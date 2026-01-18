@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Macro Goal",
+    "slug": "Macro Goal",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/02b0be00-cc51-4a2d-b5ec-a2936df17daa.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/02b0be00-cc51-4a2d-b5ec-a2936df17daa.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elitemacrotracker.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSpeechRecognitionUsageDescription": "We need access to speech recognition to transcribe your voice input for the AI meal estimator"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/02b0be00-cc51-4a2d-b5ec-a2936df17daa.png",
+        "backgroundColor": "#000000"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.elitemacrotracker.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/02b0be00-cc51-4a2d-b5ec-a2936df17daa.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Elite Macro Tracker to access your camera for barcode scanning"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Elite Macro Tracker to access your microphone for voice input"
+        }
+      ]
+    ],
+    "scheme": "macrogoal",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "fooddataCentralApiKey": "2cILVFzO3AdhZSQjt8teTzmF0DMIdDTt0nHgGmCW"
+    }
+  },
+  "scheme": "Macro Goal"
+}
