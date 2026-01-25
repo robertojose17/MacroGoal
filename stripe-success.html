@@ -1,0 +1,224 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Successful - Macro Goal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0F4C81 0%, #1a5f9e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: #10B981;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .success-icon svg {
+            width: 48px;
+            height: 48px;
+            stroke: white;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0);
+            }
+            to {
+                transform: scale(1);
+            }
+        }
+
+        h1 {
+            color: #1F2937;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        p {
+            color: #6B7280;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+
+        .button {
+            display: inline-block;
+            background: #0F4C81;
+            color: white;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(15, 76, 129, 0.3);
+        }
+
+        .button:hover {
+            background: #1a5f9e;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(15, 76, 129, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(15, 76, 129, 0.3);
+            border-top-color: #0F4C81;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status {
+            margin-top: 24px;
+            padding: 12px;
+            background: #F3F4F6;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        .manual-link {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        .manual-link a {
+            color: #0F4C81;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .manual-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">
+            <svg viewBox="0 0 24 24">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+        
+        <h1>Payment Successful!</h1>
+        <p>Your subscription has been activated. We're redirecting you back to the app...</p>
+        
+        <a href="#" id="openAppButton" class="button">
+            <span class="loading"></span>
+            Opening App...
+        </a>
+        
+        <div class="status" id="status">
+            Attempting to open app automatically...
+        </div>
+        
+        <div class="manual-link">
+            If the app doesn't open, <a href="#" id="manualLink">tap here</a>
+        </div>
+    </div>
+
+    <script>
+        // Get session_id from URL query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        
+        // Construct deep link
+        const deepLink = `macrogoal://profile?payment_success=true&session_id=${sessionId || 'unknown'}`;
+        
+        // Update button and manual link
+        const button = document.getElementById('openAppButton');
+        const manualLink = document.getElementById('manualLink');
+        const status = document.getElementById('status');
+        
+        button.href = deepLink;
+        manualLink.href = deepLink;
+        
+        // Auto-redirect after 2 seconds
+        let countdown = 2;
+        const countdownInterval = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                clearInterval(countdownInterval);
+                status.textContent = 'Opening app now...';
+                window.location.href = deepLink;
+                
+                // Update UI after redirect attempt
+                setTimeout(() => {
+                    button.innerHTML = 'Open App';
+                    button.classList.remove('loading');
+                    status.textContent = 'If the app didn\'t open, tap the button above.';
+                }, 1000);
+            } else {
+                status.textContent = `Opening app in ${countdown} second${countdown !== 1 ? 's' : ''}...`;
+            }
+        }, 1000);
+        
+        // Handle button click
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.location.href = deepLink;
+            
+            setTimeout(() => {
+                button.innerHTML = 'Open App';
+                status.textContent = 'If the app didn\'t open, make sure Macro Goal is installed.';
+            }, 1000);
+        });
+        
+        // Handle manual link click
+        manualLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.location.href = deepLink;
+        });
+    </script>
+</body>
+</html>
