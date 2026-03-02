@@ -1,0 +1,12 @@
+
+project_id = "esgptfiofoaeguslgvcq"
+
+# Disable JWT verification for checkout-redirect function
+# This function is called by Stripe's browser redirect and doesn't have a JWT token
+[functions.checkout-redirect]
+verify_jwt = false
+
+# Disable JWT verification for stripe-webhook function
+# Webhooks from Stripe don't have JWT tokens
+[functions.stripe-webhook]
+verify_jwt = false
