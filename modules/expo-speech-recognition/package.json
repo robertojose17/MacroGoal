@@ -1,0 +1,34 @@
+
+{
+  "name": "expo-speech-recognition",
+  "version": "1.0.0",
+  "description": "Native speech recognition module for iOS and Android",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build"
+  },
+  "keywords": [
+    "expo",
+    "speech",
+    "recognition",
+    "stt",
+    "voice"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-repo/expo-speech-recognition.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-repo/expo-speech-recognition/issues"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "homepage": "https://github.com/your-repo/expo-speech-recognition#readme",
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  }
+}
