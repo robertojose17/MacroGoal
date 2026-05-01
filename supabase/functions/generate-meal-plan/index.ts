@@ -189,8 +189,8 @@ function buildSystemPrompt(
     : "";
 
   const skinnytasteSection = skinnytasteContent
-    ? `\nSKINNYTASTE RECIPE INSPIRATION — These are real recipes from skinnytaste.com, a healthy eating website. Use these as creative inspiration for meal names and flavor combinations. Adapt portions to match the user's exact macro targets:\n${skinnytasteContent.slice(0, 2000)}\n`
-    : '';
+    ? `\nSKINNYTASTE RECIPES — You MUST base the meal plan exclusively on recipes found in this content from skinnytaste.com. Pick meal names and flavor profiles directly from these recipes. Adapt portions to match the user's exact macro targets. Do NOT invent generic meals — use what is listed here:\n${skinnytasteContent.slice(0, 2000)}\n`
+    : `\nNote: No external recipe source available this request — use creative healthy recipes inspired by skinnytaste.com style (low calorie, high protein, globally diverse).\n`;
 
   const prefsSection = preferences
     ? `\nUSER FOOD PREFERENCES:
@@ -420,7 +420,7 @@ Deno.serve(async (req) => {
     const isFirstMessage = messages.length === 1;
     const [recipePool, skinnytasteContent] = isFirstMessage
       ? await Promise.all([
-          fetchRecipePool(userPreferences),
+          Promise.resolve([]), // local recipe pool disabled — using Skinnytaste only
           fetchSkinnytasteInspiration(userGoals, userPreferences),
         ])
       : [[], ''];
