@@ -260,6 +260,13 @@ items: [
   { "name": "Butter", "serving_size": 5, "serving_unit": "g", "serving_description": "cooked", "calories": 36, "protein": 0, "carbs": 0, "fats": 4, "fiber": 0 }
 ]
 
+CORRECT EXAMPLE for Greek yogurt snack (every topping is a separate item):
+items: [
+  { "name": "Greek Yogurt", "serving_size": 150, "serving_unit": "g", "serving_description": "raw", "calories": 89, "protein": 15, "carbs": 5, "fats": 1, "fiber": 0 },
+  { "name": "Mixed Berries", "serving_size": 80, "serving_unit": "g", "serving_description": "raw", "calories": 46, "protein": 1, "carbs": 11, "fats": 0, "fiber": 2 }
+]
+WRONG (do NOT do this): { "name": "Greek Yogurt", "serving_description": "with berries" } — berries have calories and MUST be a separate item.
+
 SELF-CHECK before outputting (do this mentally):
 1. Add up all item calories → must be between ${calMin} and ${calMax}
 2. Add up all protein → must be between ${protMin}g and ${protMax}g
@@ -267,10 +274,21 @@ SELF-CHECK before outputting (do this mentally):
 4. Check every item: is serving_description free of ingredient names and quantities? If not, fix it.
 5. Are all caloric toppings/oils/butters listed as separate items? If not, add them.
 
-CREATIVITY RULES:
-- NEVER suggest plain grilled chicken salad or plain scrambled eggs as a standalone meal
+VARIETY RULES — STRICTLY ENFORCED:
+BANNED MEALS — NEVER suggest these, not even as a variation:
+- Breakfast: scrambled eggs (standalone), oatmeal with berries (standalone), avocado toast (standalone)
+- Lunch: grilled chicken salad, chicken and rice bowl, tuna salad
+- Dinner: baked salmon, grilled chicken with vegetables, chicken stir fry
+- Snack: Greek yogurt with berries, apple with peanut butter, protein shake
+
+Instead use creative alternatives:
+- Breakfast: shakshuka, Korean egg toast, breakfast burrito, congee, masala omelette, acai bowl, huevos rancheros, bircher muesli, tamagoyaki, chilaquiles
+- Lunch: bibimbap, tacos al pastor, pad thai, falafel wrap, butter chicken, ramen, bulgogi bowl, poke bowl, lamb shawarma, pozole
+- Dinner: miso-glazed cod, lamb tagine, chicken mole, beef rendang, seafood paella, osso buco, jerk pork, chicken katsu curry, dakgalbi, cochinita pibil
+- Snack: edamame with togarashi, guacamole with plantain chips, hummus with pita, onigiri, samosa, kimchi pancake, elote, labneh, spanakopita
+
 - NEVER repeat the same cuisine twice in one day
-- Rotate cuisines: Mediterranean, Asian, Mexican, Middle Eastern, Indian, Italian, Caribbean, Korean, Japanese, American
+- NEVER use the same protein source (chicken, beef, fish, eggs) more than once per day
 
 SAVE TRIGGER: When the message starts with "GENERATE_PLAN:" or the user says they're satisfied, respond with ONLY this raw JSON (no markdown, no backticks):
 {"ready_to_save":true,"plan":{"breakfast":{"dish_description":"...","items":[...]},"lunch":{"dish_description":"...","items":[...]},"dinner":{"dish_description":"...","items":[...]},"snack":{"dish_description":"...","items":[...]}},"summary":"..."}
