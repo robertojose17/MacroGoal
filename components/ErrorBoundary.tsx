@@ -106,6 +106,25 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error("Error caught by boundary:", error, errorInfo);
     this.setState({ error, errorInfo });
     this.props.onError?.(error, errorInfo);
+
+    // Notify parent window that ErrorBoundary is now visible (web iframe mode)
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({
+          type: "ERROR_BOUNDARY_SHOWN",
+          level: "error",
+          message: error?.message || "Unknown error",
+          data: {
+            errorName: error?.name || "Error",
+            errorMessage: error?.message || "Unknown error",
+            componentStack: errorInfo?.componentStack || "",
+            errorStack: error?.stack || "",
+          },
+          timestamp: new Date().toISOString(),
+          source: "error-boundary",
+        }, "*");
+      } catch (_) {}
+    }
   }
 
   handleReset = () => {
