@@ -64,7 +64,9 @@ interface UserGoals {
 
 interface UserPreferences {
   dietary_restrictions: string[] | null;
-  cuisine_preferences: string[] | null;
+  protein_preferences: string[] | null;
+  carb_preferences: string[] | null;
+  fat_preferences: string[] | null;
   disliked_foods: string | null;
   cooking_level: string | null;
 }
@@ -338,10 +340,12 @@ interface ActivePreferencesSummaryProps {
 
 function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isDark, onGoToProfile }: ActivePreferencesSummaryProps) {
   const hasRestrictions = userPreferences?.dietary_restrictions && userPreferences.dietary_restrictions.length > 0;
-  const hasCuisines = userPreferences?.cuisine_preferences && userPreferences.cuisine_preferences.length > 0;
+  const hasProteins = userPreferences?.protein_preferences && userPreferences.protein_preferences.length > 0;
+  const hasCarbs = userPreferences?.carb_preferences && userPreferences.carb_preferences.length > 0;
+  const hasFats = userPreferences?.fat_preferences && userPreferences.fat_preferences.length > 0;
   const hasCookingLevel = !!userPreferences?.cooking_level;
   const hasDisliked = !!userPreferences?.disliked_foods;
-  const hasAny = hasRestrictions || hasCuisines || hasCookingLevel || hasDisliked;
+  const hasAny = hasRestrictions || hasProteins || hasCarbs || hasFats || hasCookingLevel || hasDisliked;
 
   const restrictionEmojis: Record<string, string> = {
     vegetarian: '🥗',
@@ -350,19 +354,6 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
     'dairy-free': '🥛',
     halal: '☪️',
     'nut-free': '🥜',
-  };
-
-  const cuisineEmojis: Record<string, string> = {
-    mediterranean: '🫒',
-    asian: '🍜',
-    mexican: '🌮',
-    american: '🍔',
-    'middle eastern': '🧆',
-    indian: '🍛',
-    italian: '🍝',
-    caribbean: '🌴',
-    korean: '🍱',
-    japanese: '🍣',
   };
 
   const cookingEmojis: Record<string, string> = {
@@ -392,11 +383,19 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
       chips.push(`${emoji} ${label}`);
     });
   }
-  if (hasCuisines) {
-    userPreferences!.cuisine_preferences!.forEach(c => {
-      const emoji = cuisineEmojis[c] || '🍽️';
-      const label = c.charAt(0).toUpperCase() + c.slice(1);
-      chips.push(`${emoji} ${label}`);
+  if (hasProteins) {
+    userPreferences!.protein_preferences!.forEach(p => {
+      chips.push(`🥩 ${p}`);
+    });
+  }
+  if (hasCarbs) {
+    userPreferences!.carb_preferences!.forEach(c => {
+      chips.push(`🌾 ${c}`);
+    });
+  }
+  if (hasFats) {
+    userPreferences!.fat_preferences!.forEach(f => {
+      chips.push(`🥑 ${f}`);
     });
   }
   if (hasCookingLevel) {
@@ -510,7 +509,7 @@ export default function AIMealPlannerScreen() {
           .maybeSingle(),
         supabase
           .from('users')
-          .select('dietary_restrictions, cuisine_preferences, disliked_foods, cooking_level')
+          .select('dietary_restrictions, protein_preferences, carb_preferences, fat_preferences, disliked_foods, cooking_level')
           .eq('id', user.id)
           .maybeSingle(),
       ]);
@@ -531,7 +530,9 @@ export default function AIMealPlannerScreen() {
         console.log('[AIMealPlanner] user preferences loaded:', prefsResult.data);
         setUserPreferences({
           dietary_restrictions: prefsResult.data.dietary_restrictions || null,
-          cuisine_preferences: prefsResult.data.cuisine_preferences || null,
+          protein_preferences: prefsResult.data.protein_preferences || null,
+          carb_preferences: prefsResult.data.carb_preferences || null,
+          fat_preferences: prefsResult.data.fat_preferences || null,
           disliked_foods: prefsResult.data.disliked_foods || null,
           cooking_level: prefsResult.data.cooking_level || null,
         });

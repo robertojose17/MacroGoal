@@ -24,18 +24,9 @@ const DIETARY_RESTRICTION_OPTIONS = [
   { label: 'Nut-Free', value: 'nut-free' },
 ];
 
-const CUISINE_OPTIONS = [
-  { label: 'Mediterranean', value: 'mediterranean' },
-  { label: 'Asian', value: 'asian' },
-  { label: 'Mexican', value: 'mexican' },
-  { label: 'American', value: 'american' },
-  { label: 'Middle Eastern', value: 'middle eastern' },
-  { label: 'Indian', value: 'indian' },
-  { label: 'Italian', value: 'italian' },
-  { label: 'Caribbean', value: 'caribbean' },
-  { label: 'Korean', value: 'korean' },
-  { label: 'Japanese', value: 'japanese' },
-];
+const PROTEIN_OPTIONS = ['Chicken', 'Turkey', 'Beef', 'Pork', 'Salmon', 'Tuna', 'Shrimp', 'Cod', 'Tilapia', 'Eggs', 'Greek Yogurt', 'Cottage Cheese', 'Whey Protein', 'Tofu', 'Tempeh', 'Edamame', 'Lentils', 'Chickpeas', 'Black Beans'];
+const CARB_OPTIONS = ['White Rice', 'Brown Rice', 'Oats', 'Sweet Potato', 'Quinoa', 'Whole Wheat Bread', 'Pasta', 'Tortillas', 'Potatoes', 'Fruits', 'Vegetables', 'Beans'];
+const FAT_OPTIONS = ['Avocado', 'Olive Oil', 'Almonds', 'Walnuts', 'Cashews', 'Peanut Butter', 'Almond Butter', 'Chia Seeds', 'Flaxseeds', 'Coconut Oil', 'Cheese'];
 
 const COOKING_LEVELS = [
   { label: 'Simple', value: 'simple' },
@@ -72,7 +63,9 @@ export default function ProfileScreen() {
 
   // Food preferences state
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
-  const [cuisinePreferences, setCuisinePreferences] = useState<string[]>([]);
+  const [proteinPreferences, setProteinPreferences] = useState<string[]>([]);
+  const [carbPreferences, setCarbPreferences] = useState<string[]>([]);
+  const [fatPreferences, setFatPreferences] = useState<string[]>([]);
   const [dislikedFoods, setDislikedFoods] = useState('');
   const [cookingLevel, setCookingLevel] = useState<string | null>(null);
   const [prefsSaving, setPrefsSaving] = useState(false);
@@ -104,9 +97,11 @@ export default function ProfileScreen() {
           console.log('[Profile] Goal weight is missing, showing prompt');
           setShowGoalWeightPrompt(true);
         }
-        // Initialize food preferences from DB (new columns may be null on first load)
+        // Initialize food preferences from DB
         setDietaryRestrictions(Array.isArray(userResult.data.dietary_restrictions) ? userResult.data.dietary_restrictions : []);
-        setCuisinePreferences(Array.isArray(userResult.data.cuisine_preferences) ? userResult.data.cuisine_preferences : []);
+        setProteinPreferences(Array.isArray(userResult.data.protein_preferences) ? userResult.data.protein_preferences : []);
+        setCarbPreferences(Array.isArray(userResult.data.carb_preferences) ? userResult.data.carb_preferences : []);
+        setFatPreferences(Array.isArray(userResult.data.fat_preferences) ? userResult.data.fat_preferences : []);
         setDislikedFoods(userResult.data.disliked_foods || '');
         setCookingLevel(userResult.data.cooking_level || null);
       } else {
@@ -179,13 +174,31 @@ export default function ProfileScreen() {
     await saveFoodPrefsField('dietary_restrictions', next);
   };
 
-  const toggleCuisinePreference = async (value: string) => {
-    console.log('[Profile] Cuisine preference chip tapped:', value);
-    const next = cuisinePreferences.includes(value)
-      ? cuisinePreferences.filter(v => v !== value)
-      : [...cuisinePreferences, value];
-    setCuisinePreferences(next);
-    await saveFoodPrefsField('cuisine_preferences', next);
+  const toggleProteinPreference = async (value: string) => {
+    console.log('[Profile] Protein preference chip tapped:', value);
+    const next = proteinPreferences.includes(value)
+      ? proteinPreferences.filter(v => v !== value)
+      : [...proteinPreferences, value];
+    setProteinPreferences(next);
+    await saveFoodPrefsField('protein_preferences', next);
+  };
+
+  const toggleCarbPreference = async (value: string) => {
+    console.log('[Profile] Carb preference chip tapped:', value);
+    const next = carbPreferences.includes(value)
+      ? carbPreferences.filter(v => v !== value)
+      : [...carbPreferences, value];
+    setCarbPreferences(next);
+    await saveFoodPrefsField('carb_preferences', next);
+  };
+
+  const toggleFatPreference = async (value: string) => {
+    console.log('[Profile] Fat preference chip tapped:', value);
+    const next = fatPreferences.includes(value)
+      ? fatPreferences.filter(v => v !== value)
+      : [...fatPreferences, value];
+    setFatPreferences(next);
+    await saveFoodPrefsField('fat_preferences', next);
   };
 
   const handleCookingLevelSelect = async (value: string) => {
@@ -1002,36 +1015,86 @@ export default function ProfileScreen() {
               })}
             </View>
 
-            {/* Cuisine Preferences */}
+            {/* Protein Preferences */}
             <Text style={[styles.prefSectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
-              CUISINE PREFERENCES
+              🥩 PROTEIN PREFERENCES
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsScrollRow}
-            >
-              {CUISINE_OPTIONS.map(opt => {
-                const isSelected = cuisinePreferences.includes(opt.value);
+            <View style={styles.chipsRow}>
+              {PROTEIN_OPTIONS.map(item => {
+                const isSelected = proteinPreferences.includes(item);
                 return (
                   <TouchableOpacity
-                    key={opt.value}
+                    key={item}
                     style={[
                       styles.chip,
                       isSelected
                         ? { backgroundColor: TEAL }
                         : { backgroundColor: isDark ? '#2C2C2E' : '#F0F2F7' },
                     ]}
-                    onPress={() => toggleCuisinePreference(opt.value)}
+                    onPress={() => toggleProteinPreference(item)}
                     activeOpacity={0.75}
                   >
                     <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                      {opt.label}
+                      {item}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
+            </View>
+
+            {/* Carb Preferences */}
+            <Text style={[styles.prefSectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
+              🌾 CARB PREFERENCES
+            </Text>
+            <View style={styles.chipsRow}>
+              {CARB_OPTIONS.map(item => {
+                const isSelected = carbPreferences.includes(item);
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      styles.chip,
+                      isSelected
+                        ? { backgroundColor: TEAL }
+                        : { backgroundColor: isDark ? '#2C2C2E' : '#F0F2F7' },
+                    ]}
+                    onPress={() => toggleCarbPreference(item)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Fat Preferences */}
+            <Text style={[styles.prefSectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
+              🥑 FAT PREFERENCES
+            </Text>
+            <View style={styles.chipsRow}>
+              {FAT_OPTIONS.map(item => {
+                const isSelected = fatPreferences.includes(item);
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      styles.chip,
+                      isSelected
+                        ? { backgroundColor: TEAL }
+                        : { backgroundColor: isDark ? '#2C2C2E' : '#F0F2F7' },
+                    ]}
+                    onPress={() => toggleFatPreference(item)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             {/* Foods I Dislike */}
             <Text style={[styles.prefSectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>

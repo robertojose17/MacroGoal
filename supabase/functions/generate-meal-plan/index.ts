@@ -18,7 +18,9 @@ const corsHeaders = {
 
 interface UserPreferences {
   dietary_restrictions?: string[];
-  cuisine_preferences?: string[];
+  protein_preferences?: string[];
+  carb_preferences?: string[];
+  fat_preferences?: string[];
   disliked_foods?: string;
   cooking_level?: string;
 }
@@ -62,21 +64,8 @@ async function fetchRecipePool(preferences: UserPreferences | null): Promise<any
       }
     }
 
-    // Prefer cuisine preferences
+    // No cuisine_preferences anymore — use all filtered recipes
     let preferred = filtered;
-    if (preferences?.cuisine_preferences && preferences.cuisine_preferences.length > 0) {
-      const cuisines = preferences.cuisine_preferences.map((c: string) => c.toLowerCase());
-      const cuisineFiltered = filtered.filter((r: any) =>
-        cuisines.some((c: string) => r.cuisine.toLowerCase().includes(c))
-      );
-      // Mix preferred cuisines (70%) with random others (30%) for variety
-      if (cuisineFiltered.length >= 8) {
-        const others = filtered.filter((r: any) =>
-          !cuisines.some((c: string) => r.cuisine.toLowerCase().includes(c))
-        );
-        preferred = [...cuisineFiltered, ...shuffle(others).slice(0, Math.floor(cuisineFiltered.length * 0.3))];
-      }
-    }
 
     // Shuffle and pick a diverse subset
     const shuffled = shuffle(preferred);
@@ -195,7 +184,9 @@ function buildSystemPrompt(
   const prefsSection = preferences
     ? `\nUSER FOOD PREFERENCES:
 ${preferences.dietary_restrictions?.length ? `- Dietary restrictions: ${preferences.dietary_restrictions.join(", ")} — STRICTLY respect these` : ""}
-${preferences.cuisine_preferences?.length ? `- Preferred cuisines: ${preferences.cuisine_preferences.join(", ")} — prioritize these` : ""}
+${preferences.protein_preferences?.length ? `- Preferred proteins: ${preferences.protein_preferences.join(", ")} — use these as the primary protein sources in every meal` : ""}
+${preferences.carb_preferences?.length ? `- Preferred carbs: ${preferences.carb_preferences.join(", ")} — use these as the primary carb sources` : ""}
+${preferences.fat_preferences?.length ? `- Preferred fats: ${preferences.fat_preferences.join(", ")} — use these as the primary fat sources` : ""}
 ${preferences.disliked_foods ? `- Dislikes: ${preferences.disliked_foods} — NEVER include these` : ""}
 ${preferences.cooking_level ? `- Cooking level: ${preferences.cooking_level}` : ""}
 `
