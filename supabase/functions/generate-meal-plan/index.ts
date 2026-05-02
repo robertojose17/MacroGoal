@@ -139,26 +139,31 @@ async function fetchSkinnytasteInspiration(
           headers: {
             'Accept': 'text/plain',
             'X-Return-Format': 'text',
+            'User-Agent': 'Mozilla/5.0 (compatible; MacroGoalApp/1.0)',
+            'X-No-Cache': 'true',
           },
-          signal: AbortSignal.timeout(8000), // 8 second timeout
+          signal: AbortSignal.timeout(15000), // increased to 15 seconds
         });
 
-        if (!response.ok) continue;
+        if (!response.ok) {
+          console.log('[MealPlan] Jina returned', response.status, 'for', url);
+          continue;
+        }
 
         const text = await response.text();
+        console.log('[MealPlan] Jina fetched', url, '- content length:', text.length);
 
-        // Extract just recipe names and brief descriptions (first 3000 chars to keep prompt size manageable)
-        const truncated = text.slice(0, 3000);
+        const truncated = text.slice(0, 5000);
         results.push(truncated);
       } catch (err) {
-        console.log('[MealPlan] Jina fetch failed for', url, '- skipping');
+        console.log('[MealPlan] Jina fetch failed for', url, '- skipping:', err);
         continue;
       }
     }
 
     if (results.length === 0) return '';
 
-    return results.join('\n\n');
+    return `SKINNYTASTE LIVE CONTENT (scraped right now from skinnytaste.com):\n\n` + results.join('\n\n---\n\n');
   } catch (err) {
     console.log('[MealPlan] fetchSkinnytasteInspiration failed - continuing without it');
     return '';
@@ -182,13 +187,14 @@ function buildSystemPrompt(
     : `\nNote: No external recipe source available this request — use creative healthy recipes inspired by skinnytaste.com style (low calorie, high protein, globally diverse).\n`;
 
   const prefsSection = preferences
-    ? `\nUSER FOOD PREFERENCES:
-${preferences.dietary_restrictions?.length ? `- Dietary restrictions: ${preferences.dietary_restrictions.join(", ")} — STRICTLY respect these` : ""}
-${preferences.protein_preferences?.length ? `- Preferred proteins: ${preferences.protein_preferences.join(", ")} — use these as the primary protein sources in every meal` : ""}
-${preferences.carb_preferences?.length ? `- Preferred carbs: ${preferences.carb_preferences.join(", ")} — use these as the primary carb sources` : ""}
-${preferences.fat_preferences?.length ? `- Preferred fats: ${preferences.fat_preferences.join(", ")} — use these as the primary fat sources` : ""}
-${preferences.disliked_foods ? `- Dislikes: ${preferences.disliked_foods} — NEVER include these` : ""}
+    ? `\nUSER FOOD PREFERENCES — THESE ARE HARD RULES, NOT SUGGESTIONS:
+${preferences.dietary_restrictions?.length ? `- Dietary restrictions: ${preferences.dietary_restrictions.join(", ")} — STRICTLY FORBIDDEN to violate these` : ""}
+${preferences.protein_preferences?.length ? `- ALLOWED proteins ONLY: ${preferences.protein_preferences.join(", ")} — You MUST ONLY use proteins from this exact list. Any protein NOT in this list is STRICTLY FORBIDDEN. If chicken is not listed, never use chicken. If beef is not listed, never use beef. If eggs are not listed, never use eggs. Zero exceptions.` : "- No protein preferences set — you may use any protein"}
+${preferences.carb_preferences?.length ? `- ALLOWED carbs ONLY: ${preferences.carb_preferences.join(", ")} — You MUST ONLY use carb sources from this exact list. Any carb NOT in this list is STRICTLY FORBIDDEN.` : "- No carb preferences set — you may use any carb"}
+${preferences.fat_preferences?.length ? `- ALLOWED fats ONLY: ${preferences.fat_preferences.join(", ")} — You MUST ONLY use fat sources from this exact list. Any fat NOT in this list is STRICTLY FORBIDDEN.` : "- No fat preferences set — you may use any fat"}
+${preferences.disliked_foods ? `- Disliked foods: ${preferences.disliked_foods} — NEVER include these under any circumstances` : ""}
 ${preferences.cooking_level ? `- Cooking level: ${preferences.cooking_level}` : ""}
+PREFERENCE ENFORCEMENT CHECK: Before outputting the final plan, scan every single food item. If any item uses a protein, carb, or fat not in the allowed lists above, replace it immediately with one that IS in the allowed list. This check is mandatory.
 `
     : "";
 
