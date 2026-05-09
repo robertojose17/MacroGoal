@@ -65,10 +65,8 @@ interface UserGoals {
 interface UserPreferences {
   dietary_restrictions: string[] | null;
   protein_preferences: string[] | null;
-  carb_preferences: string[] | null;
-  fat_preferences: string[] | null;
+  recipe_styles: string[] | null;
   disliked_foods: string | null;
-  cooking_level: string | null;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -78,6 +76,17 @@ type ScreenStep = 'preferences' | 'generating' | 'plan';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TEAL = '#14B8A6';
+
+const RECIPE_STYLE_OPTIONS = [
+  { label: 'Air Fryer', value: 'air-fryer' },
+  { label: 'Meal Prep', value: 'meal-prep' },
+  { label: 'Under 30 Minutes', value: 'under-30-minutes' },
+  { label: 'One Pan Meals', value: 'one-pan-meals' },
+  { label: 'Slow Cooker', value: 'slow-cooker' },
+  { label: 'Instant Pot', value: 'instant-pot' },
+  { label: 'Easy Recipes', value: 'easy-recipes' },
+  { label: 'Freezer Friendly', value: 'freezer-friendly' },
+];
 const MEAL_SECTIONS: { key: MealType; label: string; emoji: string }[] = [
   { key: 'breakfast', label: 'Breakfast', emoji: '🌅' },
   { key: 'lunch', label: 'Lunch', emoji: '☀️' },
@@ -341,11 +350,9 @@ interface ActivePreferencesSummaryProps {
 function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isDark, onGoToProfile }: ActivePreferencesSummaryProps) {
   const hasRestrictions = userPreferences?.dietary_restrictions && userPreferences.dietary_restrictions.length > 0;
   const hasProteins = userPreferences?.protein_preferences && userPreferences.protein_preferences.length > 0;
-  const hasCarbs = userPreferences?.carb_preferences && userPreferences.carb_preferences.length > 0;
-  const hasFats = userPreferences?.fat_preferences && userPreferences.fat_preferences.length > 0;
-  const hasCookingLevel = !!userPreferences?.cooking_level;
+  const hasRecipeStyles = userPreferences?.recipe_styles && userPreferences.recipe_styles.length > 0;
   const hasDisliked = !!userPreferences?.disliked_foods;
-  const hasAny = hasRestrictions || hasProteins || hasCarbs || hasFats || hasCookingLevel || hasDisliked;
+  const hasAny = hasRestrictions || hasProteins || hasRecipeStyles || hasDisliked;
 
   const restrictionEmojis: Record<string, string> = {
     vegetarian: '🥗',
@@ -354,12 +361,6 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
     'dairy-free': '🥛',
     halal: '☪️',
     'nut-free': '🥜',
-  };
-
-  const cookingEmojis: Record<string, string> = {
-    simple: '🍳',
-    moderate: '👨‍🍳',
-    advanced: '⭐',
   };
 
   if (!hasAny) {
@@ -388,19 +389,21 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
       chips.push(`🥩 ${p}`);
     });
   }
-  if (hasCarbs) {
-    userPreferences!.carb_preferences!.forEach(c => {
-      chips.push(`🌾 ${c}`);
+  if (hasRecipeStyles) {
+    userPreferences!.recipe_styles!.forEach(s => {
+      const styleEmojis: Record<string, string> = {
+        'air-fryer': '🌬️',
+        'meal-prep': '📦',
+        'under-30-minutes': '⏱️',
+        'one-pan-meals': '🍳',
+        'slow-cooker': '🫕',
+        'instant-pot': '⚡',
+        'easy-recipes': '✅',
+        'freezer-friendly': '❄️',
+      };
+      const label = RECIPE_STYLE_OPTIONS.find(o => o.value === s)?.label || s;
+      chips.push(`${styleEmojis[s] || '🍽️'} ${label}`);
     });
-  }
-  if (hasFats) {
-    userPreferences!.fat_preferences!.forEach(f => {
-      chips.push(`🥑 ${f}`);
-    });
-  }
-  if (hasCookingLevel) {
-    const lvl = userPreferences!.cooking_level!;
-    chips.push(`${cookingEmojis[lvl] || '🍳'} ${lvl.charAt(0).toUpperCase() + lvl.slice(1)} cooking`);
   }
 
   return (
@@ -509,7 +512,7 @@ export default function AIMealPlannerScreen() {
           .maybeSingle(),
         supabase
           .from('users')
-          .select('dietary_restrictions, protein_preferences, carb_preferences, fat_preferences, disliked_foods, cooking_level')
+          .select('dietary_restrictions, protein_preferences, recipe_styles, disliked_foods')
           .eq('id', user.id)
           .maybeSingle(),
       ]);
@@ -531,10 +534,8 @@ export default function AIMealPlannerScreen() {
         setUserPreferences({
           dietary_restrictions: prefsResult.data.dietary_restrictions || null,
           protein_preferences: prefsResult.data.protein_preferences || null,
-          carb_preferences: prefsResult.data.carb_preferences || null,
-          fat_preferences: prefsResult.data.fat_preferences || null,
+          recipe_styles: prefsResult.data.recipe_styles || null,
           disliked_foods: prefsResult.data.disliked_foods || null,
-          cooking_level: prefsResult.data.cooking_level || null,
         });
       } else {
         console.log('[AIMealPlanner] no user preferences found');

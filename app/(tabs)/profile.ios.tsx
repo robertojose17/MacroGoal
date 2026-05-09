@@ -14,8 +14,17 @@ import { Sex, ActivityLevel, GoalType } from '@/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PROTEIN_OPTIONS = ['Chicken', 'Turkey', 'Beef', 'Pork', 'Salmon', 'Tuna', 'Shrimp', 'Cod', 'Tilapia', 'Eggs', 'Greek Yogurt', 'Cottage Cheese', 'Whey Protein', 'Tofu', 'Tempeh', 'Edamame', 'Lentils', 'Chickpeas', 'Black Beans'];
-const CARB_OPTIONS = ['White Rice', 'Brown Rice', 'Oats', 'Sweet Potato', 'Quinoa', 'Whole Wheat Bread', 'Pasta', 'Tortillas', 'Potatoes', 'Fruits', 'Vegetables', 'Beans'];
-const FAT_OPTIONS = ['Avocado', 'Olive Oil', 'Almonds', 'Walnuts', 'Cashews', 'Peanut Butter', 'Almond Butter', 'Chia Seeds', 'Flaxseeds', 'Coconut Oil', 'Cheese'];
+
+const RECIPE_STYLE_OPTIONS = [
+  { label: 'Air Fryer', value: 'air-fryer' },
+  { label: 'Meal Prep', value: 'meal-prep' },
+  { label: 'Under 30 Minutes', value: 'under-30-minutes' },
+  { label: 'One Pan Meals', value: 'one-pan-meals' },
+  { label: 'Slow Cooker', value: 'slow-cooker' },
+  { label: 'Instant Pot', value: 'instant-pot' },
+  { label: 'Easy Recipes', value: 'easy-recipes' },
+  { label: 'Freezer Friendly', value: 'freezer-friendly' },
+];
 
 type EditField = 'name' | 'height' | 'weight' | 'goalWeight' | 'age' | 'sex' | 'activity' | 'lossRate' | 'startDate' | null;
 
@@ -49,17 +58,13 @@ export default function ProfileScreen() {
   const [foodPrefs, setFoodPrefs] = useState<{
     dietary_restrictions: string[];
     protein_preferences: string[];
-    carb_preferences: string[];
-    fat_preferences: string[];
+    recipe_styles: string[];
     disliked_foods: string;
-    cooking_level: string;
   }>({
     dietary_restrictions: [],
     protein_preferences: [],
-    carb_preferences: [],
-    fat_preferences: [],
+    recipe_styles: [],
     disliked_foods: '',
-    cooking_level: 'moderate',
   });
   const [savingFoodPrefs, setSavingFoodPrefs] = useState(false);
 
@@ -127,10 +132,8 @@ export default function ProfileScreen() {
       setFoodPrefs({
         dietary_restrictions: Array.isArray(user.dietary_restrictions) ? user.dietary_restrictions : [],
         protein_preferences: Array.isArray(user.protein_preferences) ? user.protein_preferences : [],
-        carb_preferences: Array.isArray(user.carb_preferences) ? user.carb_preferences : [],
-        fat_preferences: Array.isArray(user.fat_preferences) ? user.fat_preferences : [],
+        recipe_styles: Array.isArray(user.recipe_styles) ? user.recipe_styles : [],
         disliked_foods: typeof user.disliked_foods === 'string' ? user.disliked_foods : '',
-        cooking_level: typeof user.cooking_level === 'string' && user.cooking_level ? user.cooking_level : 'moderate',
       });
     }
   }, [user]);
@@ -148,10 +151,8 @@ export default function ProfileScreen() {
       const updateData = {
         dietary_restrictions: foodPrefs.dietary_restrictions,
         protein_preferences: foodPrefs.protein_preferences,
-        carb_preferences: foodPrefs.carb_preferences,
-        fat_preferences: foodPrefs.fat_preferences,
+        recipe_styles: foodPrefs.recipe_styles,
         disliked_foods: foodPrefs.disliked_foods.trim(),
-        cooking_level: foodPrefs.cooking_level,
         updated_at: new Date().toISOString(),
       };
       console.log('[Profile iOS] Saving food preferences to Supabase:', updateData);
@@ -191,23 +192,13 @@ export default function ProfileScreen() {
     }));
   };
 
-  const toggleCarbPreference = (item: string) => {
-    console.log('[Profile iOS] Carb preference toggled:', item);
+  const toggleRecipeStyle = (item: string) => {
+    console.log('[Profile iOS] Recipe style toggled:', item);
     setFoodPrefs((prev) => ({
       ...prev,
-      carb_preferences: prev.carb_preferences.includes(item)
-        ? prev.carb_preferences.filter((i) => i !== item)
-        : [...prev.carb_preferences, item],
-    }));
-  };
-
-  const toggleFatPreference = (item: string) => {
-    console.log('[Profile iOS] Fat preference toggled:', item);
-    setFoodPrefs((prev) => ({
-      ...prev,
-      fat_preferences: prev.fat_preferences.includes(item)
-        ? prev.fat_preferences.filter((i) => i !== item)
-        : [...prev.fat_preferences, item],
+      recipe_styles: prev.recipe_styles.includes(item)
+        ? prev.recipe_styles.filter((i) => i !== item)
+        : [...prev.recipe_styles, item],
     }));
   };
 
@@ -674,17 +665,14 @@ export default function ProfileScreen() {
   console.log('[Profile iOS] Displaying subscription status:', subscriptionStatusText, '(isPremium:', isPremium, ')');
 
   const DIETARY_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free'];
-  const COOKING_LEVELS = ['easy', 'moderate', 'advanced'];
 
   const proteinCount = foodPrefs.protein_preferences.length;
-  const carbCount = foodPrefs.carb_preferences.length;
-  const fatCount = foodPrefs.fat_preferences.length;
-  const hasAnyMacroPrefs = proteinCount > 0 || carbCount > 0 || fatCount > 0;
+  const recipeStyleCount = foodPrefs.recipe_styles.length;
+  const hasAnyPrefs = proteinCount > 0 || recipeStyleCount > 0;
   const foodPrefsSummaryParts: string[] = [];
-  if (hasAnyMacroPrefs) {
+  if (hasAnyPrefs) {
     if (proteinCount > 0) foodPrefsSummaryParts.push(`🥩 ${proteinCount} protein${proteinCount !== 1 ? 's' : ''}`);
-    if (carbCount > 0) foodPrefsSummaryParts.push(`🌾 ${carbCount} carb${carbCount !== 1 ? 's' : ''}`);
-    if (fatCount > 0) foodPrefsSummaryParts.push(`🥑 ${fatCount} fat${fatCount !== 1 ? 's' : ''}`);
+    if (recipeStyleCount > 0) foodPrefsSummaryParts.push(`🍳 ${recipeStyleCount} style${recipeStyleCount !== 1 ? 's' : ''}`);
   }
   const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : 'No preferences set';
 
@@ -1331,58 +1319,6 @@ export default function ProfileScreen() {
                 })}
               </View>
 
-              {/* Carb Preferences */}
-              <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                🌾 Carb Preferences
-              </Text>
-              <View style={styles.chipsRow}>
-                {CARB_OPTIONS.map((item) => {
-                  const isSelected = foodPrefs.carb_preferences.includes(item);
-                  return (
-                    <TouchableOpacity
-                      key={item}
-                      style={[
-                        styles.chip,
-                        isSelected
-                          ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                          : { backgroundColor: 'transparent', borderColor: isDark ? colors.textSecondaryDark : colors.border },
-                      ]}
-                      onPress={() => toggleCarbPreference(item)}
-                    >
-                      <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {item}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Fat Preferences */}
-              <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                🥑 Fat Preferences
-              </Text>
-              <View style={styles.chipsRow}>
-                {FAT_OPTIONS.map((item) => {
-                  const isSelected = foodPrefs.fat_preferences.includes(item);
-                  return (
-                    <TouchableOpacity
-                      key={item}
-                      style={[
-                        styles.chip,
-                        isSelected
-                          ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                          : { backgroundColor: 'transparent', borderColor: isDark ? colors.textSecondaryDark : colors.border },
-                      ]}
-                      onPress={() => toggleFatPreference(item)}
-                    >
-                      <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {item}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
               {/* Disliked Foods */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
                 Disliked Foods
@@ -1406,30 +1342,26 @@ export default function ProfileScreen() {
                 multiline
               />
 
-              {/* Cooking Level */}
+              {/* Recipe Style */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Cooking Level
+                What type of recipe fits your lifestyle best?
               </Text>
               <View style={styles.chipsRow}>
-                {COOKING_LEVELS.map((level) => {
-                  const isSelected = foodPrefs.cooking_level === level;
-                  const label = level.charAt(0).toUpperCase() + level.slice(1);
+                {RECIPE_STYLE_OPTIONS.map((opt) => {
+                  const isSelected = foodPrefs.recipe_styles.includes(opt.value);
                   return (
                     <TouchableOpacity
-                      key={level}
+                      key={opt.value}
                       style={[
                         styles.chip,
                         isSelected
                           ? { backgroundColor: colors.primary, borderColor: colors.primary }
                           : { backgroundColor: 'transparent', borderColor: isDark ? colors.textSecondaryDark : colors.border },
                       ]}
-                      onPress={() => {
-                        console.log('[Profile iOS] Cooking level selected:', level);
-                        setFoodPrefs((prev) => ({ ...prev, cooking_level: level }));
-                      }}
+                      onPress={() => toggleRecipeStyle(opt.value)}
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {label}
+                        {opt.label}
                       </Text>
                     </TouchableOpacity>
                   );

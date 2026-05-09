@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recipe_styles TEXT[] DEFAULT '{}';
