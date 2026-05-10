@@ -29,6 +29,8 @@ export interface MealPlanItem {
   carbs: number;
   fats: number;
   fiber?: number;
+  dish_description?: string;
+  recipe_url?: string;
 }
 
 export interface MealPlanDetail extends MealPlan {
@@ -66,6 +68,8 @@ export interface AddMealPlanItemBody {
   carbs?: number;
   fats?: number;
   fiber?: number;
+  dish_description?: string;
+  recipe_url?: string;
 }
 
 export async function listMealPlans(): Promise<{ plans: MealPlan[] }> {
@@ -156,6 +160,8 @@ export async function addMealPlanItem(planId: string, body: AddMealPlanItemBody)
       carbs: body.carbs || 0,
       fats: body.fats || 0,
       fiber: body.fiber || 0,
+      dish_description: body.dish_description || null,
+      recipe_url: body.recipe_url || null,
     })
     .select()
     .single();

@@ -45,6 +45,7 @@ interface PlanFood {
 
 interface MealSection {
   dish_description?: string;
+  recipe_url?: string;
   items: PlanFood[];
 }
 
@@ -114,6 +115,12 @@ function getMealDescription(meal: MealSection | PlanFood[] | undefined): string 
   if (!meal) return null;
   if (Array.isArray(meal)) return null;
   return meal?.dish_description || null;
+}
+
+function getMealRecipeUrl(meal: MealSection | PlanFood[] | undefined): string | null {
+  if (!meal) return null;
+  if (Array.isArray(meal)) return null;
+  return meal?.recipe_url || null;
 }
 
 // Approximate calories per gram for common foods — used to infer serving size
@@ -836,6 +843,8 @@ export default function AIMealPlannerScreen() {
             fats: Math.round(Number(food.fats) || 0),
             fiber: Math.round(Number(food.fiber) || 0),
             grams: null,
+            dish_description: getMealDescription(generatedPlan[mealType]) || undefined,
+            recipe_url: getMealRecipeUrl(generatedPlan[mealType]) || undefined,
           });
         }
       }

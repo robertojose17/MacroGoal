@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -157,6 +159,13 @@ export default function MealPlanDetailScreen() {
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [itemEditStates, setItemEditStates] = useState<Record<string, ItemEditState>>({});
 
+  // Recipe modal state
+  const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+  const [recipeModalMeal, setRecipeModalMeal] = useState<string | null>(null);
+  const [recipeModalUrl, setRecipeModalUrl] = useState<string | null>(null);
+  const [recipeContent, setRecipeContent] = useState<string | null>(null);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -283,6 +292,50 @@ export default function MealPlanDetailScreen() {
       },
     });
   };
+
+  const handleOpenRecipe = useCallback(async (dishDescription: string | null, recipeUrl: string | null) => {
+    console.log('[MealPlanDetail] Recipe button pressed, dish:', dishDescription, 'url:', recipeUrl);
+    setRecipeModalMeal(dishDescription);
+    setRecipeModalUrl(recipeUrl);
+    setRecipeContent(null);
+    setRecipeModalVisible(true);
+
+    if (!recipeUrl) return;
+
+    setRecipeLoading(true);
+    try {
+      console.log('[MealPlanDetail] Fetching recipe from Jina:', recipeUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(`https://r.jina.ai/${recipeUrl}`, {
+        headers: { 'Accept': 'text/plain', 'X-Return-Format': 'text' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[MealPlanDetail] Jina fetch error:', response.status, errText.slice(0, 200));
+        setRecipeContent('Failed to load recipe. Please try again.');
+        return;
+      }
+      const text = await response.text();
+      console.log('[MealPlanDetail] Recipe fetched, length:', text.length);
+      setRecipeContent(text || 'No recipe content found.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[MealPlanDetail] Recipe fetch error:', msg);
+      setRecipeContent('Failed to load recipe. Please check your connection.');
+    } finally {
+      setRecipeLoading(false);
+    }
+  }, []);
+
+  const handleCloseRecipe = useCallback(() => {
+    console.log('[MealPlanDetail] Recipe modal closed');
+    setRecipeModalVisible(false);
+    setRecipeContent(null);
+    setRecipeLoading(false);
+  }, []);
 
   const handleGroceryList = () => {
     console.log('[MealPlanDetail] Grocery list button pressed, planId:', planId);
@@ -423,6 +476,8 @@ export default function MealPlanDetailScreen() {
         {MEAL_TYPES.map((mealDef, mealIdx) => {
           const mealItems = dedupedItems.filter(i => i.meal_type === mealDef.type);
           const isLast = mealIdx === MEAL_TYPES.length - 1;
+          const dishDescription = mealItems[0]?.dish_description ?? null;
+          const dishRecipeUrl = mealItems[0]?.recipe_url ?? null;
 
           // Live meal totals
           const mealCalories = Math.round(mealItems.reduce((s, i) => {
@@ -495,6 +550,22 @@ export default function MealPlanDetailScreen() {
                     <Text style={[styles.macroPillValue, { color: colors.fats }]}>{mealFats}g</Text>
                     <Text style={[styles.macroPillUnit, { color: colors.fats }]}>F</Text>
                   </View>
+                </View>
+              )}
+
+              {/* Dish title row */}
+              {!!dishDescription && (
+                <View style={styles.dishTitleRow}>
+                  <Text style={[styles.dishTitleText, { color: secondaryColor }]} numberOfLines={2}>
+                    {dishDescription}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.recipeDotsBtn}
+                    onPress={() => handleOpenRecipe(dishDescription, dishRecipeUrl)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.recipeDotsText, { color: colors.primary }]}>•••</Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -668,6 +739,54 @@ export default function MealPlanDetailScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Recipe Bottom Sheet Modal */}
+      <Modal
+        visible={recipeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseRecipe}
+      >
+        <View style={styles.recipeModalOverlay}>
+          <TouchableOpacity style={styles.recipeModalBackdrop} onPress={handleCloseRecipe} activeOpacity={1} />
+          <View style={[styles.recipeModalSheet, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
+            {/* Sheet handle */}
+            <View style={[styles.recipeSheetHandle, { backgroundColor: borderColor }]} />
+
+            {/* Modal header */}
+            <View style={styles.recipeModalHeader}>
+              <Text style={[styles.recipeModalTitle, { color: textColor }]} numberOfLines={2}>
+                {recipeModalMeal ?? 'Recipe'}
+              </Text>
+              <TouchableOpacity onPress={handleCloseRecipe} style={styles.recipeCloseBtn} activeOpacity={0.7}>
+                <Text style={[styles.recipeCloseBtnText, { color: colors.primary }]}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Content */}
+            {recipeLoading ? (
+              <View style={styles.recipeLoadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>Loading recipe...</Text>
+              </View>
+            ) : recipeModalUrl === null ? (
+              <View style={styles.recipeLoadingContainer}>
+                <Text style={[styles.recipeNoLinkText, { color: secondaryColor }]}>No recipe link available for this meal.</Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.recipeScrollView}
+                contentContainerStyle={styles.recipeScrollContent}
+                showsVerticalScrollIndicator
+              >
+                <Text style={[styles.recipeContentText, { color: textColor }]}>
+                  {recipeContent ?? ''}
+                </Text>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -833,4 +952,103 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacer: { height: 40 },
+
+  // Dish title row
+  dishTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  dishTitleText: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  recipeDotsBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  recipeDotsText: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+
+  // Recipe modal
+  recipeModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  recipeModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  recipeModalSheet: {
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    maxHeight: Dimensions.get('window').height * 0.72,
+    minHeight: 200,
+    paddingBottom: 32,
+  },
+  recipeSheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  recipeModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  recipeModalTitle: {
+    ...typography.bodyBold,
+    flex: 1,
+    fontSize: 16,
+  },
+  recipeCloseBtn: {
+    paddingVertical: 2,
+    paddingLeft: spacing.sm,
+  },
+  recipeCloseBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  recipeLoadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  recipeLoadingText: {
+    ...typography.caption,
+    marginTop: spacing.sm,
+  },
+  recipeNoLinkText: {
+    ...typography.body,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  recipeScrollView: {
+    flex: 1,
+  },
+  recipeScrollContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  recipeContentText: {
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: 'System',
+  },
 });
