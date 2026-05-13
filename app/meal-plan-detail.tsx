@@ -145,6 +145,47 @@ function computeLiveMacros(es: ItemEditState, servingsStr: string) {
   }
 }
 
+function parseRecipeContent(raw: string): { ingredients: string[]; instructions: string[] } {
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const ingredients: string[] = [];
+  const instructions: string[] = [];
+
+  let mode: 'none' | 'ingredients' | 'instructions' = 'none';
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+
+    if (/^#+\s*ingredient/i.test(line) || lower === 'ingredients' || lower === 'ingredients:') {
+      mode = 'ingredients';
+      continue;
+    }
+    if (/^#+\s*instruction/i.test(line) || lower === 'instructions' || lower === 'instructions:' || lower === 'directions' || lower === 'directions:' || lower === 'how to make' || /^#+\s*direction/i.test(line)) {
+      mode = 'instructions';
+      continue;
+    }
+    if (/^#+\s*(nutrition|notes?|tips?|serving|storage|faq|related|more recipe)/i.test(line)) {
+      mode = 'none';
+      continue;
+    }
+
+    if (line.length < 3) continue;
+    if (/^(jump to|print recipe|save recipe|pin recipe|rate this|leave a|subscribe|newsletter|advertisement|skip to|home\s*›|recipes\s*›)/i.test(line)) continue;
+    if (/^\d+\s*(calories|kcal|protein|carb|fat|fiber|sugar|sodium)/i.test(line)) continue;
+
+    if (mode === 'ingredients' && line.length > 2) {
+      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+      if (cleaned.length > 2) ingredients.push(cleaned);
+    }
+    if (mode === 'instructions' && line.length > 5) {
+      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+      if (cleaned.length > 5) instructions.push(cleaned);
+    }
+  }
+
+  return { ingredients, instructions };
+}
+
 export default function MealPlanDetailScreen() {
   const router = useRouter();
   const { planId } = useLocalSearchParams<{ planId: string }>();
@@ -163,7 +204,8 @@ export default function MealPlanDetailScreen() {
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
   const [recipeModalMeal, setRecipeModalMeal] = useState<string | null>(null);
   const [recipeModalUrl, setRecipeModalUrl] = useState<string | null>(null);
-  const [recipeContent, setRecipeContent] = useState<string | null>(null);
+  const [recipeIngredients, setRecipeIngredients] = useState<string[]>([]);
+  const [recipeInstructions, setRecipeInstructions] = useState<string[]>([]);
   const [recipeLoading, setRecipeLoading] = useState(false);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
@@ -297,7 +339,8 @@ export default function MealPlanDetailScreen() {
     console.log('[MealPlanDetail] Recipe button pressed, dish:', dishDescription, 'url:', recipeUrl);
     setRecipeModalMeal(dishDescription);
     setRecipeModalUrl(recipeUrl);
-    setRecipeContent(null);
+    setRecipeIngredients([]);
+    setRecipeInstructions([]);
     setRecipeModalVisible(true);
 
     if (!recipeUrl) return;
@@ -315,16 +358,25 @@ export default function MealPlanDetailScreen() {
       if (!response.ok) {
         const errText = await response.text();
         console.error('[MealPlanDetail] Jina fetch error:', response.status, errText.slice(0, 200));
-        setRecipeContent('Failed to load recipe. Please try again.');
+        setRecipeIngredients([]);
+        setRecipeInstructions(['Failed to load recipe. Please try again.']);
         return;
       }
       const text = await response.text();
       console.log('[MealPlanDetail] Recipe fetched, length:', text.length);
-      setRecipeContent(text || 'No recipe content found.');
+      const parsed = parseRecipeContent(text);
+      if (parsed.ingredients.length === 0 && parsed.instructions.length === 0) {
+        setRecipeIngredients([]);
+        setRecipeInstructions(['Could not extract recipe details. Visit the Skinnytaste website for the full recipe.']);
+      } else {
+        setRecipeIngredients(parsed.ingredients);
+        setRecipeInstructions(parsed.instructions);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[MealPlanDetail] Recipe fetch error:', msg);
-      setRecipeContent('Failed to load recipe. Please check your connection.');
+      setRecipeIngredients([]);
+      setRecipeInstructions(['Failed to load recipe. Please check your connection.']);
     } finally {
       setRecipeLoading(false);
     }
@@ -333,7 +385,8 @@ export default function MealPlanDetailScreen() {
   const handleCloseRecipe = useCallback(() => {
     console.log('[MealPlanDetail] Recipe modal closed');
     setRecipeModalVisible(false);
-    setRecipeContent(null);
+    setRecipeIngredients([]);
+    setRecipeInstructions([]);
     setRecipeLoading(false);
   }, []);
 
@@ -779,9 +832,31 @@ export default function MealPlanDetailScreen() {
                 contentContainerStyle={styles.recipeScrollContent}
                 showsVerticalScrollIndicator
               >
-                <Text style={[styles.recipeContentText, { color: textColor }]}>
-                  {recipeContent ?? ''}
-                </Text>
+                {recipeIngredients.length > 0 && (
+                  <View style={styles.recipeSectionBlock}>
+                    <Text style={[styles.recipeSectionHeader, { color: textColor }]}>Ingredients</Text>
+                    {recipeIngredients.map((ing, i) => (
+                      <View key={i} style={styles.recipeListItem}>
+                        <Text style={[styles.recipeBullet, { color: colors.primary }]}>•</Text>
+                        <Text style={[styles.recipeListText, { color: textColor }]}>{ing}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {recipeInstructions.length > 0 && (
+                  <View style={styles.recipeSectionBlock}>
+                    <Text style={[styles.recipeSectionHeader, { color: textColor }]}>Instructions</Text>
+                    {recipeInstructions.map((step, i) => {
+                      const stepNum = i + 1;
+                      return (
+                        <View key={i} style={styles.recipeListItem}>
+                          <Text style={[styles.recipeStepNumber, { color: colors.primary }]}>{stepNum}.</Text>
+                          <Text style={[styles.recipeListText, { color: textColor }]}>{step}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </ScrollView>
             )}
           </View>
@@ -1046,9 +1121,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.lg,
   },
-  recipeContentText: {
+  recipeSectionBlock: {
+    marginBottom: spacing.lg,
+  },
+  recipeSectionHeader: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    letterSpacing: 0.3,
+  },
+  recipeListItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 6,
+  },
+  recipeBullet: {
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    minWidth: 12,
+  },
+  recipeStepNumber: {
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 20,
+    minWidth: 20,
+  },
+  recipeListText: {
     fontSize: 13,
     lineHeight: 20,
-    fontFamily: 'System',
+    flex: 1,
   },
 });
