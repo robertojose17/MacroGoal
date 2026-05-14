@@ -720,13 +720,16 @@ export default function AIMealPlannerScreen() {
       setRecipeLoading(false);
       return;
     }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
       const jinaUrl = `https://r.jina.ai/${recipeUrl}`;
       console.log('[AIMealPlanner] fetching recipe from Jina:', jinaUrl);
       const response = await fetch(jinaUrl, {
         headers: { 'Accept': 'text/plain', 'X-Return-Format': 'text', 'User-Agent': 'Mozilla/5.0' },
-        signal: AbortSignal.timeout(15000),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       if (!response.ok) throw new Error('Could not fetch recipe');
       const text = await response.text();
       console.log('[AIMealPlanner] Jina response received, length:', text.length);
@@ -736,8 +739,9 @@ export default function AIMealPlannerScreen() {
         setRecipeIngredients(ingredients);
         setRecipeInstructions(instructions);
       }
-    } catch (e) {
-      console.error('[AIMealPlanner] handleOpenRecipe fetch error:', e);
+    } catch (e: any) {
+      clearTimeout(timeoutId);
+      console.error('[AIMealPlanner] handleOpenRecipe fetch error:', e?.message || e);
       if (isMounted.current) {
         setRecipeIngredients([]);
         setRecipeInstructions([]);
