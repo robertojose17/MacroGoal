@@ -123,6 +123,31 @@ function getMealRecipeUrl(meal: MealSection | PlanFood[] | undefined): string | 
   return meal?.recipe_url || null;
 }
 
+function parseRecipeContent(raw: string): { ingredients: string[]; instructions: string[] } {
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const ingredients: string[] = [];
+  const instructions: string[] = [];
+  let mode: 'none' | 'ingredients' | 'instructions' = 'none';
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (/^#+\s*ingredient/i.test(line) || lower === 'ingredients' || lower === 'ingredients:') { mode = 'ingredients'; continue; }
+    if (/^#+\s*instruction/i.test(line) || lower === 'instructions' || lower === 'instructions:' || lower === 'directions' || lower === 'directions:' || lower === 'how to make' || /^#+\s*direction/i.test(line)) { mode = 'instructions'; continue; }
+    if (/^#+\s*(nutrition|notes?|tips?|serving|storage|faq|related|more recipe)/i.test(line)) { mode = 'none'; continue; }
+    if (line.length < 3) continue;
+    if (/^(jump to|print recipe|save recipe|pin recipe|rate this|leave a|subscribe|newsletter|advertisement|skip to|home\s*›|recipes\s*›)/i.test(line)) continue;
+    if (/^\d+\s*(calories|kcal|protein|carb|fat|fiber|sugar|sodium)/i.test(line)) continue;
+    if (mode === 'ingredients' && line.length > 2) {
+      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+      if (cleaned.length > 2) ingredients.push(cleaned);
+    }
+    if (mode === 'instructions' && line.length > 5) {
+      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+      if (cleaned.length > 5) instructions.push(cleaned);
+    }
+  }
+  return { ingredients, instructions };
+}
+
 // Approximate calories per gram for common foods — used to infer serving size
 const CAL_PER_GRAM: Record<string, number> = {
   // Grains/starches
@@ -478,6 +503,13 @@ export default function AIMealPlannerScreen() {
   // Preferences
   const [foodPrefs, setFoodPrefs] = useState('');
 
+  // Recipe modal
+  const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+  const [recipeModalTitle, setRecipeModalTitle] = useState<string | null>(null);
+  const [recipeIngredients, setRecipeIngredients] = useState<string[]>([]);
+  const [recipeInstructions, setRecipeInstructions] = useState<string[]>([]);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+
   // Save plan modal
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [planName, setPlanName] = useState('');
@@ -673,6 +705,55 @@ export default function AIMealPlannerScreen() {
       Alert.alert('Error', 'Failed to add foods. Please try again.');
     }
   }, [generatedPlan, showToast]);
+
+  // ── Recipe modal ────────────────────────────────────────────────────────────
+
+  const handleOpenRecipe = useCallback(async (title: string, recipeUrl: string | null) => {
+    console.log('[AIMealPlanner] handleOpenRecipe pressed, title:', title, 'recipeUrl:', recipeUrl);
+    setRecipeModalTitle(title);
+    setRecipeIngredients([]);
+    setRecipeInstructions([]);
+    setRecipeLoading(true);
+    setRecipeModalVisible(true);
+    if (!recipeUrl) {
+      console.log('[AIMealPlanner] handleOpenRecipe: no recipeUrl, skipping fetch');
+      setRecipeLoading(false);
+      return;
+    }
+    try {
+      const jinaUrl = `https://r.jina.ai/${recipeUrl}`;
+      console.log('[AIMealPlanner] fetching recipe from Jina:', jinaUrl);
+      const response = await fetch(jinaUrl, {
+        headers: { 'Accept': 'text/plain', 'X-Return-Format': 'text', 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error('Could not fetch recipe');
+      const text = await response.text();
+      console.log('[AIMealPlanner] Jina response received, length:', text.length);
+      const { ingredients, instructions } = parseRecipeContent(text);
+      console.log('[AIMealPlanner] parsed ingredients:', ingredients.length, 'instructions:', instructions.length);
+      if (isMounted.current) {
+        setRecipeIngredients(ingredients);
+        setRecipeInstructions(instructions);
+      }
+    } catch (e) {
+      console.error('[AIMealPlanner] handleOpenRecipe fetch error:', e);
+      if (isMounted.current) {
+        setRecipeIngredients([]);
+        setRecipeInstructions([]);
+      }
+    } finally {
+      if (isMounted.current) setRecipeLoading(false);
+    }
+  }, []);
+
+  const handleCloseRecipe = useCallback(() => {
+    console.log('[AIMealPlanner] recipe modal closed');
+    setRecipeModalVisible(false);
+    setRecipeModalTitle(null);
+    setRecipeIngredients([]);
+    setRecipeInstructions([]);
+  }, []);
 
   // ── Replace meal ────────────────────────────────────────────────────────────
 
@@ -1028,6 +1109,7 @@ export default function AIMealPlannerScreen() {
               const meal = generatedPlan[section.key];
               const foods = getMealItems(meal);
               const description = getMealDescription(meal);
+              const recipeUrl = getMealRecipeUrl(meal);
               const sectionMacros = sumMacros(foods);
               return (
                 <MealSectionCard
@@ -1035,6 +1117,7 @@ export default function AIMealPlannerScreen() {
                   section={section}
                   foods={foods}
                   dishDescription={description}
+                  recipeUrl={recipeUrl}
                   sectionCalories={sectionMacros.calories}
                   isDark={isDark}
                   textColor={textColor}
@@ -1044,6 +1127,7 @@ export default function AIMealPlannerScreen() {
                   inputBg={inputBg}
                   onReplaceMeal={handleOpenReplace}
                   onServingChange={handleFoodServingChange}
+                  onOpenRecipe={handleOpenRecipe}
                 />
               );
             })}
@@ -1191,6 +1275,62 @@ export default function AIMealPlannerScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Recipe Modal */}
+      <Modal visible={recipeModalVisible} transparent animationType="slide" onRequestClose={handleCloseRecipe}>
+        <View style={styles.recipeModalOverlay}>
+          <View style={[styles.recipeModalSheet, { backgroundColor: isDark ? '#1C1C1E' : '#fff' }]}>
+            <View style={styles.recipeModalHeader}>
+              <Text style={[styles.recipeModalTitle, { color: isDark ? '#fff' : '#000' }]} numberOfLines={2}>
+                {recipeModalTitle || 'Recipe'}
+              </Text>
+              <TouchableOpacity onPress={handleCloseRecipe} style={styles.recipeModalCloseBtn} activeOpacity={0.7}>
+                <Text style={{ fontSize: 22, color: isDark ? '#aaa' : '#666' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {recipeLoading ? (
+              <View style={styles.recipeLoadingContainer}>
+                <ActivityIndicator size="large" color={TEAL} />
+                <Text style={[styles.recipeLoadingText, { color: isDark ? '#aaa' : '#666' }]}>Loading recipe from Skinnytaste...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
+                {recipeIngredients.length === 0 && recipeInstructions.length === 0 ? (
+                  <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666' }]}>
+                    Recipe details not available for this meal.
+                  </Text>
+                ) : (
+                  <>
+                    {recipeIngredients.length > 0 && (
+                      <View style={styles.recipeSection}>
+                        <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Ingredients</Text>
+                        {recipeIngredients.map((ing, i) => (
+                          <View key={i} style={styles.recipeIngredientRow}>
+                            <Text style={[styles.recipeBullet, { color: TEAL }]}>•</Text>
+                            <Text style={[styles.recipeIngredientText, { color: isDark ? '#e0e0e0' : '#222' }]}>{ing}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {recipeInstructions.length > 0 && (
+                      <View style={styles.recipeSection}>
+                        <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Instructions</Text>
+                        {recipeInstructions.map((step, i) => (
+                          <View key={i} style={styles.recipeStepRow}>
+                            <Text style={[styles.recipeStepNumber, { color: TEAL }]}>{i + 1}.</Text>
+                            <Text style={[styles.recipeStepText, { color: isDark ? '#e0e0e0' : '#222' }]}>{step}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                )}
+                <View style={{ height: 40 }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1220,6 +1360,7 @@ interface MealSectionCardProps {
   section: { key: MealType; label: string; emoji: string };
   foods: PlanFood[];
   dishDescription: string | null;
+  recipeUrl: string | null;
   sectionCalories: number;
   isDark: boolean;
   textColor: string;
@@ -1229,19 +1370,14 @@ interface MealSectionCardProps {
   inputBg: string;
   onReplaceMeal: (mealType: MealType, mealLabel: string) => void;
   onServingChange: (mealType: MealType, foodIndex: number, field: 'serving_size' | 'serving_unit', value: string | number) => void;
+  onOpenRecipe: (title: string, recipeUrl: string | null) => void;
 }
 
 function MealSectionCard({
-  section, foods, dishDescription, sectionCalories, isDark, textColor, secondaryColor, cardBg, borderColor, inputBg,
-  onReplaceMeal, onServingChange,
+  section, foods, dishDescription, recipeUrl, sectionCalories, isDark, textColor, secondaryColor, cardBg, borderColor, inputBg,
+  onReplaceMeal, onServingChange, onOpenRecipe,
 }: MealSectionCardProps) {
-  const [descExpanded, setDescExpanded] = useState(false);
   const calRounded = Math.round(sectionCalories);
-
-  const TRUNCATE_LENGTH = 55;
-  const isTruncatable = dishDescription !== null && dishDescription.length > TRUNCATE_LENGTH;
-  const truncatedDesc = isTruncatable ? dishDescription!.slice(0, TRUNCATE_LENGTH) : dishDescription;
-  const displayDesc = descExpanded ? dishDescription : truncatedDesc;
 
   return (
     <View style={[styles.mealCard, { backgroundColor: cardBg, borderColor }]}>
@@ -1268,35 +1404,22 @@ function MealSectionCard({
         </View>
       </View>
 
-      {/* 2. Dish description (between header and divider) */}
-      {dishDescription !== null && (
-        <View style={styles.dishDescContainer}>
-          <Text style={[styles.dishDescText, { color: secondaryColor }]}>
-            {displayDesc}
-            {isTruncatable && !descExpanded && (
-              <Text
-                style={styles.dishDescToggle}
-                onPress={() => {
-                  console.log('[AIMealPlanner] dish description expanded for:', section.label);
-                  setDescExpanded(true);
-                }}
-              >
-                {'... '}
-                <Text style={styles.dishDescToggle}>more</Text>
-              </Text>
-            )}
-            {isTruncatable && descExpanded && (
-              <Text
-                style={styles.dishDescToggle}
-                onPress={() => {
-                  console.log('[AIMealPlanner] dish description collapsed for:', section.label);
-                  setDescExpanded(false);
-                }}
-              >
-                {' less'}
-              </Text>
-            )}
+      {/* 2. Dish title row with ••• button (between header and divider) */}
+      {!!dishDescription && (
+        <View style={styles.dishTitleRow}>
+          <Text style={[styles.dishTitleText, { color: secondaryColor }]} numberOfLines={2}>
+            {dishDescription}
           </Text>
+          <TouchableOpacity
+            style={styles.recipeDotsBtn}
+            onPress={() => {
+              console.log('[AIMealPlanner] ••• recipe button pressed for:', dishDescription, 'recipeUrl:', recipeUrl);
+              onOpenRecipe(dishDescription, recipeUrl);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.recipeDotsText, { color: TEAL }]}>•••</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1693,22 +1816,121 @@ const styles = StyleSheet.create({
   },
   mealDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.md },
 
-  // Dish description — between header and divider
-  dishDescContainer: {
+  // Dish title row with ••• button — between header and divider
+  dishTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: 0,
+    paddingTop: 4,
     paddingBottom: 10,
   },
-  dishDescText: {
-    fontSize: 12,
+  dishTitleText: {
+    fontSize: 13,
     fontStyle: 'italic',
+    flex: 1,
+    marginRight: 8,
     lineHeight: 18,
   },
-  dishDescToggle: {
-    fontSize: 12,
-    fontStyle: 'normal',
-    fontWeight: '600',
-    color: TEAL,
+  recipeDotsBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  recipeDotsText: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+
+  // Recipe modal
+  recipeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  recipeModalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    maxHeight: '85%',
+  },
+  recipeModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  recipeModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 12,
+    lineHeight: 24,
+  },
+  recipeModalCloseBtn: {
+    padding: 4,
+  },
+  recipeLoadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 16,
+  },
+  recipeLoadingText: {
+    fontSize: 14,
+  },
+  recipeModalScroll: {
+    flex: 1,
+  },
+  recipeNoContent: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 40,
+    lineHeight: 22,
+  },
+  recipeSection: {
+    marginBottom: 24,
+  },
+  recipeSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  recipeIngredientRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 8,
+  },
+  recipeBullet: {
+    fontSize: 16,
+    lineHeight: 22,
+    marginTop: 1,
+  },
+  recipeIngredientText: {
+    fontSize: 14,
+    lineHeight: 22,
+    flex: 1,
+  },
+  recipeStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  recipeStepNumber: {
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 22,
+    minWidth: 20,
+  },
+  recipeStepText: {
+    fontSize: 14,
+    lineHeight: 22,
+    flex: 1,
   },
 
   // Food row
