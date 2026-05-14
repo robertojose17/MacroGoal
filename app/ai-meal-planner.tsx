@@ -46,6 +46,7 @@ interface PlanFood {
 interface MealSection {
   dish_description?: string;
   recipe_url?: string;
+  meal_name?: string;
   items: PlanFood[];
 }
 
@@ -121,6 +122,12 @@ function getMealRecipeUrl(meal: MealSection | PlanFood[] | undefined): string | 
   if (!meal) return null;
   if (Array.isArray(meal)) return null;
   return meal?.recipe_url || null;
+}
+
+function getMealName(meal: MealSection | PlanFood[] | undefined): string | null {
+  if (!meal) return null;
+  if (Array.isArray(meal)) return null;
+  return meal?.meal_name || null;
 }
 
 function parseRecipeContent(raw: string): { ingredients: string[]; instructions: string[] } {
@@ -708,39 +715,75 @@ export default function AIMealPlannerScreen() {
 
   // ── Recipe modal ────────────────────────────────────────────────────────────
 
-  const handleOpenRecipe = useCallback(async (title: string, recipeUrl: string | null) => {
-    console.log('[AIMealPlanner] handleOpenRecipe pressed, title:', title, 'recipeUrl:', recipeUrl);
-    setRecipeModalTitle(title);
+  const handleOpenRecipe = useCallback(async (mealName: string) => {
+    console.log('[AIMealPlanner] handleOpenRecipe pressed, mealName:', mealName);
+    setRecipeModalTitle(mealName);
     setRecipeIngredients([]);
     setRecipeInstructions([]);
     setRecipeLoading(true);
     setRecipeModalVisible(true);
-    if (!recipeUrl) {
-      console.log('[AIMealPlanner] handleOpenRecipe: no recipeUrl, skipping fetch');
-      setRecipeLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    try {
-      const jinaUrl = `https://r.jina.ai/${recipeUrl}`;
-      console.log('[AIMealPlanner] fetching recipe from Jina:', jinaUrl);
-      const response = await fetch(jinaUrl, {
-        headers: { 'Accept': 'text/plain', 'X-Return-Format': 'text', 'User-Agent': 'Mozilla/5.0' },
-        signal: controller.signal,
+
+    const fetchFromMealDB = async (query: string): Promise<{ meals: Record<string, string>[] } | null> => {
+      const url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
+      console.log('[AIMealPlanner] fetching TheMealDB:', url);
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`TheMealDB error ${response.status}: ${errText.slice(0, 100)}`);
+      }
+      return response.json();
+    };
+
+    const extractIngredients = (meal: Record<string, string>): string[] => {
+      const result: string[] = [];
+      for (let i = 1; i <= 20; i++) {
+        const ingredient = (meal[`strIngredient${i}`] || '').trim();
+        const measure = (meal[`strMeasure${i}`] || '').trim();
+        if (!ingredient) continue;
+        const combined = `${measure} ${ingredient}`.trim();
+        if (combined) result.push(combined);
+      }
+      return result;
+    };
+
+    const extractInstructions = (meal: Record<string, string>): string[] => {
+      const raw = meal['strInstructions'] || '';
+      const steps = raw.split(/\r\n|\n|\. /).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      return steps.map((step: string, index: number) => {
+        if (/^\d+[.)]/u.test(step)) return step;
+        return `${index + 1}. ${step}`;
       });
-      clearTimeout(timeoutId);
-      if (!response.ok) throw new Error('Could not fetch recipe');
-      const text = await response.text();
-      console.log('[AIMealPlanner] Jina response received, length:', text.length);
-      const { ingredients, instructions } = parseRecipeContent(text);
-      console.log('[AIMealPlanner] parsed ingredients:', ingredients.length, 'instructions:', instructions.length);
+    };
+
+    try {
+      let data = await fetchFromMealDB(mealName);
+      let meal: Record<string, string> | null = data?.meals?.[0] ?? null;
+
+      if (!meal) {
+        console.log('[AIMealPlanner] no exact match, trying first word fallback');
+        const firstWord = mealName.split(' ')[0];
+        data = await fetchFromMealDB(firstWord);
+        meal = data?.meals?.[0] ?? null;
+      }
+
+      if (!meal) {
+        console.log('[AIMealPlanner] TheMealDB: no results found for:', mealName);
+        if (isMounted.current) {
+          setRecipeIngredients([]);
+          setRecipeInstructions([]);
+        }
+        return;
+      }
+
+      const ingredients = extractIngredients(meal);
+      const instructions = extractInstructions(meal);
+      console.log('[AIMealPlanner] TheMealDB result — meal:', meal['strMeal'], 'ingredients:', ingredients.length, 'instructions:', instructions.length);
+
       if (isMounted.current) {
         setRecipeIngredients(ingredients);
         setRecipeInstructions(instructions);
       }
     } catch (e: any) {
-      clearTimeout(timeoutId);
       console.error('[AIMealPlanner] handleOpenRecipe fetch error:', e?.message || e);
       if (isMounted.current) {
         setRecipeIngredients([]);
@@ -1113,7 +1156,7 @@ export default function AIMealPlannerScreen() {
               const meal = generatedPlan[section.key];
               const foods = getMealItems(meal);
               const description = getMealDescription(meal);
-              const recipeUrl = getMealRecipeUrl(meal);
+              const mealNameVal = getMealName(meal) || description;
               const sectionMacros = sumMacros(foods);
               return (
                 <MealSectionCard
@@ -1121,7 +1164,7 @@ export default function AIMealPlannerScreen() {
                   section={section}
                   foods={foods}
                   dishDescription={description}
-                  recipeUrl={recipeUrl}
+                  mealName={mealNameVal}
                   sectionCalories={sectionMacros.calories}
                   isDark={isDark}
                   textColor={textColor}
@@ -1295,13 +1338,13 @@ export default function AIMealPlannerScreen() {
             {recipeLoading ? (
               <View style={styles.recipeLoadingContainer}>
                 <ActivityIndicator size="large" color={TEAL} />
-                <Text style={[styles.recipeLoadingText, { color: isDark ? '#aaa' : '#666' }]}>Loading recipe from Skinnytaste...</Text>
+                <Text style={[styles.recipeLoadingText, { color: isDark ? '#aaa' : '#666' }]}>Looking up recipe...</Text>
               </View>
             ) : (
               <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
                 {recipeIngredients.length === 0 && recipeInstructions.length === 0 ? (
                   <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666' }]}>
-                    Recipe details not available for this meal.
+                    No recipe found for this meal.
                   </Text>
                 ) : (
                   <>
@@ -1364,7 +1407,7 @@ interface MealSectionCardProps {
   section: { key: MealType; label: string; emoji: string };
   foods: PlanFood[];
   dishDescription: string | null;
-  recipeUrl: string | null;
+  mealName: string | null;
   sectionCalories: number;
   isDark: boolean;
   textColor: string;
@@ -1374,11 +1417,11 @@ interface MealSectionCardProps {
   inputBg: string;
   onReplaceMeal: (mealType: MealType, mealLabel: string) => void;
   onServingChange: (mealType: MealType, foodIndex: number, field: 'serving_size' | 'serving_unit', value: string | number) => void;
-  onOpenRecipe: (title: string, recipeUrl: string | null) => void;
+  onOpenRecipe: (mealName: string) => void;
 }
 
 function MealSectionCard({
-  section, foods, dishDescription, recipeUrl, sectionCalories, isDark, textColor, secondaryColor, cardBg, borderColor, inputBg,
+  section, foods, dishDescription, mealName, sectionCalories, isDark, textColor, secondaryColor, cardBg, borderColor, inputBg,
   onReplaceMeal, onServingChange, onOpenRecipe,
 }: MealSectionCardProps) {
   const calRounded = Math.round(sectionCalories);
@@ -1417,8 +1460,9 @@ function MealSectionCard({
           <TouchableOpacity
             style={styles.recipeDotsBtn}
             onPress={() => {
-              console.log('[AIMealPlanner] ••• recipe button pressed for:', dishDescription, 'recipeUrl:', recipeUrl);
-              onOpenRecipe(dishDescription, recipeUrl);
+              const searchName = mealName || dishDescription || '';
+              console.log('[AIMealPlanner] ••• recipe button pressed, searching TheMealDB for:', searchName);
+              onOpenRecipe(searchName);
             }}
             activeOpacity={0.7}
           >
