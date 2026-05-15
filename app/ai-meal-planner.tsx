@@ -760,15 +760,23 @@ export default function AIMealPlannerScreen() {
       let meal: Record<string, string> | null = data?.meals?.[0] ?? null;
 
       if (!meal) {
-        console.log('[AIMealPlanner] no exact match, trying first word fallback');
-        const firstWord = mealName.split(' ')[0];
-        data = await fetchFromMealDB(firstWord);
-        meal = data?.meals?.[0] ?? null;
+        console.log('[AIMealPlanner] no exact match, trying per-word fallback for:', mealName);
+        const words = mealName.split(' ').filter(w => w.length > 2);
+        for (const word of words) {
+          console.log('[AIMealPlanner] trying word fallback:', word);
+          data = await fetchFromMealDB(word);
+          meal = data?.meals?.[0] ?? null;
+          if (meal) {
+            console.log('[AIMealPlanner] word fallback matched on:', word);
+            break;
+          }
+        }
       }
 
       if (!meal) {
         console.log('[AIMealPlanner] TheMealDB: no results found for:', mealName);
         if (isMounted.current) {
+          setRecipeLoading(false);
           setRecipeIngredients([]);
           setRecipeInstructions([]);
         }
