@@ -314,9 +314,14 @@ export default function MealPlanDetailScreen() {
 
     try {
       console.log('[MealPlanDetail] Calling recipe-details edge function for:', dishDescription);
+      const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA";
       const response = await fetch('https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/recipe-details', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        },
         body: JSON.stringify({ meal_name: dishDescription, foods: foodsPayload }),
       });
       if (!response.ok) {
