@@ -130,31 +130,6 @@ function getMealName(meal: MealSection | PlanFood[] | undefined): string | null 
   return meal?.meal_name || null;
 }
 
-function parseRecipeContent(raw: string): { ingredients: string[]; instructions: string[] } {
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  const ingredients: string[] = [];
-  const instructions: string[] = [];
-  let mode: 'none' | 'ingredients' | 'instructions' = 'none';
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    if (/^#+\s*ingredient/i.test(line) || lower === 'ingredients' || lower === 'ingredients:') { mode = 'ingredients'; continue; }
-    if (/^#+\s*instruction/i.test(line) || lower === 'instructions' || lower === 'instructions:' || lower === 'directions' || lower === 'directions:' || lower === 'how to make' || /^#+\s*direction/i.test(line)) { mode = 'instructions'; continue; }
-    if (/^#+\s*(nutrition|notes?|tips?|serving|storage|faq|related|more recipe)/i.test(line)) { mode = 'none'; continue; }
-    if (line.length < 3) continue;
-    if (/^(jump to|print recipe|save recipe|pin recipe|rate this|leave a|subscribe|newsletter|advertisement|skip to|home\s*›|recipes\s*›)/i.test(line)) continue;
-    if (/^\d+\s*(calories|kcal|protein|carb|fat|fiber|sugar|sodium)/i.test(line)) continue;
-    if (mode === 'ingredients' && line.length > 2) {
-      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
-      if (cleaned.length > 2) ingredients.push(cleaned);
-    }
-    if (mode === 'instructions' && line.length > 5) {
-      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
-      if (cleaned.length > 5) instructions.push(cleaned);
-    }
-  }
-  return { ingredients, instructions };
-}
-
 // Approximate calories per gram for common foods — used to infer serving size
 const CAL_PER_GRAM: Record<string, number> = {
   // Grains/starches
@@ -715,91 +690,18 @@ export default function AIMealPlannerScreen() {
 
   // ── Recipe modal ────────────────────────────────────────────────────────────
 
-  const handleOpenRecipe = useCallback(async (mealName: string) => {
-    console.log('[AIMealPlanner] handleOpenRecipe pressed, mealName:', mealName);
+  const handleOpenRecipe = useCallback((mealName: string, foods: PlanFood[]) => {
+    console.log('[AIMealPlanner] ••• recipe modal opened for:', mealName, 'foods count:', foods.length);
+    const ingredientStrings = foods.map(food => {
+      const size = food.serving_size ?? 1;
+      const unit = food.serving_unit || 'g';
+      return `${size}${unit} ${food.name}`;
+    });
     setRecipeModalTitle(mealName);
-    setRecipeIngredients([]);
+    setRecipeIngredients(ingredientStrings);
     setRecipeInstructions([]);
-    setRecipeLoading(true);
+    setRecipeLoading(false);
     setRecipeModalVisible(true);
-
-    const fetchFromMealDB = async (query: string): Promise<{ meals: Record<string, string>[] } | null> => {
-      const url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
-      console.log('[AIMealPlanner] fetching TheMealDB:', url);
-      const response = await fetch(url);
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`TheMealDB error ${response.status}: ${errText.slice(0, 100)}`);
-      }
-      return response.json();
-    };
-
-    const extractIngredients = (meal: Record<string, string>): string[] => {
-      const result: string[] = [];
-      for (let i = 1; i <= 20; i++) {
-        const ingredient = (meal[`strIngredient${i}`] || '').trim();
-        const measure = (meal[`strMeasure${i}`] || '').trim();
-        if (!ingredient) continue;
-        const combined = `${measure} ${ingredient}`.trim();
-        if (combined) result.push(combined);
-      }
-      return result;
-    };
-
-    const extractInstructions = (meal: Record<string, string>): string[] => {
-      const raw = meal['strInstructions'] || '';
-      const steps = raw.split(/\r\n|\n|\. /).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-      return steps.map((step: string, index: number) => {
-        if (/^\d+[.)]/u.test(step)) return step;
-        return `${index + 1}. ${step}`;
-      });
-    };
-
-    try {
-      let data = await fetchFromMealDB(mealName);
-      let meal: Record<string, string> | null = data?.meals?.[0] ?? null;
-
-      if (!meal) {
-        console.log('[AIMealPlanner] no exact match, trying per-word fallback for:', mealName);
-        const words = mealName.split(' ').filter(w => w.length > 2);
-        for (const word of words) {
-          console.log('[AIMealPlanner] trying word fallback:', word);
-          data = await fetchFromMealDB(word);
-          meal = data?.meals?.[0] ?? null;
-          if (meal) {
-            console.log('[AIMealPlanner] word fallback matched on:', word);
-            break;
-          }
-        }
-      }
-
-      if (!meal) {
-        console.log('[AIMealPlanner] TheMealDB: no results found for:', mealName);
-        if (isMounted.current) {
-          setRecipeLoading(false);
-          setRecipeIngredients([]);
-          setRecipeInstructions([]);
-        }
-        return;
-      }
-
-      const ingredients = extractIngredients(meal);
-      const instructions = extractInstructions(meal);
-      console.log('[AIMealPlanner] TheMealDB result — meal:', meal['strMeal'], 'ingredients:', ingredients.length, 'instructions:', instructions.length);
-
-      if (isMounted.current) {
-        setRecipeIngredients(ingredients);
-        setRecipeInstructions(instructions);
-      }
-    } catch (e: any) {
-      console.error('[AIMealPlanner] handleOpenRecipe fetch error:', e?.message || e);
-      if (isMounted.current) {
-        setRecipeIngredients([]);
-        setRecipeInstructions([]);
-      }
-    } finally {
-      if (isMounted.current) setRecipeLoading(false);
-    }
   }, []);
 
   const handleCloseRecipe = useCallback(() => {
@@ -1182,7 +1084,7 @@ export default function AIMealPlannerScreen() {
                   inputBg={inputBg}
                   onReplaceMeal={handleOpenReplace}
                   onServingChange={handleFoodServingChange}
-                  onOpenRecipe={handleOpenRecipe}
+                  onOpenRecipe={(mealName, mealFoods) => handleOpenRecipe(mealName, mealFoods)}
                 />
               );
             })}
@@ -1343,46 +1245,24 @@ export default function AIMealPlannerScreen() {
                 <Text style={{ fontSize: 22, color: isDark ? '#aaa' : '#666' }}>✕</Text>
               </TouchableOpacity>
             </View>
-            {recipeLoading ? (
-              <View style={styles.recipeLoadingContainer}>
-                <ActivityIndicator size="large" color={TEAL} />
-                <Text style={[styles.recipeLoadingText, { color: isDark ? '#aaa' : '#666' }]}>Looking up recipe...</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
-                {recipeIngredients.length === 0 && recipeInstructions.length === 0 ? (
-                  <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666' }]}>
-                    No recipe found for this meal.
-                  </Text>
-                ) : (
-                  <>
-                    {recipeIngredients.length > 0 && (
-                      <View style={styles.recipeSection}>
-                        <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Ingredients</Text>
-                        {recipeIngredients.map((ing, i) => (
-                          <View key={i} style={styles.recipeIngredientRow}>
-                            <Text style={[styles.recipeBullet, { color: TEAL }]}>•</Text>
-                            <Text style={[styles.recipeIngredientText, { color: isDark ? '#e0e0e0' : '#222' }]}>{ing}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                    {recipeInstructions.length > 0 && (
-                      <View style={styles.recipeSection}>
-                        <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Instructions</Text>
-                        {recipeInstructions.map((step, i) => (
-                          <View key={i} style={styles.recipeStepRow}>
-                            <Text style={[styles.recipeStepNumber, { color: TEAL }]}>{i + 1}.</Text>
-                            <Text style={[styles.recipeStepText, { color: isDark ? '#e0e0e0' : '#222' }]}>{step}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </>
-                )}
-                <View style={{ height: 40 }} />
-              </ScrollView>
-            )}
+            <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
+              {recipeIngredients.length > 0 ? (
+                <View style={styles.recipeSection}>
+                  <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Ingredients</Text>
+                  {recipeIngredients.map((ing, i) => (
+                    <View key={i} style={styles.recipeIngredientRow}>
+                      <Text style={[styles.recipeBullet, { color: TEAL }]}>•</Text>
+                      <Text style={[styles.recipeIngredientText, { color: isDark ? '#e0e0e0' : '#222' }]}>{ing}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666' }]}>
+                  No ingredients available for this meal.
+                </Text>
+              )}
+              <View style={{ height: 40 }} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1425,7 +1305,7 @@ interface MealSectionCardProps {
   inputBg: string;
   onReplaceMeal: (mealType: MealType, mealLabel: string) => void;
   onServingChange: (mealType: MealType, foodIndex: number, field: 'serving_size' | 'serving_unit', value: string | number) => void;
-  onOpenRecipe: (mealName: string) => void;
+  onOpenRecipe: (mealName: string, foods: PlanFood[]) => void;
 }
 
 function MealSectionCard({
@@ -1469,8 +1349,8 @@ function MealSectionCard({
             style={styles.recipeDotsBtn}
             onPress={() => {
               const searchName = mealName || dishDescription || '';
-              console.log('[AIMealPlanner] ••• recipe button pressed, searching TheMealDB for:', searchName);
-              onOpenRecipe(searchName);
+              console.log('[AIMealPlanner] ••• recipe button pressed for:', searchName);
+              onOpenRecipe(searchName, foods);
             }}
             activeOpacity={0.7}
           >
