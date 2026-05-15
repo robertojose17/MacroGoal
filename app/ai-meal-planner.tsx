@@ -690,18 +690,48 @@ export default function AIMealPlannerScreen() {
 
   // ── Recipe modal ────────────────────────────────────────────────────────────
 
-  const handleOpenRecipe = useCallback((mealName: string, foods: PlanFood[]) => {
+  const handleOpenRecipe = useCallback(async (mealName: string, foods: PlanFood[]) => {
     console.log('[AIMealPlanner] ••• recipe modal opened for:', mealName, 'foods count:', foods.length);
-    const ingredientStrings = foods.map(food => {
-      const size = food.serving_size ?? 1;
-      const unit = food.serving_unit || 'g';
-      return `${size}${unit} ${food.name}`;
-    });
     setRecipeModalTitle(mealName);
-    setRecipeIngredients(ingredientStrings);
+    setRecipeIngredients([]);
     setRecipeInstructions([]);
-    setRecipeLoading(false);
+    setRecipeLoading(true);
     setRecipeModalVisible(true);
+
+    const foodsPayload = foods.map(f => ({
+      name: f.name,
+      serving_size: f.serving_size ?? 1,
+      serving_unit: f.serving_unit || 'g',
+      calories: f.calories ?? 0,
+      protein: f.protein ?? 0,
+      carbs: f.carbs ?? 0,
+      fats: f.fats ?? 0,
+    }));
+
+    try {
+      console.log('[AIMealPlanner] Calling recipe-details edge function for:', mealName);
+      const response = await fetch('https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/recipe-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meal_name: mealName, foods: foodsPayload }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[AIMealPlanner] recipe-details error:', response.status, errText.slice(0, 200));
+        setRecipeInstructions(['Failed to generate recipe. Please try again.']);
+        return;
+      }
+      const data = await response.json();
+      console.log('[AIMealPlanner] recipe-details response received, ingredients:', data.ingredients?.length, 'instructions:', data.instructions?.length);
+      setRecipeIngredients(Array.isArray(data.ingredients) ? data.ingredients : []);
+      setRecipeInstructions(Array.isArray(data.instructions) ? data.instructions : []);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[AIMealPlanner] recipe-details fetch error:', msg);
+      setRecipeInstructions(['Failed to generate recipe. Please try again.']);
+    } finally {
+      setRecipeLoading(false);
+    }
   }, []);
 
   const handleCloseRecipe = useCallback(() => {
@@ -1245,24 +1275,48 @@ export default function AIMealPlannerScreen() {
                 <Text style={{ fontSize: 22, color: isDark ? '#aaa' : '#666' }}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
-              {recipeIngredients.length > 0 ? (
-                <View style={styles.recipeSection}>
-                  <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Ingredients</Text>
-                  {recipeIngredients.map((ing, i) => (
-                    <View key={i} style={styles.recipeIngredientRow}>
-                      <Text style={[styles.recipeBullet, { color: TEAL }]}>•</Text>
-                      <Text style={[styles.recipeIngredientText, { color: isDark ? '#e0e0e0' : '#222' }]}>{ing}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666' }]}>
-                  No ingredients available for this meal.
+            {recipeLoading ? (
+              <View style={styles.recipeLoadingContainer}>
+                <ActivityIndicator size="large" color={TEAL} />
+                <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666', marginTop: 12 }]}>
+                  Generating recipe...
                 </Text>
-              )}
-              <View style={{ height: 40 }} />
-            </ScrollView>
+              </View>
+            ) : (
+              <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
+                {recipeIngredients.length > 0 && (
+                  <View style={styles.recipeSection}>
+                    <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Ingredients</Text>
+                    {recipeIngredients.map((ing, i) => (
+                      <View key={i} style={styles.recipeIngredientRow}>
+                        <Text style={[styles.recipeBullet, { color: TEAL }]}>•</Text>
+                        <Text style={[styles.recipeIngredientText, { color: isDark ? '#e0e0e0' : '#222' }]}>{ing}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {recipeInstructions.length > 0 && (
+                  <View style={styles.recipeSection}>
+                    <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Instructions</Text>
+                    {recipeInstructions.map((step, i) => {
+                      const stepNum = i + 1;
+                      return (
+                        <View key={i} style={styles.recipeIngredientRow}>
+                          <Text style={[styles.recipeBullet, { color: TEAL }]}>{stepNum}.</Text>
+                          <Text style={[styles.recipeIngredientText, { color: isDark ? '#e0e0e0' : '#222' }]}>{step}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+                {recipeIngredients.length === 0 && recipeInstructions.length === 0 && (
+                  <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666' }]}>
+                    No recipe available.
+                  </Text>
+                )}
+                <View style={{ height: 40 }} />
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>

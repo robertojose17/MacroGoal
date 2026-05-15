@@ -145,46 +145,6 @@ function computeLiveMacros(es: ItemEditState, servingsStr: string) {
   }
 }
 
-function parseRecipeContent(raw: string): { ingredients: string[]; instructions: string[] } {
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-
-  const ingredients: string[] = [];
-  const instructions: string[] = [];
-
-  let mode: 'none' | 'ingredients' | 'instructions' = 'none';
-
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-
-    if (/^#+\s*ingredient/i.test(line) || lower === 'ingredients' || lower === 'ingredients:') {
-      mode = 'ingredients';
-      continue;
-    }
-    if (/^#+\s*instruction/i.test(line) || lower === 'instructions' || lower === 'instructions:' || lower === 'directions' || lower === 'directions:' || lower === 'how to make' || /^#+\s*direction/i.test(line)) {
-      mode = 'instructions';
-      continue;
-    }
-    if (/^#+\s*(nutrition|notes?|tips?|serving|storage|faq|related|more recipe)/i.test(line)) {
-      mode = 'none';
-      continue;
-    }
-
-    if (line.length < 3) continue;
-    if (/^(jump to|print recipe|save recipe|pin recipe|rate this|leave a|subscribe|newsletter|advertisement|skip to|home\s*›|recipes\s*›)/i.test(line)) continue;
-    if (/^\d+\s*(calories|kcal|protein|carb|fat|fiber|sugar|sodium)/i.test(line)) continue;
-
-    if (mode === 'ingredients' && line.length > 2) {
-      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
-      if (cleaned.length > 2) ingredients.push(cleaned);
-    }
-    if (mode === 'instructions' && line.length > 5) {
-      const cleaned = line.replace(/^[-•*▪◦]\s*/, '').replace(/^\d+\.\s*/, '').trim();
-      if (cleaned.length > 5) instructions.push(cleaned);
-    }
-  }
-
-  return { ingredients, instructions };
-}
 
 export default function MealPlanDetailScreen() {
   const router = useRouter();
@@ -203,7 +163,6 @@ export default function MealPlanDetailScreen() {
   // Recipe modal state
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
   const [recipeModalMeal, setRecipeModalMeal] = useState<string | null>(null);
-  const [recipeModalUrl, setRecipeModalUrl] = useState<string | null>(null);
   const [recipeIngredients, setRecipeIngredients] = useState<string[]>([]);
   const [recipeInstructions, setRecipeInstructions] = useState<string[]>([]);
   const [recipeLoading, setRecipeLoading] = useState(false);
@@ -335,48 +294,45 @@ export default function MealPlanDetailScreen() {
     });
   };
 
-  const handleOpenRecipe = useCallback(async (dishDescription: string | null, recipeUrl: string | null) => {
-    console.log('[MealPlanDetail] Recipe button pressed, dish:', dishDescription, 'url:', recipeUrl);
+  const handleOpenRecipe = useCallback(async (dishDescription: string | null, mealItems: MealPlanItem[]) => {
+    console.log('[MealPlanDetail] ••• recipe button pressed, dish:', dishDescription, 'items count:', mealItems.length);
     setRecipeModalMeal(dishDescription);
-    setRecipeModalUrl(recipeUrl);
     setRecipeIngredients([]);
     setRecipeInstructions([]);
+    setRecipeLoading(true);
     setRecipeModalVisible(true);
 
-    if (!recipeUrl) return;
+    const foodsPayload = mealItems.map(item => ({
+      name: item.food_name,
+      serving_size: item.quantity,
+      serving_unit: 'g',
+      calories: item.calories,
+      protein: item.protein,
+      carbs: item.carbs,
+      fats: item.fats,
+    }));
 
-    setRecipeLoading(true);
     try {
-      console.log('[MealPlanDetail] Fetching recipe from Jina:', recipeUrl);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-      const response = await fetch(`https://r.jina.ai/${recipeUrl}`, {
-        headers: { 'Accept': 'text/plain', 'X-Return-Format': 'text' },
-        signal: controller.signal,
+      console.log('[MealPlanDetail] Calling recipe-details edge function for:', dishDescription);
+      const response = await fetch('https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/recipe-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meal_name: dishDescription, foods: foodsPayload }),
       });
-      clearTimeout(timeoutId);
       if (!response.ok) {
         const errText = await response.text();
-        console.error('[MealPlanDetail] Jina fetch error:', response.status, errText.slice(0, 200));
-        setRecipeIngredients([]);
-        setRecipeInstructions(['Failed to load recipe. Please try again.']);
+        console.error('[MealPlanDetail] recipe-details error:', response.status, errText.slice(0, 200));
+        setRecipeInstructions(['Failed to generate recipe. Please try again.']);
         return;
       }
-      const text = await response.text();
-      console.log('[MealPlanDetail] Recipe fetched, length:', text.length);
-      const parsed = parseRecipeContent(text);
-      if (parsed.ingredients.length === 0 && parsed.instructions.length === 0) {
-        setRecipeIngredients([]);
-        setRecipeInstructions(['Could not extract recipe details. Visit the Skinnytaste website for the full recipe.']);
-      } else {
-        setRecipeIngredients(parsed.ingredients);
-        setRecipeInstructions(parsed.instructions);
-      }
+      const data = await response.json();
+      console.log('[MealPlanDetail] recipe-details response received, ingredients:', data.ingredients?.length, 'instructions:', data.instructions?.length);
+      setRecipeIngredients(Array.isArray(data.ingredients) ? data.ingredients : []);
+      setRecipeInstructions(Array.isArray(data.instructions) ? data.instructions : []);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      console.error('[MealPlanDetail] Recipe fetch error:', msg);
-      setRecipeIngredients([]);
-      setRecipeInstructions(['Failed to load recipe. Please check your connection.']);
+      console.error('[MealPlanDetail] recipe-details fetch error:', msg);
+      setRecipeInstructions(['Failed to generate recipe. Please try again.']);
     } finally {
       setRecipeLoading(false);
     }
@@ -530,7 +486,6 @@ export default function MealPlanDetailScreen() {
           const mealItems = dedupedItems.filter(i => i.meal_type === mealDef.type);
           const isLast = mealIdx === MEAL_TYPES.length - 1;
           const dishDescription = mealItems[0]?.dish_description ?? null;
-          const dishRecipeUrl = mealItems[0]?.recipe_url ?? null;
 
           // Live meal totals
           const mealCalories = Math.round(mealItems.reduce((s, i) => {
@@ -614,7 +569,7 @@ export default function MealPlanDetailScreen() {
                   </Text>
                   <TouchableOpacity
                     style={styles.recipeDotsBtn}
-                    onPress={() => handleOpenRecipe(dishDescription, dishRecipeUrl)}
+                    onPress={() => handleOpenRecipe(dishDescription, mealItems)}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.recipeDotsText, { color: colors.primary }]}>•••</Text>
@@ -820,11 +775,7 @@ export default function MealPlanDetailScreen() {
             {recipeLoading ? (
               <View style={styles.recipeLoadingContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>Loading recipe...</Text>
-              </View>
-            ) : recipeModalUrl === null ? (
-              <View style={styles.recipeLoadingContainer}>
-                <Text style={[styles.recipeNoLinkText, { color: secondaryColor }]}>No recipe link available for this meal.</Text>
+                <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>Generating recipe...</Text>
               </View>
             ) : (
               <ScrollView
@@ -856,6 +807,9 @@ export default function MealPlanDetailScreen() {
                       );
                     })}
                   </View>
+                )}
+                {recipeIngredients.length === 0 && recipeInstructions.length === 0 && (
+                  <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>No recipe available.</Text>
                 )}
               </ScrollView>
             )}
