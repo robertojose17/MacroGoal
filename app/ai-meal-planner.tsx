@@ -1269,9 +1269,9 @@ export default function AIMealPlannerScreen() {
       </Modal>
 
       {/* Recipe Modal */}
-      <Modal visible={recipeModalVisible} transparent animationType="slide" onRequestClose={handleCloseRecipe}>
-        <View style={styles.recipeModalOverlay}>
-          <View style={[styles.recipeModalSheet, { backgroundColor: isDark ? '#1C1C1E' : '#fff' }]}>
+      <Modal visible={recipeModalVisible} transparent={false} animationType="slide" onRequestClose={handleCloseRecipe}>
+        <View style={[styles.recipeModalOverlay, { backgroundColor: isDark ? '#1C1C1E' : '#fff' }]}>
+          <View style={styles.recipeModalSheet}>
             <View style={styles.recipeModalHeader}>
               <Text style={[styles.recipeModalTitle, { color: isDark ? '#fff' : '#000' }]} numberOfLines={2}>
                 {recipeModalTitle || 'Recipe'}
@@ -1840,16 +1840,12 @@ const styles = StyleSheet.create({
   // Recipe modal
   recipeModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
   },
   recipeModalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 16,
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
     paddingHorizontal: 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    maxHeight: '85%',
   },
   recipeModalHeader: {
     flexDirection: 'row',

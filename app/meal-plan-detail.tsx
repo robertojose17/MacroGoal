@@ -11,7 +11,7 @@ import {
   RefreshControl,
   TextInput,
   Modal,
-  Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -753,28 +753,23 @@ export default function MealPlanDetailScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Recipe Bottom Sheet Modal */}
+      {/* Recipe Full Screen Modal */}
       <Modal
         visible={recipeModalVisible}
-        transparent
+        transparent={false}
         animationType="slide"
         onRequestClose={handleCloseRecipe}
       >
-        <View style={styles.recipeModalOverlay}>
-          <TouchableOpacity style={styles.recipeModalBackdrop} onPress={handleCloseRecipe} activeOpacity={1} />
-          <View style={[styles.recipeModalSheet, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-            {/* Sheet handle */}
-            <View style={[styles.recipeSheetHandle, { backgroundColor: borderColor }]} />
-
-            {/* Modal header */}
-            <View style={styles.recipeModalHeader}>
-              <Text style={[styles.recipeModalTitle, { color: textColor }]} numberOfLines={2}>
-                {recipeModalMeal ?? 'Recipe'}
-              </Text>
-              <TouchableOpacity onPress={handleCloseRecipe} style={styles.recipeCloseBtn} activeOpacity={0.7}>
-                <Text style={[styles.recipeCloseBtnText, { color: colors.primary }]}>Close</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={[styles.recipeModalOverlay, { backgroundColor: cardBg }]}>
+          {/* Modal header */}
+          <View style={[styles.recipeModalHeader, { borderBottomColor: borderColor }]}>
+            <Text style={[styles.recipeModalTitle, { color: textColor }]} numberOfLines={2}>
+              {recipeModalMeal ?? 'Recipe'}
+            </Text>
+            <TouchableOpacity onPress={handleCloseRecipe} style={styles.recipeCloseBtn} activeOpacity={0.7}>
+              <Text style={[styles.recipeCloseBtnText, { color: colors.primary }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
 
             {/* Content */}
             {recipeLoading ? (
@@ -818,7 +813,6 @@ export default function MealPlanDetailScreen() {
                 )}
               </ScrollView>
             )}
-          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1014,28 +1008,7 @@ const styles = StyleSheet.create({
   // Recipe modal
   recipeModalOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
-  recipeModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  recipeModalSheet: {
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    maxHeight: Dimensions.get('window').height * 0.72,
-    minHeight: 200,
-    paddingBottom: 32,
-  },
-  recipeSheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
   },
   recipeModalHeader: {
     flexDirection: 'row',
@@ -1044,6 +1017,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.sm,
   },
   recipeModalTitle: {
     ...typography.bodyBold,
