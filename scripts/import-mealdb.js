@@ -101,34 +101,59 @@ const usdaCache = new Map();
 async function getUsdaMacros(ingredientName) {
   const key = ingredientName.toLowerCase().trim();
   if (usdaCache.has(key)) return usdaCache.get(key);
-  await sleep(200);
-  try {
-    const query = encodeURIComponent(key);
-    const url = `${USDA_BASE}/foods/search?query=${query}&api_key=${USDA_API_KEY}&pageSize=5&dataType=SR%20Legacy,Foundation,Survey%20(FNDDS)`;
-    const res = await fetch(url);
-    if (!res.ok) { usdaCache.set(key, null); return null; }
-    const data = await res.json();
-    const foods = data.foods || [];
-    if (foods.length === 0) { usdaCache.set(key, null); return null; }
-    const food = foods[0];
-    const nutrients = food.foodNutrients || [];
-    const get = (name) => {
-      const n = nutrients.find(n => n.nutrientName && n.nutrientName.toLowerCase().includes(name.toLowerCase()));
-      return n ? (n.value || 0) : 0;
-    };
-    const macros = {
-      calories: get('Energy') || get('energy'),
-      protein: get('Protein'),
-      carbs: get('Carbohydrate'),
-      fat: get('Total lipid'),
-      fiber: get('Fiber'),
-    };
-    usdaCache.set(key, macros);
-    return macros;
-  } catch (err) {
-    usdaCache.set(key, null);
-    return null;
+
+  // Build fallback search terms: full name → first word → last word
+  const words = key.split(/\s+/).filter(Boolean);
+  const searchTerms = [key];
+  if (words.length > 1) {
+    searchTerms.push(words[0]);           // first word (e.g. "beef" from "beef rendang")
+    searchTerms.push(words[words.length - 1]); // last word (e.g. "paste" from "tamarind paste")
   }
+
+  // Known zero-calorie ingredients — skip USDA entirely
+  const zeroCalorie = ['water','salt','pepper','black pepper','white pepper','ice'];
+  if (zeroCalorie.some(z => key.includes(z))) {
+    usdaCache.set(key, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+    return usdaCache.get(key);
+  }
+
+  for (const term of searchTerms) {
+    await sleep(200);
+    try {
+      const query = encodeURIComponent(term);
+      const url = `${USDA_BASE}/foods/search?query=${query}&api_key=${USDA_API_KEY}&pageSize=5&dataType=SR%20Legacy,Foundation,Survey%20(FNDDS)`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const foods = data.foods || [];
+      if (foods.length === 0) continue;
+      const food = foods[0];
+      const nutrients = food.foodNutrients || [];
+      const get = (name) => {
+        const n = nutrients.find(n => n.nutrientName && n.nutrientName.toLowerCase().includes(name.toLowerCase()));
+        return n ? (n.value || 0) : 0;
+      };
+      const macros = {
+        calories: get('Energy') || get('energy'),
+        protein: get('Protein'),
+        carbs: get('Carbohydrate'),
+        fat: get('Total lipid'),
+        fiber: get('Fiber'),
+      };
+      // If calories > 0, this is a good result — use it
+      if (macros.calories > 0) {
+        usdaCache.set(key, macros);
+        return macros;
+      }
+      // calories === 0, try next fallback term
+    } catch (err) {
+      continue;
+    }
+  }
+
+  // All terms returned 0 — cache and return null
+  usdaCache.set(key, null);
+  return null;
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -267,7 +292,7 @@ async function processMeal(meal, category, existingIds) {
     ingredients.push({ name: ing.name, measure: ing.measure, grams, calories: cal, protein, carbs, fat, fiber });
   }
 
-  if (totalCal < 50) return null;
+  if (totalCal < 20) return null;
 
   return {
     name: meal.strMeal,
