@@ -195,23 +195,29 @@ async function supabaseInsert(rows) {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer': 'resolution=ignore-duplicates,return=minimal',
+      'Prefer': 'return=minimal',
     },
     body: JSON.stringify(rows),
   });
   if (!res.ok) {
     const err = await res.text();
+    // Ignore duplicate key errors (23505) silently
+    if (err.includes('23505')) return;
     throw new Error(`Supabase insert failed: ${res.status} ${err}`);
   }
 }
 
 async function supabaseGetExistingIds() {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/meal_recipes?select=mealdb_id&source=eq.mealdb&mealdb_id=not.is.null`, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-  });
-  if (!res.ok) return new Set();
-  const data = await res.json();
-  return new Set(data.map(r => r.mealdb_id));
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/meal_recipes?select=mealdb_id&source=eq.mealdb`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!res.ok) return new Set();
+    const data = await res.json();
+    return new Set(data.filter(r => r.mealdb_id).map(r => r.mealdb_id));
+  } catch (e) {
+    return new Set();
+  }
 }
 
 async function fetchAllCategories() {
