@@ -307,7 +307,7 @@ function Toast({ message, visible }: ToastProps) {
         Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start();
     }
-  }, [visible, message]);
+  }, [visible, message, opacity]);
 
   return (
     <Animated.View style={[styles.toast, { opacity }]} pointerEvents="none">
@@ -340,7 +340,7 @@ function LoadingDots({ color }: LoadingDotsProps) {
     const a3 = anim(dot3, 400);
     a1.start(); a2.start(); a3.start();
     return () => { a1.stop(); a2.stop(); a3.stop(); };
-  }, []);
+  }, [dot1, dot2, dot3]);
 
   return (
     <View style={styles.dotsRow}>
@@ -879,7 +879,7 @@ export default function AIMealPlannerScreen() {
     } finally {
       if (isMounted.current) setReplacing(false);
     }
-  }, [replaceTarget, replaceText, userGoals, showToast, generatedPlan]);
+  }, [replaceTarget, replaceText, userGoals, showToast]);
 
   // ── Save plan ───────────────────────────────────────────────────────────────
 
