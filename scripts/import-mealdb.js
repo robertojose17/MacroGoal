@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 /**
- * TheMealDB + USDA → Supabase import script
+ * TheMealDB + Open Food Facts → Supabase import script
  * Run once: SUPABASE_SERVICE_ROLE_KEY=your_key node scripts/import-mealdb.js
  */
 
 const MEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
-const USDA_BASE = 'https://api.nal.usda.gov/fdc/v1';
-const USDA_API_KEY = process.env.USDA_API_KEY || '9pHGuGFIg0fLfwTErc6Fb0ITiHwgwWSow27SjBjL';
+const OFF_BASE = 'https://world.openfoodfacts.org/cgi/search.pl';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://esgptfiofoaeguslgvcq.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -96,64 +95,105 @@ function parseAmount(measureStr, ingredientName) {
   return Math.round(amount * 50);
 }
 
-const usdaCache = new Map();
+// Sanity check: returns true if macros look plausible for the ingredient
+function passesSanityCheck(ingredientName, macros) {
+  const name = ingredientName.toLowerCase();
 
-async function getUsdaMacros(ingredientName) {
+  // Nothing can exceed ~900 kcal/100g (pure fat)
+  if (macros.calories > 900) return false;
+
+  // Sugar/carb-only ingredients should have negligible fat
+  const sugarLike = ['sugar', 'honey', 'syrup', 'flour', 'starch'];
+  if (sugarLike.some(k => name.includes(k)) && macros.fat > 2) return false;
+
+  // Herbs and spices should not be calorie-dense or fatty
+  const herbSpice = ['garlic', 'tarragon', 'basil', 'oregano', 'thyme', 'parsley',
+    'cilantro', 'rosemary', 'sage', 'mint', 'dill', 'chive'];
+  if (herbSpice.some(k => name.includes(k))) {
+    if (macros.calories > 400) return false;
+    if (macros.fat > 5) return false;
+  }
+
+  return true;
+}
+
+const offCache = new Map();
+
+async function getOFFMacros(ingredientName) {
   const key = ingredientName.toLowerCase().trim();
-  if (usdaCache.has(key)) return usdaCache.get(key);
+  if (offCache.has(key)) return offCache.get(key);
 
-  // Build fallback search terms: full name → first word → last word
-  const words = key.split(/\s+/).filter(Boolean);
-  const searchTerms = [key];
-  if (words.length > 1) {
-    searchTerms.push(words[0]);           // first word (e.g. "beef" from "beef rendang")
-    searchTerms.push(words[words.length - 1]); // last word (e.g. "paste" from "tamarind paste")
-  }
-
-  // Known zero-calorie ingredients — skip USDA entirely
-  const zeroCalorie = ['water','salt','pepper','black pepper','white pepper','ice'];
+  // Known zero-calorie ingredients — skip OFF entirely
+  const zeroCalorie = ['water', 'salt', 'pepper', 'black pepper', 'white pepper', 'ice'];
   if (zeroCalorie.some(z => key.includes(z))) {
-    usdaCache.set(key, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
-    return usdaCache.get(key);
+    const result = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    offCache.set(key, result);
+    return result;
   }
 
-  for (const term of searchTerms) {
-    await sleep(200);
-    try {
-      const query = encodeURIComponent(term);
-      const url = `${USDA_BASE}/foods/search?query=${query}&api_key=${USDA_API_KEY}&pageSize=5&dataType=SR%20Legacy,Foundation,Survey%20(FNDDS)`;
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const foods = data.foods || [];
-      if (foods.length === 0) continue;
-      const food = foods[0];
-      const nutrients = food.foodNutrients || [];
-      const get = (name) => {
-        const n = nutrients.find(n => n.nutrientName && n.nutrientName.toLowerCase().includes(name.toLowerCase()));
-        return n ? (n.value || 0) : 0;
-      };
-      const macros = {
-        calories: get('Energy') || get('energy'),
-        protein: get('Protein'),
-        carbs: get('Carbohydrate'),
-        fat: get('Total lipid'),
-        fiber: get('Fiber'),
-      };
-      // If calories > 0, this is a good result — use it
-      if (macros.calories > 0) {
-        usdaCache.set(key, macros);
-        return macros;
-      }
-      // calories === 0, try next fallback term
-    } catch (err) {
-      continue;
+  await sleep(200);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const query = encodeURIComponent(key);
+    const url = `${OFF_BASE}?search_terms=${query}&search_simple=1&action=process&json=1&page_size=10&sort_by=unique_scans_n&fields=code,product_name,nutriments`;
+
+    console.log(`   [OFF] Searching: "${key}"`);
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'MacroGoal/1.0' },
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      console.log(`   [OFF] HTTP ${res.status} for "${key}"`);
+      offCache.set(key, null);
+      return null;
     }
-  }
 
-  // All terms returned 0 — cache and return null
-  usdaCache.set(key, null);
-  return null;
+    const data = await res.json();
+    const products = data.products || [];
+
+    for (const product of products) {
+      const n = product.nutriments || {};
+      const calories = n['energy-kcal_100g'] || n['energy-kcal'] || (n['energy_100g'] ? n['energy_100g'] / 4.184 : 0) || 0;
+
+      // Skip products with no calorie data
+      if (calories <= 0) continue;
+
+      const macros = {
+        calories: Math.round(calories * 10) / 10,
+        protein: Math.round((n['proteins_100g'] || n['proteins'] || 0) * 10) / 10,
+        carbs: Math.round((n['carbohydrates_100g'] || n['carbohydrates'] || 0) * 10) / 10,
+        fat: Math.round((n['fat_100g'] || n['fat'] || 0) * 10) / 10,
+        fiber: Math.round((n['fiber_100g'] || n['fiber'] || 0) * 10) / 10,
+      };
+
+      if (!passesSanityCheck(key, macros)) {
+        console.log(`   [OFF] Sanity fail for "${key}" on product "${product.product_name}" (${macros.calories} kcal, ${macros.fat}g fat) — trying next`);
+        continue;
+      }
+
+      console.log(`   [OFF] Found "${key}": ${macros.calories} kcal, ${macros.protein}g P, ${macros.carbs}g C, ${macros.fat}g F`);
+      offCache.set(key, macros);
+      return macros;
+    }
+
+    console.log(`   [OFF] No valid result for "${key}"`);
+    offCache.set(key, null);
+    return null;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      console.log(`   [OFF] Timeout for "${key}"`);
+    } else {
+      console.log(`   [OFF] Error for "${key}": ${err.message}`);
+    }
+    offCache.set(key, null);
+    return null;
+  }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -278,7 +318,7 @@ async function processMeal(meal, category, existingIds) {
 
   for (const ing of rawIngredients) {
     const grams = parseAmount(ing.measure, ing.name);
-    const macros = await getUsdaMacros(ing.name);
+    const macros = await getOFFMacros(ing.name);
     let cal = 0, protein = 0, carbs = 0, fat = 0, fiber = 0;
     if (macros) {
       const factor = grams / 100;
@@ -318,7 +358,7 @@ async function processMeal(meal, category, existingIds) {
 }
 
 async function main() {
-  console.log('🍽️  Starting TheMealDB → Supabase import...\n');
+  console.log('🍽️  Starting TheMealDB → Supabase import (using Open Food Facts)...\n');
   const existingIds = await supabaseGetExistingIds();
   console.log(`📋 Already imported: ${existingIds.size} recipes\n`);
   const categories = await fetchAllCategories();
