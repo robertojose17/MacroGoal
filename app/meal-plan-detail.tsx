@@ -69,44 +69,42 @@ function buildInitialStates(items: MealPlanItem[]): Record<string, ItemEditState
   const deduped = deduplicateItems(items);
   const initialStates: Record<string, ItemEditState> = {};
   for (const item of deduped) {
-    const qty = item.quantity > 0 ? item.quantity : 1;
-    // Per-serving base (always accurate — DB stores totals for qty servings)
-    const baseCaloriesPerServing = (Number(item.calories) || 0) / qty;
-    const baseProteinPerServing = (Number(item.protein) || 0) / qty;
-    const baseCarbsPerServing = (Number(item.carbs) || 0) / qty;
-    const baseFatsPerServing = (Number(item.fats) || 0) / qty;
+    // The DB stores the TOTAL macros for the item as saved.
+    // quantity/grams represent the gram amount, not a "number of servings".
+    // We always start with servings=1 and treat stored macros as the full amount for 1 serving.
+    const baseCaloriesPerServing = Number(item.calories) || 0;
+    const baseProteinPerServing  = Number(item.protein)  || 0;
+    const baseCarbsPerServing    = Number(item.carbs)    || 0;
+    const baseFatsPerServing     = Number(item.fats)     || 0;
 
-    // Per-gram base (only accurate when grams is known)
-    const totalGrams = item.grams != null ? item.grams : null;
-    const gramsPerServing = totalGrams != null ? totalGrams / qty : null;
-    const baseCaloriesPerGram = totalGrams != null && totalGrams > 0 ? (Number(item.calories) || 0) / totalGrams : 0;
-    const baseProteinPerGram = totalGrams != null && totalGrams > 0 ? (Number(item.protein) || 0) / totalGrams : 0;
-    const baseCarbsPerGram = totalGrams != null && totalGrams > 0 ? (Number(item.carbs) || 0) / totalGrams : 0;
-    const baseFatsPerGram = totalGrams != null && totalGrams > 0 ? (Number(item.fats) || 0) / totalGrams : 0;
+    // Per-gram base (for unit switching to g/oz/lb)
+    const totalGrams = item.grams != null && item.grams > 0 ? item.grams : null;
+    const baseCaloriesPerGram = totalGrams != null ? baseCaloriesPerServing / totalGrams : 0;
+    const baseProteinPerGram  = totalGrams != null ? baseProteinPerServing  / totalGrams : 0;
+    const baseCarbsPerGram    = totalGrams != null ? baseCarbsPerServing    / totalGrams : 0;
+    const baseFatsPerGram     = totalGrams != null ? baseFatsPerServing     / totalGrams : 0;
 
     // Default serving label
-    const defaultLabel = item.serving_description
-      ? item.serving_description
-      : gramsPerServing != null
-        ? `${Math.round(gramsPerServing)}g`
-        : 'serving';
+    const defaultLabel = totalGrams != null
+      ? `${Math.round(totalGrams)}g`
+      : 'serving';
 
-    // Serving options: always include default; only include g/oz/lb if grams are known
+    // Serving options
     const servingOptions: ItemEditState['servingOptions'] = [
-      { key: 'default', label: defaultLabel, gramsPerUnit: gramsPerServing ?? 0, isDefault: true },
+      { key: 'default', label: defaultLabel, gramsPerUnit: totalGrams ?? 0, isDefault: true },
     ];
-    if (gramsPerServing != null) {
+    if (totalGrams != null) {
       servingOptions.push(
-        { key: 'g', label: '1 g', gramsPerUnit: 1, isDefault: false },
-        { key: 'oz', label: '1 oz', gramsPerUnit: 28.35, isDefault: false },
+        { key: 'g',  label: '1 g',  gramsPerUnit: 1,       isDefault: false },
+        { key: 'oz', label: '1 oz', gramsPerUnit: 28.35,   isDefault: false },
         { key: 'lb', label: '1 lb', gramsPerUnit: 453.592, isDefault: false },
       );
     }
 
     initialStates[item.id] = {
-      servings: item.serving_description ? '1' : String(qty),
+      servings: '1',
       selectedOptionKey: 'default',
-      gramsPerUnit: gramsPerServing ?? 0,
+      gramsPerUnit: totalGrams ?? 0,
       servingOptions,
       showOptions: false,
       baseCaloriesPerServing,

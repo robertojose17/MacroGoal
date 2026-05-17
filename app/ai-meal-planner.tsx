@@ -909,7 +909,7 @@ export default function AIMealPlannerScreen() {
             meal_type: mealType,
             food_name: food.name,
             quantity: food.serving_size > 0 ? food.serving_size : 1,
-            serving_description: food.serving_description || '1 serving',
+            serving_description: food.serving_description || null,
             calories: Math.round(Number(food.calories) || 0),
             protein: Math.round(Number(food.protein) || 0),
             carbs: Math.round(Number(food.carbs) || 0),
