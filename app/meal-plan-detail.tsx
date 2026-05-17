@@ -304,7 +304,7 @@ export default function MealPlanDetailScreen() {
 
     const foodsPayload = mealItems.map(item => ({
       name: item.food_name,
-      serving_size: item.quantity,
+      serving_size: item.grams != null && item.grams > 0 ? item.grams : item.quantity,
       serving_unit: 'g',
       calories: item.calories,
       protein: item.protein,
