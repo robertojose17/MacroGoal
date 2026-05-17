@@ -261,13 +261,21 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /**
  * Parse a MealDB measure string into grams.
+ * Returns { grams, exact } where exact:true means the conversion is reliable.
  * Handles fractions, units, volume→mass conversion, and bare piece counts.
  */
 function parseAmount(measureStr, ingredientName) {
-  if (!measureStr || measureStr.trim() === '') return 100;
-  const s = measureStr.trim().toLowerCase();
-  let amount = 0;
+  if (!measureStr || measureStr.trim() === '') return { grams: 100, exact: false };
 
+  const s = measureStr.trim().toLowerCase();
+
+  // Reject vague measures immediately
+  const vague = ['to taste', 'as needed', 'some', 'a little', 'optional', 'sprinkle'];
+  if (vague.some(v => s.includes(v))) return { grams: 0, exact: false };
+
+  // Note: pinch and dash ARE in MEASURE_TO_GRAMS (0.5g each) so they ARE exact for spices
+
+  let amount = 0;
   const fracMatch = s.match(/^(\d+)\s+(\d+)\/(\d+)/);
   const simpleFrac = s.match(/^(\d+)\/(\d+)/);
   const numMatch = s.match(/^(\d+\.?\d*)/);
@@ -283,7 +291,8 @@ function parseAmount(measureStr, ingredientName) {
   }
   if (amount === 0) amount = 1;
 
-  const unitMatch = s.match(/[\d/\s.]+([a-z\s]+)/);
+  // Extract FIRST word only after the number
+  const unitMatch = s.match(/[\d/\s.]+([a-z]+)/);
   const unit = unitMatch ? unitMatch[1].trim() : '';
   const gramsPerUnit = MEASURE_TO_GRAMS[unit];
 
@@ -296,25 +305,25 @@ function parseAmount(measureStr, ingredientName) {
         if (ingLower.includes(key)) { grams = grams * density; break; }
       }
     }
-    return Math.round(grams);
+    return { grams: Math.round(grams), exact: true };
   }
 
-  // No recognised unit — check if this is a bare piece count (e.g. "8" for "Chicken Thighs")
+  // No recognised unit — check PIECE_WEIGHTS for bare number
   if (amount >= 1 && amount <= 20 && Number.isInteger(amount)) {
     const ingLower = ingredientName.toLowerCase();
     for (const [key, weight] of Object.entries(PIECE_WEIGHTS)) {
       if (ingLower.includes(key)) {
-        return Math.round(amount * weight);
+        return { grams: Math.round(amount * weight), exact: true };
       }
     }
-    // Unknown ingredient with bare number — assume 50g per piece as fallback
-    return Math.round(amount * 50);
+    // Unknown ingredient with bare number — NOT exact
+    return { grams: Math.round(amount * 50), exact: false };
   }
 
-  // Large bare number — treat as grams directly
-  if (amount > 20) return Math.round(amount);
+  // Large bare number — treat as grams (e.g. "400" → 400g) — exact
+  if (amount > 20) return { grams: Math.round(amount), exact: true };
 
-  return Math.round(amount * 50);
+  return { grams: Math.round(amount * 50), exact: false };
 }
 
 // Sanity check: returns true if macros look plausible for the ingredient
@@ -469,6 +478,21 @@ async function getOFFMacros(ingredientName) {
 // Supabase helpers
 // ---------------------------------------------------------------------------
 
+async function deleteRecipe(id) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/meal_recipes?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': 'return=minimal',
+    },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error(`DELETE failed for id=${id}: ${res.status} ${err}`);
+  }
+}
+
 async function fetchAllRecipes() {
   const pageSize = 1000;
   let offset = 0;
@@ -543,18 +567,41 @@ async function main() {
     }
 
     try {
+      // Step 1: Validate all measures BEFORE making any OFF requests
+      let recipeIsValid = true;
+      let invalidIngredient = '';
+      const parsedIngredients = [];
+
+      for (const ing of ingredients) {
+        const ingName = ing.name || '';
+        const measureStr = ing.measure || '';
+        const { grams, exact } = measureStr
+          ? parseAmount(measureStr, ingName)
+          : { grams: ing.grams || 100, exact: false };
+        if (!exact) {
+          recipeIsValid = false;
+          invalidIngredient = `"${measureStr}" for "${ingName}"`;
+          break;
+        }
+        parsedIngredients.push({ ...ing, grams });
+      }
+
+      if (!recipeIsValid) {
+        console.log(`⏭  Deleting — inexact measure: ${invalidIngredient}`);
+        await deleteRecipe(id);
+        totalSkipped++;
+        await sleep(100);
+        continue;
+      }
+
+      // Step 2: Only now fetch OFF macros for valid recipes
       let totalCal = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0;
       let anyUpdated = false;
       const updatedIngredients = [];
 
-      for (const ing of ingredients) {
+      for (const ing of parsedIngredients) {
         const ingName = ing.name || '';
-
-        // Recalculate grams from measure string to fix bare-number bugs
-        // (e.g. measure="8" for "Chicken Thighs" → 8×120g = 960g, not 8g)
-        const grams = ing.measure
-          ? parseAmount(ing.measure, ingName)
-          : (ing.grams || 100);
+        const grams = ing.grams;
 
         const macros = await getOFFMacros(ingName);
 
