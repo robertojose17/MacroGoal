@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, Alert, ActivityIndicator, ScrollView, ActionSheetIOS,
-  Modal, TextInput,
+  Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -982,65 +982,67 @@ export default function HomeScreen() {
           activeOpacity={1}
           onPress={() => setNewPlanModalVisible(false)}
         />
-        <View style={{
-          backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          paddingHorizontal: 24,
-          paddingTop: 20,
-          paddingBottom: 40,
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-        }}>
-          {/* Handle bar */}
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? '#3C3C3E' : '#D1D5DB', alignSelf: 'center', marginBottom: 20 }} />
+        <KeyboardAvoidingView
+          behavior="position"
+          keyboardVerticalOffset={0}
+          style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+        >
+          <View style={{
+            backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            paddingHorizontal: 24,
+            paddingTop: 20,
+            paddingBottom: 40,
+          }}>
+            {/* Handle bar */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? '#3C3C3E' : '#D1D5DB', alignSelf: 'center', marginBottom: 20 }} />
 
-          <Text style={{ fontSize: 20, fontWeight: '700', color: isDark ? '#FFFFFF' : '#000000', marginBottom: 20 }}>
-            New Plan
-          </Text>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: isDark ? '#FFFFFF' : '#000000', marginBottom: 20 }}>
+              New Plan
+            </Text>
 
-          <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#8E8E93' : '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-            PLAN NAME
-          </Text>
-          <TextInput
-            style={{
-              backgroundColor: isDark ? '#2C2C2E' : '#F5F5F5',
-              borderRadius: 12,
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              fontSize: 16,
-              color: isDark ? '#FFFFFF' : '#000000',
-              marginBottom: 24,
-            }}
-            value={newPlanName}
-            onChangeText={setNewPlanName}
-            placeholder="e.g. Week 1 Bulk"
-            placeholderTextColor={isDark ? '#8E8E93' : '#9CA3AF'}
-            returnKeyType="done"
-            onSubmitEditing={handleCreateNewPlan}
-            autoFocus
-          />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#8E8E93' : '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+              PLAN NAME
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: isDark ? '#2C2C2E' : '#F5F5F5',
+                borderRadius: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                fontSize: 16,
+                color: isDark ? '#FFFFFF' : '#000000',
+                marginBottom: 24,
+              }}
+              value={newPlanName}
+              onChangeText={setNewPlanName}
+              placeholder="e.g. Week 1 Bulk"
+              placeholderTextColor={isDark ? '#8E8E93' : '#9CA3AF'}
+              returnKeyType="done"
+              onSubmitEditing={handleCreateNewPlan}
+              autoFocus
+            />
 
-          <TouchableOpacity
-            onPress={handleCreateNewPlan}
-            disabled={newPlanSaving || !newPlanName.trim()}
-            activeOpacity={0.8}
-            style={{
-              backgroundColor: '#14B8A6',
-              borderRadius: 14,
-              paddingVertical: 16,
-              alignItems: 'center',
-              opacity: (newPlanSaving || !newPlanName.trim()) ? 0.5 : 1,
-            }}
-          >
-            {newPlanSaving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={{ fontSize: 17, fontWeight: '600', color: '#fff' }}>Save</Text>
-            }
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              onPress={handleCreateNewPlan}
+              disabled={newPlanSaving || !newPlanName.trim()}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: '#14B8A6',
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                opacity: (newPlanSaving || !newPlanName.trim()) ? 0.5 : 1,
+              }}
+            >
+              {newPlanSaving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ fontSize: 17, fontWeight: '600', color: '#fff' }}>Save</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
     </SafeAreaView>
