@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, Modal, Platform,
-  Keyboard, KeyboardEvent
+  Keyboard, KeyboardEvent, useWindowDimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +28,7 @@ export default function MealPlanCreateScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
 
   const today = new Date();
   const nextWeek = new Date(today);
@@ -92,12 +92,10 @@ export default function MealPlanCreateScreen() {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error('[MealPlanCreate] Auth error:', userError?.message);
         Alert.alert('Not Logged In', 'Please log in again to create a meal plan.');
         setSaving(false);
         return;
       }
-      console.log('[MealPlanCreate] Creating meal plan for user:', user.id);
       const { data, error } = await supabase
         .from('meal_plans')
         .insert({
@@ -109,29 +107,25 @@ export default function MealPlanCreateScreen() {
         .select()
         .single();
       if (error) {
-        console.error('[MealPlanCreate] Supabase insert error:', error.message);
         Alert.alert('Error', error.message || 'Failed to create meal plan.');
         setSaving(false);
         return;
       }
-      console.log('[MealPlanCreate] Meal plan created successfully, id:', data.id);
       router.replace({ pathname: '/meal-plan-detail', params: { planId: data.id } });
     } catch (err: any) {
-      console.error('[MealPlanCreate] Unexpected error:', err?.message);
       Alert.alert('Error', err?.message || 'Unexpected error. Please try again.');
       setSaving(false);
     }
   };
 
-  // The key: the outer View shrinks by kbHeight, pushing everything up
+  // containerHeight shrinks when keyboard appears, pushing content up
+  const containerHeight = screenHeight - kbHeight;
+
   return (
-    <View style={{ flex: 1, backgroundColor: bgColor, paddingTop: insets.top, paddingBottom: kbHeight > 0 ? kbHeight : insets.bottom }}>
+    <View style={{ height: containerHeight, backgroundColor: bgColor, paddingTop: insets.top }}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: borderColor }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => {
-          console.log('[MealPlanCreate] Back button pressed');
-          router.back();
-        }}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor }]}>New Meal Plan</Text>
@@ -139,7 +133,7 @@ export default function MealPlanCreateScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: 32 }}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -160,10 +154,7 @@ export default function MealPlanCreateScreen() {
           <Text style={[styles.sectionLabel, { color: secondaryColor }]}>START DATE</Text>
           <TouchableOpacity
             style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
-            onPress={() => {
-              console.log('[MealPlanCreate] Start date picker opened');
-              setPickerMode('start');
-            }}
+            onPress={() => setPickerMode('start')}
             activeOpacity={0.7}
           >
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
@@ -176,10 +167,7 @@ export default function MealPlanCreateScreen() {
           <Text style={[styles.sectionLabel, { color: secondaryColor }]}>END DATE</Text>
           <TouchableOpacity
             style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
-            onPress={() => {
-              console.log('[MealPlanCreate] End date picker opened');
-              setPickerMode('end');
-            }}
+            onPress={() => setPickerMode('end')}
             activeOpacity={0.7}
           >
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
@@ -206,24 +194,15 @@ export default function MealPlanCreateScreen() {
         visible={pickerMode !== null}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          console.log('[MealPlanCreate] Date picker modal dismissed');
-          setPickerMode(null);
-        }}
+        onRequestClose={() => setPickerMode(null)}
       >
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => {
-          console.log('[MealPlanCreate] Date picker backdrop tapped, closing');
-          setPickerMode(null);
-        }} />
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setPickerMode(null)} />
         <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.cardDark : '#fff' }]}>
           <View style={styles.modalSheetHeader}>
             <Text style={[styles.modalSheetTitle, { color: isDark ? colors.textDark : colors.text }]}>
               {pickerMode === 'start' ? 'Start Date' : 'End Date'}
             </Text>
-            <TouchableOpacity onPress={() => {
-              console.log('[MealPlanCreate] Date picker Done pressed, mode:', pickerMode);
-              setPickerMode(null);
-            }} style={styles.modalDoneButton}>
+            <TouchableOpacity onPress={() => setPickerMode(null)} style={styles.modalDoneButton}>
               <Text style={styles.modalDoneText}>Done</Text>
             </TouchableOpacity>
           </View>
