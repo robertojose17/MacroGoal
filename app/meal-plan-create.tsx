@@ -86,14 +86,20 @@ export default function MealPlanCreateScreen() {
       router.replace({ pathname: '/meal-plan-detail', params: { planId: newPlan.id } });
     } catch (err: any) {
       console.error('[MealPlanCreate] Error creating plan:', err);
-      Alert.alert('Error', 'Failed to create meal plan. Please try again.');
+      console.error('[MealPlanCreate] Full error:', JSON.stringify(err));
+      Alert.alert('Error', err?.message || 'Failed to create meal plan. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: bgColor }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: borderColor }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => {
@@ -106,12 +112,7 @@ export default function MealPlanCreateScreen() {
         <View style={styles.headerRight} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scrollContent, { flexGrow: 1 }]} keyboardShouldPersistTaps="handled">
         {/* Plan Name */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: secondaryColor }]}>PLAN NAME</Text>
@@ -181,7 +182,7 @@ export default function MealPlanCreateScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
-      </KeyboardAvoidingView>
+      </SafeAreaView>
 
       {/* Date Picker Modal */}
       <Modal
@@ -227,7 +228,7 @@ export default function MealPlanCreateScreen() {
           )}
         </View>
       </Modal>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
