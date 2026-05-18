@@ -90,13 +90,30 @@ export async function listMealPlans(): Promise<{ plans: MealPlan[] }> {
 export async function createMealPlan(body: { name: string; start_date: string; end_date: string }): Promise<MealPlan> {
   console.log('[MealPlansApi] createMealPlan()', body);
   const userId = await getCurrentUserId();
+
+  // Ensure dates are valid strings — never pass null/undefined to Supabase
+  const today = new Date();
+  const formatDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const startDate = body.start_date && body.start_date.length === 10 ? body.start_date : formatDate(today);
+  const nextWeek = new Date(today);
+  nextWeek.setDate(today.getDate() + 6);
+  const endDate = body.end_date && body.end_date.length === 10 ? body.end_date : formatDate(nextWeek);
+
+  console.log('[MealPlansApi] Inserting with dates:', startDate, endDate);
+
   const { data, error } = await supabase
     .from('meal_plans')
-    .insert({ user_id: userId, name: body.name, start_date: body.start_date, end_date: body.end_date })
+    .insert({ user_id: userId, name: body.name, start_date: startDate, end_date: endDate })
     .select()
     .single();
   if (error) {
-    console.error('[MealPlansApi] createMealPlan error:', error.message);
+    console.error('[MealPlansApi] createMealPlan error:', error.message, error.code, error.details);
     throw new Error(error.message);
   }
   return data;
