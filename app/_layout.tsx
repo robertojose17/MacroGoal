@@ -554,6 +554,11 @@ export default function RootLayout() {
                 />
 
                 <Stack.Screen
+                  name="meal-plan-create"
+                  options={{ headerShown: false, presentation: "fullScreenModal" }}
+                />
+
+                <Stack.Screen
                   name="tracker/[id]"
                   options={{
                     headerShown: true,

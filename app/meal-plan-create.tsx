@@ -121,12 +121,12 @@ export default function MealPlanCreateScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={[styles.container, { backgroundColor: bgColor }]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: bgColor }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: borderColor }]}>
           <TouchableOpacity style={styles.backButton} onPress={() => {
@@ -139,9 +139,8 @@ export default function MealPlanCreateScreen() {
           <View style={styles.headerRight} />
         </View>
 
-        {/* ScrollView */}
         <ScrollView
-          contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -212,9 +211,9 @@ export default function MealPlanCreateScreen() {
             )}
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </SafeAreaView>
 
-      {/* Date Picker Modal — outside KeyboardAvoidingView */}
+      {/* Date Picker Modal - outside SafeAreaView so it covers full screen */}
       <Modal
         visible={pickerMode !== null}
         transparent
@@ -251,12 +250,13 @@ export default function MealPlanCreateScreen() {
           )}
         </View>
       </Modal>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scrollContent: { padding: spacing.md },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
