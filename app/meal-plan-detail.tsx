@@ -101,10 +101,14 @@ function buildInitialStates(items: MealPlanItem[]): Record<string, ItemEditState
       );
     }
 
+    // If we have gram data, default to the 'g' unit with the gram amount as servings
+    // so the input shows e.g. "150" and the dropdown shows "1 g"
+    const useGramDefault = totalGrams != null && totalGrams > 0;
+
     initialStates[item.id] = {
-      servings: '1',
-      selectedOptionKey: 'default',
-      gramsPerUnit: totalGrams ?? 0,
+      servings: useGramDefault ? String(Math.round(totalGrams!)) : '1',
+      selectedOptionKey: useGramDefault ? 'g' : 'default',
+      gramsPerUnit: useGramDefault ? 1 : (totalGrams ?? 0),
       servingOptions,
       showOptions: false,
       baseCaloriesPerServing,
