@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, Modal, Platform,
-  Keyboard, KeyboardAvoidingView
+  Keyboard, KeyboardEvent
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -28,6 +28,7 @@ export default function MealPlanCreateScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
 
   const today = new Date();
   const nextWeek = new Date(today);
@@ -38,6 +39,19 @@ export default function MealPlanCreateScreen() {
   const [endDate, setEndDate] = useState(nextWeek);
   const [pickerMode, setPickerMode] = useState<'start' | 'end' | null>(null);
   const [saving, setSaving] = useState(false);
+  const [kbHeight, setKbHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e: KeyboardEvent) => setKbHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKbHeight(0)
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -48,7 +62,6 @@ export default function MealPlanCreateScreen() {
   const handlePickerChange = (_: any, date?: Date) => {
     if (!date) return;
     if (pickerMode === 'start') {
-      console.log('[MealPlanCreate] Start date changed:', formatDateForStorage(date));
       setStartDate(date);
       if (date > endDate) {
         const newEnd = new Date(date);
@@ -56,16 +69,13 @@ export default function MealPlanCreateScreen() {
         setEndDate(newEnd);
       }
     } else if (pickerMode === 'end') {
-      console.log('[MealPlanCreate] End date changed:', formatDateForStorage(date));
       setEndDate(date);
     }
   };
 
   const pickerValue = pickerMode === 'start' ? startDate : endDate;
   const pickerMinDate = pickerMode === 'end' ? startDate : new Date();
-
   const durationDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1);
-  const durationText = `${durationDays} day plan`;
 
   const handleCreate = async () => {
     console.log('[MealPlanCreate] Create Plan button pressed, name:', planName);
@@ -77,22 +87,17 @@ export default function MealPlanCreateScreen() {
       Alert.alert('Invalid Dates', 'End date must be on or after start date.');
       return;
     }
-
     Keyboard.dismiss();
     setSaving(true);
-
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-
       if (userError || !user) {
         console.error('[MealPlanCreate] Auth error:', userError?.message);
         Alert.alert('Not Logged In', 'Please log in again to create a meal plan.');
         setSaving(false);
         return;
       }
-
-      console.log('[MealPlanCreate] Creating plan for user:', user.id);
-
+      console.log('[MealPlanCreate] Creating meal plan for user:', user.id);
       const { data, error } = await supabase
         .from('meal_plans')
         .insert({
@@ -103,15 +108,13 @@ export default function MealPlanCreateScreen() {
         })
         .select()
         .single();
-
       if (error) {
-        console.error('[MealPlanCreate] Supabase error:', error.message, error.code, error.details);
+        console.error('[MealPlanCreate] Supabase insert error:', error.message);
         Alert.alert('Error', error.message || 'Failed to create meal plan.');
         setSaving(false);
         return;
       }
-
-      console.log('[MealPlanCreate] Plan created:', data.id);
+      console.log('[MealPlanCreate] Meal plan created successfully, id:', data.id);
       router.replace({ pathname: '/meal-plan-detail', params: { planId: data.id } });
     } catch (err: any) {
       console.error('[MealPlanCreate] Unexpected error:', err?.message);
@@ -120,100 +123,85 @@ export default function MealPlanCreateScreen() {
     }
   };
 
+  // The key: the outer View shrinks by kbHeight, pushing everything up
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: bgColor }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: borderColor }]}>
-          <TouchableOpacity style={styles.backButton} onPress={() => {
-            console.log('[MealPlanCreate] Back button pressed');
-            router.back();
-          }}>
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>New Meal Plan</Text>
-          <View style={styles.headerRight} />
+    <View style={{ flex: 1, backgroundColor: bgColor, paddingTop: insets.top, paddingBottom: kbHeight > 0 ? kbHeight : insets.bottom }}>
+      {/* Header */}
+      <View style={[styles.header, { borderBottomColor: borderColor }]}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          console.log('[MealPlanCreate] Back button pressed');
+          router.back();
+        }}>
+          <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: textColor }]}>New Meal Plan</Text>
+        <View style={styles.headerRight} />
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: 32 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>PLAN NAME</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: cardBg, borderColor, color: textColor }]}
+            value={planName}
+            onChangeText={setPlanName}
+            placeholder="e.g. Week of Jun 2"
+            placeholderTextColor={secondaryColor}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+          />
         </View>
 
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Plan Name */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: secondaryColor }]}>PLAN NAME</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: cardBg, borderColor, color: textColor }]}
-              value={planName}
-              onChangeText={setPlanName}
-              placeholder="e.g. Week of Jun 2"
-              placeholderTextColor={secondaryColor}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-          </View>
-
-          {/* Start Date */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: secondaryColor }]}>START DATE</Text>
-            <TouchableOpacity
-              style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
-              onPress={() => {
-                console.log('[MealPlanCreate] Start date picker opened');
-                setPickerMode('start');
-              }}
-              activeOpacity={0.7}
-            >
-              <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
-              <Text style={[styles.dateButtonText, { color: textColor }]}>{formatDateDisplay(startDate)}</Text>
-              <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={secondaryColor} />
-            </TouchableOpacity>
-          </View>
-
-          {/* End Date */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: secondaryColor }]}>END DATE</Text>
-            <TouchableOpacity
-              style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
-              onPress={() => {
-                console.log('[MealPlanCreate] End date picker opened');
-                setPickerMode('end');
-              }}
-              activeOpacity={0.7}
-            >
-              <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
-              <Text style={[styles.dateButtonText, { color: textColor }]}>{formatDateDisplay(endDate)}</Text>
-              <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={secondaryColor} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Duration hint */}
-          <View style={[styles.hintCard, { backgroundColor: cardBg }]}>
-            <Text style={[styles.hintText, { color: secondaryColor }]}>{durationText}</Text>
-          </View>
-
-          {/* Create button */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>START DATE</Text>
           <TouchableOpacity
-            style={[styles.createButton, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
-            onPress={handleCreate}
-            disabled={saving}
-            activeOpacity={0.8}
+            style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+            onPress={() => {
+              console.log('[MealPlanCreate] Start date picker opened');
+              setPickerMode('start');
+            }}
+            activeOpacity={0.7}
           >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.createButtonText}>Create Plan</Text>
-            )}
+            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
+            <Text style={[styles.dateButtonText, { color: textColor }]}>{formatDateDisplay(startDate)}</Text>
+            <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={secondaryColor} />
           </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
+        </View>
 
-      {/* Date Picker Modal - outside SafeAreaView so it covers full screen */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>END DATE</Text>
+          <TouchableOpacity
+            style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+            onPress={() => {
+              console.log('[MealPlanCreate] End date picker opened');
+              setPickerMode('end');
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
+            <Text style={[styles.dateButtonText, { color: textColor }]}>{formatDateDisplay(endDate)}</Text>
+            <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={secondaryColor} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.hintCard, { backgroundColor: cardBg }]}>
+          <Text style={[styles.hintText, { color: secondaryColor }]}>{durationDays} day plan</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.createButton, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
+          onPress={handleCreate}
+          disabled={saving}
+          activeOpacity={0.8}
+        >
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.createButtonText}>Create Plan</Text>}
+        </TouchableOpacity>
+      </ScrollView>
+
       <Modal
         visible={pickerMode !== null}
         transparent
@@ -250,13 +238,11 @@ export default function MealPlanCreateScreen() {
           )}
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { padding: spacing.md },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
