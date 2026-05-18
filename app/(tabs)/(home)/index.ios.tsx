@@ -681,6 +681,7 @@ export default function HomeScreen() {
 
     // Grocery list for this week
     const assignedPlanIds = [...new Set(DAYS.map(d => currentWeekPlan[d]).filter(Boolean))] as string[];
+    const allAssignedPlanIds = DAYS.map(d => currentWeekPlan[d]).filter(Boolean) as string[]; // with duplicates for counting
 
     return (
       <View>
@@ -783,9 +784,9 @@ export default function HomeScreen() {
           {assignedPlanIds.length > 0 && (
             <TouchableOpacity
               onPress={() => {
-                const firstPlanId = assignedPlanIds[0];
-                console.log('[Home iOS] Grocery list button pressed, planId:', firstPlanId);
-                router.push({ pathname: '/meal-plan-grocery', params: { planId: firstPlanId } });
+                const planIdsStr = allAssignedPlanIds.join(',');
+                console.log('[Home iOS] Grocery list button pressed, planIds:', planIdsStr);
+                router.push({ pathname: '/meal-plan-grocery', params: { planIds: planIdsStr, rangeLabel: weekLabel } });
               }}
               activeOpacity={0.8}
               style={{
