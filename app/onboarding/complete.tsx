@@ -1384,24 +1384,14 @@ function Step10({
               {'Calories, macros, meals, and groceries fully personalized for your goal.'}
             </Text>
 
-            {/* Blurred previews */}
-            <View style={styles.previewRow}>
-              <View style={styles.previewCard}>
-                <Image source={MEAL_PREVIEW_IMAGE} style={styles.previewImage} resizeMode="cover" />
-                <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
-                <View style={styles.previewOverlay}>
-                  <Text style={styles.previewIcon}>{'🍽️'}</Text>
-                  <Text style={styles.previewLabel}>{'Meal Plan'}</Text>
-                </View>
-              </View>
-              <View style={styles.previewCard}>
-                <Image source={GROCERY_PREVIEW_IMAGE} style={styles.previewImage} resizeMode="cover" />
-                <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
-                <View style={styles.previewOverlay}>
-                  <Text style={styles.previewIcon}>{'🛒'}</Text>
-                  <Text style={styles.previewLabel}>{'Grocery List'}</Text>
-                </View>
-              </View>
+            {/* Blurred preview */}
+            <View style={styles.singlePreviewCard}>
+              <Image
+                source={require('../../assets/images/96d5afb8-a4dc-4c75-946c-a4f2fb9abc86.jpeg')}
+                style={styles.singlePreviewImage}
+                resizeMode="cover"
+              />
+              <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
             </View>
 
             {/* Bullets */}
@@ -1412,13 +1402,6 @@ function Step10({
                   <Text style={styles.bulletText}>{text}</Text>
                 </View>
               ))}
-            </View>
-
-            {/* No-X lines */}
-            <View style={styles.noLines}>
-              <Text style={styles.noLineText}>{'No restrictive dieting.'}</Text>
-              <Text style={styles.noLineText}>{'No meal guessing.'}</Text>
-              <Text style={styles.noLineText}>{'No grocery confusion.'}</Text>
             </View>
 
             {/* CTA */}
@@ -1735,15 +1718,18 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 22,
   },
-  noLines: {
-    alignItems: 'center',
-    gap: 4,
+  singlePreviewCard: {
+    width: '100%',
+    height: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
     marginBottom: 24,
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  noLineText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.45)',
-    fontStyle: 'italic',
+  singlePreviewImage: {
+    width: '100%',
+    height: '100%',
   },
   purchaseBtn: {
     backgroundColor: PRIMARY,
