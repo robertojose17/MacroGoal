@@ -1,88 +1,194 @@
-
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Animated,
+  Dimensions,
+  Platform,
+  Alert,
+  ActivityIndicator,
+  ImageBackground,
+  KeyboardAvoidingView,
+  ScrollView,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { Sex, GoalType, ActivityLevel } from '@/types';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase/client';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '@/utils/calculations';
+import { Sex, GoalType, ActivityLevel } from '@/types';
+import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
+
+const BG_IMAGE = require('../../assets/images/73291328-4520-475d-9d5f-c23a5206eb1d.jpeg');
+const PRIMARY = '#4CAF50';
+const DARK_BG = '#0A0A0A';
+
+const DIETARY_OPTIONS = [
+  { label: 'Vegetarian', value: 'vegetarian' },
+  { label: 'Vegan', value: 'vegan' },
+  { label: 'Gluten-Free', value: 'gluten-free' },
+  { label: 'Dairy-Free', value: 'dairy-free' },
+  { label: 'Halal', value: 'halal' },
+  { label: 'Nut-Free', value: 'nut-free' },
+];
+
+const PROTEIN_OPTIONS = [
+  { label: 'Chicken', value: 'chicken' },
+  { label: 'Turkey', value: 'turkey' },
+  { label: 'Beef', value: 'beef' },
+  { label: 'Pork', value: 'pork' },
+  { label: 'Salmon', value: 'salmon' },
+  { label: 'Tuna', value: 'tuna' },
+  { label: 'Shrimp', value: 'shrimp' },
+  { label: 'Cod', value: 'cod' },
+  { label: 'Tilapia', value: 'tilapia' },
+  { label: 'Eggs', value: 'eggs' },
+  { label: 'Greek Yogurt', value: 'greek-yogurt' },
+  { label: 'Cottage Cheese', value: 'cottage-cheese' },
+  { label: 'Whey Protein', value: 'whey-protein' },
+  { label: 'Tofu', value: 'tofu' },
+  { label: 'Tempeh', value: 'tempeh' },
+  { label: 'Edamame', value: 'edamame' },
+  { label: 'Lentils', value: 'lentils' },
+  { label: 'Chickpeas', value: 'chickpeas' },
+  { label: 'Black Beans', value: 'black-beans' },
+];
+
+const RECIPE_STYLE_OPTIONS = [
+  { label: 'Air Fryer', value: 'air-fryer' },
+  { label: 'Meal Prep', value: 'meal-prep' },
+  { label: 'Under 30 Minutes', value: 'under-30-minutes' },
+  { label: 'One Pan Meals', value: 'one-pan-meals' },
+  { label: 'Slow Cooker', value: 'slow-cooker' },
+  { label: 'Instant Pot', value: 'instant-pot' },
+  { label: 'Easy Recipes', value: 'easy-recipes' },
+  { label: 'Freezer Friendly', value: 'freezer-friendly' },
+];
 
 export default function CompleteOnboardingScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { width } = Dimensions.get('window');
 
-  // Personal Info
+  const [step, setStep] = useState(0);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Body data
   const [sex, setSex] = useState<Sex>('male');
   const [age, setAge] = useState('');
   const [units, setUnits] = useState<'metric' | 'imperial'>('metric');
-  
-  // Height
   const [heightFeet, setHeightFeet] = useState('');
   const [heightInches, setHeightInches] = useState('');
   const [heightCm, setHeightCm] = useState('');
-  
-  // Weight
   const [weight, setWeight] = useState('');
-
-  // Goal Weight
   const [goalWeight, setGoalWeight] = useState('');
-
-  // Goal
   const [goalType, setGoalType] = useState<GoalType>('lose');
-  
-  // Weight Loss Rate (only for 'lose' goal)
   const [lossRateLbsPerWeek, setLossRateLbsPerWeek] = useState<number>(1.0);
-  
-  // Activity
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
-  
-  const [saving, setSaving] = useState(false);
 
-  const handleWeightChange = (value: string) => {
-    setWeight(value);
+  // Pain point
+  const [painPoint, setPainPoint] = useState<number | null>(null);
+
+  // Food preferences
+  const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
+  const [proteinPreferences, setProteinPreferences] = useState<string[]>([]);
+  const [recipeStyles, setRecipeStyles] = useState<string[]>([]);
+  const [dislikedFoods, setDislikedFoods] = useState('');
+
+  // Calculated results
+  const [calcCalories, setCalcCalories] = useState(0);
+  const [calcProtein, setCalcProtein] = useState(0);
+  const [calcCarbs, setCalcCarbs] = useState(0);
+  const [calcFats, setCalcFats] = useState(0);
+  const [calcWeeks, setCalcWeeks] = useState(0);
+
+  // Animated bullets for step 2
+  const bullet1Anim = useRef(new Animated.Value(0)).current;
+  const bullet2Anim = useRef(new Animated.Value(0)).current;
+  const bullet3Anim = useRef(new Animated.Value(0)).current;
+
+  // Count-up animations for step 9
+  const caloriesAnim = useRef(new Animated.Value(0)).current;
+  const proteinAnim = useRef(new Animated.Value(0)).current;
+  const carbsAnim = useRef(new Animated.Value(0)).current;
+  const fatsAnim = useRef(new Animated.Value(0)).current;
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Animated display values for count-up
+  const [displayCalories, setDisplayCalories] = useState(0);
+  const [displayProtein, setDisplayProtein] = useState(0);
+  const [displayCarbs, setDisplayCarbs] = useState(0);
+  const [displayFats, setDisplayFats] = useState(0);
+
+  // ─── Navigation ────────────────────────────────────────────────────────────
+
+  const goToStep = (nextStep: number) => {
+    const direction = nextStep > step ? 1 : -1;
+    slideAnim.setValue(direction * width);
+    setStep(nextStep);
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
   };
 
-  const handleComplete = async () => {
-    console.log('[Onboarding] Complete Setup button pressed');
+  const goNext = () => {
+    console.log(`[Onboarding] Advancing from step ${step} to step ${step + 1}`);
+    goToStep(step + 1);
+  };
 
-    // Validation
-    if (!age || !weight) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
+  const goBack = () => {
+    if (step > 0) {
+      console.log(`[Onboarding] Going back from step ${step} to step ${step - 1}`);
+      goToStep(step - 1);
     }
+  };
 
-    if (units === 'imperial') {
-      if (!heightFeet || !heightInches) {
-        Alert.alert('Error', 'Please enter both feet and inches for height');
-        return;
-      }
-    } else {
-      if (!heightCm) {
-        Alert.alert('Error', 'Please enter your height');
-        return;
-      }
+  // ─── Bullet animations (step 2) ────────────────────────────────────────────
+
+  useEffect(() => {
+    if (step === 2) {
+      bullet1Anim.setValue(0);
+      bullet2Anim.setValue(0);
+      bullet3Anim.setValue(0);
+      Animated.sequence([
+        Animated.timing(bullet1Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.delay(200),
+        Animated.timing(bullet2Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.delay(200),
+        Animated.timing(bullet3Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]).start();
     }
+  }, [step]);
 
-    if (!goalWeight) {
-      Alert.alert('Error', 'Please enter your goal weight');
-      return;
+  // ─── Calculations + Save (step 9) ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (step === 9) {
+      runCalculationsAndSave();
     }
+  }, [step]);
 
+  const runCalculationsAndSave = async () => {
+    console.log('[Onboarding] Step 9 mounted — running calculations and saving');
     setSaving(true);
+    setSaveError(null);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
-        setSaving(false);
-        return;
+        throw new Error('You must be logged in');
       }
 
-      // Convert height to cm for storage
+      // Convert height to cm
       let heightInCm: number;
       if (units === 'imperial') {
         const totalInches = parseInt(heightFeet) * 12 + parseInt(heightInches);
@@ -91,7 +197,7 @@ export default function CompleteOnboardingScreen() {
         heightInCm = parseInt(heightCm);
       }
 
-      // Convert weight to kg for storage
+      // Convert weight to kg
       let weightInKg: number;
       if (units === 'imperial') {
         weightInKg = parseFloat(weight) * 0.453592;
@@ -99,7 +205,7 @@ export default function CompleteOnboardingScreen() {
         weightInKg = parseFloat(weight);
       }
 
-      // Convert goal weight to kg for storage
+      // Convert goal weight to kg
       let goalWeightInKg: number;
       if (units === 'imperial') {
         goalWeightInKg = parseFloat(goalWeight) * 0.453592;
@@ -120,33 +226,40 @@ export default function CompleteOnboardingScreen() {
         lossRateLbsPerWeek: goalType === 'lose' ? lossRateLbsPerWeek : null,
       });
 
-      // Calculate BMR and TDEE
       const bmr = calculateBMR(weightInKg, heightInCm, ageNum, sex);
       const tdee = calculateTDEE(bmr, activityLevel);
-      
-      // Calculate target calories based on goal type and loss rate
       const targetCalories = calculateTargetCalories(
-        tdee, 
-        goalType, 
+        tdee,
+        goalType,
         goalType === 'lose' ? lossRateLbsPerWeek : undefined
       );
-      
       const macros = calculateMacros(targetCalories, weightInKg, 'balanced');
 
-      console.log('[Onboarding] Calculated:', {
-        bmr,
-        tdee,
-        targetCalories,
-        macros,
-        lossRateLbsPerWeek: goalType === 'lose' ? lossRateLbsPerWeek : null,
-      });
+      console.log('[Onboarding] Calculated:', { bmr, tdee, targetCalories, macros });
 
-      // Calculate date of birth
+      // Set state for display
+      setCalcCalories(targetCalories);
+      setCalcProtein(macros.protein);
+      setCalcCarbs(macros.carbs);
+      setCalcFats(macros.fats);
+
+      // Calculate weeks to goal
+      const currentWeightLbs = units === 'imperial' ? parseFloat(weight) : parseFloat(weight) * 2.20462;
+      const goalWeightLbs = units === 'imperial' ? parseFloat(goalWeight) : parseFloat(goalWeight) * 2.20462;
+      let weeks = 0;
+      if (goalType === 'lose') {
+        weeks = Math.round(Math.abs(currentWeightLbs - goalWeightLbs) / lossRateLbsPerWeek);
+      } else if (goalType === 'gain') {
+        weeks = Math.round(Math.abs(currentWeightLbs - goalWeightLbs) / 0.5);
+      }
+      setCalcWeeks(weeks);
+
+      // Date of birth
       const currentYear = new Date().getFullYear();
       const birthYear = currentYear - ageNum;
       const dateOfBirth = `${birthYear}-01-01`;
 
-      // Update user profile
+      // Save user profile
       console.log('[Onboarding] Saving user profile to Supabase...');
       const { error: userError } = await supabase
         .from('users')
@@ -158,6 +271,10 @@ export default function CompleteOnboardingScreen() {
           goal_weight: goalWeightInKg,
           activity_level: activityLevel,
           preferred_units: units,
+          dietary_restrictions: dietaryRestrictions,
+          protein_preferences: proteinPreferences,
+          recipe_styles: recipeStyles,
+          disliked_foods: dislikedFoods,
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
         })
@@ -168,17 +285,17 @@ export default function CompleteOnboardingScreen() {
         throw userError;
       }
 
-      console.log('[Onboarding] User profile updated with goal_weight');
+      console.log('[Onboarding] User profile updated');
 
-      // Deactivate any existing goals
+      // Deactivate existing goals
       await supabase
         .from('goals')
         .update({ is_active: false })
         .eq('user_id', user.id)
         .eq('is_active', true);
 
-      // Create new goal with loss rate if applicable
-      const goalData: any = {
+      // Create new goal
+      const goalData: Record<string, unknown> = {
         user_id: user.id,
         goal_type: goalType,
         goal_intensity: 1,
@@ -190,15 +307,12 @@ export default function CompleteOnboardingScreen() {
         is_active: true,
       };
 
-      // Add loss rate only for weight loss goal
       if (goalType === 'lose') {
         goalData.loss_rate_lbs_per_week = lossRateLbsPerWeek;
       }
 
       console.log('[Onboarding] Creating goal in Supabase...');
-      const { error: goalError } = await supabase
-        .from('goals')
-        .insert(goalData);
+      const { error: goalError } = await supabase.from('goals').insert(goalData);
 
       if (goalError) {
         console.error('[Onboarding] Goal creation error:', goalError);
@@ -207,577 +321,1613 @@ export default function CompleteOnboardingScreen() {
 
       console.log('[Onboarding] Goal created successfully');
 
-      Alert.alert(
-        'Success!',
-        `Your daily calorie target is ${targetCalories} kcal`,
-        [
-          {
-            text: 'Start Tracking',
-            onPress: () => router.replace('/(tabs)/(home)/'),
-          },
-        ]
-      );
-    } catch (error: any) {
-      console.error('[Onboarding] Error:', error);
-      Alert.alert('Error', error.message || 'Failed to save your information. Please try again.');
+      // Run count-up animations
+      caloriesAnim.setValue(0);
+      proteinAnim.setValue(0);
+      carbsAnim.setValue(0);
+      fatsAnim.setValue(0);
+
+      caloriesAnim.addListener(({ value }) => setDisplayCalories(Math.round(value)));
+      proteinAnim.addListener(({ value }) => setDisplayProtein(Math.round(value)));
+      carbsAnim.addListener(({ value }) => setDisplayCarbs(Math.round(value)));
+      fatsAnim.addListener(({ value }) => setDisplayFats(Math.round(value)));
+
+      Animated.parallel([
+        Animated.timing(caloriesAnim, { toValue: targetCalories, duration: 1200, useNativeDriver: false }),
+        Animated.timing(proteinAnim, { toValue: macros.protein, duration: 1200, useNativeDriver: false }),
+        Animated.timing(carbsAnim, { toValue: macros.carbs, duration: 1200, useNativeDriver: false }),
+        Animated.timing(fatsAnim, { toValue: macros.fats, duration: 1200, useNativeDriver: false }),
+      ]).start();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to save your information. Please try again.';
+      console.error('[Onboarding] Save error:', error);
+      setSaveError(msg);
     } finally {
       setSaving(false);
     }
   };
 
+  // ─── Purchase / finish ─────────────────────────────────────────────────────
+
+  const handleStartTrial = async () => {
+    console.log('[Onboarding] Start Free Trial pressed');
+    try {
+      if (isPurchasesAvailable && Purchases) {
+        const offerings = await Purchases.getOfferings();
+        if (offerings.current) {
+          await Purchases.presentPaywall();
+        }
+      }
+    } catch (e) {
+      console.log('[Onboarding] Paywall error:', e);
+    } finally {
+      router.replace('/(tabs)/(home)/');
+    }
+  };
+
+  const handleSkipTrial = () => {
+    console.log('[Onboarding] Skip trial pressed — navigating to home');
+    router.replace('/(tabs)/(home)/');
+  };
+
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  const toggleItem = (item: string, list: string[], setList: (v: string[]) => void) => {
+    setList(list.includes(item) ? list.filter(i => i !== item) : [...list, item]);
+  };
+
   const weightUnit = units === 'metric' ? 'kg' : 'lbs';
 
+  // ─── Step 4 validation ─────────────────────────────────────────────────────
+
+  const step4Valid = (() => {
+    if (units === 'imperial') {
+      return heightFeet !== '' && heightInches !== '' && weight !== '' && goalWeight !== '';
+    }
+    return heightCm !== '' && weight !== '' && goalWeight !== '';
+  })();
+
+  // ─── Goal projection text ──────────────────────────────────────────────────
+
+  const goalProjectionText = (() => {
+    if (goalType === 'maintain') {
+      return "You're already at your goal weight. Let's keep you there.";
+    }
+    if (calcWeeks === 0) {
+      return "You're already at your goal weight!";
+    }
+    return `You could reach your goal of ${goalWeight}${weightUnit} in ~${calcWeeks} weeks.`;
+  })();
+
+  // ─── Progress bar ──────────────────────────────────────────────────────────
+
+  const progress = step / 10;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={0}
+    <View style={styles.root}>
+      {/* Progress bar — steps 1–10 */}
+      {step > 0 && (
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+        </View>
+      )}
+
+      {/* Back button — steps 1–9 */}
+      {step > 0 && step < 10 && (
+        <TouchableOpacity style={styles.backBtn} onPress={goBack}>
+          <Text style={styles.backBtnText}>‹</Text>
+        </TouchableOpacity>
+      )}
+
+      <Animated.View style={[styles.stepContainer, { transform: [{ translateX: slideAnim }] }]}>
+        {step === 0 && <Step0 onNext={goNext} />}
+        {step === 1 && (
+          <Step1
+            painPoint={painPoint}
+            setPainPoint={setPainPoint}
+            onNext={goNext}
+          />
+        )}
+        {step === 2 && (
+          <Step2
+            bullet1Anim={bullet1Anim}
+            bullet2Anim={bullet2Anim}
+            bullet3Anim={bullet3Anim}
+            onNext={goNext}
+          />
+        )}
+        {step === 3 && (
+          <Step3
+            sex={sex}
+            setSex={setSex}
+            age={age}
+            setAge={setAge}
+            units={units}
+            setUnits={setUnits}
+            onNext={goNext}
+          />
+        )}
+        {step === 4 && (
+          <Step4
+            units={units}
+            heightFeet={heightFeet}
+            setHeightFeet={setHeightFeet}
+            heightInches={heightInches}
+            setHeightInches={setHeightInches}
+            heightCm={heightCm}
+            setHeightCm={setHeightCm}
+            weight={weight}
+            setWeight={setWeight}
+            goalWeight={goalWeight}
+            setGoalWeight={setGoalWeight}
+            weightUnit={weightUnit}
+            isValid={step4Valid}
+            onNext={goNext}
+          />
+        )}
+        {step === 5 && (
+          <Step5
+            goalType={goalType}
+            setGoalType={setGoalType}
+            lossRateLbsPerWeek={lossRateLbsPerWeek}
+            setLossRateLbsPerWeek={setLossRateLbsPerWeek}
+            onNext={goNext}
+          />
+        )}
+        {step === 6 && (
+          <Step6
+            activityLevel={activityLevel}
+            setActivityLevel={setActivityLevel}
+            onNext={goNext}
+          />
+        )}
+        {step === 7 && (
+          <Step7
+            dietaryRestrictions={dietaryRestrictions}
+            proteinPreferences={proteinPreferences}
+            toggleDietary={(item) => toggleItem(item, dietaryRestrictions, setDietaryRestrictions)}
+            toggleProtein={(item) => toggleItem(item, proteinPreferences, setProteinPreferences)}
+            onNext={goNext}
+          />
+        )}
+        {step === 8 && (
+          <Step8
+            recipeStyles={recipeStyles}
+            toggleRecipeStyle={(item) => toggleItem(item, recipeStyles, setRecipeStyles)}
+            dislikedFoods={dislikedFoods}
+            setDislikedFoods={setDislikedFoods}
+            onNext={goNext}
+          />
+        )}
+        {step === 9 && (
+          <Step9
+            saving={saving}
+            saveError={saveError}
+            displayCalories={displayCalories}
+            displayProtein={displayProtein}
+            displayCarbs={displayCarbs}
+            displayFats={displayFats}
+            goalProjectionText={goalProjectionText}
+            onRetry={runCalculationsAndSave}
+            onNext={goNext}
+          />
+        )}
+        {step === 10 && (
+          <Step10
+            onStartTrial={handleStartTrial}
+            onSkip={handleSkipTrial}
+          />
+        )}
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─── STEP 0 — EMOTION ────────────────────────────────────────────────────────
+
+function Step0({ onNext }: { onNext: () => void }) {
+  return (
+    <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
+      <LinearGradient
+        colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.95)', '#000000']}
+        locations={[0, 0.35, 0.55, 0.75, 1]}
+        style={styles.fullScreen}
       >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+        <SafeAreaView style={styles.step0Safe} edges={['bottom']}>
+          <View style={styles.step0Content}>
+            <Text style={styles.step0Headline}>{'Lose weight without\noverthinking food.'}</Text>
+            <Text style={styles.step0Sub}>
+              {'A personalized nutrition system built around your body and favorite foods.'}
+            </Text>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => {
+                console.log('[Onboarding] Step 0: Build My Plan pressed');
+                onNext();
+              }}
+            >
+              <Text style={styles.primaryBtnText}>Build My Plan</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    </ImageBackground>
+  );
+}
+
+// ─── STEP 1 — PAIN ───────────────────────────────────────────────────────────
+
+const PAIN_CARDS = [
+  {
+    emoji: '😩',
+    title: "I don't know what to eat",
+    subtitle: 'Guessing every meal is exhausting',
+  },
+  {
+    emoji: '📊',
+    title: 'I track but never see results',
+    subtitle: 'Logging without progress is demoralizing',
+  },
+  {
+    emoji: '🔄',
+    title: 'I start strong, then fall off',
+    subtitle: 'Consistency has always been the problem',
+  },
+];
+
+function Step1({
+  painPoint,
+  setPainPoint,
+  onNext,
+}: {
+  painPoint: number | null;
+  setPainPoint: (v: number) => void;
+  onNext: () => void;
+}) {
+  const ctaDisabled = painPoint === null;
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{"What's been holding you back?"}</Text>
+        <Text style={styles.stepSubtitle}>{'Pick the one that hits closest.'}</Text>
+
+        <View style={styles.cardList}>
+          {PAIN_CARDS.map((card, idx) => {
+            const selected = painPoint === idx;
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.selectionCard, selected && styles.selectionCardSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Pain point selected: ${card.title}`);
+                  setPainPoint(idx);
+                }}
+              >
+                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                <View style={styles.cardTextBlock}>
+                  <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>{card.title}</Text>
+                  <Text style={[styles.cardSubtitle, selected && styles.cardSubtitleSelected]}>{card.subtitle}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.primaryBtn, ctaDisabled && styles.primaryBtnDisabled]}
+          onPress={() => {
+            console.log('[Onboarding] Step 1: This is me pressed');
+            onNext();
+          }}
+          disabled={ctaDisabled}
         >
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-              Complete Your Profile
-            </Text>
-            <Text style={[styles.subtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              We&apos;ll calculate your personalized nutrition goals
-            </Text>
-          </View>
+          <Text style={styles.primaryBtnText}>This is me →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
 
-          {/* Sex */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Sex *</Text>
-            <View style={styles.optionRow}>
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-                  sex === 'male' && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => {
-                  console.log('[Onboarding] Sex selected: male');
-                  setSex('male');
-                }}
-              >
-                <Text style={[styles.optionText, { color: isDark ? colors.textDark : colors.text }, sex === 'male' && { color: '#FFFFFF' }]}>
-                  Male
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-                  sex === 'female' && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => {
-                  console.log('[Onboarding] Sex selected: female');
-                  setSex('female');
-                }}
-              >
-                <Text style={[styles.optionText, { color: isDark ? colors.textDark : colors.text }, sex === 'female' && { color: '#FFFFFF' }]}>
-                  Female
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+// ─── STEP 2 — HOPE ───────────────────────────────────────────────────────────
 
-          {/* Age */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Age *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-              placeholder="Enter your age"
-              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              keyboardType="number-pad"
-              value={age}
-              onChangeText={setAge}
-              returnKeyType="next"
-            />
-          </View>
+const HOPE_BULLETS = [
+  {
+    icon: '✅',
+    title: 'Know exactly how much to eat',
+    body: 'Your daily calorie and macro targets, calculated for your body.',
+  },
+  {
+    icon: '✅',
+    title: 'Meals already planned around your preferences',
+    body: 'No more guessing what fits your goals.',
+  },
+  {
+    icon: '✅',
+    title: 'A system built to help you stay consistent',
+    body: 'Weekly check-ins and progress tracking built in.',
+  },
+];
 
-          {/* Units */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Preferred Units *</Text>
-            <View style={styles.optionRow}>
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-                  units === 'metric' && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => {
-                  console.log('[Onboarding] Units selected: metric');
-                  setUnits('metric');
-                }}
-              >
-                <Text style={[styles.optionText, { color: isDark ? colors.textDark : colors.text }, units === 'metric' && { color: '#FFFFFF' }]}>
-                  Metric
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-                  units === 'imperial' && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => {
-                  console.log('[Onboarding] Units selected: imperial');
-                  setUnits('imperial');
-                }}
-              >
-                <Text style={[styles.optionText, { color: isDark ? colors.textDark : colors.text }, units === 'imperial' && { color: '#FFFFFF' }]}>
-                  Imperial
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+function Step2({
+  bullet1Anim,
+  bullet2Anim,
+  bullet3Anim,
+  onNext,
+}: {
+  bullet1Anim: Animated.Value;
+  bullet2Anim: Animated.Value;
+  bullet3Anim: Animated.Value;
+  onNext: () => void;
+}) {
+  const anims = [bullet1Anim, bullet2Anim, bullet3Anim];
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{'What changes when you stop guessing'}</Text>
+        <Text style={styles.stepSubtitle}>{"Here's what your plan includes:"}</Text>
 
-          {/* Height */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Height *
-            </Text>
-            {units === 'imperial' ? (
-              <View style={styles.heightRow}>
-                <View style={styles.heightInputContainer}>
-                  <Text style={[styles.heightLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Feet
-                  </Text>
-                  <TextInput
-                    style={[styles.input, styles.heightInput, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                    placeholder="5"
-                    placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                    keyboardType="number-pad"
-                    value={heightFeet}
-                    onChangeText={setHeightFeet}
-                    returnKeyType="next"
-                  />
+        <View style={styles.cardList}>
+          {HOPE_BULLETS.map((bullet, idx) => {
+            const anim = anims[idx];
+            const opacity = anim;
+            const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
+            return (
+              <Animated.View
+                key={idx}
+                style={[styles.hopeBullet, { opacity, transform: [{ translateY }] }]}
+              >
+                <Text style={styles.hopeBulletIcon}>{bullet.icon}</Text>
+                <View style={styles.hopeBulletText}>
+                  <Text style={styles.hopeBulletTitle}>{bullet.title}</Text>
+                  <Text style={styles.hopeBulletBody}>{bullet.body}</Text>
                 </View>
-                <View style={styles.heightInputContainer}>
-                  <Text style={[styles.heightLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Inches
-                  </Text>
-                  <TextInput
-                    style={[styles.input, styles.heightInput, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                    placeholder="9"
-                    placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                    keyboardType="number-pad"
-                    value={heightInches}
-                    onChangeText={setHeightInches}
-                    returnKeyType="next"
-                  />
-                </View>
-              </View>
-            ) : (
+              </Animated.View>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            console.log('[Onboarding] Step 2: I want this pressed');
+            onNext();
+          }}
+        >
+          <Text style={styles.primaryBtnText}>I want this →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 3 — BODY DATA part 1 ───────────────────────────────────────────────
+
+function Step3({
+  sex,
+  setSex,
+  age,
+  setAge,
+  units,
+  setUnits,
+  onNext,
+}: {
+  sex: Sex;
+  setSex: (v: Sex) => void;
+  age: string;
+  setAge: (v: string) => void;
+  units: 'metric' | 'imperial';
+  setUnits: (v: 'metric' | 'imperial') => void;
+  onNext: () => void;
+}) {
+  const ctaDisabled = age === '';
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{"Let's build your system"}</Text>
+        <Text style={styles.stepSubtitle}>{'A few quick questions about your body.'}</Text>
+
+        {/* Sex */}
+        <Text style={styles.fieldLabel}>{'Biological sex'}</Text>
+        <View style={styles.twoCardRow}>
+          {([['male', '👨', 'Male'], ['female', '👩', 'Female']] as const).map(([val, emoji, label]) => {
+            const selected = sex === val;
+            return (
+              <TouchableOpacity
+                key={val}
+                style={[styles.twoCard, selected && styles.twoCardSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Sex selected: ${val}`);
+                  setSex(val);
+                }}
+              >
+                <Text style={styles.twoCardEmoji}>{emoji}</Text>
+                <Text style={[styles.twoCardLabel, selected && styles.twoCardLabelSelected]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Age */}
+        <Text style={styles.fieldLabel}>{'How old are you?'}</Text>
+        <TextInput
+          style={styles.bigInput}
+          placeholder="e.g. 28"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          keyboardType="number-pad"
+          value={age}
+          onChangeText={setAge}
+          returnKeyType="done"
+        />
+
+        {/* Units */}
+        <Text style={styles.fieldLabel}>{'Preferred units'}</Text>
+        <View style={styles.twoCardRow}>
+          {([['metric', 'Metric', 'kg / cm'], ['imperial', 'Imperial', 'lbs / ft']] as const).map(([val, label, sub]) => {
+            const selected = units === val;
+            return (
+              <TouchableOpacity
+                key={val}
+                style={[styles.twoCard, selected && styles.twoCardSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Units selected: ${val}`);
+                  setUnits(val);
+                }}
+              >
+                <Text style={[styles.twoCardLabel, selected && styles.twoCardLabelSelected]}>{label}</Text>
+                <Text style={[styles.twoCardSub, selected && styles.twoCardSubSelected]}>{sub}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.primaryBtn, ctaDisabled && styles.primaryBtnDisabled]}
+          onPress={() => {
+            console.log('[Onboarding] Step 3: Continue pressed');
+            onNext();
+          }}
+          disabled={ctaDisabled}
+        >
+          <Text style={styles.primaryBtnText}>Continue →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 4 — BODY DATA part 2 ───────────────────────────────────────────────
+
+function Step4({
+  units,
+  heightFeet,
+  setHeightFeet,
+  heightInches,
+  setHeightInches,
+  heightCm,
+  setHeightCm,
+  weight,
+  setWeight,
+  goalWeight,
+  setGoalWeight,
+  weightUnit,
+  isValid,
+  onNext,
+}: {
+  units: 'metric' | 'imperial';
+  heightFeet: string;
+  setHeightFeet: (v: string) => void;
+  heightInches: string;
+  setHeightInches: (v: string) => void;
+  heightCm: string;
+  setHeightCm: (v: string) => void;
+  weight: string;
+  setWeight: (v: string) => void;
+  goalWeight: string;
+  setGoalWeight: (v: string) => void;
+  weightUnit: string;
+  isValid: boolean;
+  onNext: () => void;
+}) {
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{'Almost there'}</Text>
+        <Text style={styles.stepSubtitle}>{'Your measurements help us calculate your exact targets.'}</Text>
+
+        {/* Height */}
+        <Text style={styles.fieldLabel}>{'Your height'}</Text>
+        {units === 'imperial' ? (
+          <View style={styles.twoInputRow}>
+            <View style={styles.twoInputItem}>
               <TextInput
-                style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="e.g., 175"
-                placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                style={styles.bigInput}
+                placeholder="5"
+                placeholderTextColor="rgba(255,255,255,0.3)"
                 keyboardType="number-pad"
-                value={heightCm}
-                onChangeText={setHeightCm}
+                value={heightFeet}
+                onChangeText={setHeightFeet}
                 returnKeyType="next"
               />
-            )}
-          </View>
-
-          {/* Current Weight */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Current Weight ({weightUnit}) *
-            </Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-              placeholder={units === 'metric' ? 'e.g., 75' : 'e.g., 165'}
-              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              keyboardType="decimal-pad"
-              value={weight}
-              onChangeText={handleWeightChange}
-              returnKeyType="next"
-            />
-          </View>
-
-          {/* Goal Weight */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Goal Weight ({weightUnit}) *
-            </Text>
-            <Text style={[styles.helperText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              The weight you want to reach
-            </Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-              placeholder={units === 'metric' ? 'e.g., 70' : 'e.g., 155'}
-              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              keyboardType="decimal-pad"
-              value={goalWeight}
-              onChangeText={setGoalWeight}
-              returnKeyType="next"
-            />
-          </View>
-
-          {/* Goal */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Goal *</Text>
-            <View style={styles.goalOptions}>
-              <TouchableOpacity
-                style={[
-                  styles.goalOption,
-                  { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-                  goalType === 'lose' && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => {
-                  console.log('[Onboarding] Goal selected: lose');
-                  setGoalType('lose');
-                }}
-              >
-                <Text style={styles.goalIcon}>📉</Text>
-                <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'lose' && { color: '#FFFFFF' }]}>
-                  Lose Weight
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.goalOption,
-                  { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-                  goalType === 'maintain' && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => {
-                  console.log('[Onboarding] Goal selected: maintain');
-                  setGoalType('maintain');
-                }}
-              >
-                <Text style={styles.goalIcon}>⚖️</Text>
-                <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'maintain' && { color: '#FFFFFF' }]}>
-                  Maintain
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.goalOption,
-                  { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-                  goalType === 'gain' && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => {
-                  console.log('[Onboarding] Goal selected: gain');
-                  setGoalType('gain');
-                }}
-              >
-                <Text style={styles.goalIcon}>📈</Text>
-                <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'gain' && { color: '#FFFFFF' }]}>
-                  Gain Weight
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.inputSuffix}>ft</Text>
+            </View>
+            <View style={styles.twoInputItem}>
+              <TextInput
+                style={styles.bigInput}
+                placeholder="9"
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                keyboardType="number-pad"
+                value={heightInches}
+                onChangeText={setHeightInches}
+                returnKeyType="next"
+              />
+              <Text style={styles.inputSuffix}>in</Text>
             </View>
           </View>
+        ) : (
+          <View style={styles.inputWithSuffix}>
+            <TextInput
+              style={[styles.bigInput, styles.flex1]}
+              placeholder="e.g. 175"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              keyboardType="number-pad"
+              value={heightCm}
+              onChangeText={setHeightCm}
+              returnKeyType="next"
+            />
+            <Text style={styles.inputSuffix}>cm</Text>
+          </View>
+        )}
 
-          {/* Weight Loss Rate - Only show when goal is 'lose' */}
-          {goalType === 'lose' && (
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                How fast do you want to lose weight? *
-              </Text>
-              <View style={styles.activityOptions}>
-                <LossRateOption
-                  label="0.5 lb per week"
-                  description="Slow and steady"
-                  value={0.5}
-                  selected={lossRateLbsPerWeek === 0.5}
-                  onPress={() => {
-                    console.log('[Onboarding] Loss rate selected: 0.5 lb/week');
-                    setLossRateLbsPerWeek(0.5);
-                  }}
-                  isDark={isDark}
-                />
-                <LossRateOption
-                  label="1.0 lb per week"
-                  description="Moderate"
-                  value={1.0}
-                  selected={lossRateLbsPerWeek === 1.0}
-                  onPress={() => {
-                    console.log('[Onboarding] Loss rate selected: 1.0 lb/week');
-                    setLossRateLbsPerWeek(1.0);
-                  }}
-                  isDark={isDark}
-                />
-                <LossRateOption
-                  label="1.5 lb per week"
-                  description="Fast"
-                  value={1.5}
-                  selected={lossRateLbsPerWeek === 1.5}
-                  onPress={() => {
-                    console.log('[Onboarding] Loss rate selected: 1.5 lb/week');
-                    setLossRateLbsPerWeek(1.5);
-                  }}
-                  isDark={isDark}
-                />
-                <LossRateOption
-                  label="2.0 lb per week"
-                  description="Very aggressive"
-                  value={2.0}
-                  selected={lossRateLbsPerWeek === 2.0}
-                  onPress={() => {
-                    console.log('[Onboarding] Loss rate selected: 2.0 lb/week');
-                    setLossRateLbsPerWeek(2.0);
-                  }}
-                  isDark={isDark}
-                />
+        {/* Current Weight */}
+        <Text style={styles.fieldLabel}>{'Current weight'}</Text>
+        <View style={styles.inputWithSuffix}>
+          <TextInput
+            style={[styles.bigInput, styles.flex1]}
+            placeholder={units === 'metric' ? 'e.g. 75' : 'e.g. 165'}
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            keyboardType="decimal-pad"
+            value={weight}
+            onChangeText={setWeight}
+            returnKeyType="next"
+          />
+          <Text style={styles.inputSuffix}>{weightUnit}</Text>
+        </View>
+
+        {/* Goal Weight */}
+        <Text style={styles.fieldLabel}>{'Goal weight'}</Text>
+        <Text style={styles.fieldHelper}>{'The weight you want to reach'}</Text>
+        <View style={styles.inputWithSuffix}>
+          <TextInput
+            style={[styles.bigInput, styles.flex1]}
+            placeholder={units === 'metric' ? 'e.g. 70' : 'e.g. 155'}
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            keyboardType="decimal-pad"
+            value={goalWeight}
+            onChangeText={setGoalWeight}
+            returnKeyType="done"
+          />
+          <Text style={styles.inputSuffix}>{weightUnit}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.primaryBtn, !isValid && styles.primaryBtnDisabled]}
+          onPress={() => {
+            console.log('[Onboarding] Step 4: Continue pressed');
+            onNext();
+          }}
+          disabled={!isValid}
+        >
+          <Text style={styles.primaryBtnText}>Continue →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 5 — GOAL + SPEED ───────────────────────────────────────────────────
+
+const GOAL_CARDS = [
+  { value: 'lose' as GoalType, emoji: '📉', title: 'Lose Weight', subtitle: 'Burn fat, keep muscle' },
+  { value: 'maintain' as GoalType, emoji: '⚖️', title: 'Maintain', subtitle: 'Stay where you are, feel better' },
+  { value: 'gain' as GoalType, emoji: '📈', title: 'Gain', subtitle: 'Build strength and size' },
+];
+
+const SPEED_OPTIONS = [
+  { value: 0.5, label: '0.5 lb/week', sub: 'Slow & steady' },
+  { value: 1.0, label: '1.0 lb/week', sub: 'Moderate' },
+  { value: 1.5, label: '1.5 lb/week', sub: 'Fast' },
+  { value: 2.0, label: '2.0 lb/week', sub: 'Aggressive' },
+];
+
+function Step5({
+  goalType,
+  setGoalType,
+  lossRateLbsPerWeek,
+  setLossRateLbsPerWeek,
+  onNext,
+}: {
+  goalType: GoalType;
+  setGoalType: (v: GoalType) => void;
+  lossRateLbsPerWeek: number;
+  setLossRateLbsPerWeek: (v: number) => void;
+  onNext: () => void;
+}) {
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{"What's your goal?"}</Text>
+
+        <View style={styles.cardList}>
+          {GOAL_CARDS.map((card) => {
+            const selected = goalType === card.value;
+            return (
+              <TouchableOpacity
+                key={card.value}
+                style={[styles.selectionCard, selected && styles.selectionCardSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Goal selected: ${card.value}`);
+                  setGoalType(card.value);
+                }}
+              >
+                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                <View style={styles.cardTextBlock}>
+                  <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>{card.title}</Text>
+                  <Text style={[styles.cardSubtitle, selected && styles.cardSubtitleSelected]}>{card.subtitle}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {goalType === 'lose' && (
+          <View style={styles.speedSection}>
+            <Text style={styles.fieldLabel}>{'How fast?'}</Text>
+            <View style={styles.speedGrid}>
+              {SPEED_OPTIONS.map((opt) => {
+                const selected = lossRateLbsPerWeek === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.speedChip, selected && styles.speedChipSelected]}
+                    onPress={() => {
+                      console.log(`[Onboarding] Loss rate selected: ${opt.value} lb/week`);
+                      setLossRateLbsPerWeek(opt.value);
+                    }}
+                  >
+                    <Text style={[styles.speedChipLabel, selected && styles.speedChipLabelSelected]}>{opt.label}</Text>
+                    <Text style={[styles.speedChipSub, selected && styles.speedChipSubSelected]}>{opt.sub}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            console.log('[Onboarding] Step 5: Continue pressed');
+            onNext();
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Continue →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 6 — ACTIVITY LEVEL ─────────────────────────────────────────────────
+
+const ACTIVITY_CARDS = [
+  { value: 'sedentary' as ActivityLevel, emoji: '🪑', title: 'Sedentary', subtitle: 'Desk job, little movement' },
+  { value: 'light' as ActivityLevel, emoji: '🚶', title: 'Lightly Active', subtitle: 'Light exercise 1–3 days/week' },
+  { value: 'moderate' as ActivityLevel, emoji: '🏃', title: 'Moderately Active', subtitle: 'Exercise 3–5 days/week' },
+  { value: 'very_active' as ActivityLevel, emoji: '💪', title: 'Very Active', subtitle: 'Hard training 6–7 days/week' },
+];
+
+function Step6({
+  activityLevel,
+  setActivityLevel,
+  onNext,
+}: {
+  activityLevel: ActivityLevel;
+  setActivityLevel: (v: ActivityLevel) => void;
+  onNext: () => void;
+}) {
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{'How active are you?'}</Text>
+        <Text style={styles.stepSubtitle}>{'Be honest — this affects your calorie target.'}</Text>
+
+        <View style={styles.cardList}>
+          {ACTIVITY_CARDS.map((card) => {
+            const selected = activityLevel === card.value;
+            return (
+              <TouchableOpacity
+                key={card.value}
+                style={[styles.selectionCard, selected && styles.selectionCardSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Activity level selected: ${card.value}`);
+                  setActivityLevel(card.value);
+                }}
+              >
+                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                <View style={styles.cardTextBlock}>
+                  <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>{card.title}</Text>
+                  <Text style={[styles.cardSubtitle, selected && styles.cardSubtitleSelected]}>{card.subtitle}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            console.log('[Onboarding] Step 6: Continue pressed');
+            onNext();
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Continue →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 7 — FOOD PREFERENCES part 1 ───────────────────────────────────────
+
+function Step7({
+  dietaryRestrictions,
+  proteinPreferences,
+  toggleDietary,
+  toggleProtein,
+  onNext,
+}: {
+  dietaryRestrictions: string[];
+  proteinPreferences: string[];
+  toggleDietary: (item: string) => void;
+  toggleProtein: (item: string) => void;
+  onNext: () => void;
+}) {
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{'What are your dietary restrictions?'}</Text>
+        <Text style={styles.stepSubtitle}>{"Select all that apply. We'll make sure your plan respects these."}</Text>
+
+        <View style={styles.chipWrap}>
+          {DIETARY_OPTIONS.map((opt) => {
+            const selected = dietaryRestrictions.includes(opt.value);
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Dietary restriction toggled: ${opt.value}`);
+                  toggleDietary(opt.value);
+                }}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={styles.sectionTitle}>{'Choose proteins you actually enjoy eating.'}</Text>
+
+        <View style={styles.chipWrap}>
+          {PROTEIN_OPTIONS.map((opt) => {
+            const selected = proteinPreferences.includes(opt.value);
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Protein preference toggled: ${opt.value}`);
+                  toggleProtein(opt.value);
+                }}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            console.log('[Onboarding] Step 7: Continue pressed');
+            onNext();
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Continue →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 8 — FOOD PREFERENCES part 2 ───────────────────────────────────────
+
+function Step8({
+  recipeStyles,
+  toggleRecipeStyle,
+  dislikedFoods,
+  setDislikedFoods,
+  onNext,
+}: {
+  recipeStyles: string[];
+  toggleRecipeStyle: (item: string) => void;
+  dislikedFoods: string;
+  setDislikedFoods: (v: string) => void;
+  onNext: () => void;
+}) {
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={styles.stepScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+        <Text style={styles.stepTitle}>{'What kind of meals fit your lifestyle?'}</Text>
+
+        <View style={styles.chipWrap}>
+          {RECIPE_STYLE_OPTIONS.map((opt) => {
+            const selected = recipeStyles.includes(opt.value);
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => {
+                  console.log(`[Onboarding] Recipe style toggled: ${opt.value}`);
+                  toggleRecipeStyle(opt.value);
+                }}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={styles.fieldLabel}>{'Anything you never want to see in your plan?'}</Text>
+        <TextInput
+          style={styles.multilineInput}
+          placeholder="e.g. cilantro, mushrooms, shellfish..."
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          multiline
+          value={dislikedFoods}
+          onChangeText={setDislikedFoods}
+        />
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            console.log('[Onboarding] Step 8: Build My Plan pressed');
+            onNext();
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Build My Plan →</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 9 — VALUE (Results) ─────────────────────────────────────────────────
+
+function Step9({
+  saving,
+  saveError,
+  displayCalories,
+  displayProtein,
+  displayCarbs,
+  displayFats,
+  goalProjectionText,
+  onRetry,
+  onNext,
+}: {
+  saving: boolean;
+  saveError: string | null;
+  displayCalories: number;
+  displayProtein: number;
+  displayCarbs: number;
+  displayFats: number;
+  goalProjectionText: string;
+  onRetry: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+      <ScrollView
+        contentContainerStyle={[styles.stepScroll, styles.step9Scroll]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeTop} />
+
+        <Text style={styles.step9Title}>{'Your plan is ready.'}</Text>
+        <Text style={styles.step9Sub}>{'Built specifically for your body and goals.'}</Text>
+
+        {saving ? (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator size="large" color={PRIMARY} />
+            <Text style={styles.loadingText}>{'Calculating your targets...'}</Text>
+          </View>
+        ) : saveError ? (
+          <View style={styles.errorBlock}>
+            <Text style={styles.errorText}>{saveError}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
+              <Text style={styles.retryBtnText}>{'Try Again'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <View style={styles.statsGrid}>
+              <View style={styles.statCard}>
+                <Text style={styles.statEmoji}>🔥</Text>
+                <Text style={styles.statValue}>{displayCalories}</Text>
+                <Text style={styles.statLabel}>{'cal/day'}</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statEmoji}>🥩</Text>
+                <Text style={styles.statValue}>{displayProtein}<Text style={styles.statUnit}>g</Text></Text>
+                <Text style={styles.statLabel}>{'protein'}</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statEmoji}>🍚</Text>
+                <Text style={styles.statValue}>{displayCarbs}<Text style={styles.statUnit}>g</Text></Text>
+                <Text style={styles.statLabel}>{'carbs'}</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statEmoji}>🥑</Text>
+                <Text style={styles.statValue}>{displayFats}<Text style={styles.statUnit}>g</Text></Text>
+                <Text style={styles.statLabel}>{'fats'}</Text>
               </View>
             </View>
-          )}
 
-          {/* Activity Level */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Activity Level *</Text>
-            <View style={styles.activityOptions}>
-              <ActivityOption
-                label="Sedentary"
-                description="Little or no exercise"
-                selected={activityLevel === 'sedentary'}
-                onPress={() => {
-                  console.log('[Onboarding] Activity level selected: sedentary');
-                  setActivityLevel('sedentary');
-                }}
-                isDark={isDark}
-              />
-              <ActivityOption
-                label="Light"
-                description="Exercise 1-3 days/week"
-                selected={activityLevel === 'light'}
-                onPress={() => {
-                  console.log('[Onboarding] Activity level selected: light');
-                  setActivityLevel('light');
-                }}
-                isDark={isDark}
-              />
-              <ActivityOption
-                label="Moderate"
-                description="Exercise 3-5 days/week"
-                selected={activityLevel === 'moderate'}
-                onPress={() => {
-                  console.log('[Onboarding] Activity level selected: moderate');
-                  setActivityLevel('moderate');
-                }}
-                isDark={isDark}
-              />
-              <ActivityOption
-                label="Very Active"
-                description="Exercise 6-7 days/week"
-                selected={activityLevel === 'very_active'}
-                onPress={() => {
-                  console.log('[Onboarding] Activity level selected: very_active');
-                  setActivityLevel('very_active');
-                }}
-                isDark={isDark}
-              />
+            <View style={styles.projectionBox}>
+              <Text style={styles.projectionText}>{goalProjectionText}</Text>
             </View>
-          </View>
 
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
-            onPress={handleComplete}
-            disabled={saving}
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => {
+                console.log('[Onboarding] Step 9: This is my plan pressed');
+                onNext();
+              }}
+            >
+              <Text style={styles.primaryBtnText}>This is my plan →</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── STEP 10 — PURCHASE ───────────────────────────────────────────────────────
+
+const FEATURE_ROWS = [
+  { emoji: '🍽️', text: 'Personalized meal plan every week' },
+  { emoji: '🛒', text: 'Grocery list auto-generated' },
+  { emoji: '🔄', text: 'Recipes that match your lifestyle' },
+  { emoji: '📈', text: 'Adjusts as your goals change' },
+];
+
+function Step10({
+  onStartTrial,
+  onSkip,
+}: {
+  onStartTrial: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
+      <LinearGradient
+        colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.95)', '#000000']}
+        locations={[0, 0.35, 0.55, 0.75, 1]}
+        style={styles.fullScreen}
+      >
+        <SafeAreaView style={styles.step10Safe} edges={['top', 'bottom']}>
+          <ScrollView
+            contentContainerStyle={styles.step10Scroll}
+            showsVerticalScrollIndicator={false}
           >
-            {saving ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Complete Setup</Text>
-            )}
-          </TouchableOpacity>
-          
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            <Text style={styles.step10Label}>{'ONE LAST THING'}</Text>
+            <Text style={styles.step10Title}>{'Let AI do the\nhard part for you.'}</Text>
+            <Text style={styles.step10Sub}>
+              {'Your first AI Meal Plan — built around your body, your proteins, and how you cook. Includes your full grocery list so you can start your transformation this week.'}
+            </Text>
+
+            <View style={styles.featureList}>
+              {FEATURE_ROWS.map((row, idx) => (
+                <View key={idx} style={styles.featureRow}>
+                  <Text style={styles.featureEmoji}>{row.emoji}</Text>
+                  <Text style={styles.featureText}>{row.text}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, styles.step10Btn]}
+              onPress={onStartTrial}
+            >
+              <Text style={styles.primaryBtnText}>Start Free Trial</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={onSkip} style={styles.skipLink}>
+              <Text style={styles.skipLinkText}>{"I'll set it up myself →"}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
+    </ImageBackground>
   );
 }
 
-function LossRateOption({ label, description, value, selected, onPress, isDark }: any) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.activityOption,
-        { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.activityContent}>
-        <Text style={[styles.activityLabel, { color: isDark ? colors.textDark : colors.text }, selected && { color: '#FFFFFF' }]}>
-          {label}
-        </Text>
-        <Text style={[styles.activityDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }, selected && { color: 'rgba(255,255,255,0.8)' }]}>
-          {description}
-        </Text>
-      </View>
-      <View style={[styles.radio, { borderColor: selected ? '#FFFFFF' : (isDark ? colors.borderDark : colors.border) }]}>
-        {selected && <View style={styles.radioInner} />}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function ActivityOption({ label, description, selected, onPress, isDark }: any) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.activityOption,
-        { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
-        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.activityContent}>
-        <Text style={[styles.activityLabel, { color: isDark ? colors.textDark : colors.text }, selected && { color: '#FFFFFF' }]}>
-          {label}
-        </Text>
-        <Text style={[styles.activityDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }, selected && { color: 'rgba(255,255,255,0.8)' }]}>
-          {description}
-        </Text>
-      </View>
-      <View style={[styles.radio, { borderColor: selected ? '#FFFFFF' : (isDark ? colors.borderDark : colors.border) }]}>
-        {selected && <View style={styles.radioInner} />}
-      </View>
-    </TouchableOpacity>
-  );
-}
+// ─── STYLES ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
+    flex: 1,
+    backgroundColor: DARK_BG,
+  },
+  flex1: {
     flex: 1,
   },
-  keyboardView: {
+  stepContainer: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: Platform.OS === 'android' ? spacing.xxl : spacing.md,
-    paddingBottom: spacing.xxl,
-  },
-  header: {
-    marginBottom: spacing.xl,
-  },
-  title: {
-    ...typography.h1,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  label: {
-    ...typography.bodyBold,
-    marginBottom: spacing.sm,
-  },
-  helperText: {
-    ...typography.caption,
-    marginBottom: spacing.sm,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  optionButton: {
+  fullScreen: {
     flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    alignItems: 'center',
   },
-  optionText: {
-    ...typography.bodyBold,
+
+  // Progress bar
+  progressTrack: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    zIndex: 10,
   },
-  input: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+  progressFill: {
+    height: 3,
+    backgroundColor: PRIMARY,
+  },
+
+  // Back button
+  backBtn: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    zIndex: 20,
+    padding: 16,
+  },
+  backBtnText: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    lineHeight: 32,
+  },
+
+  // Safe area spacer for steps
+  safeTop: {
+    height: 56,
+  },
+
+  // Step scroll container
+  stepScroll: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+  },
+
+  // Step 0
+  step0Safe: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  step0Content: {
+    paddingHorizontal: 24,
+    paddingBottom: 48,
+  },
+  step0Headline: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 42,
+  },
+  step0Sub: {
     fontSize: 16,
+    color: 'rgba(255,255,255,0.75)',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 24,
   },
-  heightRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  heightInputContainer: {
-    flex: 1,
-  },
-  heightLabel: {
-    ...typography.caption,
-    marginBottom: spacing.xs,
-  },
-  heightInput: {
-    marginBottom: 0,
-  },
-  goalOptions: {
-    gap: spacing.sm,
-  },
-  goalOption: {
-    flexDirection: 'row',
+
+  // Step 9
+  step9Scroll: {
     alignItems: 'center',
-    borderWidth: 2,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
   },
-  goalIcon: {
-    fontSize: 24,
-    marginRight: spacing.md,
+  step9Title: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  goalText: {
-    ...typography.bodyBold,
+  step9Sub: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.55)',
+    textAlign: 'center',
+    marginBottom: 32,
   },
-  activityOptions: {
-    gap: spacing.sm,
-  },
-  activityOption: {
-    flexDirection: 'row',
+  loadingBlock: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 2,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    marginTop: 40,
+    gap: 16,
   },
-  activityContent: {
-    flex: 1,
+  loadingText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 15,
   },
-  activityLabel: {
-    ...typography.bodyBold,
-    marginBottom: 2,
+  errorBlock: {
+    alignItems: 'center',
+    marginTop: 40,
+    gap: 16,
+    paddingHorizontal: 24,
   },
-  activityDescription: {
-    ...typography.caption,
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 15,
+    textAlign: 'center',
   },
-  radio: {
-    width: 24,
-    height: 24,
+  retryBtn: {
+    backgroundColor: PRIMARY,
     borderRadius: 12,
-    borderWidth: 2,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  statEmoji: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  statUnit: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
+  projectionBox: {
+    backgroundColor: 'rgba(76,175,80,0.12)',
+    borderColor: PRIMARY,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 4,
+    marginBottom: 24,
+    width: '100%',
+  },
+  projectionText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  // Step 10
+  step10Safe: {
+    flex: 1,
+  },
+  step10Scroll: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+  },
+  step10Label: {
+    fontSize: 11,
+    letterSpacing: 2,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  step10Title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 40,
+  },
+  step10Sub: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  featureList: {
+    marginBottom: 28,
+    gap: 10,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  featureEmoji: {
+    fontSize: 20,
+  },
+  featureText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    flex: 1,
+  },
+  step10Btn: {
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  skipLink: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  skipLinkText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+
+  // Shared step titles
+  stepTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  stepSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.55)',
+    marginBottom: 28,
+    lineHeight: 22,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 28,
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 10,
+    marginTop: 20,
+  },
+  fieldHelper: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 8,
+    marginTop: -6,
+  },
+
+  // Primary button
+  primaryBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 16,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 28,
   },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+  primaryBtnDisabled: {
+    opacity: 0.4,
   },
-  button: {
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.lg,
-  },
-  buttonText: {
+  primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
   },
-  bottomSpacer: {
-    height: 100,
+
+  // Selection cards
+  cardList: {
+    gap: 12,
+    marginBottom: 8,
+  },
+  selectionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    gap: 16,
+  },
+  selectionCardSelected: {
+    backgroundColor: 'rgba(76,175,80,0.15)',
+    borderColor: PRIMARY,
+  },
+  cardEmoji: {
+    fontSize: 28,
+  },
+  cardTextBlock: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 3,
+  },
+  cardTitleSelected: {
+    color: '#FFFFFF',
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  cardSubtitleSelected: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+
+  // Two-card row (sex, units)
+  twoCardRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 4,
+  },
+  twoCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    gap: 6,
+  },
+  twoCardSelected: {
+    backgroundColor: 'rgba(76,175,80,0.15)',
+    borderColor: PRIMARY,
+  },
+  twoCardEmoji: {
+    fontSize: 28,
+  },
+  twoCardLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  twoCardLabelSelected: {
+    color: PRIMARY,
+  },
+  twoCardSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.45)',
+  },
+  twoCardSubSelected: {
+    color: 'rgba(76,175,80,0.8)',
+  },
+
+  // Inputs
+  bigInput: {
+    height: 56,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    color: '#FFFFFF',
+    fontSize: 20,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+  inputWithSuffix: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inputSuffix: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 16,
+    fontWeight: '600',
+    minWidth: 32,
+  },
+  twoInputRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  twoInputItem: {
+    flex: 1,
+    gap: 6,
+  },
+  multilineInput: {
+    height: 80,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    color: '#FFFFFF',
+    fontSize: 15,
+    padding: 14,
+    textAlignVertical: 'top',
+  },
+
+  // Speed chips (2x2 grid)
+  speedSection: {
+    marginTop: 8,
+  },
+  speedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  speedChip: {
+    width: '47%',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+  },
+  speedChipSelected: {
+    backgroundColor: 'rgba(76,175,80,0.15)',
+    borderColor: PRIMARY,
+  },
+  speedChipLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  speedChipLabelSelected: {
+    color: PRIMARY,
+  },
+  speedChipSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.45)',
+  },
+  speedChipSubSelected: {
+    color: 'rgba(76,175,80,0.7)',
+  },
+
+  // Chips (dietary, protein, recipe)
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 8,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  chipSelected: {
+    backgroundColor: 'rgba(76,175,80,0.2)',
+    borderColor: PRIMARY,
+  },
+  chipText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  chipTextSelected: {
+    color: PRIMARY,
+    fontWeight: '600',
+  },
+
+  // Hope bullets
+  hopeBullet: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderLeftWidth: 3,
+    borderLeftColor: PRIMARY,
+    marginBottom: 12,
+  },
+  hopeBulletIcon: {
+    fontSize: 20,
+    marginTop: 1,
+  },
+  hopeBulletText: {
+    flex: 1,
+  },
+  hopeBulletTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  hopeBulletBody: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.55)',
+    lineHeight: 19,
   },
 });
