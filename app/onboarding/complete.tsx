@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   ImageBackground,
+  Image,
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
@@ -1337,7 +1338,7 @@ function Step9({
                 onNext();
               }}
             >
-              <Text style={styles.primaryBtnText}>This is my plan →</Text>
+              <Text style={styles.primaryBtnText}>Unlock My Plan</Text>
             </TouchableOpacity>
           </>
         )}
@@ -1348,11 +1349,14 @@ function Step9({
 
 // ─── STEP 10 — PURCHASE ───────────────────────────────────────────────────────
 
-const FEATURE_ROWS = [
-  { emoji: '🍽️', text: 'Personalized meal plan every week' },
-  { emoji: '🛒', text: 'Grocery list auto-generated' },
-  { emoji: '🔄', text: 'Recipes that match your lifestyle' },
-  { emoji: '📈', text: 'Adjusts as your goals change' },
+const MEAL_PREVIEW_IMAGE = require('../../assets/images/f78b4cf2-5c02-49b5-83e5-49f019069017.jpeg');
+const GROCERY_PREVIEW_IMAGE = require('../../assets/images/e5e3653d-e210-40ed-8bbb-87bd7d5f1d48.jpeg');
+
+const PURCHASE_BULLETS = [
+  'Know exactly what to eat every day',
+  'Grocery lists organized automatically',
+  'Meals built around foods you actually enjoy',
+  'Stay consistent without starting over',
 ];
 
 function Step10({
@@ -1365,8 +1369,8 @@ function Step10({
   return (
     <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
       <LinearGradient
-        colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.95)', '#000000']}
-        locations={[0, 0.35, 0.55, 0.75, 1]}
+        colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.92)', '#000000']}
+        locations={[0, 0.3, 0.6, 1]}
         style={styles.fullScreen}
       >
         <SafeAreaView style={styles.step10Safe} edges={['top', 'bottom']}>
@@ -1374,30 +1378,58 @@ function Step10({
             contentContainerStyle={styles.step10Scroll}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.step10Label}>{'ONE LAST THING'}</Text>
-            <Text style={styles.step10Title}>{'Let AI do the\nhard part for you.'}</Text>
+            {/* Header */}
+            <Text style={styles.step10Title}>{'Your meals are\nalready planned.'}</Text>
             <Text style={styles.step10Sub}>
-              {'Your first AI Meal Plan — built around your body, your proteins, and how you cook. Includes your full grocery list so you can start your transformation this week.'}
+              {'Calories, macros, meals, and groceries fully personalized for your goal.'}
             </Text>
 
-            <View style={styles.featureList}>
-              {FEATURE_ROWS.map((row, idx) => (
-                <View key={idx} style={styles.featureRow}>
-                  <Text style={styles.featureEmoji}>{row.emoji}</Text>
-                  <Text style={styles.featureText}>{row.text}</Text>
+            {/* Blurred previews */}
+            <View style={styles.previewRow}>
+              <View style={styles.previewCard}>
+                <Image source={MEAL_PREVIEW_IMAGE} style={styles.previewImage} resizeMode="cover" />
+                <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={styles.previewOverlay}>
+                  <Text style={styles.previewIcon}>{'🍽️'}</Text>
+                  <Text style={styles.previewLabel}>{'Meal Plan'}</Text>
+                </View>
+              </View>
+              <View style={styles.previewCard}>
+                <Image source={GROCERY_PREVIEW_IMAGE} style={styles.previewImage} resizeMode="cover" />
+                <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={styles.previewOverlay}>
+                  <Text style={styles.previewIcon}>{'🛒'}</Text>
+                  <Text style={styles.previewLabel}>{'Grocery List'}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Bullets */}
+            <View style={styles.bulletList}>
+              {PURCHASE_BULLETS.map((text, idx) => (
+                <View key={idx} style={styles.bulletRow}>
+                  <Text style={styles.bulletCheck}>{'✅'}</Text>
+                  <Text style={styles.bulletText}>{text}</Text>
                 </View>
               ))}
             </View>
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, styles.step10Btn]}
-              onPress={onStartTrial}
-            >
-              <Text style={styles.primaryBtnText}>Start Free Trial</Text>
-            </TouchableOpacity>
+            {/* No-X lines */}
+            <View style={styles.noLines}>
+              <Text style={styles.noLineText}>{'No restrictive dieting.'}</Text>
+              <Text style={styles.noLineText}>{'No meal guessing.'}</Text>
+              <Text style={styles.noLineText}>{'No grocery confusion.'}</Text>
+            </View>
 
+            {/* CTA */}
+            <TouchableOpacity style={styles.purchaseBtn} onPress={onStartTrial}>
+              <Text style={styles.purchaseBtnText}>{'Start My Personalized Plan'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.trialNote}>{'Free 7-day trial included'}</Text>
+
+            {/* Skip */}
             <TouchableOpacity onPress={onSkip} style={styles.skipLink}>
-              <Text style={styles.skipLinkText}>{"I'll set it up myself →"}</Text>
+              <Text style={styles.skipLinkText}>{"I'll do everything manually"}</Text>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
@@ -1467,11 +1499,11 @@ const styles = StyleSheet.create({
   // Step 0
   step0Safe: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   step0Content: {
     paddingHorizontal: 24,
-    paddingBottom: 48,
+    paddingBottom: 0,
   },
   step0Headline: {
     fontSize: 34,
@@ -1593,8 +1625,8 @@ const styles = StyleSheet.create({
   },
   step10Scroll: {
     flexGrow: 1,
-    justifyContent: 'flex-end',
     paddingHorizontal: 24,
+    paddingTop: 16,
     paddingBottom: 32,
   },
   step10Label: {
@@ -1606,12 +1638,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   step10Title: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 40,
+    lineHeight: 38,
+    marginBottom: 10,
   },
   step10Sub: {
     fontSize: 15,
@@ -1654,6 +1686,90 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  previewRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+    marginTop: 8,
+  },
+  previewCard: {
+    flex: 1,
+    height: 120,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  previewIcon: {
+    fontSize: 28,
+  },
+  previewLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.8)',
+  },
+  bulletList: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  bulletCheck: {
+    fontSize: 16,
+    marginTop: 1,
+  },
+  bulletText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    flex: 1,
+    lineHeight: 22,
+  },
+  noLines: {
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 24,
+  },
+  noLineText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.45)',
+    fontStyle: 'italic',
+  },
+  purchaseBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 16,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  purchaseBtnText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  trialNote: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
 
   // Shared step titles
   stepTitle: {
@@ -1694,7 +1810,7 @@ const styles = StyleSheet.create({
   primaryBtn: {
     backgroundColor: PRIMARY,
     borderRadius: 16,
-    height: 56,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 28,
