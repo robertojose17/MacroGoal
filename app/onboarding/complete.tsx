@@ -1332,7 +1332,7 @@ function Step9({
             </View>
 
             <TouchableOpacity
-              style={styles.primaryBtn}
+              style={[styles.primaryBtn, { width: '100%' }]}
               onPress={() => {
                 console.log('[Onboarding] Step 9: This is my plan pressed');
                 onNext();
@@ -1522,7 +1522,6 @@ const styles = StyleSheet.create({
 
   // Step 9
   step9Scroll: {
-    alignItems: 'center',
   },
   step9Title: {
     fontSize: 30,
