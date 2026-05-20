@@ -31,26 +31,11 @@ type CustomerInfo = any;
 
 // Premium features list
 const PREMIUM_FEATURES = [
-  {
-    title: 'Snap a photo to estimate',
-    description: 'calories & macros instantly',
-  },
-  {
-    title: 'Personalized meal plans for',
-    description: 'fat loss, muscle gain, or maintenance',
-  },
-  {
-    title: 'Generate grocery lists',
-    description: 'automatically from your plan',
-  },
-  {
-    title: 'Track progress photos &',
-    description: 'body measurements',
-  },
-  {
-    title: 'No ads. No invasive tracking.',
-    description: '',
-  },
+  'Snap a photo to estimate calories & macros instantly',
+  'Personalized meal plans for fat loss, muscle gain, or maintenance',
+  'Generate grocery lists automatically from your plan',
+  'Track progress photos & body measurements',
+  'No ads. No invasive tracking.',
 ];
 
 export default function SubscriptionScreen() {
@@ -67,6 +52,7 @@ export default function SubscriptionScreen() {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activePlan, setActivePlan] = useState<'monthly' | 'yearly'>('yearly');
   const { autoStart } = useLocalSearchParams<{ autoStart?: string }>();
   const autoStartFiredRef = React.useRef(false);
 
@@ -268,17 +254,25 @@ export default function SubscriptionScreen() {
     initializeRevenueCat();
   }, []);
 
-  // Auto-start monthly purchase when coming from onboarding
+  // Auto-start yearly purchase when coming from onboarding
   useEffect(() => {
     if (autoStart !== 'true' || packages.length === 0 || autoStartFiredRef.current) return;
     autoStartFiredRef.current = true;
+    const yearlyPkg =
+      packages.find((p: any) => p.packageType === 'ANNUAL') ??
+      packages.find((p: any) =>
+        p.identifier.toLowerCase().includes('annual') ||
+        p.identifier.toLowerCase().includes('yearly')
+      );
     const monthlyPkg =
       packages.find((p: any) => p.packageType === 'MONTHLY') ??
       packages.find((p: any) => p.identifier.toLowerCase().includes('monthly')) ??
       packages[0];
-    if (monthlyPkg) {
-      console.log('[Subscription] Auto-starting monthly purchase from onboarding:', monthlyPkg.identifier);
-      setTimeout(() => handlePurchase(monthlyPkg), 500);
+    const targetPkg = yearlyPkg ?? monthlyPkg;
+    if (targetPkg) {
+      setActivePlan(yearlyPkg ? 'yearly' : 'monthly');
+      console.log('[Subscription] Auto-starting yearly purchase from onboarding:', targetPkg.identifier);
+      setTimeout(() => handlePurchase(targetPkg), 500);
     }
   }, [packages, autoStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -470,14 +464,9 @@ export default function SubscriptionScreen() {
                   size={20}
                   color={colors.primary}
                 />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text, fontWeight: '700' }]}>
-                    {feature.title}
-                  </Text>
-                  <Text style={[styles.featureDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {feature.description}
-                  </Text>
-                </View>
+                <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text }]}>
+                  {feature}
+                </Text>
               </View>
             ))}
           </View>
@@ -609,14 +598,9 @@ export default function SubscriptionScreen() {
                   size={20}
                   color={colors.primary}
                 />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text, fontWeight: '700' }]}>
-                    {feature.title}
-                  </Text>
-                  <Text style={[styles.featureDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {feature.description}
-                  </Text>
-                </View>
+                <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text }]}>
+                  {feature}
+                </Text>
               </View>
             ))}
           </View>
@@ -634,6 +618,7 @@ export default function SubscriptionScreen() {
     );
   }
 
+  // Resolve packages
   const monthlyPkg =
     packages.find((p: any) => p.packageType === 'MONTHLY') ??
     packages.find((p: any) => p.identifier.toLowerCase().includes('monthly'));
@@ -645,17 +630,28 @@ export default function SubscriptionScreen() {
       p.identifier.toLowerCase().includes('yearly')
     );
 
-  // If only one package exists and it's not matched as yearly, show it as monthly
   const resolvedMonthlyPkg = monthlyPkg ?? (yearlyPkg ? undefined : packages[0]);
   const resolvedYearlyPkg = yearlyPkg;
 
   const monthlyPrice = resolvedMonthlyPkg?.product?.priceString ?? '';
   const yearlyPrice = resolvedYearlyPkg?.product?.priceString ?? '';
 
-  const isPurchasingMonthly = purchasing && selectedPackage === resolvedMonthlyPkg?.identifier;
-  const isPurchasingYearly = purchasing && selectedPackage === resolvedYearlyPkg?.identifier;
+  const yearlyRawPrice = resolvedYearlyPkg?.product?.price;
+  const yearlyMonthlyEquiv = yearlyRawPrice
+    ? `$${(Number(yearlyRawPrice) / 12).toFixed(2)}/mo`
+    : null;
+
+  const selectedPkg = activePlan === 'yearly' ? resolvedYearlyPkg : resolvedMonthlyPkg;
 
   const borderTopColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+
+  const handleSubscribe = () => {
+    console.log('[Subscription] Subscribe button pressed, plan:', activePlan, selectedPkg?.identifier);
+    if (!selectedPkg) return;
+    handlePurchase(selectedPkg);
+  };
+
+  const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -679,6 +675,7 @@ export default function SubscriptionScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Hero */}
         <View style={styles.heroSection}>
           <Text style={[styles.heroTitle, { color: isDark ? colors.textDark : colors.text }]}>
             Track Meals in Seconds
@@ -688,105 +685,143 @@ export default function SubscriptionScreen() {
           </Text>
         </View>
 
+        {/* Features — compact single-line */}
         <View style={styles.featuresListContainer}>
           {PREMIUM_FEATURES.map((feature, index) => (
             <View key={index} style={styles.featureRow}>
               <IconSymbol
                 ios_icon_name="checkmark.circle.fill"
                 android_material_icon_name="check-circle"
-                size={22}
+                size={18}
                 color={colors.primary}
               />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text, fontWeight: '700' }]}>
-                  {feature.title}
-                </Text>
-                <Text style={[styles.featureDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {feature.description}
-                </Text>
-              </View>
+              <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text }]}>
+                {feature}
+              </Text>
             </View>
           ))}
         </View>
 
+        {/* Divider */}
+        <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]} />
+
+        {/* Choose Your Plan */}
+        <Text style={[styles.choosePlanTitle, { color: isDark ? colors.textDark : colors.text }]}>
+          Choose Your Plan
+        </Text>
+
+        {/* Yearly card */}
+        {resolvedYearlyPkg && (
+          <TouchableOpacity
+            style={[
+              styles.planCard,
+              { backgroundColor: isDark ? colors.cardDark : colors.card },
+              activePlan === 'yearly' && { borderColor: colors.primary, borderWidth: 2 },
+            ]}
+            onPress={() => {
+              console.log('[Subscription] Yearly plan selected');
+              setActivePlan('yearly');
+            }}
+            activeOpacity={0.85}
+          >
+            {/* SAVE badge */}
+            <View style={[styles.saveBadge, { backgroundColor: colors.primary }]}>
+              <Text style={styles.saveBadgeText}>✓ SAVE 58%</Text>
+            </View>
+
+            <View style={styles.planCardInner}>
+              <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: colors.primary }]}>
+                {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.planCardTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  7-Day Free Trial
+                </Text>
+                <Text style={[styles.planCardPrice, { color: isDark ? colors.textDark : colors.text }]}>
+                  Then {yearlyPrice}/year
+                </Text>
+                {yearlyMonthlyEquiv && (
+                  <Text style={[styles.planCardSub, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    Only {yearlyMonthlyEquiv}
+                  </Text>
+                )}
+                <Text style={[styles.planCardTag, { color: colors.primary }]}>
+                  Most users choose this
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Monthly card */}
+        {resolvedMonthlyPkg && (
+          <TouchableOpacity
+            style={[
+              styles.planCard,
+              { backgroundColor: isDark ? colors.cardDark : colors.card },
+              activePlan === 'monthly' && { borderColor: colors.primary, borderWidth: 2 },
+            ]}
+            onPress={() => {
+              console.log('[Subscription] Monthly plan selected');
+              setActivePlan('monthly');
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={styles.planCardInner}>
+              <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: colors.primary }]}>
+                {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.planCardPrice, { color: isDark ? colors.textDark : colors.text }]}>
+                  {monthlyPrice} monthly
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Cancel anytime */}
+        <Text style={[styles.cancelText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          Cancel anytime during trial
+        </Text>
+
+        {/* Legal disclaimer */}
         <View style={styles.disclaimerContainer}>
           <Text style={[styles.disclaimerText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
             You can manage your subscription in your App Store account settings.
           </Text>
-          <Text style={[styles.disclaimerText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
-            Note: Each app account requires its own subscription. If you have multiple accounts, you must purchase or restore the subscription for each account separately.
-          </Text>
         </View>
       </ScrollView>
 
-      {/* Sticky bottom buttons */}
+      {/* Sticky bottom — single CTA button */}
       <View style={[styles.stickyBottom, { borderTopColor, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-        {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ paddingVertical: spacing.lg }} />
-        ) : (
-          <>
-            {resolvedMonthlyPkg && (
-              <TouchableOpacity
-                style={[styles.stickyButton, { backgroundColor: colors.primary, marginBottom: spacing.lg }]}
-                onPress={() => {
-                  console.log('[Subscription] Monthly button pressed:', resolvedMonthlyPkg.identifier);
-                  handlePurchase(resolvedMonthlyPkg);
-                }}
-                disabled={purchasing}
-              >
-                {isPurchasingMonthly ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.stickyButtonTextSolid}>
-                    {'Monthly  •  '}
-                    {monthlyPrice}
-                    {'/mo'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
+        <TouchableOpacity
+          style={[styles.ctaButton, { backgroundColor: colors.primary }, purchasing && { opacity: 0.7 }]}
+          onPress={handleSubscribe}
+          disabled={purchasing || !selectedPkg}
+        >
+          {purchasing ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={styles.ctaButtonText}>
+              {ctaLabel}
+            </Text>
+          )}
+        </TouchableOpacity>
 
-            {resolvedYearlyPkg && (
-              <View style={[styles.stickyButtonWrapper, { marginBottom: spacing.sm }]}>
-                <TouchableOpacity
-                  style={[styles.stickyButton, styles.stickyButtonOutlined, { borderColor: colors.primary }]}
-                  onPress={() => {
-                    console.log('[Subscription] Yearly button pressed:', resolvedYearlyPkg.identifier);
-                    handlePurchase(resolvedYearlyPkg);
-                  }}
-                  disabled={purchasing}
-                >
-                  {isPurchasingYearly ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Text style={[styles.stickyButtonTextOutlined, { color: colors.primary }]}>
-                      {'Yearly  •  '}
-                      {yearlyPrice}
-                      {'/yr'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-                <View style={[styles.bestValueBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.bestValueText}>BEST VALUE</Text>
-                </View>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.restoreButton}
-              onPress={() => {
-                console.log('[Subscription] Restore Purchases pressed');
-                handleRestore();
-              }}
-              disabled={loading}
-            >
-              <Text style={[styles.restoreButtonText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Restore Purchases
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <TouchableOpacity
+          style={styles.restoreButton}
+          onPress={() => {
+            console.log('[Subscription] Restore Purchases pressed');
+            handleRestore();
+          }}
+          disabled={loading}
+        >
+          <Text style={[styles.restoreButtonText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Restore Purchases
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Success Modal */}
@@ -868,7 +903,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   featuresListContainer: {
-    gap: spacing.md,
+    gap: 10,
     marginBottom: spacing.lg,
   },
   stickyBottom: {
@@ -940,8 +975,83 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  planCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  planCardTitle: {
+    ...typography.bodyBold,
+    marginBottom: 2,
+  },
+  planCardPrice: {
+    ...typography.body,
+    marginBottom: 2,
+  },
+  planCardSub: {
+    ...typography.caption,
+    marginBottom: 4,
+  },
+  planCardTag: {
+    ...typography.caption,
+    fontWeight: '600',
+  },
+  saveBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.sm,
+  },
+  saveBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  divider: {
+    height: 1,
+    marginVertical: spacing.lg,
+  },
+  choosePlanTitle: {
+    ...typography.h3,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  cancelText: {
+    textAlign: 'center',
+    ...typography.caption,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  ctaButton: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 54,
+  },
+  ctaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
   popularPlan: {
     borderWidth: 2,
@@ -978,12 +1088,12 @@ const styles = StyleSheet.create({
   },
   featureRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: 14,
   },
   featureText: {
     ...typography.body,
+    flex: 1,
   },
   featureDescription: {
     ...typography.body,
