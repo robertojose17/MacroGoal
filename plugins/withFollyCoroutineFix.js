@@ -275,9 +275,23 @@ class ReanimatedMountHook : public UIManagerMountHook {
     }
   }
 
-  // Fix 6: Patch RNWorklets.podspec to produce empty library (RNReanimated 3.17.x bundles it)
-  // Handles both 'react-native-worklets-core' and 'react-native-worklets' package names.
+  // Fix 6: Replace RNWorklets.podspec with a no-op stub (RNReanimated 3.17.x bundles worklets internally)
+  // Overwrite entirely instead of patching to avoid Ruby syntax corruption.
   const WORKLETS_PATCH_MARKER = 'patch-folly-fix6: emptied for RNReanimated 3.17.x';
+  const STUB_PODSPEC = `# ${WORKLETS_PATCH_MARKER}
+Pod::Spec.new do |s|
+  s.name         = "RNWorklets"
+  s.version      = "0.5.1"
+  s.summary      = "Stub podspec — worklets are bundled inside react-native-reanimated"
+  s.description  = "No-op stub to prevent duplicate symbol conflicts"
+  s.homepage     = "https://github.com/software-mansion/react-native-reanimated"
+  s.license      = "MIT"
+  s.author       = { "Software Mansion" => "contact@swmansion.com" }
+  s.platform     = :ios, "13.4"
+  s.source       = { :path => "." }
+  s.source_files = []
+end
+`;
   const workletsPodspecCandidates = [
     path.join(projectRoot, 'node_modules/react-native-worklets-core/RNWorklets.podspec'),
     path.join(projectRoot, 'node_modules/react-native-worklets/RNWorklets.podspec'),
@@ -287,20 +301,13 @@ class ReanimatedMountHook : public UIManagerMountHook {
       console.log('[withFollyCoroutineFix] Fix 6: podspec not found (ok):', workletsPodspecPath);
       continue;
     }
-    let podspec = fs.readFileSync(workletsPodspecPath, 'utf8');
-    if (podspec.includes(WORKLETS_PATCH_MARKER)) {
+    const existing = fs.readFileSync(workletsPodspecPath, 'utf8');
+    if (existing.includes(WORKLETS_PATCH_MARKER)) {
       console.log('[withFollyCoroutineFix] Fix 6: already patched:', workletsPodspecPath);
       continue;
     }
-    podspec = podspec
-      .replace(/s\.source_files\s*=\s*[^\n]+/g, "s.source_files = []")
-      .replace(/s\.exclude_files\s*=\s*[^\n]+\n?/g, '')
-      .replace(/s\.compiler_flags\s*=\s*[^\n]+\n?/g, '')
-      .replace(/s\.dependency\s+['"]React[^'"]*['"]\s*[^\n]*\n?/g, '')
-      .replace(/s\.dependency\s+['"]RCT[^'"]*['"]\s*[^\n]*\n?/g, '');
-    podspec = '# ' + WORKLETS_PATCH_MARKER + '\n' + podspec;
-    fs.writeFileSync(workletsPodspecPath, podspec, 'utf8');
-    console.log('[withFollyCoroutineFix] Fix 6: Patched podspec (emptied source_files + removed React deps):', workletsPodspecPath);
+    fs.writeFileSync(workletsPodspecPath, STUB_PODSPEC, 'utf8');
+    console.log('[withFollyCoroutineFix] Fix 6: Replaced podspec with no-op stub:', workletsPodspecPath);
   }
 
   // Fix 6b: Remove codegenConfig from worklets package.json (both package name variants)
