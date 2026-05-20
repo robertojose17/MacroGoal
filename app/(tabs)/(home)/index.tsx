@@ -4,7 +4,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   RefreshControl, Alert, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -266,6 +266,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
 
@@ -555,6 +556,14 @@ export default function HomeScreen() {
       loadPlans();
     }, [loadData, loadPlans])
   );
+
+  // Switch to planning tab when navigated with ?tab=planning
+  useEffect(() => {
+    if (tab === 'planning') {
+      console.log('[Home] tab param detected, switching to planning tab');
+      setActiveTab('planning');
+    }
+  }, [tab]);
 
   // Load month assignments when calendar month changes
   useEffect(() => {

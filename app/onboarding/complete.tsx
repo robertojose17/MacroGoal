@@ -350,19 +350,49 @@ export default function CompleteOnboardingScreen() {
 
   // ─── Purchase / finish ─────────────────────────────────────────────────────
 
+  const [purchasing, setPurchasing] = useState(false);
+
   const handleStartTrial = async () => {
     console.log('[Onboarding] Start Free Trial pressed');
+
+    if (!isPurchasesAvailable || !Purchases) {
+      console.log('[Onboarding] RevenueCat not available, navigating directly');
+      router.replace('/(tabs)/(home)?tab=planning');
+      return;
+    }
+
+    setPurchasing(true);
     try {
-      if (isPurchasesAvailable && Purchases) {
-        const offerings = await Purchases.getOfferings();
-        if (offerings.current) {
-          await Purchases.presentPaywall();
-        }
+      console.log('[Onboarding] Fetching RevenueCat offerings');
+      const offerings = await Purchases.getOfferings();
+      const packages = offerings.current?.availablePackages ?? [];
+      console.log('[Onboarding] Available packages:', packages.map((p: any) => p.identifier));
+
+      const monthlyPkg =
+        packages.find((pkg: any) => pkg.packageType === 'MONTHLY') ??
+        packages.find((pkg: any) => pkg.identifier.toLowerCase().includes('monthly')) ??
+        packages[0];
+
+      if (!monthlyPkg) {
+        console.log('[Onboarding] No packages found, navigating directly');
+        router.replace('/(tabs)/(home)?tab=planning');
+        return;
       }
-    } catch (e) {
-      console.log('[Onboarding] Paywall error:', e);
+
+      console.log('[Onboarding] Purchasing package:', monthlyPkg.identifier);
+      await Purchases.purchasePackage(monthlyPkg);
+      console.log('[Onboarding] Purchase successful, navigating to planning tab');
+      router.replace('/(tabs)/(home)?tab=planning');
+    } catch (e: any) {
+      const cancelled = e?.userCancelled === true || e?.code === 'PURCHASE_CANCELLED';
+      if (cancelled) {
+        console.log('[Onboarding] Purchase cancelled by user');
+      } else {
+        console.error('[Onboarding] Purchase error:', e);
+        Alert.alert('Purchase Failed', e?.message ?? 'Something went wrong. Please try again.');
+      }
     } finally {
-      router.replace('/(tabs)/(home)/');
+      setPurchasing(false);
     }
   };
 
