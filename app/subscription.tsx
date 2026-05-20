@@ -626,6 +626,29 @@ export default function SubscriptionScreen() {
     );
   }
 
+  const monthlyPkg =
+    packages.find((p: any) => p.packageType === 'MONTHLY') ??
+    packages.find((p: any) => p.identifier.toLowerCase().includes('monthly'));
+
+  const yearlyPkg =
+    packages.find((p: any) => p.packageType === 'ANNUAL') ??
+    packages.find((p: any) =>
+      p.identifier.toLowerCase().includes('annual') ||
+      p.identifier.toLowerCase().includes('yearly')
+    );
+
+  // If only one package exists and it's not matched as yearly, show it as monthly
+  const resolvedMonthlyPkg = monthlyPkg ?? (yearlyPkg ? undefined : packages[0]);
+  const resolvedYearlyPkg = yearlyPkg;
+
+  const monthlyPrice = resolvedMonthlyPkg?.product?.priceString ?? '';
+  const yearlyPrice = resolvedYearlyPkg?.product?.priceString ?? '';
+
+  const isPurchasingMonthly = purchasing && selectedPackage === resolvedMonthlyPkg?.identifier;
+  const isPurchasingYearly = purchasing && selectedPackage === resolvedYearlyPkg?.identifier;
+
+  const borderTopColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
@@ -643,7 +666,11 @@ export default function SubscriptionScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.heroSection}>
           <View style={[styles.iconCircle, { backgroundColor: colors.primary + '20' }]}>
             <IconSymbol
@@ -661,98 +688,26 @@ export default function SubscriptionScreen() {
           </Text>
         </View>
 
-        {packages.map((pkg, index) => {
-          const isSelected = selectedPackage === pkg.identifier;
-          const isPurchasingThis = purchasing && isSelected;
-          const isPopular = pkg.packageType === 'ANNUAL' || pkg.identifier.toLowerCase().includes('annual') || pkg.identifier.toLowerCase().includes('yearly');
-
-          // Get package details
-          const product = pkg.product;
-          const title = product.title || pkg.identifier;
-          const price = product.priceString;
-          const description = product.description || '';
-
-          return (
-            <View
-              key={pkg.identifier}
-              style={[
-                styles.planCard,
-                { backgroundColor: isDark ? colors.cardDark : colors.card },
-                isPopular && styles.popularPlan,
-              ]}
-            >
-              {isPopular && (
-                <View style={[styles.popularBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.popularText}>MOST POPULAR</Text>
-                </View>
-              )}
-
-              <Text style={[styles.planTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                {title}
-              </Text>
-              <Text style={[styles.planPrice, { color: colors.primary }]}>
-                {price}
-              </Text>
-              {description && (
-                <Text style={[styles.planDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {description}
+        <View style={styles.featuresListContainer}>
+          {PREMIUM_FEATURES.map((feature, index) => (
+            <View key={index} style={styles.featureRow}>
+              <IconSymbol
+                ios_icon_name="checkmark.circle.fill"
+                android_material_icon_name="check-circle"
+                size={22}
+                color={colors.primary}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text, fontWeight: '700' }]}>
+                  {feature.title}
                 </Text>
-              )}
-
-              <View style={styles.featuresContainer}>
-                {PREMIUM_FEATURES.map((feature, idx) => (
-                  <View key={idx} style={styles.featureRow}>
-                    <IconSymbol
-                      ios_icon_name="checkmark.circle.fill"
-                      android_material_icon_name="check-circle"
-                      size={20}
-                      color={colors.primary}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text, fontWeight: '700' }]}>
-                        {feature.title}
-                      </Text>
-                      <Text style={[styles.featureDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                        {feature.description}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
+                <Text style={[styles.featureDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  {feature.description}
+                </Text>
               </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.subscribeButton,
-                  { backgroundColor: colors.primary },
-                  isPurchasingThis && styles.subscribeButtonDisabled,
-                ]}
-                onPress={() => handlePurchase(pkg)}
-                disabled={purchasing}
-              >
-                {isPurchasingThis ? (
-                  <View style={styles.loadingRow}>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text style={styles.subscribeButtonText}>Processing...</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.subscribeButtonText}>
-                    Subscribe Now
-                  </Text>
-                )}
-              </TouchableOpacity>
             </View>
-          );
-        })}
-
-        <TouchableOpacity
-          style={styles.restoreButton}
-          onPress={handleRestore}
-          disabled={loading}
-        >
-          <Text style={[styles.restoreButtonText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Restore Purchases
-          </Text>
-        </TouchableOpacity>
+          ))}
+        </View>
 
         <View style={styles.disclaimerContainer}>
           <Text style={[styles.disclaimerText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -764,6 +719,75 @@ export default function SubscriptionScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Sticky bottom buttons */}
+      <View style={[styles.stickyBottom, { borderTopColor, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        {loading ? (
+          <ActivityIndicator size="large" color={colors.primary} style={{ paddingVertical: spacing.lg }} />
+        ) : (
+          <>
+            {resolvedMonthlyPkg && (
+              <TouchableOpacity
+                style={[styles.stickyButton, { backgroundColor: colors.primary, marginBottom: spacing.sm }]}
+                onPress={() => {
+                  console.log('[Subscription] Monthly button pressed:', resolvedMonthlyPkg.identifier);
+                  handlePurchase(resolvedMonthlyPkg);
+                }}
+                disabled={purchasing}
+              >
+                {isPurchasingMonthly ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.stickyButtonTextSolid}>
+                    {'Monthly  •  '}
+                    {monthlyPrice}
+                    {'/mo'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {resolvedYearlyPkg && (
+              <View style={[styles.stickyButtonWrapper, { marginBottom: spacing.sm }]}>
+                <TouchableOpacity
+                  style={[styles.stickyButton, styles.stickyButtonOutlined, { borderColor: colors.primary }]}
+                  onPress={() => {
+                    console.log('[Subscription] Yearly button pressed:', resolvedYearlyPkg.identifier);
+                    handlePurchase(resolvedYearlyPkg);
+                  }}
+                  disabled={purchasing}
+                >
+                  {isPurchasingYearly ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={[styles.stickyButtonTextOutlined, { color: colors.primary }]}>
+                      {'Yearly  •  '}
+                      {yearlyPrice}
+                      {'/yr'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <View style={[styles.bestValueBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.bestValueText}>BEST VALUE</Text>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.restoreButton}
+              onPress={() => {
+                console.log('[Subscription] Restore Purchases pressed');
+                handleRestore();
+              }}
+              disabled={loading}
+            >
+              <Text style={[styles.restoreButtonText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Restore Purchases
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
 
       {/* Success Modal */}
       <Modal
@@ -841,7 +865,55 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: 100,
+    paddingBottom: spacing.xl,
+  },
+  featuresListContainer: {
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  stickyBottom: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+  },
+  stickyButtonWrapper: {
+    position: 'relative',
+  },
+  stickyButton: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    minHeight: 52,
+  },
+  stickyButtonOutlined: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+  },
+  stickyButtonTextSolid: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  stickyButtonTextOutlined: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bestValueBadge: {
+    position: 'absolute',
+    top: -10,
+    left: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+  },
+  bestValueText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   heroSection: {
     alignItems: 'center',
