@@ -1391,7 +1391,6 @@ function Step10({
                 style={styles.singlePreviewImage}
                 resizeMode="cover"
               />
-              <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
             </View>
 
             {/* Bullets */}
