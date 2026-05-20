@@ -16,6 +16,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -365,6 +366,19 @@ export default function CompleteOnboardingScreen() {
 
     setPurchasing(true);
     try {
+      // Configure RevenueCat before calling getOfferings — the SDK may not
+      // be initialized yet if the user reached this step quickly after launch.
+      const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
+      const apiKey = Platform.select({
+        ios: revenueCatConfig?.iosApiKey,
+        android: revenueCatConfig?.androidApiKey,
+      });
+      if (apiKey && !apiKey.includes('YOUR')) {
+        const { data: { user } } = await supabase.auth.getUser();
+        await Purchases.configure({ apiKey, appUserID: user?.id ?? undefined });
+        console.log('[Onboarding] RevenueCat configured');
+      }
+
       console.log('[Onboarding] Fetching RevenueCat offerings');
       const offerings = await Purchases.getOfferings();
       const packages = offerings.current?.availablePackages ?? [];
