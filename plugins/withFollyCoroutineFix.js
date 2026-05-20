@@ -440,46 +440,17 @@ function applyPodfilePatch(podfilePath) {
 
   let content = fs.readFileSync(podfilePath, 'utf8');
 
-  if (content.includes('withFollyCoroutineFix-v14')) {
+  if (content.includes('withFollyCoroutineFix-v15')) {
     console.log('[withFollyCoroutineFix] Podfile already patched.');
     return;
   }
 
-  // --- RNWorklets pod override injection ---
-  const WORKLETS_OVERRIDE_MARKER = 'withFollyCoroutineFix-worklets-override-v2';
-  // Remove old v1 override if present (it was injected in wrong location)
+  // --- RNWorklets pod override injection (REMOVED) ---
+  // Fix 6 now overwrites the node_modules podspec with a no-op stub directly,
+  // so injecting a second pod source causes a CocoaPods conflict. Remove any
+  // previously injected overrides (v1 and v2) if present.
   content = content.replace(/\n {2}# withFollyCoroutineFix-worklets-override-v1\n {2}# Override RNWorklets[^\n]*\n {2}# Having both[^\n]*\n {2}pod 'RNWorklets'[^\n]*\n/g, '');
-
-  if (!content.includes(WORKLETS_OVERRIDE_MARKER)) {
-    const overrideSnippet = `
-  # ${WORKLETS_OVERRIDE_MARKER}
-  # Override RNWorklets with empty stub — react-native-reanimated 3.17.x bundles worklets internally
-  # Having both causes duplicate symbol linker errors (_OBJC_CLASS_$_NativeWorkletsModuleSpecBase)
-  pod 'RNWorklets', :path => '../ios-patches'
-`;
-    // Inject inside the main target block — find `use_react_native!` call and inject after it
-    // This is always inside the target block in Expo-generated Podfiles
-    const useReactNativeRegex = /^([ \t]*use_react_native!\([^)]*\)[ \t]*)$/m;
-    const useReactNativeSimpleRegex = /^([ \t]*use_react_native![ \t]*)$/m;
-
-    if (useReactNativeRegex.test(content)) {
-      content = content.replace(useReactNativeRegex, `$1\n${overrideSnippet}`);
-      console.log('[withFollyCoroutineFix] Podfile: injected RNWorklets pod override after use_react_native!.');
-    } else if (useReactNativeSimpleRegex.test(content)) {
-      content = content.replace(useReactNativeSimpleRegex, `$1\n${overrideSnippet}`);
-      console.log('[withFollyCoroutineFix] Podfile: injected RNWorklets pod override after use_react_native!.');
-    } else {
-      // Fallback: inject before the closing `end` of the first target block
-      // Find `target '...' do` and its matching `end`
-      const targetBlockEndRegex = /^([ \t]*end[ \t]*\n[ \t]*\n[ \t]*post_install)/m;
-      if (targetBlockEndRegex.test(content)) {
-        content = content.replace(targetBlockEndRegex, `${overrideSnippet}\n$1`);
-        console.log('[withFollyCoroutineFix] Podfile: injected RNWorklets pod override before target end.');
-      } else {
-        console.warn('[withFollyCoroutineFix] Podfile: could not find injection point for RNWorklets override.');
-      }
-    }
-  }
+  content = content.replace(/\n {2}# withFollyCoroutineFix-worklets-override-v2\n {2}# Override RNWorklets[^\n]*\n {2}# Having both[^\n]*\n {2}pod 'RNWorklets'[^\n]*\n/g, '');
 
   // --- pre_install injection ---
   const PRE_INSTALL_BLOCK = `
