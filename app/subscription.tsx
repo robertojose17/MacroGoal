@@ -11,7 +11,7 @@ import {
   Platform,
   Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -59,6 +59,8 @@ export default function SubscriptionScreen() {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { autoStart } = useLocalSearchParams<{ autoStart?: string }>();
+  const autoStartFiredRef = React.useRef(false);
 
   // Initialize RevenueCat and fetch offerings
   const initializeRevenueCat = async () => {
@@ -257,6 +259,20 @@ export default function SubscriptionScreen() {
   useEffect(() => {
     initializeRevenueCat();
   }, []);
+
+  // Auto-start monthly purchase when coming from onboarding
+  useEffect(() => {
+    if (autoStart !== 'true' || packages.length === 0 || autoStartFiredRef.current) return;
+    autoStartFiredRef.current = true;
+    const monthlyPkg =
+      packages.find((p: any) => p.packageType === 'MONTHLY') ??
+      packages.find((p: any) => p.identifier.toLowerCase().includes('monthly')) ??
+      packages[0];
+    if (monthlyPkg) {
+      console.log('[Subscription] Auto-starting monthly purchase from onboarding:', monthlyPkg.identifier);
+      setTimeout(() => handlePurchase(monthlyPkg), 500);
+    }
+  }, [packages, autoStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle purchase
   const handlePurchase = async (pkg: PurchasesPackage) => {
