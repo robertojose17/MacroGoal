@@ -278,8 +278,87 @@ function applySourcePatches(projectRoot) {
     }
   }
 
+  // Fix 8: Restore react-native-worklets/RNWorklets.podspec if it was previously stubbed by Fix 6.
+  // reanimated 4.1.7 requires the REAL worklets pod (it imports <rnworklets/rnworklets.h>).
+  // The stub was only correct for reanimated 3.17.x where worklets were bundled internally.
+  const WORKLETS_REAL_PODSPEC = `require "json"
+require_relative './scripts/worklets_utils'
+
+package = JSON.parse(File.read(File.join(__dir__, "package.json")))
+$worklets_config = worklets_find_config()
+worklets_assert_minimal_react_native_version($worklets_config)
+
+$new_arch_enabled = ENV['RCT_NEW_ARCH_ENABLED'] != '0'
+worklets_assert_new_architecture_enabled($new_arch_enabled)
+
+ios_min_version = '13.4'
+
+feature_flags = "-DWORKLETS_FEATURE_FLAGS=\\"#{worklets_get_static_feature_flags()}\\""
+version_flags = "-DWORKLETS_VERSION=#{package['version']}"
+
+Pod::Spec.new do |s|
+  s.name         = "RNWorklets"
+  s.version      = package["version"]
+  s.summary      = package["description"]
+  s.homepage     = "https://github.com/software-mansion/react-native-reanimated"
+  s.license      = package["license"]
+  s.authors      = { "author" => "author@domain.com" }
+  s.platforms    = { :ios => ios_min_version, :tvos => "9.0", :osx => "10.14", :visionos => "1.0" }
+  s.source       = { :git => "https://github.com/software-mansion/react-native-reanimated.git", :tag => "#{s.version}" }
+
+  s.subspec "worklets" do |ss|
+    ss.source_files = "Common/cpp/worklets/**/*.{cpp,h}"
+    ss.header_dir = "worklets"
+    ss.header_mappings_dir = "Common/cpp/worklets"
+  end
+
+  s.subspec "apple" do |ss|
+    ss.source_files = "apple/worklets/**/*.{mm,cpp,h}"
+    ss.header_dir = "worklets"
+    ss.header_mappings_dir = "apple/worklets"
+  end
+
+  s.subspec "rnworklets" do |ss|
+    ss.source_files = "apple/rnworklets/**/*.{mm,cpp,h}"
+    ss.header_dir = "rnworklets"
+    ss.header_mappings_dir = "apple/rnworklets"
+  end
+
+  s.default_subspecs = ["worklets", "apple", "rnworklets"]
+
+  s.dependency "React-Core"
+  s.dependency "React-RCTFabric"
+  s.dependency "React-jsi"
+  s.dependency "React-jsiexecutor"
+  s.dependency "React-callinvoker"
+  s.dependency "ReactCommon/turbomodule/core"
+  s.dependency "React-NativeModulesApple"
+  s.dependency "React-RCTAppDelegate"
+  s.dependency "hermes-engine"
+
+  s.pod_target_xcconfig = {
+    "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",
+    "OTHER_CPLUSPLUSFLAGS" => "#{feature_flags} #{version_flags}",
+    "HEADER_SEARCH_PATHS" => "\\"$(PODS_ROOT)/Headers/Public/React-Codegen/react/renderer/components\\" \\"$(PODS_TARGET_SRCROOT)/Common/cpp\\" \\"$(PODS_TARGET_SRCROOT)/apple\\""
+  }
+end
+`;
+  const workletsRealPodspecPath = path.join(projectRoot, 'node_modules/react-native-worklets/RNWorklets.podspec');
+  if (fs.existsSync(workletsRealPodspecPath)) {
+    const existingContent = fs.readFileSync(workletsRealPodspecPath, 'utf8');
+    if (existingContent.includes('no-op stub') || existingContent.includes('preserve_paths = "README.md"') || existingContent.includes('patch-folly-fix6')) {
+      fs.writeFileSync(workletsRealPodspecPath, WORKLETS_REAL_PODSPEC, 'utf8');
+      console.log('[withFollyCoroutineFix] Fix 8: Restored real react-native-worklets/RNWorklets.podspec (was previously stubbed)');
+    } else {
+      console.log('[withFollyCoroutineFix] Fix 8: react-native-worklets/RNWorklets.podspec is already the real podspec — no restore needed');
+    }
+  } else {
+    console.log('[withFollyCoroutineFix] Fix 8: react-native-worklets/RNWorklets.podspec not found — skipping restore');
+  }
+
   // Fix 6: Replace RNWorklets.podspec with a no-op stub (RNReanimated 3.17.x bundles worklets internally)
-  // Overwrite entirely instead of patching to avoid Ruby syntax corruption.
+  // NOTE: react-native-worklets is intentionally excluded — reanimated 4.1.7 requires its real pod.
+  // Only stub react-native-worklets-core (legacy package) if present.
   const WORKLETS_PATCH_MARKER = 'patch-folly-fix6: emptied for RNReanimated 3.17.x';
   const STUB_PODSPEC = `# ${WORKLETS_PATCH_MARKER}
 Pod::Spec.new do |s|
@@ -295,9 +374,9 @@ Pod::Spec.new do |s|
   s.preserve_paths = "README.md"
 end
 `;
+  // Only target react-native-worklets-core (not react-native-worklets which is needed by reanimated 4.x)
   const workletsPodspecCandidates = [
     path.join(projectRoot, 'node_modules/react-native-worklets-core/RNWorklets.podspec'),
-    path.join(projectRoot, 'node_modules/react-native-worklets/RNWorklets.podspec'),
   ];
   for (const workletsPodspecPath of workletsPodspecCandidates) {
     if (!fs.existsSync(workletsPodspecPath)) {
@@ -313,11 +392,12 @@ end
     console.log('[withFollyCoroutineFix] Fix 6: Replaced podspec with no-op stub:', workletsPodspecPath);
   }
 
-  // Fix 6b: Remove codegenConfig from worklets package.json (both package name variants)
+  // Fix 6b: Remove codegenConfig from worklets package.json
+  // NOTE: react-native-worklets is intentionally excluded — reanimated 4.1.7 needs its codegenConfig intact.
+  // Only target react-native-worklets-core (legacy package) if present.
   const WORKLETS_CODEGEN_MARKER = 'patch-folly-fix6: codegenConfig removed';
   const workletsPackageJsonCandidates = [
     path.join(projectRoot, 'node_modules/react-native-worklets-core/package.json'),
-    path.join(projectRoot, 'node_modules/react-native-worklets/package.json'),
   ];
   for (const workletsPackageJsonPath of workletsPackageJsonCandidates) {
     if (!fs.existsSync(workletsPackageJsonPath)) {

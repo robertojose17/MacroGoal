@@ -167,6 +167,7 @@ export default function CompleteOnboardingScreen() {
         Animated.timing(bullet3Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
       ]).start();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   // ─── Calculations + Save (step 9) ──────────────────────────────────────────
@@ -175,6 +176,7 @@ export default function CompleteOnboardingScreen() {
     if (step === 9) {
       runCalculationsAndSave();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   const runCalculationsAndSave = async () => {
