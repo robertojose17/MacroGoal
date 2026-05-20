@@ -435,7 +435,7 @@ function applyPodfilePatch(podfilePath) {
 
   let content = fs.readFileSync(podfilePath, 'utf8');
 
-  if (content.includes('withFollyCoroutineFix-v15')) {
+  if (content.includes('withFollyCoroutineFix-v16')) {
     console.log('[withFollyCoroutineFix] Podfile already patched.');
     return;
   }
@@ -447,47 +447,14 @@ function applyPodfilePatch(podfilePath) {
   content = content.replace(/\n {2}# withFollyCoroutineFix-worklets-override-v1\n {2}# Override RNWorklets[^\n]*\n {2}# Having both[^\n]*\n {2}pod 'RNWorklets'[^\n]*\n/g, '');
   content = content.replace(/\n {2}# withFollyCoroutineFix-worklets-override-v2\n {2}# Override RNWorklets[^\n]*\n {2}# Having both[^\n]*\n {2}pod 'RNWorklets'[^\n]*\n/g, '');
 
-  // --- pre_install injection ---
-  const PRE_INSTALL_BLOCK = `
-pre_install do |installer|
-  # withFollyCoroutineFix-pre-v3: Neutralize RNWorklets since RNReanimated 3.17.x bundles it internally
-  begin
-    next if installer.nil?
-    pod_targets = installer.respond_to?(:pod_targets) ? installer.pod_targets : nil
-    next if pod_targets.nil?
-    pod_targets.compact.each do |target|
-      next if target.nil?
-      next unless target.name.to_s == 'RNWorklets' || target.name.to_s.start_with?('RNWorklets')
-      target.build_configurations.each do |config|
-        next if config.nil?
-        config.build_settings['EXCLUDED_ARCHS[sdk=iphoneos*]'] = 'arm64 x86_64 arm64e'
-        config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64 x86_64 arm64e'
-        config.build_settings['EXCLUDED_ARCHS'] = 'arm64 x86_64 arm64e'
-      end rescue nil
-    end
-  rescue => e
-    puts "[withFollyCoroutineFix] pre_install error: #{e.message}"
-  end
-end
-`;
-
-  const preInstallMarker = 'withFollyCoroutineFix-pre-v3';
-  if (!content.includes(preInstallMarker)) {
-    // Remove old pre_install blocks (v1 and v2)
-    content = content.replace(/\npre_install do \|installer\|\n {2}# withFollyCoroutineFix-pre-v[12][^\n]*\n[\s\S]*?\nend\n/g, '');
-    // Inject before the first post_install block, or before end-of-file
-    const preInstallInsertRegex = /^([ \t]*post_install do \|installer\|)/m;
-    if (preInstallInsertRegex.test(content)) {
-      content = content.replace(preInstallInsertRegex, PRE_INSTALL_BLOCK + '\n$1');
-    } else {
-      content = content + PRE_INSTALL_BLOCK;
-    }
-    console.log('[withFollyCoroutineFix] Podfile: injected pre_install RNWorklets neutralization.');
-  }
+  // Remove old pre_install RNWorklets neutralization blocks (no longer needed for reanimated 4.x)
+  content = content.replace(/\npre_install do \|installer\|\n {2}# withFollyCoroutineFix-pre-v3[\s\S]*?\nend\n/g, '');
+  // Also remove old v1/v2 pre_install blocks if still present
+  content = content.replace(/\npre_install do \|installer\|\n {2}# withFollyCoroutineFix-pre-v[12][^\n]*\n[\s\S]*?\nend\n/g, '');
 
   // --- post_install injection ---
   const postInstallRegex = /^([ \t]*post_install do \|installer\|[ \t]*)$/m;
-  const injection = `  # withFollyCoroutineFix-v14 — disable Folly coroutines for Xcode 26 / iPhoneOS26.0.sdk
+  const injection = `  # withFollyCoroutineFix-v16 — disable Folly coroutines for Xcode 26 / iPhoneOS26.0.sdk
   begin
     next if installer.nil?
     pods_project = installer.pods_project rescue nil
@@ -512,44 +479,6 @@ end
           end
         end
       end rescue nil
-    end
-
-    # Neutralize RNWorklets: RNReanimated 3.17.x bundles it — exclude all archs so it links nothing
-    pods_project.targets.each do |target|
-      next if target.nil?
-      next unless target.name.to_s == 'RNWorklets' || target.name.to_s.start_with?('RNWorklets')
-      target.build_configurations.each do |config|
-        next if config.nil?
-        config.build_settings['EXCLUDED_ARCHS[sdk=iphoneos*]'] = 'arm64 x86_64 arm64e'
-        config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64 x86_64 arm64e'
-        config.build_settings['EXCLUDED_ARCHS'] = 'arm64 x86_64 arm64e'
-        config.build_settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = 'DEBUG'
-      end rescue nil
-    end
-
-    # Remove RNWorklets from all framework link phases
-    pods_project.targets.each do |target|
-      next if target.nil?
-      (target.build_phases rescue []).each do |phase|
-        next if phase.nil?
-        next unless phase.is_a?(Xcodeproj::Project::Object::PBXFrameworksBuildPhase)
-        (phase.files.to_a rescue []).each do |file|
-          next if file.nil?
-          next unless file.display_name.to_s.include?('RNWorklets')
-          phase.remove_file_reference(file.file_ref) rescue nil
-        end
-      end
-    end
-
-    # Remove RNWorklets from ReactCodegen to fix duplicate codegen symbols
-    pods_project.targets.each do |target|
-      next if target.nil?
-      next unless target.name == 'ReactCodegen' || target.name == 'React-Codegen'
-      (target.source_build_phase.files.to_a rescue []).each do |file|
-        next if file.nil?
-        next unless file.display_name.to_s.include?('rnworklets')
-        target.source_build_phase.remove_file_reference(file.file_ref) rescue nil
-      end
     end
 
     # Fix shadowNodeFromValue removed in RN 0.81.x
