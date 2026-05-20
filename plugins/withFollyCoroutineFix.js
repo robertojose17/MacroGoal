@@ -228,6 +228,34 @@ function applySourcePatches(projectRoot) {
     }
   }
 
+  // Fix 7: ReanimatedModule.mm — EventListener is now a std::function alias in RN 0.81
+  // std::make_shared<EventListener>(lambda) fails; must construct via std::function then wrap.
+  const REA_MODULE_MARKER = 'rea-event-listener-patch-v1';
+  const reaModulePath = path.join(
+    projectRoot,
+    'node_modules/react-native-reanimated/apple/reanimated/apple/ReanimatedModule.mm'
+  );
+  if (!fs.existsSync(reaModulePath)) {
+    console.log('[withFollyCoroutineFix] Fix 7: ReanimatedModule.mm not found (ok)');
+  } else {
+    let reaContent = fs.readFileSync(reaModulePath, 'utf8');
+    if (reaContent.includes(REA_MODULE_MARKER)) {
+      console.log('[withFollyCoroutineFix] Fix 7: ReanimatedModule.mm already patched');
+    } else {
+      reaContent = reaContent.replace(
+        /auto eventListener =\s*\n\s*std::make_shared<facebook::react::EventListener>\(\[reanimatedModuleProxyWeak\]\(const RawEvent &rawEvent\)/,
+        'auto eventListenerFn = facebook::react::EventListener([reanimatedModuleProxyWeak](const RawEvent &rawEvent)'
+      );
+      reaContent = reaContent.replace(
+        /\[scheduler addEventListener:eventListener\];/,
+        'auto eventListener = std::make_shared<const facebook::react::EventListener>(std::move(eventListenerFn));\n    [scheduler addEventListener:eventListener];'
+      );
+      reaContent = '// ' + REA_MODULE_MARKER + '\n' + reaContent;
+      fs.writeFileSync(reaModulePath, reaContent, 'utf8');
+      console.log('[withFollyCoroutineFix] Fix 7: Patched ReanimatedModule.mm (EventListener std::function fix)');
+    }
+  }
+
   // Fix 6: Replace RNWorklets.podspec with a no-op stub (RNReanimated 3.17.x bundles worklets internally)
   // Overwrite entirely instead of patching to avoid Ruby syntax corruption.
   const WORKLETS_PATCH_MARKER = 'patch-folly-fix6: emptied for RNReanimated 3.17.x';
