@@ -356,6 +356,43 @@ end
     console.log('[withFollyCoroutineFix] Fix 8: react-native-worklets/RNWorklets.podspec not found — skipping restore');
   }
 
+  // Fix 9: Patch @supabase/supabase-js dynamic import(OTEL_PKG) — Hermes rejects variable-argument dynamic imports
+  const SUPABASE_OTEL_MARKER = 'supabase-otel-patch-v1';
+  const SUPABASE_OTEL_OLD = `function loadOtel() {
+\tif (otelModulePromise === null) otelModulePromise = import(
+\t\t/* webpackIgnore: true */
+\t\t/* @vite-ignore */
+\t\tOTEL_PKG
+).catch(() => null);
+\treturn otelModulePromise;
+}`;
+  const SUPABASE_OTEL_NEW = `function loadOtel() {
+\tif (otelModulePromise === null) otelModulePromise = Promise.resolve(null);
+\treturn otelModulePromise;
+}`;
+  const supabaseDistFiles = [
+    path.join(projectRoot, 'node_modules/@supabase/supabase-js/dist/index.mjs'),
+    path.join(projectRoot, 'node_modules/@supabase/supabase-js/dist/index.cjs'),
+  ];
+  for (const supabaseFile of supabaseDistFiles) {
+    if (!fs.existsSync(supabaseFile)) {
+      console.log('[withFollyCoroutineFix] Fix 9: file not found (ok):', supabaseFile);
+      continue;
+    }
+    const supabaseContent = fs.readFileSync(supabaseFile, 'utf8');
+    if (supabaseContent.includes(SUPABASE_OTEL_MARKER)) {
+      console.log('[withFollyCoroutineFix] Fix 9: already patched:', supabaseFile);
+      continue;
+    }
+    if (!supabaseContent.includes(SUPABASE_OTEL_OLD)) {
+      console.log('[withFollyCoroutineFix] Fix 9: pattern not found (may already be different version):', supabaseFile);
+      continue;
+    }
+    const patched = `// ${SUPABASE_OTEL_MARKER}\n` + supabaseContent.replace(SUPABASE_OTEL_OLD, SUPABASE_OTEL_NEW);
+    fs.writeFileSync(supabaseFile, patched, 'utf8');
+    console.log('[withFollyCoroutineFix] Fix 9: patched dynamic import(OTEL_PKG) in', supabaseFile);
+  }
+
   // Fix 6: Replace RNWorklets.podspec with a no-op stub (RNReanimated 3.17.x bundles worklets internally)
   // NOTE: react-native-worklets is intentionally excluded — reanimated 4.1.7 requires its real pod.
   // Only stub react-native-worklets-core (legacy package) if present.

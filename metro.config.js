@@ -11,6 +11,20 @@ config.resolver.extraNodeModules = {
   '@opentelemetry/api': require.resolve('./stubs/opentelemetry-api.js'),
 };
 
+const originalResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === '@opentelemetry/api') {
+    return {
+      filePath: require.resolve('./stubs/opentelemetry-api.js'),
+      type: 'sourceFile',
+    };
+  }
+  if (originalResolveRequest) {
+    return originalResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
