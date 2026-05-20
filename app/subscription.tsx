@@ -680,14 +680,6 @@ export default function SubscriptionScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroSection}>
-          <View style={[styles.iconCircle, { backgroundColor: colors.primary + '20' }]}>
-            <IconSymbol
-              ios_icon_name="star.fill"
-              android_material_icon_name="star"
-              size={48}
-              color={colors.primary}
-            />
-          </View>
           <Text style={[styles.heroTitle, { color: isDark ? colors.textDark : colors.text }]}>
             Track Meals in Seconds
           </Text>
@@ -736,7 +728,7 @@ export default function SubscriptionScreen() {
           <>
             {resolvedMonthlyPkg && (
               <TouchableOpacity
-                style={[styles.stickyButton, { backgroundColor: colors.primary, marginBottom: spacing.sm }]}
+                style={[styles.stickyButton, { backgroundColor: colors.primary, marginBottom: spacing.lg }]}
                 onPress={() => {
                   console.log('[Subscription] Monthly button pressed:', resolvedMonthlyPkg.identifier);
                   handlePurchase(resolvedMonthlyPkg);

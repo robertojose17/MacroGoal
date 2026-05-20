@@ -355,7 +355,7 @@ export default function CompleteOnboardingScreen() {
 
   const handleStartTrial = () => {
     console.log('[Onboarding] Start Free Trial pressed — navigating to subscription screen');
-    router.replace('/subscription?autoStart=true');
+    router.push('/subscription?autoStart=true');
   };
 
   const handleSkipTrial = () => {
