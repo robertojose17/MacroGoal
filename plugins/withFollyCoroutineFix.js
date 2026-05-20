@@ -28,16 +28,9 @@ const RANGES_MARKER = 'ranges-patch: removed <ranges> for iPhoneOS26.0.sdk';
 const MOUNT_HOOK_MARKER = 'mount-hook-patch: HighResTimeStamp signature for RN 0.81.x';
 
 const FIXED_SHADOW_TREE_CLONER = `// ${RANGES_MARKER}
-// patch-folly: disable Folly coroutines for Xcode 26
-#ifndef FOLLY_CFG_NO_COROUTINES
-#define FOLLY_CFG_NO_COROUTINES 1
-#endif
-
-#ifdef RCT_NEW_ARCH_ENABLED
-
 #include <reanimated/Fabric/ShadowTreeCloner.h>
+#include <reanimated/Tools/ReanimatedSystraceSection.h>
 
-#include <algorithm>
 #include <utility>
 
 namespace reanimated {
@@ -46,6 +39,8 @@ Props::Shared mergeProps(
     const ShadowNode &shadowNode,
     const PropsMap &propsMap,
     const ShadowNodeFamily &family) {
+  ReanimatedSystraceSection s("ShadowTreeCloner::mergeProps");
+
   const auto it = propsMap.find(&family);
 
   if (it == propsMap.end()) {
@@ -77,7 +72,7 @@ Props::Shared mergeProps(
   return newProps;
 }
 
-ShadowNode::Unshared cloneShadowTreeWithNewPropsRecursive(
+std::shared_ptr<ShadowNode> cloneShadowTreeWithNewPropsRecursive(
     const ShadowNode &shadowNode,
     const ChildrenMap &childrenMap,
     const PropsMap &propsMap) {
@@ -94,29 +89,35 @@ ShadowNode::Unshared cloneShadowTreeWithNewPropsRecursive(
 
   return shadowNode.clone(
       {mergeProps(shadowNode, propsMap, *family),
-       std::make_shared<ShadowNode::ListOfShared>(children),
-       shadowNode.getState()});
+       std::make_shared<std::vector<std::shared_ptr<const ShadowNode>>>(
+           children),
+       shadowNode.getState(),
+       false});
 }
 
 RootShadowNode::Unshared cloneShadowTreeWithNewProps(
     const RootShadowNode &oldRootNode,
     const PropsMap &propsMap) {
+  ReanimatedSystraceSection s("ShadowTreeCloner::cloneShadowTreeWithNewProps");
+
   ChildrenMap childrenMap;
 
-  for (auto &[family, _] : propsMap) {
-    const auto ancestors = family->getAncestors(oldRootNode);
+  {
+    ReanimatedSystraceSection s("ShadowTreeCloner::prepareChildrenMap");
 
-    for (auto rit = ancestors.rbegin(); rit != ancestors.rend(); ++rit) {
-      const auto &parentNode = rit->first;
-      const auto &index = rit->second;
-      const auto parentFamily = &parentNode.get().getFamily();
-      auto &affectedChildren = childrenMap[parentFamily];
+    for (auto &[family, _] : propsMap) {
+      const auto ancestors = family->getAncestors(oldRootNode);
 
-      if (affectedChildren.contains(index)) {
-        continue;
+      for (auto rit = ancestors.rbegin(); rit != ancestors.rend(); ++rit) {
+        const auto parentFamily = &rit->first.get().getFamily();
+        auto &affectedChildren = childrenMap[parentFamily];
+
+        if (affectedChildren.contains(rit->second)) {
+          continue;
+        }
+
+        affectedChildren.insert(rit->second);
       }
-
-      affectedChildren.insert(index);
     }
   }
 
@@ -125,8 +126,6 @@ RootShadowNode::Unshared cloneShadowTreeWithNewProps(
 }
 
 } // namespace reanimated
-
-#endif // RCT_NEW_ARCH_ENABLED
 `;
 
 function applySourcePatches(projectRoot) {
@@ -174,55 +173,9 @@ function applySourcePatches(projectRoot) {
     }
   }
 
-  // Fix 3: ReanimatedMountHook.h — replace `double mountTime` with `HighResTimeStamp mountTime`
-  const mountHookHPath = path.join(fabricDir, 'ReanimatedMountHook.h');
-  if (!fs.existsSync(mountHookHPath)) {
-    console.log('[withFollyCoroutineFix] ReanimatedMountHook.h not found (ok)');
-  } else {
-    const content = fs.readFileSync(mountHookHPath, 'utf8');
-    if (content.includes(MOUNT_HOOK_MARKER)) {
-      console.log('[withFollyCoroutineFix] ReanimatedMountHook.h already patched');
-    } else {
-      // Replace the entire file with the fixed version
-      const fixed = `// ${MOUNT_HOOK_MARKER}
-#pragma once
-#ifdef RCT_NEW_ARCH_ENABLED
-
-#include <reanimated/Fabric/PropsRegistry.h>
-#include <reanimated/Fabric/ShadowTreeCloner.h>
-
-#include <react/renderer/uimanager/UIManagerMountHook.h>
-
-#include <memory>
-
-namespace reanimated {
-
-using namespace facebook::react;
-
-class ReanimatedMountHook : public UIManagerMountHook {
- public:
-  ReanimatedMountHook(
-      const std::shared_ptr<PropsRegistry> &propsRegistry,
-      const std::shared_ptr<UIManager> &uiManager);
-  ~ReanimatedMountHook() noexcept override;
-
-  void shadowTreeDidMount(
-      const RootShadowNode::Shared &rootShadowNode,
-      HighResTimeStamp mountTime) noexcept override;
-
- private:
-  const std::shared_ptr<PropsRegistry> propsRegistry_;
-  const std::shared_ptr<UIManager> uiManager_;
-};
-
-} // namespace reanimated
-
-#endif // RCT_NEW_ARCH_ENABLED
-`;
-      fs.writeFileSync(mountHookHPath, fixed, 'utf8');
-      console.log('[withFollyCoroutineFix] Patched ReanimatedMountHook.h (HighResTimeStamp)');
-    }
-  }
+  // Fix 3: DISABLED for reanimated 4.x — ReanimatedMountHook.h already handles
+  // HighResTimeStamp via #if REACT_NATIVE_MINOR_VERSION >= 81 in reanimated 4.1.7+
+  console.log('[withFollyCoroutineFix] Fix 3: skipped (reanimated 4.x already correct)');
 
   // Fix 5: ReanimatedModuleProxy.cpp — add shadowNodeFromValue compat shim for RN 0.81.x
   const reanimatedProxyPath = path.join(
@@ -339,97 +292,9 @@ end
     console.log('[withFollyCoroutineFix] Fix 6b: Removed codegenConfig from:', workletsPackageJsonPath);
   }
 
-  // Fix 4: ReanimatedMountHook.cpp — replace `double)` with `HighResTimeStamp /*mountTime*/)`
-  const mountHookCppPath = path.join(fabricDir, 'ReanimatedMountHook.cpp');
-  if (!fs.existsSync(mountHookCppPath)) {
-    console.log('[withFollyCoroutineFix] ReanimatedMountHook.cpp not found (ok)');
-  } else {
-    const content = fs.readFileSync(mountHookCppPath, 'utf8');
-    if (content.includes(MOUNT_HOOK_MARKER)) {
-      console.log('[withFollyCoroutineFix] ReanimatedMountHook.cpp already patched');
-    } else {
-      const fixed = `// ${MOUNT_HOOK_MARKER}
-#ifdef RCT_NEW_ARCH_ENABLED
-
-#include <reanimated/Fabric/ReanimatedCommitShadowNode.h>
-#include <reanimated/Fabric/ReanimatedMountHook.h>
-
-namespace reanimated {
-
-ReanimatedMountHook::ReanimatedMountHook(
-    const std::shared_ptr<PropsRegistry> &propsRegistry,
-    const std::shared_ptr<UIManager> &uiManager)
-    : propsRegistry_(propsRegistry), uiManager_(uiManager) {
-  uiManager_->registerMountHook(*this);
-}
-
-ReanimatedMountHook::~ReanimatedMountHook() noexcept {
-  uiManager_->unregisterMountHook(*this);
-}
-
-void ReanimatedMountHook::shadowTreeDidMount(
-    const RootShadowNode::Shared &rootShadowNode,
-    HighResTimeStamp /*mountTime*/) noexcept {
-  auto reaShadowNode =
-      std::reinterpret_pointer_cast<ReanimatedCommitShadowNode>(
-          std::const_pointer_cast<RootShadowNode>(rootShadowNode));
-
-  if (reaShadowNode->hasReanimatedMountTrait()) {
-    reaShadowNode->unsetReanimatedMountTrait();
-    return;
-  }
-
-  {
-    auto lock = propsRegistry_->createLock();
-    propsRegistry_->handleNodeRemovals(*rootShadowNode);
-    propsRegistry_->unpauseReanimatedCommits();
-    if (!propsRegistry_->shouldCommitAfterPause()) {
-      return;
-    }
-  }
-
-  const auto &shadowTreeRegistry = uiManager_->getShadowTreeRegistry();
-  shadowTreeRegistry.visit(
-      rootShadowNode->getSurfaceId(), [&](ShadowTree const &shadowTree) {
-        shadowTree.commit(
-            [&](RootShadowNode const &oldRootShadowNode)
-                -> RootShadowNode::Unshared {
-              PropsMap propsMap;
-
-              RootShadowNode::Unshared rootNode =
-                  std::static_pointer_cast<RootShadowNode>(
-                      oldRootShadowNode.ShadowNode::clone({}));
-              {
-                auto lock = propsRegistry_->createLock();
-
-                propsRegistry_->for_each([&](const ShadowNodeFamily &family,
-                                             const folly::dynamic &props) {
-                  propsMap[&family].emplace_back(props);
-                });
-
-                rootNode =
-                    cloneShadowTreeWithNewProps(oldRootShadowNode, propsMap);
-              }
-
-              auto reaShadowNode =
-                  std::reinterpret_pointer_cast<ReanimatedCommitShadowNode>(
-                      rootNode);
-              reaShadowNode->setReanimatedCommitTrait();
-
-              return rootNode;
-            },
-            {false, true});
-      });
-}
-
-} // namespace reanimated
-
-#endif // RCT_NEW_ARCH_ENABLED
-`;
-      fs.writeFileSync(mountHookCppPath, fixed, 'utf8');
-      console.log('[withFollyCoroutineFix] Patched ReanimatedMountHook.cpp (HighResTimeStamp)');
-    }
-  }
+  // Fix 4: DISABLED for reanimated 4.x — ReanimatedMountHook.cpp already handles
+  // HighResTimeStamp via #if REACT_NATIVE_MINOR_VERSION >= 81 in reanimated 4.1.7+
+  console.log('[withFollyCoroutineFix] Fix 4: skipped (reanimated 4.x already correct)');
 }
 
 function applyPodfilePatch(podfilePath) {
