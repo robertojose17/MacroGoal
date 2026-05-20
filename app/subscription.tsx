@@ -32,16 +32,24 @@ type CustomerInfo = any;
 // Premium features list
 const PREMIUM_FEATURES = [
   {
-    title: 'AI Meal Estimator',
-    description: 'Snap a photo or describe a meal — get instant calorie and macro estimates.',
+    title: 'Snap a photo to estimate',
+    description: 'calories & macros instantly',
   },
   {
-    title: 'Ad-Free Experience',
-    description: 'No interruptions. Just clean, focused tracking.',
+    title: 'Personalized meal plans for',
+    description: 'fat loss, muscle gain, or maintenance',
   },
   {
-    title: 'All Future Features',
-    description: 'Every new premium feature we ship — yours automatically.',
+    title: 'Generate grocery lists',
+    description: 'automatically from your plan',
+  },
+  {
+    title: 'Track progress photos &',
+    description: 'body measurements',
+  },
+  {
+    title: 'No ads. No invasive tracking.',
+    description: '',
   },
 ];
 
@@ -681,10 +689,10 @@ export default function SubscriptionScreen() {
             />
           </View>
           <Text style={[styles.heroTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Unlock Premium Features
+            Track Meals in Seconds
           </Text>
           <Text style={[styles.heroSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Unlock the tools that make tracking easier — and everything we build next.
+            AI-powered nutrition tracking without the hassle.
           </Text>
         </View>
 
