@@ -230,7 +230,7 @@ function applySourcePatches(projectRoot) {
 
   // Fix 7: ReanimatedModule.mm — EventListener is now a std::function alias in RN 0.81
   // std::make_shared<EventListener>(lambda) fails; must construct via std::function then wrap.
-  const REA_MODULE_MARKER = 'rea-event-listener-patch-v1';
+  const REA_MODULE_MARKER = 'rea-event-listener-patch-v2';
   const reaModulePath = path.join(
     projectRoot,
     'node_modules/react-native-reanimated/apple/reanimated/apple/ReanimatedModule.mm'
@@ -240,19 +240,41 @@ function applySourcePatches(projectRoot) {
   } else {
     let reaContent = fs.readFileSync(reaModulePath, 'utf8');
     if (reaContent.includes(REA_MODULE_MARKER)) {
-      console.log('[withFollyCoroutineFix] Fix 7: ReanimatedModule.mm already patched');
+      console.log('[withFollyCoroutineFix] Fix 7: ReanimatedModule.mm already patched (v2)');
     } else {
-      reaContent = reaContent.replace(
-        /auto eventListener =\s*\n\s*std::make_shared<facebook::react::EventListener>\(\[reanimatedModuleProxyWeak\]\(const RawEvent &rawEvent\)/,
-        'auto eventListenerFn = facebook::react::EventListener([reanimatedModuleProxyWeak](const RawEvent &rawEvent)'
-      );
-      reaContent = reaContent.replace(
-        /\[scheduler addEventListener:eventListener\];/,
-        'auto eventListener = std::make_shared<const facebook::react::EventListener>(std::move(eventListenerFn));\n    [scheduler addEventListener:eventListener];'
-      );
-      reaContent = '// ' + REA_MODULE_MARKER + '\n' + reaContent;
-      fs.writeFileSync(reaModulePath, reaContent, 'utf8');
-      console.log('[withFollyCoroutineFix] Fix 7: Patched ReanimatedModule.mm (EventListener std::function fix)');
+      const OLD_SNIPPET = `    auto eventListener =
+        std::make_shared<facebook::react::EventListener>([reanimatedModuleProxyWeak](const RawEvent &rawEvent) {
+          if (!RCTIsMainQueue()) {
+            // event listener called on the JS thread, let's ignore this event
+            // as we cannot safely access worklet runtime here
+            // and also we don't care about topLayout events
+            return false;
+          }
+          if (const auto reanimatedModuleProxy = reanimatedModuleProxyWeak.lock()) {
+            return reanimatedModuleProxy->handleRawEvent(rawEvent, CACurrentMediaTime() * 1000);
+          }
+          return false;
+        });
+    [scheduler addEventListener:eventListener];`;
+      const NEW_SNIPPET = `    facebook::react::EventListener listenerFn = [reanimatedModuleProxyWeak](const RawEvent &rawEvent) {
+          if (!RCTIsMainQueue()) {
+            return false;
+          }
+          if (const auto reanimatedModuleProxy = reanimatedModuleProxyWeak.lock()) {
+            return reanimatedModuleProxy->handleRawEvent(rawEvent, CACurrentMediaTime() * 1000);
+          }
+          return false;
+        };
+    auto eventListener = std::make_shared<facebook::react::EventListener>(std::move(listenerFn));
+    [scheduler addEventListener:eventListener];`;
+      if (!reaContent.includes(OLD_SNIPPET)) {
+        console.log('[withFollyCoroutineFix] Fix 7: OLD_SNIPPET not found in ReanimatedModule.mm — skipping (may already be patched or file differs)');
+      } else {
+        reaContent = reaContent.replace(OLD_SNIPPET, NEW_SNIPPET);
+        reaContent = '// ' + REA_MODULE_MARKER + '\n' + reaContent;
+        fs.writeFileSync(reaModulePath, reaContent, 'utf8');
+        console.log('[withFollyCoroutineFix] Fix 7: Patched ReanimatedModule.mm (EventListener std::function fix v2)');
+      }
     }
   }
 
