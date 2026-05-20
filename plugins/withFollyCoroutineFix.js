@@ -357,22 +357,11 @@ end
   }
 
   // Fix 9: Patch @supabase/supabase-js dynamic import(OTEL_PKG) — Hermes rejects variable-argument dynamic imports
-  const SUPABASE_OTEL_MARKER = 'supabase-otel-patch-v1';
-  const SUPABASE_OTEL_OLD = `function loadOtel() {
-\tif (otelModulePromise === null) otelModulePromise = import(
-\t\t/* webpackIgnore: true */
-\t\t/* @vite-ignore */
-\t\tOTEL_PKG
-).catch(() => null);
-\treturn otelModulePromise;
-}`;
-  const SUPABASE_OTEL_NEW = `function loadOtel() {
-\tif (otelModulePromise === null) otelModulePromise = Promise.resolve(null);
-\treturn otelModulePromise;
-}`;
+  const SUPABASE_OTEL_MARKER = 'supabase-otel-patch-v2';
+  const SUPABASE_OTEL_OLD = 'function loadOtel() {\n\tif (otelModulePromise === null) otelModulePromise = import(/* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ OTEL_PKG).catch(() => null);\n\treturn otelModulePromise;\n}';
+  const SUPABASE_OTEL_NEW = 'function loadOtel() {\n\tif (otelModulePromise === null) otelModulePromise = Promise.resolve(null);\n\treturn otelModulePromise;\n}';
   const supabaseDistFiles = [
     path.join(projectRoot, 'node_modules/@supabase/supabase-js/dist/index.mjs'),
-    path.join(projectRoot, 'node_modules/@supabase/supabase-js/dist/index.cjs'),
   ];
   for (const supabaseFile of supabaseDistFiles) {
     if (!fs.existsSync(supabaseFile)) {
@@ -384,11 +373,15 @@ end
       console.log('[withFollyCoroutineFix] Fix 9: already patched:', supabaseFile);
       continue;
     }
-    if (!supabaseContent.includes(SUPABASE_OTEL_OLD)) {
-      console.log('[withFollyCoroutineFix] Fix 9: pattern not found (may already be different version):', supabaseFile);
+    if (!supabaseContent.includes('import(/* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ OTEL_PKG)')) {
+      console.log('[withFollyCoroutineFix] Fix 9: pattern not found in', supabaseFile);
       continue;
     }
-    const patched = `// ${SUPABASE_OTEL_MARKER}\n` + supabaseContent.replace(SUPABASE_OTEL_OLD, SUPABASE_OTEL_NEW);
+    // Replace the entire loadOtel function using a regex that handles the exact one-line format
+    const patched = supabaseContent.replace(
+      /function loadOtel\(\) \{[\s\S]*?return otelModulePromise;\n\}/,
+      'function loadOtel() {\n\tif (otelModulePromise === null) otelModulePromise = Promise.resolve(null);\n\treturn otelModulePromise;\n}'
+    ) + '\n// ' + SUPABASE_OTEL_MARKER;
     fs.writeFileSync(supabaseFile, patched, 'utf8');
     console.log('[withFollyCoroutineFix] Fix 9: patched dynamic import(OTEL_PKG) in', supabaseFile);
   }

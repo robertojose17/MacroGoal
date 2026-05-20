@@ -6,24 +6,6 @@ const fs = require('fs');
 const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
-config.resolver.extraNodeModules = {
-  ...config.resolver.extraNodeModules,
-  '@opentelemetry/api': require.resolve('./stubs/opentelemetry-api.js'),
-};
-
-const originalResolveRequest = config.resolver.resolveRequest;
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === '@opentelemetry/api') {
-    return {
-      filePath: require.resolve('./stubs/opentelemetry-api.js'),
-      type: 'sourceFile',
-    };
-  }
-  if (originalResolveRequest) {
-    return originalResolveRequest(context, moduleName, platform);
-  }
-  return context.resolveRequest(context, moduleName, platform);
-};
 
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
@@ -289,6 +271,22 @@ config.server.enhanceMiddleware = (middleware) => {
     // Pass through to default Metro middleware
     return middleware(req, res, next);
   };
+};
+
+// Stub out @opentelemetry/api — Hermes rejects the dynamic import(OTEL_PKG) in @supabase/supabase-js
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === '@opentelemetry/api') {
+    return {
+      filePath: require.resolve('./stubs/opentelemetry-api.js'),
+      type: 'sourceFile',
+    };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
+  '@opentelemetry/api': require.resolve('./stubs/opentelemetry-api.js'),
 };
 
 module.exports = config;
