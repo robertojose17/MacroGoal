@@ -10,10 +10,11 @@ import {
   Alert,
   Platform,
   Modal,
-  Image,
+  ImageBackground,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -710,41 +711,48 @@ export default function SubscriptionScreen() {
     : 'Tap a feature to learn more';
 
   return (
-    <SafeAreaView style={styles.darkContainer} edges={[]}>
-      <ScrollView
-        style={styles.darkScroll}
-        contentContainerStyle={styles.darkScrollContent}
-        showsVerticalScrollIndicator={false}
+    <ImageBackground
+      source={require('../assets/images/3762b428-5e21-48da-9bba-734aa0e46c87.jpeg')}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.55)', '#000']}
+        locations={[0, 0.4, 0.72]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+      {/* Floating back button */}
+      <TouchableOpacity
+        onPress={() => {
+          console.log('[Subscription] Back button pressed');
+          router.back();
+        }}
+        style={styles.floatingBackButton}
       >
-        {/* Hero image with overlay, back button, and text */}
-        <View style={styles.heroImageContainer}>
-          <Image
-            source={require('../assets/images/3762b428-5e21-48da-9bba-734aa0e46c87.jpeg')}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
-          <View style={styles.heroOverlay} />
-          <TouchableOpacity
-            onPress={() => {
-              console.log('[Subscription] Back button pressed');
-              router.back();
-            }}
-            style={styles.heroBackButton}
-          >
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={26}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
+        <IconSymbol
+          ios_icon_name="chevron.left"
+          android_material_icon_name="arrow-back"
+          size={26}
+          color="#FFFFFF"
+        />
+      </TouchableOpacity>
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={[]}>
+        <ScrollView
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+          contentContainerStyle={{ paddingBottom: 48, backgroundColor: 'transparent' }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Spacer so content starts below the hero image area */}
+          <View style={styles.heroSpacer} />
+
+          {/* Hero text over the image */}
           <View style={styles.heroTextContainer}>
             <Text style={styles.heroTitleWhite}>Track Meals in Seconds</Text>
             <Text style={styles.heroSubtitleWhite}>
               {'AI-powered nutrition tracking\nwithout the hassle.'}
             </Text>
           </View>
-        </View>
 
         {/* 5-icon tappable grid */}
         <View style={styles.iconGrid}>
@@ -912,7 +920,8 @@ export default function SubscriptionScreen() {
             You can manage your subscription in your App Store account settings.
           </Text>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
       {/* Success Modal */}
       <Modal
@@ -952,7 +961,7 @@ export default function SubscriptionScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ImageBackground>
   );
 }
 
@@ -1132,49 +1141,27 @@ const styles = StyleSheet.create({
   },
 
   // ── Dark paywall screen ────────────────────────────────────────────────────
-  darkContainer: {
-    flex: 1,
-    backgroundColor: DARK_BG,
-  },
-  darkScroll: {
-    flex: 1,
-    backgroundColor: DARK_BG,
-  },
-  darkScrollContent: {
-    paddingHorizontal: 0,
-    paddingBottom: 48,
-    backgroundColor: DARK_BG,
-  },
 
-  // Hero
-  heroImageContainer: {
-    width: '100%',
-    height: 280,
-    position: 'relative',
-    marginBottom: spacing.lg,
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-  },
-  heroBackButton: {
+  // Floating back button (absolute, over the full-screen image)
+  floatingBackButton: {
     position: 'absolute',
     top: Platform.OS === 'android' ? 40 : 54,
     left: spacing.md,
     padding: spacing.xs,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    zIndex: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     borderRadius: 20,
   },
+
+  // Spacer at top of ScrollView so content starts below the image area
+  heroSpacer: {
+    height: 210,
+  },
+
+  // Hero text rendered inside the scroll, over the image
   heroTextContainer: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.md,
-    right: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
   },
   heroTitleWhite: {
     fontSize: 28,
@@ -1382,9 +1369,4 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Scroll content (legacy, kept for safety)
-  scrollContent: {
-    paddingHorizontal: 0,
-    paddingBottom: 40,
-  },
 });
