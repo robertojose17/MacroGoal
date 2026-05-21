@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   Modal,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -643,8 +644,6 @@ export default function SubscriptionScreen() {
 
   const selectedPkg = activePlan === 'yearly' ? resolvedYearlyPkg : resolvedMonthlyPkg;
 
-  const borderTopColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
-
   const handleSubscribe = () => {
     console.log('[Subscription] Subscribe button pressed, plan:', activePlan, selectedPkg?.identifier);
     if (!selectedPkg) return;
@@ -653,36 +652,61 @@ export default function SubscriptionScreen() {
 
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={isDark ? colors.textDark : colors.text}
-          />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Go Premium
-        </Text>
-        <View style={{ width: 24 }} />
-      </View>
+  const iconGridItems = [
+    { icon_ios: 'camera.fill', icon_android: 'camera-alt', label: 'Snap & Track' },
+    { icon_ios: 'chart.bar.fill', icon_android: 'bar-chart', label: 'Meal Plans' },
+    { icon_ios: 'figure.walk', icon_android: 'directions-walk', label: 'Progress' },
+    { icon_ios: 'sparkles', icon_android: 'auto-awesome', label: 'No Ads' },
+  ];
 
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={[]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
-        <View style={styles.heroSection}>
-          <Text style={[styles.heroTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Track Meals in Seconds
-          </Text>
-          <Text style={[styles.heroSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            AI-powered nutrition tracking without the hassle.
-          </Text>
+        {/* Hero image with overlay, back button, and text */}
+        <View style={styles.heroImageContainer}>
+          <Image
+            source={require('../assets/images/3762b428-5e21-48da-9bba-734aa0e46c87.jpeg')}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+          <View style={styles.heroOverlay} />
+          <TouchableOpacity onPress={() => router.back()} style={styles.heroBackButton}>
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="arrow-back"
+              size={26}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+          <View style={styles.heroTextContainer}>
+            <Text style={styles.heroTitleWhite}>Track Meals in Seconds</Text>
+            <Text style={styles.heroSubtitleWhite}>
+              {'AI-powered nutrition tracking\nwithout the hassle.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* 4-icon grid */}
+        <View style={styles.iconGrid}>
+          {iconGridItems.map((item, i) => (
+            <View key={i} style={styles.iconGridItem}>
+              <View style={[styles.iconGridCircle, { backgroundColor: colors.primary + '18' }]}>
+                <IconSymbol
+                  ios_icon_name={item.icon_ios}
+                  android_material_icon_name={item.icon_android}
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={[styles.iconGridLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {item.label}
+              </Text>
+            </View>
+          ))}
         </View>
 
         {/* Features — compact single-line */}
@@ -738,7 +762,7 @@ export default function SubscriptionScreen() {
                   7-Day Free Trial
                 </Text>
                 <Text style={[styles.planCardPrice, { color: isDark ? colors.textDark : colors.text }]}>
-                  Then {yearlyPrice}/year
+                  {yearlyPrice}/year
                 </Text>
                 {yearlyMonthlyEquiv && (
                   <Text style={[styles.planCardSub, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -785,17 +809,7 @@ export default function SubscriptionScreen() {
           Cancel anytime during trial
         </Text>
 
-        {/* Legal disclaimer */}
-        <View style={styles.disclaimerContainer}>
-          <Text style={[styles.disclaimerText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
-            You can manage your subscription in your App Store account settings.
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Sticky bottom — single CTA button */}
-      <View style={[styles.stickyBottom, { borderTopColor, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        {/* CTA button */}
         <TouchableOpacity
           style={[styles.ctaButton, { backgroundColor: colors.primary }, purchasing && { opacity: 0.7 }]}
           onPress={handleSubscribe}
@@ -810,6 +824,7 @@ export default function SubscriptionScreen() {
           )}
         </TouchableOpacity>
 
+        {/* Restore Purchases */}
         <TouchableOpacity
           style={styles.restoreButton}
           onPress={() => {
@@ -822,7 +837,15 @@ export default function SubscriptionScreen() {
             Restore Purchases
           </Text>
         </TouchableOpacity>
-      </View>
+
+        {/* Legal disclaimer */}
+        <View style={styles.disclaimerContainer}>
+          <Text style={[styles.disclaimerText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+            You can manage your subscription in your App Store account settings.
+          </Text>
+        </View>
+      </ScrollView>
 
       {/* Success Modal */}
       <Modal
@@ -899,12 +922,13 @@ const styles = StyleSheet.create({
     ...typography.h3,
   },
   scrollContent: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: 0,
+    paddingBottom: 40,
   },
   featuresListContainer: {
     gap: 10,
     marginBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   stickyBottom: {
     paddingHorizontal: spacing.md,
@@ -975,6 +999,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
+    marginHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: 'transparent',
   },
@@ -1029,17 +1054,20 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     marginVertical: spacing.lg,
+    marginHorizontal: spacing.md,
   },
   choosePlanTitle: {
     ...typography.h3,
     textAlign: 'center',
     marginBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   cancelText: {
     textAlign: 'center',
     ...typography.caption,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   ctaButton: {
     borderRadius: borderRadius.md,
@@ -1047,6 +1075,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 54,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
   },
   ctaButtonText: {
     color: '#FFFFFF',
@@ -1124,7 +1154,7 @@ const styles = StyleSheet.create({
   },
   disclaimerContainer: {
     marginTop: spacing.lg,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   disclaimerText: {
     ...typography.caption,
@@ -1258,5 +1288,66 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  heroImageContainer: {
+    width: '100%',
+    height: 260,
+    position: 'relative',
+    marginBottom: spacing.lg,
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  heroBackButton: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 40 : 54,
+    left: spacing.md,
+    padding: spacing.xs,
+    zIndex: 10,
+  },
+  heroTextContainer: {
+    position: 'absolute',
+    bottom: spacing.xl,
+    left: spacing.md,
+    right: spacing.md,
+  },
+  heroTitleWhite: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: spacing.xs,
+  },
+  heroSubtitleWhite: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 22,
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  iconGridItem: {
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  iconGridCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconGridLabel: {
+    fontSize: 11,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });
