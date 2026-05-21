@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -737,190 +736,185 @@ export default function SubscriptionScreen() {
           color="#FFFFFF"
         />
       </TouchableOpacity>
-      <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={[]}>
-        <ScrollView
-          style={{ flex: 1, backgroundColor: 'transparent' }}
-          contentContainerStyle={{ paddingBottom: 48, backgroundColor: 'transparent' }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Spacer so content starts below the hero image area */}
-          <View style={styles.heroSpacer} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: 64 }}>
 
-          {/* Hero text over the image */}
+          {/* Hero text */}
           <View style={styles.heroTextContainer}>
             <Text style={styles.heroTitleWhite}>Track Meals in Seconds</Text>
             <Text style={styles.heroSubtitleWhite}>
-              {'AI-powered nutrition tracking\nwithout the hassle.'}
+              AI-powered nutrition tracking without the hassle.
             </Text>
           </View>
 
-        {/* 5-icon tappable grid */}
-        <View style={styles.iconGrid}>
-          {ICON_GRID_ITEMS.map((item) => {
-            const isSelected = selectedFeature === item.key;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={styles.iconGridItem}
-                onPress={() => {
-                  console.log('[Subscription] Feature icon tapped:', item.key);
-                  setSelectedFeature(isSelected ? null : item.key);
-                }}
-                activeOpacity={0.75}
-              >
-                <View
-                  style={[
-                    styles.iconGridCircle,
-                    isSelected
-                      ? styles.iconGridCircleSelected
-                      : styles.iconGridCircleDefault,
-                  ]}
+          {/* Flexible spacer — pushes content down a bit but won't overflow */}
+          <View style={{ flex: 0.6 }} />
+
+          {/* 5-icon tappable grid */}
+          <View style={styles.iconGrid}>
+            {ICON_GRID_ITEMS.map((item) => {
+              const isSelected = selectedFeature === item.key;
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  style={styles.iconGridItem}
+                  onPress={() => {
+                    console.log('[Subscription] Feature icon tapped:', item.key);
+                    setSelectedFeature(isSelected ? null : item.key);
+                  }}
+                  activeOpacity={0.75}
                 >
-                  <IconSymbol
-                    ios_icon_name={item.icon_ios}
-                    android_material_icon_name={item.icon_android}
-                    size={22}
-                    color={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.iconGridLabel,
-                    isSelected ? styles.iconGridLabelSelected : styles.iconGridLabelDefault,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Feature description card */}
-        <View style={styles.featureDescCard}>
-          <Text style={styles.featureDescText}>
-            {featureDescriptionText}
-          </Text>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.darkDivider} />
-
-        {/* Choose Your Plan */}
-        <Text style={styles.choosePlanTitleDark}>
-          Choose Your Plan
-        </Text>
-
-        {/* Yearly card */}
-        {resolvedYearlyPkg && (
-          <TouchableOpacity
-            style={[
-              styles.darkPlanCard,
-              activePlan === 'yearly' && styles.darkPlanCardSelected,
-            ]}
-            onPress={() => {
-              console.log('[Subscription] Yearly plan selected');
-              setActivePlan('yearly');
-            }}
-            activeOpacity={0.85}
-          >
-            {/* SAVE badge */}
-            <View style={[styles.saveBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.saveBadgeText}>✓ SAVE 58%</Text>
-            </View>
-
-            <View style={styles.planCardInner}>
-              <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#fff' }]}>
-                {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.darkPlanCardTitle}>
-                  7-Day Free Trial
-                </Text>
-                <Text style={styles.darkPlanCardPrice}>
-                  {yearlyPrice}/year
-                </Text>
-                {yearlyMonthlyEquiv && (
-                  <Text style={styles.darkPlanCardSub}>
-                    Only {yearlyMonthlyEquiv}
+                  <View
+                    style={[
+                      styles.iconGridCircle,
+                      isSelected
+                        ? styles.iconGridCircleSelected
+                        : styles.iconGridCircleDefault,
+                    ]}
+                  >
+                    <IconSymbol
+                      ios_icon_name={item.icon_ios}
+                      android_material_icon_name={item.icon_android}
+                      size={18}
+                      color={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.iconGridLabel,
+                      isSelected ? styles.iconGridLabelSelected : styles.iconGridLabelDefault,
+                    ]}
+                  >
+                    {item.label}
                   </Text>
-                )}
-                <Text style={[styles.planCardTag, { color: colors.primary }]}>
-                  Most users choose this
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-        {/* Monthly card */}
-        {resolvedMonthlyPkg && (
-          <TouchableOpacity
-            style={[
-              styles.darkPlanCard,
-              activePlan === 'monthly' && styles.darkPlanCardSelected,
-            ]}
-            onPress={() => {
-              console.log('[Subscription] Monthly plan selected');
-              setActivePlan('monthly');
-            }}
-            activeOpacity={0.85}
-          >
-            <View style={styles.planCardInner}>
-              <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#fff' }]}>
-                {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.darkPlanCardPrice}>
-                  {monthlyPrice} monthly
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Cancel anytime */}
-        <Text style={styles.darkCancelText}>
-          Cancel anytime during trial
-        </Text>
-
-        {/* CTA button */}
-        <TouchableOpacity
-          style={[styles.ctaButtonDark, purchasing && { opacity: 0.7 }]}
-          onPress={handleSubscribe}
-          disabled={purchasing || !selectedPkg}
-        >
-          {purchasing ? (
-            <ActivityIndicator size="small" color="#000" />
-          ) : (
-            <Text style={styles.ctaButtonDarkText}>
-              {ctaLabel}
+          {/* Feature description card */}
+          <View style={styles.featureDescCard}>
+            <Text style={styles.featureDescText}>
+              {featureDescriptionText}
             </Text>
+          </View>
+
+          {/* Choose Your Plan */}
+          <Text style={styles.choosePlanTitleDark}>
+            Choose Your Plan
+          </Text>
+
+          {/* Yearly card */}
+          {resolvedYearlyPkg && (
+            <TouchableOpacity
+              style={[
+                styles.darkPlanCard,
+                activePlan === 'yearly' && styles.darkPlanCardSelected,
+              ]}
+              onPress={() => {
+                console.log('[Subscription] Yearly plan selected');
+                setActivePlan('yearly');
+              }}
+              activeOpacity={0.85}
+            >
+              {/* SAVE badge */}
+              <View style={[styles.saveBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.saveBadgeText}>✓ SAVE 58%</Text>
+              </View>
+
+              <View style={styles.planCardInner}>
+                <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#fff' }]}>
+                  {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.darkPlanCardTitle}>
+                    7-Day Free Trial
+                  </Text>
+                  <Text style={styles.darkPlanCardPrice}>
+                    {yearlyPrice}/year
+                  </Text>
+                  {yearlyMonthlyEquiv && (
+                    <Text style={styles.darkPlanCardSub}>
+                      Only {yearlyMonthlyEquiv}
+                    </Text>
+                  )}
+                  <Text style={[styles.planCardTag, { color: colors.primary }]}>
+                    Most users choose this
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
 
-        {/* Restore Purchases */}
-        <TouchableOpacity
-          style={styles.restoreButton}
-          onPress={() => {
-            console.log('[Subscription] Restore Purchases pressed');
-            handleRestore();
-          }}
-          disabled={loading}
-        >
-          <Text style={styles.darkRestoreText}>
-            Restore Purchases
-          </Text>
-        </TouchableOpacity>
+          {/* Monthly card */}
+          {resolvedMonthlyPkg && (
+            <TouchableOpacity
+              style={[
+                styles.darkPlanCard,
+                activePlan === 'monthly' && styles.darkPlanCardSelected,
+              ]}
+              onPress={() => {
+                console.log('[Subscription] Monthly plan selected');
+                setActivePlan('monthly');
+              }}
+              activeOpacity={0.85}
+            >
+              <View style={styles.planCardInner}>
+                <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#fff' }]}>
+                  {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.darkPlanCardPrice}>
+                    {monthlyPrice} monthly
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
 
-        {/* Legal disclaimer */}
-        <View style={styles.disclaimerContainer}>
-          <Text style={styles.darkDisclaimerText}>
-            Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
-            You can manage your subscription in your App Store account settings.
+          {/* Cancel anytime */}
+          <Text style={styles.darkCancelText}>
+            Cancel anytime during trial
           </Text>
+
+          {/* CTA button */}
+          <TouchableOpacity
+            style={[styles.ctaButtonDark, purchasing && { opacity: 0.7 }]}
+            onPress={handleSubscribe}
+            disabled={purchasing || !selectedPkg}
+          >
+            {purchasing ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <Text style={styles.ctaButtonDarkText}>
+                {ctaLabel}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Restore Purchases */}
+          <TouchableOpacity
+            style={styles.restoreButton}
+            onPress={() => {
+              console.log('[Subscription] Restore Purchases pressed');
+              handleRestore();
+            }}
+            disabled={loading}
+          >
+            <Text style={styles.darkRestoreText}>
+              Restore Purchases
+            </Text>
+          </TouchableOpacity>
+
+          {/* Legal disclaimer */}
+          <View style={styles.disclaimerContainer}>
+            <Text style={styles.darkDisclaimerText}>
+              Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+              You can manage your subscription in your App Store account settings.
+            </Text>
+          </View>
+
         </View>
-        </ScrollView>
       </SafeAreaView>
 
       {/* Success Modal */}
@@ -1153,44 +1147,38 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 
-  // Spacer at top of ScrollView so content starts below the image area
-  heroSpacer: {
-    height: 210,
-  },
-
-  // Hero text rendered inside the scroll, over the image
+  // Hero text
   heroTextContainer: {
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
   heroTitleWhite: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: spacing.xs,
+    lineHeight: 26,
+    marginBottom: 4,
   },
   heroSubtitleWhite: {
-    fontSize: 15,
+    fontSize: 13,
     color: 'rgba(255,255,255,0.85)',
-    lineHeight: 22,
+    lineHeight: 18,
   },
 
   // Icon grid
   iconGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   iconGridItem: {
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     flex: 1,
   },
   iconGridCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1205,7 +1193,8 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   iconGridLabel: {
-    fontSize: 10,
+    fontSize: 9,
+    lineHeight: 12,
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -1219,45 +1208,35 @@ const styles = StyleSheet.create({
 
   // Feature description card
   featureDescCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    paddingVertical: spacing.sm + 2,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: borderRadius.md,
-    minHeight: 44,
+    minHeight: 38,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   featureDescText: {
     color: 'rgba(255,255,255,0.75)',
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 16,
     textAlign: 'center',
-  },
-
-  // Divider
-  darkDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    marginVertical: spacing.lg,
-    marginHorizontal: spacing.md,
   },
 
   // Plan section
   choosePlanTitleDark: {
-    ...typography.h3,
+    fontSize: 16,
+    fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
   },
   darkPlanCard: {
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    marginHorizontal: spacing.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
     backgroundColor: DARK_CARD,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -1272,48 +1251,52 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   darkPlanCardTitle: {
     ...typography.bodyBold,
+    fontSize: 15,
     color: '#fff',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   darkPlanCardPrice: {
     ...typography.body,
+    fontSize: 14,
     color: '#fff',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   darkPlanCardSub: {
     ...typography.caption,
+    fontSize: 12,
     color: 'rgba(255,255,255,0.55)',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   planCardTag: {
     ...typography.caption,
+    fontSize: 11,
     fontWeight: '600',
   },
   saveBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: borderRadius.sm,
-    marginBottom: spacing.sm,
+    marginBottom: 6,
   },
   saveBadgeText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -1322,51 +1305,50 @@ const styles = StyleSheet.create({
   darkCancelText: {
     textAlign: 'center',
     ...typography.caption,
+    fontSize: 11,
     color: 'rgba(255,255,255,0.45)',
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
+    marginTop: 4,
+    marginBottom: 4,
   },
 
   // CTA
   ctaButtonDark: {
     borderRadius: borderRadius.md,
-    paddingVertical: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 54,
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
+    minHeight: 48,
+    marginTop: spacing.xs,
     backgroundColor: '#fff',
   },
   ctaButtonDarkText: {
     color: '#000',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
   },
 
   // Restore
   restoreButton: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
   },
   darkRestoreText: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
   },
 
   // Disclaimer
   disclaimerContainer: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.md,
+    marginTop: spacing.xs,
   },
   darkDisclaimerText: {
     ...typography.caption,
+    fontSize: 9,
     color: 'rgba(255,255,255,0.3)',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 12,
   },
 
 });
