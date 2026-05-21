@@ -30,13 +30,65 @@ type PurchasesPackage = any;
 type PurchasesOffering = any;
 type CustomerInfo = any;
 
-// Premium features list
+// Premium features list (used in web + isPremium views)
 const PREMIUM_FEATURES = [
   'Snap a photo to estimate calories & macros instantly',
   'Personalized meal plans for fat loss, muscle gain, or maintenance',
   'Generate grocery lists automatically from your plan',
   'Track progress photos & body measurements',
   'No ads. No invasive tracking.',
+];
+
+const DARK_BG = '#0d0d0d';
+const DARK_CARD = '#1a1a1a';
+const DARK_CARD_SELECTED = 'rgba(255,255,255,0.08)';
+
+type FeatureKey = 'snap' | 'mealplans' | 'progress' | 'noads' | 'grocery';
+
+interface FeatureItem {
+  key: FeatureKey;
+  icon_ios: string;
+  icon_android: keyof typeof import('@expo/vector-icons/MaterialIcons').glyphMap;
+  label: string;
+  description: string;
+}
+
+const ICON_GRID_ITEMS: FeatureItem[] = [
+  {
+    key: 'snap',
+    icon_ios: 'camera.fill',
+    icon_android: 'camera-alt',
+    label: 'Snap & Track',
+    description: 'Snap a photo to estimate calories & macros instantly.',
+  },
+  {
+    key: 'mealplans',
+    icon_ios: 'calendar',
+    icon_android: 'calendar-today',
+    label: 'Meal Plans',
+    description: 'Get personalized meal plans tailored to your goals.',
+  },
+  {
+    key: 'progress',
+    icon_ios: 'chart.line.uptrend.xyaxis',
+    icon_android: 'trending-up',
+    label: 'Progress',
+    description: 'Track your progress with detailed charts and insights.',
+  },
+  {
+    key: 'noads',
+    icon_ios: 'sparkles',
+    icon_android: 'auto-awesome',
+    label: 'No Ads',
+    description: 'Enjoy a clean, ad-free experience.',
+  },
+  {
+    key: 'grocery',
+    icon_ios: 'cart.fill',
+    icon_android: 'shopping-cart',
+    label: 'Grocery List',
+    description: 'Auto-generate grocery lists from your meal plans.',
+  },
 ];
 
 export default function SubscriptionScreen() {
@@ -54,6 +106,7 @@ export default function SubscriptionScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activePlan, setActivePlan] = useState<'monthly' | 'yearly'>('yearly');
+  const [selectedFeature, setSelectedFeature] = useState<FeatureKey | null>(null);
   const { autoStart } = useLocalSearchParams<{ autoStart?: string }>();
   const autoStartFiredRef = React.useRef(false);
 
@@ -136,11 +189,10 @@ export default function SubscriptionScreen() {
       console.log('[Subscription] ✅ RevenueCat configured successfully');
 
       // CRITICAL: Set user attributes (email and display name) for RevenueCat dashboard
-      // This ensures the user's email and name appear in the RevenueCat dashboard instead of random numbers
       console.log('[Subscription] 📝 Setting user attributes for RevenueCat dashboard...');
-      
+
       const userEmail = user.email;
-      
+
       // Get user's name from the users table
       const { data: userData } = await supabase
         .from('users')
@@ -161,7 +213,7 @@ export default function SubscriptionScreen() {
       // Fetch offerings
       console.log('[Subscription] Fetching offerings...');
       const offeringsResponse = await Purchases.getOfferings();
-      
+
       console.log('[Subscription] Offerings response:', {
         hasCurrent: !!offeringsResponse.current,
         currentIdentifier: offeringsResponse.current?.identifier,
@@ -189,14 +241,14 @@ export default function SubscriptionScreen() {
         console.log('[Subscription] ✅ Offering found:', {
           identifier: targetOffering.identifier,
           packagesCount: targetOffering.availablePackages.length,
-          packageIdentifiers: targetOffering.availablePackages.map(p => p.identifier),
+          packageIdentifiers: targetOffering.availablePackages.map((p: any) => p.identifier),
         });
 
         setOfferings(targetOffering);
         setPackages(targetOffering.availablePackages);
 
         // Log package details
-        targetOffering.availablePackages.forEach((pkg, index) => {
+        targetOffering.availablePackages.forEach((pkg: any, index: number) => {
           console.log(`[Subscription] Package ${index + 1}:`, {
             identifier: pkg.identifier,
             packageType: pkg.packageType,
@@ -225,7 +277,7 @@ export default function SubscriptionScreen() {
 
       const entitlementIdentifier = revenueCatConfig?.entitlementIdentifier || 'Macrogoal Pro';
       const hasActiveEntitlement = info.entitlements.active[entitlementIdentifier]?.isActive || false;
-      
+
       console.log('[Subscription] Customer info:', {
         hasActiveEntitlements: Object.keys(info.entitlements.active).length > 0,
         activeEntitlements: Object.keys(info.entitlements.active),
@@ -242,7 +294,7 @@ export default function SubscriptionScreen() {
         code: error.code,
         stack: error.stack,
       });
-      
+
       const errorMsg = `Failed to initialize subscriptions:\n\n${error.message || 'Unknown error'}\n\nPlease check:\n1. RevenueCat API keys are correct\n2. Products are configured in RevenueCat dashboard\n3. Internet connection is active`;
       setErrorMessage(errorMsg);
     } finally {
@@ -307,7 +359,7 @@ export default function SubscriptionScreen() {
 
       // Make purchase through RevenueCat
       const { customerInfo, productIdentifier } = await Purchases.purchasePackage(pkg);
-      
+
       console.log('[Subscription] ✅ Purchase successful');
       console.log('[Subscription] Product:', productIdentifier);
       console.log('[Subscription] Active entitlements:', Object.keys(customerInfo.entitlements.active));
@@ -338,7 +390,7 @@ export default function SubscriptionScreen() {
         code: error.code,
         userCancelled: error.userCancelled,
       });
-      
+
       // Handle specific error codes
       if (error.userCancelled) {
         console.log('[Subscription] User cancelled purchase');
@@ -388,11 +440,11 @@ export default function SubscriptionScreen() {
       console.log('[Subscription] Active entitlements:', Object.keys(info.entitlements.active));
 
       setCustomerInfo(info);
-      
+
       const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
       const entitlementIdentifier = revenueCatConfig?.entitlementIdentifier || 'Macrogoal Pro';
       const hasActiveEntitlement = info.entitlements.active[entitlementIdentifier]?.isActive || false;
-      
+
       setIsPremium(hasActiveEntitlement);
 
       if (hasActiveEntitlement) {
@@ -455,7 +507,7 @@ export default function SubscriptionScreen() {
           <Text style={[styles.webMessageText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             Please download the mobile app to subscribe to Premium and unlock:
           </Text>
-          
+
           <View style={styles.featuresList}>
             {PREMIUM_FEATURES.map((feature, index) => (
               <View key={index} style={styles.featureRow}>
@@ -485,10 +537,10 @@ export default function SubscriptionScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: DARK_BG }]} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+          <Text style={[styles.loadingText, { color: '#fff' }]}>
             Loading subscription options...
           </Text>
         </View>
@@ -499,17 +551,17 @@ export default function SubscriptionScreen() {
   // Show error state if there's an error
   if (errorMessage) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: DARK_BG }]} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow-back"
               size={24}
-              color={isDark ? colors.textDark : colors.text}
+              color="#fff"
             />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
+          <Text style={[styles.headerTitle, { color: '#fff' }]}>
             Go Premium
           </Text>
           <View style={{ width: 24 }} />
@@ -524,10 +576,10 @@ export default function SubscriptionScreen() {
               color={colors.error}
             />
           </View>
-          <Text style={[styles.errorTitle, { color: isDark ? colors.textDark : colors.text }]}>
+          <Text style={[styles.errorTitle, { color: '#fff' }]}>
             Unable to Load Subscriptions
           </Text>
-          <Text style={[styles.errorMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          <Text style={[styles.errorMessage, { color: 'rgba(255,255,255,0.6)' }]}>
             {errorMessage}
           </Text>
           <TouchableOpacity
@@ -541,10 +593,10 @@ export default function SubscriptionScreen() {
             <Text style={styles.buttonText}>Try Again</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: isDark ? colors.cardDark : colors.card, marginTop: spacing.md }]}
+            style={[styles.button, { backgroundColor: DARK_CARD, marginTop: spacing.md }]}
             onPress={() => router.back()}
           >
-            <Text style={[styles.buttonText, { color: isDark ? colors.textDark : colors.text }]}>
+            <Text style={[styles.buttonText, { color: '#fff' }]}>
               Go Back
             </Text>
           </TouchableOpacity>
@@ -555,17 +607,17 @@ export default function SubscriptionScreen() {
 
   if (isPremium) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: DARK_BG }]} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow-back"
               size={24}
-              color={isDark ? colors.textDark : colors.text}
+              color="#fff"
             />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
+          <Text style={[styles.headerTitle, { color: '#fff' }]}>
             Premium Status
           </Text>
           <View style={{ width: 24 }} />
@@ -580,15 +632,15 @@ export default function SubscriptionScreen() {
               color="#FFFFFF"
             />
           </View>
-          <Text style={[styles.premiumTitle, { color: isDark ? colors.textDark : colors.text }]}>
+          <Text style={[styles.premiumTitle, { color: '#fff' }]}>
             You&apos;re Premium!
           </Text>
-          <Text style={[styles.premiumSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          <Text style={[styles.premiumSubtitle, { color: 'rgba(255,255,255,0.6)' }]}>
             Enjoy unlimited access to all premium features
           </Text>
 
-          <View style={[styles.featuresCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <Text style={[styles.featuresTitle, { color: isDark ? colors.textDark : colors.text }]}>
+          <View style={[styles.featuresCard, { backgroundColor: DARK_CARD }]}>
+            <Text style={[styles.featuresTitle, { color: '#fff' }]}>
               Your Premium Features
             </Text>
             {PREMIUM_FEATURES.map((feature, index) => (
@@ -599,7 +651,7 @@ export default function SubscriptionScreen() {
                   size={20}
                   color={colors.primary}
                 />
-                <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text }]}>
+                <Text style={[styles.featureText, { color: '#fff' }]}>
                   {feature}
                 </Text>
               </View>
@@ -607,10 +659,10 @@ export default function SubscriptionScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+            style={[styles.button, { backgroundColor: DARK_CARD }]}
             onPress={() => router.back()}
           >
-            <Text style={[styles.buttonText, { color: isDark ? colors.textDark : colors.text }]}>
+            <Text style={[styles.buttonText, { color: '#fff' }]}>
               Continue
             </Text>
           </TouchableOpacity>
@@ -652,18 +704,16 @@ export default function SubscriptionScreen() {
 
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
-  const iconGridItems = [
-    { icon_ios: 'camera.fill', icon_android: 'camera-alt', label: 'Snap & Track' },
-    { icon_ios: 'chart.bar.fill', icon_android: 'bar-chart', label: 'Meal Plans' },
-    { icon_ios: 'figure.walk', icon_android: 'directions-walk', label: 'Progress' },
-    { icon_ios: 'sparkles', icon_android: 'auto-awesome', label: 'No Ads' },
-  ];
+  const activeFeatureItem = ICON_GRID_ITEMS.find((f) => f.key === selectedFeature);
+  const featureDescriptionText = activeFeatureItem
+    ? activeFeatureItem.description
+    : 'Tap a feature to learn more';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={[]}>
+    <SafeAreaView style={styles.darkContainer} edges={[]}>
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
+        style={styles.darkScroll}
+        contentContainerStyle={styles.darkScrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero image with overlay, back button, and text */}
@@ -674,7 +724,13 @@ export default function SubscriptionScreen() {
             resizeMode="cover"
           />
           <View style={styles.heroOverlay} />
-          <TouchableOpacity onPress={() => router.back()} style={styles.heroBackButton}>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Subscription] Back button pressed');
+              router.back();
+            }}
+            style={styles.heroBackButton}
+          >
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow-back"
@@ -690,47 +746,60 @@ export default function SubscriptionScreen() {
           </View>
         </View>
 
-        {/* 4-icon grid */}
+        {/* 5-icon tappable grid */}
         <View style={styles.iconGrid}>
-          {iconGridItems.map((item, i) => (
-            <View key={i} style={styles.iconGridItem}>
-              <View style={[styles.iconGridCircle, { backgroundColor: colors.primary + '18' }]}>
-                <IconSymbol
-                  ios_icon_name={item.icon_ios}
-                  android_material_icon_name={item.icon_android}
-                  size={24}
-                  color={colors.primary}
-                />
-              </View>
-              <Text style={[styles.iconGridLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {item.label}
-              </Text>
-            </View>
-          ))}
+          {ICON_GRID_ITEMS.map((item) => {
+            const isSelected = selectedFeature === item.key;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={styles.iconGridItem}
+                onPress={() => {
+                  console.log('[Subscription] Feature icon tapped:', item.key);
+                  setSelectedFeature(isSelected ? null : item.key);
+                }}
+                activeOpacity={0.75}
+              >
+                <View
+                  style={[
+                    styles.iconGridCircle,
+                    isSelected
+                      ? styles.iconGridCircleSelected
+                      : styles.iconGridCircleDefault,
+                  ]}
+                >
+                  <IconSymbol
+                    ios_icon_name={item.icon_ios}
+                    android_material_icon_name={item.icon_android}
+                    size={22}
+                    color={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.iconGridLabel,
+                    isSelected ? styles.iconGridLabelSelected : styles.iconGridLabelDefault,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* Features — compact single-line */}
-        <View style={styles.featuresListContainer}>
-          {PREMIUM_FEATURES.map((feature, index) => (
-            <View key={index} style={styles.featureRow}>
-              <IconSymbol
-                ios_icon_name="checkmark.circle.fill"
-                android_material_icon_name="check-circle"
-                size={18}
-                color={colors.primary}
-              />
-              <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text }]}>
-                {feature}
-              </Text>
-            </View>
-          ))}
+        {/* Feature description card */}
+        <View style={styles.featureDescCard}>
+          <Text style={styles.featureDescText}>
+            {featureDescriptionText}
+          </Text>
         </View>
 
         {/* Divider */}
-        <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]} />
+        <View style={styles.darkDivider} />
 
         {/* Choose Your Plan */}
-        <Text style={[styles.choosePlanTitle, { color: isDark ? colors.textDark : colors.text }]}>
+        <Text style={styles.choosePlanTitleDark}>
           Choose Your Plan
         </Text>
 
@@ -738,9 +807,8 @@ export default function SubscriptionScreen() {
         {resolvedYearlyPkg && (
           <TouchableOpacity
             style={[
-              styles.planCard,
-              { backgroundColor: isDark ? colors.cardDark : colors.card },
-              activePlan === 'yearly' && { borderColor: colors.primary, borderWidth: 2 },
+              styles.darkPlanCard,
+              activePlan === 'yearly' && styles.darkPlanCardSelected,
             ]}
             onPress={() => {
               console.log('[Subscription] Yearly plan selected');
@@ -754,18 +822,18 @@ export default function SubscriptionScreen() {
             </View>
 
             <View style={styles.planCardInner}>
-              <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: colors.primary }]}>
-                {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />}
+              <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#fff' }]}>
+                {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.planCardTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                <Text style={styles.darkPlanCardTitle}>
                   7-Day Free Trial
                 </Text>
-                <Text style={[styles.planCardPrice, { color: isDark ? colors.textDark : colors.text }]}>
+                <Text style={styles.darkPlanCardPrice}>
                   {yearlyPrice}/year
                 </Text>
                 {yearlyMonthlyEquiv && (
-                  <Text style={[styles.planCardSub, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  <Text style={styles.darkPlanCardSub}>
                     Only {yearlyMonthlyEquiv}
                   </Text>
                 )}
@@ -781,9 +849,8 @@ export default function SubscriptionScreen() {
         {resolvedMonthlyPkg && (
           <TouchableOpacity
             style={[
-              styles.planCard,
-              { backgroundColor: isDark ? colors.cardDark : colors.card },
-              activePlan === 'monthly' && { borderColor: colors.primary, borderWidth: 2 },
+              styles.darkPlanCard,
+              activePlan === 'monthly' && styles.darkPlanCardSelected,
             ]}
             onPress={() => {
               console.log('[Subscription] Monthly plan selected');
@@ -792,11 +859,11 @@ export default function SubscriptionScreen() {
             activeOpacity={0.85}
           >
             <View style={styles.planCardInner}>
-              <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: colors.primary }]}>
-                {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />}
+              <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#fff' }]}>
+                {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.planCardPrice, { color: isDark ? colors.textDark : colors.text }]}>
+                <Text style={styles.darkPlanCardPrice}>
                   {monthlyPrice} monthly
                 </Text>
               </View>
@@ -805,20 +872,20 @@ export default function SubscriptionScreen() {
         )}
 
         {/* Cancel anytime */}
-        <Text style={[styles.cancelText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        <Text style={styles.darkCancelText}>
           Cancel anytime during trial
         </Text>
 
         {/* CTA button */}
         <TouchableOpacity
-          style={[styles.ctaButton, { backgroundColor: colors.primary }, purchasing && { opacity: 0.7 }]}
+          style={[styles.ctaButtonDark, purchasing && { opacity: 0.7 }]}
           onPress={handleSubscribe}
           disabled={purchasing || !selectedPkg}
         >
           {purchasing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color="#000" />
           ) : (
-            <Text style={styles.ctaButtonText}>
+            <Text style={styles.ctaButtonDarkText}>
               {ctaLabel}
             </Text>
           )}
@@ -833,14 +900,14 @@ export default function SubscriptionScreen() {
           }}
           disabled={loading}
         >
-          <Text style={[styles.restoreButtonText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          <Text style={styles.darkRestoreText}>
             Restore Purchases
           </Text>
         </TouchableOpacity>
 
         {/* Legal disclaimer */}
         <View style={styles.disclaimerContainer}>
-          <Text style={[styles.disclaimerText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          <Text style={styles.darkDisclaimerText}>
             Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
             You can manage your subscription in your App Store account settings.
           </Text>
@@ -858,7 +925,7 @@ export default function SubscriptionScreen() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <View style={[styles.modalContent, { backgroundColor: DARK_CARD }]}>
             <View style={[styles.successIconCircle, { backgroundColor: colors.primary + '20' }]}>
               <IconSymbol
                 ios_icon_name="checkmark.circle.fill"
@@ -867,10 +934,10 @@ export default function SubscriptionScreen() {
                 color={colors.primary}
               />
             </View>
-            <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            <Text style={[styles.modalTitle, { color: '#fff' }]}>
               Welcome to Premium! 🎉
             </Text>
-            <Text style={[styles.modalMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            <Text style={[styles.modalMessage, { color: 'rgba(255,255,255,0.6)' }]}>
               You now have access to all premium features. Enjoy your enhanced experience!
             </Text>
             <TouchableOpacity
@@ -890,6 +957,7 @@ export default function SubscriptionScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Shared / non-dark screens ──────────────────────────────────────────────
   container: {
     flex: 1,
   },
@@ -901,11 +969,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     ...typography.body,
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
   },
   header: {
     flexDirection: 'row',
@@ -921,199 +984,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h3,
   },
-  scrollContent: {
-    paddingHorizontal: 0,
-    paddingBottom: 40,
-  },
-  featuresListContainer: {
-    gap: 10,
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.md,
-  },
-  stickyBottom: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-  },
-  stickyButtonWrapper: {
-    position: 'relative',
-  },
-  stickyButton: {
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    minHeight: 52,
-  },
-  stickyButtonOutlined: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-  },
-  stickyButtonTextSolid: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  stickyButtonTextOutlined: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  bestValueBadge: {
-    position: 'absolute',
-    top: -10,
-    left: spacing.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-  },
-  bestValueText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  heroSection: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
   iconCircle: {
     width: 96,
     height: 96,
     borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  heroTitle: {
-    ...typography.h1,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  heroSubtitle: {
-    ...typography.body,
-    textAlign: 'center',
-  },
-  planCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    marginHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  planCardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#ccc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  planCardTitle: {
-    ...typography.bodyBold,
-    marginBottom: 2,
-  },
-  planCardPrice: {
-    ...typography.body,
-    marginBottom: 2,
-  },
-  planCardSub: {
-    ...typography.caption,
-    marginBottom: 4,
-  },
-  planCardTag: {
-    ...typography.caption,
-    fontWeight: '600',
-  },
-  saveBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing.sm,
-  },
-  saveBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  divider: {
-    height: 1,
-    marginVertical: spacing.lg,
-    marginHorizontal: spacing.md,
-  },
-  choosePlanTitle: {
-    ...typography.h3,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.md,
-  },
-  cancelText: {
-    textAlign: 'center',
-    ...typography.caption,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  ctaButton: {
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 54,
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-  },
-  ctaButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  popularPlan: {
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  popularBadge: {
-    position: 'absolute',
-    top: -12,
-    alignSelf: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-  },
-  popularText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  planTitle: {
-    ...typography.h2,
-    marginBottom: spacing.xs,
-  },
-  planPrice: {
-    ...typography.h1,
-    marginBottom: spacing.xs,
-  },
-  planDescription: {
-    ...typography.body,
-    marginBottom: spacing.md,
-  },
-  featuresContainer: {
-    gap: spacing.md,
     marginBottom: spacing.md,
   },
   featureRow: {
@@ -1125,76 +1001,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     flex: 1,
   },
-  featureDescription: {
-    ...typography.body,
-    marginTop: 2,
-  },
-  subscribeButton: {
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  subscribeButtonDisabled: {
-    opacity: 0.6,
-  },
-  subscribeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  restoreButton: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  restoreButtonText: {
-    ...typography.bodyBold,
-    textDecorationLine: 'underline',
-  },
-  disclaimerContainer: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.md,
-  },
-  disclaimerText: {
-    ...typography.caption,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  premiumStatusContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  premiumBadge: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  premiumTitle: {
-    ...typography.h1,
-    marginBottom: spacing.sm,
-  },
-  premiumSubtitle: {
-    ...typography.body,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  featuresCard: {
-    width: '100%',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    paddingBottom: spacing.xl,
-  },
-  featuresTitle: {
-    ...typography.h3,
-    marginBottom: spacing.md,
-  },
   button: {
     width: '100%',
     borderRadius: borderRadius.md,
@@ -1204,6 +1010,7 @@ const styles = StyleSheet.create({
   buttonText: {
     ...typography.bodyBold,
     fontSize: 16,
+    color: '#fff',
   },
   webMessageContainer: {
     flex: 1,
@@ -1246,9 +1053,43 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: spacing.xl,
   },
+  premiumStatusContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  premiumBadge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  premiumTitle: {
+    ...typography.h1,
+    marginBottom: spacing.sm,
+  },
+  premiumSubtitle: {
+    ...typography.body,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  featuresCard: {
+    width: '100%',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
+  featuresTitle: {
+    ...typography.h3,
+    marginBottom: spacing.md,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
@@ -1289,9 +1130,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+
+  // ── Dark paywall screen ────────────────────────────────────────────────────
+  darkContainer: {
+    flex: 1,
+    backgroundColor: DARK_BG,
+  },
+  darkScroll: {
+    flex: 1,
+    backgroundColor: DARK_BG,
+  },
+  darkScrollContent: {
+    paddingHorizontal: 0,
+    paddingBottom: 48,
+    backgroundColor: DARK_BG,
+  },
+
+  // Hero
   heroImageContainer: {
     width: '100%',
-    height: 260,
+    height: 280,
     position: 'relative',
     marginBottom: spacing.lg,
   },
@@ -1301,7 +1159,7 @@ const styles = StyleSheet.create({
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.52)',
   },
   heroBackButton: {
     position: 'absolute',
@@ -1309,6 +1167,8 @@ const styles = StyleSheet.create({
     left: spacing.md,
     padding: spacing.xs,
     zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
   },
   heroTextContainer: {
     position: 'absolute',
@@ -1327,11 +1187,13 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     lineHeight: 22,
   },
+
+  // Icon grid
   iconGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   iconGridItem: {
     alignItems: 'center',
@@ -1345,9 +1207,184 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconGridCircleDefault: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  iconGridCircleSelected: {
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
   iconGridLabel: {
-    fontSize: 11,
+    fontSize: 10,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  iconGridLabelDefault: {
+    color: 'rgba(255,255,255,0.55)',
+  },
+  iconGridLabelSelected: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+
+  // Feature description card
+  featureDescCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: borderRadius.md,
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  featureDescText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+
+  // Divider
+  darkDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginVertical: spacing.lg,
+    marginHorizontal: spacing.md,
+  },
+
+  // Plan section
+  choosePlanTitleDark: {
+    ...typography.h3,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  darkPlanCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    marginHorizontal: spacing.md,
+    backgroundColor: DARK_CARD,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  darkPlanCardSelected: {
+    borderColor: '#fff',
+    backgroundColor: DARK_CARD_SELECTED,
+  },
+  planCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  darkPlanCardTitle: {
+    ...typography.bodyBold,
+    color: '#fff',
+    marginBottom: 2,
+  },
+  darkPlanCardPrice: {
+    ...typography.body,
+    color: '#fff',
+    marginBottom: 2,
+  },
+  darkPlanCardSub: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.55)',
+    marginBottom: 4,
+  },
+  planCardTag: {
+    ...typography.caption,
+    fontWeight: '600',
+  },
+  saveBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.sm,
+  },
+  saveBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  // Cancel text
+  darkCancelText: {
+    textAlign: 'center',
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+
+  // CTA
+  ctaButtonDark: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 54,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    backgroundColor: '#fff',
+  },
+  ctaButtonDarkText: {
+    color: '#000',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+
+  // Restore
+  restoreButton: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  darkRestoreText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  // Disclaimer
+  disclaimerContainer: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  darkDisclaimerText: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+
+  // Scroll content (legacy, kept for safety)
+  scrollContent: {
+    paddingHorizontal: 0,
+    paddingBottom: 40,
   },
 });
