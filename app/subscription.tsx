@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   ImageBackground,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -710,212 +711,223 @@ export default function SubscriptionScreen() {
     : 'Tap a feature to learn more';
 
   return (
-    <ImageBackground
-      source={require('../assets/images/3762b428-5e21-48da-9bba-734aa0e46c87.jpeg')}
-      style={{ flex: 1 }}
-      resizeMode="cover"
-    >
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.55)', '#000']}
-        locations={[0, 0.4, 0.72]}
-        style={StyleSheet.absoluteFillObject}
-        pointerEvents="none"
-      />
-      {/* Floating back button */}
-      <TouchableOpacity
-        onPress={() => {
-          console.log('[Subscription] Back button pressed');
-          router.back();
-        }}
-        style={styles.floatingBackButton}
-      >
-        <IconSymbol
-          ios_icon_name="chevron.left"
-          android_material_icon_name="arrow-back"
-          size={26}
-          color="#FFFFFF"
-        />
-      </TouchableOpacity>
-      <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top', 'bottom']}>
-        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: 64 }}>
+    <>
+      <View style={styles.subRoot}>
 
-          {/* Hero text */}
-          <View style={styles.heroTextContainer}>
-            <Text style={styles.heroTitleWhite}>Track Meals in Seconds</Text>
-            <Text style={styles.heroSubtitleWhite}>
-              AI-powered nutrition tracking without the hassle.
-            </Text>
-          </View>
-
-          {/* Flexible spacer — pushes content down a bit but won't overflow */}
-          <View style={{ flex: 0.6 }} />
-
-          {/* 5-icon tappable grid */}
-          <View style={styles.iconGrid}>
-            {ICON_GRID_ITEMS.map((item) => {
-              const isSelected = selectedFeature === item.key;
-              return (
-                <TouchableOpacity
-                  key={item.key}
-                  style={styles.iconGridItem}
-                  onPress={() => {
-                    console.log('[Subscription] Feature icon tapped:', item.key);
-                    setSelectedFeature(isSelected ? null : item.key);
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <View
-                    style={[
-                      styles.iconGridCircle,
-                      isSelected
-                        ? styles.iconGridCircleSelected
-                        : styles.iconGridCircleDefault,
-                    ]}
-                  >
-                    <IconSymbol
-                      ios_icon_name={item.icon_ios}
-                      android_material_icon_name={item.icon_android}
-                      size={18}
-                      color={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.iconGridLabel,
-                      isSelected ? styles.iconGridLabelSelected : styles.iconGridLabelDefault,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Feature description card */}
-          <View style={styles.featureDescCard}>
-            <Text style={styles.featureDescText}>
-              {featureDescriptionText}
-            </Text>
-          </View>
-
-          {/* Choose Your Plan */}
-          <Text style={styles.choosePlanTitleDark}>
-            Choose Your Plan
-          </Text>
-
-          {/* Yearly card */}
-          {resolvedYearlyPkg && (
-            <TouchableOpacity
-              style={[
-                styles.darkPlanCard,
-                activePlan === 'yearly' && styles.darkPlanCardSelected,
-              ]}
-              onPress={() => {
-                console.log('[Subscription] Yearly plan selected');
-                setActivePlan('yearly');
-              }}
-              activeOpacity={0.85}
-            >
-              {/* SAVE badge */}
-              <View style={[styles.saveBadge, { backgroundColor: colors.primary }]}>
-                <Text style={styles.saveBadgeText}>✓ SAVE 58%</Text>
-              </View>
-
-              <View style={styles.planCardInner}>
-                <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#fff' }]}>
-                  {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.darkPlanCardTitle}>
-                    7-Day Free Trial
-                  </Text>
-                  <Text style={styles.darkPlanCardPrice}>
-                    {yearlyPrice}/year
-                  </Text>
-                  {yearlyMonthlyEquiv && (
-                    <Text style={styles.darkPlanCardSub}>
-                      Only {yearlyMonthlyEquiv}
-                    </Text>
-                  )}
-                  <Text style={[styles.planCardTag, { color: colors.primary }]}>
-                    Most users choose this
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* Monthly card */}
-          {resolvedMonthlyPkg && (
-            <TouchableOpacity
-              style={[
-                styles.darkPlanCard,
-                activePlan === 'monthly' && styles.darkPlanCardSelected,
-              ]}
-              onPress={() => {
-                console.log('[Subscription] Monthly plan selected');
-                setActivePlan('monthly');
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={styles.planCardInner}>
-                <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#fff' }]}>
-                  {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.darkPlanCardPrice}>
-                    {monthlyPrice} monthly
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* Cancel anytime */}
-          <Text style={styles.darkCancelText}>
-            Cancel anytime during trial
-          </Text>
-
-          {/* CTA button */}
-          <TouchableOpacity
-            style={[styles.ctaButtonDark, purchasing && { opacity: 0.7 }]}
-            onPress={handleSubscribe}
-            disabled={purchasing || !selectedPkg}
+        {/* ── HERO 40% ───────────────────────────── */}
+        <View style={styles.subHero}>
+          <ImageBackground
+            source={require('../assets/images/3762b428-5e21-48da-9bba-734aa0e46c87.jpeg')}
+            style={styles.subHeroImage}
+            resizeMode="cover"
           >
-            {purchasing ? (
-              <ActivityIndicator size="small" color="#000" />
-            ) : (
-              <Text style={styles.ctaButtonDarkText}>
-                {ctaLabel}
-              </Text>
-            )}
-          </TouchableOpacity>
+            {/* Floating back button */}
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Subscription] Back button pressed');
+                router.back();
+              }}
+              style={styles.floatingBackButton}
+            >
+              <IconSymbol
+                ios_icon_name="chevron.left"
+                android_material_icon_name="arrow-back"
+                size={26}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
 
-          {/* Restore Purchases */}
-          <TouchableOpacity
-            style={styles.restoreButton}
-            onPress={() => {
-              console.log('[Subscription] Restore Purchases pressed');
-              handleRestore();
-            }}
-            disabled={loading}
-          >
-            <Text style={styles.darkRestoreText}>
-              Restore Purchases
-            </Text>
-          </TouchableOpacity>
+            {/* Title block — top-left, respects safe area */}
+            <SafeAreaView edges={['top']} style={styles.subHeroSafe}>
+              <View style={styles.subHeroTextWrap}>
+                <Text style={styles.heroTitleWhite}>Track Meals in Seconds</Text>
+                <Text style={styles.heroSubtitleWhite}>
+                  AI-powered nutrition tracking without the hassle.
+                </Text>
+              </View>
+            </SafeAreaView>
 
-          {/* Legal disclaimer */}
-          <View style={styles.disclaimerContainer}>
-            <Text style={styles.darkDisclaimerText}>
-              Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
-              You can manage your subscription in your App Store account settings.
-            </Text>
-          </View>
-
+            {/* Bottom fade into black */}
+            <LinearGradient
+              colors={['transparent', '#000']}
+              style={styles.subHeroFade}
+              pointerEvents="none"
+            />
+          </ImageBackground>
         </View>
-      </SafeAreaView>
+
+        {/* ── BLACK PANEL 60% ────────────────────── */}
+        <SafeAreaView edges={['bottom']} style={styles.subBlackPanel}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.subBlackPanelInner}
+          >
+            {/* 5-icon tappable grid */}
+            <View style={styles.iconGrid}>
+              {ICON_GRID_ITEMS.map((item) => {
+                const isSelected = selectedFeature === item.key;
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={styles.iconGridItem}
+                    onPress={() => {
+                      console.log('[Subscription] Feature icon tapped:', item.key);
+                      setSelectedFeature(isSelected ? null : item.key);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View
+                      style={[
+                        styles.iconGridCircle,
+                        isSelected
+                          ? styles.iconGridCircleSelected
+                          : styles.iconGridCircleDefault,
+                      ]}
+                    >
+                      <IconSymbol
+                        ios_icon_name={item.icon_ios}
+                        android_material_icon_name={item.icon_android}
+                        size={18}
+                        color={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.iconGridLabel,
+                        isSelected ? styles.iconGridLabelSelected : styles.iconGridLabelDefault,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Feature description card */}
+            <View style={styles.featureDescCard}>
+              <Text style={styles.featureDescText}>
+                {featureDescriptionText}
+              </Text>
+            </View>
+
+            {/* Choose Your Plan */}
+            <Text style={styles.choosePlanTitleDark}>
+              Choose Your Plan
+            </Text>
+
+            {/* Yearly card */}
+            {resolvedYearlyPkg && (
+              <TouchableOpacity
+                style={[
+                  styles.darkPlanCard,
+                  activePlan === 'yearly' && styles.darkPlanCardSelected,
+                ]}
+                onPress={() => {
+                  console.log('[Subscription] Yearly plan selected');
+                  setActivePlan('yearly');
+                }}
+                activeOpacity={0.85}
+              >
+                {/* SAVE badge */}
+                <View style={[styles.saveBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.saveBadgeText}>✓ SAVE 58%</Text>
+                </View>
+
+                <View style={styles.planCardInner}>
+                  <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#fff' }]}>
+                    {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.darkPlanCardTitle}>
+                      7-Day Free Trial
+                    </Text>
+                    <Text style={styles.darkPlanCardPrice}>
+                      {yearlyPrice}/year
+                    </Text>
+                    {yearlyMonthlyEquiv && (
+                      <Text style={styles.darkPlanCardSub}>
+                        Only {yearlyMonthlyEquiv}
+                      </Text>
+                    )}
+                    <Text style={[styles.planCardTag, { color: colors.primary }]}>
+                      Most users choose this
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Monthly card */}
+            {resolvedMonthlyPkg && (
+              <TouchableOpacity
+                style={[
+                  styles.darkPlanCard,
+                  activePlan === 'monthly' && styles.darkPlanCardSelected,
+                ]}
+                onPress={() => {
+                  console.log('[Subscription] Monthly plan selected');
+                  setActivePlan('monthly');
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.planCardInner}>
+                  <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#fff' }]}>
+                    {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.darkPlanCardPrice}>
+                      {monthlyPrice} monthly
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Cancel anytime */}
+            <Text style={styles.darkCancelText}>
+              Cancel anytime during trial
+            </Text>
+
+            {/* CTA button */}
+            <TouchableOpacity
+              style={[styles.ctaButtonDark, purchasing && { opacity: 0.7 }]}
+              onPress={handleSubscribe}
+              disabled={purchasing || !selectedPkg}
+            >
+              {purchasing ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Text style={styles.ctaButtonDarkText}>
+                  {ctaLabel}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Restore Purchases */}
+            <TouchableOpacity
+              style={styles.restoreButton}
+              onPress={() => {
+                console.log('[Subscription] Restore Purchases pressed');
+                handleRestore();
+              }}
+              disabled={loading}
+            >
+              <Text style={styles.darkRestoreText}>
+                Restore Purchases
+              </Text>
+            </TouchableOpacity>
+
+            {/* Legal disclaimer */}
+            <View style={styles.disclaimerContainer}>
+              <Text style={styles.darkDisclaimerText}>
+                Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+                You can manage your subscription in your App Store account settings.
+              </Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
 
       {/* Success Modal */}
       <Modal
@@ -955,7 +967,7 @@ export default function SubscriptionScreen() {
           </View>
         </View>
       </Modal>
-    </ImageBackground>
+    </>
   );
 }
 
@@ -1358,6 +1370,43 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.3)',
     textAlign: 'center',
     lineHeight: 12,
+  },
+
+  // ── Split-screen layout ────────────────────────────────────────────────────
+  subRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  subHero: {
+    height: '40%',
+    width: '100%',
+  },
+  subHeroImage: {
+    flex: 1,
+    width: '100%',
+  },
+  subHeroSafe: {
+    flex: 1,
+  },
+  subHeroTextWrap: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
+  subHeroFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '35%',
+  },
+  subBlackPanel: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  subBlackPanelInner: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
 
 });
