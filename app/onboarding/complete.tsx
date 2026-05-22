@@ -511,6 +511,9 @@ export default function CompleteOnboardingScreen() {
           <Step10
             onStartTrial={handleStartTrial}
             onSkip={handleSkipTrial}
+            totalWeeks={calcWeeks}
+            goalWeight={goalWeight}
+            weightUnit={weightUnit}
           />
         )}
       </Animated.View>
@@ -1341,23 +1344,95 @@ function Step9({
 
 // ─── STEP 10 — PURCHASE ───────────────────────────────────────────────────────
 
-const MEAL_PREVIEW_IMAGE = require('../../assets/images/f78b4cf2-5c02-49b5-83e5-49f019069017.jpeg');
-const GROCERY_PREVIEW_IMAGE = require('../../assets/images/e5e3653d-e210-40ed-8bbb-87bd7d5f1d48.jpeg');
+const MILESTONE_PCTS = [0.15, 0.50, 0.70, 1.00] as const;
 
-const PURCHASE_BULLETS = [
-  'Know exactly what to eat every day',
-  'Grocery lists organized automatically',
-  'Meals built around foods you actually enjoy',
-  'Stay consistent without starting over',
-];
+function computeMilestoneWeeks(totalWeeks: number): number[] {
+  const raw = MILESTONE_PCTS.map((p) => Math.max(1, Math.round(totalWeeks * p)));
+  const adjusted: number[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const min = i === 0 ? 1 : adjusted[i - 1] + 1;
+    adjusted.push(Math.max(raw[i], min));
+  }
+  adjusted[adjusted.length - 1] = totalWeeks;
+  for (let i = adjusted.length - 2; i >= 0; i--) {
+    if (adjusted[i] >= adjusted[i + 1]) {
+      adjusted[i] = adjusted[i + 1] - 1;
+    }
+  }
+  return adjusted;
+}
 
 function Step10({
   onStartTrial,
   onSkip,
+  totalWeeks,
+  goalWeight,
+  weightUnit,
 }: {
   onStartTrial: () => void;
   onSkip: () => void;
+  totalWeeks: number;
+  goalWeight: string;
+  weightUnit: string;
 }) {
+  const milestoneWeeks = totalWeeks > 0 ? computeMilestoneWeeks(totalWeeks) : [];
+
+  useEffect(() => {
+    console.log('[Onboarding] Step 10: timeline rendered with weeks', milestoneWeeks);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const goalLine = `You reached your goal of ${goalWeight} ${weightUnit}`;
+
+  const TIMELINE_NODES = [
+    {
+      weekLabel: 'Today',
+      title: 'Your journey starts here',
+      lines: [
+        'Get Your Personalized Meal Plan',
+        'Get Your Grocery List',
+      ],
+      isToday: true,
+      isFinal: false,
+      pctIndex: -1,
+    },
+    {
+      weekLabel: '',
+      title: 'Building Awareness',
+      lines: ['More control over meals'],
+      isToday: false,
+      isFinal: false,
+      pctIndex: 0,
+    },
+    {
+      weekLabel: '',
+      title: '"You look different."',
+      lines: ['People are starting to notice your progress'],
+      isToday: false,
+      isFinal: false,
+      pctIndex: 1,
+    },
+    {
+      weekLabel: '',
+      title: 'More confidence',
+      lines: ['Healthy habits feel easier now'],
+      isToday: false,
+      isFinal: false,
+      pctIndex: 2,
+    },
+    {
+      weekLabel: '',
+      title: 'You transformed your body,\nmind, and energy',
+      lines: [
+        goalLine,
+        'And it shows.',
+      ],
+      isToday: false,
+      isFinal: true,
+      pctIndex: 3,
+    },
+  ];
+
   return (
     <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
       <LinearGradient
@@ -1371,38 +1446,93 @@ function Step10({
             showsVerticalScrollIndicator={false}
           >
             {/* Header */}
-            <Text style={styles.step10Title}>{'Your meals are\nalready planned.'}</Text>
+            <Text style={styles.step10Title}>{'Your transformation\nstarts today.'}</Text>
             <Text style={styles.step10Sub}>
-              {'Calories, macros, meals, and groceries fully personalized for your goal.'}
+              {"Here's what your journey will look like."}
             </Text>
 
-            {/* Blurred preview */}
-            <View style={styles.singlePreviewCard}>
-              <Image
-                source={require('../../assets/images/96d5afb8-a4dc-4c75-946c-a4f2fb9abc86.jpeg')}
-                style={styles.singlePreviewImage}
-                resizeMode="cover"
-              />
-            </View>
+            {/* Timeline or fallback */}
+            {totalWeeks <= 0 ? (
+              <View style={styles.timelineFallback}>
+                <Text style={styles.timelineFallbackTitle}>{"You're already where you want to be."}</Text>
+                <Text style={styles.timelineFallbackSub}>{"Let's keep you there with a system built for consistency."}</Text>
+              </View>
+            ) : (
+              <View style={styles.timelineContainer}>
+                {/* Vertical connecting line */}
+                <View style={styles.timelineLineTrack} />
 
-            {/* Bullets */}
-            <View style={styles.bulletList}>
-              {PURCHASE_BULLETS.map((text, idx) => (
-                <View key={idx} style={styles.bulletRow}>
-                  <Text style={styles.bulletCheck}>{'✅'}</Text>
-                  <Text style={styles.bulletText}>{text}</Text>
-                </View>
-              ))}
-            </View>
+                {TIMELINE_NODES.map((node, idx) => {
+                  const isToday = node.isToday;
+                  const isFinal = node.isFinal;
+                  const weekLabel = isToday
+                    ? 'Today'
+                    : node.pctIndex >= 0 && milestoneWeeks[node.pctIndex] !== undefined
+                      ? `Week ${milestoneWeeks[node.pctIndex]}`
+                      : '';
+                  const weekLabelColor = isToday || isFinal
+                    ? PRIMARY
+                    : 'rgba(255,255,255,0.55)';
+                  const titleStyle = node.title.startsWith('"')
+                    ? [styles.timelineTitle, styles.timelineTitleItalic]
+                    : [styles.timelineTitle];
+
+                  return (
+                    <View key={idx} style={styles.timelineRow}>
+                      {/* Dot column */}
+                      <View style={styles.timelineDotCol}>
+                        {isToday ? (
+                          <View style={styles.timelineDotToday} />
+                        ) : isFinal ? (
+                          <View style={styles.timelineDotFinal} />
+                        ) : (
+                          <View style={styles.timelineDotMid} />
+                        )}
+                      </View>
+
+                      {/* Text block */}
+                      <View style={styles.timelineTextBlock}>
+                        <View style={styles.timelineWeekRow}>
+                          <Text style={[styles.timelineWeekLabel, { color: weekLabelColor }]}>
+                            {weekLabel}
+                          </Text>
+                          {isFinal && (
+                            <View style={styles.timelineGoalPill}>
+                              <Text style={styles.timelineGoalPillText}>{'GOAL'}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={titleStyle}>{node.title}</Text>
+                        {node.lines.map((line, li) => (
+                          <Text key={li} style={styles.timelineSubLine}>{line}</Text>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             {/* CTA */}
-            <TouchableOpacity style={styles.purchaseBtn} onPress={onStartTrial}>
+            <TouchableOpacity
+              style={styles.purchaseBtn}
+              onPress={() => {
+                console.log('[Onboarding] Step 10: Start My Personalized Plan pressed');
+                onStartTrial();
+              }}
+            >
               <Text style={styles.purchaseBtnText}>{'Start My Personalized Plan'}</Text>
             </TouchableOpacity>
             <Text style={styles.trialNote}>{'Free 7-day trial included'}</Text>
 
             {/* Skip */}
-            <TouchableOpacity onPress={onSkip} style={styles.skipLink}>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Onboarding] Step 10: I\'ll do everything manually pressed');
+                onSkip();
+              }}
+              style={styles.skipLink}
+            >
               <Text style={styles.skipLinkText}>{"I'll do everything manually"}</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -1599,7 +1729,7 @@ const styles = StyleSheet.create({
   step10Scroll: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 32,
   },
   step10Label: {
@@ -1611,44 +1741,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   step10Title: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
-    lineHeight: 38,
-    marginBottom: 10,
+    lineHeight: 34,
+    marginBottom: 6,
   },
   step10Sub: {
-    fontSize: 15,
+    fontSize: 14,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
-    marginTop: 12,
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  featureList: {
-    marginBottom: 28,
-    gap: 10,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  featureEmoji: {
-    fontSize: 20,
-  },
-  featureText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.85)',
-    flex: 1,
-  },
-  step10Btn: {
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    lineHeight: 20,
+    marginBottom: 20,
   },
   skipLink: {
     paddingVertical: 16,
@@ -1658,69 +1763,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
     fontSize: 14,
     textAlign: 'center',
-  },
-  previewRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  previewCard: {
-    flex: 1,
-    height: 120,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  previewOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  previewIcon: {
-    fontSize: 28,
-  },
-  previewLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.8)',
-  },
-  bulletList: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  bulletCheck: {
-    fontSize: 16,
-    marginTop: 1,
-  },
-  bulletText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.85)',
-    flex: 1,
-    lineHeight: 22,
-  },
-  singlePreviewCard: {
-    width: '100%',
-    height: 160,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 24,
-    marginTop: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  singlePreviewImage: {
-    width: '100%',
-    height: '100%',
   },
   purchaseBtn: {
     backgroundColor: PRIMARY,
@@ -1745,6 +1787,124 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     marginBottom: 4,
+  },
+
+  // Timeline
+  timelineContainer: {
+    position: 'relative',
+    marginBottom: 24,
+    paddingLeft: 0,
+  },
+  timelineLineTrack: {
+    position: 'absolute',
+    left: 13,
+    top: 14,
+    bottom: 14,
+    width: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    marginBottom: 22,
+  },
+  timelineDotCol: {
+    width: 28,
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  timelineDotToday: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: PRIMARY,
+    shadowColor: PRIMARY,
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  timelineDotMid: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  timelineDotFinal: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: PRIMARY,
+    shadowColor: PRIMARY,
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
+  timelineTextBlock: {
+    flex: 1,
+    paddingLeft: 10,
+  },
+  timelineWeekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 3,
+  },
+  timelineWeekLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  timelineGoalPill: {
+    backgroundColor: PRIMARY,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  timelineGoalPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  timelineTitleItalic: {
+    fontStyle: 'italic',
+  },
+  timelineSubLine: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.65)',
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  timelineFallback: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 8,
+    marginBottom: 24,
+  },
+  timelineFallbackTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 10,
+    lineHeight: 26,
+  },
+  timelineFallbackSub: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.65)',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 
   // Shared step titles
