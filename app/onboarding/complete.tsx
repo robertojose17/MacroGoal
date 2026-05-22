@@ -1333,7 +1333,7 @@ function Step9({
                 onNext();
               }}
             >
-              <Text style={styles.primaryBtnText}>Unlock My Plan</Text>
+              <Text style={styles.primaryBtnText}>Continue</Text>
             </TouchableOpacity>
           </>
         )}
@@ -1434,14 +1434,9 @@ function Step10({
   ];
 
   return (
-    <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
-      <LinearGradient
-        colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.92)', '#000000']}
-        locations={[0, 0.3, 0.6, 1]}
-        style={styles.fullScreen}
-      >
-        <SafeAreaView style={styles.step10Safe} edges={['top', 'bottom']}>
-          <ScrollView
+    <View style={[styles.fullScreen, { backgroundColor: '#000000' }]}>
+      <SafeAreaView style={styles.step10Safe} edges={['top', 'bottom']}>
+        <ScrollView
             contentContainerStyle={styles.step10Scroll}
             showsVerticalScrollIndicator={false}
           >
@@ -1523,7 +1518,6 @@ function Step10({
             >
               <Text style={styles.purchaseBtnText}>{'Start My Personalized Plan'}</Text>
             </TouchableOpacity>
-            <Text style={styles.trialNote}>{'Free 7-day trial included'}</Text>
 
             {/* Skip */}
             <TouchableOpacity
@@ -1535,10 +1529,9 @@ function Step10({
             >
               <Text style={styles.skipLinkText}>{"I'll do everything manually"}</Text>
             </TouchableOpacity>
-          </ScrollView>
-        </SafeAreaView>
-      </LinearGradient>
-    </ImageBackground>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 

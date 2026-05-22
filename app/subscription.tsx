@@ -1157,11 +1157,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 26,
     marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   heroSubtitleWhite: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.85)',
     lineHeight: 18,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
 
   // Icon grid
@@ -1197,6 +1203,9 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     textAlign: 'center',
     fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   iconGridLabelDefault: {
     color: 'rgba(255,255,255,0.55)',
