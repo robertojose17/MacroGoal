@@ -1378,7 +1378,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   subHero: {
-    height: '40%',
+    height: '30%',
     width: '100%',
   },
   subHeroImage: {
@@ -1391,6 +1391,7 @@ const styles = StyleSheet.create({
   subHeroTextWrap: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    maxWidth: '50%',
   },
   subHeroFade: {
     position: 'absolute',
