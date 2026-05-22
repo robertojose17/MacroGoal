@@ -1390,7 +1390,7 @@ const styles = StyleSheet.create({
   },
   subHeroTextWrap: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingTop: 72,
     maxWidth: '50%',
   },
   subHeroFade: {
