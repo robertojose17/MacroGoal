@@ -1530,7 +1530,7 @@ function Phase3({
   );
 }
 
-function Phase4({ monthsText }: { monthsText: string }) {
+function Phase4({ weeksText }: { weeksText: string }) {
   const timelineAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -1547,7 +1547,7 @@ function Phase4({ monthsText }: { monthsText: string }) {
     <View style={styles.s9PhaseCenter}>
       <Text style={styles.s9Phase4Text}>
         {'You could reach your goal\nin around '}
-        <Text style={styles.s9Accent}>{monthsText}</Text>
+        <Text style={styles.s9Accent}>{weeksText}</Text>
         {'.'}
       </Text>
       <View style={styles.s9TimelineWrap}>
@@ -1678,12 +1678,11 @@ function Step9({
     Math.floor(Math.random() * (35 - 15 + 1)) + 15
   );
 
-  const monthsText = useMemo(() => {
+  const weeksText = useMemo(() => {
     const match = goalProjectionText.match(/(\d+)\s*week/i);
     if (match) {
       const weeks = parseInt(match[1], 10);
-      const months = Math.max(1, Math.round(weeks / 4));
-      return months + ' ' + (months === 1 ? 'month' : 'months');
+      return weeks + ' ' + (weeks === 1 ? 'week' : 'weeks');
     }
     return goalProjectionText;
   }, [goalProjectionText]);
@@ -1817,7 +1816,7 @@ function Step9({
               displayFats={displayFats}
             />
           )}
-          {phase === 4 && <Phase4 monthsText={monthsText} />}
+          {phase === 4 && <Phase4 weeksText={weeksText} />}
           {phase === 5 && <Phase5 onNext={onNext} />}
         </Animated.View>
       </View>
