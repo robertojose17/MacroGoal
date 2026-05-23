@@ -1714,7 +1714,6 @@ function Step9({
 
   // Start progress bar animation for phase 1 (loops continuously)
   useEffect(() => {
-    if (saving || saveError) return;
     progressAnim.setValue(0);
     const loop = Animated.loop(
       Animated.timing(progressAnim, {
@@ -1726,11 +1725,10 @@ function Step9({
     );
     loop.start();
     return () => loop.stop();
-  }, [saving, saveError, progressAnim]);
+  }, [progressAnim]);
 
   // Phase auto-advance chain
   useEffect(() => {
-    if (saving || saveError) return;
     if (hasStarted.current) return;
     hasStarted.current = true;
 
@@ -1750,7 +1748,7 @@ function Step9({
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saving, saveError]);
+  }, []);
 
   const phaseTransform = [{ translateY: phaseTranslateY }];
 
