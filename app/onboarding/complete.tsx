@@ -1712,16 +1712,20 @@ function Step9({
     });
   };
 
-  // Start progress bar animation for phase 1
+  // Start progress bar animation for phase 1 (loops continuously)
   useEffect(() => {
-    if (!saving && !saveError) {
-      progressAnim.setValue(0);
+    if (saving || saveError) return;
+    progressAnim.setValue(0);
+    const loop = Animated.loop(
       Animated.timing(progressAnim, {
         toValue: 1,
-        duration: 2400,
+        duration: 1400,
         useNativeDriver: false,
-      }).start();
-    }
+      }),
+      { resetBeforeIteration: true }
+    );
+    loop.start();
+    return () => loop.stop();
   }, [saving, saveError, progressAnim]);
 
   // Phase auto-advance chain
