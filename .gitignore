@@ -37,3 +37,10 @@ netlify.toml
 
 pnpm-lock.yaml
 package-lock.json
+
+.next/
+.turbo/
+.vercel/
+.cache/
+build/
+next-env.d.ts
