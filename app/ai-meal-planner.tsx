@@ -34,6 +34,7 @@ interface PlanFood {
   serving_size: number;
   serving_unit: string;
   serving_description: string;  // cooking method only: "grilled", "steamed", "raw"
+  brand?: string | null;         // brand name for packaged foods, null for whole foods
   note?: string;                 // optional extra context for this ingredient
   // Hidden per-gram bases — set once so unit cycling stays accurate
   _base_calories_per_gram?: number;
@@ -909,6 +910,7 @@ export default function AIMealPlannerScreen() {
             date: dateStr,
             meal_type: mealType,
             food_name: food.name,
+            brand: food.brand || undefined,
             quantity: food.serving_size > 0 ? food.serving_size : 1,
             serving_unit: unit,
             serving_description: food.serving_description || null,
