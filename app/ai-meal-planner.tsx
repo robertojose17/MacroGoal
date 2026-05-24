@@ -903,19 +903,21 @@ export default function AIMealPlannerScreen() {
       for (const mealType of mealTypes) {
         const foods = getMealItems(generatedPlan[mealType]);
         for (const food of foods) {
-          console.log('[AIMealPlanner] adding meal plan item:', food.name, 'to', mealType);
+          const unit = food.serving_unit || 'g';
+          console.log('[AIMealPlanner] adding meal plan item:', food.name, 'to', mealType, 'unit:', unit);
           await addMealPlanItem(newPlan.id, {
             date: dateStr,
             meal_type: mealType,
             food_name: food.name,
             quantity: food.serving_size > 0 ? food.serving_size : 1,
+            serving_unit: unit,
             serving_description: food.serving_description || null,
             calories: Math.round(Number(food.calories) || 0),
             protein: Math.round(Number(food.protein) || 0),
             carbs: Math.round(Number(food.carbs) || 0),
             fats: Math.round(Number(food.fats) || 0),
             fiber: Math.round(Number(food.fiber) || 0),
-            grams: food.serving_size > 0 ? food.serving_size : null,
+            grams: unit === 'g' && food.serving_size > 0 ? food.serving_size : null,
             dish_description: getMealDescription(generatedPlan[mealType]) || undefined,
             recipe_url: getMealRecipeUrl(generatedPlan[mealType]) || undefined,
           });

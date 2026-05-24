@@ -23,6 +23,7 @@ export interface MealPlanItem {
   brand?: string;
   quantity: number;
   grams?: number;
+  serving_unit?: string;
   serving_description?: string;
   calories: number;
   protein: number;
@@ -62,6 +63,7 @@ export interface AddMealPlanItemBody {
   brand?: string;
   quantity?: number;
   grams?: number;
+  serving_unit?: string | null;
   serving_description?: string;
   calories?: number;
   protein?: number;
@@ -171,6 +173,7 @@ export async function addMealPlanItem(planId: string, body: AddMealPlanItemBody)
       brand: body.brand || null,
       quantity: body.quantity || 1,
       grams: body.grams || null,
+      serving_unit: body.serving_unit || null,
       serving_description: body.serving_description || null,
       calories: body.calories || 0,
       protein: body.protein || 0,

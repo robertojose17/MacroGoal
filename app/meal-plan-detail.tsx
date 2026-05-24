@@ -304,15 +304,21 @@ export default function MealPlanDetailScreen() {
     setRecipeLoading(true);
     setRecipeModalVisible(true);
 
-    const foodsPayload = mealItems.map(item => ({
-      name: item.food_name,
-      serving_size: item.grams != null && item.grams > 0 ? item.grams : item.quantity,
-      serving_unit: 'g',
-      calories: item.calories,
-      protein: item.protein,
-      carbs: item.carbs,
-      fats: item.fats,
-    }));
+    const foodsPayload = mealItems.map(item => {
+      const unit = item.serving_unit || 'g';
+      const size = unit === 'g'
+        ? (item.grams != null && item.grams > 0 ? item.grams : item.quantity)
+        : item.quantity;
+      return {
+        name: item.food_name,
+        serving_size: size,
+        serving_unit: unit,
+        calories: item.calories,
+        protein: item.protein,
+        carbs: item.carbs,
+        fats: item.fats,
+      };
+    });
 
     try {
       console.log('[MealPlanDetail] Calling recipe-details edge function for:', dishDescription);
