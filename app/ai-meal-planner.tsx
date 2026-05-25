@@ -264,6 +264,62 @@ function normalizeServingDescription(food: PlanFood): PlanFood {
   return food;
 }
 
+function coerceBackendPlan(raw: any): GeneratedPlan {
+  const coerceItem = (it: any): PlanFood => ({
+    name: String(it?.name || ''),
+    brand: it?.brand ?? null,
+    serving_size: Number(it?.serving_size) || 1,
+    serving_unit: String(it?.serving_unit || 'g'),
+    serving_description: String(it?.serving_description || ''),
+    calories: Number(it?.calories) || 0,
+    protein: Number(it?.protein ?? it?.protein_g) || 0,
+    carbs: Number(it?.carbs ?? it?.carbs_g) || 0,
+    fats: Number(it?.fats ?? it?.fat ?? it?.fat_g) || 0,
+    fiber: Number(it?.fiber ?? it?.fiber_g) || 0,
+    note: it?.note,
+  });
+
+  const coerceSection = (sec: any): MealSection => {
+    if (!sec) return { items: [] };
+    if (Array.isArray(sec)) return { items: sec.map(coerceItem) };
+    return {
+      meal_name: sec.meal_name || sec.name || undefined,
+      dish_description: sec.dish_description || sec.description || undefined,
+      recipe_url: sec.recipe_url || undefined,
+      items: Array.isArray(sec.items) ? sec.items.map(coerceItem) : [],
+    };
+  };
+
+  // Case A: keyed shape { breakfast, lunch, dinner, snack }
+  if (raw && (raw.breakfast || raw.lunch || raw.dinner || raw.snack)) {
+    return {
+      breakfast: coerceSection(raw.breakfast),
+      lunch: coerceSection(raw.lunch),
+      dinner: coerceSection(raw.dinner),
+      snack: coerceSection(raw.snack),
+    };
+  }
+
+  // Case B: legacy shape with meals: [{ meal_type, items, name, description }]
+  if (raw && Array.isArray(raw.meals)) {
+    const result: any = { breakfast: { items: [] }, lunch: { items: [] }, dinner: { items: [] }, snack: { items: [] } };
+    for (const m of raw.meals) {
+      const type = String(m?.meal_type || '').toLowerCase();
+      if (type === 'breakfast' || type === 'lunch' || type === 'dinner' || type === 'snack') {
+        result[type] = {
+          meal_name: m.name || m.meal_name,
+          dish_description: m.description || m.dish_description,
+          items: Array.isArray(m.items) ? m.items.map(coerceItem) : [],
+        };
+      }
+    }
+    return result;
+  }
+
+  // Fallback
+  return { breakfast: { items: [] }, lunch: { items: [] }, dinner: { items: [] }, snack: { items: [] } };
+}
+
 function normalizePlan(plan: GeneratedPlan): GeneratedPlan {
   const normalizeSection = (section: MealSection | PlanFood[] | undefined): MealSection | PlanFood[] => {
     if (!section) return [];
@@ -592,7 +648,10 @@ export default function AIMealPlannerScreen() {
       console.log('[AIMealPlanner] generate-meal-plan response, readyToSave:', data?.readyToSave);
 
       if (data?.readyToSave && data?.planData) {
-        const normalized = normalizePlan(data.planData);
+        console.log('[AIMealPlanner] raw planData keys:', Object.keys(data.planData || {}));
+        const coerced = coerceBackendPlan(data.planData);
+        console.log('[AIMealPlanner] coerced plan, breakfast items:', coerced.breakfast?.items?.length, 'lunch items:', coerced.lunch?.items?.length);
+        const normalized = normalizePlan(coerced);
         setGeneratedPlan(normalized);
         setStep('plan');
       } else {
@@ -864,7 +923,8 @@ export default function AIMealPlannerScreen() {
       console.log('[AIMealPlanner] replace response, readyToSave:', data?.readyToSave);
 
       if (data?.readyToSave && data?.planData) {
-        const normalized = normalizePlan(data.planData);
+        const coerced = coerceBackendPlan(data.planData);
+        const normalized = normalizePlan(coerced);
         setGeneratedPlan(prev => ({
           ...prev!,
           [mealType]: normalized[mealType],
