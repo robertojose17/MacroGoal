@@ -243,11 +243,16 @@ function scalePlan(
     return offCache.get(name.toLowerCase().trim()) || null;
   };
 
-  // STEP 1: Scale protein
-  for (let iter = 0; iter < 12; iter++) {
+  // STEP 1: Scale protein — stay INSIDE the range, don't overshoot
+  const pMin = goals.daily_protein - 10;
+  const pMax = goals.daily_protein + 10;
+  const pTarget = goals.daily_protein;
+  for (let iter = 0; iter < 15; iter++) {
     const tot = sumPlan(plan);
-    const gap = goals.daily_protein - tot.p;
-    if (Math.abs(gap) <= 5) break;
+    // Exit when INSIDE the accepted range
+    if (tot.p >= pMin && tot.p <= pMax) break;
+
+    const gap = pTarget - tot.p;
 
     const protItems = allItems.filter((it) => {
       const m = lookupBoth(it.name || "");
@@ -258,11 +263,13 @@ function scalePlan(
     const totalProt = protItems.reduce((s, it) => s + (Number(it.protein) || 0), 0);
     if (totalProt <= 0) break;
 
+    // Damping factor 0.7 to avoid overshooting
+    const damping = 0.7;
     for (const it of protItems) {
       const itemProt = Number(it.protein) || 0;
       if (itemProt <= 0) continue;
       const share = itemProt / totalProt;
-      const itemGap = gap * share;
+      const itemGap = gap * share * damping;
       const m = lookupBoth(it.name || "")!;
       const currentSz = Number(it.serving_size) || 100;
       const deltaSz = (itemGap / m.p) * 100;
@@ -271,11 +278,16 @@ function scalePlan(
     }
   }
 
-  // STEP 2: Scale fats
-  for (let iter = 0; iter < 12; iter++) {
+  // STEP 2: Scale fats — stay INSIDE the range, don't overshoot
+  const fMin = goals.daily_fats - 10;
+  const fMax = goals.daily_fats + 10;
+  const fTarget = goals.daily_fats;
+  for (let iter = 0; iter < 15; iter++) {
     const tot = sumPlan(plan);
-    const gap = goals.daily_fats - tot.f;
-    if (Math.abs(gap) <= 5) break;
+    // Exit when INSIDE the accepted range
+    if (tot.f >= fMin && tot.f <= fMax) break;
+
+    const gap = fTarget - tot.f;
 
     const fatItems = allItems.filter((it) => {
       const m = lookupBoth(it.name || "");
@@ -286,11 +298,13 @@ function scalePlan(
     const totalFat = fatItems.reduce((s, it) => s + (Number(it.fats) || 0), 0);
     if (totalFat <= 0) break;
 
+    // Damping factor 0.7 to avoid overshooting
+    const damping = 0.7;
     for (const it of fatItems) {
       const itemFat = Number(it.fats) || 0;
       if (itemFat <= 0) continue;
       const share = itemFat / totalFat;
-      const itemGap = gap * share;
+      const itemGap = gap * share * damping;
       const m = lookupBoth(it.name || "")!;
       const currentSz = Number(it.serving_size) || 100;
       const deltaSz = (itemGap / m.f) * 100;
