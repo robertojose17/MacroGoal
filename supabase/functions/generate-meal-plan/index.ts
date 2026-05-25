@@ -77,6 +77,118 @@ function findInDB(name: string): Macros | null {
   return null;
 }
 
+// Module-level cache: maps item name (lowercase) to enriched macros from OFF
+const offCache = new Map<string, Macros>();
+
+type Preference = "high-protein" | "low-cal" | "balanced";
+
+function detectPreference(messages: any[]): Preference {
+  const allText = messages.map((m: any) => String(m.content || "").toLowerCase()).join(" ");
+  if (/low\s*-?\s*cal|low\s+calorie|fewer\s+calories|less\s+calories|cutting|deficit|weight\s+loss/.test(allText)) {
+    return "low-cal";
+  }
+  if (/high\s*-?\s*protein|more\s+protein|protein\s+rich|muscle|bulk|gain/.test(allText)) {
+    return "high-protein";
+  }
+  return "balanced";
+}
+
+async function searchOpenFoodFacts(name: string, pref: Preference): Promise<Macros | null> {
+  const key = name.toLowerCase().trim();
+  if (offCache.has(key)) return offCache.get(key)!;
+
+  try {
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(name)}&page_size=15&json=1&fields=product_name,nutriments,brands`;
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "MacroGoalApp/1.0" } });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+
+    const json = await res.json().catch(() => null);
+    const products = json?.products;
+    if (!Array.isArray(products) || products.length === 0) return null;
+
+    // Filter: only products with COMPLETE nutritional data (per 100g)
+    const valid: Array<{ cal: number; p: number; c: number; f: number; productName: string }> = [];
+    for (const p of products) {
+      const n = p?.nutriments;
+      if (!n) continue;
+      const cal = Number(n["energy-kcal_100g"] ?? n["energy-kcal"]);
+      const prot = Number(n["proteins_100g"] ?? n["proteins"]);
+      const carb = Number(n["carbohydrates_100g"] ?? n["carbohydrates"]);
+      const fat = Number(n["fat_100g"] ?? n["fat"]);
+      // Strict completeness check: all four fields must be valid finite numbers
+      if (!Number.isFinite(cal) || !Number.isFinite(prot) || !Number.isFinite(carb) || !Number.isFinite(fat)) continue;
+      // Reject if calories is 0 or negative (incomplete data)
+      if (cal <= 0) continue;
+      // Reject if all macros are 0 (water, etc — useless for scaling)
+      if (prot === 0 && carb === 0 && fat === 0) continue;
+      // Reject if values are absurd (data quality issue)
+      if (cal > 900 || prot > 100 || carb > 100 || fat > 100) continue;
+      valid.push({ cal, p: prot, c: carb, f: fat, productName: p.product_name || "" });
+    }
+
+    if (valid.length === 0) return null;
+
+    // Pick best based on preference
+    let best = valid[0];
+    if (pref === "high-protein") {
+      // Highest protein per 100 calories
+      best = valid.reduce((acc, cur) => {
+        const curRatio = cur.cal > 0 ? cur.p / (cur.cal / 100) : 0;
+        const accRatio = acc.cal > 0 ? acc.p / (acc.cal / 100) : 0;
+        return curRatio > accRatio ? cur : acc;
+      });
+    } else if (pref === "low-cal") {
+      // Lowest calories per 100g
+      best = valid.reduce((acc, cur) => (cur.cal < acc.cal ? cur : acc));
+    } else {
+      // Balanced: highest protein
+      best = valid.reduce((acc, cur) => (cur.p > acc.p ? cur : acc));
+    }
+
+    const result: Macros = { cal: best.cal, p: best.p, c: best.c, f: best.f };
+    offCache.set(key, result);
+    console.log(`[MealPlan] OFF match for "${name}" (${pref}): ${best.productName} → ${best.cal}cal/${best.p}p/${best.c}c/${best.f}f`);
+    return result;
+  } catch (e) {
+    console.log(`[MealPlan] OFF lookup failed for "${name}":`, e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
+// Combined lookup: NDB first (faster), then OFF cache, then OFF live
+async function lookupMacros(name: string, pref: Preference): Promise<Macros | null> {
+  const fromDB = findInDB(name);
+  if (fromDB) return fromDB;
+  const key = name.toLowerCase().trim();
+  if (offCache.has(key)) return offCache.get(key)!;
+  return await searchOpenFoodFacts(name, pref);
+}
+
+async function enrichItemsFromOFF(plan: any, pref: Preference): Promise<void> {
+  const allItems = getAllItems(plan);
+  // Only items NOT in NDB
+  const unknownItems = allItems.filter((it) => !findInDB(it.name || ""));
+  if (unknownItems.length === 0) return;
+
+  console.log(`[MealPlan] enriching ${unknownItems.length} unknown items from OFF (preference: ${pref})`);
+
+  // Parallel lookups with Promise.all
+  await Promise.all(
+    unknownItems.map(async (it) => {
+      const name = it.name || "";
+      if (!name) return;
+      const m = await searchOpenFoodFacts(name, pref);
+      if (m) {
+        // Cache by lowercase name for later lookup in scaler
+        offCache.set(name.toLowerCase().trim(), m);
+      }
+    })
+  );
+}
+
 function getAllItems(plan: any): any[] {
   const items: any[] = [];
   for (const key of ["breakfast", "lunch", "dinner", "snack"]) {
@@ -103,7 +215,12 @@ function sumPlan(plan: any): { cal: number; p: number; c: number; f: number } {
 }
 
 function recalcItem(item: any): void {
-  const m = findInDB(item.name || "");
+  const name = item.name || "";
+  let m: Macros | null = findInDB(name);
+  if (!m) {
+    const cached = offCache.get(name.toLowerCase().trim());
+    if (cached) m = cached;
+  }
   if (!m) return;
   const sz = Number(item.serving_size) || 100;
   const fac = sz / 100;
@@ -120,6 +237,12 @@ function scalePlan(
   const allItems = getAllItems(plan);
   for (const it of allItems) recalcItem(it);
 
+  const lookupBoth = (name: string): Macros | null => {
+    const fromDB = findInDB(name);
+    if (fromDB) return fromDB;
+    return offCache.get(name.toLowerCase().trim()) || null;
+  };
+
   // STEP 1: Scale protein
   for (let iter = 0; iter < 12; iter++) {
     const tot = sumPlan(plan);
@@ -127,7 +250,7 @@ function scalePlan(
     if (Math.abs(gap) <= 5) break;
 
     const protItems = allItems.filter((it) => {
-      const m = findInDB(it.name || "");
+      const m = lookupBoth(it.name || "");
       return m && m.p > 10;
     });
     if (!protItems.length) break;
@@ -140,7 +263,7 @@ function scalePlan(
       if (itemProt <= 0) continue;
       const share = itemProt / totalProt;
       const itemGap = gap * share;
-      const m = findInDB(it.name || "")!;
+      const m = lookupBoth(it.name || "")!;
       const currentSz = Number(it.serving_size) || 100;
       const deltaSz = (itemGap / m.p) * 100;
       it.serving_size = Math.max(30, Math.min(500, Math.round(currentSz + deltaSz)));
@@ -155,7 +278,7 @@ function scalePlan(
     if (Math.abs(gap) <= 5) break;
 
     const fatItems = allItems.filter((it) => {
-      const m = findInDB(it.name || "");
+      const m = lookupBoth(it.name || "");
       return m && m.f > 10 && m.p < 15;
     });
     if (!fatItems.length) break;
@@ -168,7 +291,7 @@ function scalePlan(
       if (itemFat <= 0) continue;
       const share = itemFat / totalFat;
       const itemGap = gap * share;
-      const m = findInDB(it.name || "")!;
+      const m = lookupBoth(it.name || "")!;
       const currentSz = Number(it.serving_size) || 100;
       const deltaSz = (itemGap / m.f) * 100;
       it.serving_size = Math.max(5, Math.min(300, Math.round(currentSz + deltaSz)));
@@ -187,11 +310,11 @@ function scalePlan(
     const gap = target - tot.cal;
 
     let scalable = allItems.filter((it) => {
-      const m = findInDB(it.name || "");
+      const m = lookupBoth(it.name || "");
       return m && m.c > 5;
     });
     if (!scalable.length) {
-      scalable = allItems.filter((it) => findInDB(it.name || ""));
+      scalable = allItems.filter((it) => lookupBoth(it.name || ""));
     }
     if (!scalable.length) break;
 
@@ -203,7 +326,7 @@ function scalePlan(
       if (itemCal <= 0) continue;
       const share = itemCal / totalCal;
       const itemGap = gap * share;
-      const m = findInDB(it.name || "")!;
+      const m = lookupBoth(it.name || "")!;
       const currentSz = Number(it.serving_size) || 100;
       const deltaSz = (itemGap / m.cal) * 100;
       it.serving_size = Math.max(20, Math.min(500, Math.round(currentSz + deltaSz)));
@@ -367,6 +490,13 @@ Deno.serve(async (req) => {
     const duration_ms = Math.round(performance.now() - started);
     console.log("[MealPlan] GPT done in", duration_ms, "ms");
 
+    // Detect user preference from messages and enrich unknown items from OFF
+    const preference = detectPreference(messages);
+    const offStarted = performance.now();
+    await enrichItemsFromOFF(planData, preference);
+    const off_duration_ms = Math.round(performance.now() - offStarted);
+    console.log("[MealPlan] OFF enrichment done in", off_duration_ms, "ms, cache size:", offCache.size);
+
     scalePlan(planData, userGoals);
 
     const final = sumPlan(planData);
@@ -383,6 +513,8 @@ Deno.serve(async (req) => {
       planData,
       validation_passed,
       duration_ms,
+      off_duration_ms,
+      preference,
     });
   } catch (e: any) {
     console.error("[MealPlan] unhandled error:", e.message);
