@@ -44,3 +44,7 @@ package-lock.json
 .cache/
 build/
 next-env.d.ts
+
+.bun/bun.lock
+bun.lockb
+yarn.lock
