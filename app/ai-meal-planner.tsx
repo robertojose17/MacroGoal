@@ -21,6 +21,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
+import { usePremium } from '@/hooks/usePremium';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -511,6 +512,7 @@ export default function AIMealPlannerScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const isMounted = useRef(true);
+  const { isPremium, loading: premiumLoading } = usePremium();
 
   // Theme
   const bgColor = isDark ? colors.backgroundDark : colors.background;
@@ -1011,6 +1013,80 @@ export default function AIMealPlannerScreen() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const replaceTitleText = replaceTarget ? `Replace ${replaceTarget.mealLabel}` : 'Replace Meal';
+
+  // --- Premium gate ---
+  if (premiumLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
+        <View style={styles.gateLoadingContainer}>
+          <ActivityIndicator size="large" color={TEAL} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isPremium) {
+    console.log('[AIMealPlanner] Non-premium user attempted access — showing paywall');
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
+        <View style={[styles.header, { borderBottomColor: borderColor }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="arrow_back"
+              size={24}
+              color={textColor}
+            />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color={TEAL} />
+            <Text style={[styles.headerTitle, { color: textColor }]}>AI Meal Planner</Text>
+          </View>
+          <View style={styles.headerRight} />
+        </View>
+
+        <View style={styles.gateContainer}>
+          <View style={[styles.gateIconCircle, { backgroundColor: TEAL + '20' }]}>
+            <IconSymbol
+              ios_icon_name="star.fill"
+              android_material_icon_name="star"
+              size={48}
+              color={TEAL}
+            />
+          </View>
+          <Text style={[styles.gateTitle, { color: textColor }]}>Premium Feature</Text>
+          <Text style={[styles.gateMessage, { color: secondaryColor }]}>
+            AI Meal Planner is a premium feature. Generate complete personalized meal plans tailored to your goals, preferences, and dietary needs — with one tap.
+          </Text>
+          <TouchableOpacity
+            style={[styles.gateButton, { backgroundColor: TEAL }]}
+            onPress={() => {
+              console.log('[AIMealPlanner] User tapped Upgrade to Premium');
+              router.push('/subscription');
+            }}
+          >
+            <IconSymbol
+              ios_icon_name="star.fill"
+              android_material_icon_name="star"
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.gateButtonText}>Upgrade to Premium</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.gateBackButton}
+            onPress={() => {
+              console.log('[AIMealPlanner] Non-premium user tapped Go Back');
+              router.back();
+            }}
+          >
+            <Text style={[styles.gateBackText, { color: secondaryColor }]}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  // --- End premium gate ---
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -2206,5 +2282,59 @@ const styles = StyleSheet.create({
   },
   noteModalClose: {
     alignSelf: 'flex-end',
+  },
+  gateLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  gateIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  gateTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  gateMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  gateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  gateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  gateBackButton: {
+    paddingVertical: 8,
+  },
+  gateBackText: {
+    fontSize: 15,
+    textDecorationLine: 'underline',
   },
 });
