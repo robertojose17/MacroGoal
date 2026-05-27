@@ -918,41 +918,9 @@ export default function HomeScreen() {
   );
 
   const renderPlanningContent = () => {
-    const planningSubControl = (
-      <View style={[styles.subSegmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-        <View style={[styles.subSegmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
-          <TouchableOpacity
-            style={[styles.subSegmentButton, planningTab === 'plans' && { backgroundColor: colors.primary }]}
-            onPress={() => {
-              console.log('[Home] Planning sub-tab pressed: plans');
-              setPlanningTab('plans');
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'plans' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Meal Plans
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.subSegmentButton, planningTab === 'recipes' && { backgroundColor: colors.primary }]}
-            onPress={() => {
-              console.log('[Home] Planning sub-tab pressed: recipes');
-              setPlanningTab('recipes');
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Recipes
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-
     if (planningTab === 'recipes') {
       return (
         <View>
-          {planningSubControl}
           <RecipesSection isDark={isDark} />
         </View>
       );
@@ -960,34 +928,27 @@ export default function HomeScreen() {
 
     if (plansLoading) {
       return (
-        <View>
-          {planningSubControl}
-          <View style={styles.plansLoadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
+        <View style={styles.plansLoadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       );
     }
 
     if (plansError) {
       return (
-        <View>
-          {planningSubControl}
-          <View style={styles.plansEmptyContainer}>
-            <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {plansError}
-            </Text>
-            <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.plansEmptyContainer}>
+          <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            {plansError}
+          </Text>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       );
     }
 
     return (
       <View>
-        {planningSubControl}
         {/* ── Calendar header ── */}
         <View style={styles.calendarHeader}>
           <TouchableOpacity onPress={handlePrevMonth} style={styles.calNavBtn} activeOpacity={0.7}>
@@ -1279,29 +1240,73 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      {/* Segmented control */}
-      <View style={[styles.segmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-        <View style={[styles.segmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
-          <TouchableOpacity
-            style={[styles.segmentButton, activeTab === 'tracking' && { backgroundColor: colors.primary }]}
-            onPress={() => handleTabPress('tracking')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.segmentButtonText, { color: activeTab === 'tracking' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Tracking
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segmentButton, activeTab === 'planning' && { backgroundColor: colors.primary }]}
-            onPress={() => handleTabPress('planning')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Planning
-            </Text>
-          </TouchableOpacity>
+      {/* Top header: pill control in Tracking mode, underline tabs in Planning mode */}
+      {activeTab === 'tracking' ? (
+        <View style={[styles.segmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+          <View style={[styles.segmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
+            <TouchableOpacity
+              style={[styles.segmentButton, activeTab === 'tracking' && { backgroundColor: colors.primary }]}
+              onPress={() => handleTabPress('tracking')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.segmentButtonText, { color: activeTab === 'tracking' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+                Tracking
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segmentButton, activeTab === 'planning' && { backgroundColor: colors.primary }]}
+              onPress={() => handleTabPress('planning')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+                Planning
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      ) : (
+        <View style={[styles.planningHeaderRow, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
+          <TouchableOpacity
+            style={styles.planningBackButton}
+            onPress={() => {
+              console.log('[Home] Planning back button pressed — returning to Tracking');
+              handleTabPress('tracking');
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="chevron-left" size={16} color={colors.primary} />
+            <Text style={[styles.planningBackText, { color: colors.primary }]}>Tracking</Text>
+          </TouchableOpacity>
+          <View style={styles.planningTabsRow}>
+            <TouchableOpacity
+              style={styles.planningTab}
+              onPress={() => {
+                console.log('[Home] Planning underline tab pressed: plans');
+                setPlanningTab('plans');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.planningTabText, planningTab === 'plans' && styles.planningTabTextActive, { color: planningTab === 'plans' ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+                Meal Plans
+              </Text>
+              {planningTab === 'plans' && <View style={[styles.planningTabUnderline, { backgroundColor: colors.primary }]} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.planningTab}
+              onPress={() => {
+                console.log('[Home] Planning underline tab pressed: recipes');
+                setPlanningTab('recipes');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.planningTabText, planningTab === 'recipes' && styles.planningTabTextActive, { color: planningTab === 'recipes' ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+                Recipes
+              </Text>
+              {planningTab === 'recipes' && <View style={[styles.planningTabUnderline, { backgroundColor: colors.primary }]} />}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Date navigation — only visible in Tracking mode */}
       {activeTab === 'tracking' && (
@@ -1541,22 +1546,49 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentButtonText: { fontSize: 14, fontWeight: '600' },
-  subSegmentedControlWrapper: {
-    paddingBottom: spacing.sm,
-  },
-  subSegmentedControl: {
+  planningHeaderRow: {
     flexDirection: 'row',
-    borderRadius: borderRadius.full,
-    padding: 3,
-  },
-  subSegmentButton: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: borderRadius.full,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  subSegmentButtonText: { fontSize: 13, fontWeight: '600' },
+  planningBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingRight: spacing.sm,
+    minWidth: 80,
+  },
+  planningBackText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  planningTabsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xl,
+  },
+  planningTab: {
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+  },
+  planningTabActive: {},
+  planningTabText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  planningTabTextActive: {
+    fontWeight: '700',
+  },
+  planningTabUnderline: {
+    height: 2,
+    borderRadius: 1,
+    width: '100%',
+    marginTop: 4,
+  },
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
   caloriesCard: {
     borderRadius: borderRadius.lg,
