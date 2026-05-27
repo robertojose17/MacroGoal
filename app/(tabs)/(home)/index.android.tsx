@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import RecipesSection from '@/components/RecipesSection';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -77,6 +78,9 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+
+  // Planning sub-tab
+  const [planningTab, setPlanningTab] = useState<'plans' | 'recipes'>('plans');
 
   const [goal, setGoal] = useState<any>(null);
   const [meals, setMeals] = useState<MealData[]>([
@@ -503,29 +507,76 @@ export default function HomeScreen() {
   );
 
   const renderPlanningContent = () => {
+    const planningSubControl = (
+      <View style={[styles.subSegmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        <View style={[styles.subSegmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
+          <TouchableOpacity
+            style={[styles.subSegmentButton, planningTab === 'plans' && { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[Home Android] Planning sub-tab pressed: plans');
+              setPlanningTab('plans');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'plans' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Meal Plans
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.subSegmentButton, planningTab === 'recipes' && { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[Home Android] Planning sub-tab pressed: recipes');
+              setPlanningTab('recipes');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Recipes
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+
+    if (planningTab === 'recipes') {
+      return (
+        <View>
+          {planningSubControl}
+          <RecipesSection isDark={isDark} />
+        </View>
+      );
+    }
+
     if (plansLoading) {
       return (
-        <View style={styles.plansLoadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View>
+          {planningSubControl}
+          <View style={styles.plansLoadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
         </View>
       );
     }
 
     if (plansError) {
       return (
-        <View style={styles.plansEmptyContainer}>
-          <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {plansError}
-          </Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+        <View>
+          {planningSubControl}
+          <View style={styles.plansEmptyContainer}>
+            <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {plansError}
+            </Text>
+            <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
 
     return (
       <View>
+        {planningSubControl}
         {plans.length === 0 ? (
           <View style={[styles.plansEmptyCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={40} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
@@ -637,6 +688,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentButtonText: { fontSize: 14, fontWeight: '600' },
+  subSegmentedControlWrapper: {
+    paddingBottom: spacing.sm,
+  },
+  subSegmentedControl: {
+    flexDirection: 'row',
+    borderRadius: borderRadius.full,
+    padding: 3,
+  },
+  subSegmentButton: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subSegmentButtonText: { fontSize: 13, fontWeight: '600' },
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
   dateNavigation: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import {
   RefreshControl, Alert, ActivityIndicator, ScrollView, ActionSheetIOS,
   Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
+import RecipesSection from '@/components/RecipesSection';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -94,6 +95,9 @@ export default function HomeScreen() {
 
   // Segmented control
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+
+  // Planning sub-tab
+  const [planningTab, setPlanningTab] = useState<'plans' | 'recipes'>('plans');
 
   // ── Tracking state ──
   const [goal, setGoal] = useState<any>(null);
@@ -641,20 +645,66 @@ export default function HomeScreen() {
   );
 
   const renderPlanningContent = () => {
+    const planningSubControl = (
+      <View style={[styles.subSegmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        <View style={[styles.subSegmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
+          <TouchableOpacity
+            style={[styles.subSegmentButton, planningTab === 'plans' && { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[Home iOS] Planning sub-tab pressed: plans');
+              setPlanningTab('plans');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'plans' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Meal Plans
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.subSegmentButton, planningTab === 'recipes' && { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[Home iOS] Planning sub-tab pressed: recipes');
+              setPlanningTab('recipes');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Recipes
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+
+    if (planningTab === 'recipes') {
+      return (
+        <View>
+          {planningSubControl}
+          <RecipesSection isDark={isDark} />
+        </View>
+      );
+    }
+
     if (plansLoading) {
       return (
-        <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#14B8A6" />
+        <View>
+          {planningSubControl}
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#14B8A6" />
+          </View>
         </View>
       );
     }
     if (plansError) {
       return (
-        <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-          <Text style={{ color: isDark ? '#fff' : '#000', marginBottom: 12 }}>{plansError}</Text>
-          <TouchableOpacity onPress={loadPlans} style={{ backgroundColor: '#14B8A6', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 }}>
-            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
-          </TouchableOpacity>
+        <View>
+          {planningSubControl}
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <Text style={{ color: isDark ? '#fff' : '#000', marginBottom: 12 }}>{plansError}</Text>
+            <TouchableOpacity onPress={loadPlans} style={{ backgroundColor: '#14B8A6', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 }}>
+              <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
@@ -685,6 +735,7 @@ export default function HomeScreen() {
 
     return (
       <View>
+        {planningSubControl}
         {/* Week selector + macro card */}
         <View style={{ backgroundColor: cardBg, borderRadius: 16, padding: 16, marginBottom: 12 }}>
           {/* Week navigation */}
@@ -1110,6 +1161,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentButtonText: { fontSize: 14, fontWeight: '600' },
+  subSegmentedControlWrapper: {
+    paddingBottom: spacing.sm,
+  },
+  subSegmentedControl: {
+    flexDirection: 'row',
+    borderRadius: borderRadius.full,
+    padding: 3,
+  },
+  subSegmentButton: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subSegmentButtonText: { fontSize: 13, fontWeight: '600' },
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
   caloriesCard: {
     borderRadius: borderRadius.lg,

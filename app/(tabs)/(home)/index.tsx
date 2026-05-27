@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   RefreshControl, Alert, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
+import RecipesSection from '@/components/RecipesSection';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -269,6 +270,9 @@ export default function HomeScreen() {
   const { tab } = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+
+  // Planning sub-tab
+  const [planningTab, setPlanningTab] = useState<'plans' | 'recipes'>('plans');
 
   // ── Tracking state ──
   const [goal, setGoal] = useState<any>(null);
@@ -914,29 +918,76 @@ export default function HomeScreen() {
   );
 
   const renderPlanningContent = () => {
+    const planningSubControl = (
+      <View style={[styles.subSegmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        <View style={[styles.subSegmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
+          <TouchableOpacity
+            style={[styles.subSegmentButton, planningTab === 'plans' && { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[Home] Planning sub-tab pressed: plans');
+              setPlanningTab('plans');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'plans' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Meal Plans
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.subSegmentButton, planningTab === 'recipes' && { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[Home] Planning sub-tab pressed: recipes');
+              setPlanningTab('recipes');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.subSegmentButtonText, { color: planningTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Recipes
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+
+    if (planningTab === 'recipes') {
+      return (
+        <View>
+          {planningSubControl}
+          <RecipesSection isDark={isDark} />
+        </View>
+      );
+    }
+
     if (plansLoading) {
       return (
-        <View style={styles.plansLoadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View>
+          {planningSubControl}
+          <View style={styles.plansLoadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
         </View>
       );
     }
 
     if (plansError) {
       return (
-        <View style={styles.plansEmptyContainer}>
-          <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {plansError}
-          </Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+        <View>
+          {planningSubControl}
+          <View style={styles.plansEmptyContainer}>
+            <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {plansError}
+            </Text>
+            <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
 
     return (
       <View>
+        {planningSubControl}
         {/* ── Calendar header ── */}
         <View style={styles.calendarHeader}>
           <TouchableOpacity onPress={handlePrevMonth} style={styles.calNavBtn} activeOpacity={0.7}>
@@ -1490,6 +1541,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentButtonText: { fontSize: 14, fontWeight: '600' },
+  subSegmentedControlWrapper: {
+    paddingBottom: spacing.sm,
+  },
+  subSegmentedControl: {
+    flexDirection: 'row',
+    borderRadius: borderRadius.full,
+    padding: 3,
+  },
+  subSegmentButton: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subSegmentButtonText: { fontSize: 13, fontWeight: '600' },
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
   caloriesCard: {
     borderRadius: borderRadius.lg,
