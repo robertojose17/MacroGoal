@@ -29,8 +29,8 @@ export interface Recipe {
   review_count: number | null;
 }
 
-type MealTypeFilter = 'All' | 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
-const MEAL_TYPE_FILTERS: MealTypeFilter[] = ['All', 'Breakfast', 'Lunch', 'Dinner', 'Snack'];
+type RecipeFilter = 'All' | 'My Recipes' | 'Saved' | 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
+const RECIPE_FILTERS: RecipeFilter[] = ['All', 'My Recipes', 'Saved', 'Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -158,7 +158,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<MealTypeFilter>('All');
+  const [activeFilter, setActiveFilter] = useState<RecipeFilter>('All');
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -170,6 +170,88 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
     console.log('[RecipesSection] Loading recipes, filter:', activeFilter, 'query:', searchQuery);
     setError(null);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUserId = user?.id ?? null;
+
+      // ── My Recipes ──────────────────────────────────────────────────────────
+      if (activeFilter === 'My Recipes') {
+        if (!currentUserId) {
+          setRecipes([]);
+          return;
+        }
+        let query = supabase
+          .from('meal_recipes')
+          .select('id, name, cuisine, meal_type, calories, protein, carbs, fat, description, dietary_tags, thumbnail_url, source, average_rating, review_count')
+          .eq('created_by', currentUserId)
+          .order('average_rating', { ascending: false, nullsFirst: false })
+          .order('review_count', { ascending: false, nullsFirst: false })
+          .limit(50);
+
+        if (searchQuery.trim()) {
+          query = query.ilike('name', `%${searchQuery.trim()}%`);
+        }
+
+        const { data, error: fetchError } = await query;
+        if (fetchError) {
+          console.error('[RecipesSection] Error loading my recipes:', fetchError);
+          setError('Failed to load recipes. Please try again.');
+          return;
+        }
+        console.log('[RecipesSection] My recipes loaded:', data?.length ?? 0);
+        setRecipes((data as Recipe[]) ?? []);
+        return;
+      }
+
+      // ── Saved ────────────────────────────────────────────────────────────────
+      if (activeFilter === 'Saved') {
+        if (!currentUserId) {
+          setRecipes([]);
+          return;
+        }
+        const { data: favData, error: favError } = await supabase
+          .from('recipe_favorites')
+          .select('recipe_id')
+          .eq('user_id', currentUserId);
+
+        if (favError) {
+          console.error('[RecipesSection] Error loading favorites:', favError);
+          setError('Failed to load saved recipes. Please try again.');
+          return;
+        }
+
+        const recipeIds = (favData ?? []).map((r: { recipe_id: string }) => r.recipe_id);
+        console.log('[RecipesSection] Saved recipe IDs:', recipeIds.length);
+
+        if (recipeIds.length === 0) {
+          setRecipes([]);
+          return;
+        }
+
+        let query = supabase
+          .from('meal_recipes')
+          .select('id, name, cuisine, meal_type, calories, protein, carbs, fat, description, dietary_tags, thumbnail_url, source, average_rating, review_count')
+          .in('id', recipeIds)
+          .eq('is_public', true)
+          .order('average_rating', { ascending: false, nullsFirst: false })
+          .order('review_count', { ascending: false, nullsFirst: false })
+          .limit(50);
+
+        if (searchQuery.trim()) {
+          query = query.ilike('name', `%${searchQuery.trim()}%`);
+        }
+
+        const { data, error: fetchError } = await query;
+        if (fetchError) {
+          console.error('[RecipesSection] Error loading saved recipes:', fetchError);
+          setError('Failed to load saved recipes. Please try again.');
+          return;
+        }
+        console.log('[RecipesSection] Saved recipes loaded:', data?.length ?? 0);
+        setRecipes((data as Recipe[]) ?? []);
+        return;
+      }
+
+      // ── All / Meal-type filters ──────────────────────────────────────────────
       let query = supabase
         .from('meal_recipes')
         .select('id, name, cuisine, meal_type, calories, protein, carbs, fat, description, dietary_tags, thumbnail_url, source, average_rating, review_count')
@@ -224,7 +306,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
     setSearchQuery(text);
   };
 
-  const handleFilterPress = (filter: MealTypeFilter) => {
+  const handleFilterPress = (filter: RecipeFilter) => {
     console.log('[RecipesSection] Filter chip pressed:', filter);
     setActiveFilter(filter);
   };
@@ -295,7 +377,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
         style={rcStyles.filterScroll}
         contentContainerStyle={rcStyles.filterContent}
       >
-        {MEAL_TYPE_FILTERS.map((filter) => {
+        {RECIPE_FILTERS.map((filter) => {
           const isActive = activeFilter === filter;
           return (
             <TouchableOpacity
@@ -320,6 +402,16 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
     </View>
   );
 
+  const emptyTitle =
+    activeFilter === 'My Recipes' ? 'No recipes yet' :
+    activeFilter === 'Saved' ? 'No saved recipes' :
+    'No recipes found';
+
+  const emptySubtitle =
+    activeFilter === 'My Recipes' ? 'Tap + Add Recipe to create your first recipe' :
+    activeFilter === 'Saved' ? 'Tap the bookmark icon on any recipe to save it here' :
+    searchQuery ? 'Try a different search term' : 'Be the first to add a recipe!';
+
   const ListEmpty = loading ? (
     <View style={rcStyles.centerContainer}>
       <ActivityIndicator size="large" color={colors.primary} />
@@ -341,15 +433,13 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
   ) : (
     <View style={rcStyles.centerContainer}>
       <IconSymbol
-        ios_icon_name="fork.knife"
-        android_material_icon_name="restaurant"
+        ios_icon_name={activeFilter === 'Saved' ? 'bookmark' : 'fork.knife'}
+        android_material_icon_name={activeFilter === 'Saved' ? 'bookmark-border' : 'restaurant'}
         size={48}
         color={secondaryColor}
       />
-      <Text style={[rcStyles.emptyTitle, { color: textColor }]}>No recipes found</Text>
-      <Text style={[rcStyles.emptySubtitle, { color: secondaryColor }]}>
-        {searchQuery ? 'Try a different search term' : 'Be the first to add a recipe!'}
-      </Text>
+      <Text style={[rcStyles.emptyTitle, { color: textColor }]}>{emptyTitle}</Text>
+      <Text style={[rcStyles.emptySubtitle, { color: secondaryColor }]}>{emptySubtitle}</Text>
     </View>
   );
 

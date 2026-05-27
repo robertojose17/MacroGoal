@@ -130,6 +130,10 @@ export default function RecipeDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+  // Favorite/bookmark state
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingFavorite, setSavingFavorite] = useState(false);
+
   // Rating state
   const [myReview, setMyReview] = useState<RecipeReview | null>(null);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
@@ -167,23 +171,35 @@ export default function RecipeDetailScreen() {
       console.log('[RecipeDetail] Recipe loaded:', recipeResult.data?.name);
       setRecipe(recipeResult.data as RecipeDetail);
 
-      // Load user's existing review
+      // Load user's existing review and favorite status
       const user = userResult.data?.user;
       if (user) setCurrentUserId(user.id);
       if (user) {
-        const { data: reviewData, error: reviewError } = await supabase
-          .from('recipe_reviews')
-          .select('*')
-          .eq('recipe_id', id)
-          .eq('user_id', user.id)
-          .maybeSingle();
+        const [reviewResult, favoriteResult] = await Promise.all([
+          supabase
+            .from('recipe_reviews')
+            .select('*')
+            .eq('recipe_id', id)
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('recipe_favorites')
+            .select('id')
+            .eq('recipe_id', id)
+            .eq('user_id', user.id)
+            .maybeSingle(),
+        ]);
 
-        if (!reviewError && reviewData) {
-          console.log('[RecipeDetail] Existing review found, rating:', reviewData.rating);
-          setMyReview(reviewData as RecipeReview);
-          setSelectedRating(reviewData.rating);
-          setRatingComment(reviewData.comment || '');
+        if (!reviewResult.error && reviewResult.data) {
+          console.log('[RecipeDetail] Existing review found, rating:', reviewResult.data.rating);
+          setMyReview(reviewResult.data as RecipeReview);
+          setSelectedRating(reviewResult.data.rating);
+          setRatingComment(reviewResult.data.comment || '');
         }
+
+        const savedState = !favoriteResult.error && !!favoriteResult.data;
+        console.log('[RecipeDetail] Recipe saved state:', savedState);
+        setIsSaved(savedState);
       }
     } catch (err: any) {
       console.error('[RecipeDetail] Unexpected error:', err);
@@ -285,6 +301,53 @@ export default function RecipeDetailScreen() {
 
   const isOwner = !!(currentUserId && recipe.created_by && currentUserId === recipe.created_by);
 
+  const handleToggleSave = async () => {
+    if (!currentUserId || !recipe) return;
+    console.log('[RecipeDetail] Bookmark toggle pressed, currently saved:', isSaved, 'recipe:', recipe.id);
+
+    // Optimistic update
+    const previousState = isSaved;
+    setIsSaved(!isSaved);
+    setSavingFavorite(true);
+
+    try {
+      if (previousState) {
+        // Remove from favorites
+        const { error: deleteError } = await supabase
+          .from('recipe_favorites')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('recipe_id', recipe.id);
+
+        if (deleteError) {
+          console.error('[RecipeDetail] Error removing favorite:', deleteError);
+          setIsSaved(previousState); // revert
+          Alert.alert('Error', 'Failed to remove from saved. Please try again.');
+        } else {
+          console.log('[RecipeDetail] Recipe removed from favorites');
+        }
+      } else {
+        // Add to favorites
+        const { error: insertError } = await supabase
+          .from('recipe_favorites')
+          .insert({ user_id: currentUserId, recipe_id: recipe.id });
+
+        if (insertError) {
+          console.error('[RecipeDetail] Error saving favorite:', insertError);
+          setIsSaved(previousState); // revert
+          Alert.alert('Error', 'Failed to save recipe. Please try again.');
+        } else {
+          console.log('[RecipeDetail] Recipe added to favorites');
+        }
+      }
+    } catch (err: any) {
+      console.error('[RecipeDetail] Unexpected error toggling favorite:', err);
+      setIsSaved(previousState); // revert
+    } finally {
+      setSavingFavorite(false);
+    }
+  };
+
   const handleEdit = () => {
     console.log('[RecipeDetail] Edit button pressed for recipe:', recipe.id);
     router.push({ pathname: '/recipe-edit', params: { id: recipe.id } });
@@ -348,10 +411,40 @@ export default function RecipeDetailScreen() {
               colors={['transparent', 'rgba(0,0,0,0.55)']}
               style={styles.heroGradient}
             />
+            {currentUserId ? (
+              <TouchableOpacity
+                style={styles.bookmarkBtn}
+                onPress={handleToggleSave}
+                disabled={savingFavorite}
+                activeOpacity={0.8}
+              >
+                <IconSymbol
+                  ios_icon_name={isSaved ? 'bookmark.fill' : 'bookmark'}
+                  android_material_icon_name={isSaved ? 'bookmark' : 'bookmark-border'}
+                  size={22}
+                  color="#fff"
+                />
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : (
           <View style={[styles.heroPlaceholder, { backgroundColor: colors.primary + '33' }]}>
             <Text style={[styles.heroPlaceholderText, { color: colors.primary }]}>{cuisineLabel}</Text>
+            {currentUserId ? (
+              <TouchableOpacity
+                style={[styles.bookmarkBtnPlain, { backgroundColor: isSaved ? colors.primary : (isDark ? colors.cardDark : colors.card), borderColor: isDark ? colors.borderDark : colors.border }]}
+                onPress={handleToggleSave}
+                disabled={savingFavorite}
+                activeOpacity={0.8}
+              >
+                <IconSymbol
+                  ios_icon_name={isSaved ? 'bookmark.fill' : 'bookmark'}
+                  android_material_icon_name={isSaved ? 'bookmark' : 'bookmark-border'}
+                  size={20}
+                  color={isSaved ? '#fff' : colors.primary}
+                />
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
 
@@ -544,6 +637,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroPlaceholderText: { fontSize: 22, fontWeight: '700' },
+  bookmarkBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookmarkBtnPlain: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   contentPadding: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
 
