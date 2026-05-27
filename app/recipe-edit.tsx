@@ -1,11 +1,11 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, KeyboardAvoidingView,
   Platform, Image, ImageSourcePropType,
 } from 'react-native';
-import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase/client';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -34,8 +34,6 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-// ─── Form Field ───────────────────────────────────────────────────────────────
-
 function FormLabel({ text, required, isDark }: { text: string; required?: boolean; isDark: boolean }) {
   const color = isDark ? colors.textSecondaryDark : colors.textSecondary;
   return (
@@ -52,13 +50,19 @@ const formStyles = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export default function RecipeCreateScreen() {
+export default function RecipeEditScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  const [loadingRecipe, setLoadingRecipe] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
+
   // Form state
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [existingThumbnail, setExistingThumbnail] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [mealType, setMealType] = useState<MealTypeOption>('lunch');
@@ -66,6 +70,7 @@ export default function RecipeCreateScreen() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [instructions, setInstructions] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -77,12 +82,78 @@ export default function RecipeCreateScreen() {
 
   const inputStyle = [styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }];
 
+  // ── Load recipe ──
+  const loadRecipe = useCallback(async () => {
+    if (!id) return;
+    console.log('[RecipeEdit] Loading recipe:', id);
+    setLoadingRecipe(true);
+    setLoadError(null);
+    try {
+      const [recipeResult, userResult] = await Promise.all([
+        supabase
+          .from('meal_recipes')
+          .select('id, name, cuisine, meal_type, description, thumbnail_url, ingredients, instructions, created_by')
+          .eq('id', id)
+          .single(),
+        supabase.auth.getUser(),
+      ]);
+
+      if (recipeResult.error || !recipeResult.data) {
+        console.error('[RecipeEdit] Error loading recipe:', recipeResult.error);
+        setLoadError('Failed to load recipe.');
+        return;
+      }
+
+      const recipe = recipeResult.data as any;
+      const user = userResult.data?.user;
+
+      if (!user || recipe.created_by !== user.id) {
+        console.warn('[RecipeEdit] User is not the owner of this recipe');
+        setLoadError('You can only edit your own recipes.');
+        setIsOwner(false);
+        return;
+      }
+
+      setIsOwner(true);
+      setName(recipe.name || '');
+      setDescription(recipe.description || '');
+      setMealType((recipe.meal_type as MealTypeOption) || 'lunch');
+      setCuisine(recipe.cuisine || '');
+      setInstructions(recipe.instructions || '');
+      setExistingThumbnail(recipe.thumbnail_url || null);
+
+      // Parse ingredients — stored as [{name, amount}] or [{name, grams, kcal, protein, carbs, fat}]
+      if (Array.isArray(recipe.ingredients)) {
+        const parsed: Ingredient[] = recipe.ingredients.map((item: any) => ({
+          name: item.name || '',
+          grams: Number(item.grams) || 0,
+          kcal: Number(item.kcal) || 0,
+          protein: Number(item.protein) || 0,
+          carbs: Number(item.carbs) || 0,
+          fat: Number(item.fat) || 0,
+        }));
+        setIngredients(parsed);
+      }
+
+      console.log('[RecipeEdit] Recipe loaded:', recipe.name);
+    } catch (err: any) {
+      console.error('[RecipeEdit] Unexpected error:', err);
+      setLoadError(err?.message || 'An unexpected error occurred.');
+    } finally {
+      setLoadingRecipe(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadRecipe();
+  }, [loadRecipe]);
+
   // ── Consume pendingIngredient when screen regains focus ──
   useFocusEffect(
     useCallback(() => {
       const pending = (global as any).__pendingIngredient;
       if (pending) {
-        console.log('[RecipeCreate] Consuming pendingIngredient:', pending.name);
+        console.log('[RecipeEdit] Consuming pendingIngredient:', pending.name);
         setIngredients(prev => [...prev, pending as Ingredient]);
         (global as any).__pendingIngredient = null;
       }
@@ -102,7 +173,7 @@ export default function RecipeCreateScreen() {
 
   // ── Photo picker ──
   const handlePickPhoto = async () => {
-    console.log('[RecipeCreate] Photo picker pressed');
+    console.log('[RecipeEdit] Photo picker pressed');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission required', 'Please allow access to your photo library.');
@@ -115,62 +186,49 @@ export default function RecipeCreateScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      console.log('[RecipeCreate] Photo selected:', result.assets[0].uri);
+      console.log('[RecipeEdit] Photo selected:', result.assets[0].uri);
       setPhotoUri(result.assets[0].uri);
     }
   };
 
-  // ── Upload photo ──
   const uploadPhoto = async (uri: string): Promise<string | null> => {
-    console.log('[RecipeCreate] Uploading photo to Supabase Storage');
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
-
       const ext = uri.split('.').pop() || 'jpg';
       const fileName = `${user.id}_${Date.now()}.${ext}`;
-
       const response = await fetch(uri);
       const blob = await response.blob();
-
       const { data, error } = await supabase.storage
         .from('recipe-images')
         .upload(fileName, blob, { contentType: `image/${ext}`, upsert: false });
-
-      if (error) {
-        console.error('[RecipeCreate] Storage upload error:', error);
-        return null;
-      }
-
+      if (error) return null;
       const { data: urlData } = supabase.storage.from('recipe-images').getPublicUrl(data.path);
-      console.log('[RecipeCreate] Photo uploaded, URL:', urlData.publicUrl);
       return urlData.publicUrl;
-    } catch (err) {
-      console.error('[RecipeCreate] Photo upload failed, continuing without image:', err);
+    } catch {
       return null;
     }
   };
 
-  // ── Ingredient picker buttons ──
+  // ── Ingredient picker ──
   const handleOpenLibrary = () => {
-    console.log('[RecipeCreate] Library button pressed — opening food-search in ingredient mode');
+    console.log('[RecipeEdit] Library button pressed — opening food-search in ingredient mode');
     router.push({ pathname: '/food-search', params: { mode: 'ingredient' } });
   };
 
   const handleOpenBarcode = () => {
-    console.log('[RecipeCreate] Barcode button pressed — opening barcode-scanner in ingredient mode');
+    console.log('[RecipeEdit] Barcode button pressed — opening barcode-scanner in ingredient mode');
     router.push({ pathname: '/barcode-scanner', params: { mode: 'ingredient' } });
   };
 
   const removeIngredient = (index: number) => {
-    console.log('[RecipeCreate] Remove ingredient pressed, index:', index);
+    console.log('[RecipeEdit] Remove ingredient pressed, index:', index);
     setIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
-  // ── Publish ──
-  const handlePublish = async () => {
-    console.log('[RecipeCreate] Publish Recipe pressed');
-
+  // ── Save changes ──
+  const handleSave = async () => {
+    console.log('[RecipeEdit] Save Changes pressed');
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter a recipe name.');
       return;
@@ -182,20 +240,20 @@ export default function RecipeCreateScreen() {
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert('Sign in required', 'Please sign in to publish recipes.');
-        return;
-      }
-
-      let thumbnailUrl: string | null = null;
+      let thumbnailUrl: string | null = existingThumbnail;
       if (photoUri) {
-        thumbnailUrl = await uploadPhoto(photoUri);
+        const uploaded = await uploadPhoto(photoUri);
+        if (uploaded) thumbnailUrl = uploaded;
       }
 
       const ingredientsPayload = ingredients.map(i => ({
         name: i.name,
         amount: `${i.grams}g`,
+        grams: i.grams,
+        kcal: i.kcal,
+        protein: i.protein,
+        carbs: i.carbs,
+        fat: i.fat,
       }));
 
       const payload = {
@@ -210,40 +268,103 @@ export default function RecipeCreateScreen() {
         ingredients: ingredientsPayload.length > 0 ? ingredientsPayload : null,
         instructions: instructions.trim() || null,
         thumbnail_url: thumbnailUrl,
-        source: 'user',
-        created_by: user.id,
-        is_public: true,
-        approved_for_meal_plan: false,
       };
 
-      console.log('[RecipeCreate] Inserting recipe into meal_recipes:', payload.name, 'kcal:', payload.calories);
-      const { data, error } = await supabase
+      console.log('[RecipeEdit] Updating recipe:', id, 'name:', payload.name);
+      const { error } = await supabase
         .from('meal_recipes')
-        .insert(payload)
-        .select()
-        .single();
+        .update(payload)
+        .eq('id', id);
 
       if (error) {
-        console.error('[RecipeCreate] Error inserting recipe:', error);
-        Alert.alert('Error', 'Failed to publish recipe. Please try again.');
+        console.error('[RecipeEdit] Error updating recipe:', error);
+        Alert.alert('Error', 'Failed to save changes. Please try again.');
         return;
       }
 
-      console.log('[RecipeCreate] Recipe published successfully, id:', data?.id);
+      console.log('[RecipeEdit] Recipe updated successfully');
       router.back();
     } catch (err: any) {
-      console.error('[RecipeCreate] Unexpected error:', err);
-      Alert.alert('Error', err?.message || 'Failed to publish recipe.');
+      console.error('[RecipeEdit] Unexpected error:', err);
+      Alert.alert('Error', err?.message || 'Failed to save changes.');
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Delete ──
+  const handleDelete = () => {
+    console.log('[RecipeEdit] Delete Recipe pressed');
+    Alert.alert(
+      'Delete Recipe',
+      'Are you sure you want to delete this recipe? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('[RecipeEdit] Confirming delete for recipe:', id);
+            setDeleting(true);
+            try {
+              const { error } = await supabase
+                .from('meal_recipes')
+                .delete()
+                .eq('id', id);
+
+              if (error) {
+                console.error('[RecipeEdit] Error deleting recipe:', error);
+                Alert.alert('Error', 'Failed to delete recipe. Please try again.');
+                return;
+              }
+
+              console.log('[RecipeEdit] Recipe deleted successfully');
+              router.dismiss();
+              router.dismiss();
+            } catch (err: any) {
+              console.error('[RecipeEdit] Unexpected error deleting:', err);
+              Alert.alert('Error', err?.message || 'Failed to delete recipe.');
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Loading / error states ──
+  if (loadingRecipe) {
+    return (
+      <View style={[styles.centered, { backgroundColor: bgColor }]}>
+        <Stack.Screen options={{ title: 'Edit Recipe', headerBackTitle: 'Back' }} />
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={[styles.centered, { backgroundColor: bgColor }]}>
+        <Stack.Screen options={{ title: 'Edit Recipe', headerBackTitle: 'Back' }} />
+        <Text style={[styles.errorText, { color: colors.error }]}>{loadError}</Text>
+        <TouchableOpacity
+          style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.retryBtnText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const thumbnailSource = photoUri || existingThumbnail;
+
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Stack.Screen
         options={{
-          title: 'New Recipe',
+          title: 'Edit Recipe',
           headerBackTitle: 'Back',
           headerStyle: { backgroundColor: isDark ? colors.backgroundDark : colors.background },
           headerTintColor: textColor,
@@ -266,8 +387,8 @@ export default function RecipeCreateScreen() {
             onPress={handlePickPhoto}
             activeOpacity={0.8}
           >
-            {photoUri ? (
-              <Image source={resolveImageSource(photoUri)} style={styles.photoPreview} resizeMode="cover" />
+            {thumbnailSource ? (
+              <Image source={resolveImageSource(thumbnailSource)} style={styles.photoPreview} resizeMode="cover" />
             ) : (
               <View style={styles.photoPlaceholder}>
                 <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={32} color={secondaryColor} />
@@ -322,7 +443,7 @@ export default function RecipeCreateScreen() {
                       },
                     ]}
                     onPress={() => {
-                      console.log('[RecipeCreate] Meal type selected:', option);
+                      console.log('[RecipeEdit] Meal type selected:', option);
                       setMealType(option);
                     }}
                     activeOpacity={0.7}
@@ -349,11 +470,10 @@ export default function RecipeCreateScreen() {
             />
           </View>
 
-          {/* Ingredients section */}
+          {/* Ingredients */}
           <View style={styles.fieldGroup}>
             <FormLabel text="Ingredients" required isDark={isDark} />
 
-            {/* Totals card — only shown when there are ingredients */}
             {ingredients.length > 0 && (
               <View style={[styles.totalsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 <Text style={[styles.totalsTitle, { color: textColor }]}>Totals</Text>
@@ -378,7 +498,6 @@ export default function RecipeCreateScreen() {
               </View>
             )}
 
-            {/* Ingredient list */}
             {ingredients.map((ing, idx) => {
               const ingKcal = String(Math.round(ing.kcal));
               const ingGrams = String(Math.round(ing.grams));
@@ -412,7 +531,6 @@ export default function RecipeCreateScreen() {
               );
             })}
 
-            {/* Picker buttons */}
             <View style={styles.pickerButtonsRow}>
               <TouchableOpacity
                 style={[styles.pickerBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary }]}
@@ -448,10 +566,10 @@ export default function RecipeCreateScreen() {
             />
           </View>
 
-          {/* Publish button */}
+          {/* Save button */}
           <TouchableOpacity
-            style={[styles.publishBtn, { backgroundColor: colors.success, opacity: saving ? 0.7 : 1 }]}
-            onPress={handlePublish}
+            style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
+            onPress={handleSave}
             disabled={saving}
             activeOpacity={0.85}
           >
@@ -459,8 +577,25 @@ export default function RecipeCreateScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#fff" />
-                <Text style={styles.publishBtnText}>Publish Recipe</Text>
+                <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>Save Changes</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Delete button */}
+          <TouchableOpacity
+            style={[styles.deleteBtn, { opacity: deleting ? 0.7 : 1 }]}
+            onPress={handleDelete}
+            disabled={deleting}
+            activeOpacity={0.85}
+          >
+            {deleting ? (
+              <ActivityIndicator color={colors.error} />
+            ) : (
+              <>
+                <IconSymbol ios_icon_name="trash" android_material_icon_name="delete" size={20} color={colors.error} />
+                <Text style={[styles.deleteBtnText, { color: colors.error }]}>Delete Recipe</Text>
               </>
             )}
           </TouchableOpacity>
@@ -473,6 +608,11 @@ export default function RecipeCreateScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  errorText: { ...typography.body, textAlign: 'center', marginBottom: spacing.md },
+  retryBtn: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, borderRadius: borderRadius.md },
+  retryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
@@ -594,7 +734,7 @@ const styles = StyleSheet.create({
   },
   pickerBtnText: { fontSize: 14, fontWeight: '700' },
 
-  publishBtn: {
+  saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -602,6 +742,20 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  publishBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    marginBottom: spacing.md,
+  },
+  deleteBtnText: { fontSize: 17, fontWeight: '700' },
 });

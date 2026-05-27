@@ -27,7 +27,7 @@ type ServingOption = {
 };
 
 interface FoodDetailsLayoutProps {
-  mode: 'view' | 'edit';
+  mode: 'view' | 'edit' | 'ingredient';
   offData?: string;
   mealType?: string;
   date?: string;
@@ -502,6 +502,25 @@ export default function FoodDetailsLayout({
       return;
     }
 
+    // ── Ingredient mode: save to global bridge and go back ──
+    if (mode === 'ingredient') {
+      const totalGrams = getTotalGrams();
+      const macros = calculateMacros();
+      const foodName = (product.product_name || product.generic_name || 'Unknown Product').trim();
+      const ingredient = {
+        name: foodName,
+        grams: Math.round(totalGrams),
+        kcal: Math.round(macros.calories),
+        protein: Math.round(macros.protein),
+        carbs: Math.round(macros.carbs),
+        fat: Math.round(macros.fats),
+      };
+      console.log('[FoodDetails] ingredient mode — saving pendingIngredient:', ingredient);
+      (global as any).__pendingIngredient = ingredient;
+      router.back();
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -857,7 +876,7 @@ export default function FoodDetailsLayout({
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: textColor }]}>
-            {mode === 'edit' ? 'Edit Food' : 'Food Details'}
+            {mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Edit Food' : 'Food Details'}
           </Text>
         </View>
         <TouchableOpacity style={styles.favoriteButton} onPress={handleToggleFavorite}>
@@ -945,7 +964,7 @@ export default function FoodDetailsLayout({
         </View>
 
         <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.primary }]} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>{mode === 'edit' ? 'Update' : 'Add to Meal'}</Text>
+          <Text style={styles.saveButtonText}>{mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Update' : 'Add to Meal'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

@@ -520,7 +520,7 @@ const rcStyles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 100,
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',

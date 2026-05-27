@@ -31,6 +31,7 @@ interface RecipeDetail {
   review_count: number | null;
   ingredients: any;
   instructions: string | null;
+  created_by: string | null;
 }
 
 interface RecipeReview {
@@ -127,6 +128,7 @@ export default function RecipeDetailScreen() {
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Rating state
   const [myReview, setMyReview] = useState<RecipeReview | null>(null);
@@ -150,7 +152,7 @@ export default function RecipeDetailScreen() {
       const [recipeResult, userResult] = await Promise.all([
         supabase
           .from('meal_recipes')
-          .select('id, name, cuisine, meal_type, calories, protein, carbs, fat, description, dietary_tags, thumbnail_url, source, average_rating, review_count, ingredients, instructions')
+          .select('id, name, cuisine, meal_type, calories, protein, carbs, fat, description, dietary_tags, thumbnail_url, source, average_rating, review_count, ingredients, instructions, created_by')
           .eq('id', id)
           .single(),
         supabase.auth.getUser(),
@@ -167,6 +169,7 @@ export default function RecipeDetailScreen() {
 
       // Load user's existing review
       const user = userResult.data?.user;
+      if (user) setCurrentUserId(user.id);
       if (user) {
         const { data: reviewData, error: reviewError } = await supabase
           .from('recipe_reviews')
@@ -280,6 +283,47 @@ export default function RecipeDetailScreen() {
 
   const myRatingLabel = myReview ? `You rated this ${myReview.rating}/5` : null;
 
+  const isOwner = !!(currentUserId && recipe.created_by && currentUserId === recipe.created_by);
+
+  const handleEdit = () => {
+    console.log('[RecipeDetail] Edit button pressed for recipe:', recipe.id);
+    router.push({ pathname: '/recipe-edit', params: { id: recipe.id } });
+  };
+
+  const handleDelete = () => {
+    console.log('[RecipeDetail] Delete button pressed for recipe:', recipe.id);
+    Alert.alert(
+      'Delete Recipe',
+      'Are you sure you want to delete this recipe? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('[RecipeDetail] Confirming delete for recipe:', recipe.id);
+            try {
+              const { error: deleteError } = await supabase
+                .from('meal_recipes')
+                .delete()
+                .eq('id', recipe.id);
+              if (deleteError) {
+                console.error('[RecipeDetail] Error deleting recipe:', deleteError);
+                Alert.alert('Error', 'Failed to delete recipe. Please try again.');
+                return;
+              }
+              console.log('[RecipeDetail] Recipe deleted successfully');
+              router.back();
+            } catch (err: any) {
+              console.error('[RecipeDetail] Unexpected error deleting:', err);
+              Alert.alert('Error', err?.message || 'Failed to delete recipe.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Stack.Screen
@@ -383,19 +427,40 @@ export default function RecipeDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Add to Meal Plan button */}
+      {/* Bottom action bar */}
       <View style={[styles.bottomBar, { backgroundColor: bgColor, borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-        <TouchableOpacity
-          style={[styles.addToPlanBtn, { backgroundColor: colors.primary }]}
-          onPress={() => {
-            console.log('[RecipeDetail] Add to Meal Plan pressed for recipe:', recipe.id);
-            Alert.alert('Coming soon', 'We will wire this up to your meal plans next');
-          }}
-          activeOpacity={0.85}
-        >
-          <IconSymbol ios_icon_name="calendar.badge.plus" android_material_icon_name="event" size={20} color="#fff" />
-          <Text style={styles.addToPlanBtnText}>Add to Meal Plan</Text>
-        </TouchableOpacity>
+        {isOwner ? (
+          <View style={styles.ownerActions}>
+            <TouchableOpacity
+              style={[styles.editBtn, { backgroundColor: colors.primary }]}
+              onPress={handleEdit}
+              activeOpacity={0.85}
+            >
+              <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color="#fff" />
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.deleteBtn, { borderColor: colors.error }]}
+              onPress={handleDelete}
+              activeOpacity={0.85}
+            >
+              <IconSymbol ios_icon_name="trash" android_material_icon_name="delete" size={18} color={colors.error} />
+              <Text style={[styles.deleteBtnText, { color: colors.error }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.addToPlanBtn, { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[RecipeDetail] Add to Meal Plan pressed for recipe:', recipe.id);
+              Alert.alert('Coming soon', 'We will wire this up to your meal plans next');
+            }}
+            activeOpacity={0.85}
+          >
+            <IconSymbol ios_icon_name="calendar.badge.plus" android_material_icon_name="event" size={20} color="#fff" />
+            <Text style={styles.addToPlanBtnText}>Add to Meal Plan</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Rating Modal */}
@@ -552,6 +617,32 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   addToPlanBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  ownerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  editBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+  },
+  editBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  deleteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    borderWidth: 1.5,
+  },
+  deleteBtnText: { fontSize: 16, fontWeight: '700' },
 
   // Modal
   modalOverlay: {

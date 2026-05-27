@@ -559,7 +559,7 @@ export default function FoodSearchScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Search Food Library
+            {mode === 'ingredient' ? 'Add Ingredient' : 'Search Food Library'}
           </Text>
           <View style={{ width: 24 }} />
         </View>

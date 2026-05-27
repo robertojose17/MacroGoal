@@ -10,8 +10,9 @@ export default function FoodDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
 
-  const layoutMode = (params.mode as string) === 'edit' ? 'edit' : 'view';
-  const isMealPlanMode = (params.mode as string) === 'meal-plan';
+  const rawMode = params.mode as string;
+  const layoutMode = rawMode === 'edit' ? 'edit' : rawMode === 'ingredient' ? 'ingredient' : 'view';
+  const isMealPlanMode = rawMode === 'meal-plan';
   const context = (params.context as string) || undefined;
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
