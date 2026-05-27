@@ -67,7 +67,6 @@
           "iosAppId": "ca-app-pub-5592015069000241~5529470607"
         }
       ],
-      "@bacons/apple-targets",
       "./plugins/withFollyCoroutineFix"
     ],
     "scheme": "macrogoal",
