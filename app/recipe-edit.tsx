@@ -3,7 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Image, ImageSourcePropType,
+  Platform, Image, ImageSourcePropType, Modal,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -71,6 +71,15 @@ export default function RecipeEditScreen() {
   const [instructions, setInstructions] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Quick Add modal state
+  const [quickAddVisible, setQuickAddVisible] = useState(false);
+  const [qaName, setQaName] = useState('');
+  const [qaGrams, setQaGrams] = useState('');
+  const [qaKcal, setQaKcal] = useState('');
+  const [qaProtein, setQaProtein] = useState('');
+  const [qaCarbs, setQaCarbs] = useState('');
+  const [qaFat, setQaFat] = useState('');
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -219,6 +228,42 @@ export default function RecipeEditScreen() {
   const handleOpenBarcode = () => {
     console.log('[RecipeEdit] Barcode button pressed — opening barcode-scanner in ingredient mode');
     router.push({ pathname: '/barcode-scanner', params: { mode: 'ingredient' } });
+  };
+
+  const handleOpenQuickAdd = () => {
+    console.log('[RecipeEdit] Quick Add button pressed — opening inline modal');
+    setQuickAddVisible(true);
+  };
+
+  const handleQuickAddCancel = () => {
+    console.log('[RecipeEdit] Quick Add modal cancelled');
+    setQuickAddVisible(false);
+    setQaName(''); setQaGrams(''); setQaKcal(''); setQaProtein(''); setQaCarbs(''); setQaFat('');
+  };
+
+  const handleQuickAddSubmit = () => {
+    const trimmedName = qaName.trim();
+    if (!trimmedName) {
+      Alert.alert('Required', 'Please enter an ingredient name.');
+      return;
+    }
+    const kcalNum = parseFloat(qaKcal);
+    if (!qaKcal.trim() || isNaN(kcalNum) || kcalNum <= 0) {
+      Alert.alert('Required', 'Please enter calories.');
+      return;
+    }
+    const ing: Ingredient = {
+      name: trimmedName,
+      grams: parseFloat(qaGrams) || 0,
+      kcal: kcalNum,
+      protein: parseFloat(qaProtein) || 0,
+      carbs: parseFloat(qaCarbs) || 0,
+      fat: parseFloat(qaFat) || 0,
+    };
+    console.log('[RecipeEdit] Quick Add ingredient submitted:', ing.name, 'kcal:', ing.kcal);
+    setIngredients(prev => [...prev, ing]);
+    setQuickAddVisible(false);
+    setQaName(''); setQaGrams(''); setQaKcal(''); setQaProtein(''); setQaCarbs(''); setQaFat('');
   };
 
   const removeIngredient = (index: number) => {
@@ -548,6 +593,14 @@ export default function RecipeEditScreen() {
                 <IconSymbol ios_icon_name="barcode.viewfinder" android_material_icon_name="qr-code-scanner" size={16} color={colors.info} />
                 <Text style={[styles.pickerBtnText, { color: colors.info }]}>Barcode</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pickerBtn, { backgroundColor: colors.success + '18', borderColor: colors.success }]}
+                onPress={handleOpenQuickAdd}
+                activeOpacity={0.7}
+              >
+                <IconSymbol ios_icon_name="plus.circle" android_material_icon_name="add-circle-outline" size={16} color={colors.success} />
+                <Text style={[styles.pickerBtnText, { color: colors.success }]}>Quick Add</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -601,6 +654,120 @@ export default function RecipeEditScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Quick Add Modal */}
+      <Modal
+        visible={quickAddVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleQuickAddCancel}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKAV}
+          >
+            <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>Quick Add Ingredient</Text>
+
+              <View style={styles.modalField}>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Name *</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                  placeholder="e.g. Olive oil"
+                  placeholderTextColor={secondaryColor}
+                  value={qaName}
+                  onChangeText={setQaName}
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.modalField}>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Grams (optional)</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                  placeholder="0"
+                  placeholderTextColor={secondaryColor}
+                  value={qaGrams}
+                  onChangeText={setQaGrams}
+                  keyboardType="decimal-pad"
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.modalField}>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Calories *</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                  placeholder="0"
+                  placeholderTextColor={secondaryColor}
+                  value={qaKcal}
+                  onChangeText={setQaKcal}
+                  keyboardType="decimal-pad"
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.modalMacroRow}>
+                <View style={[styles.modalField, { flex: 1 }]}>
+                  <Text style={[styles.modalLabel, { color: colors.protein }]}>Protein (g)</Text>
+                  <TextInput
+                    style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                    placeholder="0"
+                    placeholderTextColor={secondaryColor}
+                    value={qaProtein}
+                    onChangeText={setQaProtein}
+                    keyboardType="decimal-pad"
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={[styles.modalField, { flex: 1 }]}>
+                  <Text style={[styles.modalLabel, { color: colors.carbs }]}>Carbs (g)</Text>
+                  <TextInput
+                    style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                    placeholder="0"
+                    placeholderTextColor={secondaryColor}
+                    value={qaCarbs}
+                    onChangeText={setQaCarbs}
+                    keyboardType="decimal-pad"
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={[styles.modalField, { flex: 1 }]}>
+                  <Text style={[styles.modalLabel, { color: colors.fats }]}>Fat (g)</Text>
+                  <TextInput
+                    style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                    placeholder="0"
+                    placeholderTextColor={secondaryColor}
+                    value={qaFat}
+                    onChangeText={setQaFat}
+                    keyboardType="decimal-pad"
+                    returnKeyType="done"
+                    onSubmitEditing={handleQuickAddSubmit}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalCancelBtn, { borderColor: inputBorder }]}
+                  onPress={handleQuickAddCancel}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.modalCancelBtnText, { color: secondaryColor }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalAddBtn, { backgroundColor: colors.success }]}
+                  onPress={handleQuickAddSubmit}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.modalAddBtnText}>Add Ingredient</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -719,11 +886,13 @@ const styles = StyleSheet.create({
 
   pickerButtonsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
   pickerBtn: {
     flex: 1,
+    minWidth: 90,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -732,7 +901,70 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
   },
-  pickerBtnText: { fontSize: 14, fontWeight: '700' },
+  pickerBtnText: { fontSize: 13, fontWeight: '700' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalKAV: { width: '100%' },
+  modalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  modalField: {
+    marginBottom: spacing.sm,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  modalInput: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    fontSize: 15,
+  },
+  modalMacroRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelBtnText: { fontSize: 15, fontWeight: '600' },
+  modalAddBtn: {
+    flex: 2,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalAddBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   saveBtn: {
     flexDirection: 'row',
