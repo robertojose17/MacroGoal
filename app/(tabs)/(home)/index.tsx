@@ -4,7 +4,6 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   RefreshControl, Alert, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
-import RecipesSection from '@/components/RecipesSection';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -270,9 +269,6 @@ export default function HomeScreen() {
   const { tab } = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
-
-  // Planning sub-tab
-  const [planningTab, setPlanningTab] = useState<'plans' | 'recipes'>('plans');
 
   // ── Tracking state ──
   const [goal, setGoal] = useState<any>(null);
@@ -918,14 +914,6 @@ export default function HomeScreen() {
   );
 
   const renderPlanningContent = () => {
-    if (planningTab === 'recipes') {
-      return (
-        <View>
-          <RecipesSection isDark={isDark} />
-        </View>
-      );
-    }
-
     if (plansLoading) {
       return (
         <View style={styles.plansLoadingContainer}>
@@ -1277,34 +1265,6 @@ export default function HomeScreen() {
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="chevron-left" size={16} color={colors.primary} />
             <Text style={[styles.planningBackText, { color: colors.primary }]}>Tracking</Text>
           </TouchableOpacity>
-          <View style={styles.planningTabsRow}>
-            <TouchableOpacity
-              style={styles.planningTab}
-              onPress={() => {
-                console.log('[Home] Planning underline tab pressed: plans');
-                setPlanningTab('plans');
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.planningTabText, planningTab === 'plans' && styles.planningTabTextActive, { color: planningTab === 'plans' ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                Meal Plans
-              </Text>
-              {planningTab === 'plans' && <View style={[styles.planningTabUnderline, { backgroundColor: colors.primary }]} />}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.planningTab}
-              onPress={() => {
-                console.log('[Home] Planning underline tab pressed: recipes');
-                setPlanningTab('recipes');
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.planningTabText, planningTab === 'recipes' && styles.planningTabTextActive, { color: planningTab === 'recipes' ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                Recipes
-              </Text>
-              {planningTab === 'recipes' && <View style={[styles.planningTabUnderline, { backgroundColor: colors.primary }]} />}
-            </TouchableOpacity>
-          </View>
         </View>
       )}
 
@@ -1563,31 +1523,6 @@ const styles = StyleSheet.create({
   planningBackText: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  planningTabsRow: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.xl,
-  },
-  planningTab: {
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
-  },
-  planningTabActive: {},
-  planningTabText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  planningTabTextActive: {
-    fontWeight: '700',
-  },
-  planningTabUnderline: {
-    height: 2,
-    borderRadius: 1,
-    width: '100%',
-    marginTop: 4,
   },
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
   caloriesCard: {
