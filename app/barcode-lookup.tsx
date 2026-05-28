@@ -7,6 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 // CRITICAL: Timeout constant
 const LOOKUP_TIMEOUT_MS = 10000; // 10 seconds
@@ -79,11 +80,33 @@ export default function BarcodeLookupScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Build a synthetic OFF-shaped object from a cached food_items row
+   * so food-details screen keeps working unchanged.
+   */
+  const buildSyntheticOffData = (item: any) => ({
+    code: item.barcode,
+    product_name: item.name,
+    brands: item.brand,
+    serving_size: item.serving_size ? `${item.serving_size} ${item.serving_unit || 'g'}` : undefined,
+    serving_quantity: item.serving_size,
+    nutriments: {
+      'energy-kcal_100g': item.calories,
+      'proteins_100g': item.protein,
+      'carbohydrates_100g': item.carbs,
+      'fat_100g': item.fat,
+      'fiber_100g': item.fiber,
+      'sugars_100g': item.sugar,
+    },
+    image_url: item.image_url,
+  });
+
   const performLookup = async () => {
     console.log('[BarcodeLookup] ========== START LOOKUP ==========');
     console.log('[BarcodeLookup] BARCODE:', barcode);
     console.log('[BarcodeLookup] Barcode length:', barcode.length);
     console.log('[BarcodeLookup] Barcode type:', typeof barcode);
+    console.log('[BarcodeLookup] Routing through edge function: lookup-barcode');
     
     setLoading(true);
     setError(null);
@@ -98,16 +121,21 @@ export default function BarcodeLookupScreen() {
     });
 
     try {
-      // Using v2 endpoint as per OpenFoodFacts API documentation
-      const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`;
-      console.log('[BarcodeLookup] LOOKUP URL:', url);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      console.log('[BarcodeLookup] Auth token present:', !!token);
+
+      const edgeFnUrl = `${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`;
+      console.log('[BarcodeLookup] Edge function URL:', edgeFnUrl);
       console.log('[BarcodeLookup] Starting fetch...');
 
-      const fetchPromise = fetch(url, {
+      const fetchPromise = fetch(edgeFnUrl, {
+        method: 'POST',
         headers: {
-          'User-Agent': 'EliteMacroTracker/1.0 (iOS)',
-          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
+        body: JSON.stringify({ barcode }),
       });
 
       console.log('[BarcodeLookup] Waiting for response (max 10s)...');
@@ -122,7 +150,8 @@ export default function BarcodeLookupScreen() {
       console.log('[BarcodeLookup] HTTP STATUS:', response.status);
 
       if (!response.ok) {
-        console.log('[BarcodeLookup] ❌ HTTP error:', response.status);
+        const errText = await response.text();
+        console.error('[BarcodeLookup] Edge function error body:', errText);
         throw new Error(`HTTP error: ${response.status}`);
       }
 
@@ -135,27 +164,26 @@ export default function BarcodeLookupScreen() {
         return;
       }
 
-      const status = Number(result.status);
-      console.log('[BarcodeLookup] OFF JSON status:', status, '(1=found, 0=not found)');
-      console.log('[BarcodeLookup] Has product:', !!result.product);
+      console.log('[BarcodeLookup] Edge function result — found:', result.found, 'source:', result.source);
 
-      if (result.product) {
-        console.log('[BarcodeLookup] Product name:', result.product.product_name || 'Unknown');
-        console.log('[BarcodeLookup] Product brand:', result.product.brands || 'Unknown');
-        console.log('[BarcodeLookup] Product code:', result.product.code || 'N/A');
-      }
+      if (result.found) {
+        let offData: any;
 
-      if (status === 1 && result.product) {
-        console.log('[BarcodeLookup] ✅ PRODUCT FOUND');
-        console.log('[BarcodeLookup] Product name:', result.product.product_name || 'Unknown');
+        if (result.off_data) {
+          console.log('[BarcodeLookup] ✅ PRODUCT FOUND via', result.source, '— using off_data blob');
+          offData = result.off_data;
+        } else {
+          console.log('[BarcodeLookup] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item');
+          offData = buildSyntheticOffData(result.item);
+        }
 
-        // Navigate to food-details with product data
+        console.log('[BarcodeLookup] Product name:', offData.product_name || 'Unknown');
         console.log('[BarcodeLookup] NAVIGATING TO: food-details');
-        
+
         router.push({
           pathname: '/food-details',
           params: {
-            offData: JSON.stringify(result.product),
+            offData: JSON.stringify(offData),
             meal: mealType,
             date: date,
             mode: mode,
@@ -165,7 +193,7 @@ export default function BarcodeLookupScreen() {
           },
         });
       } else {
-        // Product not found
+        // Product not found in cache or OFF
         console.log('[BarcodeLookup] ❌ PRODUCT NOT FOUND');
         console.log('[BarcodeLookup] Barcode:', barcode);
         setNotFound(true);

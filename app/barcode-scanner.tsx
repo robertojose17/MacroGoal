@@ -8,6 +8,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 /**
  * BARCODE SCANNER SCREEN
@@ -64,45 +65,82 @@ export default function BarcodeScannerScreen() {
   );
 
   /**
-   * Perform OpenFoodFacts lookup and navigate to Food Details
-   * CRITICAL FIX: Use router.dismissTo() to dismiss ALL screens back to home, then push food-details
+   * Build a synthetic OFF-shaped object from a cached food_items row
+   * so food-details screen keeps working unchanged.
+   */
+  const buildSyntheticOffData = (item: any) => ({
+    code: item.barcode,
+    product_name: item.name,
+    brands: item.brand,
+    serving_size: item.serving_size ? `${item.serving_size} ${item.serving_unit || 'g'}` : undefined,
+    serving_quantity: item.serving_size,
+    nutriments: {
+      'energy-kcal_100g': item.calories,
+      'proteins_100g': item.protein,
+      'carbohydrates_100g': item.carbs,
+      'fat_100g': item.fat,
+      'fiber_100g': item.fiber,
+      'sugars_100g': item.sugar,
+    },
+    image_url: item.image_url,
+  });
+
+  /**
+   * Perform lookup via Supabase edge function (lookup-barcode) and navigate.
+   * Falls back to barcode-lookup screen on error or not-found.
    */
   const performLookupAndNavigate = useCallback(async (barcode: string) => {
     console.log('[BarcodeScanner] ========== PERFORMING LOOKUP ==========');
     console.log('[BarcodeScanner] Barcode:', barcode);
+    console.log('[BarcodeScanner] Routing through edge function: lookup-barcode');
 
     try {
-      const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`;
-      console.log('[BarcodeScanner] Lookup URL:', url);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      console.log('[BarcodeScanner] Auth token present:', !!token);
 
-      const response = await fetch(url, {
+      const edgeFnUrl = `${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`;
+      console.log('[BarcodeScanner] Edge function URL:', edgeFnUrl);
+
+      const response = await fetch(edgeFnUrl, {
+        method: 'POST',
         headers: {
-          'User-Agent': 'EliteMacroTracker/1.0',
-          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
+        body: JSON.stringify({ barcode }),
       });
 
       console.log('[BarcodeScanner] HTTP Status:', response.status);
 
       if (!response.ok) {
+        const errText = await response.text();
+        console.error('[BarcodeScanner] Edge function error body:', errText);
         throw new Error(`HTTP error: ${response.status}`);
       }
 
       const result = await response.json();
-      const status = Number(result.status);
-      
-      console.log('[BarcodeScanner] OpenFoodFacts status:', status);
+      console.log('[BarcodeScanner] Edge function result — found:', result.found, 'source:', result.source);
 
-      if (status === 1 && result.product) {
-        console.log('[BarcodeScanner] ✅ PRODUCT FOUND:', result.product.product_name);
-        console.log('[BarcodeScanner] 🚀 Navigating to food-details, preserving add-food stack');
+      if (result.found) {
+        let offData: any;
+
+        if (result.off_data) {
+          console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, '— using off_data blob');
+          offData = result.off_data;
+        } else {
+          console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item');
+          offData = buildSyntheticOffData(result.item);
+        }
+
+        console.log('[BarcodeScanner] 🚀 Navigating to food-details');
         console.log('[BarcodeScanner] Context:', context);
         console.log('[BarcodeScanner] ReturnTo:', returnTo);
 
         router.push({
           pathname: '/food-details',
           params: {
-            offData: JSON.stringify(result.product),
+            offData: JSON.stringify(offData),
             meal: mealType,
             date: date,
             mode: mode,
