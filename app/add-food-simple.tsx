@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 
 export default function AddFoodSimpleScreen() {
   const router = useRouter();
@@ -208,6 +209,12 @@ export default function AddFoodSimpleScreen() {
 
       console.log('[AddFoodSimple] ✅ Meal item created successfully:', mealItemData);
       console.log('[AddFoodSimple] Quick Add complete! Dismissing modal back to diary...');
+
+      // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
+      const xpSourceId = mealItemData?.id ?? `${mealId}_${foodData.id}_${date}`;
+      console.log('[AddFoodSimple] awarding meal XP, source_id:', xpSourceId);
+      tryAwardMealLogged(xpSourceId, mealType);
+      evaluateDailyGoals(date);
       
       // Success! Navigate back
       setSaving(false);

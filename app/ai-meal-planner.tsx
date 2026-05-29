@@ -22,6 +22,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 import { usePremium } from '@/hooks/usePremium';
+import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -690,7 +691,7 @@ export default function AIMealPlannerScreen() {
 
       const todayStr = getTodayStr();
       console.log('[AIMealPlanner] inserting food_log:', food.name, mealType, todayStr);
-      const { error } = await supabase.from('food_logs').insert({
+      const { data: insertedLog, error } = await supabase.from('food_logs').insert({
         user_id: user.id,
         date: todayStr,
         meal_type: mealType,
@@ -702,11 +703,18 @@ export default function AIMealPlannerScreen() {
         fiber: Math.round(Number(food.fiber) || 0),
         quantity: 1,
         serving_description: food.serving_description || '1 serving',
-      });
+      }).select('id').single();
       if (error) throw new Error(error.message);
 
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
       console.log('[AIMealPlanner] food added to log successfully:', food.name);
+
+      // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
+      const xpSourceId = insertedLog?.id ?? `food_log_${user.id}_${todayStr}_${food.name}`;
+      console.log('[AIMealPlanner] awarding meal XP, source_id:', xpSourceId);
+      tryAwardMealLogged(xpSourceId, mealType);
+      evaluateDailyGoals(todayStr);
+
       showToast(`Added to ${mealLabel} ✓`);
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddFood error:', e?.message || e);
@@ -738,11 +746,22 @@ export default function AIMealPlannerScreen() {
       }));
 
       console.log('[AIMealPlanner] inserting', inserts.length, 'food_logs for', mealType);
-      const { error } = await supabase.from('food_logs').insert(inserts);
+      const { data: insertedLogs, error } = await supabase.from('food_logs').insert(inserts).select('id');
       if (error) throw new Error(error.message);
 
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
       console.log('[AIMealPlanner] all foods added to', mealType);
+
+      // ── XP: award meal_logged for each inserted log (fire-and-forget) ────
+      const logIds: string[] = (insertedLogs ?? []).map((r: any) => r.id as string);
+      logIds.forEach((logId, idx) => {
+        console.log('[AIMealPlanner] awarding meal XP for bulk log', idx, 'source_id:', logId);
+        tryAwardMealLogged(logId, mealType);
+      });
+      if (logIds.length > 0) {
+        evaluateDailyGoals(todayStr);
+      }
+
       showToast(`All added to ${mealLabel} ✓`);
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddAllToMeal error:', e?.message || e);

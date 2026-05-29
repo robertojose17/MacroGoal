@@ -17,6 +17,7 @@ import { addMealPlanItem } from '@/utils/mealPlansApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
 import { usePremium } from '@/hooks/usePremium';
+import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 
 /** Safely coerce any value to a finite number, defaulting to 0 on NaN/null/undefined */
 function safeNum(value: unknown, fallback = 0): number {
@@ -1075,6 +1076,12 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] ✅ Recent food added successfully!');
       console.log('[AddFood] Triggering success banner');
+
+      // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
+      const xpSourceId = `${mealId}_${food.id}_${date}`;
+      console.log('[AddFood] awarding meal XP for recent food, source_id:', xpSourceId);
+      tryAwardMealLogged(xpSourceId, mealType);
+      evaluateDailyGoals(date);
       
       // Show success banner (will interrupt if one is already showing)
       showSuccessBanner();
@@ -1382,6 +1389,12 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] ✅ Favorite added to meal successfully');
       console.log('[AddFood] Triggering success banner');
+
+      // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
+      const xpSourceId = `${mealId}_${foodId}_${date}`;
+      console.log('[AddFood] awarding meal XP for favorite, source_id:', xpSourceId);
+      tryAwardMealLogged(xpSourceId, mealType);
+      evaluateDailyGoals(date);
       
       // Show success banner (will interrupt if one is already showing)
       showSuccessBanner();

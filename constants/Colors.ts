@@ -41,6 +41,18 @@ export const Colors = {
   },
 };
 
+// ─── XP Rank Colors ───────────────────────────────────────────────────────────
+// Used by XpHeroCard, RankBadge, and LevelUpModal
+export const rankColors: Record<string, { gradient: [string, string]; text: string; glow: string }> = {
+  Rookie:     { gradient: ['#9CA3AF', '#6B7280'], text: '#9CA3AF', glow: 'rgba(156,163,175,0.4)' },
+  Consistent: { gradient: ['#60A5FA', '#2563EB'], text: '#60A5FA', glow: 'rgba(96,165,250,0.4)' },
+  Athlete:    { gradient: ['#34D399', '#059669'], text: '#34D399', glow: 'rgba(52,211,153,0.4)' },
+  'Iron Mind':{ gradient: ['#A78BFA', '#7C3AED'], text: '#A78BFA', glow: 'rgba(167,139,250,0.4)' },
+  Elite:      { gradient: ['#FCD34D', '#D97706'], text: '#FCD34D', glow: 'rgba(252,211,77,0.4)' },
+  Beast:      { gradient: ['#FB923C', '#DC2626'], text: '#FB923C', glow: 'rgba(251,146,60,0.4)' },
+  Legend:     { gradient: ['#F472B6', '#8B5CF6'], text: '#F472B6', glow: 'rgba(244,114,182,0.4)' },
+};
+
 export const backgroundColors = [
   "#fef2f2",
   "#fee2e2",

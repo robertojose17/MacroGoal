@@ -7,6 +7,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { isFavorite, toggleFavorite } from '@/utils/favoritesDatabase';
 import { useRouter } from 'expo-router';
 import { addToDraft } from '@/utils/myMealsDraft';
+import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -805,6 +806,13 @@ export default function FoodDetailsLayout({
 
           console.log('[FoodDetails] handleSave: meal_item inserted successfully');
           setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Food added to meal', timestamp: Date.now() }]);
+
+          // ── XP: award meal_logged (fire-and-forget) ──────────────────────
+          // We don't have the new meal_item id here (no .select()), so use mealId+foodId as source
+          const xpSourceId = `${mealId}_${foodId}_${targetDate}`;
+          console.log('[FoodDetails] awarding meal XP, source_id:', xpSourceId);
+          tryAwardMealLogged(xpSourceId, targetMealType);
+          evaluateDailyGoals(targetDate);
 
           setTimeout(() => {
             router.back();

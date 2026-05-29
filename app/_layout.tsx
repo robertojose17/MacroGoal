@@ -20,6 +20,7 @@ import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { initializeFoodDatabase } from "@/utils/foodDatabase";
 import { supabase } from "@/lib/supabase/client";
+import { reportTodaySteps } from "@/utils/stepsReporter";
 import type { Session } from "@supabase/supabase-js";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Constants from "expo-constants";
@@ -408,6 +409,11 @@ export default function RootLayout() {
 
         console.log(
           "[AppState] App foregrounded, checking for subscription updates..."
+        );
+
+        // Non-blocking: report today's steps to the XP system (throttled to once/30 min)
+        reportTodaySteps().catch((e) =>
+          console.warn("[AppState] reportTodaySteps error (non-fatal):", e)
         );
 
         const syncTimeout = new Promise<void>((resolve) =>

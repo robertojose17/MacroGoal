@@ -26,6 +26,13 @@ import ShareableProgressCard from '@/components/ShareableProgressCard';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import * as Sharing from 'expo-sharing';
 import { toLocalDateString } from '@/utils/dateUtils';
+// ─── XP System ────────────────────────────────────────────────────────────────
+import { useXpStatus } from '@/hooks/useXpStatus';
+import XpHeroCard from '@/components/xp/XpHeroCard';
+import DailyMissionsCard from '@/components/xp/DailyMissionsCard';
+import TodaysXpBreakdown from '@/components/xp/TodaysXpBreakdown';
+import LevelUpModal from '@/components/xp/LevelUpModal';
+import { reportTodaySteps } from '@/utils/stepsReporter';
 
 // react-native-view-shot requires a native build — lazy require so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -101,6 +108,17 @@ export default function DashboardScreen() {
   const [isGeneratingShare, setIsGeneratingShare] = useState(false);
   const [shareCardData, setShareCardData] = useState<any>(null);
   const shareCardRef = useRef<any>(null);
+
+  // ─── XP System ──────────────────────────────────────────────────────────────
+  const xp = useXpStatus();
+  const missionsScrollRef = useRef<ScrollView>(null);
+
+  // On mount: report steps and refresh XP
+  useEffect(() => {
+    console.log('[Dashboard] mount — reporting steps and refreshing XP');
+    reportTodaySteps().then(() => xp.refresh()).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
     try {
@@ -787,6 +805,7 @@ export default function DashboardScreen() {
       edges={['top']}
     >
       <ScrollView
+        ref={missionsScrollRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -814,7 +833,29 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Consistency Score - NEW COMPONENT AT THE TOP */}
+        {/* ── XP Hero Card ── */}
+        <CardErrorBoundary label="XpHeroCard">
+          <XpHeroCard status={xp.status} isDark={isDark} />
+        </CardErrorBoundary>
+
+        {/* ── Daily Missions ── */}
+        <CardErrorBoundary label="DailyMissionsCard">
+          <DailyMissionsCard missions={xp.status?.missions} isDark={isDark} />
+        </CardErrorBoundary>
+
+        {/* ── Today's XP Breakdown ── */}
+        <CardErrorBoundary label="TodaysXpBreakdown">
+          <TodaysXpBreakdown
+            status={xp.status}
+            isDark={isDark}
+            onScrollToMissions={() => {
+              console.log('[Dashboard] scrolling to missions');
+              missionsScrollRef.current?.scrollTo({ y: 0, animated: true });
+            }}
+          />
+        </CardErrorBoundary>
+
+        {/* Consistency Score - EXISTING — kept below XP sections */}
         {user && (
           <CardErrorBoundary label="ConsistencyScore">
             <ConsistencyScore userId={user.id} isDark={isDark} />
@@ -1225,6 +1266,18 @@ export default function DashboardScreen() {
         initialEndDate={calendarInitialEnd}
         maxDate={calendarMaxDate}
         title="Select Date Range"
+      />
+
+      {/* ── Level Up Modal ── */}
+      <LevelUpModal
+        visible={xp.status?.pending_level_up ?? false}
+        level={xp.status?.pending_level_up_to ?? 0}
+        rank={xp.status?.pending_rank_change ?? xp.status?.current_rank ?? 'Rookie'}
+        pendingRankChange={xp.status?.pending_rank_change ?? null}
+        onDismiss={() => {
+          console.log('[Dashboard] LevelUpModal dismissed — refreshing XP');
+          xp.refresh();
+        }}
       />
     </SafeAreaView>
   );

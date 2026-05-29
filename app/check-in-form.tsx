@@ -22,6 +22,7 @@ import CalendarDatePicker from '@/components/CalendarDatePicker';
 import { listTrackers, logEntry as logTrackerEntry } from '@/utils/trackersApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import * as ImagePicker from 'expo-image-picker';
+import { tryAwardWorkout, tryAwardWeightCheckin, tryAwardProgressPhoto } from '@/utils/xpAwarder';
 
 type CheckInType = 'weight' | 'steps' | 'gym';
 
@@ -293,6 +294,18 @@ export default function CheckInFormScreen() {
         await syncToTrackerEntries(authUser.id, checkInType, dateString, checkInData, notes);
       }
 
+      // ── XP: award check-in XP (fire-and-forget) ──────────────────────────
+      if (savedCheckInId) {
+        if (checkInType === 'gym' && checkInData.went_to_gym === true) {
+          console.log('[CheckInForm] awarding workout XP for check-in:', savedCheckInId);
+          tryAwardWorkout(savedCheckInId);
+        }
+        if (checkInType === 'weight' && checkInData.weight != null) {
+          console.log('[CheckInForm] awarding weight_checkin XP for check-in:', savedCheckInId);
+          tryAwardWeightCheckin(savedCheckInId, checkInData.weight as number);
+        }
+      }
+
       // Upload photo non-blocking (only for weight check-ins with a selected photo)
       if (selectedPhotoUri && savedCheckInId && checkInType === 'weight') {
         setUploadingPhoto(true);
@@ -300,6 +313,9 @@ export default function CheckInFormScreen() {
         uploadPhoto(savedCheckInId, selectedPhotoUri)
           .then(() => {
             console.log('[CheckInForm] ✅ Photo uploaded successfully');
+            // ── XP: award progress_photo (fire-and-forget) ──────────────
+            console.log('[CheckInForm] awarding progress_photo XP for check-in:', savedCheckInId);
+            tryAwardProgressPhoto(savedCheckInId!);
           })
           .catch((err) => {
             console.error('[CheckInForm] Photo upload failed (non-blocking):', err);
