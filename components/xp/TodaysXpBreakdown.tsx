@@ -2,12 +2,8 @@
  * TodaysXpBreakdown
  *
  * Compact card showing XP earned today by category.
- * Reads from the xp_ledger via the XpStatus.today field.
- *
- * Note: The get-xp-status endpoint returns xp_today as a number.
- * We derive the breakdown from the missions and known event types.
- * The ledger breakdown is not directly exposed by the current API,
- * so we show the total and mission progress as a proxy.
+ * Prefers the server-supplied today_breakdown field; falls back gracefully
+ * if the backend hasn't deployed that field yet.
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -21,9 +17,46 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
-import type { XpStatus } from '@/types/xp';
+import type { XpStatus, XpBreakdownEntry } from '@/types/xp';
 
 const DAILY_CAP = 500;
+
+// ─── Icon map ─────────────────────────────────────────────────────────────────
+
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const LABEL_ICONS: Record<string, IoniconsName> = {
+  Meals: 'restaurant',
+  Protein: 'fitness',
+  Calories: 'pie-chart',
+  Workout: 'barbell',
+  Steps: 'walk',
+  'Weight Check-in': 'scale',
+  'Progress Photo': 'camera',
+  Missions: 'flag',
+  'Mission Bonus': 'star',
+  Activity: 'flash',
+};
+
+function iconForLabel(label: string): IoniconsName {
+  return LABEL_ICONS[label] ?? 'flash';
+}
+
+// ─── Breakdown derivation ─────────────────────────────────────────────────────
+
+function getBreakdownItems(status: XpStatus): XpBreakdownEntry[] {
+  // Prefer the server-supplied breakdown
+  if (status.today_breakdown && status.today_breakdown.length > 0) {
+    return status.today_breakdown;
+  }
+  // Fallback: if backend hasn't deployed yet, show a single "Activity" row
+  if (status.xp_today > 0) {
+    return [{ event_type: 'unknown', label: 'Activity', xp: status.xp_today }];
+  }
+  return [];
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface TodaysXpBreakdownProps {
   status: XpStatus | null;
@@ -31,52 +64,37 @@ interface TodaysXpBreakdownProps {
   onScrollToMissions?: () => void;
 }
 
-// Derive a breakdown from what we know about the user's state
-function deriveBreakdown(status: XpStatus): { label: string; xp: number }[] {
-  const items: { label: string; xp: number }[] = [];
-
-  // Missions completed today contribute XP
-  const completedMissions = (status.missions ?? []).filter((m) => m.completed);
-  const missionXp = completedMissions.reduce((sum, m) => sum + m.xp_reward, 0);
-  if (missionXp > 0) {
-    items.push({ label: 'Missions', xp: missionXp });
-  }
-
-  // If all missions done, bonus was awarded
-  const allMissionsDone = status.missions?.length > 0 && completedMissions.length === status.missions.length;
-  if (allMissionsDone) {
-    items.push({ label: 'Mission Bonus', xp: 100 });
-  }
-
-  // Remaining XP attributed to general activity
-  const accountedFor = items.reduce((s, i) => s + i.xp, 0);
-  const remaining = status.xp_today - accountedFor;
-  if (remaining > 0) {
-    items.push({ label: 'Activity', xp: remaining });
-  }
-
-  return items;
-}
+// ─── Row component ────────────────────────────────────────────────────────────
 
 interface BreakdownRowProps {
-  label: string;
-  xp: number;
+  entry: XpBreakdownEntry;
   isDark: boolean;
 }
 
-function BreakdownRow({ label, xp, isDark }: BreakdownRowProps) {
-  const xpDisplay = '+' + xp.toLocaleString();
+function BreakdownRow({ entry, isDark }: BreakdownRowProps) {
+  const xpDisplay = '+' + entry.xp.toLocaleString();
+  const iconName = iconForLabel(entry.label);
   return (
     <View style={styles.breakdownRow}>
-      <Text style={[styles.breakdownLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-        {label}
-      </Text>
+      <View style={styles.breakdownLeft}>
+        <Ionicons
+          name={iconName}
+          size={16}
+          color={isDark ? '#A0A2B8' : '#6B7280'}
+          style={styles.rowIcon}
+        />
+        <Text style={[styles.breakdownLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+          {entry.label}
+        </Text>
+      </View>
       <Text style={[styles.breakdownXp, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
         {xpDisplay}
       </Text>
     </View>
   );
 }
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }: TodaysXpBreakdownProps) {
   const barAnim = useRef(new Animated.Value(0)).current;
@@ -100,7 +118,7 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
     outputRange: ['0%', '100%'],
   });
 
-  const breakdown = status ? deriveBreakdown(status) : [];
+  const breakdown = status ? getBreakdownItems(status) : [];
   const isEmpty = xpToday === 0;
 
   return (
@@ -150,8 +168,8 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
       ) : (
         /* Breakdown list */
         <View style={styles.breakdownList}>
-          {breakdown.map((item) => (
-            <BreakdownRow key={item.label} label={item.label} xp={item.xp} isDark={isDark} />
+          {breakdown.map((item, idx) => (
+            <BreakdownRow key={item.event_type + '_' + idx} entry={item} isDark={isDark} />
           ))}
         </View>
       )}
@@ -223,6 +241,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
+  },
+  breakdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rowIcon: {
+    width: 20,
   },
   breakdownLabel: {
     fontSize: 14,

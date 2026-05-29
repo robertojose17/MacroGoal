@@ -77,6 +77,12 @@ export type UserRanking = {
   percentile: number | null;
 };
 
+export type XpBreakdownEntry = {
+  event_type: string;
+  label: string;
+  xp: number;
+};
+
 export type XpStatus = {
   /** Core user XP state */
   total_xp: number;
@@ -98,4 +104,7 @@ export type XpStatus = {
 
   /** Leaderboard position */
   ranking: UserRanking | null;
+
+  /** Per-event XP breakdown for today — optional, requires updated backend */
+  today_breakdown?: XpBreakdownEntry[];
 };

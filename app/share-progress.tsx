@@ -40,6 +40,7 @@ interface CardData {
   afterPhotoUrl?: string | null;
   beforeDateLabel?: string;
   afterDateLabel?: string;
+  calorieDeficit?: number;
 }
 
 type CardVariant = 'progress' | 'level';
@@ -240,6 +241,49 @@ export default function ShareProgressScreen() {
     }
   };
 
+  const calculateRecentDeficit = async (userId: string): Promise<number> => {
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      const startDate = sevenDaysAgo.toISOString().split('T')[0];
+
+      const [{ data: goal }, { data: meals }] = await Promise.all([
+        supabase
+          .from('goals')
+          .select('daily_calories')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .maybeSingle(),
+        supabase
+          .from('meals')
+          .select('date, meal_items(calories)')
+          .eq('user_id', userId)
+          .gte('date', startDate),
+      ]);
+
+      if (!goal?.daily_calories) return 0;
+      if (!meals) return 0;
+
+      const dailyTotals: Record<string, number> = {};
+      for (const m of meals) {
+        const items = (m as any).meal_items ?? [];
+        const dayCals = items.reduce((s: number, i: any) => s + (Number(i.calories) || 0), 0);
+        dailyTotals[m.date] = (dailyTotals[m.date] ?? 0) + dayCals;
+      }
+
+      let totalDeficit = 0;
+      for (const cals of Object.values(dailyTotals)) {
+        const diff = goal.daily_calories - cals;
+        if (diff > 0) totalDeficit += diff;
+      }
+      console.log('[ShareProgress] 7-day calorie deficit:', Math.round(totalDeficit));
+      return Math.round(totalDeficit);
+    } catch (error) {
+      console.error('[ShareProgress] Error calculating calorie deficit:', error);
+      return 0;
+    }
+  };
+
   const calculateDayStreak = async (userId: string, startDate: string): Promise<number> => {
     try {
       const today = toLocalDateString();
@@ -336,7 +380,7 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] Journey start date:', startDate);
 
       // Run independent calculations in parallel
-      const [consistencyScore, weightResult, dayStreak, checkInsWithPhotos] = await Promise.all([
+      const [consistencyScore, weightResult, dayStreak, checkInsWithPhotos, calorieDeficit] = await Promise.all([
         calculateConsistencyScore(authUser.id, startDate, goal.protein_g || 150),
         calculateWeightGoalProgress(authUser.id, userData),
         calculateDayStreak(authUser.id, startDate),
@@ -346,6 +390,7 @@ export default function ShareProgressScreen() {
           .eq('user_id', authUser.id)
           .not('photo_url', 'is', null)
           .order('date', { ascending: true }),
+        calculateRecentDeficit(authUser.id),
       ]);
 
       const { weightGoalProgress, weightLost } = weightResult;
@@ -416,6 +461,7 @@ export default function ShareProgressScreen() {
         afterPhotoUrl,
         beforeDateLabel,
         afterDateLabel,
+        calorieDeficit,
       });
 
       setLoading(false);
@@ -657,6 +703,7 @@ export default function ShareProgressScreen() {
                   currentStreak={xpStatus.current_streak}
                   consistencyScore={cardData.consistencyScore}
                   percentile={xpStatus.ranking?.percentile ?? 50}
+                  calorieDeficit={cardData.calorieDeficit}
                 />
               </View>
             )}

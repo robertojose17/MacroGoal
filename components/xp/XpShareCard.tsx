@@ -44,6 +44,7 @@ export interface XpShareCardProps {
   currentStreak: number;
   consistencyScore: number; // 0-100
   percentile: number;       // 0-100, where 92.5 means top 7.5%
+  calorieDeficit?: number;  // 7-day calorie deficit (optional)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ const CARD_HEIGHT = Math.round((CARD_WIDTH * 16) / 9);
 
 const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
   function XpShareCard(
-    { level, rank, totalXp, currentStreak, consistencyScore, percentile },
+    { level, rank, totalXp, currentStreak, consistencyScore, percentile, calorieDeficit },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -108,6 +109,8 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
     const consistencyDisplay = String(Math.round(consistencyScore));
     const topPercentDisplay = topPercent(percentile);
     const xpDisplay = Number(totalXp).toLocaleString();
+    const showDeficit = (calorieDeficit ?? 0) > 0;
+    const deficitDisplay = showDeficit ? Number(calorieDeficit).toLocaleString() : '';
 
     return (
       <CaptureWrapper
@@ -225,6 +228,14 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
               <Text style={styles.xpValue}>{xpDisplay}</Text>
               <Text style={styles.xpLabel}> XP EARNED</Text>
             </View>
+
+            {/* Calorie Deficit (7d) — only shown when provided */}
+            {showDeficit && (
+              <View style={styles.deficitRow}>
+                <Text style={styles.deficitValue}>{deficitDisplay}</Text>
+                <Text style={styles.deficitLabel}> CAL DEFICIT (7D)</Text>
+              </View>
+            )}
 
             {/* Divider */}
             <LinearGradient
@@ -396,7 +407,7 @@ const styles = StyleSheet.create({
   xpRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 24,
+    marginBottom: 8,
   },
   xpValue: {
     fontSize: 32,
@@ -409,6 +420,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: 2,
+  },
+  deficitRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 20,
+  },
+  deficitValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#34D399',
+    letterSpacing: -0.5,
+  },
+  deficitLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(52,211,153,0.6)',
+    letterSpacing: 1.5,
   },
   divider: {
     width: 60,

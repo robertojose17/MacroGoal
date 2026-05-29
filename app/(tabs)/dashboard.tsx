@@ -32,7 +32,13 @@ import XpHeroCard from '@/components/xp/XpHeroCard';
 import DailyMissionsCard from '@/components/xp/DailyMissionsCard';
 import TodaysXpBreakdown from '@/components/xp/TodaysXpBreakdown';
 import LevelUpModal from '@/components/xp/LevelUpModal';
+import NextUnlockCard from '@/components/xp/NextUnlockCard';
+import SocialComparisonCard from '@/components/xp/SocialComparisonCard';
+import StreakBadgeModal from '@/components/xp/StreakBadgeModal';
 import { reportTodaySteps } from '@/utils/stepsReporter';
+import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // react-native-view-shot requires a native build — lazy require so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -112,6 +118,7 @@ export default function DashboardScreen() {
   // ─── XP System ──────────────────────────────────────────────────────────────
   const xp = useXpStatus();
   const missionsScrollRef = useRef<ScrollView>(null);
+  const [pendingMilestone, setPendingMilestone] = useState<number | null>(null);
 
   // On mount: report steps and refresh XP
   useEffect(() => {
@@ -119,6 +126,23 @@ export default function DashboardScreen() {
     reportTodaySteps().then(() => xp.refresh()).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Streak milestone watcher
+  useEffect(() => {
+    const streak = xp.status?.current_streak;
+    if (streak == null) return;
+    if (streak === 0) {
+      resetMilestones();
+      return;
+    }
+    getPendingMilestone(streak).then((m) => {
+      if (m && pendingMilestone !== m) {
+        console.log('[Dashboard] streak milestone reached:', m);
+        setPendingMilestone(m);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xp.status?.current_streak]);
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
     try {
@@ -855,6 +879,28 @@ export default function DashboardScreen() {
           />
         </CardErrorBoundary>
 
+        {/* ── Next Unlock Card ── */}
+        {xp.status && (
+          <CardErrorBoundary label="NextUnlockCard">
+            <NextUnlockCard
+              currentLevel={xp.status.current_level}
+              currentRank={xp.status.current_rank}
+              isDark={isDark}
+            />
+          </CardErrorBoundary>
+        )}
+
+        {/* ── Social Comparison Card ── */}
+        {xp.status && (
+          <CardErrorBoundary label="SocialComparisonCard">
+            <SocialComparisonCard
+              ranking={xp.status.ranking}
+              currentRank={xp.status.current_rank}
+              isDark={isDark}
+            />
+          </CardErrorBoundary>
+        )}
+
         {/* Consistency Score - EXISTING — kept below XP sections */}
         {user && (
           <CardErrorBoundary label="ConsistencyScore">
@@ -1052,6 +1098,28 @@ export default function DashboardScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* ── Sticky Share My Progress button ── */}
+      <View style={styles.stickyButtonContainer} pointerEvents="box-none">
+        <TouchableOpacity
+          style={styles.shareProgressButton}
+          onPress={() => {
+            console.log('[Dashboard] Sticky Share My Progress pressed');
+            router.push('/share-progress?variant=level');
+          }}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[colors.primary, '#FF8E3C']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.shareProgressGradient}
+          >
+            <Ionicons name="share-social" size={20} color="#fff" />
+            <Text style={styles.shareProgressButtonText}>Share My Progress</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
 
       {/* Hidden ShareableProgressCard for capture */}
       {shareCardData && (
@@ -1279,6 +1347,17 @@ export default function DashboardScreen() {
           xp.refresh();
         }}
       />
+
+      {/* ── Streak Badge Modal ── */}
+      <StreakBadgeModal
+        visible={pendingMilestone !== null}
+        streakDays={pendingMilestone ?? 0}
+        onDismiss={() => {
+          console.log('[Dashboard] StreakBadgeModal dismissed — milestone:', pendingMilestone);
+          if (pendingMilestone) markMilestoneCelebrated(pendingMilestone);
+          setPendingMilestone(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1314,7 +1393,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: 120,
+    paddingBottom: 160,
   },
   card: {
     borderRadius: borderRadius.lg,
@@ -1411,6 +1490,41 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  stickyButtonContainer: {
+    position: 'absolute',
+    bottom: 90,
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  shareProgressButton: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    height: 56,
+  },
+  shareProgressGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: 28,
+  },
+  shareProgressButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   hiddenCardContainer: {
     position: 'absolute',
