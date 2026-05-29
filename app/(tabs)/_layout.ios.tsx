@@ -17,7 +17,7 @@ export default function TabLayout() {
   const tabBarBackgroundColor = isDark ? colors.cardDark : colors.card;
   const tabBarBorderColor = isDark ? colors.borderDark : colors.border;
 
-  const premiumHref = isPremium ? null : '/premium';
+  const premiumHref = isPremium ? null : '/subscription';
 
   const tabs = (
     <Tabs
