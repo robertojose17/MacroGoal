@@ -98,7 +98,7 @@ export function usePremium(): UsePremiumReturn {
       // was just initialized (e.g. right after a SIGNED_IN event) and the SDK
       // hasn't fully identified the user yet.
       if (Platform.OS !== 'web' && Purchases) {
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             console.log(`[usePremium] 🔍 Checking RevenueCat entitlements (attempt ${attempt})...`);
 
@@ -133,6 +133,15 @@ export function usePremium(): UsePremiumReturn {
                   identifiedInfo.entitlements.active['premium'];
                 const hasActiveAfterLogin = premiumEntitlementAfterLogin?.isActive || false;
 
+                // If the just-logged-in customer info still has zero active entitlements
+                // AND we have more attempts left, retry — RevenueCat sometimes needs a
+                // moment after logIn to populate entitlements from the server.
+                if (!hasActiveAfterLogin && Object.keys(identifiedInfo.entitlements.all).length === 0 && attempt < 3) {
+                  console.log(`[usePremium] logIn returned empty entitlements, retrying (attempt ${attempt}/3)`);
+                  await new Promise(resolve => setTimeout(resolve, 1500));
+                  continue;
+                }
+
                 setCustomerInfo(identifiedInfo);
                 setIsPremium(hasActiveAfterLogin);
                 if (premiumEntitlementAfterLogin?.expirationDate) {
@@ -143,7 +152,12 @@ export function usePremium(): UsePremiumReturn {
                 return;
               } catch (loginErr) {
                 console.warn('[usePremium] ⚠️ Could not log in to RevenueCat from hook:', loginErr);
-                // Fall through to use the anonymous info we already have
+                if (attempt < 3) {
+                  console.log(`[usePremium] Retrying after logIn failure (attempt ${attempt}/3)`);
+                  await new Promise(resolve => setTimeout(resolve, 1500));
+                  continue;
+                }
+                // Final attempt — fall through to use the anonymous info we already have
               }
             }
 
@@ -173,11 +187,11 @@ export function usePremium(): UsePremiumReturn {
             console.log('[usePremium] ========== PREMIUM STATUS CHECK COMPLETE ==========');
             return;
           } catch (revenueCatError) {
-            if (attempt === 1) {
-              console.warn('[usePremium] ⚠️ RevenueCat attempt 1 failed, retrying in 1s:', revenueCatError);
-              await new Promise(resolve => setTimeout(resolve, 1000));
+            if (attempt < 3) {
+              console.warn(`[usePremium] ⚠️ RevenueCat attempt ${attempt} failed, retrying in 1.5s:`, revenueCatError);
+              await new Promise(resolve => setTimeout(resolve, 1500));
             } else {
-              console.warn('[usePremium] ⚠️ RevenueCat check failed after 2 attempts, falling back to Supabase:', revenueCatError);
+              console.warn('[usePremium] ⚠️ RevenueCat check failed after 3 attempts, falling back to Supabase:', revenueCatError);
             }
           }
         }
@@ -262,6 +276,15 @@ export function usePremium(): UsePremiumReturn {
           console.log('[usePremium] ⏱️ Running post-login premium check');
           checkPremiumStatus();
         }, 1500);
+      } else if (event === 'INITIAL_SESSION' && session?.user?.id) {
+        console.log('[usePremium] 🔐 INITIAL_SESSION event detected, scheduling delayed premium check for user:', session.user.id);
+        // Wait longer than SIGNED_IN because on cold start RevenueCat is still
+        // initializing in parallel from _layout.tsx. We need to give configure()
+        // and logIn() time to complete before we ask for customer info.
+        setTimeout(() => {
+          console.log('[usePremium] ⏱️ Running cold-start premium re-check');
+          checkPremiumStatus(true); // force = true to bypass the in-progress guard
+        }, 2500);
       } else if (event === 'SIGNED_OUT') {
         console.log('[usePremium] 🚪 SIGNED_OUT event detected, resetting premium status');
         setIsPremium(false);
