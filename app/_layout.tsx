@@ -8,6 +8,7 @@ import {
   AppStateStatus,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
 import {
@@ -21,12 +22,14 @@ import { WidgetProvider } from "@/contexts/WidgetContext";
 import { initializeFoodDatabase } from "@/utils/foodDatabase";
 import { supabase } from "@/lib/supabase/client";
 import { reportTodaySteps } from "@/utils/stepsReporter";
+import { setUserTimezone } from "@/utils/macroXpApi";
 import type { Session } from "@supabase/supabase-js";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Constants from "expo-constants";
-
 import Purchases, { LOG_LEVEL } from "@/utils/purchases";
 import mobileAds from "@/utils/mobileAds";
+
+const TIMEZONE_STORAGE_KEY = "user_timezone_synced";
 
 function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
   return { Purchases, LOG_LEVEL };
@@ -186,6 +189,35 @@ export default function RootLayout() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ─── Timezone sync ────────────────────────────────────────────────────────
+  // Fire-and-forget: sync the device timezone to the backend once per change.
+  // Runs whenever the session becomes available (i.e. user is signed in).
+  useEffect(() => {
+    if (!session) return;
+
+    const syncTimezone = async () => {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log("[Layout] timezone sync — device timezone:", tz);
+
+        const cached = await AsyncStorage.getItem(TIMEZONE_STORAGE_KEY);
+        if (cached === tz) {
+          console.log("[Layout] timezone sync — already synced, skipping");
+          return;
+        }
+
+        console.log("[Layout] timezone sync — sending to backend:", tz);
+        await setUserTimezone(tz);
+        await AsyncStorage.setItem(TIMEZONE_STORAGE_KEY, tz);
+        console.log("[Layout] timezone sync — success, cached:", tz);
+      } catch (e) {
+        console.warn("[Layout] timezone sync failed (non-fatal):", e);
+      }
+    };
+
+    syncTimezone();
+  }, [session]);
 
   // ─── Navigation guard ─────────────────────────────────────────────────────
   // Runs once isReady flips to true. Does NOT wait for segments — on cold

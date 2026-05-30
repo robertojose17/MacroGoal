@@ -1,8 +1,12 @@
 /**
  * NutritionMissionCard
  *
- * Shows 4 macro progress circles (Calories, Protein, Carbs, Fats) with a +90 XP reward badge.
- * Animates arcs from 0 to value on mount.
+ * Shows 4 macro progress circles (Calories, Protein, Carbs, Fats) with a live
+ * XP badge that reflects the current tier for each macro.
+ *
+ * Tier logic mirrors the backend `set-macro-tier` function exactly (see
+ * utils/macroTier.ts). Values are synced to the backend debounced 1500 ms
+ * after the last change so we don't spam on every keystroke.
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -19,6 +23,16 @@ import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
+import {
+  getMacroTier,
+  totalLiveXp,
+  MACRO_KEYS,
+  MAX_MACRO_XP,
+  type MacroKey,
+} from '@/utils/macroTier';
+import { setMacroTier } from '@/utils/macroXpApi';
+import { emitXpRefresh } from '@/utils/xpEvents';
+import { toLocalDateString } from '@/utils/dateUtils';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +55,10 @@ const STROKE_WIDTH = 7;
 const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
+// Tier pill colors
+const TIER_1_COLOR = '#22C55E'; // green
+const TIER_2_COLOR = '#F59E0B'; // amber
+
 interface MacroCircleProps {
   label: string;
   current: number;
@@ -48,9 +66,10 @@ interface MacroCircleProps {
   unit: string;
   color: string;
   isDark: boolean;
+  tier: 0 | 1 | 2;
 }
 
-function MacroCircle({ label, current, goal, unit, color, isDark }: MacroCircleProps) {
+function MacroCircle({ label, current, goal, unit, color, isDark, tier }: MacroCircleProps) {
   const animVal = useRef(new Animated.Value(0)).current;
   const progress = goal > 0 ? Math.min(current / goal, 1) : 0;
 
@@ -65,8 +84,6 @@ function MacroCircle({ label, current, goal, unit, color, isDark }: MacroCircleP
   const currentDisplay = Math.round(current).toLocaleString();
   const goalDisplay = Math.round(goal).toLocaleString();
 
-  // We drive the dashoffset via a JS-side interpolation (no native driver for SVG props)
-  // We use a state-based approach: read the animated value and re-render via listener
   const [dashOffset, setDashOffset] = React.useState(CIRCUMFERENCE);
 
   useEffect(() => {
@@ -75,6 +92,9 @@ function MacroCircle({ label, current, goal, unit, color, isDark }: MacroCircleP
     });
     return () => animVal.removeListener(id);
   }, [animVal]);
+
+  const tierPillColor = tier === 1 ? TIER_1_COLOR : tier === 2 ? TIER_2_COLOR : null;
+  const tierPillText = tier === 1 ? 'MAX +XP' : tier === 2 ? '+XP' : null;
 
   return (
     <View style={styles.circleCell}>
@@ -121,6 +141,16 @@ function MacroCircle({ label, current, goal, unit, color, isDark }: MacroCircleP
           </Text>
         </View>
       </View>
+      {/* Tier pill — only shown when earning XP */}
+      {tierPillColor !== null && tierPillText !== null ? (
+        <View style={[styles.tierPill, { backgroundColor: tierPillColor + '26' }]}>
+          <Text style={[styles.tierPillText, { color: tierPillColor }]}>
+            {tierPillText}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.tierPillPlaceholder} />
+      )}
     </View>
   );
 }
@@ -140,29 +170,97 @@ export default function NutritionMissionCard({
 }: NutritionMissionCardProps) {
   const router = useRouter();
 
-  const isEmpty = totalCalories === 0 && totalProtein === 0 && totalCarbs === 0 && totalFats === 0;
+  const isEmpty =
+    totalCalories === 0 && totalProtein === 0 && totalCarbs === 0 && totalFats === 0;
 
-  // Compute "on track" macros: current >= 0.9 * goal AND current <= 1.1 * goal
-  const onTrackCount = [
-    { current: totalCalories, goal: goalCalories },
-    { current: totalProtein, goal: goalProtein },
-    { current: totalCarbs, goal: goalCarbs },
-    { current: totalFats, goal: goalFats },
-  ].filter(({ current, goal }) => goal > 0 && current >= 0.9 * goal && current <= 1.1 * goal).length;
+  // ─── Tier computation ──────────────────────────────────────────────────────
+  const macroInputs: { macro: MacroKey; current: number; goal: number }[] = [
+    { macro: 'calories', current: totalCalories, goal: goalCalories },
+    { macro: 'protein',  current: totalProtein,  goal: goalProtein },
+    { macro: 'carbs',    current: totalCarbs,    goal: goalCarbs },
+    { macro: 'fats',     current: totalFats,     goal: goalFats },
+  ];
 
-  const avgProgress = goalCalories > 0
-    ? Math.min(
-        ((totalCalories / goalCalories) +
-          (goalProtein > 0 ? totalProtein / goalProtein : 0) +
-          (goalCarbs > 0 ? totalCarbs / goalCarbs : 0) +
-          (goalFats > 0 ? totalFats / goalFats : 0)) /
-          4,
-        1
-      )
-    : 0;
+  const tiers = MACRO_KEYS.map((m, i) =>
+    getMacroTier(m, macroInputs[i].current, macroInputs[i].goal)
+  );
+
+  const onTrackCount = tiers.filter((t) => t.tier > 0).length;
+  const liveXp = totalLiveXp(macroInputs);
+  const remaining = MAX_MACRO_XP - liveXp;
+  const isMaxXp = liveXp === MAX_MACRO_XP;
+
+  const onTrackText = onTrackCount + ' of 4 macros earning XP';
+  const xpBadgeText = '+' + liveXp + ' XP';
+  const xpSubtitleText = isMaxXp ? 'Max XP earned!' : '+' + remaining + ' XP available today';
+
+  const avgProgress =
+    goalCalories > 0
+      ? Math.min(
+          ((totalCalories / goalCalories) +
+            (goalProtein > 0 ? totalProtein / goalProtein : 0) +
+            (goalCarbs > 0 ? totalCarbs / goalCarbs : 0) +
+            (goalFats > 0 ? totalFats / goalFats : 0)) /
+            4,
+          1
+        )
+      : 0;
 
   const avgProgressPct = Math.round(avgProgress * 100);
-  const onTrackText = onTrackCount + ' of 4 macros on track';
+
+  // ─── Debounced backend sync ────────────────────────────────────────────────
+  const lastSentRef = useRef<
+    Record<MacroKey, { current: number; goal: number; sent: number }>
+  >({
+    calories: { current: -1, goal: -1, sent: 0 },
+    protein:  { current: -1, goal: -1, sent: 0 },
+    carbs:    { current: -1, goal: -1, sent: 0 },
+    fats:     { current: -1, goal: -1, sent: 0 },
+  });
+
+  useEffect(() => {
+    if (isEmpty) return;
+
+    const date = toLocalDateString();
+
+    const timer = setTimeout(() => {
+      macroInputs.forEach(({ macro, current, goal }) => {
+        if (goal <= 0) return;
+        const prev = lastSentRef.current[macro];
+        if (prev.current === current && prev.goal === goal) return;
+
+        lastSentRef.current[macro] = { current, goal, sent: Date.now() };
+
+        console.log('[NutritionMissionCard] syncing tier to backend', { macro, current, goal, date });
+
+        setMacroTier({ date, macro, current, goal })
+          .then((res) => {
+            console.log('[NutritionMissionCard] tier sync ok', macro, res);
+            emitXpRefresh();
+          })
+          .catch((e) =>
+            console.warn(
+              '[NutritionMissionCard] tier sync failed (non-fatal)',
+              macro,
+              e?.message ?? e
+            )
+          );
+      });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    totalCalories,
+    totalProtein,
+    totalCarbs,
+    totalFats,
+    goalCalories,
+    goalProtein,
+    goalCarbs,
+    goalFats,
+    isEmpty,
+  ]);
 
   return (
     <View
@@ -179,17 +277,32 @@ export default function NutritionMissionCard({
         <Text style={[styles.cardTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
           Nutrition Mission
         </Text>
-        <LinearGradient
-          colors={[colors.primary, '#FF8E3C']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.xpBadge}
-        >
-          <Ionicons name="trophy" size={12} color="#fff" />
-          <Text style={styles.xpBadgeText}>
-            +90 XP Reward
-          </Text>
-        </LinearGradient>
+        <View style={styles.badgeColumn}>
+          <LinearGradient
+            colors={[colors.primary, '#FF8E3C']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.xpBadge}
+          >
+            <Ionicons name="trophy" size={12} color="#fff" />
+            <Text style={styles.xpBadgeText}>
+              {xpBadgeText}
+            </Text>
+          </LinearGradient>
+          <View style={styles.xpSubtitleRow}>
+            {isMaxXp ? (
+              <Ionicons name="checkmark-circle" size={11} color={TIER_1_COLOR} />
+            ) : null}
+            <Text
+              style={[
+                styles.xpSubtitle,
+                { color: isMaxXp ? TIER_1_COLOR : isDark ? '#6B7280' : '#9CA3AF' },
+              ]}
+            >
+              {xpSubtitleText}
+            </Text>
+          </View>
+        </View>
       </View>
 
       {isEmpty ? (
@@ -197,7 +310,7 @@ export default function NutritionMissionCard({
         <View style={styles.emptyState}>
           <Ionicons name="nutrition-outline" size={36} color={isDark ? '#3A3C52' : '#D4D6DA'} />
           <Text style={[styles.emptyTitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            Log your meals to unlock +90 XP
+            Log your meals to start earning XP
           </Text>
           <TouchableOpacity
             style={[styles.ctaButton, { backgroundColor: colors.primary }]}
@@ -223,6 +336,7 @@ export default function NutritionMissionCard({
               unit=" kcal"
               color={colors.calories}
               isDark={isDark}
+              tier={tiers[0].tier}
             />
             <MacroCircle
               label="PROTEIN"
@@ -231,6 +345,7 @@ export default function NutritionMissionCard({
               unit="g"
               color={colors.protein}
               isDark={isDark}
+              tier={tiers[1].tier}
             />
             <MacroCircle
               label="CARBS"
@@ -239,6 +354,7 @@ export default function NutritionMissionCard({
               unit="g"
               color={colors.carbs}
               isDark={isDark}
+              tier={tiers[2].tier}
             />
             <MacroCircle
               label="FATS"
@@ -247,6 +363,7 @@ export default function NutritionMissionCard({
               unit="g"
               color={colors.fats}
               isDark={isDark}
+              tier={tiers[3].tier}
             />
           </View>
 
@@ -260,7 +377,12 @@ export default function NutritionMissionCard({
                 {onTrackText}
               </Text>
             </View>
-            <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
+            <View
+              style={[
+                styles.progressBarBg,
+                { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' },
+              ]}
+            >
               <View
                 style={[
                   styles.progressBarFill,
@@ -297,12 +419,16 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  badgeColumn: {
+    alignItems: 'flex-end',
+    gap: 3,
   },
   xpBadge: {
     flexDirection: 'row',
@@ -316,6 +442,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
+  },
+  xpSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  xpSubtitle: {
+    fontSize: 10,
+    fontWeight: '500',
   },
   grid: {
     flexDirection: 'row',
@@ -354,6 +489,21 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '500',
     marginTop: 1,
+  },
+  tierPill: {
+    marginTop: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: borderRadius.full,
+  },
+  tierPillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  tierPillPlaceholder: {
+    marginTop: 4,
+    height: 17, // same height as pill so grid rows stay aligned
   },
   progressSection: {
     marginTop: spacing.xs,
