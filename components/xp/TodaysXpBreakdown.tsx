@@ -1,17 +1,15 @@
 /**
  * TodaysXpBreakdown
  *
- * Compact card showing XP earned today by category.
- * Prefers the server-supplied today_breakdown field; falls back gracefully
- * if the backend hasn't deployed that field yet.
+ * Horizontal grid of XP source tiles showing today's XP by category.
+ * Prefers the server-supplied today_breakdown field; falls back gracefully.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Animated,
   Platform,
   TouchableOpacity,
 } from 'react-native';
@@ -38,6 +36,15 @@ const LABEL_ICONS: Record<string, IoniconsName> = {
   Activity: 'flash',
 };
 
+// Fixed tile categories always shown
+const FIXED_TILES: { label: string; icon: IoniconsName }[] = [
+  { label: 'Meals', icon: 'restaurant' },
+  { label: 'Protein', icon: 'fitness' },
+  { label: 'Calories', icon: 'pie-chart' },
+  { label: 'Steps', icon: 'walk' },
+  { label: 'Workout', icon: 'barbell' },
+];
+
 function iconForLabel(label: string): IoniconsName {
   return LABEL_ICONS[label] ?? 'flash';
 }
@@ -45,11 +52,9 @@ function iconForLabel(label: string): IoniconsName {
 // ─── Breakdown derivation ─────────────────────────────────────────────────────
 
 function getBreakdownItems(status: XpStatus): XpBreakdownEntry[] {
-  // Prefer the server-supplied breakdown
   if (status.today_breakdown && status.today_breakdown.length > 0) {
     return status.today_breakdown;
   }
-  // Fallback: if backend hasn't deployed yet, show a single "Activity" row
   if (status.xp_today > 0) {
     return [{ event_type: 'unknown', label: 'Activity', xp: status.xp_today }];
   }
@@ -64,30 +69,34 @@ interface TodaysXpBreakdownProps {
   onScrollToMissions?: () => void;
 }
 
-// ─── Row component ────────────────────────────────────────────────────────────
+// ─── XP Tile ──────────────────────────────────────────────────────────────────
 
-interface BreakdownRowProps {
-  entry: XpBreakdownEntry;
+interface XpTileProps {
+  label: string;
+  icon: IoniconsName;
+  xp: number;
   isDark: boolean;
 }
 
-function BreakdownRow({ entry, isDark }: BreakdownRowProps) {
-  const xpDisplay = '+' + entry.xp.toLocaleString();
-  const iconName = iconForLabel(entry.label);
+function XpTile({ label, icon, xp, isDark }: XpTileProps) {
+  const hasXp = xp > 0;
+  const xpDisplay = '+' + xp;
+  const iconColor = hasXp ? colors.primary : (isDark ? '#3A3C52' : '#D4D6DA');
+  const iconBg = hasXp
+    ? (isDark ? colors.primary + '22' : colors.primary + '15')
+    : (isDark ? '#252740' : '#F3F4F6');
+  const labelColor = hasXp ? (isDark ? '#A0A2B8' : '#6B7280') : (isDark ? '#3A3C52' : '#CBD5E1');
+  const xpColor = hasXp ? colors.primary : (isDark ? '#3A3C52' : '#D4D6DA');
+
   return (
-    <View style={styles.breakdownRow}>
-      <View style={styles.breakdownLeft}>
-        <Ionicons
-          name={iconName}
-          size={16}
-          color={isDark ? '#A0A2B8' : '#6B7280'}
-          style={styles.rowIcon}
-        />
-        <Text style={[styles.breakdownLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-          {entry.label}
-        </Text>
+    <View style={[styles.tile, { backgroundColor: isDark ? '#1E2035' : '#F9FAFB' }]}>
+      <View style={[styles.tileIconBg, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={20} color={iconColor} />
       </View>
-      <Text style={[styles.breakdownXp, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
+      <Text style={[styles.tileLabel, { color: labelColor }]}>
+        {label}
+      </Text>
+      <Text style={[styles.tileXp, { color: xpColor }]}>
         {xpDisplay}
       </Text>
     </View>
@@ -97,29 +106,24 @@ function BreakdownRow({ entry, isDark }: BreakdownRowProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }: TodaysXpBreakdownProps) {
-  const barAnim = useRef(new Animated.Value(0)).current;
-
   const xpToday = status?.xp_today ?? 0;
-  const capProgress = Math.min(xpToday / DAILY_CAP, 1);
   const xpTodayDisplay = '+' + xpToday.toLocaleString();
-  const xpTodayRaw = xpToday.toLocaleString();
-  const capDisplay = DAILY_CAP.toLocaleString();
-
-  useEffect(() => {
-    Animated.timing(barAnim, {
-      toValue: capProgress,
-      duration: 800,
-      useNativeDriver: false,
-    }).start();
-  }, [capProgress, barAnim]);
-
-  const barWidth = barAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
+  const isEmpty = xpToday === 0;
 
   const breakdown = status ? getBreakdownItems(status) : [];
-  const isEmpty = xpToday === 0;
+
+  // Build a lookup map from breakdown
+  const xpByLabel: Record<string, number> = {};
+  breakdown.forEach((entry) => {
+    xpByLabel[entry.label] = (xpByLabel[entry.label] ?? 0) + entry.xp;
+  });
+
+  // CTA banner
+  const xpRemaining = Math.max(0, DAILY_CAP - xpToday);
+  const capReached = xpToday >= DAILY_CAP;
+  const bannerText = capReached
+    ? 'Daily cap reached!'
+    : 'Earn ' + xpRemaining + ' XP more today to reach your daily goal';
 
   return (
     <View
@@ -141,63 +145,59 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
         </Text>
       </View>
 
-      {isEmpty ? (
-        /* Empty state */
-        <View style={styles.emptyState}>
-          <Ionicons name="flash-outline" size={32} color={isDark ? '#3A3C52' : '#D4D6DA'} />
-          <Text style={[styles.emptyTitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            No XP yet today
+      {/* Tile grid — always shown, greyed out when empty */}
+      <View style={styles.tileRow}>
+        {FIXED_TILES.map((tile) => {
+          const tileXp = xpByLabel[tile.label] ?? 0;
+          return (
+            <XpTile
+              key={tile.label}
+              label={tile.label}
+              icon={tile.icon}
+              xp={tileXp}
+              isDark={isDark}
+            />
+          );
+        })}
+      </View>
+
+      {/* Empty state CTA */}
+      {isEmpty && onScrollToMissions && (
+        <TouchableOpacity
+          style={[styles.ctaButton, { backgroundColor: colors.primary }]}
+          onPress={() => {
+            console.log('[TodaysXpBreakdown] View Missions pressed');
+            onScrollToMissions();
+          }}
+        >
+          <Text style={styles.ctaText}>
+            View Missions
           </Text>
-          <Text style={[styles.emptySubtitle, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
-            Complete a mission to start earning
-          </Text>
-          {onScrollToMissions && (
-            <TouchableOpacity
-              style={[styles.ctaButton, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                console.log('[TodaysXpBreakdown] CTA pressed — scrolling to missions');
-                onScrollToMissions();
-              }}
-            >
-              <Text style={styles.ctaText}>
-                View Missions
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      ) : (
-        /* Breakdown list */
-        <View style={styles.breakdownList}>
-          {breakdown.map((item, idx) => (
-            <BreakdownRow key={item.event_type + '_' + idx} entry={item} isDark={isDark} />
-          ))}
-        </View>
+        </TouchableOpacity>
       )}
 
-      {/* Daily cap bar */}
-      <View style={styles.capSection}>
-        <View style={styles.capHeader}>
-          <Text style={[styles.capLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            Daily cap
-          </Text>
-          <Text style={[styles.capValue, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            {xpTodayRaw}
-            {' / '}
-            {capDisplay}
-            {' XP'}
-          </Text>
-        </View>
-        <View style={[styles.capBarBg, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-          <Animated.View
-            style={[
-              styles.capBarFill,
-              {
-                width: barWidth,
-                backgroundColor: capProgress >= 1 ? '#34D399' : colors.primary,
-              },
-            ]}
-          />
-        </View>
+      {/* CTA banner replacing daily cap bar */}
+      <View
+        style={[
+          styles.banner,
+          {
+            backgroundColor: capReached
+              ? (isDark ? '#34D39922' : '#34D39915')
+              : (isDark ? colors.primary + '22' : colors.primary + '15'),
+          },
+        ]}
+      >
+        {capReached && (
+          <Ionicons name="flame" size={14} color="#34D399" style={styles.bannerIcon} />
+        )}
+        <Text
+          style={[
+            styles.bannerText,
+            { color: capReached ? '#34D399' : colors.primary },
+          ]}
+        >
+          {bannerText}
+        </Text>
       </View>
     </View>
   );
@@ -233,80 +233,64 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
   },
-  breakdownList: {
-    marginBottom: spacing.md,
-  },
-  breakdownRow: {
+  tileRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  breakdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rowIcon: {
-    width: 20,
-  },
-  breakdownLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  breakdownXp: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    gap: spacing.xs,
     marginBottom: spacing.md,
+    gap: spacing.xs,
   },
-  emptyTitle: {
-    fontSize: 15,
+  tile: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: 4,
+    borderRadius: borderRadius.md,
+    gap: 4,
+  },
+  tileIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileLabel: {
+    fontSize: 9,
     fontWeight: '600',
-    marginTop: spacing.xs,
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
-  emptySubtitle: {
+  tileXp: {
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: '800',
   },
   ctaButton: {
-    marginTop: spacing.sm,
+    alignSelf: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
   },
   ctaText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
   },
-  capSection: {
-    marginTop: spacing.xs,
-  },
-  capHeader: {
+  banner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: 6,
   },
-  capLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+  bannerIcon: {
+    marginRight: 2,
   },
-  capValue: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  capBarBg: {
-    height: 5,
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
-  },
-  capBarFill: {
-    height: '100%',
-    borderRadius: borderRadius.full,
+  bannerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

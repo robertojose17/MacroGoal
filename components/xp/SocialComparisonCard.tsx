@@ -1,13 +1,14 @@
 /**
  * SocialComparisonCard
  *
- * Shows the user's standing relative to other users.
- * Hides meaningless percentiles for small sample sizes.
+ * Compact horizontal pill/banner showing the user's standing relative to others.
+ * Sits right below the Hero Card as a sub-hero strip.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { rankColors } from '@/constants/Colors';
 import type { UserRanking } from '@/types/xp';
@@ -34,169 +35,114 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
   const totalUsersDisplay = hasEnoughData ? ranking!.total_users.toLocaleString() : '';
 
   return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: isDark ? colors.cardDark : colors.card,
-          borderColor: isDark ? '#3A3C52' : '#D4D6DA',
-        },
-      ]}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.cardTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-          Your Standing
-        </Text>
-        <Text style={styles.globeEmoji}>🌍</Text>
-      </View>
+    <View style={styles.wrapper}>
+      <LinearGradient
+        colors={[gradStart + '15', gradEnd + '08']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[
+          styles.pill,
+          { borderColor: rankColor.text + '33' },
+        ]}
+      >
+        <Ionicons name="globe-outline" size={16} color={rankColor.text} style={styles.globeIcon} />
 
-      {hasEnoughData ? (
-        <>
-          {/* Gradient stat block */}
-          <LinearGradient
-            colors={[gradStart + '22', gradEnd + '11']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.statBlock, { borderColor: rankColor.text + '33' }]}
-          >
-            <View style={styles.topRow}>
-              <Text style={styles.topLabel}>TOP</Text>
-              <Text style={[styles.topPercent, { color: rankColor.text }]}>
-                {topPercentDisplay}
-                <Text style={styles.topPercentSign}>%</Text>
-              </Text>
-            </View>
-            <Text style={[styles.subtitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-              {'More consistent than '}
+        {hasEnoughData ? (
+          <View style={styles.statsRow}>
+            <Text style={[styles.statChip, { color: rankColor.text }]}>
+              {'TOP '}
+              {topPercentDisplay}
+              {'%'}
+            </Text>
+            <Text style={[styles.separator, { color: isDark ? '#3A3C52' : '#D4D6DA' }]}>
+              {'·'}
+            </Text>
+            <Text style={[styles.statText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+              {'Better than '}
               {betterThanDisplay}
-              {'% of users'}
+              {'%'}
             </Text>
             {rankPositionDisplay !== '' && (
-              <Text style={[styles.rankPosition, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
-                {rankPositionDisplay}
-                {' of '}
-                {totalUsersDisplay}
-              </Text>
+              <>
+                <Text style={[styles.separator, { color: isDark ? '#3A3C52' : '#D4D6DA' }]}>
+                  {'·'}
+                </Text>
+                <Text style={[styles.statText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+                  {rankPositionDisplay}
+                  {' of '}
+                  {totalUsersDisplay}
+                </Text>
+              </>
             )}
-          </LinearGradient>
-
-          {/* Beta note */}
-          <Text style={[styles.betaNote, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
-            Beta — friend rankings coming soon
-          </Text>
-        </>
-      ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>🌱</Text>
+          </View>
+        ) : (
           <Text style={[styles.emptyText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            Building your community...
+            Building your community — keep earning XP!
           </Text>
-          <Text style={[styles.emptySubtext, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
-            Keep earning XP to unlock your ranking!
-          </Text>
-          <Text style={[styles.betaNote, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
-            Beta — friend rankings coming soon
-          </Text>
-        </View>
-      )}
+        )}
+      </LinearGradient>
+      <Text style={[styles.betaNote, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
+        Beta — friend rankings coming soon
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
+  wrapper: {
     marginBottom: spacing.md,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
+    gap: spacing.sm,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
       },
-      android: { elevation: 2 },
+      android: { elevation: 1 },
     }),
   },
-  header: {
+  globeIcon: {
+    flexShrink: 0,
+  },
+  statsRow: {
+    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  globeEmoji: {
-    fontSize: 18,
-  },
-  statBlock: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    alignItems: 'center',
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 4,
   },
-  topLabel: {
+  statChip: {
     fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 2,
-    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.3,
   },
-  topPercent: {
-    fontSize: 52,
-    fontWeight: '900',
-    lineHeight: 58,
-    letterSpacing: -2,
+  separator: {
+    fontSize: 13,
+    fontWeight: '400',
   },
-  topPercentSign: {
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  subtitle: {
-    fontSize: 14,
+  statText: {
+    fontSize: 13,
     fontWeight: '500',
-    textAlign: 'center',
-    marginBottom: 4,
   },
-  rankPosition: {
-    fontSize: 12,
+  emptyText: {
+    flex: 1,
+    fontSize: 13,
     fontWeight: '500',
-    marginTop: 2,
   },
   betaNote: {
     fontSize: 11,
     fontWeight: '400',
     textAlign: 'center',
-    marginTop: spacing.xs,
+    marginTop: 4,
     fontStyle: 'italic',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
-  },
-  emptyEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.xs,
-  },
-  emptyText: {
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    fontSize: 13,
-    fontWeight: '400',
-    textAlign: 'center',
   },
 });
