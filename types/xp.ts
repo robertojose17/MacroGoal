@@ -75,6 +75,10 @@ export type UserRanking = {
   rank_position: number | null;
   total_users: number;
   percentile: number | null;
+  // NEW — lifetime consistency-based ranking
+  consistency_score: number;          // 0-100, default 0 if no meals ever
+  consistency_rank: number | null;    // null if user has no meals
+  consistency_percentile: number;     // 0-100, default 0 if no meals ever
 };
 
 export type XpBreakdownEntry = {

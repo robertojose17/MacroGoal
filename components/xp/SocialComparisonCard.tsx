@@ -28,7 +28,9 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
   // Pre-compute display values
   const topPercent = hasEnoughData ? Math.max(1, Math.round(100 - (ranking!.percentile ?? 0))) : 0;
   const topPercentDisplay = String(topPercent);
-  const betterThanDisplay = hasEnoughData ? (ranking!.percentile ?? 0).toFixed(0) : '0';
+  const consistencyPercentDisplay = hasEnoughData
+    ? (ranking!.consistency_percentile ?? 0).toFixed(0)
+    : '0';
   const rankPositionDisplay = hasEnoughData && ranking!.rank_position !== null
     ? '#' + ranking!.rank_position
     : '';
@@ -58,8 +60,8 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
               {'·'}
             </Text>
             <Text style={[styles.statText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-              {'Better than '}
-              {betterThanDisplay}
+              {'More consistent than '}
+              {consistencyPercentDisplay}
               {'%'}
             </Text>
             {rankPositionDisplay !== '' && (
