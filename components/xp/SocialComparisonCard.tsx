@@ -31,10 +31,7 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
   const consistencyPercentDisplay = hasEnoughData
     ? (ranking!.consistency_percentile ?? 0).toFixed(0)
     : '0';
-  const rankPositionDisplay = hasEnoughData && ranking!.rank_position !== null
-    ? '#' + ranking!.rank_position
-    : '';
-  const totalUsersDisplay = hasEnoughData ? ranking!.total_users.toLocaleString() : '';
+
 
   return (
     <View style={styles.wrapper}>
@@ -62,20 +59,8 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
             <Text style={[styles.statText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
               {'More consistent than '}
               {consistencyPercentDisplay}
-              {'%'}
+              {'% of users'}
             </Text>
-            {rankPositionDisplay !== '' && (
-              <>
-                <Text style={[styles.separator, { color: isDark ? '#3A3C52' : '#D4D6DA' }]}>
-                  {'·'}
-                </Text>
-                <Text style={[styles.statText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-                  {rankPositionDisplay}
-                  {' of '}
-                  {totalUsersDisplay}
-                </Text>
-              </>
-            )}
           </View>
         ) : (
           <Text style={[styles.emptyText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
