@@ -1,5 +1,6 @@
 
 import { OpenFoodFactsProduct, extractServingSize, extractNutrition } from '@/utils/openFoodFacts';
+import { formatServing } from '@/utils/servingFormat';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
@@ -343,7 +344,7 @@ export default function FoodDetailsLayout({
           fat_100g: food.fats,
           fiber_100g: food.fiber || 0,
         },
-        serving_size: mealItem.serving_description || `${food.serving_amount}${food.serving_unit}`,
+        serving_size: `${food.serving_amount} ${food.serving_unit}`,
         serving_quantity: food.serving_amount,
       };
 
@@ -560,33 +561,32 @@ export default function FoodDetailsLayout({
       const nutrition = extractNutrition(product);
       const servingInfo = extractServingSize(product);
 
-      // Build a human-readable serving description.
-      // - For 'default' (discrete unit like "1 cookie"): if numberOfServings is 1, use the description
-      //   as-is. If > 1, multiply: "3 × 1 cookie".
-      // - For continuous units (g/oz/lb): show the total amount in the user's selected unit.
-      const defaultServingDesc = extractServingSize(product).description;
+      // Build a human-readable serving description using formatServing for proper pluralization.
+      // - For 'default' (discrete unit e.g. "slice", "cookie"): multiply numberOfServings by the
+      //   food's base serving amount and format with the base unit. E.g. 6 × "1 slice" → "6 slices".
+      // - For continuous units (g/oz/lb): show the total amount in the selected unit.
+      const baseServing = extractServingSize(product);
       const servingsCountForDisplay = parseFloat(numberOfServings) || 1;
 
       let servingDescription: string;
-      if (selectedServingOptionKey === 'default' && defaultServingDesc) {
-        if (servingsCountForDisplay === 1) {
-          servingDescription = defaultServingDesc;
-        } else {
-          const servingsLabel = Number.isInteger(servingsCountForDisplay)
-            ? servingsCountForDisplay.toString()
-            : servingsCountForDisplay.toFixed(1);
-          servingDescription = `${servingsLabel} × ${defaultServingDesc}`;
+      if (selectedServingOptionKey === 'default') {
+        // Parse the leading number and unit from the base description (e.g. "1 slice" → 1, "slice")
+        const baseDescMatch = (baseServing.description || '').match(/^([\d.]+)\s*(.+)$/);
+        const baseAmount = baseDescMatch ? parseFloat(baseDescMatch[1]) : 1;
+        let baseUnit = baseDescMatch ? baseDescMatch[2].trim() : 'serving';
+        // Singularize if the base unit is already plural (rare upstream data), so formatServing can re-pluralize correctly
+        if (baseUnit.length > 2 && baseUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(baseUnit.toLowerCase())) {
+          baseUnit = baseUnit.slice(0, -1);
         }
+        const totalUnits = servingsCountForDisplay * baseAmount;
+        servingDescription = formatServing(totalUnits, baseUnit);
       } else {
         // Continuous unit (g/oz/lb). numberOfServings is the count in the selected unit.
         const unitSuffix =
           selectedServingOptionKey === 'oz' ? 'oz' :
           selectedServingOptionKey === 'lb' ? 'lb' :
           'g';
-        const formattedAmount = Number.isInteger(servingsCountForDisplay)
-          ? servingsCountForDisplay.toString()
-          : servingsCountForDisplay.toFixed(1);
-        servingDescription = `${formattedAmount} ${unitSuffix}`;
+        servingDescription = formatServing(servingsCountForDisplay, unitSuffix);
       }
 
       console.log('[FoodDetailsLayout] handleSave serving_description:', servingDescription, '| selectedServingOptionKey:', selectedServingOptionKey, '| numberOfServings:', numberOfServings);
