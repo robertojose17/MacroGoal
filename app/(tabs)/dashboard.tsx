@@ -17,9 +17,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import ProgressCard from '@/components/ProgressCard';
 import PhotoProgressCard from '@/components/PhotoProgressCard';
-import ConsistencyScore from '@/components/ConsistencyScore';
+import CompactConsistencyCard from '@/components/CompactConsistencyCard';
+import CompactProgressCard from '@/components/CompactProgressCard';
 import ShareableProgressCard from '@/components/ShareableProgressCard';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import * as Sharing from 'expo-sharing';
@@ -690,20 +690,16 @@ export default function DashboardScreen() {
           />
         </CardErrorBoundary>
 
-        {/* ── Consistency Score + Progress Card side-by-side ── */}
+        {/* ── Consistency Score + Weight Progress (compact, full-width) ── */}
         {user && (
-          <View style={styles.sideBySideRow}>
-            <View style={styles.sideBySideCell}>
-              <CardErrorBoundary label="ConsistencyScore">
-                <ConsistencyScore userId={user.id} isDark={isDark} />
-              </CardErrorBoundary>
-            </View>
-            <View style={styles.sideBySideCell}>
-              <CardErrorBoundary label="ProgressCard">
-                <ProgressCard userId={user.id} isDark={isDark} />
-              </CardErrorBoundary>
-            </View>
-          </View>
+          <>
+            <CardErrorBoundary label="CompactConsistencyCard">
+              <CompactConsistencyCard userId={user.id} isDark={isDark} />
+            </CardErrorBoundary>
+            <CardErrorBoundary label="CompactProgressCard">
+              <CompactProgressCard userId={user.id} isDark={isDark} />
+            </CardErrorBoundary>
+          </>
         )}
 
         {/* ── Photo Progress Card ── */}
@@ -883,15 +879,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingBottom: 32,
-  },
-  sideBySideRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  sideBySideCell: {
-    flex: 1,
-    minWidth: 0,
   },
   bottomSpacer: {
     height: 48,
