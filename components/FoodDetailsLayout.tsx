@@ -348,11 +348,28 @@ export default function FoodDetailsLayout({
       };
 
       setProduct(mockProduct);
-      const gramsPerServing = (mealItem.grams || 100) / (mealItem.quantity || 1);
+      const rawQuantity = mealItem.quantity || 1;
+      const gramsPerServing = (mealItem.grams || 100) / rawQuantity;
       setServingAmount(gramsPerServing);
       setServingUnit('serving');
-      setNumberOfServings(mealItem.quantity.toString());
-      setSelectedServingOptionKey('default');
+
+      // Detect whether the saved serving was a discrete unit (cookie/slice/piece) or a gram amount.
+      // If serving_description matches a "<number> g" / "<number> oz" / "<number> lb" pattern,
+      // it was saved with a continuous unit and `quantity` may legitimately be fractional.
+      // Otherwise, treat it as discrete and round to a whole number (minimum 1).
+      const desc = (mealItem.serving_description || '').toLowerCase();
+      const isContinuousUnit = /\d+(\.\d+)?\s*(g|oz|lb|ml)\b/.test(desc);
+      if (isContinuousUnit) {
+        setNumberOfServings(rawQuantity.toString());
+        // Pick the matching servingOptionKey based on the unit found in the description
+        if (/\bg\b/.test(desc)) setSelectedServingOptionKey('g');
+        else if (/\boz\b/.test(desc)) setSelectedServingOptionKey('oz');
+        else if (/\blb\b/.test(desc)) setSelectedServingOptionKey('lb');
+        else setSelectedServingOptionKey('default');
+      } else {
+        setNumberOfServings(Math.max(1, Math.round(rawQuantity)).toString());
+        setSelectedServingOptionKey('default');
+      }
 
       await checkFavoriteStatus(mockProduct);
     } catch (error) {
@@ -462,7 +479,15 @@ export default function FoodDetailsLayout({
     const totalGrams = servingAmount * (parseFloat(numberOfServings) || 1);
     const newNumberOfServings = totalGrams / option.gramsPerUnit;
     setServingAmount(option.gramsPerUnit);
-    setNumberOfServings(newNumberOfServings.toFixed(2));
+    // Discrete units (default = "1 cookie", "1 slice", etc.) must be whole numbers.
+    // Continuous units (g/oz/lb) can be fractional.
+    const isDiscrete = option.key === 'default';
+    if (isDiscrete) {
+      const rounded = Math.max(1, Math.round(newNumberOfServings));
+      setNumberOfServings(rounded.toString());
+    } else {
+      setNumberOfServings(newNumberOfServings.toFixed(2));
+    }
     setSelectedServingOptionKey(option.key);
     setShowUnitOptions(false);
   };
