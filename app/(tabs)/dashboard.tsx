@@ -1096,30 +1096,30 @@ export default function DashboardScreen() {
           </CardErrorBoundary>
         )}
 
+        {/* ── Share My Progress button ── */}
+        <View style={styles.shareProgressButtonContainer}>
+          <TouchableOpacity
+            style={styles.shareProgressButton}
+            onPress={() => {
+              console.log('[Dashboard] Share My Progress pressed');
+              router.push('/share-progress?variant=level');
+            }}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={[colors.primary, '#FF8E3C']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.shareProgressGradient}
+            >
+              <Ionicons name="share-social" size={20} color="#fff" />
+              <Text style={styles.shareProgressButtonText}>Share My Progress</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
-
-      {/* ── Sticky Share My Progress button ── */}
-      <View style={styles.stickyButtonContainer} pointerEvents="box-none">
-        <TouchableOpacity
-          style={styles.shareProgressButton}
-          onPress={() => {
-            console.log('[Dashboard] Sticky Share My Progress pressed');
-            router.push('/share-progress?variant=level');
-          }}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[colors.primary, '#FF8E3C']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.shareProgressGradient}
-          >
-            <Ionicons name="share-social" size={20} color="#fff" />
-            <Text style={styles.shareProgressButtonText}>Share My Progress</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
 
       {/* Hidden ShareableProgressCard for capture */}
       {shareCardData && (
@@ -1393,7 +1393,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: 160,
+    paddingBottom: 32,
   },
   card: {
     borderRadius: borderRadius.lg,
@@ -1489,14 +1489,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   bottomSpacer: {
-    height: 40,
+    height: 48,
   },
-  stickyButtonContainer: {
-    position: 'absolute',
-    bottom: 90,
-    left: spacing.md,
-    right: spacing.md,
-    zIndex: 10,
+  shareProgressButtonContainer: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
