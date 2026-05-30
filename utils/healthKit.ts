@@ -16,6 +16,12 @@
 
 import { Platform } from 'react-native';
 
+// ─── DEV MOCK ─────────────────────────────────────────────────────────────────
+// Set MOCK_STEPS to a number to bypass HealthKit / Health Connect entirely.
+// This lets you test the app in Expo Go without running a native build.
+// Set to null to re-enable real health data (requires a native build).
+const MOCK_STEPS: number | null = 8500;
+
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export type PermissionStatus = 'granted' | 'denied' | 'not_determined';
@@ -277,6 +283,10 @@ async function android_getStepsForDate(date: Date): Promise<StepsResult> {
  * Safe to call multiple times — subsequent calls are cheap.
  */
 export async function initializeHealthData(): Promise<{ available: boolean }> {
+  if (MOCK_STEPS !== null) {
+    console.log('[healthKit] MOCK MODE — initializeHealthData returning available=true');
+    return { available: true };
+  }
   console.log('[healthKit] initializeHealthData, platform:', Platform.OS);
   if (Platform.OS === 'ios') return ios_initialize();
   if (Platform.OS === 'android') return android_initialize();
@@ -289,6 +299,10 @@ export async function initializeHealthData(): Promise<{ available: boolean }> {
  * Safe to call multiple times.
  */
 export async function requestStepsPermission(): Promise<PermissionStatus> {
+  if (MOCK_STEPS !== null) {
+    console.log('[healthKit] MOCK MODE — requestStepsPermission returning granted');
+    return 'granted';
+  }
   console.log('[healthKit] requestStepsPermission, platform:', Platform.OS);
   if (Platform.OS === 'ios') return ios_requestPermission();
   if (Platform.OS === 'android') return android_requestPermission();
@@ -308,6 +322,10 @@ export async function getTodaySteps(): Promise<StepsResult> {
  * Read step count for a specific date (useful for backfilling missions).
  */
 export async function getStepsForDate(date: Date): Promise<StepsResult> {
+  if (MOCK_STEPS !== null) {
+    console.log('[healthKit] MOCK MODE — returning', MOCK_STEPS, 'steps for', date.toISOString());
+    return { available: true, permission: 'granted', steps: MOCK_STEPS };
+  }
   console.log('[healthKit] getStepsForDate:', date.toISOString());
   if (Platform.OS === 'ios') return ios_getStepsForDate(date);
   if (Platform.OS === 'android') return android_getStepsForDate(date);
