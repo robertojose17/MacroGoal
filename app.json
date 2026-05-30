@@ -18,8 +18,10 @@
       "bundleIdentifier": "com.robertojose17.macrogoal",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSSpeechRecognitionUsageDescription": "We need access to speech recognition to transcribe your voice input for the AI meal estimator",
-        "NSPhotoLibraryUsageDescription": "Elite Macro Tracker needs access to your photo library to let you select progress photos for your weight check-ins. For example, you can choose a photo from your gallery to track your body transformation over time alongside your weight measurements."
+        "NSSpeechRecognitionUsageDescription": "Macro Goal uses speech recognition to transcribe your voice when you describe meals to the AI meal estimator.",
+        "NSPhotoLibraryUsageDescription": "Macro Goal needs access to your photo library so you can attach progress photos to your weight check-ins and track your transformation over time.",
+        "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
+        "NSHealthUpdateUsageDescription": "Macro Goal writes your nutrition data to Apple Health to keep your health profile in sync across all your apps."
       }
     },
     "android": {
@@ -46,19 +48,19 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Elite Macro Tracker to access your camera for barcode scanning"
+          "cameraPermission": "Macro Goal uses your camera to scan barcodes on food packaging so you can quickly add accurate nutrition information."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow Elite Macro Tracker to access your microphone for voice input"
+          "microphonePermission": "Macro Goal uses your microphone so you can describe meals by voice to the AI meal estimator."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Elite Macro Tracker needs access to your photo library to let you select progress photos for your weight check-ins. For example, you can choose a photo from your gallery to track your body transformation over time alongside your weight measurements."
+          "photosPermission": "Macro Goal needs access to your photo library so you can attach progress photos to your weight check-ins and track your transformation over time."
         }
       ],
       [
