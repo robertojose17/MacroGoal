@@ -560,14 +560,36 @@ export default function FoodDetailsLayout({
       const nutrition = extractNutrition(product);
       const servingInfo = extractServingSize(product);
 
-      // Build a human-readable serving description
-      // For the default option, use the product's serving description (e.g. "1 slice", "1 cookie")
-      // For g/oz/lb options, use the gram amount
+      // Build a human-readable serving description.
+      // - For 'default' (discrete unit like "1 cookie"): if numberOfServings is 1, use the description
+      //   as-is. If > 1, multiply: "3 × 1 cookie".
+      // - For continuous units (g/oz/lb): show the total amount in the user's selected unit.
       const defaultServingDesc = extractServingSize(product).description;
-      const servingDescription = selectedServingOptionKey === 'default' && defaultServingDesc
-        ? defaultServingDesc
-        : `${servingAmount % 1 === 0 ? servingAmount : servingAmount.toFixed(2)} g`;
-      console.log('[FoodDetailsLayout] handleSave serving_description:', servingDescription, '| selectedServingOptionKey:', selectedServingOptionKey);
+      const servingsCountForDisplay = parseFloat(numberOfServings) || 1;
+
+      let servingDescription: string;
+      if (selectedServingOptionKey === 'default' && defaultServingDesc) {
+        if (servingsCountForDisplay === 1) {
+          servingDescription = defaultServingDesc;
+        } else {
+          const servingsLabel = Number.isInteger(servingsCountForDisplay)
+            ? servingsCountForDisplay.toString()
+            : servingsCountForDisplay.toFixed(1);
+          servingDescription = `${servingsLabel} × ${defaultServingDesc}`;
+        }
+      } else {
+        // Continuous unit (g/oz/lb). numberOfServings is the count in the selected unit.
+        const unitSuffix =
+          selectedServingOptionKey === 'oz' ? 'oz' :
+          selectedServingOptionKey === 'lb' ? 'lb' :
+          'g';
+        const formattedAmount = Number.isInteger(servingsCountForDisplay)
+          ? servingsCountForDisplay.toString()
+          : servingsCountForDisplay.toFixed(1);
+        servingDescription = `${formattedAmount} ${unitSuffix}`;
+      }
+
+      console.log('[FoodDetailsLayout] handleSave serving_description:', servingDescription, '| selectedServingOptionKey:', selectedServingOptionKey, '| numberOfServings:', numberOfServings);
 
       // Meal-plan mode: delegate to onMealPlanSave callback
       if (onMealPlanSave) {
