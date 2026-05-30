@@ -101,27 +101,50 @@ export function useSteps(): UseStepsResult {
     };
   }, [fetchSteps]);
 
-  // ─── AppState: refresh on foreground ───────────────────────────────────────
+  // ─── AppState: refresh on foreground + 60s polling while active ───────────
 
   useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
     let previousState: AppStateStatus = AppState.currentState;
 
-    const subscription = AppState.addEventListener(
-      'change',
-      (nextState: AppStateStatus) => {
-        const wasBackground =
-          previousState === 'background' || previousState === 'inactive';
-        const isNowActive = nextState === 'active';
-        previousState = nextState;
+    const startPolling = () => {
+      if (intervalId) return; // already running
+      console.log('[useSteps] starting 60s polling');
+      intervalId = setInterval(() => {
+        console.log('[useSteps] interval tick — refreshing steps');
+        fetchSteps();
+      }, 60_000);
+    };
 
-        if (wasBackground && isNowActive) {
-          console.log('[useSteps] app foregrounded — refreshing steps');
-          fetchSteps();
-        }
+    const stopPolling = () => {
+      if (intervalId) {
+        console.log('[useSteps] stopping polling');
+        clearInterval(intervalId);
+        intervalId = null;
       }
-    );
+    };
+
+    // Start immediately if app is already active
+    if (AppState.currentState === 'active') {
+      startPolling();
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const wasBackground = previousState === 'background' || previousState === 'inactive';
+      const isNowActive = nextState === 'active';
+      previousState = nextState;
+
+      if (wasBackground && isNowActive) {
+        console.log('[useSteps] app foregrounded — refreshing + restarting polling');
+        fetchSteps();
+        startPolling();
+      } else if (nextState !== 'active') {
+        stopPolling();
+      }
+    });
 
     return () => {
+      stopPolling();
       subscription.remove();
     };
   }, [fetchSteps]);

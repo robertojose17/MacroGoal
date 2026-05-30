@@ -13,6 +13,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSteps } from '@/hooks/useSteps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -50,6 +51,7 @@ export default function CheckInFormScreen() {
   // Steps fields
   const [steps, setSteps] = useState('');
   const [stepsGoal, setStepsGoal] = useState('');
+  const { steps: liveSteps, loading: stepsLoading, refresh: refreshSteps } = useSteps();
   
   // Gym fields
   const [wentToGym, setWentToGym] = useState(true);
@@ -167,6 +169,14 @@ export default function CheckInFormScreen() {
     initializeForm();
   }, [initializeForm]);
 
+  // Auto-fill steps from HealthKit when in steps check-in mode (not editing)
+  useEffect(() => {
+    if (checkInType === 'steps' && !isEditing && liveSteps !== null) {
+      console.log('[CheckInForm] Auto-filling steps from HealthKit:', liveSteps);
+      setSteps(liveSteps.toString());
+    }
+  }, [liveSteps, checkInType, isEditing]);
+
   // Sync a check-in entry to tracker_entries so the tracker detail "Recent Entries" stays in sync
   const syncToTrackerEntries = async (
     _userId: string,
@@ -225,8 +235,11 @@ export default function CheckInFormScreen() {
         setSaving(false);
         return;
       }
-      if (checkInType === 'steps' && !steps) {
-        Alert.alert('Missing Steps', 'Please enter your steps');
+      if (checkInType === 'steps' && liveSteps === null) {
+        Alert.alert(
+          'Steps Not Available',
+          'Could not read your steps from Apple Health. Make sure Health permissions are enabled and try again.'
+        );
         setSaving(false);
         return;
       }
@@ -250,7 +263,7 @@ export default function CheckInFormScreen() {
         console.log('[CheckInForm] ⚖️ Converting weight for storage:', weightValue, 'lbs →', weightInKg, 'kg');
         checkInData.weight = weightInKg;
       } else if (checkInType === 'steps') {
-        checkInData.steps = steps ? parseInt(steps, 10) : null;
+        checkInData.steps = liveSteps; // already a number from the hook
         checkInData.steps_goal = stepsGoal ? parseInt(stepsGoal, 10) : null;
       } else if (checkInType === 'gym') {
         checkInData.went_to_gym = wentToGym;
@@ -551,23 +564,66 @@ export default function CheckInFormScreen() {
         {/* Steps Fields */}
         {checkInType === 'steps' && (
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Steps</Text>
-            <TextInput
+            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Steps Today</Text>
+            <View
               style={[
-                styles.input,
+                styles.stepsDisplayCard,
                 {
                   backgroundColor: isDark ? colors.backgroundDark : colors.background,
                   borderColor: isDark ? colors.borderDark : colors.border,
-                  color: isDark ? colors.textDark : colors.text,
                 },
               ]}
-              placeholder="Enter steps"
-              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              value={steps}
-              onChangeText={setSteps}
-              keyboardType="number-pad"
-            />
-            
+            >
+              <View style={styles.stepsIconCircle}>
+                <IconSymbol
+                  ios_icon_name="figure.walk"
+                  android_material_icon_name="directions_walk"
+                  size={26}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.stepsTextColumn}>
+                {stepsLoading && liveSteps === null ? (
+                  <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
+                    Loading…
+                  </Text>
+                ) : liveSteps !== null ? (
+                  <>
+                    <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
+                      {liveSteps.toLocaleString()}
+                    </Text>
+                    <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      {Platform.OS === 'ios' ? 'From Apple Health · auto-updates' : 'From Health Connect · auto-updates'}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
+                      Not available
+                    </Text>
+                    <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Enable Health permissions to track steps automatically
+                    </Text>
+                  </>
+                )}
+              </View>
+              <TouchableOpacity
+                style={styles.stepsRefreshButton}
+                onPress={() => {
+                  console.log('[CheckInForm] Manual steps refresh tapped');
+                  refreshSteps();
+                }}
+                activeOpacity={0.7}
+              >
+                <IconSymbol
+                  ios_icon_name="arrow.clockwise"
+                  android_material_icon_name="refresh"
+                  size={18}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+
             <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.md }]}>
               Steps Goal
             </Text>
@@ -926,5 +982,43 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  stepsDisplayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  stepsIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary + '18',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepsTextColumn: {
+    flex: 1,
+    gap: 2,
+  },
+  stepsValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  stepsSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  stepsRefreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '15',
   },
 });
