@@ -32,7 +32,6 @@
       "package": "com.robertojose17.macrogoal",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.health.READ_STEPS",
         "android.permission.ACTIVITY_RECOGNITION"
       ]
     },
@@ -69,15 +68,7 @@
           "iosAppId": "ca-app-pub-5592015069000241~5529470607"
         }
       ],
-      "./plugins/withFollyCoroutineFix",
-      [
-        "@kingstinct/react-native-healthkit",
-        {
-          "NSHealthShareUsageDescription": "Macro Goal reads your step count to award XP for staying active.",
-          "NSHealthUpdateUsageDescription": "Macro Goal does not write to Health."
-        }
-      ],
-      "expo-health-connect"
+      "./plugins/withFollyCoroutineFix"
     ],
     "scheme": "macrogoal",
     "experiments": {
