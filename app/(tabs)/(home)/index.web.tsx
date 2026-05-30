@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import ProgressCircle from '@/components/ProgressCircle';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import { formatServing } from '@/utils/servingFormat';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -46,21 +47,12 @@ const formatDateForStorage = (date: Date): string => {
 };
 
 const getServingDisplayText = (item: FoodItem): string => {
-  // grams is the actual total grams added (serving_amount * number_of_servings),
-  // so always prefer it over serving_description which stores only the per-serving value.
-  if (item.grams) {
-    return `${Math.round(item.grams)} g`;
-  }
-  if (item.serving_description) {
-    return item.serving_description;
-  }
+  if (item.serving_description) return item.serving_description;
+  if (item.grams) return formatServing(item.grams, 'g');
   const quantity = item.quantity || 1;
   const servingAmount = item.foods?.serving_amount || 100;
   const servingUnit = item.foods?.serving_unit || 'g';
-  if (quantity === 1) {
-    return `${servingAmount} ${servingUnit}`;
-  }
-  return `${quantity}x ${servingAmount} ${servingUnit}`;
+  return formatServing(quantity * servingAmount, servingUnit);
 };
 
 export default function HomeScreen() {

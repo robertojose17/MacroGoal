@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
 import { listMealPlans, type MealPlan as ApiMealPlan } from '@/utils/mealPlansApi';
+import { formatServing } from '@/utils/servingFormat';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -56,12 +57,11 @@ const formatDateForStorage = (date: Date): string => {
 
 const getServingDisplayText = (item: FoodItem): string => {
   if (item.serving_description) return item.serving_description;
-  if (item.grams) return `${Math.round(item.grams)} g`;
+  if (item.grams) return formatServing(item.grams, 'g');
   const quantity = item.quantity || 1;
   const servingAmount = item.foods?.serving_amount || 100;
   const servingUnit = item.foods?.serving_unit || 'g';
-  if (quantity === 1) return `${servingAmount} ${servingUnit}`;
-  return `${quantity}x ${servingAmount} ${servingUnit}`;
+  return formatServing(quantity * servingAmount, servingUnit);
 };
 
 const formatDateRange = (start: string, end: string): string => {

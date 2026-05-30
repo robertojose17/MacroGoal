@@ -18,6 +18,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
 import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
+import { formatServing } from '@/utils/servingFormat';
 
 /** Safely coerce any value to a finite number, defaulting to 0 on NaN/null/undefined */
 function safeNum(value: unknown, fallback = 0): number {
@@ -836,7 +837,7 @@ export default function AddFoodScreen() {
         code: foodData.barcode || '',
         product_name: foodData.name,
         brands: foodData.brand || '',
-        serving_size: food.last_serving_description || `${Math.round(food.serving_amount)} g`,
+        serving_size: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
         nutriments: {
           'energy-kcal_100g': foodData.calories,
           'proteins_100g': foodData.protein,
@@ -959,7 +960,7 @@ export default function AddFoodScreen() {
           brand: food.brand || undefined,
           quantity: multiplier,
           grams: gramsToAdd,
-          serving_description: food.last_serving_description || `${Math.round(gramsToAdd)} g`,
+          serving_description: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
           calories: safeNum(foodData.calories * multiplier),
           protein: safeNum(foodData.protein * multiplier),
           carbs: safeNum(foodData.carbs * multiplier),
@@ -997,7 +998,7 @@ export default function AddFoodScreen() {
 
       // Use the food's serving_amount as the default (this is the grams from last time)
       const gramsToAdd = food.serving_amount;
-      const servingDescription = food.last_serving_description || `${Math.round(gramsToAdd)} g`;
+      const servingDescription = food.last_serving_description || formatServing(food.serving_amount, food.serving_unit);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -1252,7 +1253,7 @@ export default function AddFoodScreen() {
           brand: favorite.brand || undefined,
           quantity: multiplier,
           grams: favorite.default_grams,
-          serving_description: favorite.serving_size || `${Math.round(favorite.default_grams)} g`,
+          serving_description: favorite.serving_size || formatServing(favorite.default_grams, 'g'),
           calories: safeNum(favorite.per100_calories * multiplier),
           protein: safeNum(favorite.per100_protein * multiplier),
           carbs: safeNum(favorite.per100_carbs * multiplier),
@@ -1377,7 +1378,7 @@ export default function AddFoodScreen() {
           carbs: safeNum(carbs),
           fats: safeNum(fat),
           fiber: safeNum(fiber),
-          serving_description: favorite.serving_size || `${Math.round(favorite.default_grams)}g`,
+          serving_description: favorite.serving_size || formatServing(favorite.default_grams, 'g'),
           grams: favorite.default_grams,
         });
 
@@ -1439,7 +1440,7 @@ export default function AddFoodScreen() {
   }, [favorites]);
 
   const renderFoodItem = useCallback((food: Food, index: number) => {
-    const servingText = food.last_serving_description || `${Math.round(food.serving_amount)}g`;
+    const servingText = food.last_serving_description || formatServing(food.serving_amount, food.serving_unit);
     const macrosText = `P: ${Math.round(food.protein)}g • C: ${Math.round(food.carbs)}g • F: ${Math.round(food.fats)}g`;
     
     return (

@@ -19,6 +19,7 @@ import {
   createMealPlan,
   type MealPlan,
 } from '@/utils/mealPlansApi';
+import { formatServing } from '@/utils/servingFormat';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -69,12 +70,11 @@ const formatDateForStorage = (date: Date): string => {
 
 const getServingDisplayText = (item: FoodItem): string => {
   if (item.serving_description) return item.serving_description;
-  if (item.grams) return `${Math.round(item.grams)} g`;
+  if (item.grams) return formatServing(item.grams, 'g');
   const quantity = item.quantity || 1;
   const servingAmount = item.foods?.serving_amount || 100;
   const servingUnit = item.foods?.serving_unit || 'g';
-  if (quantity === 1) return `${servingAmount} ${servingUnit}`;
-  return `${quantity}x ${servingAmount} ${servingUnit}`;
+  return formatServing(quantity * servingAmount, servingUnit);
 };
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
