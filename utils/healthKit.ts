@@ -86,66 +86,82 @@ async function ios_initialize(): Promise<{ available: boolean }> {
 
 async function ios_requestPermission(): Promise<PermissionStatus> {
   try {
-    const { requestAuthorization, getRequestStatusForAuthorization } =
+    const { requestAuthorization, queryQuantitySamples } =
       await import('@kingstinct/react-native-healthkit');
 
-    // Check if we already have authorization
-    const status = await getRequestStatusForAuthorization({
-      toRead: ['HKQuantityTypeIdentifierStepCount'],
-    });
-    console.log('[healthKit] iOS getRequestStatusForAuthorization:', status);
-
-    if (status === 'unnecessary') {
-      return 'granted';
-    }
-
-    // Request authorization — shows the system dialog
-    console.log('[healthKit] iOS requesting HealthKit authorization');
+    // Request authorization — shows the system dialog if not yet shown.
+    // NOTE: We intentionally do NOT call getRequestStatusForAuthorization
+    // after this. Apple's privacy model makes that API return 'shouldRequest'
+    // even after the user grants READ access, so it is useless as a truth source.
+    console.log('[healthKit] iOS calling requestAuthorization');
     await requestAuthorization({
       toRead: ['HKQuantityTypeIdentifierStepCount'],
     });
+    console.log('[healthKit] iOS requestAuthorization resolved (no throw = sheet was shown or already handled)');
 
-    // Re-check after request
-    const statusAfter = await getRequestStatusForAuthorization({
-      toRead: ['HKQuantityTypeIdentifierStepCount'],
-    });
-    console.log('[healthKit] iOS status after request:', statusAfter);
-
-    // HealthKit never tells you if the user denied — 'shouldRequest' after
-    // requesting means denied or restricted; 'unnecessary' means granted.
-    if (statusAfter === 'unnecessary') return 'granted';
-    if (statusAfter === 'shouldRequest') return 'denied';
-    return 'not_determined';
+    // Probe: attempt an actual sample query for the last 24 hours.
+    // This is the ONLY reliable way to know if read access was granted on iOS.
+    // A successful query (even returning an empty array) means access is granted.
+    // A throw with an authorization-related message means denied/restricted.
+    const probeEnd = new Date();
+    const probeStart = new Date(probeEnd.getTime() - 24 * 60 * 60 * 1000);
+    console.log('[healthKit] iOS probing sample query to determine actual read permission');
+    try {
+      const probeSamples = await queryQuantitySamples(
+        'HKQuantityTypeIdentifierStepCount',
+        {
+          limit: 1,
+          unit: 'count',
+          filter: { date: { startDate: probeStart, endDate: probeEnd } },
+        }
+      );
+      // Query succeeded — read access is granted regardless of what
+      // getRequestStatusForAuthorization would say.
+      console.log('[healthKit] iOS probe succeeded — permission is GRANTED. Samples returned:', probeSamples.length);
+      return 'granted';
+    } catch (probeErr) {
+      const probeMsg = probeErr instanceof Error ? probeErr.message : String(probeErr);
+      console.warn('[healthKit] iOS probe query threw:', probeMsg);
+      // Authorization-related errors mean the user denied or restricted access.
+      const isAuthError = /authoriz|not authorized|denied|permission|restricted/i.test(probeMsg);
+      if (isAuthError) {
+        console.log('[healthKit] iOS probe error looks like auth denial → returning denied');
+        return 'denied';
+      }
+      // Non-auth error (e.g. network, unexpected) — treat as not_determined so
+      // the UI shows the Connect button again rather than a hard "denied" state.
+      console.log('[healthKit] iOS probe error is non-auth → returning not_determined');
+      return 'not_determined';
+    }
   } catch (e) {
-    console.warn('[healthKit] iOS requestPermission error:', e);
-    return 'not_determined';
+    // requestAuthorization itself threw — this typically means the user
+    // cancelled the sheet or the system rejected the request outright.
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[healthKit] iOS requestAuthorization threw:', msg);
+    const isAuthError = /authoriz|not authorized|denied|permission|restricted|cancel/i.test(msg);
+    return isAuthError ? 'denied' : 'not_determined';
   }
 }
 
 async function ios_getStepsForDate(date: Date): Promise<StepsResult> {
   try {
-    const { isHealthDataAvailable, queryQuantitySamples, getRequestStatusForAuthorization } =
+    const { isHealthDataAvailable, queryQuantitySamples } =
       await import('@kingstinct/react-native-healthkit');
 
     if (!isHealthDataAvailable()) {
+      console.log('[healthKit] iOS getStepsForDate: HealthKit not available on this device');
       return { available: false, permission: 'denied', steps: null };
     }
 
-    // Determine permission status
-    const status = await getRequestStatusForAuthorization({
-      toRead: ['HKQuantityTypeIdentifierStepCount'],
-    });
-    const permission: PermissionStatus =
-      status === 'unnecessary' ? 'granted' : 'not_determined';
-
-    if (permission !== 'granted') {
-      console.log('[healthKit] iOS steps: no permission, status:', status);
-      return { available: true, permission, steps: null };
-    }
+    // NOTE: We do NOT call getRequestStatusForAuthorization here.
+    // Apple's privacy model makes it return 'shouldRequest' even after the user
+    // grants READ access. The sample query itself is the source of truth:
+    //   - resolves (even with empty array) → access granted
+    //   - throws with auth error            → access denied / restricted
+    //   - throws with other error           → unknown / not_determined
 
     const start = startOfDay(date);
     const end = endOfDay(date);
-
     console.log('[healthKit] iOS querying steps for', start.toISOString(), '→', end.toISOString());
 
     const samples = await queryQuantitySamples(
@@ -159,14 +175,26 @@ async function ios_getStepsForDate(date: Date): Promise<StepsResult> {
       }
     );
 
+    // Query succeeded — permission is granted (iOS would have thrown otherwise)
     const total = samples.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
     const steps = sanitizeSteps(total);
-    console.log('[healthKit] iOS steps total:', steps, '(', samples.length, 'samples)');
+    console.log('[healthKit] iOS steps total:', steps, '(', samples.length, 'samples) — permission confirmed GRANTED');
 
     return { available: true, permission: 'granted', steps };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn('[healthKit] iOS getStepsForDate error:', msg);
+
+    // Distinguish auth failures from other errors so the UI shows the right state
+    const isAuthError = /authoriz|not authorized|denied|permission|restricted/i.test(msg);
+    if (isAuthError) {
+      console.log('[healthKit] iOS getStepsForDate: auth error → permission denied');
+      return { available: true, permission: 'denied', steps: null, error: msg };
+    }
+
+    // Non-auth error (e.g. HealthKit temporarily unavailable) — keep as not_determined
+    // so the UI shows the Connect button rather than a permanent "denied" message.
+    console.log('[healthKit] iOS getStepsForDate: non-auth error → not_determined');
     return { available: true, permission: 'not_determined', steps: null, error: msg };
   }
 }

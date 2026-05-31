@@ -156,15 +156,17 @@ export function useSteps(): UseStepsResult {
     setLoading(true);
     try {
       const status = await requestStepsPermission();
-      console.log('[useSteps] permission result:', status);
+      console.log('[useSteps] requestStepsPermission returned status:', status);
       if (!mountedRef.current) return;
-      setPermission(status);
 
-      if (status === 'granted') {
-        await fetchSteps();
-      } else {
-        setLoading(false);
-      }
+      // Update permission state optimistically from what requestStepsPermission returned,
+      // but ALWAYS follow up with a real fetchSteps call. On iOS, the probe inside
+      // requestStepsPermission is the source of truth — if it returned 'granted' the
+      // fetch will confirm it. If it returned 'not_determined' due to a transient probe
+      // error, the fetch may still succeed and self-correct the permission state.
+      setPermission(status);
+      console.log('[useSteps] always calling fetchSteps after permission request to confirm actual access');
+      await fetchSteps();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn('[useSteps] requestPermission error:', msg);
