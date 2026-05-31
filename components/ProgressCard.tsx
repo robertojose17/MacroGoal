@@ -21,6 +21,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 interface ProgressCardProps {
   userId: string;
   isDark: boolean;
+  layout?: 'carousel' | 'stacked';
 }
 
 interface ProfileData {
@@ -219,7 +220,7 @@ function PremiumStatCard({ title, value, subtitle, explanation, accent, isDark }
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
+export default function ProgressCard({ userId, isDark, layout = 'carousel' }: ProgressCardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -920,6 +921,149 @@ export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
     ...(chartConfig.trendPathData ? [{ color: '#8B5CF6', label: 'Trend' }] : []),
   ];
 
+  // ── Shared chart page JSX ────────────────────────────────────────────────
+  const chartPageContent = (width: number) => (
+    <View style={layout === 'stacked' ? undefined : { width }}>
+      {/* Legend */}
+      <View style={styles.legendRow}>
+        {legendItems.map((item, idx) => (
+          <View key={idx} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+            <Text style={[styles.legendLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {item.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {/* SVG Chart */}
+      <View style={styles.chartContainer}>
+        <Svg width={chartConfig.totalWidth} height={chartConfig.totalHeight}>
+          <Defs>
+            <LinearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={lineColor} stopOpacity="0.3" />
+              <Stop offset="1" stopColor={lineColor} stopOpacity="0.05" />
+            </LinearGradient>
+          </Defs>
+
+          {/* Grid lines */}
+          {chartConfig.yTicks.map((tick, index) => (
+            <Line key={`grid-h-${index}`} x1={chartConfig.yAxisWidth} y1={tick.y} x2={chartConfig.yAxisWidth + chartConfig.chartAreaWidth} y2={tick.y} stroke={gridColor} strokeWidth="1" strokeDasharray="4 4" />
+          ))}
+
+          {/* Planned fill + line */}
+          <Path d={chartConfig.fillPathData} fill="url(#lineGradient)" />
+          <Path d={chartConfig.pathData} stroke={lineColor} strokeWidth="2.5" fill="none" />
+
+          {/* Calorie projection */}
+          {chartConfig.projectionPathData && (
+            <Path d={chartConfig.projectionPathData} stroke={projectionColor} strokeWidth="2" fill="none" />
+          )}
+
+          {/* Trend line (moving average) */}
+          {chartConfig.trendPathData && (
+            <Path
+              d={chartConfig.trendPathData}
+              stroke="#8B5CF6"
+              strokeWidth="2"
+              strokeOpacity="0.7"
+              strokeDasharray="6 3"
+              fill="none"
+            />
+          )}
+
+          {/* Actual weight dots */}
+          {chartConfig.actualWeightCircles.map((circle, index) => (
+            <Circle key={`actual-weight-${index}`} cx={circle.x} cy={circle.y} r="5" fill={actualWeightColor} stroke={isDark ? colors.cardDark : colors.card} strokeWidth="2" />
+          ))}
+
+          {/* Y-axis labels */}
+          {chartConfig.yTicks.map((tick, index) => (
+            <SvgText key={`y-label-${index}`} x={chartConfig.yAxisWidth - 8} y={tick.y + 4} fontSize="11" fill={labelColor} textAnchor="end">{tick.label}</SvgText>
+          ))}
+
+          {/* X-axis labels */}
+          {chartConfig.xTicks.map((tick, index) => (
+            <SvgText key={`x-label-${index}`} x={tick.x} y={chartConfig.topPadding + chartConfig.chartAreaHeight + 20} fontSize="10" fill={labelColor} textAnchor="middle">{tick.label}</SvgText>
+          ))}
+
+          {/* Status pill in top-right of chart area */}
+          {graphStatusConfig && (
+            <>
+              <Rect
+                x={chartConfig.yAxisWidth + chartConfig.chartAreaWidth - 110}
+                y={chartConfig.topPadding + 4}
+                width={108}
+                height={22}
+                rx={11}
+                ry={11}
+                fill={graphStatusConfig.pillFill}
+                opacity={0.9}
+              />
+              <SvgText
+                x={chartConfig.yAxisWidth + chartConfig.chartAreaWidth - 56}
+                y={chartConfig.topPadding + 19}
+                fontSize="11"
+                fontWeight="600"
+                fill={graphStatusConfig.textFill}
+                textAnchor="middle"
+              >
+                {graphStatusConfig.label}
+              </SvgText>
+            </>
+          )}
+        </Svg>
+      </View>
+
+      {/* Y-axis label */}
+      <Text style={[styles.yAxisLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        Weight (lbs)
+      </Text>
+    </View>
+  );
+
+  // ── Shared stats page JSX ────────────────────────────────────────────────
+  const statsPageContent = (width: number) => (
+    <View style={layout === 'stacked' ? undefined : { width, paddingTop: 4 }}>
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+        <PremiumStatCard
+          title="PROGRESS"
+          value={card1Value}
+          subtitle={card1Subtitle}
+          accent={card1Accent}
+          isDark={isDark}
+          explanation="The total weight you have lost (or gained) since your starting weight. A downward arrow means you are losing weight; an upward arrow means you have gained since the start."
+        />
+        <PremiumStatCard
+          title="MOMENTUM"
+          value={card2Value}
+          subtitle={card2Subtitle}
+          accent={isDark ? '#FFFFFF' : '#111111'}
+          isDark={isDark}
+          explanation="Your current rate of weight change based on the last 14 days of logged check-ins, expressed in pounds per week. The subtitle shows how closely your calorie intake has matched your daily goal."
+        />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <PremiumStatCard
+          title="TIMELINE"
+          value={card3Value}
+          subtitle={card3Subtitle}
+          accent={card3Accent}
+          isDark={isDark}
+          explanation="How many days ahead of or behind your original plan you are, calculated from your cumulative calorie surplus or deficit. Being ahead means your eating habits are putting you on track to reach your goal sooner."
+        />
+        <PremiumStatCard
+          title="TARGET"
+          value={card4Value}
+          subtitle={card4Subtitle}
+          accent={isDark ? '#FFFFFF' : '#111111'}
+          isDark={isDark}
+          explanation="Your starting weight versus your current weight, and the projected date you will reach your goal weight based on your recent calorie tracking and pace."
+        />
+      </View>
+    </View>
+  );
+
   return (
     <View
       style={[
@@ -940,188 +1084,72 @@ export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
           <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
             Weight Progress
           </Text>
-          <Text style={[styles.cardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Swipe to see stats
-          </Text>
+          {layout === 'carousel' && (
+            <Text style={[styles.cardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Swipe to see stats
+            </Text>
+          )}
         </View>
       </View>
 
-      {/* ── Carousel ── */}
-      {cardWidth > 0 && (
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={handleScroll}
-          style={{ width: cardWidth }}
-          contentContainerStyle={{ width: cardWidth * 2 }}
-          decelerationRate="fast"
-          snapToInterval={cardWidth}
-          snapToAlignment="start"
-        >
-          {/* ── Page 0: Graph ── */}
-          <View style={{ width: cardWidth }}>
-            {/* Legend */}
-            <View style={styles.legendRow}>
-              {legendItems.map((item, idx) => (
-                <View key={idx} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                  <Text style={[styles.legendLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {item.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
+      {layout === 'stacked' ? (
+        /* ── Stacked layout: chart on top, stats below ── */
+        <View>
+          {chartPageContent(0)}
+          <View
+            style={{
+              height: 1,
+              backgroundColor: (isDark ? colors.borderDark : colors.border),
+              opacity: 0.6,
+              marginVertical: spacing.xl,
+            }}
+          />
+          {statsPageContent(0)}
+        </View>
+      ) : (
+        /* ── Carousel layout (default) ── */
+        <>
+          {cardWidth > 0 && (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={handleScroll}
+              style={{ width: cardWidth }}
+              contentContainerStyle={{ width: cardWidth * 2 }}
+              decelerationRate="fast"
+              snapToInterval={cardWidth}
+              snapToAlignment="start"
+            >
+              {chartPageContent(cardWidth)}
+              {statsPageContent(cardWidth)}
+            </ScrollView>
+          )}
 
-            {/* SVG Chart */}
-            <View style={styles.chartContainer}>
-              <Svg width={chartConfig.totalWidth} height={chartConfig.totalHeight}>
-                <Defs>
-                  <LinearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0" stopColor={lineColor} stopOpacity="0.3" />
-                    <Stop offset="1" stopColor={lineColor} stopOpacity="0.05" />
-                  </LinearGradient>
-                </Defs>
-
-                {/* Grid lines */}
-                {chartConfig.yTicks.map((tick, index) => (
-                  <Line key={`grid-h-${index}`} x1={chartConfig.yAxisWidth} y1={tick.y} x2={chartConfig.yAxisWidth + chartConfig.chartAreaWidth} y2={tick.y} stroke={gridColor} strokeWidth="1" strokeDasharray="4 4" />
-                ))}
-
-                {/* Planned fill + line */}
-                <Path d={chartConfig.fillPathData} fill="url(#lineGradient)" />
-                <Path d={chartConfig.pathData} stroke={lineColor} strokeWidth="2.5" fill="none" />
-
-                {/* Calorie projection */}
-                {chartConfig.projectionPathData && (
-                  <Path d={chartConfig.projectionPathData} stroke={projectionColor} strokeWidth="2" fill="none" />
-                )}
-
-                {/* Trend line (moving average) */}
-                {chartConfig.trendPathData && (
-                  <Path
-                    d={chartConfig.trendPathData}
-                    stroke="#8B5CF6"
-                    strokeWidth="2"
-                    strokeOpacity="0.7"
-                    strokeDasharray="6 3"
-                    fill="none"
-                  />
-                )}
-
-                {/* Actual weight dots */}
-                {chartConfig.actualWeightCircles.map((circle, index) => (
-                  <Circle key={`actual-weight-${index}`} cx={circle.x} cy={circle.y} r="5" fill={actualWeightColor} stroke={isDark ? colors.cardDark : colors.card} strokeWidth="2" />
-                ))}
-
-                {/* Y-axis labels */}
-                {chartConfig.yTicks.map((tick, index) => (
-                  <SvgText key={`y-label-${index}`} x={chartConfig.yAxisWidth - 8} y={tick.y + 4} fontSize="11" fill={labelColor} textAnchor="end">{tick.label}</SvgText>
-                ))}
-
-                {/* X-axis labels */}
-                {chartConfig.xTicks.map((tick, index) => (
-                  <SvgText key={`x-label-${index}`} x={tick.x} y={chartConfig.topPadding + chartConfig.chartAreaHeight + 20} fontSize="10" fill={labelColor} textAnchor="middle">{tick.label}</SvgText>
-                ))}
-
-                {/* Status pill in top-right of chart area */}
-                {graphStatusConfig && (
-                  <>
-                    <Rect
-                      x={chartConfig.yAxisWidth + chartConfig.chartAreaWidth - 110}
-                      y={chartConfig.topPadding + 4}
-                      width={108}
-                      height={22}
-                      rx={11}
-                      ry={11}
-                      fill={graphStatusConfig.pillFill}
-                      opacity={0.9}
-                    />
-                    <SvgText
-                      x={chartConfig.yAxisWidth + chartConfig.chartAreaWidth - 56}
-                      y={chartConfig.topPadding + 19}
-                      fontSize="11"
-                      fontWeight="600"
-                      fill={graphStatusConfig.textFill}
-                      textAnchor="middle"
-                    >
-                      {graphStatusConfig.label}
-                    </SvgText>
-                  </>
-                )}
-              </Svg>
-            </View>
-
-            {/* Y-axis label */}
-            <Text style={[styles.yAxisLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Weight (lbs)
-            </Text>
+          {/* ── Dot indicators ── */}
+          <View style={styles.dotsRow}>
+            <Animated.View
+              style={[
+                styles.dot,
+                {
+                  width: dot0Anim,
+                  backgroundColor: activePage === 0 ? colors.primary : (isDark ? '#444' : '#ddd'),
+                },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.dot,
+                {
+                  width: dot1Anim,
+                  backgroundColor: activePage === 1 ? colors.primary : (isDark ? '#444' : '#ddd'),
+                },
+              ]}
+            />
           </View>
-
-          {/* ── Page 1: Stats ── */}
-          <View style={{ width: cardWidth, paddingTop: 4 }}>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-              <PremiumStatCard
-                title="PROGRESS"
-                value={card1Value}
-                subtitle={card1Subtitle}
-                accent={card1Accent}
-                isDark={isDark}
-                explanation="The total weight you have lost (or gained) since your starting weight. A downward arrow means you are losing weight; an upward arrow means you have gained since the start."
-              />
-              <PremiumStatCard
-                title="MOMENTUM"
-                value={card2Value}
-                subtitle={card2Subtitle}
-                accent={isDark ? '#FFFFFF' : '#111111'}
-                isDark={isDark}
-                explanation="Your current rate of weight change based on the last 14 days of logged check-ins, expressed in pounds per week. The subtitle shows how closely your calorie intake has matched your daily goal."
-              />
-            </View>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <PremiumStatCard
-                title="TIMELINE"
-                value={card3Value}
-                subtitle={card3Subtitle}
-                accent={card3Accent}
-                isDark={isDark}
-                explanation="How many days ahead of or behind your original plan you are, calculated from your cumulative calorie surplus or deficit. Being ahead means your eating habits are putting you on track to reach your goal sooner."
-              />
-              <PremiumStatCard
-                title="TARGET"
-                value={card4Value}
-                subtitle={card4Subtitle}
-                accent={isDark ? '#FFFFFF' : '#111111'}
-                isDark={isDark}
-                explanation="Your starting weight versus your current weight, and the projected date you will reach your goal weight based on your recent calorie tracking and pace."
-              />
-            </View>
-          </View>
-        </ScrollView>
+        </>
       )}
-
-      {/* ── Dot indicators ── */}
-      <View style={styles.dotsRow}>
-        <Animated.View
-          style={[
-            styles.dot,
-            {
-              width: dot0Anim,
-              backgroundColor: activePage === 0 ? colors.primary : (isDark ? '#444' : '#ddd'),
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.dot,
-            {
-              width: dot1Anim,
-              backgroundColor: activePage === 1 ? colors.primary : (isDark ? '#444' : '#ddd'),
-            },
-          ]}
-        />
-      </View>
     </View>
   );
 }

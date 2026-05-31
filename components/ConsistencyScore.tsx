@@ -24,6 +24,7 @@ import {
 interface ConsistencyScoreProps {
   userId: string;
   isDark: boolean;
+  initialExpanded?: boolean;
 }
 
 interface ScoreBreakdown {
@@ -144,10 +145,10 @@ function StatTooltipModal({ visible, title, explanation, isDark, onClose }: Stat
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ConsistencyScore({ userId, isDark }: ConsistencyScoreProps) {
+export default function ConsistencyScore({ userId, isDark, initialExpanded = false }: ConsistencyScoreProps) {
   const [loading, setLoading] = useState(true);
   const [scoreData, setScoreData] = useState<ScoreBreakdown | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(initialExpanded);
   const [showCalendarPicker, setShowCalendarPicker] = useState(false);
   const [tooltipKey, setTooltipKey] = useState<string | null>(null);
 
@@ -486,8 +487,8 @@ export default function ConsistencyScore({ userId, isDark }: ConsistencyScorePro
       >
         {/* Main Score Row */}
         <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleToggleDetails}
+          activeOpacity={initialExpanded ? 1 : 0.7}
+          onPress={initialExpanded ? undefined : handleToggleDetails}
           style={styles.mainScoreContainer}
         >
           <View style={[styles.scoreCircle, { borderColor: labelColor + '40' }]}>
@@ -514,12 +515,14 @@ export default function ConsistencyScore({ userId, isDark }: ConsistencyScorePro
               {scoreData.insight}
             </Text>
           </View>
-          <IconSymbol
-            ios_icon_name={showDetails ? 'chevron.up' : 'chevron.down'}
-            android_material_icon_name={showDetails ? 'expand_less' : 'expand_more'}
-            size={24}
-            color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-          />
+          {!initialExpanded && (
+            <IconSymbol
+              ios_icon_name={showDetails ? 'chevron.up' : 'chevron.down'}
+              android_material_icon_name={showDetails ? 'expand_less' : 'expand_more'}
+              size={24}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          )}
         </TouchableOpacity>
 
         {/* Breakdown */}
