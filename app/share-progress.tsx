@@ -15,8 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import ShareableProgressCard, { ShareableProgressCardHandle } from '@/components/ShareableProgressCard';
-import XpShareCard, { XpShareCardHandle } from '@/components/xp/XpShareCard';
+import ShareableProgressCard, { ShareableProgressCardHandle, PROGRESS_CARD_WIDTH, PROGRESS_CARD_HEIGHT } from '@/components/ShareableProgressCard';
+import XpShareCard, { XpShareCardHandle, XP_CARD_WIDTH, XP_CARD_HEIGHT } from '@/components/xp/XpShareCard';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { TouchableOpacity } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -29,17 +29,6 @@ if (Platform.OS !== 'web') {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   try { ViewShot = require('react-native-view-shot').default; } catch {}
 }
-
-// ─── Card dimensions ──────────────────────────────────────────────────────────
-// ShareableProgressCard renders at a fixed width; we use 390 as the canonical
-// full-res width for the off-screen capture target.
-const PROGRESS_CARD_WIDTH = 390;
-const PROGRESS_CARD_HEIGHT = 400; // photoRow height (320) + badge area (~80)
-
-// XpShareCard renders at screen width with 9:16 aspect ratio.
-// We use 390 as the canonical full-res width for the off-screen capture target.
-const XP_CARD_WIDTH = 390;
-const XP_CARD_HEIGHT = Math.round((XP_CARD_WIDTH * 16) / 9); // 693
 
 interface CardData {
   consistencyScore: number;
@@ -68,6 +57,7 @@ export default function ShareProgressScreen() {
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [cardData, setCardData] = useState<CardData | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const viewShotRef = useRef<ShareableProgressCardHandle>(null);
   const xpShotRef = useRef<XpShareCardHandle>(null);
 
@@ -79,11 +69,9 @@ export default function ShareProgressScreen() {
   const availableWidth = screenWidth - spacing.md * 2;
 
   const progressScale = availableWidth / PROGRESS_CARD_WIDTH;
-  const progressPreviewWidth = availableWidth;
   const progressPreviewHeight = PROGRESS_CARD_HEIGHT * progressScale;
 
   const xpScale = availableWidth / XP_CARD_WIDTH;
-  const xpPreviewWidth = availableWidth;
   const xpPreviewHeight = XP_CARD_HEIGHT * xpScale;
 
   const calculateProteinAccuracyScore = useCallback((proteinLogged: number, proteinTarget: number): number => {
@@ -380,9 +368,14 @@ export default function ShareProgressScreen() {
       }
 
       const [{ data: userData }, { data: goalData }] = await Promise.all([
-        supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
+        supabase.from('users').select('*, username').eq('id', authUser.id).maybeSingle(),
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
       ]);
+
+      // Store username for XP card
+      if (userData?.username) {
+        setUsername(userData.username);
+      }
 
       const goal = goalData || {
         daily_calories: 2000,
@@ -676,7 +669,7 @@ export default function ShareProgressScreen() {
           <>
             {/* Off-screen full-res capture target */}
             <View
-              style={styles.offScreenCapture}
+              style={[styles.offScreenCapture, { width: PROGRESS_CARD_WIDTH, height: PROGRESS_CARD_HEIGHT }]}
               pointerEvents="none"
             >
               <ShareableProgressCard
@@ -690,32 +683,35 @@ export default function ShareProgressScreen() {
             </View>
 
             {/* On-screen scaled preview */}
-            <View
-              style={[
-                styles.previewWrapper,
-                {
-                  width: progressPreviewWidth,
-                  height: progressPreviewHeight,
-                },
-              ]}
-            >
+            <View style={styles.previewCenterContainer}>
               <View
-                style={{
-                  width: PROGRESS_CARD_WIDTH,
-                  transform: [{ scale: progressScale }],
-                  transformOrigin: 'top left',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                }}
+                style={[
+                  styles.previewWrapper,
+                  {
+                    width: PROGRESS_CARD_WIDTH * progressScale,
+                    height: progressPreviewHeight,
+                  },
+                ]}
               >
-                <ShareableProgressCard
-                  beforePhoto={cardData.beforePhotoUrl}
-                  afterPhoto={cardData.afterPhotoUrl}
-                  beforeDate={cardData.beforeDateLabel}
-                  afterDate={cardData.afterDateLabel}
-                  leaderboardPhrase={cardData.leaderboardPhrase}
-                />
+                <View
+                  style={{
+                    width: PROGRESS_CARD_WIDTH,
+                    height: PROGRESS_CARD_HEIGHT,
+                    transform: [{ scale: progressScale }],
+                    transformOrigin: 'top left',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                  }}
+                >
+                  <ShareableProgressCard
+                    beforePhoto={cardData.beforePhotoUrl}
+                    afterPhoto={cardData.afterPhotoUrl}
+                    beforeDate={cardData.beforeDateLabel}
+                    afterDate={cardData.afterDateLabel}
+                    leaderboardPhrase={cardData.leaderboardPhrase}
+                  />
+                </View>
               </View>
             </View>
           </>
@@ -747,44 +743,67 @@ export default function ShareProgressScreen() {
                     consistencyScore={cardData.consistencyScore}
                     percentile={xpStatus.ranking?.percentile ?? 50}
                     calorieDeficit={cardData.calorieDeficit}
+                    username={username}
                   />
                 </View>
 
                 {/* On-screen scaled preview */}
-                <View
-                  style={[
-                    styles.previewWrapper,
-                    {
-                      width: xpPreviewWidth,
-                      height: xpPreviewHeight,
-                    },
-                  ]}
-                >
+                <View style={styles.previewCenterContainer}>
                   <View
-                    style={{
-                      width: XP_CARD_WIDTH,
-                      height: XP_CARD_HEIGHT,
-                      transform: [{ scale: xpScale }],
-                      transformOrigin: 'top left',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                    }}
+                    style={[
+                      styles.previewWrapper,
+                      {
+                        width: XP_CARD_WIDTH * xpScale,
+                        height: xpPreviewHeight,
+                      },
+                    ]}
                   >
-                    <XpShareCard
-                      level={xpStatus.current_level}
-                      rank={xpStatus.current_rank}
-                      totalXp={xpStatus.total_xp}
-                      currentStreak={xpStatus.current_streak}
-                      consistencyScore={cardData.consistencyScore}
-                      percentile={xpStatus.ranking?.percentile ?? 50}
-                      calorieDeficit={cardData.calorieDeficit}
-                    />
+                    <View
+                      style={{
+                        width: XP_CARD_WIDTH,
+                        height: XP_CARD_HEIGHT,
+                        transform: [{ scale: xpScale }],
+                        transformOrigin: 'top left',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                      }}
+                    >
+                      <XpShareCard
+                        level={xpStatus.current_level}
+                        rank={xpStatus.current_rank}
+                        totalXp={xpStatus.total_xp}
+                        currentStreak={xpStatus.current_streak}
+                        consistencyScore={cardData.consistencyScore}
+                        percentile={xpStatus.ranking?.percentile ?? 50}
+                        calorieDeficit={cardData.calorieDeficit}
+                        username={username}
+                      />
+                    </View>
                   </View>
                 </View>
               </>
             )}
           </>
+        )}
+
+        {/* ── Username banner (shown when no username set) ── */}
+        {!username && (
+          <View style={[styles.usernameBanner, { backgroundColor: isDark ? 'rgba(91,154,168,0.15)' : 'rgba(91,154,168,0.1)', borderColor: colors.primary }]}>
+            <Text style={[styles.usernameBannerText, { color: isDark ? colors.textDark : colors.text }]}>
+              Pick your @username to make this card yours
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[ShareProgress] Set username banner tapped');
+                router.push('/choose-username');
+              }}
+            >
+              <Text style={[styles.usernameBannerLink, { color: colors.primary }]}>
+                Set username
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* ── Share CTA ── */}
@@ -896,13 +915,37 @@ const styles = StyleSheet.create({
     top: 0,
   },
   // ── On-screen preview ─────────────────────────────────────────────────────
+  previewCenterContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
   previewWrapper: {
     overflow: 'hidden',
     borderRadius: borderRadius.xl,
-    marginBottom: spacing.xl,
-    alignSelf: 'center',
     boxShadow: '0px 8px 24px rgba(0,0,0,0.12)',
     elevation: 8,
+  },
+  // ── Username banner ───────────────────────────────────────────────────────
+  usernameBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  usernameBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  usernameBannerLink: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   // ── XP loading ────────────────────────────────────────────────────────────
   xpLoadingContainer: {

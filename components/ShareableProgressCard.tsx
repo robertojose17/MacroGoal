@@ -8,7 +8,12 @@ import {
   Platform,
   ImageSourcePropType,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+
+export const PROGRESS_CARD_WIDTH = Dimensions.get('window').width;
+// photo row 320 + badge area ~80 + bottom padding
+export const PROGRESS_CARD_HEIGHT = 420;
 
 // react-native-view-shot requires a native build — lazy import so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -150,12 +155,13 @@ export default ShareableProgressCard;
 
 const styles = StyleSheet.create({
   captureWrapper: {
-    width: '100%',
+    width: PROGRESS_CARD_WIDTH,
+    height: PROGRESS_CARD_HEIGHT,
     borderRadius: 20,
     overflow: 'hidden',
   },
   card: {
-    width: '100%',
+    width: PROGRESS_CARD_WIDTH,
     backgroundColor: '#0D0D0D',
     borderRadius: 20,
     overflow: 'hidden',

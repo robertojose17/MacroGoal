@@ -45,6 +45,7 @@ export interface XpShareCardProps {
   consistencyScore: number; // 0-100
   percentile: number;       // 0-100, where 92.5 means top 7.5%
   calorieDeficit?: number;  // 7-day calorie deficit (optional)
+  username?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -64,14 +65,17 @@ function topPercent(percentile: number): string {
 // ─── Card dimensions ──────────────────────────────────────────────────────────
 // Render at screen width, maintain 9:16 aspect ratio.
 // ViewShot captures at this size; the parent scales it down for preview.
-const CARD_WIDTH = Dimensions.get('window').width;
-const CARD_HEIGHT = Math.round((CARD_WIDTH * 16) / 9);
+export const XP_CARD_WIDTH = Dimensions.get('window').width;
+export const XP_CARD_HEIGHT = Math.round((XP_CARD_WIDTH * 16) / 9);
+// Internal aliases for backward compat within this file
+const CARD_WIDTH = XP_CARD_WIDTH;
+const CARD_HEIGHT = XP_CARD_HEIGHT;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
   function XpShareCard(
-    { level, rank, totalXp, currentStreak, consistencyScore, percentile, calorieDeficit },
+    { level, rank, totalXp, currentStreak, consistencyScore, percentile, calorieDeficit, username },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -111,6 +115,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
     const xpDisplay = Number(totalXp).toLocaleString();
     const showDeficit = (calorieDeficit ?? 0) > 0;
     const deficitDisplay = showDeficit ? Number(calorieDeficit).toLocaleString() : '';
+    const handleDisplay = `@${username ?? 'macrogoalapp'}`;
 
     return (
       <CaptureWrapper
@@ -247,7 +252,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
 
             {/* CTA */}
             <Text style={styles.ctaText}>Join me on Macro Goal</Text>
-            <Text style={[styles.ctaHandle, { color: rankColor.text }]}>@macrogoalapp</Text>
+            <Text style={[styles.ctaHandle, { color: rankColor.text }]}>{handleDisplay}</Text>
 
           </View>
 

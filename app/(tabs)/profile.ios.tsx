@@ -771,6 +771,16 @@ export default function ProfileScreen() {
                 isDark={isDark}
                 highlight={!user.name}
               />
+              <EditableSettingItem
+                label="Username"
+                value={user.username ? `@${user.username}` : 'Set username'}
+                onPress={() => {
+                  console.log('[Profile iOS] Username row tapped');
+                  router.push('/choose-username');
+                }}
+                isDark={isDark}
+                highlight={!user.username}
+              />
               {user.height && (
                 <EditableSettingItem
                   label="Height"
