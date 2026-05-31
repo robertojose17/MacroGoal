@@ -17,6 +17,7 @@ import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { listTrackers, getStats, listEntries, logEntry, Tracker, TrackerStats } from '@/utils/trackersApi';
+import { tryAwardWorkout, tryAwardWeightCheckin } from '@/utils/xpAwarder';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { Flame, Trophy, Plus, ChevronRight, CheckCircle2, RotateCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -609,6 +610,17 @@ export default function CheckInsScreen() {
     try {
       const entry = await logEntry(tracker.id, today, value);
       setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
+
+      // Award XP / advance missions — fire-and-forget, safe if it fails
+      const lowerName = tracker.name.toLowerCase();
+      if (tracker.is_default && lowerName === 'gym') {
+        console.log('[CheckIns] Awarding workout XP for entry:', entry.id);
+        tryAwardWorkout(entry.id);
+      } else if (tracker.is_default && lowerName === 'weight') {
+        console.log('[CheckIns] Awarding weight_checkin XP for entry:', entry.id, 'value:', value);
+        tryAwardWeightCheckin(entry.id, value);
+      }
+
       // Refresh stats so the streak updates immediately
       try {
         const newStats = await getStats(tracker.id);
@@ -633,6 +645,9 @@ export default function CheckInsScreen() {
         console.log('[CheckIns] Upserting steps entry:', currentSteps, 'for date:', today);
         const entry = await logEntry(tracker.id, today, currentSteps);
         setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
+        // No tryAwardSteps call here: xpAwarder.ts does not expose a steps event type.
+        // Steps XP is not currently tracked as a mission event — only the backend/missions
+        // layer can introduce a new event_type. If added, call tryAwardSteps(entry.id, currentSteps) here.
         // Refresh stats
         try {
           const newStats = await getStats(tracker.id);
