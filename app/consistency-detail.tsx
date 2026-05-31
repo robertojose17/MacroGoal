@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { colors, spacing, borderRadius } from '@/styles/commonStyles';
+import { colors, spacing } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase/client';
 import ConsistencyScore from '@/components/ConsistencyScore';
 
@@ -22,7 +22,6 @@ export default function ConsistencyDetailScreen() {
   }, []);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
-  const cardBg = isDark ? colors.cardDark : colors.card;
 
   return (
     <>
@@ -42,27 +41,7 @@ export default function ConsistencyDetailScreen() {
             contentContainerStyle={styles.scroll}
             showsVerticalScrollIndicator={false}
           >
-            {/* Hero card wrapper */}
-            <View
-              style={[
-                styles.heroCard,
-                {
-                  backgroundColor: cardBg,
-                  borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
-                  ...Platform.select({
-                    ios: {
-                      shadowColor: '#000',
-                      shadowOpacity: 0.06,
-                      shadowRadius: 12,
-                      shadowOffset: { width: 0, height: 4 },
-                    },
-                    android: { elevation: 2 },
-                  }),
-                },
-              ]}
-            >
-              <ConsistencyScore userId={userId} isDark={isDark} initialExpanded={true} />
-            </View>
+            <ConsistencyScore userId={userId} isDark={isDark} initialExpanded={true} />
           </ScrollView>
         ) : (
           <View style={styles.center}>
@@ -80,12 +59,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     paddingBottom: spacing.xxl,
-  },
-  heroCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    overflow: 'hidden',
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });
