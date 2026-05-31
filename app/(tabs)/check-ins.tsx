@@ -198,12 +198,19 @@ function StepsActionArea({
 
   return (
     <View style={styles.stepsActionRow}>
-      {/* Count + bar + goal label */}
+      {/* Count + bar */}
       <View style={styles.stepsInfoCol}>
-        <Text style={[styles.stepsCount, { color: textColor }]}>
-          {countFormatted}
-          <Text style={[styles.stepsUnit, { color: subColor }]}> steps</Text>
-        </Text>
+        {goal > 0 ? (
+          <View style={styles.stepsCountRow}>
+            <Text style={[styles.stepsCount, { color: textColor }]}>{countFormatted}</Text>
+            <Text style={[styles.stepsUnit, { color: subColor }]}>{' / '}{goalFormatted}</Text>
+          </View>
+        ) : (
+          <View style={styles.stepsCountRow}>
+            <Text style={[styles.stepsCount, { color: textColor }]}>{countFormatted}</Text>
+            <Text style={[styles.stepsUnit, { color: subColor }]}>{' steps'}</Text>
+          </View>
+        )}
         {goal > 0 ? (
           <View style={[styles.progressTrack, { backgroundColor: trackColor }]}>
             <Animated.View
@@ -219,11 +226,6 @@ function StepsActionArea({
               ]}
             />
           </View>
-        ) : null}
-        {goalFormatted ? (
-          <Text style={[styles.stepsGoalLabel, { color: subColor }]}>
-            Goal: {goalFormatted}
-          </Text>
         ) : null}
       </View>
 
@@ -935,6 +937,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 3,
   },
+  stepsCountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
   stepsCount: {
     fontSize: 15,
     fontWeight: '700',
@@ -953,12 +959,6 @@ const styles = StyleSheet.create({
   progressFill: {
     height: 4,
     borderRadius: 2,
-  },
-  stepsGoalLabel: {
-    fontSize: 11,
-    fontWeight: '400',
-    opacity: 0.6,
-    marginTop: 2,
   },
   refreshButton: {
     width: 32,
