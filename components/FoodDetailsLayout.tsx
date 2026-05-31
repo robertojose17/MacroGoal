@@ -615,6 +615,19 @@ export default function FoodDetailsLayout({
         }
         const totalUnits = servingsCountForDisplay * baseAmount;
         servingDescription = formatServing(totalUnits, baseUnit);
+      } else if (selectedServingOptionKey === 'custom') {
+        // Custom unit (e.g. "1 slice", "1 cookie") — extract the unit word from customUnitLabel
+        // customUnitLabel is set during edit load (e.g. "1 slice") or by the user picker
+        const customMatch = (customUnitLabel || '').match(/^([\d.]+)\s+(.+)$/);
+        const customAmount = customMatch ? parseFloat(customMatch[1]) : 1;
+        let customUnit = customMatch ? customMatch[2].trim() : 'serving';
+        // Singularize if already plural so formatServing can re-pluralize correctly
+        if (customUnit.length > 2 && customUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(customUnit.toLowerCase())) {
+          customUnit = customUnit.slice(0, -1);
+        }
+        const totalUnits = servingsCountForDisplay * customAmount;
+        servingDescription = formatServing(totalUnits, customUnit);
+        console.log('[FoodDetailsLayout] handleSave custom unit branch — customUnitLabel:', customUnitLabel, 'customUnit:', customUnit, 'totalUnits:', totalUnits, '→', servingDescription);
       } else {
         // Continuous unit (g/oz/lb). numberOfServings is the count in the selected unit.
         const unitSuffix =
