@@ -20,6 +20,21 @@ function safeNum(value: unknown, fallback = 0): number {
   return isFinite(n) ? n : fallback;
 }
 
+/**
+ * Naively singularize a food unit word.
+ * e.g. "slices" → "slice", "cookies" → "cookie", "pieces" → "piece"
+ * Leaves short words, "glass", "serving" etc. unchanged.
+ */
+function singularizeUnit(word: string): string {
+  if (!word || word.length <= 3) return word;
+  if (word === 'serving' || word === 'servings') return 'serving';
+  // "slices" → "slice", "pieces" → "piece" (ends in 'es', not 'ss')
+  if (word.endsWith('es') && word.length > 4 && !word.endsWith('ss')) return word.slice(0, -1);
+  // "cookies" → "cookie" handled above via 'es'; "chips" → "chip"
+  if (word.endsWith('s') && word.length > 3 && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
 type ServingUnit = 'g' | 'oz' | 'ml' | 'fl oz' | 'cup' | 'tbsp' | 'tsp' | 'piece' | 'serving';
 
 type ServingOption = {
@@ -261,6 +276,8 @@ export default function FoodDetailsLayout({
   const [numberOfServings, setNumberOfServings] = useState('1');
   const [showUnitOptions, setShowUnitOptions] = useState(false);
   const [selectedServingOptionKey, setSelectedServingOptionKey] = useState('default');
+  const [customUnitLabel, setCustomUnitLabel] = useState<string | null>(null);
+  const [customUnitGramsPerUnit, setCustomUnitGramsPerUnit] = useState<number>(100);
 
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
@@ -358,7 +375,7 @@ export default function FoodDetailsLayout({
       // If serving_description matches a "<number> g" / "<number> oz" / "<number> lb" pattern,
       // it was saved with a continuous unit and `quantity` may legitimately be fractional.
       // Otherwise, treat it as discrete and round to a whole number (minimum 1).
-      const desc = (mealItem.serving_description || '').toLowerCase();
+      const desc = (mealItem.serving_description || '').toLowerCase().trim();
       const isContinuousUnit = /\d+(\.\d+)?\s*(g|oz|lb|ml)\b/.test(desc);
       if (isContinuousUnit) {
         setNumberOfServings(rawQuantity.toString());
@@ -367,9 +384,27 @@ export default function FoodDetailsLayout({
         else if (/\boz\b/.test(desc)) setSelectedServingOptionKey('oz');
         else if (/\blb\b/.test(desc)) setSelectedServingOptionKey('lb');
         else setSelectedServingOptionKey('default');
+        setCustomUnitLabel(null);
       } else {
+        // Try to extract the unit token from serving_description (e.g. "4 slices" → "slice")
+        // Format is typically "<number> <unit>" or just "<unit>"
+        const unitMatch = desc.match(/^\d+(\.\d+)?\s+(.+)$/) || desc.match(/^(.+)$/);
+        const rawUnit = unitMatch ? (unitMatch[2] || unitMatch[1] || '').trim() : '';
+
+        const singularUnit = rawUnit ? singularizeUnit(rawUnit) : '';
+        const computedGramsPerUnit = rawQuantity > 0 ? (mealItem.grams || 100) / rawQuantity : (mealItem.grams || 100);
+
+        if (singularUnit && singularUnit !== 'serving') {
+          console.log('[FoodDetails] Edit load: parsed unit=', singularUnit, 'gramsPerUnit=', computedGramsPerUnit, 'from desc=', desc);
+          setCustomUnitLabel(`1 ${singularUnit}`);
+          setCustomUnitGramsPerUnit(computedGramsPerUnit);
+          setSelectedServingOptionKey('custom');
+        } else {
+          console.log('[FoodDetails] Edit load: no custom unit found, desc=', desc, 'falling back to default');
+          setCustomUnitLabel(null);
+          setSelectedServingOptionKey('default');
+        }
         setNumberOfServings(Math.max(1, Math.round(rawQuantity)).toString());
-        setSelectedServingOptionKey('default');
       }
 
       await checkFavoriteStatus(mockProduct);
@@ -896,6 +931,9 @@ export default function FoodDetailsLayout({
 
   const defaultServingInfo = extractServingSize(product);
   const servingOptions: ServingOption[] = [
+    ...(customUnitLabel
+      ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
+      : []),
     { key: 'default', label: defaultServingInfo.description || `1 serving (${defaultServingInfo.grams}g)`, gramsPerUnit: defaultServingInfo.grams },
     { key: 'g', label: '1 g', gramsPerUnit: 1 },
     { key: 'oz', label: '1 oz', gramsPerUnit: 28.35 },
