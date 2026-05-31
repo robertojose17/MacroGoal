@@ -58,3 +58,7 @@ export const LOG_LEVEL = {
 } as const;
 
 export const isPurchasesAvailable = false;
+
+export async function loginRevenueCat(_userId: string, _apiKey: string, _opts?: { email?: string }): Promise<void> {}
+
+export async function logoutRevenueCat(): Promise<void> {}

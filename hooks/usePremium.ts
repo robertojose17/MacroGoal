@@ -270,21 +270,20 @@ export function usePremium(): UsePremiumReturn {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user?.id) {
         console.log('[usePremium] 🔐 SIGNED_IN event detected, refreshing premium status for user:', session.user.id);
-        // Small delay to allow _layout.tsx to complete Purchases.logIn() first,
+        // Small delay to allow loginRevenueCat() in _layout.tsx to complete first,
         // so getCustomerInfo() returns entitlements for the identified user.
         setTimeout(() => {
           console.log('[usePremium] ⏱️ Running post-login premium check');
           checkPremiumStatus();
-        }, 1500);
+        }, 500);
       } else if (event === 'INITIAL_SESSION' && session?.user?.id) {
         console.log('[usePremium] 🔐 INITIAL_SESSION event detected, scheduling delayed premium check for user:', session.user.id);
-        // Wait longer than SIGNED_IN because on cold start RevenueCat is still
-        // initializing in parallel from _layout.tsx. We need to give configure()
-        // and logIn() time to complete before we ask for customer info.
+        // loginRevenueCat() in _layout.tsx configures RC atomically on cold start,
+        // so we only need a short delay before asking for customer info.
         setTimeout(() => {
           console.log('[usePremium] ⏱️ Running cold-start premium re-check');
           checkPremiumStatus(true); // force = true to bypass the in-progress guard
-        }, 2500);
+        }, 800);
       } else if (event === 'SIGNED_OUT') {
         console.log('[usePremium] 🚪 SIGNED_OUT event detected, resetting premium status');
         setIsPremium(false);

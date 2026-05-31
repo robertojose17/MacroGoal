@@ -26,7 +26,7 @@ import { setUserTimezone } from "@/utils/macroXpApi";
 import type { Session } from "@supabase/supabase-js";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Constants from "expo-constants";
-import Purchases, { LOG_LEVEL } from "@/utils/purchases";
+import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
 import mobileAds from "@/utils/mobileAds";
 
 const TIMEZONE_STORAGE_KEY = "user_timezone_synced";
@@ -81,38 +81,25 @@ export default function RootLayout() {
       }
 
       // Non-blocking: RevenueCat (native only)
-      const { Purchases: rc, LOG_LEVEL: ll } = loadPurchases();
-      if (rc) {
-        (async () => {
-          try {
-            const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
-            const apiKey = Platform.select({
-              ios: revenueCatConfig?.iosApiKey,
-              android: revenueCatConfig?.androidApiKey,
-            });
-            if (apiKey && !apiKey.includes("YOUR")) {
-              await rc.configure({ apiKey });
-              if (__DEV__) await rc.setLogLevel(ll.DEBUG);
-              if (resolvedSession?.user?.id) {
-                const { customerInfo } = await rc.logIn(
-                  resolvedSession.user.id
-                );
-                console.log(
-                  "[App] RevenueCat user identified:",
-                  resolvedSession.user.id
-                );
-                console.log(
-                  "[App] Active entitlements:",
-                  Object.keys(customerInfo.entitlements.active)
-                );
-                if (resolvedSession.user.email)
-                  await rc.setEmail(resolvedSession.user.email);
-              }
-            }
-          } catch (e) {
-            console.warn("[App] RevenueCat init failed (non-blocking):", e);
+      if (isPurchasesAvailable) {
+        const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
+        const apiKey = Platform.select({
+          ios: revenueCatConfig?.iosApiKey,
+          android: revenueCatConfig?.androidApiKey,
+        });
+        if (apiKey && !apiKey.includes("YOUR")) {
+          if (resolvedSession?.user?.id) {
+            // Configure AND identify atomically — no anonymous window.
+            loginRevenueCat(resolvedSession.user.id, apiKey, { email: resolvedSession.user.email ?? undefined })
+              .catch((e) => console.warn("[App] loginRevenueCat failed:", e));
+          } else {
+            // No session yet — INITIAL_SESSION listener below will handle it.
+            console.log("[App] No session at cold start — deferring RC login to auth listener");
           }
-        })();
+          if (__DEV__) {
+            try { Purchases.setLogLevel(LOG_LEVEL.DEBUG); } catch (_) {}
+          }
+        }
       }
     };
 
@@ -158,16 +145,20 @@ export default function RootLayout() {
         newSession?.user?.id || "none"
       );
 
-      if (event === "SIGNED_IN") {
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
         setSession(newSession);
-        hasNavigatedRef.current = false;
-        const { Purchases: rc } = loadPurchases();
-        if (rc && newSession?.user?.id) {
-          rc
-            .logIn(newSession.user.id)
-            .catch((e: unknown) =>
-              console.warn("[App] RC logIn failed:", e)
-            );
+        if (event === "SIGNED_IN") hasNavigatedRef.current = false;
+
+        if (newSession?.user?.id) {
+          const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
+          const apiKey = Platform.select({
+            ios: revenueCatConfig?.iosApiKey,
+            android: revenueCatConfig?.androidApiKey,
+          });
+          if (apiKey && !apiKey.includes("YOUR")) {
+            loginRevenueCat(newSession.user.id, apiKey, { email: newSession.user.email ?? undefined })
+              .catch((e) => console.warn("[App] loginRevenueCat (auth event) failed:", e));
+          }
         }
         return;
       }
@@ -176,8 +167,7 @@ export default function RootLayout() {
         console.log("[Navigation] SIGNED_OUT → /auth/signup");
         setSession(null);
         hasNavigatedRef.current = true;
-        const { Purchases: rc } = loadPurchases();
-        if (rc) rc.logOut().catch(() => {});
+        logoutRevenueCat().catch((e) => console.warn("[App] logoutRevenueCat failed:", e));
         router.replace("/auth/signup");
         return;
       }
