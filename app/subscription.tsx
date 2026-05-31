@@ -13,6 +13,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -606,69 +607,139 @@ export default function SubscriptionScreen() {
     );
   }
 
+  const PREMIUM_HERO_FEATURES = [
+    { ios: 'camera.fill', android: 'camera-alt', label: 'AI Snap & Track', desc: 'Snap a photo to estimate calories & macros instantly.' },
+    { ios: 'list.clipboard.fill', android: 'assignment', label: 'Custom Meal Plans', desc: 'Personalized plans for fat loss, muscle gain, or maintenance.' },
+    { ios: 'cart.fill', android: 'shopping-cart', label: 'Auto Grocery Lists', desc: 'Generate grocery lists automatically from your plan.' },
+    { ios: 'chart.line.uptrend.xyaxis', android: 'trending-up', label: 'Progress Tracking', desc: 'Track progress photos & body measurements over time.' },
+    { ios: 'checkmark.shield.fill', android: 'verified-user', label: 'No Ads, No Tracking', desc: 'A clean, private experience — just for you.' },
+  ];
+
   if (isPremium) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: DARK_BG }]} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color="#fff"
+      <View style={styles.premiumRoot}>
+        <StatusBar style="light" />
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {/* ── HERO ── */}
+          <ImageBackground
+            source={require('@/assets/images/2d4a02d7-8c2f-4147-a7d7-0412c4322f10.jpeg')}
+            style={styles.premiumHero}
+            resizeMode="cover"
+            imageStyle={{ resizeMode: 'cover' }}
+          >
+            {/* Left-to-right dark overlay so text is readable */}
+            <LinearGradient
+              colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0)']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFillObject}
+              pointerEvents="none"
             />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: '#fff' }]}>
-            Premium Status
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
 
-        <View style={styles.premiumStatusContainer}>
-          <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
-            <IconSymbol
-              ios_icon_name="star.fill"
-              android_material_icon_name="star"
-              size={48}
-              color="#FFFFFF"
-            />
-          </View>
-          <Text style={[styles.premiumTitle, { color: '#fff' }]}>
-            You&apos;re Premium!
-          </Text>
-          <Text style={[styles.premiumSubtitle, { color: 'rgba(255,255,255,0.6)' }]}>
-            Enjoy unlimited access to all premium features
-          </Text>
+            {/* Back button — top-left */}
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Subscription] Premium screen back button pressed');
+                router.back();
+              }}
+              style={styles.premiumBackButton}
+            >
+              <IconSymbol
+                ios_icon_name="chevron.left"
+                android_material_icon_name="arrow-back"
+                size={24}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
 
-          <View style={[styles.featuresCard, { backgroundColor: DARK_CARD }]}>
-            <Text style={[styles.featuresTitle, { color: '#fff' }]}>
-              Your Premium Features
-            </Text>
-            {PREMIUM_FEATURES.map((feature, index) => (
-              <View key={index} style={styles.featureRow}>
+            {/* Bottom-left hero content */}
+            <View style={styles.heroBottomContent}>
+              {/* Crown pill */}
+              <View style={styles.premiumPill}>
                 <IconSymbol
-                  ios_icon_name="checkmark.circle.fill"
-                  android_material_icon_name="check-circle"
-                  size={20}
+                  ios_icon_name="crown.fill"
+                  android_material_icon_name="emoji-events"
+                  size={14}
                   color={colors.primary}
                 />
-                <Text style={[styles.featureText, { color: '#fff' }]}>
-                  {feature}
-                </Text>
+                <Text style={styles.premiumPillText}>PREMIUM</Text>
+              </View>
+
+              {/* Headline */}
+              <View>
+                <Text style={styles.heroHeadline}>{"You're"}</Text>
+                <Text style={styles.heroHeadlineAccent}>{"Premium."}</Text>
+              </View>
+
+              {/* Subtitle */}
+              <Text style={styles.heroSubtitle}>
+                Enjoy unlimited access to all premium features.
+              </Text>
+            </View>
+          </ImageBackground>
+
+          {/* ── FEATURES CARD ── */}
+          <View style={styles.premiumFeaturesCard}>
+            {PREMIUM_HERO_FEATURES.map((item, index) => (
+              <View key={item.label}>
+                <View style={styles.premiumFeatureRow}>
+                  <View style={styles.premiumFeatureIconBox}>
+                    <IconSymbol
+                      ios_icon_name={item.ios}
+                      android_material_icon_name={item.android}
+                      size={18}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.premiumFeatureLabel}>{item.label}</Text>
+                    <Text style={styles.premiumFeatureDesc}>{item.desc}</Text>
+                  </View>
+                </View>
+                {index < PREMIUM_HERO_FEATURES.length - 1 && (
+                  <View style={styles.premiumFeatureSeparator} />
+                )}
               </View>
             ))}
           </View>
 
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: DARK_CARD }]}
-            onPress={() => router.back()}
-          >
-            <Text style={[styles.buttonText, { color: '#fff' }]}>
-              Continue
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+          {/* ── CTA ── */}
+          <SafeAreaView edges={['bottom']} style={{ backgroundColor: DARK_BG }}>
+            <TouchableOpacity
+              style={styles.premiumCtaButton}
+              onPress={() => {
+                console.log('[Subscription] Premium Continue button pressed');
+                router.back();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.premiumCtaText}>Continue</Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={18}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+
+            <View style={styles.premiumSecureFooter}>
+              <IconSymbol
+                ios_icon_name="lock.fill"
+                android_material_icon_name="lock"
+                size={12}
+                color="rgba(255,255,255,0.5)"
+              />
+              <Text style={styles.premiumSecureFooterText}>
+                Secure &amp; private. Your data is always protected.
+              </Text>
+            </View>
+          </SafeAreaView>
+        </ScrollView>
+      </View>
     );
   }
 
@@ -1408,6 +1479,136 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
+  },
+
+  // ── Premium hero screen (isPremium branch) ─────────────────────────────────
+  premiumRoot: {
+    flex: 1,
+    backgroundColor: DARK_BG,
+  },
+  premiumHero: {
+    height: 360,
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  premiumBackButton: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 40 : 58,
+    left: spacing.md,
+    padding: spacing.xs,
+    zIndex: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 20,
+  },
+  heroBottomContent: {
+    position: 'absolute',
+    bottom: spacing.xl,
+    left: spacing.md,
+    gap: spacing.sm,
+  },
+  premiumPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary + '20',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  premiumPillText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  heroHeadline: {
+    color: '#FFFFFF',
+    fontSize: 40,
+    fontWeight: '800',
+    lineHeight: 44,
+  },
+  heroHeadlineAccent: {
+    color: colors.primary,
+    fontSize: 40,
+    fontWeight: '800',
+    lineHeight: 44,
+  },
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  premiumFeaturesCard: {
+    backgroundColor: DARK_CARD,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+  },
+  premiumFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  premiumFeatureIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.primary + '1F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumFeatureLabel: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  premiumFeatureDesc: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  premiumFeatureSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginVertical: spacing.md,
+  },
+  premiumCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: 16,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  premiumCtaText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  premiumSecureFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  premiumSecureFooterText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
   },
 
 });
