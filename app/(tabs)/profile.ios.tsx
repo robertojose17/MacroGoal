@@ -701,7 +701,33 @@ export default function ProfileScreen() {
           <Text style={[styles.userName, { color: isDark ? colors.textDark : colors.text }]}>
             {user.name || 'User'}
           </Text>
-          
+
+          {user.username ? (
+            <Text style={styles.usernameText}>
+              {'@'}
+              {user.username}
+            </Text>
+          ) : (
+            <TouchableOpacity
+              style={styles.setUsernameRow}
+              onPress={() => {
+                console.log('[Profile] Set username pressed');
+                router.push('/choose-username');
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="plus.circle.fill"
+                android_material_icon_name="add-circle"
+                size={14}
+                color={colors.primary}
+              />
+              <Text style={styles.setUsernameText}>
+                Set @username
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <Text style={[styles.subscriptionStatus, { color: isPremium ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
             {subscriptionStatusText}
           </Text>
@@ -1554,6 +1580,26 @@ const styles = StyleSheet.create({
   },
   email: {
     ...typography.body,
+  },
+  usernameText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '500',
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  setUsernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    marginBottom: 4,
+    opacity: 0.85,
+  },
+  setUsernameText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
   },
   subscriptionCard: {
     borderRadius: borderRadius.lg,
