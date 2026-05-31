@@ -20,7 +20,7 @@ import { Platform } from 'react-native';
 // Set MOCK_STEPS to a number to bypass HealthKit / Health Connect entirely.
 // This lets you test the app in Expo Go without running a native build.
 // Set to null to re-enable real health data (requires a native build).
-const MOCK_STEPS: number | null = 8500;
+const MOCK_STEPS: number | null = null;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 

@@ -64,6 +64,13 @@
         }
       ],
       [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
+          "background": true
+        }
+      ],
+      [
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-5592015069000241~5529470607",

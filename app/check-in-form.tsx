@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -51,7 +51,7 @@ export default function CheckInFormScreen() {
   // Steps fields
   const [steps, setSteps] = useState('');
   const [stepsGoal, setStepsGoal] = useState('');
-  const { steps: liveSteps, loading: stepsLoading, refresh: refreshSteps } = useSteps();
+  const { steps: liveSteps, permission: stepsPermission, loading: stepsLoading, refresh: refreshSteps, requestPermission: requestStepsPermission } = useSteps();
   
   // Gym fields
   const [wentToGym, setWentToGym] = useState(true);
@@ -176,6 +176,17 @@ export default function CheckInFormScreen() {
       setSteps(liveSteps.toString());
     }
   }, [liveSteps, checkInType, isEditing]);
+
+  // When entering steps check-in, automatically request permission once.
+  const hasRequestedRef = useRef(false);
+  useEffect(() => {
+    if (checkInType !== 'steps') return;
+    if (stepsPermission !== 'not_determined') return;
+    if (hasRequestedRef.current) return;
+    hasRequestedRef.current = true;
+    console.log('[CheckInForm] auto-requesting HealthKit steps permission');
+    requestStepsPermission();
+  }, [checkInType, stepsPermission, requestStepsPermission]);
 
   // Sync a check-in entry to tracker_entries so the tracker detail "Recent Entries" stays in sync
   const syncToTrackerEntries = async (
@@ -596,14 +607,33 @@ export default function CheckInFormScreen() {
                       {Platform.OS === 'ios' ? 'From Apple Health · auto-updates' : 'From Health Connect · auto-updates'}
                     </Text>
                   </>
+                ) : stepsPermission === 'denied' ? (
+                  <>
+                    <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
+                      Health access denied
+                    </Text>
+                    <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Open Settings → Privacy → Health → Macro Goal to allow steps.
+                    </Text>
+                  </>
                 ) : (
                   <>
                     <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      Not available
+                      Connect Apple Health
                     </Text>
                     <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Enable Health permissions to track steps automatically
+                      Tap below to share your daily step count
                     </Text>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        console.log('[CheckInForm] Tapped connect health');
+                        await requestStepsPermission();
+                      }}
+                      style={[styles.connectHealthButton, { backgroundColor: colors.primary }]}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.connectHealthButtonText}>Connect</Text>
+                    </TouchableOpacity>
                   </>
                 )}
               </View>
@@ -1020,5 +1050,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary + '15',
+  },
+  connectHealthButton: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignSelf: 'flex-start',
+  },
+  connectHealthButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
