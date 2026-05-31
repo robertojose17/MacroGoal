@@ -18,8 +18,9 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { listTrackers, getStats, listEntries, logEntry, Tracker, TrackerStats } from '@/utils/trackersApi';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { Flame, Trophy, Plus, ChevronRight, CheckCircle2 } from 'lucide-react-native';
+import { Flame, Trophy, Plus, ChevronRight, CheckCircle2, RotateCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSteps } from '@/hooks/useSteps';
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -104,6 +105,144 @@ function getCheckInType(name: string): 'weight' | 'steps' | 'gym' | null {
   return null;
 }
 
+// ─── StepsActionArea ──────────────────────────────────────────────────────────
+function StepsActionArea({
+  steps,
+  permission,
+  loading,
+  goalValue,
+  isRefreshing,
+  isDark,
+  onRefresh,
+  onRequestPermission,
+}: {
+  steps: number | null;
+  permission: string;
+  loading: boolean;
+  goalValue: number | null;
+  isRefreshing: boolean;
+  isDark: boolean;
+  onRefresh: () => void;
+  onRequestPermission: () => void;
+}) {
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinRef = useRef<Animated.CompositeAnimation | null>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Spin animation while refreshing
+  useEffect(() => {
+    if (isRefreshing) {
+      spinRef.current = Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        })
+      );
+      spinRef.current.start();
+    } else {
+      spinRef.current?.stop();
+      spinAnim.setValue(0);
+    }
+  }, [isRefreshing, spinAnim]);
+
+  // Animate progress bar when steps change
+  const goal = goalValue && goalValue > 0 ? goalValue : 0;
+  const count = steps ?? 0;
+  const pct = goal > 0 ? Math.min(100, (count / goal) * 100) : 0;
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: pct,
+      duration: 600,
+      useNativeDriver: false,
+    }).start();
+  }, [pct, progressAnim]);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const trackColor = isDark ? '#2A2C40' : '#E5E7EB';
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const textColor = isDark ? colors.textDark : colors.text;
+
+  // Not granted — show Connect button
+  if (permission !== 'granted') {
+    return (
+      <AnimatedPressable
+        onPress={() => {
+          console.log('[CheckIns] Steps Connect Apple Health tapped');
+          onRequestPermission();
+        }}
+        style={[styles.connectButton, { backgroundColor: colors.primary }]}
+        scaleValue={0.94}
+      >
+        <Text style={styles.connectButtonText}>Connect</Text>
+      </AnimatedPressable>
+    );
+  }
+
+  // Granted but loading initial data
+  if (loading && steps === null) {
+    return (
+      <View style={styles.stepsActionRow}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }
+
+  const countFormatted = count.toLocaleString('en-US');
+  const goalFormatted = goal > 0 ? goal.toLocaleString('en-US') : null;
+
+  return (
+    <View style={styles.stepsActionRow}>
+      {/* Count + bar + goal label */}
+      <View style={styles.stepsInfoCol}>
+        <Text style={[styles.stepsCount, { color: textColor }]}>
+          {countFormatted}
+          <Text style={[styles.stepsUnit, { color: subColor }]}> steps</Text>
+        </Text>
+        {goal > 0 ? (
+          <View style={[styles.progressTrack, { backgroundColor: trackColor }]}>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                {
+                  backgroundColor: colors.primary,
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+              ]}
+            />
+          </View>
+        ) : null}
+        {goalFormatted ? (
+          <Text style={[styles.stepsGoalLabel, { color: subColor }]}>
+            Goal: {goalFormatted}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* Refresh button */}
+      <Pressable
+        onPress={() => {
+          console.log('[CheckIns] Steps refresh button tapped');
+          onRefresh();
+        }}
+        style={[styles.refreshButton, { backgroundColor: colors.primary }]}
+      >
+        <Animated.View style={{ transform: [{ rotate: spin }] }}>
+          <RotateCw size={15} color="#fff" strokeWidth={2.5} />
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+}
+
 // ─── TrackerCard ──────────────────────────────────────────────────────────────
 function TrackerCard({
   tracker,
@@ -113,6 +252,8 @@ function TrackerCard({
   onLog,
   todayEntry,
   onQuickLog,
+  stepsHook,
+  onStepsRefresh,
 }: {
   tracker: Tracker;
   stats: TrackerStats | null;
@@ -121,10 +262,13 @@ function TrackerCard({
   onLog: () => void;
   todayEntry: { id: string; value: number } | null;
   onQuickLog?: (value: number) => Promise<void> | void;
+  stepsHook?: ReturnType<typeof useSteps>;
+  onStepsRefresh?: () => Promise<void>;
 }) {
   const [weightInput, setWeightInput] = useState('');
   const [weightEditing, setWeightEditing] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [stepsRefreshing, setStepsRefreshing] = useState(false);
 
   const completionPct = stats ? Math.round(Number(stats.completion_rate) * 100) : 0;
   const streak = stats ? Number(stats.current_streak) : 0;
@@ -141,6 +285,7 @@ function TrackerCard({
 
   const isWeight = tracker.is_default && tracker.name.toLowerCase() === 'weight';
   const isGym = tracker.is_default && tracker.name.toLowerCase() === 'gym';
+  const isSteps = tracker.is_default && tracker.name.toLowerCase() === 'steps';
   const loggedToday = todayEntry !== null;
 
   const handleGymLog = async () => {
@@ -198,10 +343,37 @@ function TrackerCard({
     setWeightEditing(true);
   };
 
+  const handleStepsRefreshPress = async () => {
+    if (stepsRefreshing) return;
+    setStepsRefreshing(true);
+    try {
+      await onStepsRefresh?.();
+    } finally {
+      setStepsRefreshing(false);
+    }
+  };
+
   // ── Right-side action area ──────────────────────────────────────────────────
   let actionArea: React.ReactNode;
 
-  if (isGym) {
+  if (isSteps) {
+    // Steps: read-only from HealthKit — show count + progress bar + refresh
+    actionArea = (
+      <StepsActionArea
+        steps={stepsHook?.steps ?? null}
+        permission={stepsHook?.permission ?? 'unknown'}
+        loading={stepsHook?.loading ?? false}
+        goalValue={tracker.goal_value}
+        isRefreshing={stepsRefreshing}
+        isDark={isDark}
+        onRefresh={handleStepsRefreshPress}
+        onRequestPermission={() => {
+          console.log('[CheckIns] Steps requestPermission called from card');
+          stepsHook?.requestPermission();
+        }}
+      />
+    );
+  } else if (isGym) {
     if (loggedToday) {
       // Done pill — no navigation
       actionArea = (
@@ -369,6 +541,9 @@ export default function CheckInsScreen() {
 
   const loadingRef = useRef(false);
 
+  // ── Steps hook ──────────────────────────────────────────────────────────────
+  const stepsHook = useSteps();
+
   const loadData = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
@@ -445,6 +620,30 @@ export default function CheckInsScreen() {
     }
   }, []);
 
+  // ── Steps refresh handler ───────────────────────────────────────────────────
+  const handleStepsRefresh = useCallback(async (tracker: Tracker) => {
+    console.log('[CheckIns] handleStepsRefresh called for tracker:', tracker.id);
+    try {
+      await stepsHook.refresh();
+      const currentSteps = stepsHook.steps;
+      if (currentSteps !== null && currentSteps > 0) {
+        const today = toLocalDateString(new Date());
+        console.log('[CheckIns] Upserting steps entry:', currentSteps, 'for date:', today);
+        const entry = await logEntry(tracker.id, today, currentSteps);
+        setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
+        // Refresh stats
+        try {
+          const newStats = await getStats(tracker.id);
+          setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
+        } catch {}
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to refresh steps';
+      console.error('[CheckIns] Steps refresh failed:', msg);
+    }
+  }, [stepsHook]);
+
   useFocusEffect(
     useCallback(() => {
       console.log('[CheckIns] Screen focused');
@@ -466,13 +665,7 @@ export default function CheckInsScreen() {
 
   const handleLog = (tracker: Tracker) => {
     console.log('[CheckIns] Log button tapped (form nav):', tracker.name, tracker.id);
-    if (tracker.is_default) {
-      const type = getCheckInType(tracker.name);
-      if (type === 'steps') {
-        router.push({ pathname: '/check-in-form', params: { type } });
-        return;
-      }
-    }
+    // Steps uses the refresh button — no form navigation for steps
     router.push({ pathname: '/tracker/log', params: { trackerId: tracker.id } });
   };
 
@@ -567,6 +760,8 @@ export default function CheckInsScreen() {
                   onPress={() => handleCardPress(tracker)}
                   onLog={() => handleLog(tracker)}
                   onQuickLog={(value) => handleQuickLog(tracker, value)}
+                  stepsHook={stepsHook}
+                  onStepsRefresh={() => handleStepsRefresh(tracker)}
                 />
               </AnimatedListItem>
             ))}
@@ -729,6 +924,58 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Steps-specific styles
+  stepsActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stepsInfoCol: {
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  stepsCount: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  stepsUnit: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  progressTrack: {
+    width: 80,
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  stepsGoalLabel: {
+    fontSize: 11,
+    fontWeight: '400',
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  refreshButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: borderRadius.sm,
+  },
+  connectButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Skeleton
   skeletonCircle: {

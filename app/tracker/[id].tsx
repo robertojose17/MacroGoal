@@ -11,6 +11,8 @@ import {
   Alert,
   ActionSheetIOS,
   Platform,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -25,6 +27,7 @@ import {
   deleteTracker,
   listTrackers,
   backfillWeightFromCheckIns,
+  updateTrackerGoal,
 } from '@/utils/trackersApi';
 import {
   Flame,
@@ -37,8 +40,12 @@ import {
   Trash2,
   CheckCircle2,
   BarChart3,
+  Pencil,
+  RotateCw,
 } from 'lucide-react-native';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
+import * as Haptics from 'expo-haptics';
+import { useSteps } from '@/hooks/useSteps';
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -155,12 +162,180 @@ function formatValue(value: number, trackerType: string, unit: string | null): s
   return `${num % 1 === 0 ? num : num.toFixed(1)}${unitStr}`;
 }
 
-function getCheckInType(name: string): 'weight' | 'steps' | 'gym' | null {
-  const lower = name.toLowerCase();
-  if (lower === 'weight') return 'weight';
-  if (lower === 'steps') return 'steps';
-  if (lower === 'gym') return 'gym';
-  return null;
+// ─── Goal preset chips ────────────────────────────────────────────────────────
+const STEP_PRESETS = [5000, 7500, 10000, 12500, 15000];
+
+// ─── DailyGoalSection ─────────────────────────────────────────────────────────
+function DailyGoalSection({
+  trackerId,
+  currentGoal,
+  isDark,
+  onGoalSaved,
+}: {
+  trackerId: string;
+  currentGoal: number | null;
+  isDark: boolean;
+  onGoalSaved: (newGoal: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [customInput, setCustomInput] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const inputBg = isDark ? '#2A2C40' : '#F1F3F8';
+
+  const goalDisplay = currentGoal ? currentGoal.toLocaleString('en-US') + ' steps' : 'Not set';
+
+  const saveGoal = async (value: number) => {
+    console.log('[TrackerDetail] saveGoal called with value:', value, 'for tracker:', trackerId);
+    if (value < 1000 || value > 50000) {
+      Alert.alert('Invalid goal', 'Please enter a goal between 1,000 and 50,000 steps.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateTrackerGoal(trackerId, value);
+      console.log('[TrackerDetail] Goal saved successfully:', value);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      onGoalSaved(value);
+      setEditing(false);
+      setCustomMode(false);
+      setCustomInput('');
+      setSelectedPreset(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save goal';
+      console.error('[TrackerDetail] saveGoal error:', msg);
+      Alert.alert('Error', msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePresetTap = async (preset: number) => {
+    console.log('[TrackerDetail] Goal preset tapped:', preset);
+    setSelectedPreset(preset);
+    await saveGoal(preset);
+  };
+
+  const handleCustomSave = async () => {
+    const parsed = parseInt(customInput.replace(/,/g, ''), 10);
+    console.log('[TrackerDetail] Custom goal save tapped, input:', customInput, 'parsed:', parsed);
+    if (isNaN(parsed)) {
+      Alert.alert('Invalid goal', 'Please enter a valid number.');
+      return;
+    }
+    await saveGoal(parsed);
+  };
+
+  return (
+    <View style={[styles.goalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+      {/* Header row */}
+      <View style={styles.goalHeaderRow}>
+        <Text style={[styles.goalSectionTitle, { color: textColor }]}>Daily Goal</Text>
+        {!editing ? (
+          <AnimatedPressable
+            onPress={() => {
+              console.log('[TrackerDetail] Edit goal button tapped');
+              setEditing(true);
+            }}
+            style={styles.editGoalBtn}
+            scaleValue={0.92}
+          >
+            <Pencil size={13} color={colors.primary} strokeWidth={2.5} />
+            <Text style={[styles.editGoalBtnText, { color: colors.primary }]}>Edit</Text>
+          </AnimatedPressable>
+        ) : (
+          <Pressable
+            onPress={() => {
+              console.log('[TrackerDetail] Cancel goal edit tapped');
+              setEditing(false);
+              setCustomMode(false);
+              setCustomInput('');
+              setSelectedPreset(null);
+            }}
+          >
+            <Text style={[styles.cancelGoalText, { color: subColor }]}>Cancel</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Current goal display */}
+      {!editing ? (
+        <Text style={[styles.goalValueText, { color: colors.primary }]}>{goalDisplay}</Text>
+      ) : null}
+
+      {/* Edit mode: presets + custom */}
+      {editing ? (
+        <View style={styles.goalEditArea}>
+          {/* Preset chips */}
+          <View style={styles.presetsRow}>
+            {STEP_PRESETS.map((preset) => {
+              const isSelected = selectedPreset === preset || currentGoal === preset;
+              const chipBg = isSelected ? colors.primary : (isDark ? '#2A2C40' : '#F1F3F8');
+              const chipText = isSelected ? '#fff' : textColor;
+              const presetLabel = preset.toLocaleString('en-US');
+              return (
+                <AnimatedPressable
+                  key={preset}
+                  onPress={() => handlePresetTap(preset)}
+                  style={[styles.presetChip, { backgroundColor: chipBg }]}
+                  scaleValue={0.93}
+                  disabled={saving}
+                >
+                  <Text style={[styles.presetChipText, { color: chipText }]}>{presetLabel}</Text>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
+
+          {/* Custom input */}
+          {!customMode ? (
+            <AnimatedPressable
+              onPress={() => {
+                console.log('[TrackerDetail] Custom goal chip tapped');
+                setCustomMode(true);
+              }}
+              style={[styles.presetChip, { backgroundColor: isDark ? '#2A2C40' : '#F1F3F8' }]}
+              scaleValue={0.93}
+            >
+              <Text style={[styles.presetChipText, { color: textColor }]}>Custom</Text>
+            </AnimatedPressable>
+          ) : (
+            <View style={styles.customInputRow}>
+              <TextInput
+                style={[styles.customInput, { backgroundColor: inputBg, color: textColor }]}
+                value={customInput}
+                onChangeText={setCustomInput}
+                keyboardType="number-pad"
+                placeholder="e.g. 8000"
+                placeholderTextColor={subColor}
+                returnKeyType="done"
+                onSubmitEditing={handleCustomSave}
+                autoFocus
+              />
+              <AnimatedPressable
+                onPress={handleCustomSave}
+                style={[styles.customSaveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}
+                scaleValue={0.94}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.customSaveBtnText}>Save</Text>
+                )}
+              </AnimatedPressable>
+            </View>
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -176,6 +351,9 @@ export default function TrackerDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stepsRefreshing, setStepsRefreshing] = useState(false);
+
+  const stepsHook = useSteps();
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -282,14 +460,42 @@ export default function TrackerDetailScreen() {
 
   const handleLogEntry = () => {
     console.log('[TrackerDetail] Log entry button tapped');
-    if (tracker?.is_default) {
-      const type = getCheckInType(tracker.name);
-      if (type) {
-        router.push({ pathname: '/check-in-form', params: { type } });
-        return;
-      }
-    }
     router.push({ pathname: '/tracker/log', params: { trackerId: id } });
+  };
+
+  const handleStepsRefresh = async () => {
+    console.log('[TrackerDetail] Steps refresh from Health tapped');
+    if (stepsRefreshing || !tracker) return;
+    setStepsRefreshing(true);
+    try {
+      await stepsHook.refresh();
+      const currentSteps = stepsHook.steps;
+      if (currentSteps !== null && currentSteps > 0) {
+        const { logEntry } = await import('@/utils/trackersApi');
+        const { toLocalDateString } = await import('@/utils/dateUtils');
+        const today = toLocalDateString(new Date());
+        console.log('[TrackerDetail] Upserting steps entry from Health:', currentSteps);
+        await logEntry(tracker.id, today, currentSteps);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        // Reload entries and stats
+        const [newStats, newEntries] = await Promise.all([
+          getStats(tracker.id),
+          listEntries(tracker.id, 500),
+        ]);
+        setStats(newStats);
+        setEntries(newEntries);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to refresh steps';
+      console.error('[TrackerDetail] Steps refresh error:', msg);
+    } finally {
+      setStepsRefreshing(false);
+    }
+  };
+
+  const handleGoalSaved = (newGoal: number) => {
+    console.log('[TrackerDetail] Goal updated in local state:', newGoal);
+    setTracker(prev => prev ? { ...prev, goal_value: newGoal } : prev);
   };
 
   const bg = isDark ? colors.backgroundDark : colors.background;
@@ -297,6 +503,8 @@ export default function TrackerDetailScreen() {
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const cardBg = isDark ? colors.cardDark : colors.card;
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const isStepsTracker = tracker?.is_default && tracker.name.toLowerCase() === 'steps';
 
   const trackerTitle = tracker ? `${tracker.emoji} ${tracker.name}` : '';
   const completionPct = stats ? Math.round(Number(stats.completion_rate)) : 0;
@@ -431,20 +639,51 @@ export default function TrackerDetailScreen() {
               ) : null}
             </View>
 
+            {/* Daily Goal section — steps tracker only */}
+            {isStepsTracker && tracker ? (
+              <DailyGoalSection
+                trackerId={tracker.id}
+                currentGoal={tracker.goal_value}
+                isDark={isDark}
+                onGoalSaved={handleGoalSaved}
+              />
+            ) : null}
+
             {/* Row 5: Recent Entries */}
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: textColor }]}>Recent Entries</Text>
-              <AnimatedPressable onPress={handleLogEntry} style={[styles.logEntryBtn, { backgroundColor: colors.primary }]} scaleValue={0.94}>
-                <Plus size={14} color="#fff" strokeWidth={2.5} />
-                <Text style={styles.logEntryBtnText}>Log entry</Text>
-              </AnimatedPressable>
+              {isStepsTracker ? (
+                /* Steps: Refresh from Health instead of manual log */
+                <AnimatedPressable
+                  onPress={handleStepsRefresh}
+                  style={[styles.logEntryBtn, { backgroundColor: colors.primary, opacity: stepsRefreshing ? 0.6 : 1 }]}
+                  scaleValue={0.94}
+                  disabled={stepsRefreshing}
+                >
+                  {stepsRefreshing ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <RotateCw size={14} color="#fff" strokeWidth={2.5} />
+                      <Text style={styles.logEntryBtnText}>Refresh</Text>
+                    </>
+                  )}
+                </AnimatedPressable>
+              ) : (
+                <AnimatedPressable onPress={handleLogEntry} style={[styles.logEntryBtn, { backgroundColor: colors.primary }]} scaleValue={0.94}>
+                  <Plus size={14} color="#fff" strokeWidth={2.5} />
+                  <Text style={styles.logEntryBtnText}>Log entry</Text>
+                </AnimatedPressable>
+              )}
             </View>
 
             {entries.length === 0 ? (
               <View style={[styles.emptyEntries, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 <Text style={[styles.emptyEntriesTitle, { color: textColor }]}>No entries yet</Text>
                 <Text style={[styles.emptyEntriesSub, { color: subColor }]}>
-                  Log your first entry to start tracking progress
+                  {isStepsTracker
+                    ? 'Tap Refresh to sync your steps from Apple Health'
+                    : 'Log your first entry to start tracking progress'}
                 </Text>
               </View>
             ) : (
@@ -531,7 +770,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
     boxShadow: '0px 1px 3px rgba(0,0,0,0.04), 0px 4px 12px rgba(0,0,0,0.03)',
     elevation: 2,
   },
@@ -565,6 +804,92 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  // Daily Goal card
+  goalCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    marginBottom: spacing.lg,
+    boxShadow: '0px 1px 3px rgba(0,0,0,0.04), 0px 4px 12px rgba(0,0,0,0.03)',
+    elevation: 2,
+  },
+  goalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  goalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  editGoalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.primary + '18',
+  },
+  editGoalBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cancelGoalText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  goalValueText: {
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  goalEditArea: {
+    gap: 10,
+    marginTop: 4,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  presetChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: borderRadius.full,
+  },
+  presetChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  customInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  customInput: {
+    flex: 1,
+    height: 38,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  customSaveBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: borderRadius.sm,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  customSaveBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -583,6 +908,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: borderRadius.sm,
+    minWidth: 80,
+    justifyContent: 'center',
   },
   logEntryBtnText: {
     color: '#fff',

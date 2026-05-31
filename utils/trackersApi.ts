@@ -131,6 +131,19 @@ export async function updateTracker(id: string, data: Partial<Tracker>): Promise
   return result;
 }
 
+export async function updateTrackerGoal(trackerId: string, goalValue: number | null): Promise<void> {
+  console.log('[TrackersApi] updateTrackerGoal()', trackerId, goalValue);
+  const { error } = await supabase
+    .from('trackers')
+    .update({ goal_value: goalValue, updated_at: new Date().toISOString() })
+    .eq('id', trackerId);
+  if (error) {
+    console.error('[trackersApi] updateTrackerGoal error:', error);
+    throw new Error(error.message);
+  }
+  console.log('[TrackersApi] updateTrackerGoal success for tracker:', trackerId);
+}
+
 export async function deleteTracker(id: string): Promise<void> {
   console.log('[TrackersApi] deleteTracker()', id);
   const userId = await getCurrentUserId();
