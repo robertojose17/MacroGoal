@@ -47,21 +47,20 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
         <Ionicons name="globe-outline" size={16} color={rankColor.text} style={styles.globeIcon} />
 
         {hasEnoughData ? (
-          <View style={styles.statsRow}>
+          <Text
+            style={[styles.statsLine, { color: isDark ? '#A0A2B8' : '#6B7280' }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
             <Text style={[styles.statChip, { color: rankColor.text }]}>
-              {'TOP '}
-              {topPercentDisplay}
-              {'%'}
+              {'TOP '}{topPercentDisplay}{'%'}
             </Text>
-            <Text style={[styles.separator, { color: isDark ? '#3A3C52' : '#D4D6DA' }]}>
-              {'·'}
+            <Text style={{ color: isDark ? '#3A3C52' : '#D4D6DA' }}>{'  ·  '}</Text>
+            <Text style={styles.statText}>
+              {'More consistent than '}{consistencyPercentDisplay}{'% of users'}
             </Text>
-            <Text style={[styles.statText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-              {'More consistent than '}
-              {consistencyPercentDisplay}
-              {'% of users'}
-            </Text>
-          </View>
+          </Text>
         ) : (
           <Text style={[styles.emptyText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
             Building your community — keep earning XP!
@@ -100,21 +99,15 @@ const styles = StyleSheet.create({
   globeIcon: {
     flexShrink: 0,
   },
-  statsRow: {
+  statsLine: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
+    fontSize: 13,
+    fontWeight: '500',
   },
   statChip: {
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.3,
-  },
-  separator: {
-    fontSize: 13,
-    fontWeight: '400',
   },
   statText: {
     fontSize: 13,
