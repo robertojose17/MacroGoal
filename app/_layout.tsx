@@ -219,6 +219,30 @@ export default function RootLayout() {
     syncTimezone();
   }, [session]);
 
+  // ─── Timezone resync on foreground ────────────────────────────────────────
+  // If the user travels to a new timezone while the app is backgrounded,
+  // re-sync when they bring the app back to the foreground.
+  useEffect(() => {
+    if (!session) return;
+
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
+      if (nextState !== 'active') return;
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const cached = await AsyncStorage.getItem(TIMEZONE_STORAGE_KEY);
+        if (cached === tz) return; // unchanged, skip
+        console.log('[Layout] timezone resync on foreground — sending:', tz);
+        await setUserTimezone(tz);
+        await AsyncStorage.setItem(TIMEZONE_STORAGE_KEY, tz);
+      } catch (e) {
+        console.warn('[Layout] timezone resync (AppState) failed:', e);
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [session]);
+
   // ─── Navigation guard ─────────────────────────────────────────────────────
   // Runs once isReady flips to true. Does NOT wait for segments — on cold
   // start segments is [] which caused the old guard to bail and leave the

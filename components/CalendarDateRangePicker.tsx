@@ -38,10 +38,10 @@ export default function CalendarDateRangePicker({
   const isDark = colorScheme === 'dark';
 
   const [startDate, setStartDate] = useState<string | null>(
-    initialStartDate.toISOString().split('T')[0]
+    toLocalDateString(initialStartDate)
   );
   const [endDate, setEndDate] = useState<string | null>(
-    initialEndDate.toISOString().split('T')[0]
+    toLocalDateString(initialEndDate)
   );
   const [tapCount, setTapCount] = useState<number>(2); // Start at 2 since we have initial dates
 
@@ -137,7 +137,7 @@ export default function CalendarDateRangePicker({
       current.setDate(current.getDate() + 1);
 
       while (current < end) {
-        const dateString = current.toISOString().split('T')[0];
+        const dateString = toLocalDateString(current);
         marked[dateString] = {
           color: colors.primary + '40',
           textColor: isDark ? colors.textDark : colors.text,
@@ -289,8 +289,8 @@ export default function CalendarDateRangePicker({
               onDayPress={handleDayPress}
               markedDates={getMarkedDates()}
               markingType="period"
-              maxDate={maxDate?.toISOString().split('T')[0]}
-              minDate={minDate?.toISOString().split('T')[0]}
+              maxDate={maxDate ? toLocalDateString(maxDate) : undefined}
+              minDate={minDate ? toLocalDateString(minDate) : undefined}
               theme={calendarTheme}
               style={styles.calendar}
               enableSwipeMonths

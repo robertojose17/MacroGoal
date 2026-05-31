@@ -245,7 +245,7 @@ export default function ShareProgressScreen() {
     try {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-      const startDate = sevenDaysAgo.toISOString().split('T')[0];
+      const startDate = toLocalDateString(sevenDaysAgo);
 
       const [{ data: goal }, { data: meals }] = await Promise.all([
         supabase

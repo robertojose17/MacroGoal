@@ -55,7 +55,7 @@ export default function CopyFromPreviousScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const targetDate = (params.date as string) || new Date().toISOString().split('T')[0];
+  const targetDate = (params.date as string) || toLocalDateString();
   const targetMealType = params.meal as MealType;
 
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ export default function CopyFromPreviousScreen() {
       // Get dates with meal data from the last 30 days (excluding target date)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const thirtyDaysAgoString = thirtyDaysAgo.toISOString().split('T')[0];
+      const thirtyDaysAgoString = toLocalDateString(thirtyDaysAgo);
 
       const { data: mealsData, error } = await supabase
         .from('meals')
@@ -126,7 +126,7 @@ export default function CopyFromPreviousScreen() {
           yesterday.setDate(yesterday.getDate() - 1);
 
           let displayDate = '';
-          if (date === yesterday.toISOString().split('T')[0]) {
+          if (date === toLocalDateString(yesterday)) {
             displayDate = 'Yesterday';
           } else if (dateObj.toDateString() === today.toDateString()) {
             displayDate = 'Today';
@@ -388,7 +388,7 @@ export default function CopyFromPreviousScreen() {
       console.log('[CopyFromPrevious] Copy completed successfully!');
       Alert.alert(
         'Success',
-        `Copied ${selectedEntries.size} food ${selectedEntries.size === 1 ? 'item' : 'items'} to ${targetDate === new Date().toISOString().split('T')[0] ? 'today' : targetDate}`,
+        `Copied ${selectedEntries.size} food ${selectedEntries.size === 1 ? 'item' : 'items'} to ${targetDate === toLocalDateString() ? 'today' : targetDate}`,
         [
           {
             text: 'OK',
@@ -694,7 +694,7 @@ export default function CopyFromPreviousScreen() {
                       Copy {getSelectedCount()} {getSelectedCount() === 1 ? 'Item' : 'Items'}
                     </Text>
                     <Text style={styles.copyButtonSubtext}>
-                      to {targetDate === new Date().toISOString().split('T')[0] ? 'Today' : targetDate}
+                      to {targetDate === toLocalDateString() ? 'Today' : targetDate}
                     </Text>
                   </React.Fragment>
                 )}

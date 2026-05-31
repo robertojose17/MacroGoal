@@ -418,8 +418,8 @@ export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
   const loadCalorieLogs = async (uid: string, startDate: Date) => {
     try {
       const today = new Date();
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const todayStr = today.toISOString().split('T')[0];
+      const startDateStr = toLocalDateString(startDate);
+      const todayStr = toLocalDateString(today);
 
       console.log('[ProgressCard] Loading calorie logs from', startDateStr, 'to', todayStr);
 
@@ -465,8 +465,8 @@ export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
   const loadWeightCheckIns = async (uid: string, startDate: Date) => {
     try {
       const today = new Date();
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const todayStr = today.toISOString().split('T')[0];
+      const startDateStr = toLocalDateString(startDate);
+      const todayStr = toLocalDateString(today);
 
       console.log('[ProgressCard] Loading weight check-ins from', startDateStr, 'to', todayStr);
 
@@ -540,7 +540,7 @@ export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
     const { weeklyLossLbs, dailyCalories } = profileData;
     const logsByDate: { [key: string]: number } = {};
     calorieLogs.forEach((log) => {
-      logsByDate[log.date.toISOString().split('T')[0]] = log.calories;
+      logsByDate[toLocalDateString(log.date)] = log.calories;
     });
 
     const plannedDailyCalories = dailyCalories;
@@ -553,7 +553,7 @@ export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
       const plannedPoint = plannedData[i];
       const currentDate = new Date(plannedPoint.date);
       currentDate.setHours(0, 0, 0, 0);
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(currentDate);
 
       if (currentDate <= today) {
         const actualCalories = logsByDate[dateStr];
@@ -740,7 +740,7 @@ export default function ProgressCard({ userId, isDark }: ProgressCardProps) {
     // Adherence
     const logsByDate: { [key: string]: number } = {};
     calorieLogs.forEach(log => {
-      logsByDate[log.date.toISOString().split('T')[0]] = log.calories;
+      logsByDate[toLocalDateString(log.date)] = log.calories;
     });
     const trackedDays = calorieLogs.length;
     const adherentDays = calorieLogs.filter(log => {

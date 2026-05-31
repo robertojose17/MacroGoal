@@ -553,7 +553,7 @@ export default function ProfileScreen() {
   const saveStartDate = async (date: Date) => {
     try {
       setSaving(true);
-      const dateString = date.toISOString().split('T')[0];
+      const dateString = toLocalDateString(date);
       
       console.log('[Profile] Saving Journey Start Date:', dateString);
       

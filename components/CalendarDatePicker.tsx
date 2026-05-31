@@ -36,11 +36,11 @@ export default function CalendarDatePicker({
   const isDark = colorScheme === 'dark';
 
   const [selectedDate, setSelectedDate] = useState<string>(
-    initialDate.toISOString().split('T')[0]
+    toLocalDateString(initialDate)
   );
 
   useEffect(() => {
-    setSelectedDate(initialDate.toISOString().split('T')[0]);
+    setSelectedDate(toLocalDateString(initialDate));
   }, [initialDate]);
 
   const handleDayPress = (day: DateData) => {
@@ -129,8 +129,8 @@ export default function CalendarDatePicker({
               current={selectedDate}
               onDayPress={handleDayPress}
               markedDates={markedDates}
-              maxDate={maxDate?.toISOString().split('T')[0]}
-              minDate={minDate?.toISOString().split('T')[0]}
+              maxDate={maxDate ? toLocalDateString(maxDate) : undefined}
+              minDate={minDate ? toLocalDateString(minDate) : undefined}
               theme={calendarTheme}
               style={styles.calendar}
               enableSwipeMonths

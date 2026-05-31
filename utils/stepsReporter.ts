@@ -27,7 +27,12 @@ const MAX_STEPS = 50000;
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  // Use local timezone so the source_id matches the user's calendar day
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 async function isThrottled(): Promise<boolean> {
