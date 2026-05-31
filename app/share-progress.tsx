@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,6 +29,17 @@ if (Platform.OS !== 'web') {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   try { ViewShot = require('react-native-view-shot').default; } catch {}
 }
+
+// ─── Card dimensions ──────────────────────────────────────────────────────────
+// ShareableProgressCard renders at a fixed width; we use 390 as the canonical
+// full-res width for the off-screen capture target.
+const PROGRESS_CARD_WIDTH = 390;
+const PROGRESS_CARD_HEIGHT = 400; // photoRow height (320) + badge area (~80)
+
+// XpShareCard renders at screen width with 9:16 aspect ratio.
+// We use 390 as the canonical full-res width for the off-screen capture target.
+const XP_CARD_WIDTH = 390;
+const XP_CARD_HEIGHT = Math.round((XP_CARD_WIDTH * 16) / 9); // 693
 
 interface CardData {
   consistencyScore: number;
@@ -50,6 +62,7 @@ export default function ShareProgressScreen() {
   const { variant } = useLocalSearchParams<{ variant?: CardVariant }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { width: screenWidth } = useWindowDimensions();
 
   const [selected, setSelected] = useState<CardVariant>(variant === 'level' ? 'level' : 'progress');
   const [loading, setLoading] = useState(true);
@@ -60,6 +73,18 @@ export default function ShareProgressScreen() {
 
   // XP data for the Level variant
   const { status: xpStatus, loading: xpLoading } = useXpStatus();
+
+  // ─── Preview scale computation ────────────────────────────────────────────
+  // Available width = screenWidth - horizontal padding (spacing.md * 2 = 32)
+  const availableWidth = screenWidth - spacing.md * 2;
+
+  const progressScale = availableWidth / PROGRESS_CARD_WIDTH;
+  const progressPreviewWidth = availableWidth;
+  const progressPreviewHeight = PROGRESS_CARD_HEIGHT * progressScale;
+
+  const xpScale = availableWidth / XP_CARD_WIDTH;
+  const xpPreviewWidth = availableWidth;
+  const xpPreviewHeight = XP_CARD_HEIGHT * xpScale;
 
   const calculateProteinAccuracyScore = useCallback((proteinLogged: number, proteinTarget: number): number => {
     if (proteinTarget === 0) {
@@ -514,32 +539,33 @@ export default function ShareProgressScreen() {
     }
   };
 
+  const bgColor = isDark ? colors.backgroundDark : colors.background;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const textSecColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const segBgColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const activeSegBg = isDark ? colors.cardDark : '#FFFFFF';
+
   if (loading) {
     return (
-      <SafeAreaView
-        style={[
-          styles.container,
-          { backgroundColor: isDark ? colors.backgroundDark : colors.background },
-        ]}
-        edges={['top']}
-      >
+      <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => { console.log('[ShareProgress] Back pressed'); router.back(); }} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => { console.log('[ShareProgress] Back pressed'); router.back(); }}
+            style={styles.backButton}
+          >
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow_back"
               size={24}
-              color={isDark ? colors.textDark : colors.text}
+              color={textColor}
             />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Share Progress
-          </Text>
+          <Text style={[styles.title, { color: textColor }]}>Share Progress</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+          <Text style={[styles.loadingText, { color: textColor }]}>
             Preparing your progress card...
           </Text>
         </View>
@@ -549,29 +575,24 @@ export default function ShareProgressScreen() {
 
   if (!cardData) {
     return (
-      <SafeAreaView
-        style={[
-          styles.container,
-          { backgroundColor: isDark ? colors.backgroundDark : colors.background },
-        ]}
-        edges={['top']}
-      >
+      <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => { console.log('[ShareProgress] Back pressed'); router.back(); }} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => { console.log('[ShareProgress] Back pressed'); router.back(); }}
+            style={styles.backButton}
+          >
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow_back"
               size={24}
-              color={isDark ? colors.textDark : colors.text}
+              color={textColor}
             />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Share Progress
-          </Text>
+          <Text style={[styles.title, { color: textColor }]}>Share Progress</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>
+          <Text style={[styles.errorText, { color: textColor }]}>
             Unable to load progress data
           </Text>
         </View>
@@ -580,25 +601,21 @@ export default function ShareProgressScreen() {
   }
 
   return (
-    <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? colors.backgroundDark : colors.background },
-      ]}
-      edges={['top']}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { console.log('[ShareProgress] Back pressed'); router.back(); }} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => { console.log('[ShareProgress] Back pressed'); router.back(); }}
+          style={styles.backButton}
+        >
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
             size={24}
-            color={isDark ? colors.textDark : colors.text}
+            color={textColor}
           />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          Share Progress
-        </Text>
+        <Text style={[styles.title, { color: textColor }]}>Share Progress</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -607,20 +624,24 @@ export default function ShareProgressScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Segmented control ── */}
-        <View style={[styles.segmentedControl, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)' }]}>
+        <View style={[styles.segmentedControl, { backgroundColor: segBgColor }]}>
           <TouchableOpacity
             style={[
               styles.segmentButton,
-              selected === 'progress' && styles.segmentButtonActive,
+              selected === 'progress' && [
+                styles.segmentButtonActive,
+                { backgroundColor: activeSegBg },
+              ],
             ]}
             onPress={() => {
               console.log('[ShareProgress] Switched to Progress variant');
               setSelected('progress');
             }}
+            activeOpacity={0.7}
           >
             <Text style={[
               styles.segmentText,
-              { color: isDark ? colors.textDark : colors.text },
+              { color: selected === 'progress' ? textColor : textSecColor },
               selected === 'progress' && styles.segmentTextActive,
             ]}>
               Progress
@@ -629,16 +650,20 @@ export default function ShareProgressScreen() {
           <TouchableOpacity
             style={[
               styles.segmentButton,
-              selected === 'level' && styles.segmentButtonActive,
+              selected === 'level' && [
+                styles.segmentButtonActive,
+                { backgroundColor: activeSegBg },
+              ],
             ]}
             onPress={() => {
               console.log('[ShareProgress] Switched to Level variant');
               setSelected('level');
             }}
+            activeOpacity={0.7}
           >
             <Text style={[
               styles.segmentText,
-              { color: isDark ? colors.textDark : colors.text },
+              { color: selected === 'level' ? textColor : textSecColor },
               selected === 'level' && styles.segmentTextActive,
             ]}>
               Level
@@ -646,21 +671,14 @@ export default function ShareProgressScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Card preview ── */}
+        {/* ── Progress card ── */}
         {selected === 'progress' && (
           <>
-            <View style={styles.infoCard}>
-              <IconSymbol
-                ios_icon_name="sparkles"
-                android_material_icon_name="auto_awesome"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={[styles.infoText, { color: isDark ? colors.textDark : colors.text }]}>
-                Your shareable progress card is ready! Designed to look amazing on Instagram, Stories, and all social platforms.
-              </Text>
-            </View>
-            <View style={styles.cardPreview}>
+            {/* Off-screen full-res capture target */}
+            <View
+              style={styles.offScreenCapture}
+              pointerEvents="none"
+            >
               <ShareableProgressCard
                 ref={viewShotRef}
                 beforePhoto={cardData.beforePhotoUrl}
@@ -670,53 +688,111 @@ export default function ShareProgressScreen() {
                 leaderboardPhrase={cardData.leaderboardPhrase}
               />
             </View>
+
+            {/* On-screen scaled preview */}
+            <View
+              style={[
+                styles.previewWrapper,
+                {
+                  width: progressPreviewWidth,
+                  height: progressPreviewHeight,
+                },
+              ]}
+            >
+              <View
+                style={{
+                  width: PROGRESS_CARD_WIDTH,
+                  transform: [{ scale: progressScale }],
+                  transformOrigin: 'top left',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                }}
+              >
+                <ShareableProgressCard
+                  beforePhoto={cardData.beforePhotoUrl}
+                  afterPhoto={cardData.afterPhotoUrl}
+                  beforeDate={cardData.beforeDateLabel}
+                  afterDate={cardData.afterDateLabel}
+                  leaderboardPhrase={cardData.leaderboardPhrase}
+                />
+              </View>
+            </View>
           </>
         )}
 
+        {/* ── Level / XP card ── */}
         {selected === 'level' && (
           <>
-            <View style={styles.infoCard}>
-              <IconSymbol
-                ios_icon_name="star.fill"
-                android_material_icon_name="star"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={[styles.infoText, { color: isDark ? colors.textDark : colors.text }]}>
-                Show off your level and rank! Perfect for Instagram Stories and social media.
-              </Text>
-            </View>
             {xpLoading || !xpStatus ? (
               <View style={styles.xpLoadingContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+                <Text style={[styles.loadingText, { color: textColor }]}>
                   Loading XP data...
                 </Text>
               </View>
             ) : (
-              <View style={styles.xpCardPreview}>
-                <XpShareCard
-                  ref={xpShotRef}
-                  level={xpStatus.current_level}
-                  rank={xpStatus.current_rank}
-                  totalXp={xpStatus.total_xp}
-                  currentStreak={xpStatus.current_streak}
-                  consistencyScore={cardData.consistencyScore}
-                  percentile={xpStatus.ranking?.percentile ?? 50}
-                  calorieDeficit={cardData.calorieDeficit}
-                />
-              </View>
+              <>
+                {/* Off-screen full-res capture target */}
+                <View
+                  style={[styles.offScreenCapture, { width: XP_CARD_WIDTH, height: XP_CARD_HEIGHT }]}
+                  pointerEvents="none"
+                >
+                  <XpShareCard
+                    ref={xpShotRef}
+                    level={xpStatus.current_level}
+                    rank={xpStatus.current_rank}
+                    totalXp={xpStatus.total_xp}
+                    currentStreak={xpStatus.current_streak}
+                    consistencyScore={cardData.consistencyScore}
+                    percentile={xpStatus.ranking?.percentile ?? 50}
+                    calorieDeficit={cardData.calorieDeficit}
+                  />
+                </View>
+
+                {/* On-screen scaled preview */}
+                <View
+                  style={[
+                    styles.previewWrapper,
+                    {
+                      width: xpPreviewWidth,
+                      height: xpPreviewHeight,
+                    },
+                  ]}
+                >
+                  <View
+                    style={{
+                      width: XP_CARD_WIDTH,
+                      height: XP_CARD_HEIGHT,
+                      transform: [{ scale: xpScale }],
+                      transformOrigin: 'top left',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                    }}
+                  >
+                    <XpShareCard
+                      level={xpStatus.current_level}
+                      rank={xpStatus.current_rank}
+                      totalXp={xpStatus.total_xp}
+                      currentStreak={xpStatus.current_streak}
+                      consistencyScore={cardData.consistencyScore}
+                      percentile={xpStatus.ranking?.percentile ?? 50}
+                      calorieDeficit={cardData.calorieDeficit}
+                    />
+                  </View>
+                </View>
+              </>
             )}
           </>
         )}
 
+        {/* ── Share CTA ── */}
         <TouchableOpacity
-          style={[
-            styles.shareButton,
-            sharing && styles.shareButtonDisabled,
-          ]}
+          style={[styles.shareButton, sharing && styles.shareButtonDisabled]}
           onPress={handleShare}
           disabled={sharing}
+          activeOpacity={0.85}
         >
           {sharing ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
@@ -725,7 +801,7 @@ export default function ShareProgressScreen() {
               <IconSymbol
                 ios_icon_name="square.and.arrow.up"
                 android_material_icon_name="share"
-                size={24}
+                size={22}
                 color="#FFFFFF"
               />
               <Text style={styles.shareButtonText}>Share Your Progress</Text>
@@ -733,35 +809,10 @@ export default function ShareProgressScreen() {
           )}
         </TouchableOpacity>
 
-        <View style={styles.tipsCard}>
-          <Text style={[styles.tipsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Perfect for:
-          </Text>
-          <View style={styles.tipRow}>
-            <Text style={styles.tipEmoji}>📸</Text>
-            <Text style={[styles.tipText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Instagram posts and stories
-            </Text>
-          </View>
-          <View style={styles.tipRow}>
-            <Text style={styles.tipEmoji}>💬</Text>
-            <Text style={[styles.tipText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              WhatsApp and iMessage group chats
-            </Text>
-          </View>
-          <View style={styles.tipRow}>
-            <Text style={styles.tipEmoji}>🎯</Text>
-            <Text style={[styles.tipText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Motivating friends and accountability partners
-            </Text>
-          </View>
-          <View style={styles.tipRow}>
-            <Text style={styles.tipEmoji}>🔥</Text>
-            <Text style={[styles.tipText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Celebrating your wins
-            </Text>
-          </View>
-        </View>
+        {/* ── Helper text ── */}
+        <Text style={[styles.helperText, { color: textSecColor }]}>
+          Share to Instagram, WhatsApp, Messages, and more
+        </Text>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -812,73 +863,67 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: 120,
+    paddingBottom: 40,
   },
-  infoCard: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    backgroundColor: colors.primary + '15',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
-  },
-  infoText: {
-    flex: 1,
-    ...typography.body,
-    fontSize: 14,
-  },
+  // ── Segmented control ──────────────────────────────────────────────────────
   segmentedControl: {
     flexDirection: 'row',
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     padding: 4,
     marginBottom: spacing.lg,
   },
   segmentButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 9,
     alignItems: 'center',
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.full,
   },
   segmentButtonActive: {
-    backgroundColor: colors.primary,
+    boxShadow: '0px 1px 3px rgba(0,0,0,0.12)',
+    elevation: 2,
   },
   segmentText: {
     fontSize: 14,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  cardPreview: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    transform: [{ scale: 0.28 }],
-    marginVertical: -465,
+  // ── Off-screen capture target ──────────────────────────────────────────────
+  offScreenCapture: {
+    position: 'absolute',
+    left: -10000,
+    top: 0,
   },
-  xpCardPreview: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    transform: [{ scale: 0.28 }],
-    marginVertical: -465,
+  // ── On-screen preview ─────────────────────────────────────────────────────
+  previewWrapper: {
+    overflow: 'hidden',
+    borderRadius: borderRadius.xl,
+    marginBottom: spacing.xl,
+    alignSelf: 'center',
+    boxShadow: '0px 8px 24px rgba(0,0,0,0.12)',
+    elevation: 8,
   },
+  // ── XP loading ────────────────────────────────────────────────────────────
   xpLoadingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.xl * 2,
     gap: spacing.md,
   },
+  // ── Share button ──────────────────────────────────────────────────────────
   shareButton: {
     backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 4,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
-    boxShadow: '0px 4px 12px rgba(91, 154, 168, 0.3)',
-    elevation: 4,
+    marginBottom: spacing.md,
+    boxShadow: '0px 6px 20px rgba(91, 154, 168, 0.35)',
+    elevation: 6,
   },
   shareButtonDisabled: {
     opacity: 0.6,
@@ -888,31 +933,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  tipsCard: {
-    backgroundColor: colors.card,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    gap: spacing.md,
-  },
-  tipsTitle: {
-    ...typography.h3,
-    fontSize: 18,
-    marginBottom: spacing.xs,
-  },
-  tipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  tipEmoji: {
-    fontSize: 20,
-  },
-  tipText: {
-    flex: 1,
-    ...typography.body,
-    fontSize: 14,
+  // ── Helper text ───────────────────────────────────────────────────────────
+  helperText: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   bottomSpacer: {
     height: 40,
