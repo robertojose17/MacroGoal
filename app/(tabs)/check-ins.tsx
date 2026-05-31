@@ -9,12 +9,17 @@ import {
   Animated,
   Pressable,
   ActivityIndicator,
+  TextInput,
+  Alert,
+  LayoutAnimation,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { listTrackers, getStats, Tracker, TrackerStats } from '@/utils/trackersApi';
+import { listTrackers, getStats, listEntries, logEntry, Tracker, TrackerStats } from '@/utils/trackersApi';
+import { toLocalDateString } from '@/utils/dateUtils';
 import { Flame, Trophy, Plus, ChevronRight, CheckCircle2 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -106,13 +111,21 @@ function TrackerCard({
   isDark,
   onPress,
   onLog,
+  todayEntry,
+  onQuickLog,
 }: {
   tracker: Tracker;
   stats: TrackerStats | null;
   isDark: boolean;
   onPress: () => void;
   onLog: () => void;
+  todayEntry: { id: string; value: number } | null;
+  onQuickLog?: (value: number) => Promise<void> | void;
 }) {
+  const [weightInput, setWeightInput] = useState('');
+  const [weightEditing, setWeightEditing] = useState(false);
+  const [logging, setLogging] = useState(false);
+
   const completionPct = stats ? Math.round(Number(stats.completion_rate) * 100) : 0;
   const streak = stats ? Number(stats.current_streak) : 0;
   const statusColor =
@@ -124,6 +137,162 @@ function TrackerCard({
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const inputBg = isDark ? '#2A2C40' : '#F1F3F8';
+
+  const isWeight = tracker.is_default && tracker.name.toLowerCase() === 'weight';
+  const isGym = tracker.is_default && tracker.name.toLowerCase() === 'gym';
+  const loggedToday = todayEntry !== null;
+
+  const handleGymLog = async () => {
+    if (logging) return;
+    console.log('[CheckIns] Gym quick-log tapped, tracker:', tracker.id);
+    setLogging(true);
+    try {
+      await onQuickLog?.(1);
+    } finally {
+      setLogging(false);
+    }
+  };
+
+  const handleWeightLog = async () => {
+    const parsed = parseFloat(weightInput);
+    console.log('[CheckIns] Weight quick-log tapped, value:', weightInput, 'parsed:', parsed);
+    if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
+      Alert.alert('Invalid weight', 'Please enter a weight between 0 and 1000 lbs.');
+      return;
+    }
+    if (logging) return;
+    setLogging(true);
+    try {
+      await onQuickLog?.(parsed);
+      setWeightInput('');
+    } finally {
+      setLogging(false);
+    }
+  };
+
+  const handleWeightSave = async () => {
+    const parsed = parseFloat(weightInput);
+    console.log('[CheckIns] Weight save tapped, value:', weightInput, 'parsed:', parsed);
+    if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
+      Alert.alert('Invalid weight', 'Please enter a weight between 0 and 1000 lbs.');
+      return;
+    }
+    if (logging) return;
+    setLogging(true);
+    try {
+      await onQuickLog?.(parsed);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setWeightEditing(false);
+      setWeightInput('');
+    } finally {
+      setLogging(false);
+    }
+  };
+
+  const handleWeightPillPress = () => {
+    console.log('[CheckIns] Weight value pill tapped — entering edit mode');
+    const currentVal = todayEntry ? todayEntry.value.toFixed(1) : '';
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setWeightInput(currentVal);
+    setWeightEditing(true);
+  };
+
+  // ── Right-side action area ──────────────────────────────────────────────────
+  let actionArea: React.ReactNode;
+
+  if (isGym) {
+    if (loggedToday) {
+      // Done pill — no navigation
+      actionArea = (
+        <View style={styles.donePill}>
+          <CheckCircle2 size={14} color={colors.success} strokeWidth={2.5} />
+          <Text style={[styles.donePillText, { color: colors.success }]}>Done</Text>
+        </View>
+      );
+    } else {
+      // Log button — quick-log directly, no navigation
+      actionArea = (
+        <AnimatedPressable
+          onPress={handleGymLog}
+          style={[styles.logButton, { backgroundColor: colors.primary, opacity: logging ? 0.6 : 1 }]}
+          scaleValue={0.94}
+        >
+          <Plus size={14} color="#fff" strokeWidth={2.5} />
+          <Text style={styles.logButtonText}>Log</Text>
+        </AnimatedPressable>
+      );
+    }
+  } else if (isWeight) {
+    if (loggedToday && !weightEditing) {
+      // Value pill — tap to edit
+      const displayValue = todayEntry ? Number(todayEntry.value).toFixed(1) : '';
+      actionArea = (
+        <Pressable onPress={handleWeightPillPress} style={styles.donePill}>
+          <CheckCircle2 size={14} color={colors.success} strokeWidth={2.5} />
+          <Text style={[styles.donePillText, { color: colors.success }]}>
+            {displayValue}
+          </Text>
+          <Text style={[styles.donePillUnit, { color: colors.success }]}>lb</Text>
+        </Pressable>
+      );
+    } else if (weightEditing) {
+      // Inline edit mode
+      actionArea = (
+        <View style={styles.weightRow}>
+          <TextInput
+            style={[styles.weightInput, { backgroundColor: inputBg, color: textColor }]}
+            value={weightInput}
+            onChangeText={setWeightInput}
+            keyboardType="decimal-pad"
+            placeholder="lbs"
+            placeholderTextColor={subColor}
+            returnKeyType="done"
+            onSubmitEditing={handleWeightSave}
+            autoFocus
+          />
+          <AnimatedPressable
+            onPress={handleWeightSave}
+            style={[styles.logButton, { backgroundColor: colors.primary, opacity: logging ? 0.6 : 1 }]}
+            scaleValue={0.94}
+          >
+            <Text style={styles.logButtonText}>Save</Text>
+          </AnimatedPressable>
+        </View>
+      );
+    } else {
+      // Not logged — inline input + Log button
+      actionArea = (
+        <View style={styles.weightRow}>
+          <TextInput
+            style={[styles.weightInput, { backgroundColor: inputBg, color: textColor }]}
+            value={weightInput}
+            onChangeText={setWeightInput}
+            keyboardType="decimal-pad"
+            placeholder="lbs"
+            placeholderTextColor={subColor}
+            returnKeyType="done"
+            onSubmitEditing={handleWeightLog}
+          />
+          <AnimatedPressable
+            onPress={handleWeightLog}
+            style={[styles.logButton, { backgroundColor: colors.primary, opacity: logging ? 0.6 : 1 }]}
+            scaleValue={0.94}
+          >
+            <Text style={styles.logButtonText}>Log</Text>
+          </AnimatedPressable>
+        </View>
+      );
+    }
+  } else {
+    // All other trackers — navigate to form
+    actionArea = (
+      <AnimatedPressable onPress={onLog} style={[styles.logButton, { backgroundColor: colors.primary }]} scaleValue={0.94}>
+        <Plus size={14} color="#fff" strokeWidth={2.5} />
+        <Text style={styles.logButtonText}>Log</Text>
+      </AnimatedPressable>
+    );
+  }
 
   return (
     <AnimatedPressable onPress={onPress} style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -140,10 +309,7 @@ function TrackerCard({
             <Text style={[styles.trackerUnit, { color: subColor }]}>{tracker.unit}</Text>
           ) : null}
         </View>
-        <AnimatedPressable onPress={onLog} style={[styles.logButton, { backgroundColor: colors.primary }]} scaleValue={0.94}>
-          <Plus size={14} color="#fff" strokeWidth={2.5} />
-          <Text style={styles.logButtonText}>Log</Text>
-        </AnimatedPressable>
+        {actionArea}
         <ChevronRight size={16} color={subColor} strokeWidth={2} style={{ marginLeft: 4 }} />
       </View>
 
@@ -196,6 +362,7 @@ export default function CheckInsScreen() {
 
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [statsMap, setStatsMap] = useState<Record<string, TrackerStats>>({});
+  const [todayEntries, setTodayEntries] = useState<Record<string, { id: string; value: number } | null>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -213,14 +380,35 @@ export default function CheckInsScreen() {
       console.log('[CheckIns] Loaded', list.length, 'trackers');
       setTrackers(list);
 
-      const statsResults = await Promise.all(
-        list.map(t => getStats(t.id).catch(() => null))
-      );
+      const today = toLocalDateString(new Date());
+
+      const [statsResults, todayEntriesResults] = await Promise.all([
+        Promise.all(list.map(t => getStats(t.id).catch(() => null))),
+        Promise.all(
+          list.map(async (t) => {
+            try {
+              const entries = await listEntries(t.id, 5);
+              return entries.find((e) => e.date === today) ?? null;
+            } catch (err) {
+              console.warn('[CheckIns] today entry lookup failed for', t.name, err);
+              return null;
+            }
+          })
+        ),
+      ]);
+
       const map: Record<string, TrackerStats> = {};
       list.forEach((t, i) => {
         if (statsResults[i]) map[t.id] = statsResults[i]!;
       });
       setStatsMap(map);
+
+      const todayMap: Record<string, { id: string; value: number } | null> = {};
+      list.forEach((t, i) => {
+        const entry = todayEntriesResults[i];
+        todayMap[t.id] = entry ? { id: entry.id, value: Number(entry.value) } : null;
+      });
+      setTodayEntries(todayMap);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load trackers';
       console.error('[CheckIns] Error loading data:', msg);
@@ -235,6 +423,25 @@ export default function CheckInsScreen() {
       loadingRef.current = false;
       setLoading(false);
       setRefreshing(false);
+    }
+  }, []);
+
+  const handleQuickLog = useCallback(async (tracker: Tracker, value: number) => {
+    const today = toLocalDateString(new Date());
+    console.log('[CheckIns] Quick log:', tracker.name, value);
+    try {
+      const entry = await logEntry(tracker.id, today, value);
+      setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
+      // Refresh stats so the streak updates immediately
+      try {
+        const newStats = await getStats(tracker.id);
+        setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
+      } catch {}
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to log';
+      console.error('[CheckIns] Quick log failed:', msg);
+      Alert.alert('Log failed', msg);
     }
   }, []);
 
@@ -258,10 +465,10 @@ export default function CheckInsScreen() {
   };
 
   const handleLog = (tracker: Tracker) => {
-    console.log('[CheckIns] Log button tapped:', tracker.name, tracker.id);
+    console.log('[CheckIns] Log button tapped (form nav):', tracker.name, tracker.id);
     if (tracker.is_default) {
       const type = getCheckInType(tracker.name);
-      if (type) {
+      if (type === 'steps') {
         router.push({ pathname: '/check-in-form', params: { type } });
         return;
       }
@@ -355,9 +562,11 @@ export default function CheckInsScreen() {
                 <TrackerCard
                   tracker={tracker}
                   stats={statsMap[tracker.id] ?? null}
+                  todayEntry={todayEntries[tracker.id] ?? null}
                   isDark={isDark}
                   onPress={() => handleCardPress(tracker)}
                   onLog={() => handleLog(tracker)}
+                  onQuickLog={(value) => handleQuickLog(tracker, value)}
                 />
               </AnimatedListItem>
             ))}
@@ -441,6 +650,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '600',
+  },
+  donePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.success + '22',
+  },
+  donePillText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  donePillUnit: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  weightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  weightInput: {
+    width: 60,
+    height: 32,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   divider: {
     height: 1,
