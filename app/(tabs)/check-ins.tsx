@@ -283,7 +283,7 @@ function TrackerCard({
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const inputBg = isDark ? '#2A2C40' : '#F1F3F8';
+  const inputBg = isDark ? '#1A1C2E' : '#FFFFFF';
 
   const isWeight = tracker.is_default && tracker.name.toLowerCase() === 'weight';
   const isGym = tracker.is_default && tracker.name.toLowerCase() === 'gym';
@@ -415,7 +415,7 @@ function TrackerCard({
       actionArea = (
         <View style={styles.weightRow}>
           <TextInput
-            style={[styles.weightInput, { backgroundColor: inputBg, color: textColor }]}
+            style={[styles.weightInput, { backgroundColor: inputBg, color: textColor, borderColor: cardBorder }]}
             value={weightInput}
             onChangeText={setWeightInput}
             keyboardType="decimal-pad"
@@ -439,7 +439,7 @@ function TrackerCard({
       actionArea = (
         <View style={styles.weightRow}>
           <TextInput
-            style={[styles.weightInput, { backgroundColor: inputBg, color: textColor }]}
+            style={[styles.weightInput, { backgroundColor: inputBg, color: textColor, borderColor: cardBorder }]}
             value={weightInput}
             onChangeText={setWeightInput}
             keyboardType="decimal-pad"
@@ -878,6 +878,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+    borderWidth: 1,
   },
   divider: {
     height: 1,
