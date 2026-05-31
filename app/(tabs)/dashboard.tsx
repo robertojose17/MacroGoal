@@ -16,8 +16,8 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import PhotoProgressCard from '@/components/PhotoProgressCard';
-import CompactConsistencyCard from '@/components/CompactConsistencyCard';
-import CompactProgressCard from '@/components/CompactProgressCard';
+import ConsistencyScore from '@/components/ConsistencyScore';
+import ProgressCard from '@/components/ProgressCard';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 // ─── XP System ────────────────────────────────────────────────────────────────
@@ -380,11 +380,11 @@ export default function DashboardScreen() {
         {/* ── Consistency Score + Weight Progress (compact, full-width) ── */}
         {user && (
           <>
-            <CardErrorBoundary label="CompactConsistencyCard">
-              <CompactConsistencyCard userId={user.id} isDark={isDark} />
+            <CardErrorBoundary label="ConsistencyScore">
+              <ConsistencyScore userId={user.id} isDark={isDark} />
             </CardErrorBoundary>
-            <CardErrorBoundary label="CompactProgressCard">
-              <CompactProgressCard userId={user.id} isDark={isDark} />
+            <CardErrorBoundary label="ProgressCard">
+              <ProgressCard userId={user.id} isDark={isDark} />
             </CardErrorBoundary>
           </>
         )}
