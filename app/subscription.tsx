@@ -626,7 +626,7 @@ export default function SubscriptionScreen() {
         >
           {/* ── HERO ── */}
           <ImageBackground
-            source={require('@/assets/images/2d4a02d7-8c2f-4147-a7d7-0412c4322f10.jpeg')}
+            source={require('@/assets/images/8ca2a60e-2ac8-4108-bfd6-c69883d16672.jpeg')}
             style={styles.premiumHero}
             resizeMode="cover"
             imageStyle={{ resizeMode: 'cover' }}
