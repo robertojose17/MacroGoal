@@ -624,6 +624,22 @@ export default function RootLayout() {
                     title: "New Tracker",
                   }}
                 />
+                <Stack.Screen
+                  name="consistency-detail"
+                  options={{
+                    headerShown: true,
+                    headerBackButtonDisplayMode: 'minimal',
+                    title: 'Consistency Score',
+                  }}
+                />
+                <Stack.Screen
+                  name="progress-detail"
+                  options={{
+                    headerShown: true,
+                    headerBackButtonDisplayMode: 'minimal',
+                    title: 'Weight Progress',
+                  }}
+                />
               </Stack>
           </WidgetProvider>
         </ThemeProvider>
