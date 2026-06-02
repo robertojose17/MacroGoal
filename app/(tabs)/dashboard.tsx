@@ -9,6 +9,7 @@ import {
   Platform,
   RefreshControl,
   Modal,
+  Animated,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,12 +24,11 @@ import { toLocalDateString } from '@/utils/dateUtils';
 // ─── XP System ────────────────────────────────────────────────────────────────
 import { useXpStatus } from '@/hooks/useXpStatus';
 import XpHeroCard from '@/components/xp/XpHeroCard';
-import DailyMissionsCard from '@/components/xp/DailyMissionsCard';
 import TodaysXpBreakdown from '@/components/xp/TodaysXpBreakdown';
 import LevelUpModal from '@/components/xp/LevelUpModal';
 import SocialComparisonCard from '@/components/xp/SocialComparisonCard';
 import StreakBadgeModal from '@/components/xp/StreakBadgeModal';
-import NutritionMissionCard from '@/components/xp/NutritionMissionCard';
+import TodaysMissionsCard from '@/components/xp/TodaysMissionsCard';
 import { reportTodaySteps } from '@/utils/stepsReporter';
 import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,6 +69,58 @@ interface DailySummary {
   total_fiber: number;
 }
 
+// ─── Greeting helpers ─────────────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 24) return 'Good evening';
+  return 'Working late';
+}
+
+function getWeekday(): string {
+  return new Date().toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+function getDayOfJourney(journeyStartDate: string | null | undefined): number | null {
+  if (!journeyStartDate) return null;
+  const start = new Date(journeyStartDate);
+  const today = new Date();
+  const diff = Math.floor((today.getTime() - start.getTime()) / 86400000);
+  return diff + 1;
+}
+
+// ─── Skeleton block ───────────────────────────────────────────────────────────
+
+function SkeletonBlock({ height, isDark }: { height: number; isDark: boolean }) {
+  const opacity = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.skeletonBlock,
+        {
+          height,
+          backgroundColor: isDark ? colors.cardDark : colors.card,
+          opacity,
+        },
+      ]}
+    />
+  );
+}
+
 export default function DashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -80,7 +132,7 @@ export default function DashboardScreen() {
   const [goal, setGoal] = useState<any>(null);
   const [todayCheckIn, setTodayCheckIn] = useState<CheckIn | null>(null);
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
-  
+
   const [showCheckInModal, setShowCheckInModal] = useState(false);
 
   // ─── XP System ──────────────────────────────────────────────────────────────
@@ -166,12 +218,12 @@ export default function DashboardScreen() {
 
     let currentStreak = 1;
     const today = toLocalDateString();
-    
+
     const lastDate = sortedDates[sortedDates.length - 1];
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = toLocalDateString(yesterday);
-    
+
     if (lastDate !== today && lastDate !== yesterdayStr) {
       return 0;
     }
@@ -180,7 +232,7 @@ export default function DashboardScreen() {
       const currentDate = new Date(sortedDates[i + 1]);
       const prevDate = new Date(sortedDates[i]);
       const diffDays = Math.floor((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-      
+
       if (diffDays === 1) {
         currentStreak++;
       } else {
@@ -271,6 +323,7 @@ export default function DashboardScreen() {
   }, [loadData]);
 
   const handleQuickCheckIn = useCallback((type: 'weight' | 'steps' | 'gym') => {
+    console.log('[Dashboard] Quick check-in pressed, type:', type);
     setShowCheckInModal(false);
     router.push({
       pathname: '/check-in-form',
@@ -278,7 +331,17 @@ export default function DashboardScreen() {
     });
   }, [router]);
 
-
+  // ─── Derived greeting values ─────────────────────────────────────────────
+  const greeting = getGreeting();
+  const weekday = getWeekday();
+  const firstName = user?.display_name?.split(' ')[0]
+    || user?.username
+    || user?.email?.split('@')[0]
+    || 'there';
+  const dayOfJourney = getDayOfJourney(user?.journey_start_date);
+  const subGreetingText = dayOfJourney != null
+    ? weekday + ' · Day ' + dayOfJourney + ' of your journey'
+    : weekday + ' · Let\'s go';
 
   if (loading) {
     return (
@@ -286,11 +349,30 @@ export default function DashboardScreen() {
         style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
         edges={['top']}
       >
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading dashboard...
-          </Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Skeleton header */}
+          <View style={styles.header}>
+            <View>
+              <View style={[styles.skeletonText, { width: 180, height: 22, backgroundColor: isDark ? colors.cardDark : colors.card }]} />
+              <View style={[styles.skeletonText, { width: 140, height: 14, marginTop: 6, backgroundColor: isDark ? colors.cardDark : colors.card }]} />
+            </View>
+          </View>
+          <SkeletonBlock height={80} isDark={isDark} />
+          <SkeletonBlock height={50} isDark={isDark} />
+          <SkeletonBlock height={280} isDark={isDark} />
+          <SkeletonBlock height={120} isDark={isDark} />
+          <View style={styles.sideBySideRow}>
+            <View style={styles.sideBySideItem}>
+              <SkeletonBlock height={100} isDark={isDark} />
+            </View>
+            <View style={styles.sideBySideItem}>
+              <SkeletonBlock height={100} isDark={isDark} />
+            </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -309,10 +391,19 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         scrollEventThrottle={16}
       >
+        {/* ── Header with personalized greeting ── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Dashboard
-          </Text>
+          <View style={styles.greetingColumn}>
+            <Text style={[styles.greetingText, { color: isDark ? colors.textDark : colors.text }]}>
+              {greeting}
+              {', '}
+              {firstName}
+              {' 👋'}
+            </Text>
+            <Text style={[styles.subGreetingText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+              {subGreetingText}
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.shareButton}
             onPress={() => {
@@ -345,9 +436,20 @@ export default function DashboardScreen() {
           </CardErrorBoundary>
         )}
 
-        {/* ── Daily Missions ── */}
-        <CardErrorBoundary label="DailyMissionsCard">
-          <DailyMissionsCard missions={xp.status?.missions} isDark={isDark} />
+        {/* ── Unified Today's Missions (nutrition + daily missions) ── */}
+        <CardErrorBoundary label="TodaysMissionsCard">
+          <TodaysMissionsCard
+            missions={xp.status?.missions}
+            totalCalories={todaySummary?.total_calories ?? 0}
+            totalProtein={todaySummary?.total_protein ?? 0}
+            totalCarbs={todaySummary?.total_carbs ?? 0}
+            totalFats={todaySummary?.total_fats ?? 0}
+            goalCalories={goal?.daily_calories ?? 2000}
+            goalProtein={goal?.protein_g ?? 150}
+            goalCarbs={goal?.carbs_g ?? 200}
+            goalFats={goal?.fats_g ?? 65}
+            isDark={isDark}
+          />
         </CardErrorBoundary>
 
         {/* ── Today's XP Breakdown — horizontal grid ── */}
@@ -362,31 +464,20 @@ export default function DashboardScreen() {
           />
         </CardErrorBoundary>
 
-        {/* ── Nutrition Mission Card ── */}
-        <CardErrorBoundary label="NutritionMissionCard">
-          <NutritionMissionCard
-            totalCalories={todaySummary?.total_calories ?? 0}
-            totalProtein={todaySummary?.total_protein ?? 0}
-            totalCarbs={todaySummary?.total_carbs ?? 0}
-            totalFats={todaySummary?.total_fats ?? 0}
-            goalCalories={goal?.daily_calories ?? 2000}
-            goalProtein={goal?.protein_g ?? 150}
-            goalCarbs={goal?.carbs_g ?? 200}
-            goalFats={goal?.fats_g ?? 65}
-            isDark={isDark}
-          />
-        </CardErrorBoundary>
-
-        {/* ── Consistency Score + Weight Progress (compact, tap to detail) ── */}
+        {/* ── Consistency Score + Weight Progress — side by side ── */}
         {user && (
-          <>
-            <CardErrorBoundary label="CompactConsistencyCard">
-              <CompactConsistencyCard userId={user.id} isDark={isDark} />
-            </CardErrorBoundary>
-            <CardErrorBoundary label="CompactProgressCard">
-              <CompactProgressCard userId={user.id} isDark={isDark} />
-            </CardErrorBoundary>
-          </>
+          <View style={styles.sideBySideRow}>
+            <View style={styles.sideBySideItem}>
+              <CardErrorBoundary label="CompactConsistencyCard">
+                <CompactConsistencyCard userId={user.id} isDark={isDark} />
+              </CardErrorBoundary>
+            </View>
+            <View style={styles.sideBySideItem}>
+              <CardErrorBoundary label="CompactProgressCard">
+                <CompactProgressCard userId={user.id} isDark={isDark} />
+              </CardErrorBoundary>
+            </View>
+          </View>
         )}
 
         {/* ── Photo Progress Card ── */}
@@ -433,8 +524,8 @@ export default function DashboardScreen() {
           onPress={() => setShowCheckInModal(false)}
         >
           <View style={[
-            styles.modalContent, 
-            { 
+            styles.modalContent,
+            {
               backgroundColor: isDark ? colors.cardDark : colors.card,
               borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
             }
@@ -486,7 +577,10 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modalCancelButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
-              onPress={() => setShowCheckInModal(false)}
+              onPress={() => {
+                console.log('[Dashboard] Quick check-in modal cancelled');
+                setShowCheckInModal(false);
+              }}
             >
               <Text style={[styles.modalCancelText, { color: isDark ? colors.textDark : colors.text }]}>
                 Cancel
@@ -526,14 +620,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    ...typography.body,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -542,8 +628,19 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
     paddingBottom: spacing.md,
   },
-  title: {
-    ...typography.h2,
+  greetingColumn: {
+    flex: 1,
+    gap: 2,
+  },
+  greetingText: {
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 26,
+  },
+  subGreetingText: {
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   shareButton: {
     padding: spacing.xs,
@@ -558,6 +655,24 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 48,
   },
+  // ── Side-by-side row ──────────────────────────────────────────────────────
+  sideBySideRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: 0,
+  },
+  sideBySideItem: {
+    flex: 1,
+  },
+  // ── Skeleton ─────────────────────────────────────────────────────────────
+  skeletonBlock: {
+    borderRadius: borderRadius.xl,
+    marginBottom: spacing.md,
+  },
+  skeletonText: {
+    borderRadius: borderRadius.sm,
+  },
+  // ── Share progress button ─────────────────────────────────────────────────
   shareProgressButtonContainer: {
     marginHorizontal: spacing.md,
     marginTop: spacing.lg,
@@ -591,6 +706,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+  // ── Modal ─────────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
