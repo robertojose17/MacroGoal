@@ -15,11 +15,23 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
+import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { listTrackers, getStats, listEntries, logEntry, Tracker, TrackerStats } from '@/utils/trackersApi';
 import { tryAwardWorkout, tryAwardWeightCheckin } from '@/utils/xpAwarder';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { Flame, Trophy, Plus, ChevronRight, CheckCircle2, RotateCw } from 'lucide-react-native';
+import { fetchLeaderboard, type LeaderboardStats } from '@/utils/leaderboardApi';
+import { CommunityLeaderboard } from '@/components/CommunityLeaderboard';
+import {
+  Flame,
+  Trophy,
+  Plus,
+  ChevronRight,
+  CheckCircle2,
+  RotateCw,
+  TrendingDown,
+  TrendingUp,
+  Minus,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSteps } from '@/hooks/useSteps';
 
@@ -29,11 +41,13 @@ function AnimatedPressable({
   style,
   children,
   scaleValue = 0.97,
+  disabled,
 }: {
   onPress?: () => void;
   style?: object | object[];
   children: React.ReactNode;
   scaleValue?: number;
+  disabled?: boolean;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const animIn = () =>
@@ -41,8 +55,8 @@ function AnimatedPressable({
   const animOut = () =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable onPressIn={animIn} onPressOut={animOut} onPress={onPress} style={style}>
+    <Animated.View style={[{ transform: [{ scale }] }, disabled && { opacity: 0.5 }]}>
+      <Pressable onPressIn={animIn} onPressOut={animOut} onPress={onPress} style={style} disabled={disabled}>
         {children}
       </Pressable>
     </Animated.View>
@@ -52,11 +66,11 @@ function AnimatedPressable({
 // ─── AnimatedListItem ─────────────────────────────────────────────────────────
 function AnimatedListItem({ index, children }: { index: number; children: React.ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(14)).current;
+  const translateY = useRef(new Animated.Value(16)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 380, delay: index * 80, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 380, delay: index * 80, useNativeDriver: true }),
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -80,7 +94,7 @@ function SkeletonCard({ isDark }: { isDark: boolean }) {
   return (
     <Animated.View style={[styles.card, { backgroundColor: bg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder, opacity }]}>
       <View style={styles.cardHeader}>
-        <View style={[styles.skeletonCircle, { backgroundColor: shimmer }]} />
+        <View style={[styles.emojiCircle, { backgroundColor: shimmer }]} />
         <View style={{ flex: 1, gap: 6 }}>
           <View style={[styles.skeletonLine, { width: '50%', backgroundColor: shimmer }]} />
           <View style={[styles.skeletonLine, { width: '30%', height: 11, backgroundColor: shimmer }]} />
@@ -88,12 +102,98 @@ function SkeletonCard({ isDark }: { isDark: boolean }) {
         <View style={[styles.skeletonPill, { backgroundColor: shimmer }]} />
       </View>
       <View style={[styles.divider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-      <View style={styles.statsRow}>
-        <View style={[styles.skeletonLine, { width: 80, backgroundColor: shimmer }]} />
-        <View style={[styles.skeletonLine, { width: 70, backgroundColor: shimmer }]} />
-        <View style={[styles.skeletonLine, { width: 50, backgroundColor: shimmer }]} />
+      <View style={{ gap: 8 }}>
+        <View style={[styles.skeletonLine, { width: '60%', height: 36, backgroundColor: shimmer, borderRadius: 8 }]} />
+        <View style={[styles.skeletonLine, { width: '40%', backgroundColor: shimmer }]} />
       </View>
+      <View style={[styles.communityDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+      <View style={[styles.skeletonLine, { width: '70%', height: 11, backgroundColor: shimmer }]} />
     </Animated.View>
+  );
+}
+
+// ─── CommunityFooterSkeleton ──────────────────────────────────────────────────
+function CommunityFooterSkeleton({ isDark }: { isDark: boolean }) {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const shimmer = isDark ? '#3A3C52' : '#D4D6DA';
+  return (
+    <Animated.View style={[styles.communityFooter, { opacity }]}>
+      <View style={[styles.skeletonLine, { width: 60, height: 20, borderRadius: 10, backgroundColor: shimmer }]} />
+      <View style={[styles.skeletonLine, { width: 140, height: 11, backgroundColor: shimmer }]} />
+    </Animated.View>
+  );
+}
+
+// ─── CommunityFooter ──────────────────────────────────────────────────────────
+function CommunityFooter({
+  stats,
+  loading,
+  isDark,
+  trackerType,
+}: {
+  stats: LeaderboardStats | null;
+  loading: boolean;
+  isDark: boolean;
+  trackerType: 'steps' | 'gym' | 'weight' | null;
+}) {
+  // Weight: no community footer
+  if (trackerType === 'weight') return null;
+
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+
+  if (loading) {
+    return (
+      <>
+        <View style={[styles.communityDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+        <CommunityFooterSkeleton isDark={isDark} />
+      </>
+    );
+  }
+
+  if (!stats || stats.totalUsers === 0) return null;
+
+  const pct = Math.round(stats.percentile);
+  const avg = Math.round(stats.communityAvg).toLocaleString('en-US');
+  const unit = trackerType === 'steps' ? 'steps' : 'sessions';
+
+  // Badge color: green top 25%, neutral middle, warm nudge bottom
+  let badgeBg: string;
+  let badgeText: string;
+  if (pct >= 75) {
+    badgeBg = colors.success + '22';
+    badgeText = colors.success;
+  } else if (pct >= 40) {
+    badgeBg = colors.primary + '22';
+    badgeText = colors.primary;
+  } else {
+    badgeBg = colors.warning + '22';
+    badgeText = colors.warning;
+  }
+
+  const topLabel = `Top ${100 - pct}%`;
+  const avgLabel = trackerType === 'steps'
+    ? `Community avg ${avg} today`
+    : `Community avg ${avg} ${unit} this month`;
+
+  return (
+    <>
+      <View style={[styles.communityDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+      <View style={styles.communityFooter}>
+        <View style={[styles.percentileBadge, { backgroundColor: badgeBg }]}>
+          <Text style={[styles.percentileText, { color: badgeText }]}>{topLabel}</Text>
+        </View>
+        <Text style={[styles.communityAvgText, { color: subColor }]}>{avgLabel}</Text>
+      </View>
+    </>
   );
 }
 
@@ -130,15 +230,10 @@ function StepsActionArea({
   const spinRef = useRef<Animated.CompositeAnimation | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  // Spin animation while refreshing
   useEffect(() => {
     if (isRefreshing) {
       spinRef.current = Animated.loop(
-        Animated.timing(spinAnim, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        })
+        Animated.timing(spinAnim, { toValue: 1, duration: 700, useNativeDriver: true })
       );
       spinRef.current.start();
     } else {
@@ -147,29 +242,19 @@ function StepsActionArea({
     }
   }, [isRefreshing, spinAnim]);
 
-  // Animate progress bar when steps change
   const goal = goalValue && goalValue > 0 ? goalValue : 0;
   const count = steps ?? 0;
   const pct = goal > 0 ? Math.min(100, (count / goal) * 100) : 0;
 
   useEffect(() => {
-    Animated.timing(progressAnim, {
-      toValue: pct,
-      duration: 600,
-      useNativeDriver: false,
-    }).start();
+    Animated.timing(progressAnim, { toValue: pct, duration: 600, useNativeDriver: false }).start();
   }, [pct, progressAnim]);
 
-  const spin = spinAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
+  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const trackColor = isDark ? '#2A2C40' : '#E5E7EB';
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const textColor = isDark ? colors.textDark : colors.text;
 
-  // Not granted — show Connect button
   if (permission !== 'granted') {
     return (
       <AnimatedPressable
@@ -177,21 +262,16 @@ function StepsActionArea({
           console.log('[CheckIns] Steps Connect Apple Health tapped');
           onRequestPermission();
         }}
-        style={[styles.connectButton, { backgroundColor: colors.primary }]}
+        style={[styles.logButton, { backgroundColor: colors.primary }]}
         scaleValue={0.94}
       >
-        <Text style={styles.connectButtonText}>Connect</Text>
+        <Text style={styles.logButtonText}>Connect</Text>
       </AnimatedPressable>
     );
   }
 
-  // Granted but loading initial data
   if (loading && steps === null) {
-    return (
-      <View style={styles.stepsActionRow}>
-        <ActivityIndicator size="small" color={colors.primary} />
-      </View>
-    );
+    return <ActivityIndicator size="small" color={colors.primary} />;
   }
 
   const countFormatted = count.toLocaleString('en-US');
@@ -199,7 +279,6 @@ function StepsActionArea({
 
   return (
     <View style={styles.stepsActionRow}>
-      {/* Count + bar */}
       <View style={styles.stepsInfoCol}>
         {goal > 0 ? (
           <View style={styles.stepsCountRow}>
@@ -219,18 +298,13 @@ function StepsActionArea({
                 styles.progressFill,
                 {
                   backgroundColor: colors.primary,
-                  width: progressAnim.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: ['0%', '100%'],
-                  }),
+                  width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
                 },
               ]}
             />
           </View>
         ) : null}
       </View>
-
-      {/* Refresh button */}
       <Pressable
         onPress={() => {
           console.log('[CheckIns] Steps refresh button tapped');
@@ -246,6 +320,59 @@ function StepsActionArea({
   );
 }
 
+// ─── WeightTrend ──────────────────────────────────────────────────────────────
+function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean }) {
+  const [delta, setDelta] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const entries = await listEntries(trackerId, 14);
+        if (cancelled) return;
+        const today = toLocalDateString(new Date());
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const sevenDaysAgoStr = toLocalDateString(sevenDaysAgo);
+
+        const recent = entries.find((e) => e.date === today || e.date <= today);
+        const older = entries.find((e) => e.date <= sevenDaysAgoStr);
+
+        if (recent && older && recent.id !== older.id) {
+          setDelta(Number(recent.value) - Number(older.value));
+        }
+      } catch {
+        // non-fatal
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackerId]);
+
+  if (!loaded || delta === null) return null;
+
+  const isDown = delta < 0;
+  const isUp = delta > 0;
+  const absDelta = Math.abs(delta).toFixed(1);
+  const trendColor = isDown ? colors.success : isUp ? colors.warning : (isDark ? colors.textSecondaryDark : colors.textSecondary);
+  const TrendIcon = isDown ? TrendingDown : isUp ? TrendingUp : Minus;
+  const label = isDown
+    ? `↓ ${absDelta} lb this week`
+    : isUp
+    ? `↑ ${absDelta} lb this week`
+    : 'No change this week';
+
+  return (
+    <View style={styles.trendRow}>
+      <TrendIcon size={13} color={trendColor} strokeWidth={2} />
+      <Text style={[styles.trendText, { color: trendColor }]}>{label}</Text>
+    </View>
+  );
+}
+
 // ─── TrackerCard ──────────────────────────────────────────────────────────────
 function TrackerCard({
   tracker,
@@ -257,6 +384,8 @@ function TrackerCard({
   onQuickLog,
   stepsHook,
   onStepsRefresh,
+  communityStats,
+  communityLoading,
 }: {
   tracker: Tracker;
   stats: TrackerStats | null;
@@ -267,14 +396,16 @@ function TrackerCard({
   onQuickLog?: (value: number) => Promise<void> | void;
   stepsHook?: ReturnType<typeof useSteps>;
   onStepsRefresh?: () => Promise<void>;
+  communityStats: LeaderboardStats | null;
+  communityLoading: boolean;
 }) {
   const [weightInput, setWeightInput] = useState('');
   const [weightEditing, setWeightEditing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [stepsRefreshing, setStepsRefreshing] = useState(false);
 
-  const completionPct = stats ? Math.round(Number(stats.completion_rate) * 100) : 0;
   const streak = stats ? Number(stats.current_streak) : 0;
+  const completionPct = stats ? Math.round(Number(stats.completion_rate) * 100) : 0;
   const statusColor =
     stats?.status === 'on_track' ? colors.success :
     stats?.status === 'improving' ? colors.primary :
@@ -289,6 +420,7 @@ function TrackerCard({
   const isWeight = tracker.is_default && tracker.name.toLowerCase() === 'weight';
   const isGym = tracker.is_default && tracker.name.toLowerCase() === 'gym';
   const isSteps = tracker.is_default && tracker.name.toLowerCase() === 'steps';
+  const trackerType = getCheckInType(tracker.name);
   const loggedToday = todayEntry !== null;
 
   const handleGymLog = async () => {
@@ -356,11 +488,10 @@ function TrackerCard({
     }
   };
 
-  // ── Right-side action area ──────────────────────────────────────────────────
+  // ── Zone A: right-side action ───────────────────────────────────────────────
   let actionArea: React.ReactNode;
 
   if (isSteps) {
-    // Steps: read-only from HealthKit — show count + progress bar + refresh
     actionArea = (
       <StepsActionArea
         steps={stepsHook?.steps ?? null}
@@ -378,7 +509,6 @@ function TrackerCard({
     );
   } else if (isGym) {
     if (loggedToday) {
-      // Done pill — no navigation
       actionArea = (
         <View style={styles.donePill}>
           <CheckCircle2 size={14} color={colors.success} strokeWidth={2.5} />
@@ -386,7 +516,6 @@ function TrackerCard({
         </View>
       );
     } else {
-      // Log button — quick-log directly, no navigation
       actionArea = (
         <AnimatedPressable
           onPress={handleGymLog}
@@ -400,19 +529,15 @@ function TrackerCard({
     }
   } else if (isWeight) {
     if (loggedToday && !weightEditing) {
-      // Value pill — tap to edit
       const displayValue = todayEntry ? Number(todayEntry.value).toFixed(1) : '';
       actionArea = (
         <Pressable onPress={handleWeightPillPress} style={styles.donePill}>
           <CheckCircle2 size={14} color={colors.success} strokeWidth={2.5} />
-          <Text style={[styles.donePillText, { color: colors.success }]}>
-            {displayValue}
-          </Text>
+          <Text style={[styles.donePillText, { color: colors.success }]}>{displayValue}</Text>
           <Text style={[styles.donePillUnit, { color: colors.success }]}>lb</Text>
         </Pressable>
       );
     } else if (weightEditing) {
-      // Inline edit mode
       actionArea = (
         <View style={styles.weightRow}>
           <TextInput
@@ -436,7 +561,6 @@ function TrackerCard({
         </View>
       );
     } else {
-      // Not logged — inline input + Log button
       actionArea = (
         <View style={styles.weightRow}>
           <TextInput
@@ -460,7 +584,6 @@ function TrackerCard({
       );
     }
   } else {
-    // All other trackers — navigate to form
     actionArea = (
       <AnimatedPressable onPress={onLog} style={[styles.logButton, { backgroundColor: colors.primary }]} scaleValue={0.94}>
         <Plus size={14} color="#fff" strokeWidth={2.5} />
@@ -469,9 +592,70 @@ function TrackerCard({
     );
   }
 
+  // ── Zone B: hero metric ─────────────────────────────────────────────────────
+  let heroMetric: React.ReactNode = null;
+
+  if (isGym) {
+    // Gym: streak is the hero
+    heroMetric = (
+      <View style={styles.heroRow}>
+        <Text style={[styles.heroNumber, { color: textColor }]}>{streak}</Text>
+        <View style={styles.heroLabelCol}>
+          <Text style={[styles.heroUnit, { color: subColor }]}>day</Text>
+          <Text style={[styles.heroUnit, { color: subColor }]}>streak</Text>
+        </View>
+        {streak > 0 && <Text style={styles.heroFlame}>🔥</Text>}
+      </View>
+    );
+  } else if (isWeight) {
+    const currentVal = todayEntry ? Number(todayEntry.value).toFixed(1) : null;
+    heroMetric = (
+      <View>
+        {currentVal ? (
+          <View style={styles.heroRow}>
+            <Text style={[styles.heroNumber, { color: textColor }]}>{currentVal}</Text>
+            <View style={styles.heroLabelCol}>
+              <Text style={[styles.heroUnit, { color: subColor }]}>lb</Text>
+              <Text style={[styles.heroUnit, { color: subColor }]}>today</Text>
+            </View>
+          </View>
+        ) : (
+          <Text style={[styles.heroPlaceholder, { color: subColor }]}>Log your weight</Text>
+        )}
+        <WeightTrend trackerId={tracker.id} isDark={isDark} />
+      </View>
+    );
+  } else if (isSteps) {
+    // Steps hero is handled by StepsActionArea in the header row
+    heroMetric = null;
+  } else {
+    // Generic tracker: show streak + completion
+    heroMetric = (
+      <View style={styles.statsRow}>
+        <View style={styles.statChip}>
+          <Flame size={13} color="#FF8A5B" strokeWidth={2} />
+          <Text style={[styles.statChipText, { color: textColor }]}>
+            {streak}
+            <Text style={[styles.statChipLabel, { color: subColor }]}> day streak</Text>
+          </Text>
+        </View>
+        <View style={styles.statChip}>
+          <CheckCircle2 size={13} color={colors.success} strokeWidth={2} />
+          <Text style={[styles.statChipText, { color: textColor }]}>
+            {completionPct}
+            <Text style={[styles.statChipLabel, { color: subColor }]}>% rate</Text>
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Status badge ────────────────────────────────────────────────────────────
+  const statusLabel = stats?.status === 'on_track' ? 'on track' : stats?.status === 'improving' ? 'improving' : stats?.status === 'behind' || stats?.status === 'off_track' ? 'behind' : null;
+
   return (
     <AnimatedPressable onPress={onPress} style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-      {/* Header row */}
+      {/* Zone A — Header row */}
       <View style={styles.cardHeader}>
         <View style={[styles.emojiCircle, { backgroundColor: isDark ? '#2A2C40' : '#EEF2FF' }]}>
           <Text style={styles.emojiText}>{tracker.emoji}</Text>
@@ -484,48 +668,121 @@ function TrackerCard({
             <Text style={[styles.trackerUnit, { color: subColor }]}>{tracker.unit}</Text>
           ) : null}
         </View>
-        {actionArea}
+        {/* Status badge */}
+        {statusLabel ? (
+          <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+          </View>
+        ) : null}
+        {/* Steps: action in header row */}
+        {isSteps ? (
+          <View style={{ marginLeft: 8 }}>
+            {actionArea}
+          </View>
+        ) : (
+          <View style={{ marginLeft: 8 }}>
+            {actionArea}
+          </View>
+        )}
         <ChevronRight size={16} color={subColor} strokeWidth={2} style={{ marginLeft: 4 }} />
       </View>
 
-      {/* Divider */}
-      <View style={[styles.divider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-      {/* Stats row */}
-      <View style={styles.statsRow}>
-        {/* Streak */}
-        <View style={styles.statChip}>
-          <Flame size={13} color="#FF8A5B" strokeWidth={2} />
-          <Text style={[styles.statChipText, { color: textColor }]}>
-            {streak}
-            <Text style={[styles.statChipLabel, { color: subColor }]}> day streak</Text>
-          </Text>
-        </View>
-
-        {/* Completion */}
-        <View style={styles.statChip}>
-          <CheckCircle2 size={13} color={colors.success} strokeWidth={2} />
-          <Text style={[styles.statChipText, { color: textColor }]}>
-            {completionPct}
-            <Text style={[styles.statChipLabel, { color: subColor }]}>% rate</Text>
-          </Text>
-        </View>
-
-        {/* Status badge */}
-        {stats ? (
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: statusColor }]}>
-              {stats.status === 'on_track' ? 'on track' : stats.status === 'improving' ? 'improving' : 'behind'}
-            </Text>
+      {/* Zone B — Main metric */}
+      {heroMetric ? (
+        <>
+          <View style={[styles.divider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+          <View style={styles.heroSection}>
+            {heroMetric}
+            {/* For gym: also show completion rate below streak */}
+            {isGym ? (
+              <View style={styles.gymSubRow}>
+                <CheckCircle2 size={12} color={colors.success} strokeWidth={2} />
+                <Text style={[styles.gymSubText, { color: subColor }]}>
+                  {completionPct}% completion rate
+                </Text>
+              </View>
+            ) : null}
           </View>
-        ) : (
-          <View style={[styles.statusBadge, { backgroundColor: subColor + '22' }]}>
-            <Text style={[styles.statusText, { color: subColor }]}>no data</Text>
-          </View>
-        )}
-      </View>
+        </>
+      ) : null}
+
+      {/* Zone C — Community insight footer */}
+      <CommunityFooter
+        stats={communityStats}
+        loading={communityLoading}
+        isDark={isDark}
+        trackerType={trackerType}
+      />
     </AnimatedPressable>
+  );
+}
+
+// ─── Today Summary Header ─────────────────────────────────────────────────────
+function TodaySummaryHeader({
+  trackers,
+  todayEntries,
+  isDark,
+}: {
+  trackers: Tracker[];
+  todayEntries: Record<string, { id: string; value: number } | null>;
+  isDark: boolean;
+}) {
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const total = trackers.length;
+  const done = trackers.filter((t) => todayEntries[t.id] !== null && todayEntries[t.id] !== undefined).length;
+
+  // Friendly date
+  const now = new Date();
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+  const monthDay = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  const dateLabel = `${dayName} · ${monthDay}`;
+
+  // Motivational subtitle
+  let motivationText: string;
+  if (total === 0) {
+    motivationText = 'Add your first tracker below';
+  } else if (done === 0) {
+    motivationText = "Let's start the day strong";
+  } else if (done < total) {
+    motivationText = 'Keep the momentum going';
+  } else {
+    motivationText = 'Crushing it today 🔥';
+  }
+
+  const completionFraction = total > 0 ? `${done} of ${total} done today` : 'No trackers yet';
+
+  return (
+    <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+      <Text style={[styles.summaryDate, { color: subColor }]}>{dateLabel}</Text>
+      <Text style={[styles.summaryCompletion, { color: textColor }]}>{completionFraction}</Text>
+
+      {/* Progress dots */}
+      {total > 0 ? (
+        <View style={styles.dotsRow}>
+          {trackers.map((t) => {
+            const isDone = todayEntries[t.id] !== null && todayEntries[t.id] !== undefined;
+            return (
+              <View
+                key={t.id}
+                style={[
+                  styles.dot,
+                  isDone
+                    ? { backgroundColor: colors.primary }
+                    : { backgroundColor: 'transparent', borderWidth: 2, borderColor: isDark ? colors.borderDark : colors.border },
+                ]}
+              />
+            );
+          })}
+        </View>
+      ) : null}
+
+      <Text style={[styles.summaryMotivation, { color: subColor }]}>{motivationText}</Text>
+    </View>
   );
 }
 
@@ -542,10 +799,43 @@ export default function CheckInsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadingRef = useRef(false);
+  // Community stats per tracker (keyed by tracker name)
+  const [communityStatsMap, setCommunityStatsMap] = useState<Record<string, LeaderboardStats | null>>({});
+  const [communityLoadingMap, setCommunityLoadingMap] = useState<Record<string, boolean>>({});
+  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
 
-  // ── Steps hook ──────────────────────────────────────────────────────────────
+  const loadingRef = useRef(false);
   const stepsHook = useSteps();
+
+  // ── Load community stats for steps + gym ────────────────────────────────────
+  const loadCommunityStats = useCallback(async (trackerList: Tracker[]) => {
+    console.log('[CheckIns] Loading community stats for trackers');
+    const relevantTrackers = trackerList.filter((t) => {
+      const type = getCheckInType(t.name);
+      return type === 'steps' || type === 'gym';
+    });
+
+    // Mark all as loading
+    const loadingInit: Record<string, boolean> = {};
+    relevantTrackers.forEach((t) => { loadingInit[t.name.toLowerCase()] = true; });
+    setCommunityLoadingMap(loadingInit);
+
+    // Fetch in parallel
+    await Promise.all(
+      relevantTrackers.map(async (t) => {
+        const type = getCheckInType(t.name);
+        const period = type === 'steps' ? 'today' : 'month';
+        try {
+          const result = await fetchLeaderboard(t.name.toLowerCase(), period);
+          setCommunityStatsMap((prev) => ({ ...prev, [t.name.toLowerCase()]: result.stats }));
+        } catch {
+          setCommunityStatsMap((prev) => ({ ...prev, [t.name.toLowerCase()]: null }));
+        } finally {
+          setCommunityLoadingMap((prev) => ({ ...prev, [t.name.toLowerCase()]: false }));
+        }
+      })
+    );
+  }, []);
 
   const loadData = useCallback(async () => {
     if (loadingRef.current) return;
@@ -561,7 +851,7 @@ export default function CheckInsScreen() {
       const today = toLocalDateString(new Date());
 
       const [statsResults, todayEntriesResults] = await Promise.all([
-        Promise.all(list.map(t => getStats(t.id).catch(() => null))),
+        Promise.all(list.map((t) => getStats(t.id).catch(() => null))),
         Promise.all(
           list.map(async (t) => {
             try {
@@ -576,9 +866,7 @@ export default function CheckInsScreen() {
       ]);
 
       const map: Record<string, TrackerStats> = {};
-      list.forEach((t, i) => {
-        if (statsResults[i]) map[t.id] = statsResults[i]!;
-      });
+      list.forEach((t, i) => { if (statsResults[i]) map[t.id] = statsResults[i]!; });
       setStatsMap(map);
 
       const todayMap: Record<string, { id: string; value: number } | null> = {};
@@ -587,10 +875,13 @@ export default function CheckInsScreen() {
         todayMap[t.id] = entry ? { id: entry.id, value: Number(entry.value) } : null;
       });
       setTodayEntries(todayMap);
+
+      // Load community stats async — does NOT block main UI
+      loadCommunityStats(list);
+      setLeaderboardRefreshKey((k) => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load trackers';
       console.error('[CheckIns] Error loading data:', msg);
-      // 404 means the feature endpoint isn't available yet — show empty state, not error
       if (msg.includes('404')) {
         setTrackers([]);
         setError(null);
@@ -602,7 +893,7 @@ export default function CheckInsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [loadCommunityStats]);
 
   const handleQuickLog = useCallback(async (tracker: Tracker, value: number) => {
     const today = toLocalDateString(new Date());
@@ -611,7 +902,6 @@ export default function CheckInsScreen() {
       const entry = await logEntry(tracker.id, today, value);
       setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
 
-      // Award XP / advance missions — fire-and-forget, safe if it fails
       const lowerName = tracker.name.toLowerCase();
       if (tracker.is_default && lowerName === 'gym') {
         console.log('[CheckIns] Awarding workout XP for entry:', entry.id);
@@ -621,7 +911,6 @@ export default function CheckInsScreen() {
         tryAwardWeightCheckin(entry.id, value);
       }
 
-      // Refresh stats so the streak updates immediately
       try {
         const newStats = await getStats(tracker.id);
         setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
@@ -634,7 +923,6 @@ export default function CheckInsScreen() {
     }
   }, []);
 
-  // ── Steps refresh handler ───────────────────────────────────────────────────
   const handleStepsRefresh = useCallback(async (tracker: Tracker) => {
     console.log('[CheckIns] handleStepsRefresh called for tracker:', tracker.id);
     try {
@@ -645,10 +933,6 @@ export default function CheckInsScreen() {
         console.log('[CheckIns] Upserting steps entry:', currentSteps, 'for date:', today);
         const entry = await logEntry(tracker.id, today, currentSteps);
         setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
-        // No tryAwardSteps call here: xpAwarder.ts does not expose a steps event type.
-        // Steps XP is not currently tracked as a mission event — only the backend/missions
-        // layer can introduce a new event_type. If added, call tryAwardSteps(entry.id, currentSteps) here.
-        // Refresh stats
         try {
           const newStats = await getStats(tracker.id);
           setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
@@ -682,7 +966,6 @@ export default function CheckInsScreen() {
 
   const handleLog = (tracker: Tracker) => {
     console.log('[CheckIns] Log button tapped (form nav):', tracker.name, tracker.id);
-    // Steps uses the refresh button — no form navigation for steps
     router.push({ pathname: '/tracker/log', params: { trackerId: tracker.id } });
   };
 
@@ -718,23 +1001,9 @@ export default function CheckInsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        {/* Section header */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>Your Trackers</Text>
-          {!loading && (
-            <View style={[styles.countBadge, { backgroundColor: colors.primary + '22' }]}>
-              <Text style={[styles.countBadgeText, { color: colors.primary }]}>{trackers.length}</Text>
-            </View>
-          )}
-        </View>
-
         {/* Error state */}
         {error && !loading ? (
           <View style={[styles.errorCard, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
@@ -747,7 +1016,16 @@ export default function CheckInsScreen() {
         ) : loading ? (
           /* Skeleton */
           <View style={styles.list}>
-            {[0, 1, 2].map(i => <SkeletonCard key={i} isDark={isDark} />)}
+            <View style={[styles.summaryCardSkeleton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
+              {[0, 1, 2].map((i) => {
+                const shimmer = isDark ? '#3A3C52' : '#D4D6DA';
+                const opacity = 0.5;
+                return (
+                  <View key={i} style={[styles.skeletonLine, { width: i === 0 ? '40%' : i === 1 ? '60%' : '50%', backgroundColor: shimmer, opacity, marginBottom: 8 }]} />
+                );
+              })}
+            </View>
+            {[0, 1, 2].map((i) => <SkeletonCard key={i} isDark={isDark} />)}
           </View>
         ) : trackers.length === 0 ? (
           /* Empty state */
@@ -765,23 +1043,52 @@ export default function CheckInsScreen() {
             </AnimatedPressable>
           </View>
         ) : (
-          /* Tracker list */
           <View style={styles.list}>
-            {trackers.map((tracker, index) => (
-              <AnimatedListItem key={tracker.id} index={index}>
-                <TrackerCard
-                  tracker={tracker}
-                  stats={statsMap[tracker.id] ?? null}
-                  todayEntry={todayEntries[tracker.id] ?? null}
-                  isDark={isDark}
-                  onPress={() => handleCardPress(tracker)}
-                  onLog={() => handleLog(tracker)}
-                  onQuickLog={(value) => handleQuickLog(tracker, value)}
-                  stepsHook={stepsHook}
-                  onStepsRefresh={() => handleStepsRefresh(tracker)}
-                />
-              </AnimatedListItem>
-            ))}
+            {/* Today summary header */}
+            <AnimatedListItem index={0}>
+              <TodaySummaryHeader
+                trackers={trackers}
+                todayEntries={todayEntries}
+                isDark={isDark}
+              />
+            </AnimatedListItem>
+
+            {/* Tracker cards */}
+            {trackers.map((tracker, index) => {
+              const trackerType = getCheckInType(tracker.name);
+              const communityKey = tracker.name.toLowerCase();
+              const cStats = (trackerType === 'steps' || trackerType === 'gym')
+                ? (communityStatsMap[communityKey] ?? null)
+                : null;
+              const cLoading = (trackerType === 'steps' || trackerType === 'gym')
+                ? (communityLoadingMap[communityKey] ?? false)
+                : false;
+
+              return (
+                <AnimatedListItem key={tracker.id} index={index + 1}>
+                  <TrackerCard
+                    tracker={tracker}
+                    stats={statsMap[tracker.id] ?? null}
+                    todayEntry={todayEntries[tracker.id] ?? null}
+                    isDark={isDark}
+                    onPress={() => handleCardPress(tracker)}
+                    onLog={() => handleLog(tracker)}
+                    onQuickLog={(value) => handleQuickLog(tracker, value)}
+                    stepsHook={stepsHook}
+                    onStepsRefresh={() => handleStepsRefresh(tracker)}
+                    communityStats={cStats}
+                    communityLoading={cLoading}
+                  />
+                </AnimatedListItem>
+              );
+            })}
+
+            {/* Community leaderboard section */}
+            <AnimatedListItem index={trackers.length + 1}>
+              <View style={styles.leaderboardSection}>
+                <CommunityLeaderboard isDark={isDark} refreshKey={leaderboardRefreshKey} />
+              </View>
+            </AnimatedListItem>
           </View>
         )}
       </ScrollView>
@@ -794,35 +1101,65 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 120,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    marginTop: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  countBadge: {
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  countBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
   list: {
     gap: spacing.sm,
   },
+
+  // ── Today Summary ────────────────────────────────────────────────────────────
+  summaryCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 4,
+  },
+  summaryCardSkeleton: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  summaryDate: {
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0.1,
+    marginBottom: 4,
+  },
+  summaryCompletion: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 12,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  summaryMotivation: {
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+
+  // ── Card ─────────────────────────────────────────────────────────────────────
   card: {
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    boxShadow: '0px 1px 3px rgba(0,0,0,0.04), 0px 4px 12px rgba(0,0,0,0.03)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 2,
   },
   cardHeader: {
@@ -850,6 +1187,138 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginTop: 1,
   },
+
+  // ── Zone B: Hero metric ──────────────────────────────────────────────────────
+  heroSection: {
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  heroNumber: {
+    fontSize: 40,
+    fontWeight: '800',
+    letterSpacing: -1,
+    lineHeight: 46,
+  },
+  heroLabelCol: {
+    paddingBottom: 6,
+    gap: 0,
+  },
+  heroUnit: {
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  heroFlame: {
+    fontSize: 24,
+    paddingBottom: 4,
+  },
+  heroPlaceholder: {
+    fontSize: 15,
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  trendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  trendText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  gymSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  gymSubText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // ── Zone C: Community footer ─────────────────────────────────────────────────
+  communityDivider: {
+    height: 1,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    opacity: 0.5,
+  },
+  communityFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  percentileBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  percentileText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  communityAvgText: {
+    fontSize: 11,
+    fontWeight: '500',
+    flex: 1,
+  },
+
+  // ── Divider ──────────────────────────────────────────────────────────────────
+  divider: {
+    height: 1,
+    marginVertical: spacing.sm,
+    opacity: 0.5,
+  },
+
+  // ── Stats row (generic trackers) ─────────────────────────────────────────────
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  statChipLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+
+  // ── Status badge ─────────────────────────────────────────────────────────────
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  // ── Action buttons ───────────────────────────────────────────────────────────
   logButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -895,55 +1364,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     borderWidth: 1,
   },
-  divider: {
-    height: 1,
-    marginVertical: spacing.sm,
-    opacity: 0.5,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  statChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  statChipLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: borderRadius.full,
-    marginLeft: 'auto',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  headerButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Steps-specific styles
+
+  // ── Steps ────────────────────────────────────────────────────────────────────
   stepsActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -983,22 +1405,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  connectButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: borderRadius.sm,
+
+  // ── Header ───────────────────────────────────────────────────────────────────
+  headerButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  connectButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  // Skeleton
-  skeletonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-  },
+
+  // ── Skeleton ─────────────────────────────────────────────────────────────────
   skeletonLine: {
     height: 13,
     borderRadius: 6,
@@ -1008,7 +1424,8 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: borderRadius.sm,
   },
-  // Error
+
+  // ── Error ────────────────────────────────────────────────────────────────────
   errorCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.xl,
@@ -1035,7 +1452,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
-  // Empty
+
+  // ── Empty ────────────────────────────────────────────────────────────────────
   emptyCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.xl,
@@ -1074,5 +1492,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 15,
+  },
+
+  // ── Leaderboard section ──────────────────────────────────────────────────────
+  leaderboardSection: {
+    marginTop: spacing.sm,
   },
 });
