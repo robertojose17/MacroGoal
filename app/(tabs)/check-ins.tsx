@@ -14,6 +14,7 @@ import {
   LayoutAnimation,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { listTrackers, getStats, listEntries, logEntry, Tracker, TrackerStats } from '@/utils/trackersApi';
@@ -34,6 +35,47 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSteps } from '@/hooks/useSteps';
+
+// ─── Cache helpers ────────────────────────────────────────────────────────────
+const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_KEY = 'check-ins-cache-v1';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+interface CheckInsCache {
+  trackers: Tracker[];
+  statsMap: Record<string, TrackerStats>;
+  todayEntries: Record<string, { id: string; value: number } | null>;
+  cachedAt: number;
+  cachedDate: string;
+}
+
+async function readCache(): Promise<CheckInsCache | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CheckInsCache;
+    const today = toLocalDateString(new Date());
+    if (Date.now() - parsed.cachedAt > CACHE_TTL_MS) return null;
+    if (parsed.cachedDate !== today) return null;
+    return parsed;
+  } catch (err) {
+    console.warn('[CheckIns] cache read failed:', err);
+    return null;
+  }
+}
+
+async function writeCache(data: Omit<CheckInsCache, 'cachedAt' | 'cachedDate'>): Promise<void> {
+  try {
+    const payload: CheckInsCache = {
+      ...data,
+      cachedAt: Date.now(),
+      cachedDate: toLocalDateString(new Date()),
+    };
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.warn('[CheckIns] cache write failed:', err);
+  }
+}
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -805,6 +847,8 @@ export default function CheckInsScreen() {
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
 
   const loadingRef = useRef(false);
+  const hasHydratedFromCacheRef = useRef(false);
+  const lastLoadedAtRef = useRef<number>(0);
   const stepsHook = useSteps();
 
   // ── Load community stats for steps + gym ────────────────────────────────────
@@ -837,10 +881,26 @@ export default function CheckInsScreen() {
     );
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (loadingRef.current) return;
     loadingRef.current = true;
-    console.log('[CheckIns] Loading trackers and stats');
+
+    // First call: try cache hydration
+    if (!hasHydratedFromCacheRef.current && !opts?.silent) {
+      hasHydratedFromCacheRef.current = true;
+      const cached = await readCache();
+      if (cached) {
+        console.log('[CheckIns] hydrated from cache');
+        setTrackers(cached.trackers);
+        setStatsMap(cached.statsMap);
+        setTodayEntries(cached.todayEntries);
+        setLoading(false); // skip skeleton
+        // Fall through to silent background refresh
+        opts = { silent: true };
+      }
+    }
+
+    console.log('[CheckIns] Loading trackers and stats', opts?.silent ? '(silent)' : '');
     try {
       setError(null);
       const rawTrackers = await listTrackers();
@@ -876,13 +936,18 @@ export default function CheckInsScreen() {
       });
       setTodayEntries(todayMap);
 
+      // Persist to cache for next open
+      writeCache({ trackers: list, statsMap: map, todayEntries: todayMap });
+
       // Load community stats async — does NOT block main UI
       loadCommunityStats(list);
       setLeaderboardRefreshKey((k) => k + 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load trackers';
       console.error('[CheckIns] Error loading data:', msg);
-      if (msg.includes('404')) {
+      if (opts?.silent) {
+        console.warn('[CheckIns] silent refresh failed, keeping cached UI:', msg);
+      } else if (msg.includes('404')) {
         setTrackers([]);
         setError(null);
       } else {
@@ -890,7 +955,7 @@ export default function CheckInsScreen() {
       }
     } finally {
       loadingRef.current = false;
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
       setRefreshing(false);
     }
   }, [loadCommunityStats]);
@@ -898,8 +963,20 @@ export default function CheckInsScreen() {
   const handleQuickLog = useCallback(async (tracker: Tracker, value: number) => {
     const today = toLocalDateString(new Date());
     console.log('[CheckIns] Quick log:', tracker.name, value);
+
+    // Snapshot prior state for rollback
+    const prevEntry = todayEntries[tracker.id] ?? null;
+    const optimisticEntry = { id: `optimistic-${Date.now()}`, value };
+
+    // 1) Update UI INSTANTLY (before await)
+    setTodayEntries((prev) => ({ ...prev, [tracker.id]: optimisticEntry }));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
     try {
+      // 2) Server call in background
       const entry = await logEntry(tracker.id, today, value);
+
+      // 3) Replace optimistic with real entry
       setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
 
       const lowerName = tracker.name.toLowerCase();
@@ -911,17 +988,19 @@ export default function CheckInsScreen() {
         tryAwardWeightCheckin(entry.id, value);
       }
 
-      try {
-        const newStats = await getStats(tracker.id);
+      // Refresh stats in background (non-blocking)
+      getStats(tracker.id).then((newStats) => {
         setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
-      } catch {}
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }).catch(() => {});
     } catch (err) {
+      // 4) Rollback optimistic state
+      console.error('[CheckIns] Quick log failed, rolling back:', err);
+      setTodayEntries((prev) => ({ ...prev, [tracker.id]: prevEntry }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       const msg = err instanceof Error ? err.message : 'Failed to log';
-      console.error('[CheckIns] Quick log failed:', msg);
       Alert.alert('Log failed', msg);
     }
-  }, []);
+  }, [todayEntries]);
 
   const handleStepsRefresh = useCallback(async (tracker: Tracker) => {
     console.log('[CheckIns] handleStepsRefresh called for tracker:', tracker.id);
@@ -931,32 +1010,65 @@ export default function CheckInsScreen() {
       if (currentSteps !== null && currentSteps > 0) {
         const today = toLocalDateString(new Date());
         console.log('[CheckIns] Upserting steps entry:', currentSteps, 'for date:', today);
-        const entry = await logEntry(tracker.id, today, currentSteps);
-        setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
-        try {
-          const newStats = await getStats(tracker.id);
-          setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
-        } catch {}
+
+        // Snapshot prior state for rollback
+        const prevEntry = todayEntries[tracker.id] ?? null;
+        const optimisticEntry = { id: `optimistic-steps-${Date.now()}`, value: currentSteps };
+
+        // Update UI instantly
+        setTodayEntries((prev) => ({ ...prev, [tracker.id]: optimisticEntry }));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+        try {
+          const entry = await logEntry(tracker.id, today, currentSteps);
+          setTodayEntries((prev) => ({ ...prev, [tracker.id]: { id: entry.id, value: Number(entry.value) } }));
+          // Refresh stats in background (non-blocking)
+          getStats(tracker.id).then((newStats) => {
+            setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
+          }).catch(() => {});
+        } catch (err) {
+          console.error('[CheckIns] Steps log failed, rolling back:', err);
+          setTodayEntries((prev) => ({ ...prev, [tracker.id]: prevEntry }));
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          const msg = err instanceof Error ? err.message : 'Failed to log steps';
+          Alert.alert('Steps log failed', msg);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to refresh steps';
       console.error('[CheckIns] Steps refresh failed:', msg);
     }
-  }, [stepsHook]);
+  }, [stepsHook, todayEntries]);
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[CheckIns] Screen focused');
-      setLoading(true);
-      loadData();
+      const now = Date.now();
+      const isFirstLoad = lastLoadedAtRef.current === 0;
+      const isStale = now - lastLoadedAtRef.current > STALE_AFTER_MS;
+
+      if (isFirstLoad) {
+        console.log('[CheckIns] first focus — loading');
+        setLoading(true);
+        loadData().then(() => {
+          lastLoadedAtRef.current = Date.now();
+        });
+      } else if (isStale) {
+        console.log('[CheckIns] stale — silent refresh');
+        loadData({ silent: true }).then(() => {
+          lastLoadedAtRef.current = Date.now();
+        });
+      } else {
+        console.log('[CheckIns] focus — data fresh, skipping reload');
+      }
     }, [loadData])
   );
 
   const onRefresh = () => {
     console.log('[CheckIns] Pull-to-refresh triggered');
     setRefreshing(true);
-    loadData();
+    loadData().then(() => {
+      lastLoadedAtRef.current = Date.now();
+    });
   };
 
   const handleCardPress = (tracker: Tracker) => {
