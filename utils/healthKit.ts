@@ -2,6 +2,8 @@
  * Health Data Wrapper — platform-agnostic step count reader
  *
  * iOS:     @kingstinct/react-native-healthkit (Nitro Modules, SDK 54 compatible)
+ *          Uses queryStatisticsForQuantity with cumulativeSum so HealthKit
+ *          deduplicates samples across sources (iPhone + Apple Watch).
  *          Chosen over react-native-health because react-native-health pins an
  *          old @expo/config-plugins version that conflicts with SDK 54.
  *
@@ -145,7 +147,7 @@ async function ios_requestPermission(): Promise<PermissionStatus> {
 
 async function ios_getStepsForDate(date: Date): Promise<StepsResult> {
   try {
-    const { isHealthDataAvailable, queryQuantitySamples } =
+    const { isHealthDataAvailable, queryStatisticsForQuantity } =
       await import('@kingstinct/react-native-healthkit');
 
     if (!isHealthDataAvailable()) {
@@ -153,21 +155,25 @@ async function ios_getStepsForDate(date: Date): Promise<StepsResult> {
       return { available: false, permission: 'denied', steps: null };
     }
 
-    // NOTE: We do NOT call getRequestStatusForAuthorization here.
-    // Apple's privacy model makes it return 'shouldRequest' even after the user
-    // grants READ access. The sample query itself is the source of truth:
-    //   - resolves (even with empty array) → access granted
-    //   - throws with auth error            → access denied / restricted
-    //   - throws with other error           → unknown / not_determined
-
     const start = startOfDay(date);
     const end = endOfDay(date);
-    console.log('[healthKit] iOS querying steps for', start.toISOString(), '→', end.toISOString());
+    console.log('[healthKit] iOS querying steps (statistics/cumulativeSum) for', start.toISOString(), '→', end.toISOString());
 
-    const samples = await queryQuantitySamples(
+    // Use queryStatisticsForQuantity with cumulativeSum.
+    // This is the API Apple recommends for cumulative quantities like step count —
+    // HealthKit's statistics engine deduplicates and reconciles samples across all
+    // sources (iPhone, Apple Watch, third-party apps) automatically. This is what
+    // MyFitnessPal, Strava, and other professional fitness apps use.
+    //
+    // IMPORTANT: do NOT add a `metadata: { withMetadataKey: 'HKWasUserEntered' }`
+    // filter here — that filter has a known bug in the underlying iOS API that
+    // causes duplicated counts. Without it, the returned sumQuantity is the
+    // correctly deduplicated daily total.
+    // Ref: https://github.com/kingstinct/react-native-healthkit/issues/301
+    const stats = await queryStatisticsForQuantity(
       'HKQuantityTypeIdentifierStepCount',
+      ['cumulativeSum'],
       {
-        limit: 0, // 0 = no limit — get all samples for the day
         unit: 'count',
         filter: {
           date: { startDate: start, endDate: end },
@@ -175,10 +181,10 @@ async function ios_getStepsForDate(date: Date): Promise<StepsResult> {
       }
     );
 
-    // Query succeeded — permission is granted (iOS would have thrown otherwise)
-    const total = samples.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+    const total = stats.sumQuantity?.quantity ?? 0;
     const steps = sanitizeSteps(total);
-    console.log('[healthKit] iOS steps total:', steps, '(', samples.length, 'samples) — permission confirmed GRANTED');
+    const sourceNames = stats.sources?.map((s: { name: string }) => s.name).join(', ') ?? '(none)';
+    console.log('[healthKit] iOS steps total:', steps, '— sources:', sourceNames, '— permission confirmed GRANTED');
 
     return { available: true, permission: 'granted', steps };
   } catch (e) {
@@ -192,8 +198,7 @@ async function ios_getStepsForDate(date: Date): Promise<StepsResult> {
       return { available: true, permission: 'denied', steps: null, error: msg };
     }
 
-    // Non-auth error (e.g. HealthKit temporarily unavailable) — keep as not_determined
-    // so the UI shows the Connect button rather than a permanent "denied" message.
+    // Non-auth error — keep as not_determined so the UI shows the Connect button
     console.log('[healthKit] iOS getStepsForDate: non-auth error → not_determined');
     return { available: true, permission: 'not_determined', steps: null, error: msg };
   }
