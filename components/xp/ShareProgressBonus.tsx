@@ -41,14 +41,6 @@ interface ShareProgressBonusProps {
   isDark: boolean;
 }
 
-// ─── Counter text helper ──────────────────────────────────────────────────────
-
-function getCounterText(count: number): string {
-  if (count === 0) return 'Be the first to share today';
-  if (count === 1) return '1 user shared today';
-  return 'Join ' + count.toLocaleString() + ' users who shared today';
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBonusProps) {
@@ -205,10 +197,6 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
   // ─── Derived display values ──────────────────────────────────────────────
   const isHero = allDone && !userClaimedToday;
   const isClaimed = userClaimedToday;
-  const counterText = getCounterText(todayCount);
-
-  // ─── Style derivations ───────────────────────────────────────────────────
-  const subColor = isDark ? '#A0A2B8' : '#6B7280';
 
   let containerStyle: object;
   let titleText: string;
@@ -266,11 +254,6 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
             <Text style={[styles.title, { color: titleColor }, isHero && styles.heroTitle]}>
               {titleText}
             </Text>
-            {!isClaimed ? (
-              <Text style={[styles.counter, { color: subColor }]}>
-                {counterText}
-              </Text>
-            ) : null}
           </View>
         </View>
       </Pressable>
@@ -323,9 +306,5 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 15,
     fontWeight: '700',
-  },
-  counter: {
-    fontSize: 12,
-    fontWeight: '400',
   },
 });
