@@ -1,13 +1,27 @@
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  FlatList,
+  ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { searchOpenFoodFacts, OpenFoodFactsProduct, extractServingSize, extractNutrition } from '@/utils/openFoodFacts';
+import { extractServingSize, extractNutrition, type OpenFoodFactsProduct } from '@/utils/openFoodFacts';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { hybridSearch } from '@/utils/foodSearchHybrid';
+
+// Source tag for progressive UI
+type ResultSource = 'local' | 'supabase' | 'off';
 
 interface SearchResultItem {
   product: OpenFoodFactsProduct;
@@ -18,123 +32,198 @@ interface SearchResultItem {
   displayFiber: number;
   servingText: string;
   hasNutrition: boolean;
+  source: ResultSource;
 }
 
-// OPTIMIZATION: In-memory cache for search results
-// Stores last N queries to avoid redundant API calls
-const CACHE_SIZE = 20;
-const searchCache = new Map<string, SearchResultItem[]>();
+function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
+  const servingInfo = extractServingSize(product);
+  const nutrition = extractNutrition(product);
+  const multiplier = servingInfo.grams / 100;
+  const displayCalories = nutrition.calories * multiplier;
+  const displayProtein = nutrition.protein * multiplier;
+  const displayCarbs = nutrition.carbs * multiplier;
+  const displayFats = nutrition.fat * multiplier;
+  const displayFiber = nutrition.fiber * multiplier;
+  const hasNutrition =
+    nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0;
+  return {
+    product,
+    displayCalories,
+    displayProtein,
+    displayCarbs,
+    displayFats,
+    displayFiber,
+    servingText: servingInfo.displayText,
+    hasNutrition,
+    source,
+  };
+}
 
-// OPTIMIZATION: Helper to manage cache
-function getCachedResults(query: string): SearchResultItem[] | null {
-  const cached = searchCache.get(query.toLowerCase().trim());
-  if (cached) {
-    console.log('[FoodSearch] 🎯 Cache HIT for query:', query);
+/**
+ * Merge incoming products into existing results map.
+ * Deduplicates by product.code. Priority: supabase > off > local.
+ * Returns a new ordered array (insertion order preserved, higher-priority sources win).
+ */
+function mergeProducts(
+  existing: Map<string, SearchResultItem>,
+  incoming: OpenFoodFactsProduct[],
+  source: ResultSource,
+  query: string,
+): SearchResultItem[] {
+  const sourcePriority: Record<ResultSource, number> = { supabase: 3, off: 2, local: 1 };
+  const incomingPriority = sourcePriority[source];
+
+  for (const product of incoming) {
+    const key = product.code || `${product.product_name || ''}-${product.brands || ''}`;
+    if (!key) continue;
+    const existing_ = existing.get(key);
+    if (!existing_ || sourcePriority[existing_.source] < incomingPriority) {
+      existing.set(key, buildResultItem(product, source));
+    }
   }
-  return cached || null;
+
+  // Re-rank by name relevance
+  const q = query.toLowerCase().trim();
+  const items = Array.from(existing.values());
+  items.sort((a, b) => {
+    const score = (item: SearchResultItem) => {
+      const name = (item.product.product_name || item.product.generic_name || '').toLowerCase().trim();
+      const words = name.split(/\s+/);
+      if (name === q) return 1000;
+      if (words[0] === q && words.length === 1) return 900;
+      if (words[0] === q && words.length === 2) return 800;
+      if (words[0] === q) return 700;
+      if (name.startsWith(q)) return 600;
+      if (name.includes(q)) return 400;
+      return 0;
+    };
+    return score(b) - score(a);
+  });
+
+  return items.filter(item => item.hasNutrition).slice(0, 80);
 }
 
-function setCachedResults(query: string, results: SearchResultItem[]): void {
-  const key = query.toLowerCase().trim();
-  
-  // Limit cache size (LRU-style: delete oldest when full)
-  if (searchCache.size >= CACHE_SIZE) {
-    const firstKey = searchCache.keys().next().value;
-    searchCache.delete(firstKey);
-    console.log('[FoodSearch] Cache full, evicted oldest entry');
-  }
-  
-  searchCache.set(key, results);
-  console.log('[FoodSearch] 💾 Cached results for query:', query, '(cache size:', searchCache.size, ')');
-}
+// ─── Memoized row component ───────────────────────────────────────────────────
 
-// OPTIMIZATION: Memoized row component to prevent unnecessary re-renders
-const ResultRow = React.memo(({ 
-  item, 
-  isDark, 
-  onPress 
-}: { 
-  item: SearchResultItem; 
-  isDark: boolean; 
-  onPress: (item: SearchResultItem) => void;
-}) => {
-  const productName = item.product.product_name || item.product.generic_name || 'Unknown Product';
-  const brand = item.product.brands || '';
-  
-  // OPTIMIZATION: Use useCallback to prevent inline function recreation
-  const handlePress = useCallback(() => {
-    onPress(item);
-  }, [item, onPress]);
-  
-  return (
-    <TouchableOpacity
-      style={[styles.resultCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-      onPress={handlePress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.resultContent}>
-        <View style={styles.resultInfo}>
-          <Text style={[styles.productName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={2}>
-            {productName}
-          </Text>
-          
-          {brand && (
-            <Text style={[styles.productBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
-              {brand}
-            </Text>
-          )}
-          
-          <Text style={[styles.productServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            per {item.servingText}
-          </Text>
-          
-          {item.hasNutrition ? (
-            <View style={styles.macrosRow}>
-              <Text style={[styles.macroText, { color: colors.calories }]}>
-                {Math.round(item.displayCalories)} cal
+const SOURCE_BADGE: Record<ResultSource, string | null> = {
+  local: '💾',
+  supabase: null, // subtle check mark shown inline
+  off: null,
+};
+
+const ResultRow = React.memo(
+  ({
+    item,
+    isDark,
+    onPress,
+  }: {
+    item: SearchResultItem;
+    isDark: boolean;
+    onPress: (item: SearchResultItem) => void;
+  }) => {
+    const productName = item.product.product_name || item.product.generic_name || 'Unknown Product';
+    const brand = item.product.brands || '';
+    const badge = SOURCE_BADGE[item.source];
+    const isVerified = item.source === 'supabase';
+
+    const handlePress = useCallback(() => {
+      console.log('[FoodSearch] Product tapped:', productName, '| source:', item.source);
+      onPress(item);
+    }, [item, onPress, productName]);
+
+    const caloriesDisplay = Math.round(item.displayCalories);
+    const proteinDisplay = Math.round(isFinite(item.displayProtein) ? item.displayProtein : 0);
+    const carbsDisplay = Math.round(isFinite(item.displayCarbs) ? item.displayCarbs : 0);
+    const fatsDisplay = Math.round(isFinite(item.displayFats) ? item.displayFats : 0);
+
+    return (
+      <TouchableOpacity
+        style={[styles.resultCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+        onPress={handlePress}
+        activeOpacity={0.7}
+      >
+        <View style={styles.resultContent}>
+          <View style={styles.resultInfo}>
+            <View style={styles.nameRow}>
+              <Text
+                style={[styles.productName, { color: isDark ? colors.textDark : colors.text }]}
+                numberOfLines={2}
+              >
+                {productName}
               </Text>
-              <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                •
-              </Text>
-              <Text style={[styles.macroText, { color: colors.protein }]}>
-                P: {Math.round(isFinite(item.displayProtein) ? item.displayProtein : 0)}g
-              </Text>
-              <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                •
-              </Text>
-              <Text style={[styles.macroText, { color: colors.carbs }]}>
-                C: {Math.round(isFinite(item.displayCarbs) ? item.displayCarbs : 0)}g
-              </Text>
-              <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                •
-              </Text>
-              <Text style={[styles.macroText, { color: colors.fats }]}>
-                F: {Math.round(isFinite(item.displayFats) ? item.displayFats : 0)}g
-              </Text>
+              {isVerified && (
+                <Text style={styles.verifiedBadge}>✓</Text>
+              )}
+              {badge && !isVerified && (
+                <Text style={styles.cacheBadge}>{badge}</Text>
+              )}
             </View>
-          ) : (
-            <Text style={[styles.noNutritionText, { color: colors.warning || '#FF9500' }]}>
-              Nutrition not available
+
+            {brand ? (
+              <Text
+                style={[styles.productBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {brand}
+              </Text>
+            ) : null}
+
+            <Text
+              style={[styles.productServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+            >
+              per {item.servingText}
             </Text>
-          )}
+
+            {item.hasNutrition ? (
+              <View style={styles.macrosRow}>
+                <Text style={[styles.macroText, { color: colors.calories }]}>
+                  {caloriesDisplay} cal
+                </Text>
+                <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  •
+                </Text>
+                <Text style={[styles.macroText, { color: colors.protein }]}>
+                  P: {proteinDisplay}g
+                </Text>
+                <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  •
+                </Text>
+                <Text style={[styles.macroText, { color: colors.carbs }]}>
+                  C: {carbsDisplay}g
+                </Text>
+                <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  •
+                </Text>
+                <Text style={[styles.macroText, { color: colors.fats }]}>
+                  F: {fatsDisplay}g
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.noNutritionText, { color: colors.warning || '#FF9500' }]}>
+                Nutrition not available
+              </Text>
+            )}
+          </View>
+
+          <IconSymbol
+            ios_icon_name="chevron.right"
+            android_material_icon_name="chevron_right"
+            size={20}
+            color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+          />
         </View>
-        
-        <IconSymbol
-          ios_icon_name="chevron.right"
-          android_material_icon_name="chevron_right"
-          size={20}
-          color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-        />
-      </View>
-    </TouchableOpacity>
-  );
-}, (prevProps, nextProps) => {
-  // Custom comparison: only re-render if item or isDark changes
-  return prevProps.item.product.code === nextProps.item.product.code && 
-         prevProps.isDark === nextProps.isDark;
-});
+      </TouchableOpacity>
+    );
+  },
+  (prev, next) =>
+    prev.item.product.code === next.item.product.code &&
+    prev.item.source === next.item.source &&
+    prev.isDark === next.isDark,
+);
 
 ResultRow.displayName = 'ResultRow';
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function FoodSearchScreen() {
   const router = useRouter();
@@ -152,282 +241,135 @@ export default function FoodSearchScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SearchResultItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false); // true while any stage is pending
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // OPTIMIZATION: Request ID for stale response protection
-  const requestIdRef = useRef<number>(0);
   const searchInputRef = useRef<TextInput>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // OPTIMIZATION: Performance timing logs
-  const timingRef = useRef<{ [key: string]: number }>({});
-
-  const logTiming = useCallback((label: string) => {
-    const now = Date.now();
-    timingRef.current[label] = now;
-    
-    // Calculate delta from previous step
-    const keys = Object.keys(timingRef.current);
-    if (keys.length > 1) {
-      const prevKey = keys[keys.length - 2];
-      const prevTime = timingRef.current[prevKey];
-      const delta = now - prevTime;
-      console.log(`[FoodSearch] ⏱️ ${label} (+${delta}ms from ${prevKey})`);
-    } else {
-      console.log(`[FoodSearch] ⏱️ ${label}`);
-    }
-  }, []);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // Accumulated results map for the current query (reset on new query)
+  const resultsMapRef = useRef<Map<string, SearchResultItem>>(new Map());
+  const currentQueryRef = useRef<string>('');
 
   useEffect(() => {
     console.log('[FoodSearch] Screen mounted, meal:', mealType, 'date:', date);
-    console.log('[FoodSearch] Platform:', Platform.OS);
-    
-    // Auto-focus the search input with delay for mobile stability
     const focusTimeout = setTimeout(() => {
       searchInputRef.current?.focus();
     }, 300);
-
-    // Cleanup on unmount
     return () => {
       console.log('[FoodSearch] Screen unmounting, cleaning up...');
-      
-      // Clear focus timeout
       clearTimeout(focusTimeout);
-      
-      // Clear debounce timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
-      }
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      abortControllerRef.current?.abort();
     };
   }, [date, mealType]);
 
-  const performSearch = useCallback(async (query: string) => {
-    logTiming('(c) Request start');
-    console.log('[FoodSearch] ========== PERFORMING SEARCH ==========');
+  const performSearch = useCallback((query: string) => {
+    console.log('[FoodSearch] ========== PERFORMING HYBRID SEARCH ==========');
     console.log('[FoodSearch] Query:', query);
-    console.log('[FoodSearch] Platform:', Platform.OS);
-    
-    // OPTIMIZATION: Increment request ID for stale response protection
-    requestIdRef.current += 1;
-    const currentRequestId = requestIdRef.current;
-    console.log('[FoodSearch] Request ID:', currentRequestId);
-    
-    console.log('[FoodSearch] Setting loading = true');
-    setLoading(true);
+
+    // Abort any in-flight search
+    if (abortControllerRef.current) {
+      console.log('[FoodSearch] Aborting previous search');
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Reset state for new query
+    currentQueryRef.current = query;
+    resultsMapRef.current = new Map();
+    setResults([]);
     setErrorMessage(null);
     setHasSearched(true);
+    setIsSearching(true);
 
-    try {
-      // OPTIMIZATION: Check cache before making API call
-      const cachedResults = getCachedResults(query);
-      if (cachedResults) {
-        console.log('[FoodSearch] ✅ Returning cached results (no API call)');
-        
-        // Check if this is still the latest request
-        if (currentRequestId !== requestIdRef.current) {
-          console.log('[FoodSearch] 🚫 Ignoring cached results (stale request ID)');
-          return;
-        }
-        
-        setResults(cachedResults);
-        setLoading(false);
-        logTiming('(d) Results set (from cache)');
-        return;
-      }
-
-      // Call OpenFoodFacts search
-      console.log('[FoodSearch] Calling searchOpenFoodFacts...');
-      
-      const result = await searchOpenFoodFacts(query);
-      
-      logTiming('(c.1) Request end');
-      console.log('[FoodSearch] Search completed');
-      console.log('[FoodSearch] Response status:', result.status);
-      console.log('[FoodSearch] Products count:', result.products.length);
-      
-      // OPTIMIZATION: Check if this is still the latest request (stale response protection)
-      if (currentRequestId !== requestIdRef.current) {
-        console.log('[FoodSearch] 🚫 Ignoring stale search results (request ID:', currentRequestId, 'vs latest:', requestIdRef.current, ')');
-        return;
-      }
-
-      // Check for errors
-      if (result.status === 503) {
-        console.log('[FoodSearch] 503 status after retries');
-        setResults([]);
-        setErrorMessage('The food database is temporarily busy. Please try again in a moment.');
-        setLoading(false);
-        return;
-      }
-
-      if (result.status !== 200 && result.status !== 0) {
-        console.log('[FoodSearch] Non-200 status returned:', result.status);
-        setResults([]);
-        setErrorMessage(`Connection issue (status: ${result.status}). Please try again.`);
-        setLoading(false);
-        return;
-      }
-
-      if (result.status === 0) {
-        console.log('[FoodSearch] Network error (status: 0)');
-        setResults([]);
-        setErrorMessage('Connection issue. Please check your internet and try again.');
-        setLoading(false);
-        return;
-      }
-
-      if (result.products.length === 0) {
-        console.log('[FoodSearch] No products returned');
-        setResults([]);
-        setErrorMessage('No foods found. Try a different search term.');
-        setLoading(false);
-        return;
-      }
-
-      // OPTIMIZATION: Limit initial results to 50 for faster rendering
-      const limitedProducts = result.products.slice(0, 100);
-      console.log('[FoodSearch] Limited products to', limitedProducts.length, 'for faster rendering');
-
-      // Transform products into display items
-      console.log('[FoodSearch] Transforming products...');
-      const items: SearchResultItem[] = limitedProducts.map((product) => {
-        const servingInfo = extractServingSize(product);
-        const nutrition = extractNutrition(product);
-        
-        // Calculate nutrition for default serving
-        const multiplier = servingInfo.grams / 100;
-        const displayCalories = nutrition.calories * multiplier;
-        const displayProtein = nutrition.protein * multiplier;
-        const displayCarbs = nutrition.carbs * multiplier;
-        const displayFats = nutrition.fat * multiplier;
-        const displayFiber = nutrition.fiber * multiplier;
-        
-        // Check if product has nutrition data
-        const hasNutrition = nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0;
-        
-        return {
-          product,
-          displayCalories,
-          displayProtein,
-          displayCarbs,
-          displayFats,
-          displayFiber,
-          servingText: servingInfo.displayText,
-          hasNutrition,
-        };
-      });
-
-      logTiming('(d) Results transformed');
-      console.log('[FoodSearch] ✅ Transformed', items.length, 'items for display');
-
-      // Filter out products with no nutrition data
-      const filteredItems = items.filter(item => item.hasNutrition);
-      console.log('[FoodSearch] 🔍 Filtered to', filteredItems.length, 'items with nutrition data (removed', items.length - filteredItems.length, 'without)');
-
-      // RE-RANK by name relevance: exact match first, then starts-with, then compound names
-      const q = query.toLowerCase().trim();
-      filteredItems.sort((a, b) => {
-        const score = (item: SearchResultItem) => {
-          const name = (item.product.product_name || item.product.generic_name || '').toLowerCase().trim();
-          const words = name.split(/\s+/);
-          if (name === q) return 1000;                          // exact match: "banana"
-          if (words[0] === q && words.length === 1) return 900; // single word exact
-          if (words[0] === q && words.length === 2) return 800; // "banana X" (two words, starts with query)
-          if (words[0] === q) return 700;                       // "banana X Y Z..." (starts with query)
-          if (name.startsWith(q)) return 600;                   // starts with query string
-          if (name.includes(q)) return 400;                     // contains query anywhere
-          return 0;
-        };
-        return score(b) - score(a);
-      });
-      // Show top 50 after re-ranking
-      const displayItems = filteredItems.slice(0, 50);
-      console.log('[FoodSearch] Re-ranked', filteredItems.length, 'items, displaying top', displayItems.length, 'for query:', q);
-
-      // OPTIMIZATION: Cache the results
-      setCachedResults(query, displayItems);
-      
-      setResults(displayItems);
-      setLoading(false);
-      logTiming('(e) Results setState complete');
-    } catch (error) {
-      // Check if this is still the latest request
-      if (currentRequestId !== requestIdRef.current) {
-        console.log('[FoodSearch] 🚫 Ignoring error from stale request (ID:', currentRequestId, ')');
-        return;
-      }
-
-      console.error('[FoodSearch] ❌ Error in performSearch:', error);
-      if (error instanceof Error) {
-        console.error('[FoodSearch] Error message:', error.message);
-        console.error('[FoodSearch] Error stack:', error.stack);
-      }
-      setResults([]);
-      setErrorMessage('Connection issue. Please check your internet and try again.');
-    } finally {
-      // CRITICAL: Always clear loading state in finally block
-      console.log('[FoodSearch] Setting loading = false (finally block)');
-      setLoading(false);
-    }
-  }, [logTiming]);
+    hybridSearch(
+      query,
+      {
+        onLocalCacheHit: (products) => {
+          if (controller.signal.aborted) return;
+          console.log('[FoodSearch] onLocalCacheHit —', products.length, 'products');
+          const merged = mergeProducts(resultsMapRef.current, products, 'local', query);
+          setResults(merged);
+        },
+        onSupabaseHit: (products) => {
+          if (controller.signal.aborted) return;
+          console.log('[FoodSearch] onSupabaseHit —', products.length, 'products');
+          const merged = mergeProducts(resultsMapRef.current, products, 'supabase', query);
+          setResults(merged);
+        },
+        onOpenFoodFactsHit: (products) => {
+          if (controller.signal.aborted) return;
+          console.log('[FoodSearch] onOpenFoodFactsHit —', products.length, 'products');
+          const merged = mergeProducts(resultsMapRef.current, products, 'off', query);
+          setResults(merged);
+        },
+        onError: (stage, error) => {
+          if (controller.signal.aborted) return;
+          console.warn('[FoodSearch] Search error at stage:', stage, error.message);
+          // Only show error if we have no results at all
+          setResults(prev => {
+            if (prev.length === 0) {
+              setErrorMessage('Connection issue. Please check your internet and try again.');
+            }
+            return prev;
+          });
+        },
+        onComplete: () => {
+          if (controller.signal.aborted) return;
+          console.log('[FoodSearch] Search complete for query:', query);
+          setIsSearching(false);
+          // If still no results after all stages, show empty message
+          setResults(prev => {
+            if (prev.length === 0) {
+              setErrorMessage(null); // let renderEmptyState handle it
+            }
+            return prev;
+          });
+        },
+      },
+      controller.signal,
+    );
+  }, []);
 
   useEffect(() => {
-    logTiming('(a) Input changed');
-    console.log('[FoodSearch] Query changed:', searchQuery, 'length:', searchQuery.length);
-    
-    // Clear previous debounce timer
     if (debounceTimerRef.current) {
-      console.log('[FoodSearch] Clearing previous debounce timer');
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
 
     const trimmedQuery = searchQuery.trim();
 
-    // OPTIMIZATION: If query is empty, immediately clear results (no request)
     if (trimmedQuery.length === 0) {
-      console.log('[FoodSearch] Query empty, clearing results immediately');
+      console.log('[FoodSearch] Query empty — clearing results');
+      abortControllerRef.current?.abort();
+      resultsMapRef.current = new Map();
       setResults([]);
       setErrorMessage(null);
       setHasSearched(false);
-      setLoading(false);
-      timingRef.current = {};
+      setIsSearching(false);
       return;
     }
 
-    // OPTIMIZATION: Require at least 2 characters before searching
     if (trimmedQuery.length < 2) {
-      console.log('[FoodSearch] Query too short (<2 chars), clearing results');
+      console.log('[FoodSearch] Query too short (<2 chars)');
+      abortControllerRef.current?.abort();
+      resultsMapRef.current = new Map();
       setResults([]);
       setErrorMessage(null);
       setHasSearched(false);
-      setLoading(false);
+      setIsSearching(false);
       return;
     }
 
-    // OPTIMIZATION: Check cache first for progressive typing
-    // If user types "chi" -> "chip", we can reuse cached "chi" results while fetching "chip"
-    const cachedResults = getCachedResults(trimmedQuery);
-    if (cachedResults) {
-      console.log('[FoodSearch] Using cached results immediately');
-      setResults(cachedResults);
-      setErrorMessage(null);
-      setHasSearched(true);
-      setLoading(false);
-      // Still trigger search in background to ensure fresh results
-    }
-
-    // OPTIMIZATION: Debounce search (350ms for optimal mobile performance)
-    console.log('[FoodSearch] Setting debounce timer (350ms) for:', trimmedQuery);
+    console.log('[FoodSearch] Debouncing search for:', trimmedQuery);
     debounceTimerRef.current = setTimeout(() => {
-      logTiming('(b) Debounce triggered');
-      console.log('[FoodSearch] Debounce timer fired for:', trimmedQuery);
+      console.log('[FoodSearch] Debounce fired for:', trimmedQuery);
       performSearch(trimmedQuery);
     }, 350);
-  }, [searchQuery, logTiming, performSearch]);
+  }, [searchQuery, performSearch]);
 
   const handleRetry = useCallback(() => {
     console.log('[FoodSearch] Retry button pressed');
@@ -437,48 +379,62 @@ export default function FoodSearchScreen() {
     }
   }, [searchQuery, performSearch]);
 
-  // OPTIMIZATION: Memoize handleSelectProduct to prevent recreation
-  const handleSelectProduct = useCallback((item: SearchResultItem) => {
-    console.log('[FoodSearch] Product selected:', item.product.product_name);
-    console.log('[FoodSearch] Context:', context);
-    
-    console.log('[FoodSearch] Navigating to food-details, context:', context, 'returnTo:', returnTo);
-    // Navigate to Food Details screen — always pass context and returnTo so
-    // food-details can navigate back to add-food after a successful add.
-    router.push({
-      pathname: '/food-details',
-      params: {
-        meal: mealType,
-        date: date,
-        offData: JSON.stringify(item.product),
-        source: 'search',
-        mode: mode,
-        context: context,
-        returnTo: returnTo,
-        mealId: targetMealId,
-        planId: planId,
-      },
-    });
-  }, [mealType, date, mode, context, returnTo, targetMealId, planId, router]);
+  const handleSelectProduct = useCallback(
+    (item: SearchResultItem) => {
+      console.log('[FoodSearch] Product selected:', item.product.product_name, '| source:', item.source);
+      console.log('[FoodSearch] Navigating to food-details, context:', context, 'returnTo:', returnTo);
+      router.push({
+        pathname: '/food-details',
+        params: {
+          meal: mealType,
+          date: date,
+          offData: JSON.stringify(item.product),
+          source: 'search',
+          mode: mode,
+          context: context,
+          returnTo: returnTo,
+          mealId: targetMealId,
+          planId: planId,
+        },
+      });
+    },
+    [mealType, date, mode, context, returnTo, targetMealId, planId, router],
+  );
 
-  // OPTIMIZATION: Memoize renderItem to prevent recreation
-  const renderResultItem = useCallback(({ item }: { item: SearchResultItem }) => {
-    return <ResultRow item={item} isDark={isDark} onPress={handleSelectProduct} />;
-  }, [isDark, handleSelectProduct]);
+  const renderResultItem = useCallback(
+    ({ item }: { item: SearchResultItem }) => (
+      <ResultRow item={item} isDark={isDark} onPress={handleSelectProduct} />
+    ),
+    [isDark, handleSelectProduct],
+  );
 
-  // OPTIMIZATION: Memoize keyExtractor
-  const keyExtractor = useCallback((item: SearchResultItem, index: number) => {
-    return item.product.code || `product-${index}`;
-  }, []);
+  const keyExtractor = useCallback(
+    (item: SearchResultItem, index: number) => item.product.code || `product-${index}`,
+    [],
+  );
 
-  // OPTIMIZATION: Memoize onListRenderComplete callback
-  const onListRenderComplete = useCallback(() => {
-    logTiming('(f) List render complete');
-  }, [logTiming]);
+  const renderFooter = useCallback(() => {
+    if (!isSearching || results.length === 0) return null;
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.loadingMoreText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          Loading more...
+        </Text>
+      </View>
+    );
+  }, [isSearching, results.length, isDark]);
 
   const renderEmptyState = () => {
-    if (loading) {
-      return null;
+    if (isSearching && results.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: spacing.lg }} />
+          <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Searching...
+          </Text>
+        </View>
+      );
     }
 
     if (errorMessage) {
@@ -501,7 +457,7 @@ export default function FoodSearchScreen() {
       );
     }
 
-    if (hasSearched && results.length === 0) {
+    if (hasSearched && results.length === 0 && !isSearching) {
       return (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🔍</Text>
@@ -536,21 +492,32 @@ export default function FoodSearchScreen() {
           Search for foods
         </Text>
         <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          Start typing to search the OpenFoodFacts database
+          Start typing to search the food database
         </Text>
       </View>
     );
   };
 
+  const titleText = mode === 'ingredient' ? 'Add Ingredient' : 'Search Food Library';
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView 
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+      edges={['top']}
+    >
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
         keyboardVerticalOffset={0}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[FoodSearch] Back button pressed');
+              router.back();
+            }}
+            style={styles.backButton}
+          >
             <IconSymbol
               ios_icon_name="chevron.left"
               android_material_icon_name="arrow_back"
@@ -559,13 +526,21 @@ export default function FoodSearchScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            {mode === 'ingredient' ? 'Add Ingredient' : 'Search Food Library'}
+            {titleText}
           </Text>
           <View style={{ width: 24 }} />
         </View>
 
         <View style={styles.searchContainer}>
-          <View style={[styles.searchInputContainer, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}>
+          <View
+            style={[
+              styles.searchInputContainer,
+              {
+                backgroundColor: isDark ? colors.cardDark : colors.card,
+                borderColor: isDark ? colors.borderDark : colors.border,
+              },
+            ]}
+          >
             <IconSymbol
               ios_icon_name="magnifyingglass"
               android_material_icon_name="search"
@@ -578,13 +553,22 @@ export default function FoodSearchScreen() {
               placeholder="Search foods…"
               placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => {
+                console.log('[FoodSearch] Search input changed:', text);
+                setSearchQuery(text);
+              }}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[FoodSearch] Clear search button pressed');
+                  setSearchQuery('');
+                }}
+                style={styles.clearButton}
+              >
                 <IconSymbol
                   ios_icon_name="xmark.circle.fill"
                   android_material_icon_name="cancel"
@@ -595,7 +579,8 @@ export default function FoodSearchScreen() {
             )}
           </View>
 
-          {loading && (
+          {/* Subtle inline loading indicator — only shown when actively searching with no results yet */}
+          {isSearching && results.length === 0 && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={[styles.loadingText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -611,18 +596,16 @@ export default function FoodSearchScreen() {
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyState}
+          ListFooterComponent={renderFooter}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          // OPTIMIZATION: Mobile-specific FlatList performance settings
           removeClippedSubviews={true}
           maxToRenderPerBatch={8}
           windowSize={7}
           initialNumToRender={10}
           updateCellsBatchingPeriod={50}
-          // OPTIMIZATION: Track when list render completes
           onEndReachedThreshold={0.5}
-          onLayout={onListRenderComplete}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -683,6 +666,17 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.caption,
   },
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  loadingMoreText: {
+    ...typography.caption,
+    fontSize: 13,
+  },
   listContent: {
     paddingHorizontal: spacing.md,
     paddingBottom: 120,
@@ -703,10 +697,25 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
   productName: {
     ...typography.bodyBold,
     fontSize: 16,
     lineHeight: 20,
+    flexShrink: 1,
+  },
+  verifiedBadge: {
+    fontSize: 12,
+    color: '#34C759',
+    fontWeight: '700',
+  },
+  cacheBadge: {
+    fontSize: 11,
   },
   productBrand: {
     ...typography.caption,
