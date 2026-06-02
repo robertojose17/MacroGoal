@@ -1,7 +1,7 @@
 /**
  * NutritionMissionCard
  *
- * Shows 4 macro progress circles (Calories, Protein, Carbs, Fats) with a live
+ * Shows 4 macro progress columns (Calories, Protein, Carbs, Fats) with a live
  * XP badge that reflects the current tier for each macro.
  *
  * Tier logic mirrors the backend `set-macro-tier` function exactly (see
@@ -19,7 +19,6 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
@@ -48,18 +47,14 @@ interface NutritionMissionCardProps {
   isDark: boolean;
 }
 
-// ─── Macro circle config ──────────────────────────────────────────────────────
+// ─── Tier dot colors ──────────────────────────────────────────────────────────
 
-const CIRCLE_SIZE = 84;
-const STROKE_WIDTH = 7;
-const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const TIER_1_COLOR = '#22C55E'; // green  — MAX +XP
+const TIER_2_COLOR = '#F59E0B'; // amber  — +XP
 
-// Tier pill colors
-const TIER_1_COLOR = '#22C55E'; // green
-const TIER_2_COLOR = '#F59E0B'; // amber
+// ─── MacroColumn ─────────────────────────────────────────────────────────────
 
-interface MacroCircleProps {
+interface MacroColumnProps {
   label: string;
   current: number;
   goal: number;
@@ -69,7 +64,7 @@ interface MacroCircleProps {
   tier: 0 | 1 | 2;
 }
 
-function MacroCircle({ label, current, goal, unit, color, isDark, tier }: MacroCircleProps) {
+function MacroColumn({ label, current, goal, unit, color, isDark, tier }: MacroColumnProps) {
   const animVal = useRef(new Animated.Value(0)).current;
   const progress = goal > 0 ? Math.min(current / goal, 1) : 0;
 
@@ -81,76 +76,44 @@ function MacroCircle({ label, current, goal, unit, color, isDark, tier }: MacroC
     }).start();
   }, [progress, animVal]);
 
+  const widthPct = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
   const currentDisplay = Math.round(current).toLocaleString();
   const goalDisplay = Math.round(goal).toLocaleString();
+  const valueText = currentDisplay + '/' + goalDisplay + unit;
 
-  const [dashOffset, setDashOffset] = React.useState(CIRCUMFERENCE);
+  const dotColor = tier === 1 ? TIER_1_COLOR : tier === 2 ? TIER_2_COLOR : null;
 
-  useEffect(() => {
-    const id = animVal.addListener(({ value }) => {
-      setDashOffset(CIRCUMFERENCE * (1 - value));
-    });
-    return () => animVal.removeListener(id);
-  }, [animVal]);
-
-  const tierPillColor = tier === 1 ? TIER_1_COLOR : tier === 2 ? TIER_2_COLOR : null;
-  const tierPillText = tier === 1 ? 'MAX +XP' : tier === 2 ? '+XP' : null;
+  const labelColor = isDark ? '#A0A2B8' : '#6B7280';
+  const valueColor = isDark ? '#F1F5F9' : '#2B2D42';
+  const trackColor = isDark ? '#3A3C52' : '#E5E7EB';
 
   return (
     <View style={styles.circleCell}>
-      <View style={styles.circleWrapper}>
-        {/* Track ring */}
-        <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} style={StyleSheet.absoluteFill}>
-          <Circle
-            cx={CIRCLE_SIZE / 2}
-            cy={CIRCLE_SIZE / 2}
-            r={RADIUS}
-            stroke={isDark ? '#3A3C52' : '#E5E7EB'}
-            strokeWidth={STROKE_WIDTH}
-            fill="none"
-          />
-        </Svg>
-        {/* Progress arc */}
-        <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} style={StyleSheet.absoluteFill}>
-          <Circle
-            cx={CIRCLE_SIZE / 2}
-            cy={CIRCLE_SIZE / 2}
-            r={RADIUS}
-            stroke={color}
-            strokeWidth={STROKE_WIDTH}
-            fill="none"
-            strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-            rotation="-90"
-            origin={`${CIRCLE_SIZE / 2}, ${CIRCLE_SIZE / 2}`}
-          />
-        </Svg>
-        {/* Inner text */}
-        <View style={styles.circleInner}>
-          <Text style={[styles.circleLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            {label}
-          </Text>
-          <Text style={[styles.circleValue, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-            {currentDisplay}
-          </Text>
-          <Text style={[styles.circleGoal, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
-            {'/ '}
-            {goalDisplay}
-            {unit}
-          </Text>
-        </View>
+      {/* Label row with optional tier dot */}
+      <View style={styles.columnLabelRow}>
+        {dotColor !== null ? (
+          <View style={[styles.tierDot, { backgroundColor: dotColor }]} />
+        ) : null}
+        <Text style={[styles.columnLabel, { color: labelColor }]}>
+          {label}
+        </Text>
       </View>
-      {/* Tier pill — only shown when earning XP */}
-      {tierPillColor !== null && tierPillText !== null ? (
-        <View style={[styles.tierPill, { backgroundColor: tierPillColor + '26' }]}>
-          <Text style={[styles.tierPillText, { color: tierPillColor }]}>
-            {tierPillText}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.tierPillPlaceholder} />
-      )}
+
+      {/* current/goal value */}
+      <Text style={[styles.columnValue, { color: valueColor }]} numberOfLines={1}>
+        {valueText}
+      </Text>
+
+      {/* Animated progress bar */}
+      <View style={[styles.columnBarBg, { backgroundColor: trackColor }]}>
+        <Animated.View
+          style={[styles.columnBarFill, { width: widthPct, backgroundColor: color }]}
+        />
+      </View>
     </View>
   );
 }
@@ -327,10 +290,10 @@ export default function NutritionMissionCard({
         </View>
       ) : (
         <>
-          {/* 2x2 macro grid */}
+          {/* Horizontal 4-column macro row */}
           <View style={styles.grid}>
-            <MacroCircle
-              label="CAL"
+            <MacroColumn
+              label="Calories"
               current={totalCalories}
               goal={goalCalories}
               unit=" kcal"
@@ -338,8 +301,8 @@ export default function NutritionMissionCard({
               isDark={isDark}
               tier={tiers[0].tier}
             />
-            <MacroCircle
-              label="PROTEIN"
+            <MacroColumn
+              label="Protein"
               current={totalProtein}
               goal={goalProtein}
               unit="g"
@@ -347,8 +310,8 @@ export default function NutritionMissionCard({
               isDark={isDark}
               tier={tiers[1].tier}
             />
-            <MacroCircle
-              label="CARBS"
+            <MacroColumn
+              label="Carbs"
               current={totalCarbs}
               goal={goalCarbs}
               unit="g"
@@ -356,8 +319,8 @@ export default function NutritionMissionCard({
               isDark={isDark}
               tier={tiers[2].tier}
             />
-            <MacroCircle
-              label="FATS"
+            <MacroColumn
+              label="Fats"
               current={totalFats}
               goal={goalFats}
               unit="g"
@@ -452,59 +415,50 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
   },
+  // ─── Grid: single horizontal row ─────────────────────────────────────────
   grid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     marginBottom: spacing.md,
-    marginHorizontal: -spacing.xs,
   },
   circleCell: {
-    width: '50%',
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.sm,
-    alignItems: 'center',
+    width: '25%',
+    paddingHorizontal: 4,
+    alignItems: 'flex-start',
   },
-  circleWrapper: {
-    width: CIRCLE_SIZE,
-    height: CIRCLE_SIZE,
+  // ─── Column sub-components ────────────────────────────────────────────────
+  columnLabelRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 3,
   },
-  circleInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  tierDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginRight: 4,
   },
-  circleLabel: {
-    fontSize: 9,
+  columnLabel: {
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 1,
+    letterSpacing: 0.5,
   },
-  circleValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 19,
+  columnValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 0,
   },
-  circleGoal: {
-    fontSize: 9,
-    fontWeight: '500',
-    marginTop: 1,
+  columnBarBg: {
+    height: 4,
+    borderRadius: borderRadius.full,
+    marginTop: 6,
+    overflow: 'hidden',
+    width: '100%',
   },
-  tierPill: {
-    marginTop: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+  columnBarFill: {
+    height: '100%',
     borderRadius: borderRadius.full,
   },
-  tierPillText: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  tierPillPlaceholder: {
-    marginTop: 4,
-    height: 17, // same height as pill so grid rows stay aligned
-  },
+  // ─── Progress section ─────────────────────────────────────────────────────
   progressSection: {
     marginTop: spacing.xs,
   },
@@ -531,6 +485,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: borderRadius.full,
   },
+  // ─── Empty state ──────────────────────────────────────────────────────────
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
