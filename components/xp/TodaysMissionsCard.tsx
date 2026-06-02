@@ -30,6 +30,7 @@ import { setMacroTier } from '@/utils/macroXpApi';
 import { emitXpRefresh } from '@/utils/xpEvents';
 import { toLocalDateString } from '@/utils/dateUtils';
 import type { DailyMission } from '@/types/xp';
+import ShareProgressBonus from './ShareProgressBonus';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -456,14 +457,8 @@ export default function TodaysMissionsCard({
         )}
       </View>
 
-      {/* ── Bonus badge (only when all done) ── */}
-      {allDone ? (
-        <View style={styles.bonusBadge}>
-          <Text style={styles.bonusText}>
-            BONUS +100 XP CLAIMED
-          </Text>
-        </View>
-      ) : null}
+      {/* ── Share Progress Bonus (always visible) ── */}
+      <ShareProgressBonus allDone={allDone} isDark={isDark} />
     </View>
   );
 }
@@ -659,22 +654,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     paddingVertical: spacing.md,
-  },
-  // ── Bonus badge ───────────────────────────────────────────────────────────
-  bonusBadge: {
-    marginTop: spacing.md,
-    backgroundColor: 'rgba(52,211,153,0.15)',
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(52,211,153,0.4)',
-  },
-  bonusText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: CHECK_GREEN,
-    letterSpacing: 0.8,
   },
 });

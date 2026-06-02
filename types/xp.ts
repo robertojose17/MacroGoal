@@ -19,7 +19,8 @@ export type XpEventType =
   | 'workout'
   | 'steps'
   | 'weight_checkin'
-  | 'progress_photo';
+  | 'progress_photo'
+  | 'share_progress';
 
 // ─── award-xp request / response ─────────────────────────────────────────────
 
