@@ -11,7 +11,12 @@
  */
 
 import { supabase } from '@/lib/supabase/client';
-import type { AwardXpInput, AwardXpResult, XpStatus } from '@/types/xp';
+import type {
+  AwardXpInput,
+  AwardXpResult,
+  XpStatus,
+  UnlockedSlot,
+} from '@/types/xp';
 
 const FUNCTIONS_BASE_URL =
   'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1';
@@ -91,4 +96,24 @@ export async function getXpStatus(): Promise<XpStatus> {
 export async function confirmLevelUpSeen(): Promise<void> {
   console.log('[xpApi] confirmLevelUpSeen called');
   await callFunction<unknown>('confirm-level-up-seen', 'POST');
+}
+
+/**
+ * Unlock a mission slot for today by choosing a mission type.
+ * Awards +50 XP unlock bonus immediately.
+ * Call xp.refresh() after success to pull updated unlock_slot_status.slots.
+ */
+export async function unlockMissionSlot(missionType: string): Promise<{
+  success: boolean;
+  slot: UnlockedSlot;
+  xp_awarded: number;
+  remaining_slots: number;
+}> {
+  console.log('[xpApi] unlockMissionSlot called:', { missionType });
+  return callFunction<{
+    success: boolean;
+    slot: UnlockedSlot;
+    xp_awarded: number;
+    remaining_slots: number;
+  }>('unlock-mission-slot', 'POST', { mission_type: missionType });
 }

@@ -30,6 +30,7 @@ import LevelUpModal from '@/components/xp/LevelUpModal';
 import SocialComparisonCard from '@/components/xp/SocialComparisonCard';
 import StreakBadgeModal from '@/components/xp/StreakBadgeModal';
 import TodaysMissionsCard from '@/components/xp/TodaysMissionsCard';
+import UnlockMissionModal from '@/components/xp/UnlockMissionModal';
 import { reportTodaySteps } from '@/utils/stepsReporter';
 import { reportDailyHealthMetrics } from '@/utils/healthMetricsReporter';
 import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
@@ -136,6 +137,7 @@ export default function DashboardScreen() {
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
 
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [unlockModalVisible, setUnlockModalVisible] = useState(false);
 
   // ─── XP System ──────────────────────────────────────────────────────────────
   const xp = useXpStatus();
@@ -498,6 +500,11 @@ export default function DashboardScreen() {
             isDark={isDark}
             missionTier={xp.status?.mission_tier}
             tierProgress={xp.status?.tier_progress}
+            unlockSlotStatus={xp.status?.unlock_slot_status}
+            onUnlockPress={() => {
+              console.log('[Dashboard] Unlock a Mission button pressed — opening modal');
+              setUnlockModalVisible(true);
+            }}
           />
         </CardErrorBoundary>
 
@@ -647,6 +654,19 @@ export default function DashboardScreen() {
         pendingRankChange={xp.status?.pending_rank_change ?? null}
         onDismiss={() => {
           console.log('[Dashboard] LevelUpModal dismissed — refreshing XP');
+          xp.refresh();
+        }}
+      />
+
+      {/* ── Unlock Mission Modal ── */}
+      <UnlockMissionModal
+        visible={unlockModalVisible}
+        onClose={() => {
+          console.log('[Dashboard] UnlockMissionModal closed');
+          setUnlockModalVisible(false);
+        }}
+        onUnlocked={() => {
+          console.log('[Dashboard] Mission unlocked — refreshing XP status');
           xp.refresh();
         }}
       />

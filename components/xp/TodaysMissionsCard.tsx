@@ -3,6 +3,13 @@
  *
  * Unified card that combines nutrition mission rows and the daily missions
  * list into a single bordered card.
+ *
+ * Row order:
+ *   1. Hit Calories (fixed nutrition)
+ *   2. Hit Protein Goal (fixed nutrition)
+ *   3. Step mission (walk_* from missions array)
+ *   4. Unlocked slots (from unlock_slot_status.slots)
+ *   5. Unlock button / locked hint / all-used label
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -11,9 +18,11 @@ import {
   Text,
   StyleSheet,
   Platform,
+  Pressable,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Lock } from 'lucide-react-native';
+import { Lock, Sparkles } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
   getMacroTier,
@@ -24,12 +33,13 @@ import {
 import { setMacroTier } from '@/utils/macroXpApi';
 import { emitXpRefresh } from '@/utils/xpEvents';
 import { toLocalDateString } from '@/utils/dateUtils';
-import type { DailyMission, TierProgress } from '@/types/xp';
+import type { DailyMission, TierProgress, UnlockSlotStatus, UnlockedSlot } from '@/types/xp';
 import ShareProgressBonus from './ShareProgressBonus';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CHECK_GREEN = '#34D399';
+const GOLD = '#FFB547';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -44,8 +54,12 @@ interface TodaysMissionsCardProps {
   goalCarbs: number;
   goalFats: number;
   isDark: boolean;
+  /** @deprecated — replaced by unlockSlotStatus */
   missionTier?: number;
+  /** @deprecated — replaced by unlockSlotStatus */
   tierProgress?: TierProgress | null;
+  unlockSlotStatus?: UnlockSlotStatus;
+  onUnlockPress?: () => void;
 }
 
 // ─── Mission icon / title maps ────────────────────────────────────────────────
@@ -88,6 +102,40 @@ function getMissionTitle(mission: DailyMission): string {
     log_progress_photo: 'Log Your Way with a Photo',
   };
   return titleMap[mission.mission_type] ?? mission.title ?? mission.mission_type;
+}
+
+function getSlotMissionTitle(missionType: string): string {
+  const titleMap: Record<string, string> = {
+    log_three_meals:          'Log All 3 Meals',
+    complete_workout:         'Complete a Workout',
+    keep_streak_alive:        'Keep Streak Alive',
+    log_weight_with_photo:    'Log Weight + Photo',
+    burn_active_calories:     'Burn 300 Active Calories',
+    burn_active_calories_hard:'Burn 500 Active Calories',
+    exercise_minutes:         '30 Min of Exercise',
+    exercise_minutes_hard:    '60 Min of Exercise',
+    walk_distance_mile:       'Walk or Run 1 Mile',
+    walk_distance_3mile:      'Walk or Run 3 Miles',
+    flights_climbed:          'Climb 10 Flights of Stairs',
+  };
+  return titleMap[missionType] ?? missionType;
+}
+
+function getSlotMissionIcon(missionType: string): keyof typeof Ionicons.glyphMap {
+  const map: Record<string, keyof typeof Ionicons.glyphMap> = {
+    log_three_meals:          'restaurant',
+    complete_workout:         'barbell',
+    keep_streak_alive:        'flame',
+    log_weight_with_photo:    'camera',
+    burn_active_calories:     'flash',
+    burn_active_calories_hard:'flash',
+    exercise_minutes:         'timer',
+    exercise_minutes_hard:    'timer',
+    walk_distance_mile:       'location',
+    walk_distance_3mile:      'location',
+    flights_climbed:          'trending-up',
+  };
+  return map[missionType] ?? 'star';
 }
 
 // ─── NutritionMissionRow ──────────────────────────────────────────────────────
@@ -203,6 +251,56 @@ function MissionRow({ mission, isDark, isLast }: MissionRowProps) {
   );
 }
 
+// ─── UnlockedSlotRow ──────────────────────────────────────────────────────────
+
+interface UnlockedSlotRowProps {
+  slot: UnlockedSlot;
+  isDark: boolean;
+  isLast: boolean;
+}
+
+function UnlockedSlotRow({ slot, isDark, isLast }: UnlockedSlotRowProps) {
+  const icon = getSlotMissionIcon(slot.mission_type);
+  const title = getSlotMissionTitle(slot.mission_type);
+  const done = slot.completed;
+
+  const iconColor = done ? CHECK_GREEN : GOLD;
+  const titleColor = done
+    ? (isDark ? '#6B7280' : '#9CA3AF')
+    : (isDark ? '#F1F5F9' : '#2B2D42');
+  const borderColor = isDark ? '#3A3C52' : '#E5E7EB';
+  const iconBg = done
+    ? 'rgba(52,211,153,0.15)'
+    : (isDark ? 'rgba(255,181,71,0.15)' : 'rgba(255,181,71,0.1)');
+
+  return (
+    <View
+      style={[
+        styles.missionRow,
+        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderColor },
+      ]}
+    >
+      <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
+      </View>
+      <Text
+        style={[styles.missionTitle, { color: titleColor }, done && styles.strikethrough]}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+      <Text style={[styles.xpReward, { color: done ? CHECK_GREEN : GOLD }]}>
+        {'+'}
+        {slot.xp_reward}
+        {' XP'}
+      </Text>
+      <View style={[styles.checkbox, done && styles.checkboxDone]}>
+        {done ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+      </View>
+    </View>
+  );
+}
+
 // ─── Divider ──────────────────────────────────────────────────────────────────
 
 function Divider({ isDark }: { isDark: boolean }) {
@@ -213,6 +311,92 @@ function Divider({ isDark }: { isDark: boolean }) {
         { borderBottomColor: isDark ? '#3A3C52' : '#E5E7EB' },
       ]}
     />
+  );
+}
+
+// ─── UnlockButton (State A) ───────────────────────────────────────────────────
+
+interface UnlockButtonProps {
+  remainingSlots: number;
+  bonusXp: number;
+  onPress: () => void;
+}
+
+function UnlockButton({ remainingSlots, bonusXp, onPress }: UnlockButtonProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  function handlePressIn() {
+    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 30 }).start();
+  }
+
+  function handlePressOut() {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
+  }
+
+  const bonusText = '+' + bonusXp + ' XP bonus · ' + remainingSlots + ' left';
+
+  return (
+    <Pressable
+      onPress={() => {
+        console.log('[TodaysMissionsCard] Unlock a Mission button pressed');
+        onPress();
+      }}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View style={[styles.unlockButton, { transform: [{ scale }] }]}>
+        <Sparkles size={18} color="#fff" />
+        <View style={styles.unlockButtonTextBlock}>
+          <Text style={styles.unlockButtonPrimary}>
+            Unlock a Mission
+          </Text>
+          <Text style={styles.unlockButtonSecondary}>
+            {bonusText}
+          </Text>
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// ─── LockedHint (State C) ─────────────────────────────────────────────────────
+
+interface LockedHintProps {
+  message: string;
+  current: number;
+  target: number;
+  isDark: boolean;
+}
+
+function LockedHint({ message, current, target, isDark }: LockedHintProps) {
+  const progressPercent = target > 0 ? Math.min(current / target, 1) : 0;
+  const progressWidth = Math.round(progressPercent * 100);
+
+  return (
+    <View
+      style={[
+        styles.lockedHint,
+        {
+          backgroundColor: isDark
+            ? 'rgba(255, 184, 71, 0.12)'
+            : 'rgba(255, 184, 71, 0.08)',
+          borderColor: 'rgba(255, 184, 71, 0.25)',
+        },
+      ]}
+    >
+      <View style={styles.lockedHintHeader}>
+        <Lock size={16} color={GOLD} />
+        <Text style={[styles.lockedHintTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
+          Unlock Extra Missions
+        </Text>
+      </View>
+      <Text style={[styles.lockedHintSubtitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+        {message}
+      </Text>
+      <View style={styles.lockedProgressTrack}>
+        <View style={[styles.lockedProgressFill, { width: progressWidth + '%' }]} />
+      </View>
+    </View>
   );
 }
 
@@ -229,21 +413,25 @@ export default function TodaysMissionsCard({
   goalCarbs,
   goalFats,
   isDark,
-  missionTier,
-  tierProgress,
+  unlockSlotStatus,
+  onUnlockPress,
 }: TodaysMissionsCardProps) {
   const safeMissions = missions ?? [];
-  const lockedMissions = tierProgress?.locked_missions ?? [];
 
-  // Filter out nutrition missions that are locked at this tier AND
-  // always filter duplicates (backend may include them in the missions list)
-  const filteredMissions = safeMissions.filter(
+  // Filter out nutrition duplicates from the missions array
+  const nonNutritionMissions = safeMissions.filter(
     (m) => m.mission_type !== 'hit_protein_goal' && m.mission_type !== 'stay_within_calories'
   );
 
-  // Determine which fixed nutrition rows to show based on locked_missions
-  const showCaloriesRow = !lockedMissions.includes('stay_within_calories');
-  const showProteinRow = !lockedMissions.includes('hit_protein_goal');
+  // Separate step mission (walk_*) from the rest
+  const stepMission = nonNutritionMissions.find((m) => m.mission_type.startsWith('walk_'));
+  // Other non-step missions (kept for potential future use but not rendered as rotating slots)
+  // since unlocked slots come from unlock_slot_status.slots now
+
+  // Unlocked slots sorted by slot_index
+  const unlockedSlots: UnlockedSlot[] = unlockSlotStatus
+    ? [...unlockSlotStatus.slots].sort((a, b) => a.slot_index - b.slot_index)
+    : [];
 
   // ─── Nutrition tier computation ──────────────────────────────────────────
   const macroInputs: { macro: MacroKey; current: number; goal: number }[] = [
@@ -263,29 +451,30 @@ export default function TodaysMissionsCard({
     totalCalories === 0 && totalProtein === 0 && totalCarbs === 0 && totalFats === 0;
 
   // ─── Header counts ───────────────────────────────────────────────────────
-  const missionsDoneCount = filteredMissions.filter((m) => m.completed).length;
   const caloriesDone = goalCalories > 0 && totalCalories >= goalCalories;
-  const proteinDone = goalProtein > 0 && totalProtein >= goalProtein;
-  const nutritionRowCount = (showCaloriesRow ? 1 : 0) + (showProteinRow ? 1 : 0);
+  const proteinDone  = goalProtein > 0 && totalProtein >= goalProtein;
+  const stepDone     = stepMission?.completed ?? false;
+  const slotsDone    = unlockedSlots.filter((s) => s.completed).length;
+
   const totalDone =
-    missionsDoneCount +
-    (showCaloriesRow && caloriesDone ? 1 : 0) +
-    (showProteinRow && proteinDone ? 1 : 0);
-  const totalCount = filteredMissions.length + nutritionRowCount;
-  const allDone = totalDone === totalCount && totalCount > nutritionRowCount;
+    (caloriesDone ? 1 : 0) +
+    (proteinDone ? 1 : 0) +
+    (stepMission ? (stepDone ? 1 : 0) : 0) +
+    slotsDone;
+
+  const totalCount =
+    2 + // calories + protein always shown
+    (stepMission ? 1 : 0) +
+    unlockedSlots.length;
+
+  const allDone = totalCount > 2 && totalDone === totalCount;
 
   const headerCountText = totalDone + ' of ' + totalCount + ' done';
 
-  // ─── Tier progress bar ───────────────────────────────────────────────────
-  const tierProgressPercent =
-    tierProgress && tierProgress.target > 0
-      ? Math.min(tierProgress.current / tierProgress.target, 1)
-      : 0;
-  const tierProgressWidth = Math.round(tierProgressPercent * 100);
-  const tierCurrentText = tierProgress ? String(tierProgress.current) : '0';
-  const tierTargetText = tierProgress ? String(tierProgress.target) : '0';
-  const tierSubtitle = tierCurrentText + ' / ' + tierTargetText + ' active days';
-  const tierMessage = tierProgress?.message ?? '';
+  // ─── isLast helpers ──────────────────────────────────────────────────────
+  // The last "row" before the footer section
+  const hasSlots = unlockedSlots.length > 0;
+  const hasStep  = stepMission != null;
 
   // ─── Debounced backend sync ──────────────────────────────────────────────
   const lastSentRef = useRef<
@@ -341,7 +530,7 @@ export default function TodaysMissionsCard({
     isEmpty,
   ]);
 
-  // Keep liveXp and nutritionComplete in scope (used by backend sync logic above)
+  // Keep liveXp and nutritionComplete in scope
   void liveXp;
   void nutritionComplete;
 
@@ -349,6 +538,29 @@ export default function TodaysMissionsCard({
   const cardBorder = isDark ? '#3A3C52' : '#D4D6DA';
   const titleColor = isDark ? '#F1F5F9' : '#2B2D42';
   const subtitleColor = isDark ? '#A0A2B8' : '#6B7280';
+
+  // ─── Determine unlock footer state ──────────────────────────────────────
+  const showUnlockButton =
+    unlockSlotStatus != null && unlockSlotStatus.remaining_slots > 0;
+
+  const showAllUsedLabel =
+    unlockSlotStatus != null &&
+    unlockSlotStatus.max_slots > 0 &&
+    unlockSlotStatus.remaining_slots === 0;
+
+  const showLockedHint =
+    unlockSlotStatus != null &&
+    unlockSlotStatus.max_slots === 0 &&
+    unlockSlotStatus.next_unlock_at != null;
+
+  const maxSlotsText =
+    unlockSlotStatus != null
+      ? 'All ' +
+        unlockSlotStatus.max_slots +
+        ' mission slot' +
+        (unlockSlotStatus.max_slots === 1 ? '' : 's') +
+        ' unlocked for today'
+      : '';
 
   return (
     <View
@@ -369,77 +581,87 @@ export default function TodaysMissionsCard({
 
       <Divider isDark={isDark} />
 
-      {/* ── Mission rows (nutrition + daily) ── */}
+      {/* ── Mission rows ── */}
       <View style={styles.missionsSection}>
-        {showCaloriesRow && (
-          <NutritionMissionRow
-            icon="pie-chart"
-            title="Hit Calories"
-            current={totalCalories}
-            goal={goalCalories}
-            unit="kcal"
-            xpReward={15}
-            isDark={isDark}
-            isLast={!showProteinRow && filteredMissions.length === 0}
-          />
-        )}
-        {showProteinRow && (
-          <NutritionMissionRow
-            icon="fitness"
-            title="Hit Protein Goal"
-            current={totalProtein}
-            goal={goalProtein}
-            unit="g"
-            xpReward={20}
-            isDark={isDark}
-            isLast={filteredMissions.length === 0}
-          />
-        )}
-        {filteredMissions.map((mission, index) => (
+        {/* 1. Hit Calories */}
+        <NutritionMissionRow
+          icon="pie-chart"
+          title="Hit Calories"
+          current={totalCalories}
+          goal={goalCalories}
+          unit="kcal"
+          xpReward={15}
+          isDark={isDark}
+          isLast={false}
+        />
+
+        {/* 2. Hit Protein Goal */}
+        <NutritionMissionRow
+          icon="fitness"
+          title="Hit Protein Goal"
+          current={totalProtein}
+          goal={goalProtein}
+          unit="g"
+          xpReward={20}
+          isDark={isDark}
+          isLast={!hasStep && !hasSlots}
+        />
+
+        {/* 3. Step mission */}
+        {stepMission && (
           <MissionRow
-            key={mission.id}
-            mission={mission}
+            key={stepMission.id}
+            mission={stepMission}
             isDark={isDark}
-            isLast={index === filteredMissions.length - 1}
+            isLast={!hasSlots}
+          />
+        )}
+
+        {/* 4. Unlocked slots */}
+        {unlockedSlots.map((slot, index) => (
+          <UnlockedSlotRow
+            key={slot.slot_index}
+            slot={slot}
+            isDark={isDark}
+            isLast={index === unlockedSlots.length - 1}
           />
         ))}
-        {filteredMissions.length === 0 && nutritionRowCount === 0 && (
+
+        {/* Empty state */}
+        {totalCount === 0 && (
           <Text style={[styles.emptyMissionsText, { color: subtitleColor }]}>
             No missions today. Check back soon!
           </Text>
         )}
       </View>
 
-      {/* ── Tier unlock footer (only when tier_progress is non-null) ── */}
-      {tierProgress != null && (
-        <View
-          style={[
-            styles.tierFooter,
-            {
-              backgroundColor: isDark
-                ? 'rgba(255, 184, 71, 0.12)'
-                : 'rgba(255, 184, 71, 0.08)',
-              borderColor: 'rgba(255, 184, 71, 0.25)',
-            },
-          ]}
-        >
-          <View style={styles.tierFooterHeader}>
-            <Lock size={16} color="#FFB547" />
-            <Text style={[styles.tierFooterTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-              {tierMessage}
-            </Text>
-          </View>
-          <Text style={[styles.tierFooterSubtitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            {tierSubtitle}
+      {/* ── Unlock footer ── */}
+      {showUnlockButton && onUnlockPress && (
+        <View style={styles.unlockFooter}>
+          <UnlockButton
+            remainingSlots={unlockSlotStatus!.remaining_slots}
+            bonusXp={unlockSlotStatus!.unlock_bonus_xp}
+            onPress={onUnlockPress}
+          />
+        </View>
+      )}
+
+      {showAllUsedLabel && (
+        <View style={styles.allUsedContainer}>
+          <Text style={[styles.allUsedText, { color: subtitleColor }]}>
+            {maxSlotsText}
           </Text>
-          <View style={styles.tierProgressTrack}>
-            <View
-              style={[
-                styles.tierProgressFill,
-                { width: tierProgressWidth + '%' },
-              ]}
-            />
-          </View>
+        </View>
+      )}
+
+      {showLockedHint && unlockSlotStatus?.next_unlock_at && (
+        <View style={styles.unlockFooter}>
+          <LockedHint
+            message={unlockSlotStatus.next_unlock_at.message}
+            current={unlockSlotStatus.next_unlock_at.current}
+            target={unlockSlotStatus.next_unlock_at.target}
+            isDark={isDark}
+          />
         </View>
       )}
 
@@ -534,39 +756,86 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: spacing.md,
   },
-  // ── Tier unlock footer ────────────────────────────────────────────────────
-  tierFooter: {
+  // ── Unlock footer ─────────────────────────────────────────────────────────
+  unlockFooter: {
     marginTop: spacing.md,
+  },
+  // ── Unlock button (State A) ───────────────────────────────────────────────
+  unlockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    backgroundColor: '#FFB547',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#FFB547',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  unlockButtonTextBlock: {
+    alignItems: 'center',
+  },
+  unlockButtonPrimary: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  unlockButtonSecondary: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  // ── All-used label (State B) ──────────────────────────────────────────────
+  allUsedContainer: {
+    marginTop: spacing.md,
+    alignItems: 'center',
+  },
+  allUsedText: {
+    fontSize: 12,
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+  // ── Locked hint (State C) ─────────────────────────────────────────────────
+  lockedHint: {
     borderRadius: borderRadius.md,
     padding: 12,
     borderWidth: 1,
   },
-  tierFooterHeader: {
+  lockedHintHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 4,
   },
-  tierFooterTitle: {
+  lockedHintTitle: {
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
   },
-  tierFooterSubtitle: {
+  lockedHintSubtitle: {
     fontSize: 12,
     fontWeight: '400',
     marginBottom: 8,
-    marginLeft: 22, // align under title (icon 16 + gap 6)
+    marginLeft: 22,
   },
-  tierProgressTrack: {
+  lockedProgressTrack: {
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(255, 184, 71, 0.2)',
     overflow: 'hidden',
   },
-  tierProgressFill: {
+  lockedProgressFill: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#FFB547',
+    backgroundColor: GOLD,
   },
 });

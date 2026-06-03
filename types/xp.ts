@@ -8,6 +8,7 @@
  *   - generate-daily-missions
  *   - calculate-rankings
  *   - confirm-level-up-seen
+ *   - unlock-mission-slot
  */
 
 // ─── Event types accepted by award-xp ────────────────────────────────────────
@@ -90,6 +91,40 @@ export type XpBreakdownEntry = {
   xp: number;
 };
 
+// ─── Unlock Mission Slot types ────────────────────────────────────────────────
+
+export type UnlockedSlot = {
+  slot_index: number;
+  mission_type: string;       // e.g. 'complete_workout'
+  target: number;
+  xp_reward: number;
+  completed: boolean;
+  completed_at: string | null;
+};
+
+export type NextUnlockGate = {
+  type: 'level' | 'days_active';
+  current: number;
+  target: number;
+  message: string;
+};
+
+export type UnlockSlotStatus = {
+  max_slots: number;          // 0, 1, or 2
+  used_slots: number;
+  remaining_slots: number;
+  unlock_bonus_xp: number;    // 50
+  next_unlock_at: NextUnlockGate | null;
+  slots: UnlockedSlot[];
+};
+
+export type UnlockMissionSlotResult = {
+  success: boolean;
+  slot: UnlockedSlot;
+  xp_awarded: number;
+  remaining_slots: number;
+};
+
 export type XpStatus = {
   /** Core user XP state */
   total_xp: number;
@@ -122,12 +157,16 @@ export type XpStatus = {
   streak_freeze_count?: number;    // freezes available
   weekly_freeze_max?: number;      // 1 for free, 3 for premium
 
-  /** Mission tier fields — optional until backend rolls out */
-  mission_tier?: number;           // 1, 2, or 3
+  /** Unlock slot status — replaces mission_tier / tier_progress */
+  unlock_slot_status?: UnlockSlotStatus;
+
+  /** @deprecated — replaced by unlock_slot_status */
+  mission_tier?: number;
+  /** @deprecated — replaced by unlock_slot_status */
   tier_progress?: TierProgress | null;
 };
 
-// ─── Mission tier progress ────────────────────────────────────────────────────
+// ─── Mission tier progress (kept for back-compat) ─────────────────────────────
 
 export type TierProgress = {
   current: number;              // current days_active
