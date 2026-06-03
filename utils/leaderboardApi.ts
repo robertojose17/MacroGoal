@@ -4,6 +4,8 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA';
 
+export type LeaderboardPeriod = 'today' | 'week' | 'month' | 'last30' | 'custom';
+
 export type LeaderboardEntry = {
   userId: string;
   username: string;
@@ -32,9 +34,11 @@ const EMPTY_RESPONSE: LeaderboardResponse = {
 
 export async function fetchLeaderboard(
   trackerName: string,
-  period: 'today' | 'week' | 'month',
+  period: LeaderboardPeriod = 'week',
+  startDate?: string,
+  endDate?: string,
 ): Promise<LeaderboardResponse> {
-  console.log('[LeaderboardApi] fetchLeaderboard()', trackerName, period);
+  console.log('[LeaderboardApi] fetchLeaderboard()', trackerName, period, startDate, endDate);
   try {
     const {
       data: { session },
@@ -47,13 +51,19 @@ export async function fetchLeaderboard(
     const url = `${SUPABASE_PROJECT_URL}/functions/v1/leaderboard-stats`;
     console.log('[LeaderboardApi] Fetching:', url);
 
+    const body: Record<string, string> = { trackerName, period };
+    if (period === 'custom' && startDate && endDate) {
+      body.startDate = startDate;
+      body.endDate = endDate;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: authHeader,
       },
-      body: JSON.stringify({ trackerName, period }),
+      body: JSON.stringify(body),
     });
 
     console.log('[LeaderboardApi] Response status:', response.status);
