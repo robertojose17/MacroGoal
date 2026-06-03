@@ -174,10 +174,10 @@ export default function CompactProgressCard({ userId, isDark }: Props) {
         <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron_right" size={18} color={mutedColor} />
       </View>
       <View style={styles.weightRow}>
-        <Text style={[styles.weightNumber, { color: colors.primary }]}>{currentStr}</Text>
-        <Text style={[styles.weightArrow, { color: mutedColor }]}> → </Text>
-        <Text style={[styles.weightGoal, { color: isDark ? colors.textDark : colors.text }]}>{goalStr}</Text>
-        <Text style={[styles.weightUnit, { color: mutedColor }]}> lbs</Text>
+        <Text style={[styles.weightNumber, { color: colors.primary }]} numberOfLines={1}>{currentStr}</Text>
+        <Text style={[styles.weightArrow, { color: mutedColor }]} numberOfLines={1}>{' → '}</Text>
+        <Text style={[styles.weightGoal, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>{goalStr}</Text>
+        <Text style={[styles.weightUnit, { color: mutedColor }]} numberOfLines={1}>{' lbs'}</Text>
       </View>
       <View style={[styles.barTrack, { backgroundColor: barBg }]}>
         <View style={[styles.barFill, { width: `${fillPct}%` as any, backgroundColor: barColor }]} />
@@ -198,11 +198,11 @@ const styles = StyleSheet.create({
   } as any,
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  weightRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: spacing.sm },
-  weightNumber: { fontSize: 36, fontWeight: '700', lineHeight: 40 },
-  weightArrow: { fontSize: 20, fontWeight: '400' },
-  weightGoal: { fontSize: 28, fontWeight: '600' },
-  weightUnit: { fontSize: 14, fontWeight: '400', marginBottom: 2 },
+  weightRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: spacing.sm, flexWrap: 'nowrap', flexShrink: 1 },
+  weightNumber: { fontSize: 24, fontWeight: '700', lineHeight: 28, flexShrink: 1 },
+  weightArrow: { fontSize: 14, fontWeight: '400', flexShrink: 1 },
+  weightGoal: { fontSize: 18, fontWeight: '600', flexShrink: 1 },
+  weightUnit: { fontSize: 11, fontWeight: '400', marginBottom: 2, flexShrink: 1 },
   barTrack: { height: 6, borderRadius: borderRadius.full, overflow: 'hidden', marginBottom: spacing.xs },
   barFill: { height: '100%', borderRadius: borderRadius.full },
   subtitle: { ...typography.small, marginTop: 2 },

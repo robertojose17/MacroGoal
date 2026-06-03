@@ -394,14 +394,12 @@ export default function DashboardScreen() {
         {/* ── Header with personalized greeting ── */}
         <View style={styles.header}>
           <View style={styles.greetingColumn}>
-            <Text style={[styles.greetingText, { color: isDark ? colors.textDark : colors.text }]}>
-              {greeting}
-              {', '}
-              {firstName}
-              {' 👋'}
-            </Text>
-            <Text style={[styles.subGreetingText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-              {subGreetingText}
+            <Text
+              style={[styles.greetingText, { color: isDark ? colors.textDark : colors.text }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {greeting + ', ' + firstName + ' · ' + subGreetingText}
             </Text>
           </View>
           <TouchableOpacity
@@ -630,17 +628,11 @@ const styles = StyleSheet.create({
   },
   greetingColumn: {
     flex: 1,
-    gap: 2,
   },
   greetingText: {
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 26,
-  },
-  subGreetingText: {
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
   },
   shareButton: {
     padding: spacing.xs,
