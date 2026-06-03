@@ -95,11 +95,12 @@ interface NutritionMissionRowProps {
   current: number;
   goal: number;
   unit: string;
+  xpReward: number;
   isDark: boolean;
   isLast: boolean;
 }
 
-function NutritionMissionRow({ icon, title, current, goal, unit, isDark, isLast }: NutritionMissionRowProps) {
+function NutritionMissionRow({ icon, title, current, goal, unit, xpReward, isDark, isLast }: NutritionMissionRowProps) {
   const done = goal > 0 && current >= goal;
 
   const iconColor = done ? CHECK_GREEN : (isDark ? '#A0A2B8' : '#6B7280');
@@ -107,10 +108,12 @@ function NutritionMissionRow({ icon, title, current, goal, unit, isDark, isLast 
     ? (isDark ? '#6B7280' : '#9CA3AF')
     : (isDark ? '#F1F5F9' : '#2B2D42');
   const borderColor = isDark ? '#3A3C52' : '#E5E7EB';
+  const mutedColor = isDark ? '#A0A2B8' : '#6B7280';
 
   const currentRounded = Math.round(current);
   const goalRounded = Math.round(goal);
-  const valueText = currentRounded + ' / ' + goalRounded + ' ' + unit;
+  const countText = currentRounded + '/' + goalRounded;
+  const xpText = '+' + xpReward + ' XP';
 
   return (
     <View
@@ -133,9 +136,14 @@ function NutritionMissionRow({ icon, title, current, goal, unit, isDark, isLast 
       >
         {title}
       </Text>
-      <Text style={[styles.xpReward, { color: done ? CHECK_GREEN : colors.primary }]}>
-        {valueText}
-      </Text>
+      <View style={styles.nutritionRightCol}>
+        <Text style={[styles.nutritionXpText, { color: done ? CHECK_GREEN : colors.primary }]}>
+          {xpText}
+        </Text>
+        <Text style={[styles.nutritionCountText, { color: mutedColor }]}>
+          {countText}
+        </Text>
+      </View>
       <View style={[styles.checkbox, done && styles.checkboxDone]}>
         {done ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
       </View>
@@ -225,6 +233,9 @@ export default function TodaysMissionsCard({
   isDark,
 }: TodaysMissionsCardProps) {
   const safeMissions = missions ?? [];
+  const filteredMissions = safeMissions.filter(
+    (m) => m.mission_type !== 'hit_protein_goal' && m.mission_type !== 'stay_within_calories'
+  );
 
   // ─── Nutrition tier computation ──────────────────────────────────────────
   const macroInputs: { macro: MacroKey; current: number; goal: number }[] = [
@@ -244,11 +255,11 @@ export default function TodaysMissionsCard({
     totalCalories === 0 && totalProtein === 0 && totalCarbs === 0 && totalFats === 0;
 
   // ─── Header counts ───────────────────────────────────────────────────────
-  const missionsDoneCount = safeMissions.filter((m) => m.completed).length;
+  const missionsDoneCount = filteredMissions.filter((m) => m.completed).length;
   const caloriesDone = goalCalories > 0 && totalCalories >= goalCalories;
   const proteinDone = goalProtein > 0 && totalProtein >= goalProtein;
   const totalDone = missionsDoneCount + (caloriesDone ? 1 : 0) + (proteinDone ? 1 : 0);
-  const totalCount = safeMissions.length + 2; // +2 for calories + protein
+  const totalCount = filteredMissions.length + 2; // +2 for calories + protein
   const allDone = totalDone === totalCount && totalCount > 2;
 
   const headerCountText = totalDone + ' of ' + totalCount + ' done';
@@ -343,6 +354,7 @@ export default function TodaysMissionsCard({
           current={totalCalories}
           goal={goalCalories}
           unit="kcal"
+          xpReward={15}
           isDark={isDark}
           isLast={false}
         />
@@ -352,18 +364,24 @@ export default function TodaysMissionsCard({
           current={totalProtein}
           goal={goalProtein}
           unit="g"
+          xpReward={20}
           isDark={isDark}
-          isLast={safeMissions.length === 0}
+          isLast={true}
         />
-        {safeMissions.map((mission, index) => (
+        {filteredMissions.length > 0 && (
+          <Text style={[styles.sectionDivider, { color: subtitleColor }]}>
+            Daily Missions
+          </Text>
+        )}
+        {filteredMissions.map((mission, index) => (
           <MissionRow
             key={mission.id}
             mission={mission}
             isDark={isDark}
-            isLast={index === safeMissions.length - 1}
+            isLast={index === filteredMissions.length - 1}
           />
         ))}
-        {safeMissions.length === 0 && (
+        {filteredMissions.length === 0 && (
           <Text style={[styles.emptyMissionsText, { color: subtitleColor }]}>
             No missions today. Check back soon!
           </Text>
@@ -442,6 +460,27 @@ const styles = StyleSheet.create({
   xpReward: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  nutritionRightCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  nutritionXpText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  nutritionCountText: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  sectionDivider: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
   },
   checkbox: {
     width: 22,
