@@ -11,7 +11,6 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import ProgressCircle from '@/components/ProgressCircle';
 import { IconSymbol } from '@/components/IconSymbol';
-import { NotificationBell } from "@/components/NotificationBell";
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
 import {
@@ -579,9 +578,7 @@ export default function HomeScreen() {
     <View>
       <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
         <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Calories</Text>
-                <NotificationBell />
-        
-<View style={styles.caloriesContent}>
+        <View style={styles.caloriesContent}>
           <ProgressCircle
             current={totalCalories}
             target={goal?.daily_calories || 2000}
