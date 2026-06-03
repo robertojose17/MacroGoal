@@ -2,7 +2,7 @@
   "expo": {
     "name": "Macro Goal",
     "slug": "macro-goal",
-    "version": "1.4.1",
+    "version": "1.4.4",
     "orientation": "portrait",
     "icon": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
     "userInterfaceStyle": "automatic",
@@ -14,7 +14,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "8",
+      "buildNumber": "320",
       "bundleIdentifier": "com.robertojose17.macrogoal",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
