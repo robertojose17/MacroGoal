@@ -19,6 +19,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { initializeFoodDatabase } from "@/utils/foodDatabase";
 import { supabase } from "@/lib/supabase/client";
 import { reportTodaySteps } from "@/utils/stepsReporter";
@@ -28,6 +29,16 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Constants from "expo-constants";
 import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
 import mobileAds from "@/utils/mobileAds";
+
+// OneSignal — native only
+let OneSignal: any = null;
+if (Platform.OS !== "web") {
+  try {
+    OneSignal = require("react-native-onesignal").OneSignal;
+  } catch (e) {
+    console.warn("[OneSignal] Failed to load react-native-onesignal:", e);
+  }
+}
 
 const TIMEZONE_STORAGE_KEY = "user_timezone_synced";
 
@@ -290,6 +301,28 @@ export default function RootLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady, session]);
 
+  // ─── OneSignal notification click handler ────────────────────────────────
+  useEffect(() => {
+    if (Platform.OS === "web" || !OneSignal) return;
+
+    const clickHandler = (event: any) => {
+      const data = event?.notification?.additionalData as
+        | { screen?: string; action?: string }
+        | undefined;
+      console.log("[OneSignal] Notification clicked — data:", data);
+      if (!data) return;
+      if (data.screen === "dashboard" || data.screen === "missions") {
+        console.log("[OneSignal] Deep linking to dashboard");
+        router.push("/(tabs)/dashboard");
+      }
+    };
+
+    OneSignal.Notifications.addEventListener("click", clickHandler);
+    return () => {
+      OneSignal.Notifications.removeEventListener("click", clickHandler);
+    };
+  }, []);
+
   // ─── Deep link handler ────────────────────────────────────────────────────
   useEffect(() => {
     console.log("[DeepLink] Setting up deep link listener");
@@ -518,7 +551,8 @@ export default function RootLayout() {
   };
 
   return (
-    <ErrorBoundary>
+    <NotificationProvider>
+      <ErrorBoundary>
       <SafeAreaProvider>
         <StatusBar style="dark" animated />
         <ThemeProvider value={CustomDefaultTheme}>
@@ -659,5 +693,6 @@ export default function RootLayout() {
         </ThemeProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
+    </NotificationProvider>
   );
 }

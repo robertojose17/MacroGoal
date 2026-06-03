@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
+import { NotificationBell } from "@/components/NotificationBell";
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
 import { listMealPlans, type MealPlan as ApiMealPlan } from '@/utils/mealPlansApi';
@@ -477,7 +478,9 @@ export default function HomeScreen() {
           <View style={styles.mealHeader}>
             <View>
               <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{meal.label}</Text>
-              <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{Math.round(meal.totalCalories)} kcal</Text>
+                            <NotificationBell />
+              
+<Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{Math.round(meal.totalCalories)} kcal</Text>
             </View>
             <TouchableOpacity style={styles.addMealButton} onPress={() => handleAddFood(meal.type)}>
               <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add" size={28} color={colors.info} />

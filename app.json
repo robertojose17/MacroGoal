@@ -21,7 +21,16 @@
         "NSSpeechRecognitionUsageDescription": "Macro Goal uses speech recognition to transcribe your voice when you describe meals to the AI meal estimator.",
         "NSPhotoLibraryUsageDescription": "Macro Goal needs access to your photo library so you can attach progress photos to your weight check-ins and track your transformation over time.",
         "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
-        "NSHealthUpdateUsageDescription": "Macro Goal writes your nutrition data to Apple Health to keep your health profile in sync across all your apps."
+        "NSHealthUpdateUsageDescription": "Macro Goal writes your nutrition data to Apple Health to keep your health profile in sync across all your apps.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      },
+      "entitlements": {
+        "aps-environment": "production",
+        "com.apple.security.application-groups": [
+          "group.com.robertojose17.macrogoal.onesignal"
+        ]
       }
     },
     "android": {
@@ -42,6 +51,12 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production"
+        }
+      ],
       "expo-font",
       "expo-router",
       "expo-web-browser",
@@ -91,7 +106,8 @@
         "androidApiKey": "goog_YOUR_ANDROID_KEY_HERE",
         "offeringIdentifier": "Monthly_MG",
         "entitlementIdentifier": "Macrogoal Pro"
-      }
+      },
+      "oneSignalAppId": "9249650b-d254-4323-9e5e-d1c0d99c194a"
     }
   }
 }

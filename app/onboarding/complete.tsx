@@ -14,6 +14,7 @@ import {
   Image,
   KeyboardAvoidingView,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
@@ -24,6 +25,9 @@ import { supabase } from '@/lib/supabase/client';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '@/utils/calculations';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const ONESIGNAL_PROMPT_KEY = 'onesignal_prompt_shown_v1';
 
 const BG_IMAGE = require('../../assets/images/73291328-4520-475d-9d5f-c23a5206eb1d.jpeg');
 const PRIMARY = '#4CAF50';
@@ -120,6 +124,8 @@ export default function CompleteOnboardingScreen() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
 
   // Animated display values for count-up
   const [displayCalories, setDisplayCalories] = useState(0);
@@ -351,16 +357,39 @@ export default function CompleteOnboardingScreen() {
     }
   };
 
+  // ─── Notification permission helper ───────────────────────────────────────
+
+  const requestOneSignalPermission = async () => {
+    if (Platform.OS === 'web') return;
+    try {
+      const OneSignal = require('react-native-onesignal').OneSignal;
+      console.log('[Onboarding] Requesting OneSignal notification permission');
+      await OneSignal.Notifications.requestPermission(true);
+      await AsyncStorage.setItem(ONESIGNAL_PROMPT_KEY, 'true');
+    } catch (e) {
+      console.warn('[Onboarding] OneSignal permission request failed (non-fatal):', e);
+    }
+  };
+
+  const showNotifPromptThen = (nav: () => void) => {
+    if (Platform.OS === 'web') {
+      nav();
+      return;
+    }
+    pendingNavRef.current = nav;
+    setShowNotifPrompt(true);
+  };
+
   // ─── Purchase / finish ─────────────────────────────────────────────────────
 
   const handleStartTrial = () => {
-    console.log('[Onboarding] Start Free Trial pressed — navigating to subscription screen');
-    router.push('/subscription?autoStart=true');
+    console.log('[Onboarding] Start Free Trial pressed — showing notification prompt then subscription');
+    showNotifPromptThen(() => router.push('/subscription?autoStart=true'));
   };
 
   const handleSkipTrial = () => {
-    console.log('[Onboarding] Skip trial pressed — navigating to home');
-    router.replace('/(tabs)/(home)/');
+    console.log('[Onboarding] Skip trial pressed — showing notification prompt then home');
+    showNotifPromptThen(() => router.replace('/(tabs)/(home)/'));
   };
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -413,6 +442,48 @@ export default function CompleteOnboardingScreen() {
           <Text style={styles.backBtnText}>‹</Text>
         </TouchableOpacity>
       )}
+
+      {/* Notification permission prompt modal */}
+      <Modal
+        visible={showNotifPrompt}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotifPrompt(false)}
+      >
+        <View style={styles.notifOverlay}>
+          <View style={styles.notifCard}>
+            <Text style={styles.notifEmoji}>{'🔔'}</Text>
+            <Text style={styles.notifTitle}>{'Stay on track with reminders'}</Text>
+            <Text style={styles.notifBody}>
+              {"We'll notify you about your streak, daily missions, and level-ups."}
+            </Text>
+            <TouchableOpacity
+              style={styles.notifEnableBtn}
+              onPress={async () => {
+                console.log('[Onboarding] Notification prompt: Enable notifications pressed');
+                setShowNotifPrompt(false);
+                await requestOneSignalPermission();
+                pendingNavRef.current?.();
+                pendingNavRef.current = null;
+              }}
+            >
+              <Text style={styles.notifEnableBtnText}>{'Enable notifications'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.notifLaterBtn}
+              onPress={async () => {
+                console.log('[Onboarding] Notification prompt: Maybe later pressed');
+                setShowNotifPrompt(false);
+                await AsyncStorage.setItem(ONESIGNAL_PROMPT_KEY, 'true');
+                pendingNavRef.current?.();
+                pendingNavRef.current = null;
+              }}
+            >
+              <Text style={styles.notifLaterBtnText}>{'Maybe later'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Animated.View style={[styles.stepContainer, { transform: [{ translateX: slideAnim }] }]}>
         {step === 0 && <Step0 onNext={goNext} />}
@@ -2906,5 +2977,64 @@ const styles = StyleSheet.create({
     color: '#0a0a0a',
     fontWeight: '700',
     fontSize: 16,
+  },
+  // ── Notification permission prompt ────────────────────────────────────────
+  notifOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  notifCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  notifEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  notifTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 10,
+    lineHeight: 26,
+  },
+  notifBody: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  notifEnableBtn: {
+    width: '100%',
+    backgroundColor: PRIMARY,
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  notifEnableBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  notifLaterBtn: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  notifLaterBtnText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '500',
   },
 });
