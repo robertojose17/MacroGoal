@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Modal,
   Animated,
+  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -140,12 +141,43 @@ export default function DashboardScreen() {
   const missionsScrollRef = useRef<ScrollView>(null);
   const [pendingMilestone, setPendingMilestone] = useState<number | null>(null);
 
+  // Track previous freeze count to detect when a freeze is consumed
+  const prevFreezeCountRef = useRef<number | undefined>(undefined);
+  const isFirstXpLoadRef = useRef(true);
+
   // On mount: report steps and refresh XP
   useEffect(() => {
     console.log('[Dashboard] mount — reporting steps and refreshing XP');
     reportTodaySteps().then(() => xp.refresh()).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Streak-saved toast: fires when freeze count decreases but streak is intact
+  useEffect(() => {
+    const freezeCount = xp.status?.streak_freeze_count;
+    const currentStreak = xp.status?.current_streak;
+
+    if (freezeCount === undefined || currentStreak === undefined) return;
+
+    if (isFirstXpLoadRef.current) {
+      // Initialize ref on first load — don't show toast yet
+      prevFreezeCountRef.current = freezeCount;
+      isFirstXpLoadRef.current = false;
+      return;
+    }
+
+    const prev = prevFreezeCountRef.current;
+    if (prev !== undefined && freezeCount < prev && currentStreak > 0) {
+      console.log('[Dashboard] Streak freeze consumed — prev:', prev, 'now:', freezeCount, 'streak:', currentStreak);
+      Alert.alert(
+        'Streak Saved! 🛡️',
+        `A freeze was used to protect your ${currentStreak}-day streak.`,
+        [{ text: 'Nice!' }]
+      );
+    }
+
+    prevFreezeCountRef.current = freezeCount;
+  }, [xp.status?.streak_freeze_count, xp.status?.current_streak]);
 
   // Streak milestone watcher
   useEffect(() => {
@@ -163,6 +195,11 @@ export default function DashboardScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [xp.status?.current_streak]);
+
+  const handleUpgradePress = useCallback(() => {
+    console.log('[Dashboard] Navigating to subscription screen from freeze badge');
+    router.push('/subscription');
+  }, [router]);
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
     try {
@@ -420,7 +457,7 @@ export default function DashboardScreen() {
 
         {/* ── XP Hero Card ── */}
         <CardErrorBoundary label="XpHeroCard">
-          <XpHeroCard status={xp.status} isDark={isDark} />
+          <XpHeroCard status={xp.status} isDark={isDark} onUpgradePress={handleUpgradePress} />
         </CardErrorBoundary>
 
         {/* ── Social Comparison — compact sub-hero pill ── */}

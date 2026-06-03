@@ -44,6 +44,8 @@ export type AwardXpResult = {
   missions_just_completed: string[];
   all_missions_done: boolean;
   current_streak: number;
+  streak_multiplier?: number;    // e.g. 1.0, 1.1, 1.25, 1.5, 2.0
+  premium_multiplier?: number;   // 1.0 for free, 1.5 for premium
 };
 
 // ─── get-xp-status response ───────────────────────────────────────────────────
@@ -112,4 +114,11 @@ export type XpStatus = {
 
   /** Per-event XP breakdown for today — optional, requires updated backend */
   today_breakdown?: XpBreakdownEntry[];
+
+  /** Premium & streak multiplier fields — optional until backend rolls out */
+  is_premium?: boolean;
+  streak_multiplier?: number;      // current effective streak multiplier
+  premium_multiplier?: number;     // 1.0 or 1.5
+  streak_freeze_count?: number;    // freezes available
+  weekly_freeze_max?: number;      // 1 for free, 3 for premium
 };
