@@ -121,4 +121,18 @@ export type XpStatus = {
   premium_multiplier?: number;     // 1.0 or 1.5
   streak_freeze_count?: number;    // freezes available
   weekly_freeze_max?: number;      // 1 for free, 3 for premium
+
+  /** Mission tier fields — optional until backend rolls out */
+  mission_tier?: number;           // 1, 2, or 3
+  tier_progress?: TierProgress | null;
+};
+
+// ─── Mission tier progress ────────────────────────────────────────────────────
+
+export type TierProgress = {
+  current: number;              // current days_active
+  target: number;               // days needed to unlock next tier
+  next_tier: number;            // 2 or 3
+  message: string;              // backend-provided motivating message
+  locked_missions?: string[];   // mission types locked at this tier (e.g. ['hit_protein_goal'])
 };

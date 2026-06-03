@@ -31,6 +31,7 @@ import SocialComparisonCard from '@/components/xp/SocialComparisonCard';
 import StreakBadgeModal from '@/components/xp/StreakBadgeModal';
 import TodaysMissionsCard from '@/components/xp/TodaysMissionsCard';
 import { reportTodaySteps } from '@/utils/stepsReporter';
+import { reportDailyHealthMetrics } from '@/utils/healthMetricsReporter';
 import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -145,10 +146,18 @@ export default function DashboardScreen() {
   const prevFreezeCountRef = useRef<number | undefined>(undefined);
   const isFirstXpLoadRef = useRef(true);
 
-  // On mount: report steps and refresh XP
+  // On mount: report steps + all health metrics, then refresh XP
   useEffect(() => {
-    console.log('[Dashboard] mount — reporting steps and refreshing XP');
-    reportTodaySteps().then(() => xp.refresh()).catch(() => {});
+    console.log('[Dashboard] mount — reporting steps, health metrics, and refreshing XP');
+    Promise.all([
+      reportTodaySteps(),
+      reportDailyHealthMetrics(),
+    ])
+      .then(([stepsResult, metricsResult]) => {
+        console.log('[Dashboard] steps report:', stepsResult.reported, '| metrics events:', metricsResult.eventsPosted);
+        xp.refresh();
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -349,8 +358,11 @@ export default function DashboardScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[Dashboard] Screen focused, loading data');
+      console.log('[Dashboard] Screen focused, loading data and reporting health metrics');
       loadData();
+      reportDailyHealthMetrics().then((result) => {
+        console.log('[Dashboard] focus health metrics report:', result.eventsPosted);
+      }).catch(() => {});
     }, [loadData])
   );
 
@@ -484,6 +496,8 @@ export default function DashboardScreen() {
             goalCarbs={goal?.carbs_g ?? 200}
             goalFats={goal?.fats_g ?? 65}
             isDark={isDark}
+            missionTier={xp.status?.mission_tier}
+            tierProgress={xp.status?.tier_progress}
           />
         </CardErrorBoundary>
 

@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Lock } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
   getMacroTier,
@@ -23,7 +24,7 @@ import {
 import { setMacroTier } from '@/utils/macroXpApi';
 import { emitXpRefresh } from '@/utils/xpEvents';
 import { toLocalDateString } from '@/utils/dateUtils';
-import type { DailyMission } from '@/types/xp';
+import type { DailyMission, TierProgress } from '@/types/xp';
 import ShareProgressBonus from './ShareProgressBonus';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -43,6 +44,8 @@ interface TodaysMissionsCardProps {
   goalCarbs: number;
   goalFats: number;
   isDark: boolean;
+  missionTier?: number;
+  tierProgress?: TierProgress | null;
 }
 
 // ─── Mission icon / title maps ────────────────────────────────────────────────
@@ -226,11 +229,21 @@ export default function TodaysMissionsCard({
   goalCarbs,
   goalFats,
   isDark,
+  missionTier,
+  tierProgress,
 }: TodaysMissionsCardProps) {
   const safeMissions = missions ?? [];
+  const lockedMissions = tierProgress?.locked_missions ?? [];
+
+  // Filter out nutrition missions that are locked at this tier AND
+  // always filter duplicates (backend may include them in the missions list)
   const filteredMissions = safeMissions.filter(
     (m) => m.mission_type !== 'hit_protein_goal' && m.mission_type !== 'stay_within_calories'
   );
+
+  // Determine which fixed nutrition rows to show based on locked_missions
+  const showCaloriesRow = !lockedMissions.includes('stay_within_calories');
+  const showProteinRow = !lockedMissions.includes('hit_protein_goal');
 
   // ─── Nutrition tier computation ──────────────────────────────────────────
   const macroInputs: { macro: MacroKey; current: number; goal: number }[] = [
@@ -253,11 +266,26 @@ export default function TodaysMissionsCard({
   const missionsDoneCount = filteredMissions.filter((m) => m.completed).length;
   const caloriesDone = goalCalories > 0 && totalCalories >= goalCalories;
   const proteinDone = goalProtein > 0 && totalProtein >= goalProtein;
-  const totalDone = missionsDoneCount + (caloriesDone ? 1 : 0) + (proteinDone ? 1 : 0);
-  const totalCount = filteredMissions.length + 2; // +2 for calories + protein
-  const allDone = totalDone === totalCount && totalCount > 2;
+  const nutritionRowCount = (showCaloriesRow ? 1 : 0) + (showProteinRow ? 1 : 0);
+  const totalDone =
+    missionsDoneCount +
+    (showCaloriesRow && caloriesDone ? 1 : 0) +
+    (showProteinRow && proteinDone ? 1 : 0);
+  const totalCount = filteredMissions.length + nutritionRowCount;
+  const allDone = totalDone === totalCount && totalCount > nutritionRowCount;
 
   const headerCountText = totalDone + ' of ' + totalCount + ' done';
+
+  // ─── Tier progress bar ───────────────────────────────────────────────────
+  const tierProgressPercent =
+    tierProgress && tierProgress.target > 0
+      ? Math.min(tierProgress.current / tierProgress.target, 1)
+      : 0;
+  const tierProgressWidth = Math.round(tierProgressPercent * 100);
+  const tierCurrentText = tierProgress ? String(tierProgress.current) : '0';
+  const tierTargetText = tierProgress ? String(tierProgress.target) : '0';
+  const tierSubtitle = tierCurrentText + ' / ' + tierTargetText + ' active days';
+  const tierMessage = tierProgress?.message ?? '';
 
   // ─── Debounced backend sync ──────────────────────────────────────────────
   const lastSentRef = useRef<
@@ -343,26 +371,30 @@ export default function TodaysMissionsCard({
 
       {/* ── Mission rows (nutrition + daily) ── */}
       <View style={styles.missionsSection}>
-        <NutritionMissionRow
-          icon="pie-chart"
-          title="Hit Calories"
-          current={totalCalories}
-          goal={goalCalories}
-          unit="kcal"
-          xpReward={15}
-          isDark={isDark}
-          isLast={false}
-        />
-        <NutritionMissionRow
-          icon="fitness"
-          title="Hit Protein Goal"
-          current={totalProtein}
-          goal={goalProtein}
-          unit="g"
-          xpReward={20}
-          isDark={isDark}
-          isLast={true}
-        />
+        {showCaloriesRow && (
+          <NutritionMissionRow
+            icon="pie-chart"
+            title="Hit Calories"
+            current={totalCalories}
+            goal={goalCalories}
+            unit="kcal"
+            xpReward={15}
+            isDark={isDark}
+            isLast={!showProteinRow && filteredMissions.length === 0}
+          />
+        )}
+        {showProteinRow && (
+          <NutritionMissionRow
+            icon="fitness"
+            title="Hit Protein Goal"
+            current={totalProtein}
+            goal={goalProtein}
+            unit="g"
+            xpReward={20}
+            isDark={isDark}
+            isLast={filteredMissions.length === 0}
+          />
+        )}
         {filteredMissions.map((mission, index) => (
           <MissionRow
             key={mission.id}
@@ -371,12 +403,45 @@ export default function TodaysMissionsCard({
             isLast={index === filteredMissions.length - 1}
           />
         ))}
-        {filteredMissions.length === 0 && (
+        {filteredMissions.length === 0 && nutritionRowCount === 0 && (
           <Text style={[styles.emptyMissionsText, { color: subtitleColor }]}>
             No missions today. Check back soon!
           </Text>
         )}
       </View>
+
+      {/* ── Tier unlock footer (only when tier_progress is non-null) ── */}
+      {tierProgress != null && (
+        <View
+          style={[
+            styles.tierFooter,
+            {
+              backgroundColor: isDark
+                ? 'rgba(255, 184, 71, 0.12)'
+                : 'rgba(255, 184, 71, 0.08)',
+              borderColor: 'rgba(255, 184, 71, 0.25)',
+            },
+          ]}
+        >
+          <View style={styles.tierFooterHeader}>
+            <Lock size={16} color="#FFB547" />
+            <Text style={[styles.tierFooterTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
+              {tierMessage}
+            </Text>
+          </View>
+          <Text style={[styles.tierFooterSubtitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+            {tierSubtitle}
+          </Text>
+          <View style={styles.tierProgressTrack}>
+            <View
+              style={[
+                styles.tierProgressFill,
+                { width: tierProgressWidth + '%' },
+              ]}
+            />
+          </View>
+        </View>
+      )}
 
       {/* ── Share Progress Bonus (always visible) ── */}
       <ShareProgressBonus allDone={allDone} isDark={isDark} />
@@ -468,5 +533,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     paddingVertical: spacing.md,
+  },
+  // ── Tier unlock footer ────────────────────────────────────────────────────
+  tierFooter: {
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    padding: 12,
+    borderWidth: 1,
+  },
+  tierFooterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  tierFooterTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  tierFooterSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    marginBottom: 8,
+    marginLeft: 22, // align under title (icon 16 + gap 6)
+  },
+  tierProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 184, 71, 0.2)',
+    overflow: 'hidden',
+  },
+  tierProgressFill: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#FFB547',
   },
 });
