@@ -10,10 +10,10 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export const PROGRESS_CARD_WIDTH = Dimensions.get('window').width;
-// photo row 320 + badge area ~80 + bottom padding
-export const PROGRESS_CARD_HEIGHT = 420;
+export const PROGRESS_CARD_HEIGHT = 640;
 
 // react-native-view-shot requires a native build — lazy import so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -33,6 +33,9 @@ export interface ShareableProgressCardProps {
   beforeDate?: string | null;
   afterDate?: string | null;
   leaderboardPhrase?: string | null;
+  weightLost?: number;
+  dayStreak?: number;
+  consistencyScore?: number;
 }
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -41,16 +44,40 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+/** Parse "Top X%" from a leaderboard phrase, or return a fallback label */
+function parseLeaderboardLabel(phrase: string | null | undefined): string {
+  if (!phrase) return 'CRUSHING IT';
+  const match = phrase.match(/top\s+(\d+)%/i);
+  if (match) return `Top ${match[1]}%`;
+  return 'CRUSHING IT';
+}
+
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
-    { beforePhoto, afterPhoto, leaderboardPhrase },
+    { beforePhoto, afterPhoto, beforeDate, afterDate, leaderboardPhrase, weightLost, dayStreak, consistencyScore },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
-    const [beforeLoaded, setBeforeLoaded] = useState(false);
-    const [afterLoaded, setAfterLoaded] = useState(false);
 
-    const hasLeaderboard = !!leaderboardPhrase;
+    // useState for visual placeholder re-renders
+    const [beforeLoadedState, setBeforeLoadedState] = useState(false);
+    const [afterLoadedState, setAfterLoadedState] = useState(false);
+
+    // useRef for stale-closure-free capture polling
+    const beforeLoadedRef = useRef(false);
+    const afterLoadedRef = useRef(false);
+
+    const streakCount = typeof dayStreak === 'number' ? dayStreak : 0;
+    const weightLostNum = typeof weightLost === 'number' ? weightLost : 0;
+    const leaderboardLabel = parseLeaderboardLabel(leaderboardPhrase);
+
+    const weightDisplay = weightLostNum > 0
+      ? `\u2212${weightLostNum.toFixed(1)} lbs`
+      : 'On track';
+    const weightIsZero = weightLostNum === 0;
+
+    const beforeDateDisplay = beforeDate || '';
+    const afterDateDisplay = afterDate || 'Today';
 
     useImperativeHandle(ref, () => ({
       captureWhenReady: (): Promise<string> => {
@@ -63,7 +90,9 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 
           const poll = () => {
             const elapsed = Date.now() - startTime;
-            const photosReady = beforeLoaded && afterLoaded;
+            const beforeReady = !beforePhoto || beforeLoadedRef.current;
+            const afterReady = !afterPhoto || afterLoadedRef.current;
+            const photosReady = beforeReady && afterReady;
             const timedOut = elapsed >= TIMEOUT_MS;
 
             if (photosReady || timedOut) {
@@ -92,7 +121,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
           poll();
         });
       },
-    }), [beforeLoaded, afterLoaded]);
+    }), [beforePhoto, afterPhoto]);
 
     return (
       <CaptureWrapper
@@ -101,10 +130,26 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
         style={styles.captureWrapper}
       >
         <View style={styles.card}>
+
+          {/* ── HEADER ── */}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <Image
+                source={require('@/assets/icon.png')}
+                style={styles.appIcon}
+                resizeMode="cover"
+              />
+              <Text style={styles.appName}>Macro Goal</Text>
+            </View>
+            <Text style={styles.headerDots}>•••</Text>
+          </View>
+          <View style={styles.headerDivider} />
+
           {/* ── PHOTOS ROW ── */}
           <View style={styles.photoRow}>
+            {/* BEFORE */}
             <View style={styles.photoContainer}>
-              {!beforeLoaded && (
+              {!beforeLoadedState && (
                 <View style={styles.photoPlaceholder}>
                   <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
                 </View>
@@ -115,12 +160,37 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 resizeMode="cover"
                 onLoad={() => {
                   console.log('[ShareableProgressCard] Before photo loaded');
-                  setBeforeLoaded(true);
+                  beforeLoadedRef.current = true;
+                  setBeforeLoadedState(true);
+                }}
+                onError={() => {
+                  console.warn('[ShareableProgressCard] Before photo failed to load');
+                  beforeLoadedRef.current = true;
+                  setBeforeLoadedState(true);
                 }}
               />
+              {/* Bottom vignette */}
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.55)']}
+                style={styles.photoVignette}
+                pointerEvents="none"
+              />
+              {/* BEFORE label top-left */}
+              <View style={[styles.photoPill, styles.photoPillTopLeft, styles.photoPillLight]}>
+                <Text style={styles.photoPillLightText}>BEFORE</Text>
+              </View>
+              {/* Date pill bottom-left */}
+              <View style={[styles.photoPill, styles.photoPillBottomLeft, styles.photoPillDark]}>
+                <Text style={styles.photoPillDarkText}>{beforeDateDisplay}</Text>
+              </View>
             </View>
+
+            {/* Divider between photos */}
+            <View style={styles.photoDivider} />
+
+            {/* AFTER */}
             <View style={styles.photoContainer}>
-              {!afterLoaded && (
+              {!afterLoadedState && (
                 <View style={styles.photoPlaceholder}>
                   <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
                 </View>
@@ -131,20 +201,67 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 resizeMode="cover"
                 onLoad={() => {
                   console.log('[ShareableProgressCard] After photo loaded');
-                  setAfterLoaded(true);
+                  afterLoadedRef.current = true;
+                  setAfterLoadedState(true);
+                }}
+                onError={() => {
+                  console.warn('[ShareableProgressCard] After photo failed to load');
+                  afterLoadedRef.current = true;
+                  setAfterLoadedState(true);
                 }}
               />
+              {/* Bottom vignette */}
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.55)']}
+                style={styles.photoVignette}
+                pointerEvents="none"
+              />
+              {/* AFTER label top-left */}
+              <View style={[styles.photoPill, styles.photoPillTopLeft, styles.photoPillLight]}>
+                <Text style={styles.photoPillLightText}>AFTER</Text>
+              </View>
+              {/* Date pill bottom-left */}
+              <View style={[styles.photoPill, styles.photoPillBottomLeft, styles.photoPillDark]}>
+                <Text style={styles.photoPillDarkText}>{afterDateDisplay}</Text>
+              </View>
             </View>
           </View>
 
-          {/* ── LEADERBOARD BADGE ── */}
-          {hasLeaderboard && (
-            <View style={styles.badgeContainer}>
-              <View style={styles.leaderboardBadge}>
-                <Text style={styles.leaderboardText}>{leaderboardPhrase}</Text>
-              </View>
+          {/* ── STATS AREA with subtle glow ── */}
+          <LinearGradient
+            colors={['rgba(91,154,168,0.08)', 'transparent']}
+            style={styles.statsGlow}
+            pointerEvents="none"
+          />
+
+          {/* ── BIG STAT ── */}
+          <View style={styles.bigStatContainer}>
+            <Text style={[styles.bigStatNumber, weightIsZero && styles.bigStatNumberOnTrack]}>
+              {weightDisplay}
+            </Text>
+            {!weightIsZero && (
+              <Text style={styles.bigStatCaption}>TOTAL LOST</Text>
+            )}
+          </View>
+
+          {/* ── TWO STAT PILLS ── */}
+          <View style={styles.statPillsRow}>
+            <View style={styles.statPill}>
+              <Text style={styles.statPillNumber}>{streakCount}</Text>
+              <Text style={styles.statPillCaption}>DAY STREAK</Text>
             </View>
-          )}
+            <View style={styles.statPill}>
+              <Text style={styles.statPillNumber}>{leaderboardLabel}</Text>
+              <Text style={styles.statPillCaption}>THIS WEEK</Text>
+            </View>
+          </View>
+
+          {/* ── FOOTER ── */}
+          <View style={styles.footerDivider} />
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Track your macros at macrogoal.app</Text>
+          </View>
+
         </View>
       </CaptureWrapper>
     );
@@ -152,6 +269,8 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 );
 
 export default ShareableProgressCard;
+
+const PHOTO_ROW_HEIGHT = 340;
 
 const styles = StyleSheet.create({
   captureWrapper: {
@@ -162,17 +281,56 @@ const styles = StyleSheet.create({
   },
   card: {
     width: PROGRESS_CARD_WIDTH,
+    height: PROGRESS_CARD_HEIGHT,
     backgroundColor: '#0D0D0D',
     borderRadius: 20,
     overflow: 'hidden',
   },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  appIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+  },
+  appName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  headerDots: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 14,
+    letterSpacing: 2,
+  },
+  headerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginHorizontal: 0,
+  },
+
+  // ── Photos ──────────────────────────────────────────────────────────────────
   photoRow: {
     flexDirection: 'row',
     width: '100%',
-    height: 320,
+    height: PHOTO_ROW_HEIGHT,
   },
   photoContainer: {
-    width: '50%',
+    flex: 1,
     height: '100%',
     backgroundColor: '#1A1A1A',
     overflow: 'hidden',
@@ -196,21 +354,137 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 2,
   },
-  badgeContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 20,
+  photoVignette: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 80,
+    zIndex: 3,
   },
-  leaderboardBadge: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 50,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  photoDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    zIndex: 10,
   },
-  leaderboardText: {
-    fontSize: 15,
-    fontWeight: '600',
+  photoPill: {
+    position: 'absolute',
+    borderRadius: 100,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    zIndex: 4,
+  },
+  photoPillTopLeft: {
+    top: 10,
+    left: 10,
+  },
+  photoPillBottomLeft: {
+    bottom: 10,
+    left: 10,
+  },
+  photoPillLight: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+  },
+  photoPillLightText: {
+    color: '#0D0D0D',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  photoPillDark: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  photoPillDarkText: {
     color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  // ── Stats glow ───────────────────────────────────────────────────────────────
+  statsGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: PHOTO_ROW_HEIGHT + 1 + 51, // header height approx
+    height: 200,
+    zIndex: 0,
+  },
+
+  // ── Big stat ─────────────────────────────────────────────────────────────────
+  bigStatContainer: {
+    alignItems: 'center',
+    marginTop: 22,
+    marginBottom: 4,
+    zIndex: 1,
+  },
+  bigStatNumber: {
+    fontSize: 56,
+    fontWeight: '800',
+    color: '#5CB97B',
+    letterSpacing: -2,
+    lineHeight: 62,
+  },
+  bigStatNumberOnTrack: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+  },
+  bigStatCaption: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
+
+  // ── Stat pills ───────────────────────────────────────────────────────────────
+  statPillsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 10,
+    marginTop: 16,
+    zIndex: 1,
+  },
+  statPill: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderRadius: 14,
+  },
+  statPillNumber: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  statPillCaption: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 3,
+  },
+
+  // ── Footer ───────────────────────────────────────────────────────────────────
+  footerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginTop: 'auto',
+    marginHorizontal: 0,
+  },
+  footer: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.4)',
     textAlign: 'center',
   },
 });

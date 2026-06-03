@@ -679,6 +679,9 @@ export default function ShareProgressScreen() {
                 beforeDate={cardData.beforeDateLabel}
                 afterDate={cardData.afterDateLabel}
                 leaderboardPhrase={cardData.leaderboardPhrase}
+                weightLost={cardData.weightLost}
+                dayStreak={cardData.dayStreak}
+                consistencyScore={cardData.consistencyScore}
               />
             </View>
 
@@ -710,6 +713,9 @@ export default function ShareProgressScreen() {
                     beforeDate={cardData.beforeDateLabel}
                     afterDate={cardData.afterDateLabel}
                     leaderboardPhrase={cardData.leaderboardPhrase}
+                    weightLost={cardData.weightLost}
+                    dayStreak={cardData.dayStreak}
+                    consistencyScore={cardData.consistencyScore}
                   />
                 </View>
               </View>
