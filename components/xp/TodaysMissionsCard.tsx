@@ -108,12 +108,10 @@ function NutritionMissionRow({ icon, title, current, goal, unit, xpReward, isDar
     ? (isDark ? '#6B7280' : '#9CA3AF')
     : (isDark ? '#F1F5F9' : '#2B2D42');
   const borderColor = isDark ? '#3A3C52' : '#E5E7EB';
-  const mutedColor = isDark ? '#A0A2B8' : '#6B7280';
 
   const currentRounded = Math.round(current);
   const goalRounded = Math.round(goal);
-  const countText = currentRounded + '/' + goalRounded;
-  const xpText = '+' + xpReward + ' XP';
+  const fullTitle = title + ' ' + currentRounded + '/' + goalRounded + unit;
 
   return (
     <View
@@ -134,16 +132,13 @@ function NutritionMissionRow({ icon, title, current, goal, unit, xpReward, isDar
         style={[styles.missionTitle, { color: titleColor }, done && styles.strikethrough]}
         numberOfLines={1}
       >
-        {title}
+        {fullTitle}
       </Text>
-      <View style={styles.nutritionRightCol}>
-        <Text style={[styles.nutritionXpText, { color: done ? CHECK_GREEN : colors.primary }]}>
-          {xpText}
-        </Text>
-        <Text style={[styles.nutritionCountText, { color: mutedColor }]}>
-          {countText}
-        </Text>
-      </View>
+      <Text style={[styles.xpReward, { color: done ? CHECK_GREEN : colors.primary }]}>
+        {'+'}
+        {xpReward}
+        {' XP'}
+      </Text>
       <View style={[styles.checkbox, done && styles.checkboxDone]}>
         {done ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
       </View>
@@ -368,11 +363,6 @@ export default function TodaysMissionsCard({
           isDark={isDark}
           isLast={true}
         />
-        {filteredMissions.length > 0 && (
-          <Text style={[styles.sectionDivider, { color: subtitleColor }]}>
-            Daily Missions
-          </Text>
-        )}
         {filteredMissions.map((mission, index) => (
           <MissionRow
             key={mission.id}
@@ -460,27 +450,6 @@ const styles = StyleSheet.create({
   xpReward: {
     fontSize: 13,
     fontWeight: '700',
-  },
-  nutritionRightCol: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  nutritionXpText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  nutritionCountText: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  sectionDivider: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
   },
   checkbox: {
     width: 22,
