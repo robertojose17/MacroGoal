@@ -40,8 +40,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useOneSignalTags } from '@/hooks/useOneSignalTags';
+// ─── 7-Day Challenge ──────────────────────────────────────────────────────────
+import { useSevenDayChallenge } from '@/hooks/useSevenDayChallenge';
+import ChallengePopup from '@/components/xp/SevenDayChallenge/ChallengePopup';
+import ChallengeDashboardCard from '@/components/xp/SevenDayChallenge/ChallengeDashboardCard';
+import ChallengeCompleteModal from '@/components/xp/SevenDayChallenge/ChallengeCompleteModal';
+import { getChallenge } from '@/utils/sevenDayChallengeApi';
 
 const ONESIGNAL_PROMPT_KEY = 'onesignal_prompt_shown_v1';
+const CHALLENGE_SHOWN_KEY = 'seven_day_challenge_shown';
 
 // ─── Local error boundary so a crashing card doesn't blank the whole screen ───
 interface CardErrorBoundaryState { hasError: boolean; }
@@ -145,6 +152,11 @@ export default function DashboardScreen() {
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+
+  // ─── 7-Day Challenge ────────────────────────────────────────────────────────
+  const [showChallengePopup, setShowChallengePopup] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const challenge = useSevenDayChallenge();
 
   // ─── Notifications ──────────────────────────────────────────────────────────
   const { hasPermission, requestPermission } = useNotifications();
@@ -400,6 +412,44 @@ export default function DashboardScreen() {
       reportDailyHealthMetrics().then((result) => {
         console.log('[Dashboard] focus health metrics report:', result.eventsPosted);
       }).catch(() => {});
+
+      // ── 7-Day Challenge popup logic ──────────────────────────────────────
+      const checkChallengePopup = async () => {
+        try {
+          const shown = await AsyncStorage.getItem(CHALLENGE_SHOWN_KEY);
+          if (shown) return;
+
+          // Verify onboarding is complete
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) return;
+
+          const { data: userData } = await supabase
+            .from('users')
+            .select('onboarding_completed')
+            .eq('id', authUser.id)
+            .single();
+
+          if (!userData?.onboarding_completed) return;
+
+          // Don't show if user already has a challenge (active or completed)
+          const { challenge: existingChallenge } = await getChallenge();
+          if (existingChallenge) {
+            await AsyncStorage.setItem(CHALLENGE_SHOWN_KEY, 'true');
+            return;
+          }
+
+          // 1-second delay to let navigation settle
+          setTimeout(() => {
+            console.log('[Dashboard] Showing 7-Day Challenge popup');
+            setShowChallengePopup(true);
+          }, 1000);
+        } catch (err) {
+          console.warn('[Dashboard] checkChallengePopup error:', err);
+        }
+      };
+
+      checkChallengePopup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loadData])
   );
 
@@ -516,6 +566,29 @@ export default function DashboardScreen() {
               ranking={xp.status.ranking}
               currentRank={xp.status.current_rank}
               isDark={isDark}
+            />
+          </CardErrorBoundary>
+        )}
+
+        {/* ── 7-Day Challenge Card ── */}
+        {challenge.isActive && challenge.challenge && (
+          <CardErrorBoundary label="ChallengeDashboardCard">
+            <ChallengeDashboardCard
+              challenge={challenge.challenge}
+              onCompleteTodaysMission={challenge.completeTodaysMission}
+              onMissionCompleted={(result) => {
+                console.log('[Dashboard] Challenge mission completed — badge:', result.badgeEarned, 'xp:', result.xpAwarded);
+                if (result.badgeEarned) {
+                  setShowCompleteModal(true);
+                } else {
+                  const dayNum = challenge.challenge?.current_day ?? 0;
+                  Alert.alert(
+                    '🔥 Day ' + dayNum + ' Complete!',
+                    '+' + result.xpAwarded + ' XP earned. Keep it up!',
+                    [{ text: 'Let\'s go!' }]
+                  );
+                }
+              }}
             />
           </CardErrorBoundary>
         )}
@@ -714,6 +787,29 @@ export default function DashboardScreen() {
           console.log('[Dashboard] StreakBadgeModal dismissed — milestone:', pendingMilestone);
           if (pendingMilestone) markMilestoneCelebrated(pendingMilestone);
           setPendingMilestone(null);
+        }}
+      />
+
+      {/* ── 7-Day Challenge Popup ── */}
+      <ChallengePopup
+        visible={showChallengePopup}
+        onClose={() => {
+          console.log('[Dashboard] ChallengePopup closed');
+          setShowChallengePopup(false);
+        }}
+        onAccepted={() => {
+          console.log('[Dashboard] Challenge accepted — refreshing challenge state');
+          challenge.refresh();
+        }}
+        onAcceptChallenge={challenge.acceptChallenge}
+      />
+
+      {/* ── 7-Day Challenge Complete Modal ── */}
+      <ChallengeCompleteModal
+        visible={showCompleteModal}
+        onClose={() => {
+          console.log('[Dashboard] ChallengeCompleteModal closed');
+          setShowCompleteModal(false);
         }}
       />
 

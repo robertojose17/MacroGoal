@@ -735,6 +735,16 @@ export default function ProfileScreen() {
           <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {user.email || 'Guest User'}
           </Text>
+
+          {/* Challenger Badge */}
+          {user.challenger_badge && (
+            <View style={styles.badgeRow}>
+              <View style={styles.challengerBadgePill}>
+                <Text style={styles.badgeIcon}>{'🏅'}</Text>
+                <Text style={styles.badgeLabel}>{'Challenger'}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Subscription Card */}
@@ -1943,5 +1953,30 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 16,
+  },
+  // ── Challenger Badge ──────────────────────────────────────────────────────
+  badgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: spacing.sm,
+  },
+  challengerBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#FFB547',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  badgeIcon: {
+    fontSize: 16,
+  },
+  badgeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
