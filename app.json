@@ -4,10 +4,10 @@
     "slug": "macro-goal",
     "version": "1.4.1",
     "orientation": "portrait",
-    "icon": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -26,7 +26,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
+        "foregroundImage": "./assets/images/Untitled design (20).png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
