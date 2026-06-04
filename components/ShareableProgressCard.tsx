@@ -162,10 +162,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 style={styles.photoVignette}
                 pointerEvents="none"
               />
-              {/* BEFORE label top-left */}
-              <View style={[styles.photoPill, styles.photoPillTopLeft, styles.photoPillLight]}>
-                <Text style={styles.photoPillLightText}>BEFORE</Text>
-              </View>
               {/* Date pill bottom-left */}
               <View style={[styles.photoPill, styles.photoPillBottomLeft, styles.photoPillDark]}>
                 <Text style={styles.photoPillDarkText}>{beforeDateDisplay}</Text>
@@ -203,10 +199,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 style={styles.photoVignette}
                 pointerEvents="none"
               />
-              {/* AFTER label top-left */}
-              <View style={[styles.photoPill, styles.photoPillTopLeft, styles.photoPillLight]}>
-                <Text style={styles.photoPillLightText}>AFTER</Text>
-              </View>
               {/* Date pill bottom-left */}
               <View style={[styles.photoPill, styles.photoPillBottomLeft, styles.photoPillDark]}>
                 <Text style={styles.photoPillDarkText}>{afterDateDisplay}</Text>
@@ -347,22 +339,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     zIndex: 4,
   },
-  photoPillTopLeft: {
-    top: 10,
-    left: 10,
-  },
   photoPillBottomLeft: {
     bottom: 10,
     left: 10,
-  },
-  photoPillLight: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-  },
-  photoPillLightText: {
-    color: '#0D0D0D',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
   },
   photoPillDark: {
     backgroundColor: 'rgba(0,0,0,0.6)',

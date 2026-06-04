@@ -465,12 +465,14 @@ export default function ShareProgressScreen() {
 
       const formatDateLabel = (dateStr: string | null | undefined): string => {
         if (!dateStr) return '';
-        const d = new Date(dateStr + 'T00:00:00');
+        // Handle both 'YYYY-MM-DD' and full ISO timestamps
+        const d = dateStr.length === 10 ? new Date(dateStr + 'T00:00:00') : new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       };
 
       const beforeDateLabel = formatDateLabel(beforeEntry?.created_at);
-      const afterDateLabel = afterEntry ? formatDateLabel(afterEntry.created_at) : 'Today';
+      const afterDateLabel = afterEntry ? formatDateLabel(afterEntry.created_at) : '';
 
       console.log('[ShareProgress] Before photo:', beforePhotoUrl ? 'found' : 'none');
       console.log('[ShareProgress] After photo:', afterPhotoUrl ? 'found' : 'none');
