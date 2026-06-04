@@ -45,6 +45,8 @@ interface CardData {
   beforeDateLabel?: string;
   afterDateLabel?: string;
   calorieDeficit?: number;
+  beforeWeight?: number | null;
+  afterWeight?: number | null;
 }
 
 type CardVariant = 'progress' | 'level';
@@ -477,6 +479,37 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] Before photo:', beforePhotoUrl ? 'found' : 'none');
       console.log('[ShareProgress] After photo:', afterPhotoUrl ? 'found' : 'none');
 
+      // Fetch weight for each photo's date (most recent check-in on or before that date)
+      const fetchWeightForEntry = async (entry: { created_at: string } | null): Promise<number | null> => {
+        if (!entry) return null;
+        const photoDate = entry.created_at.slice(0, 10);
+        try {
+          const { data } = await supabase
+            .from('check_ins')
+            .select('weight')
+            .eq('user_id', authUser.id)
+            .not('weight', 'is', null)
+            .lte('date', photoDate)
+            .order('date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (!data?.weight) return null;
+          const lbs = parseFloat(String(data.weight)) * 2.20462;
+          return Math.round(lbs * 10) / 10;
+        } catch (e) {
+          console.warn('[ShareProgress] Failed to fetch weight for date', photoDate, e);
+          return null;
+        }
+      };
+
+      const [beforeWeightLbs, afterWeightLbs] = await Promise.all([
+        fetchWeightForEntry(beforeEntry),
+        fetchWeightForEntry(afterEntry),
+      ]);
+
+      console.log('[ShareProgress] Before weight (lbs):', beforeWeightLbs);
+      console.log('[ShareProgress] After weight (lbs):', afterWeightLbs);
+
       // Fetch leaderboard phrase
       const fallbackPhrase = "Keep going — you're building momentum 📈";
       let leaderboardPhrase = fallbackPhrase;
@@ -519,6 +552,8 @@ export default function ShareProgressScreen() {
         beforeDateLabel,
         afterDateLabel,
         calorieDeficit,
+        beforeWeight: beforeWeightLbs,
+        afterWeight: afterWeightLbs,
       });
 
       setLoading(false);
@@ -717,10 +752,10 @@ export default function ShareProgressScreen() {
                 afterPhoto={cardData.afterPhotoUrl}
                 beforeDate={cardData.beforeDateLabel}
                 afterDate={cardData.afterDateLabel}
-                leaderboardPhrase={cardData.leaderboardPhrase}
-                weightLost={cardData.weightLost}
-                dayStreak={cardData.dayStreak}
-                consistencyScore={cardData.consistencyScore}
+                beforeWeight={cardData.beforeWeight}
+                afterWeight={cardData.afterWeight}
+                weightGoalProgress={cardData.weightGoalProgress}
+                username={username}
               />
             </View>
 
@@ -751,10 +786,10 @@ export default function ShareProgressScreen() {
                     afterPhoto={cardData.afterPhotoUrl}
                     beforeDate={cardData.beforeDateLabel}
                     afterDate={cardData.afterDateLabel}
-                    leaderboardPhrase={cardData.leaderboardPhrase}
-                    weightLost={cardData.weightLost}
-                    dayStreak={cardData.dayStreak}
-                    consistencyScore={cardData.consistencyScore}
+                    beforeWeight={cardData.beforeWeight}
+                    afterWeight={cardData.afterWeight}
+                    weightGoalProgress={cardData.weightGoalProgress}
+                    username={username}
                   />
                 </View>
               </View>

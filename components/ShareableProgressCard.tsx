@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { colors } from '@/styles/commonStyles';
 
 export const PROGRESS_CARD_WIDTH = Dimensions.get('window').width;
 export const PROGRESS_CARD_HEIGHT = 640;
@@ -32,10 +32,10 @@ export interface ShareableProgressCardProps {
   afterPhoto?: string | null;
   beforeDate?: string | null;
   afterDate?: string | null;
-  leaderboardPhrase?: string | null;
-  weightLost?: number;
-  dayStreak?: number;
-  consistencyScore?: number;
+  beforeWeight?: number | null;
+  afterWeight?: number | null;
+  weightGoalProgress?: number;
+  username?: string | null;
 }
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -46,7 +46,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
-    { beforePhoto, afterPhoto, beforeDate, afterDate, weightLost },
+    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, weightGoalProgress, username },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -59,12 +59,19 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const beforeLoadedRef = useRef(false);
     const afterLoadedRef = useRef(false);
 
-    const weightLostNum = typeof weightLost === 'number' ? weightLost : 0;
-    const showBigStat = weightLostNum > 0;
-    const weightDisplay = `\u2212${weightLostNum.toFixed(1)} lbs`;
+    const clampedProgress = Math.max(0, Math.min(100, Math.round(weightGoalProgress ?? 0)));
+    const progressPercent = `${clampedProgress}%`;
+    const progressBarWidth = `${clampedProgress}%` as `${number}%`;
 
     const beforeDateDisplay = beforeDate || '';
     const afterDateDisplay = afterDate || 'Today';
+
+    const showBeforeWeight = typeof beforeWeight === 'number' && isFinite(beforeWeight) && beforeWeight > 0;
+    const showAfterWeight = typeof afterWeight === 'number' && isFinite(afterWeight) && afterWeight > 0;
+    const beforeWeightDisplay = showBeforeWeight ? `${(beforeWeight as number).toFixed(1)} lbs` : '';
+    const afterWeightDisplay = showAfterWeight ? `${(afterWeight as number).toFixed(1)} lbs` : '';
+
+    const footerHandle = username ? `@${username}` : '@you';
 
     useImperativeHandle(ref, () => ({
       captureWhenReady: (): Promise<string> => {
@@ -128,7 +135,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
               />
               <Text style={styles.appName}>Macro Goal</Text>
             </View>
-            <Text style={styles.headerDots}>•••</Text>
           </View>
           <View style={styles.headerDivider} />
 
@@ -156,16 +162,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                   setBeforeLoadedState(true);
                 }}
               />
-              {/* Bottom vignette */}
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.55)']}
-                style={styles.photoVignette}
-                pointerEvents="none"
-              />
-              {/* Date pill bottom-left */}
-              <View style={[styles.photoPill, styles.photoPillBottomLeft, styles.photoPillDark]}>
-                <Text style={styles.photoPillDarkText}>{beforeDateDisplay}</Text>
-              </View>
             </View>
 
             {/* Divider between photos */}
@@ -193,38 +189,52 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                   setAfterLoadedState(true);
                 }}
               />
-              {/* Bottom vignette */}
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.55)']}
-                style={styles.photoVignette}
-                pointerEvents="none"
-              />
-              {/* Date pill bottom-left */}
-              <View style={[styles.photoPill, styles.photoPillBottomLeft, styles.photoPillDark]}>
-                <Text style={styles.photoPillDarkText}>{afterDateDisplay}</Text>
-              </View>
             </View>
           </View>
 
-          {/* ── BIG STAT (only when weight has been lost) ── */}
-          {showBigStat && (
-            <>
-              <LinearGradient
-                colors={['rgba(91,154,168,0.08)', 'transparent']}
-                style={styles.statsGlow}
-                pointerEvents="none"
-              />
-              <View style={styles.bigStatContainer}>
-                <Text style={styles.bigStatNumber}>{weightDisplay}</Text>
-                <Text style={styles.bigStatCaption}>TOTAL LOST</Text>
-              </View>
-            </>
-          )}
+          {/* ── PHOTO CAPTIONS ROW ── */}
+          <View style={styles.captionsRow}>
+            {/* Before caption */}
+            <View style={styles.captionColumn}>
+              <Text style={styles.captionEyebrow}>BEFORE</Text>
+              <Text style={styles.captionDate}>{beforeDateDisplay}</Text>
+              {showBeforeWeight && (
+                <Text style={styles.captionWeight}>{beforeWeightDisplay}</Text>
+              )}
+            </View>
+
+            {/* After caption */}
+            <View style={styles.captionColumn}>
+              <Text style={styles.captionEyebrow}>AFTER</Text>
+              <Text style={styles.captionDate}>{afterDateDisplay}</Text>
+              {showAfterWeight && (
+                <Text style={styles.captionWeight}>{afterWeightDisplay}</Text>
+              )}
+            </View>
+          </View>
+
+          {/* ── GOAL PROGRESS ── */}
+          <View style={styles.goalDivider} />
+          <View style={styles.goalBlock}>
+            <Text style={styles.goalEyebrow}>GOAL PROGRESS</Text>
+            <Text style={styles.goalPercent}>{progressPercent}</Text>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: progressBarWidth }]} />
+            </View>
+          </View>
 
           {/* ── FOOTER ── */}
-          <View style={[styles.footerDivider, showBigStat ? undefined : styles.footerDividerNoStat]} />
+          <View style={styles.footerDivider} />
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Join me on Macro Goal</Text>
+            <Text style={styles.footerHandle}>{footerHandle}</Text>
+            <View style={styles.footerRight}>
+              <Image
+                source={require('@/assets/icon.png')}
+                style={styles.footerIcon}
+                resizeMode="cover"
+              />
+              <Text style={styles.footerBrand}>Made with Macro Goal</Text>
+            </View>
           </View>
 
         </View>
@@ -234,8 +244,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 );
 
 export default ShareableProgressCard;
-
-const PHOTO_ROW_HEIGHT = 340;
 
 const styles = StyleSheet.create({
   captureWrapper: {
@@ -256,7 +264,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 12,
@@ -277,26 +284,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  headerDots: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 14,
-    letterSpacing: 2,
-  },
   headerDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    marginHorizontal: 0,
   },
 
   // ── Photos ──────────────────────────────────────────────────────────────────
   photoRow: {
     flexDirection: 'row',
     width: '100%',
-    height: PHOTO_ROW_HEIGHT,
   },
   photoContainer: {
     flex: 1,
-    height: '100%',
+    aspectRatio: 1,
     backgroundColor: '#1A1A1A',
     overflow: 'hidden',
   },
@@ -319,69 +319,77 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 2,
   },
-  photoVignette: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 80,
-    zIndex: 3,
-  },
   photoDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 2,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     zIndex: 10,
   },
-  photoPill: {
-    position: 'absolute',
-    borderRadius: 100,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    zIndex: 4,
-  },
-  photoPillBottomLeft: {
-    bottom: 10,
-    left: 10,
-  },
-  photoPillDark: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  photoPillDarkText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
 
-  // ── Stats glow ───────────────────────────────────────────────────────────────
-  statsGlow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: PHOTO_ROW_HEIGHT + 1 + 51, // header height approx
-    height: 200,
-    zIndex: 0,
+  // ── Photo captions ──────────────────────────────────────────────────────────
+  captionsRow: {
+    flexDirection: 'row',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-
-  // ── Big stat ─────────────────────────────────────────────────────────────────
-  bigStatContainer: {
+  captionColumn: {
+    flex: 1,
     alignItems: 'center',
-    marginTop: 22,
-    marginBottom: 4,
-    zIndex: 1,
+    gap: 2,
   },
-  bigStatNumber: {
-    fontSize: 56,
-    fontWeight: '800',
-    color: '#5CB97B',
-    letterSpacing: -2,
-    lineHeight: 62,
+  captionEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: 'rgba(255,255,255,0.45)',
+    textTransform: 'uppercase',
   },
-  bigStatCaption: {
+  captionDate: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  captionWeight: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.6)',
+  },
+
+  // ── Goal progress ────────────────────────────────────────────────────────────
+  goalDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  goalBlock: {
+    paddingTop: 20,
+    paddingBottom: 18,
+    paddingHorizontal: 16,
+  },
+  goalEyebrow: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 2,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.45)',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  goalPercent: {
+    fontSize: 46,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -1.5,
+    lineHeight: 52,
+    marginBottom: 12,
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 5,
+    backgroundColor: colors.primary,
   },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
@@ -389,20 +397,32 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
     marginTop: 'auto',
-    marginHorizontal: 0,
-  },
-  footerDividerNoStat: {
-    marginTop: 'auto',
   },
   footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    alignItems: 'center',
   },
-  footerText: {
-    fontSize: 12,
+  footerHandle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+  },
+  footerBrand: {
+    fontSize: 11,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.4)',
-    textAlign: 'center',
+    color: 'rgba(255,255,255,0.45)',
   },
 });
