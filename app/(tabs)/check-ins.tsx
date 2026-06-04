@@ -776,7 +776,19 @@ function TodaySummaryHeader({
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
 
   const total = trackers.length;
-  const done = trackers.filter((t) => todayEntries[t.id] !== null && todayEntries[t.id] !== undefined).length;
+
+  const isTrackerDone = (t: Tracker): boolean => {
+    const entry = todayEntries[t.id];
+    if (!entry) return false;
+    // Numeric trackers with a positive goal_value require the goal to be met
+    if (typeof t.goal_value === 'number' && t.goal_value > 0) {
+      return entry.value >= t.goal_value;
+    }
+    // No goal — any logged entry counts as done
+    return true;
+  };
+
+  const done = trackers.filter(isTrackerDone).length;
 
   // Friendly date
   const now = new Date();
@@ -784,46 +796,12 @@ function TodaySummaryHeader({
   const monthDay = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
   const dateLabel = `${dayName} · ${monthDay}`;
 
-  // Motivational subtitle
-  let motivationText: string;
-  if (total === 0) {
-    motivationText = 'Add your first tracker below';
-  } else if (done === 0) {
-    motivationText = "Let's start the day strong";
-  } else if (done < total) {
-    motivationText = 'Keep the momentum going';
-  } else {
-    motivationText = 'Crushing it today 🔥';
-  }
-
   const completionFraction = total > 0 ? `${done} of ${total} done today` : 'No trackers yet';
 
   return (
     <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
       <Text style={[styles.summaryDate, { color: subColor }]}>{dateLabel}</Text>
       <Text style={[styles.summaryCompletion, { color: textColor }]}>{completionFraction}</Text>
-
-      {/* Progress dots */}
-      {total > 0 ? (
-        <View style={styles.dotsRow}>
-          {trackers.map((t) => {
-            const isDone = todayEntries[t.id] !== null && todayEntries[t.id] !== undefined;
-            return (
-              <View
-                key={t.id}
-                style={[
-                  styles.dot,
-                  isDone
-                    ? { backgroundColor: colors.primary }
-                    : { backgroundColor: 'transparent', borderWidth: 2, borderColor: isDark ? colors.borderDark : colors.border },
-                ]}
-              />
-            );
-          })}
-        </View>
-      ) : null}
-
-      <Text style={[styles.summaryMotivation, { color: subColor }]}>{motivationText}</Text>
     </View>
   );
 }
@@ -1247,22 +1225,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 12,
   },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 10,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  summaryMotivation: {
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-
   // ── Card ─────────────────────────────────────────────────────────────────────
   card: {
     borderRadius: borderRadius.lg,
