@@ -44,17 +44,9 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-/** Parse "Top X%" from a leaderboard phrase, or return a fallback label */
-function parseLeaderboardLabel(phrase: string | null | undefined): string {
-  if (!phrase) return 'CRUSHING IT';
-  const match = phrase.match(/top\s+(\d+)%/i);
-  if (match) return `Top ${match[1]}%`;
-  return 'CRUSHING IT';
-}
-
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
-    { beforePhoto, afterPhoto, beforeDate, afterDate, leaderboardPhrase, weightLost, dayStreak, consistencyScore },
+    { beforePhoto, afterPhoto, beforeDate, afterDate, weightLost },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -67,14 +59,9 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const beforeLoadedRef = useRef(false);
     const afterLoadedRef = useRef(false);
 
-    const streakCount = typeof dayStreak === 'number' ? dayStreak : 0;
     const weightLostNum = typeof weightLost === 'number' ? weightLost : 0;
-    const leaderboardLabel = parseLeaderboardLabel(leaderboardPhrase);
-
-    const weightDisplay = weightLostNum > 0
-      ? `\u2212${weightLostNum.toFixed(1)} lbs`
-      : 'On track';
-    const weightIsZero = weightLostNum === 0;
+    const showBigStat = weightLostNum > 0;
+    const weightDisplay = `\u2212${weightLostNum.toFixed(1)} lbs`;
 
     const beforeDateDisplay = beforeDate || '';
     const afterDateDisplay = afterDate || 'Today';
@@ -227,39 +214,25 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
             </View>
           </View>
 
-          {/* ── STATS AREA with subtle glow ── */}
-          <LinearGradient
-            colors={['rgba(91,154,168,0.08)', 'transparent']}
-            style={styles.statsGlow}
-            pointerEvents="none"
-          />
-
-          {/* ── BIG STAT ── */}
-          <View style={styles.bigStatContainer}>
-            <Text style={[styles.bigStatNumber, weightIsZero && styles.bigStatNumberOnTrack]}>
-              {weightDisplay}
-            </Text>
-            {!weightIsZero && (
-              <Text style={styles.bigStatCaption}>TOTAL LOST</Text>
-            )}
-          </View>
-
-          {/* ── TWO STAT PILLS ── */}
-          <View style={styles.statPillsRow}>
-            <View style={styles.statPill}>
-              <Text style={styles.statPillNumber}>{streakCount}</Text>
-              <Text style={styles.statPillCaption}>DAY STREAK</Text>
-            </View>
-            <View style={styles.statPill}>
-              <Text style={styles.statPillNumber}>{leaderboardLabel}</Text>
-              <Text style={styles.statPillCaption}>THIS WEEK</Text>
-            </View>
-          </View>
+          {/* ── BIG STAT (only when weight has been lost) ── */}
+          {showBigStat && (
+            <>
+              <LinearGradient
+                colors={['rgba(91,154,168,0.08)', 'transparent']}
+                style={styles.statsGlow}
+                pointerEvents="none"
+              />
+              <View style={styles.bigStatContainer}>
+                <Text style={styles.bigStatNumber}>{weightDisplay}</Text>
+                <Text style={styles.bigStatCaption}>TOTAL LOST</Text>
+              </View>
+            </>
+          )}
 
           {/* ── FOOTER ── */}
-          <View style={styles.footerDivider} />
+          <View style={[styles.footerDivider, showBigStat ? undefined : styles.footerDividerNoStat]} />
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Track your macros at macrogoal.app</Text>
+            <Text style={styles.footerText}>Join me on Macro Goal</Text>
           </View>
 
         </View>
@@ -424,12 +397,6 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
     lineHeight: 62,
   },
-  bigStatNumberOnTrack: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -1,
-  },
   bigStatCaption: {
     fontSize: 11,
     fontWeight: '700',
@@ -438,43 +405,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // ── Stat pills ───────────────────────────────────────────────────────────────
-  statPillsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 10,
-    marginTop: 16,
-    zIndex: 1,
-  },
-  statPill: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderRadius: 14,
-  },
-  statPillNumber: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  statPillCaption: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 3,
-  },
-
   // ── Footer ───────────────────────────────────────────────────────────────────
   footerDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
     marginTop: 'auto',
     marginHorizontal: 0,
+  },
+  footerDividerNoStat: {
+    marginTop: 'auto',
   },
   footer: {
     paddingVertical: 14,

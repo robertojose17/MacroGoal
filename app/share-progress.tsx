@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -22,6 +23,8 @@ import { TouchableOpacity } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { useXpStatus } from '@/hooks/useXpStatus';
+
+const PHOTOS_ENDPOINT = `${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`;
 
 // react-native-view-shot requires a native build — lazy import so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -398,16 +401,10 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] Journey start date:', startDate);
 
       // Run independent calculations in parallel
-      const [consistencyScore, weightResult, dayStreak, checkInsWithPhotos, calorieDeficit] = await Promise.all([
+      const [consistencyScore, weightResult, dayStreak, calorieDeficit] = await Promise.all([
         calculateConsistencyScore(authUser.id, startDate, goal.protein_g || 150),
         calculateWeightGoalProgress(authUser.id, userData),
         calculateDayStreak(authUser.id, startDate),
-        supabase
-          .from('check_ins')
-          .select('id, date, photo_url')
-          .eq('user_id', authUser.id)
-          .not('photo_url', 'is', null)
-          .order('date', { ascending: true }),
         calculateRecentDeficit(authUser.id),
       ]);
 
@@ -418,13 +415,53 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] Weight Lost:', weightLost, 'lb');
       console.log('[ShareProgress] Day Streak:', dayStreak);
 
-      // Extract before/after photos
-      const photosData = checkInsWithPhotos.data ?? [];
-      const beforeCheckIn = photosData.length > 0 ? photosData[0] : null;
-      const afterCheckIn = photosData.length > 1 ? photosData[photosData.length - 1] : null;
+      // Fetch photos via the same endpoint PhotoProgressCard uses
+      let photosData: { id: string; photo_url: string; created_at: string }[] = [];
+      try {
+        const { data: { session: photoSession } } = await supabase.auth.getSession();
+        if (photoSession) {
+          const photosResponse = await fetch(PHOTOS_ENDPOINT, {
+            headers: { Authorization: `Bearer ${photoSession.access_token}` },
+          });
+          if (photosResponse.ok) {
+            const photosJson = await photosResponse.json();
+            const fetched = photosJson.photos ?? [];
+            // Sort oldest → newest (same order as PhotoProgressCard)
+            photosData = [...fetched].sort(
+              (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+            console.log('[ShareProgress] Photos fetched via endpoint:', photosData.length);
+          } else {
+            console.warn('[ShareProgress] Photos endpoint returned', photosResponse.status);
+          }
+        }
+      } catch (e) {
+        console.warn('[ShareProgress] Failed to fetch photos via endpoint:', e);
+      }
 
-      const beforePhotoUrl: string | null = beforeCheckIn?.photo_url ?? null;
-      const afterPhotoUrl: string | null = afterCheckIn?.photo_url ?? null;
+      // Read saved before/after IDs from AsyncStorage (written by PhotoProgressCard)
+      let savedBeforeId: string | null = null;
+      let savedAfterId: string | null = null;
+      try {
+        [savedBeforeId, savedAfterId] = await Promise.all([
+          AsyncStorage.getItem(`@photoProgress.beforeId.${authUser.id}`),
+          AsyncStorage.getItem(`@photoProgress.afterId.${authUser.id}`),
+        ]);
+        console.log('[ShareProgress] Saved beforeId:', savedBeforeId, 'savedAfterId:', savedAfterId);
+      } catch (e) {
+        console.warn('[ShareProgress] Failed to read saved photo ids:', e);
+      }
+
+      const ids = new Set(photosData.map((p) => p.id));
+      const beforeEntry = (savedBeforeId && ids.has(savedBeforeId))
+        ? photosData.find((p) => p.id === savedBeforeId)!
+        : photosData[0] ?? null;
+      const afterEntry = (savedAfterId && ids.has(savedAfterId))
+        ? photosData.find((p) => p.id === savedAfterId)!
+        : photosData.length > 1 ? photosData[photosData.length - 1] : null;
+
+      const beforePhotoUrl: string | null = beforeEntry?.photo_url ?? null;
+      const afterPhotoUrl: string | null = afterEntry?.photo_url ?? null;
 
       const formatDateLabel = (dateStr: string | null | undefined): string => {
         if (!dateStr) return '';
@@ -432,8 +469,8 @@ export default function ShareProgressScreen() {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       };
 
-      const beforeDateLabel = formatDateLabel(beforeCheckIn?.date);
-      const afterDateLabel = photosData.length > 1 ? formatDateLabel(afterCheckIn?.date) : 'Today';
+      const beforeDateLabel = formatDateLabel(beforeEntry?.created_at);
+      const afterDateLabel = afterEntry ? formatDateLabel(afterEntry.created_at) : 'Today';
 
       console.log('[ShareProgress] Before photo:', beforePhotoUrl ? 'found' : 'none');
       console.log('[ShareProgress] After photo:', afterPhotoUrl ? 'found' : 'none');

@@ -13,6 +13,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
@@ -179,6 +180,22 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
   // Which picker is open
   const [openPicker, setOpenPicker] = useState<SlotKey | null>(null);
 
+  const persistBeforeId = useCallback(async (id: string) => {
+    try {
+      await AsyncStorage.setItem(`@photoProgress.beforeId.${userId}`, id);
+    } catch (e) {
+      console.warn('[PhotoProgressCard] Failed to persist beforeId:', e);
+    }
+  }, [userId]);
+
+  const persistAfterId = useCallback(async (id: string) => {
+    try {
+      await AsyncStorage.setItem(`@photoProgress.afterId.${userId}`, id);
+    } catch (e) {
+      console.warn('[PhotoProgressCard] Failed to persist afterId:', e);
+    }
+  }, [userId]);
+
   const loadPhotos = useCallback(async () => {
     try {
       console.log('[PhotoProgressCard] Fetching all photos for user:', userId);
@@ -214,17 +231,41 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
       setPhotos(sorted);
 
-      // Default: before = oldest, after = newest
       if (sorted.length >= 1) {
-        setBeforeId(sorted[0].id);
-        setAfterId(sorted[sorted.length - 1].id);
+        // Try to restore saved selection from AsyncStorage
+        let savedBefore: string | null = null;
+        let savedAfter: string | null = null;
+        try {
+          [savedBefore, savedAfter] = await Promise.all([
+            AsyncStorage.getItem(`@photoProgress.beforeId.${userId}`),
+            AsyncStorage.getItem(`@photoProgress.afterId.${userId}`),
+          ]);
+        } catch (e) {
+          console.warn('[PhotoProgressCard] Failed to read saved photo ids:', e);
+        }
+
+        const ids = new Set(sorted.map((p) => p.id));
+        const resolvedBefore = savedBefore && ids.has(savedBefore) ? savedBefore : sorted[0].id;
+        const resolvedAfter = savedAfter && ids.has(savedAfter) ? savedAfter : sorted[sorted.length - 1].id;
+
+        console.log('[PhotoProgressCard] Resolved beforeId:', resolvedBefore, 'afterId:', resolvedAfter);
+        setBeforeId(resolvedBefore);
+        setAfterId(resolvedAfter);
+
+        // Persist defaults if nothing was saved
+        if (!savedBefore || !ids.has(savedBefore)) {
+          await persistBeforeId(resolvedBefore);
+        }
+        if (!savedAfter || !ids.has(savedAfter)) {
+          await persistAfterId(resolvedAfter);
+        }
       }
     } catch (err) {
       console.error('[PhotoProgressCard] Error loading photos:', err);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, persistBeforeId, persistAfterId]);
 
   useEffect(() => {
     loadPhotos();
@@ -277,8 +318,10 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
   const handleSelectDate = (photo: CheckInPhoto) => {
     if (openPicker === 'before') {
       setBeforeId(photo.id);
+      persistBeforeId(photo.id);
     } else if (openPicker === 'after') {
       setAfterId(photo.id);
+      persistAfterId(photo.id);
     }
     setOpenPicker(null);
   };
