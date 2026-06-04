@@ -14,19 +14,13 @@ import {
   Animated,
 } from 'react-native';
 import type { SevenDayChallenge } from '@/types/challenge';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const GREEN = '#4CAF50';
-const GOLD = '#FFB547';
-const CARD_BG = '#111111';
-const TRACK_BG = 'rgba(255,255,255,0.1)';
-const MUTED = 'rgba(255,255,255,0.5)';
+import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface ChallengeDashboardCardProps {
   challenge: SevenDayChallenge;
+  isDark?: boolean;
   onMissionCompleted?: (result: {
     badgeEarned: boolean;
     xpAwarded: number;
@@ -44,10 +38,12 @@ function ProgressBar({
   progress,
   color,
   height,
+  trackColor,
 }: {
   progress: number;
   color: string;
   height: number;
+  trackColor: string;
 }) {
   const widthAnim = useRef(new Animated.Value(0)).current;
 
@@ -65,7 +61,7 @@ function ProgressBar({
   });
 
   return (
-    <View style={[styles.progressTrack, { height, backgroundColor: TRACK_BG }]}>
+    <View style={[styles.progressTrack, { height, backgroundColor: trackColor }]}>
       <Animated.View
         style={[
           styles.progressFill,
@@ -80,11 +76,22 @@ function ProgressBar({
 
 export default function ChallengeDashboardCard({
   challenge,
+  isDark = false,
   onMissionCompleted,
   onCompleteTodaysMission,
 }: ChallengeDashboardCardProps) {
   const [autoCompleting, setAutoCompleting] = useState(false);
   const hasAutoCompletedRef = useRef(false);
+
+  // Theme tokens
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const titleColor = isDark ? colors.textDark : colors.text;
+  const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const trackColor = isDark ? colors.borderDark : colors.border;
+  const shadowStyle = isDark
+    ? {}
+    : { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)', elevation: 4 };
 
   const completedCount = challenge.completed_days.length;
   const totalDays = 7;
@@ -130,35 +137,35 @@ export default function ChallengeDashboardCard({
   const missionProgressText = missionCurrent + ' / ' + missionTarget + (missionUnit ? ' ' + missionUnit : '');
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }, shadowStyle as any]}>
       {/* Left accent border */}
       <View style={styles.leftAccent} />
 
       <View style={styles.inner}>
         {/* Header row */}
         <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>
+          <Text style={[styles.headerTitle, { color: titleColor }]}>
             {'🔥 7-Day Challenge'}
           </Text>
-          <Text style={styles.dayCounter}>
+          <Text style={[styles.dayCounter, { color: mutedColor }]}>
             {dayText}
           </Text>
         </View>
 
         {/* Overall progress bar */}
         <View style={styles.progressSection}>
-          <ProgressBar progress={overallProgress} color={GREEN} height={4} />
-          <Text style={styles.progressLabel}>
+          <ProgressBar progress={overallProgress} color={colors.success} height={4} trackColor={trackColor} />
+          <Text style={[styles.progressLabel, { color: mutedColor }]}>
             {completedCount + ' / ' + totalDays + ' days complete'}
           </Text>
         </View>
 
         {/* Today's mission */}
         <View style={styles.missionSection}>
-          <Text style={styles.missionLabel}>
+          <Text style={[styles.missionLabel, { color: mutedColor }]}>
             {'Today:'}
           </Text>
-          <Text style={styles.missionTitle}>
+          <Text style={[styles.missionTitle, { color: titleColor }]}>
             {missionTitle}
           </Text>
 
@@ -172,10 +179,11 @@ export default function ChallengeDashboardCard({
             <View style={styles.missionProgressSection}>
               <ProgressBar
                 progress={missionProgress}
-                color={GREEN}
+                color={colors.success}
                 height={6}
+                trackColor={trackColor}
               />
-              <Text style={styles.missionProgressText}>
+              <Text style={[styles.missionProgressText, { color: mutedColor }]}>
                 {missionProgressText}
               </Text>
             </View>
@@ -184,7 +192,7 @@ export default function ChallengeDashboardCard({
 
         {/* Reward hint */}
         {!isTodayDone && (
-          <Text style={styles.rewardHint}>
+          <Text style={[styles.rewardHint, { color: mutedColor }]}>
             {'🏅 +500 XP · Challenger Badge on Day 7'}
           </Text>
         )}
@@ -198,16 +206,14 @@ export default function ChallengeDashboardCard({
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    marginBottom: 12,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(76,175,80,0.25)',
   },
   leftAccent: {
     width: 4,
-    backgroundColor: GREEN,
+    backgroundColor: colors.success,
   },
   inner: {
     flex: 1,
@@ -222,12 +228,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   dayCounter: {
     fontSize: 12,
     fontWeight: '600',
-    color: GOLD,
   },
   progressSection: {
     gap: 4,
@@ -241,7 +245,6 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 11,
-    color: MUTED,
     fontWeight: '500',
   },
   missionSection: {
@@ -250,14 +253,12 @@ const styles = StyleSheet.create({
   missionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: MUTED,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   missionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
     marginBottom: 4,
   },
   missionProgressSection: {
@@ -265,7 +266,6 @@ const styles = StyleSheet.create({
   },
   missionProgressText: {
     fontSize: 11,
-    color: MUTED,
     fontWeight: '500',
   },
   completedRow: {
@@ -273,12 +273,11 @@ const styles = StyleSheet.create({
   },
   completedText: {
     fontSize: 13,
-    color: '#34D399',
+    color: colors.success,
     fontWeight: '600',
   },
   rewardHint: {
     fontSize: 11,
-    color: 'rgba(255,181,71,0.7)',
     fontWeight: '500',
   },
 });

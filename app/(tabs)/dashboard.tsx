@@ -575,6 +575,7 @@ export default function DashboardScreen() {
           <CardErrorBoundary label="ChallengeDashboardCard">
             <ChallengeDashboardCard
               challenge={challenge.challenge}
+              isDark={isDark}
               onCompleteTodaysMission={challenge.completeTodaysMission}
               onMissionCompleted={(result) => {
                 console.log('[Dashboard] Challenge mission completed — badge:', result.badgeEarned, 'xp:', result.xpAwarded);

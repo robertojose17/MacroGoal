@@ -162,6 +162,8 @@ export default function CompactProgressCard({ userId, isDark }: Props) {
     : (achieved <= 0 ? `${deltaAbs} lbs gained` : `${deltaAbs} lbs lost`);
 
   const subtitleText = `${directionLabel} · ${pctStr}% there`;
+  const currentDisplay = currentStr + ' lbs';
+  const goalDisplay = 'Goal: ' + goalStr + ' lbs';
 
   return (
     <TouchableOpacity
@@ -173,12 +175,16 @@ export default function CompactProgressCard({ userId, isDark }: Props) {
         <Text style={[styles.sectionLabel, { color: mutedColor }]}>WEIGHT PROGRESS</Text>
         <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron_right" size={18} color={mutedColor} />
       </View>
-      <View style={styles.weightRow}>
-        <Text style={[styles.weightNumber, { color: colors.primary }]} numberOfLines={1}>{currentStr}</Text>
-        <Text style={[styles.weightArrow, { color: mutedColor }]} numberOfLines={1}>{' → '}</Text>
-        <Text style={[styles.weightGoal, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>{goalStr}</Text>
-        <Text style={[styles.weightUnit, { color: mutedColor }]} numberOfLines={1}>{' lbs'}</Text>
-      </View>
+      <Text
+        style={[styles.weightCurrent, { color: colors.primary }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {currentDisplay}
+      </Text>
+      <Text style={[styles.weightGoalLabel, { color: mutedColor }]} numberOfLines={1}>
+        {goalDisplay}
+      </Text>
       <View style={[styles.barTrack, { backgroundColor: barBg }]}>
         <View style={[styles.barFill, { width: `${fillPct}%` as any, backgroundColor: barColor }]} />
       </View>
@@ -198,11 +204,17 @@ const styles = StyleSheet.create({
   } as any,
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  weightRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: spacing.sm, flexWrap: 'nowrap', flexShrink: 1 },
-  weightNumber: { fontSize: 24, fontWeight: '700', lineHeight: 28, flexShrink: 1 },
-  weightArrow: { fontSize: 14, fontWeight: '400', flexShrink: 1 },
-  weightGoal: { fontSize: 18, fontWeight: '600', flexShrink: 1 },
-  weightUnit: { fontSize: 11, fontWeight: '400', marginBottom: 2, flexShrink: 1 },
+  weightCurrent: {
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 28,
+    marginBottom: 2,
+  },
+  weightGoalLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    marginBottom: spacing.sm,
+  },
   barTrack: { height: 6, borderRadius: borderRadius.full, overflow: 'hidden', marginBottom: spacing.xs },
   barFill: { height: '100%', borderRadius: borderRadius.full },
   subtitle: { ...typography.small, marginTop: 2 },
