@@ -361,35 +361,45 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
   const isHero = allDone && !userClaimedToday;
   const isClaimed = userClaimedToday;
 
-  let containerStyle: object;
   let titleText: string;
+  let subtitleText: string;
   let titleColor: string;
   let IconComponent: typeof Camera;
   let iconColor: string;
   let isDisabled: boolean;
 
+  const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const primaryTextColor = isDark ? colors.textDark : colors.text;
+
   if (isClaimed) {
-    containerStyle = styles.claimedContainer;
-    titleText = justEarned ? '✓ +100 XP earned!' : '+100 XP Earned · Come back tomorrow';
+    titleText = justEarned ? '✓ +100 XP earned!' : '+100 XP Earned';
+    subtitleText = 'Come back tomorrow to share again';
     titleColor = colors.success;
     IconComponent = CheckCircle2;
     iconColor = colors.success;
     isDisabled = true;
   } else if (isHero) {
-    containerStyle = styles.heroContainer;
-    titleText = 'All done! Share & Earn +100 XP';
-    titleColor = colors.primary;
+    titleText = 'Share & Earn +100 XP';
+    subtitleText = 'All missions complete — claim your bonus';
+    titleColor = primaryTextColor;
     IconComponent = Flame;
     iconColor = colors.primary;
     isDisabled = false;
   } else {
-    containerStyle = styles.defaultContainer;
-    titleText = 'Share Progress · Earn +100 XP today';
-    titleColor = colors.warning;
+    titleText = 'Share Progress';
+    subtitleText = 'Earn +100 XP today';
+    titleColor = primaryTextColor;
     IconComponent = Camera;
-    iconColor = colors.warning;
+    iconColor = colors.primary;
     isDisabled = false;
   }
+
+  const surfaceStyle = {
+    backgroundColor: isDark ? colors.cardDark : colors.card,
+    borderColor: isHero ? colors.primary : (isDark ? colors.cardBorderDark : colors.cardBorder),
+    borderWidth: isHero ? 1.5 : 1,
+    ...(isDark ? {} : { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)', elevation: 4 }),
+  };
 
   if (loading) return null;
 
@@ -424,7 +434,7 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
         <Pressable
           style={({ pressed }) => [
             styles.base,
-            containerStyle,
+            surfaceStyle,
             isDisabled && styles.disabledOpacity,
             (pressed && !isDisabled) || sharing ? styles.pressedOpacity : undefined,
           ]}
@@ -440,9 +450,20 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
               strokeWidth={2}
             />
             <View style={styles.textBlock}>
-              <Text style={[styles.title, { color: titleColor }, isHero && styles.heroTitle]}>
-                {sharing ? 'Preparing share…' : titleText}
-              </Text>
+              {sharing ? (
+                <Text style={[styles.title, { color: titleColor, fontWeight: '700' }]}>
+                  Preparing share…
+                </Text>
+              ) : (
+                <>
+                  <Text style={[styles.title, { color: titleColor, fontWeight: '700' }]}>
+                    {titleText}
+                  </Text>
+                  <Text style={[styles.subtitle, { color: mutedColor }]}>
+                    {subtitleText}
+                  </Text>
+                </>
+              )}
             </View>
           </View>
         </Pressable>
@@ -466,20 +487,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderWidth: 1,
-  },
-  defaultContainer: {
-    backgroundColor: colors.warning + '15',
-    borderColor: colors.warning + '60',
-  },
-  claimedContainer: {
-    backgroundColor: colors.success + '15',
-    borderColor: colors.success + '60',
-  },
-  heroContainer: {
-    backgroundColor: colors.primary + '20',
-    borderColor: colors.primary,
-    borderWidth: 1.5,
   },
   disabledOpacity: {
     opacity: 0.85,
@@ -494,14 +501,14 @@ const styles = StyleSheet.create({
   },
   textBlock: {
     flex: 1,
-    gap: 3,
   },
   title: {
     fontSize: 15,
-    fontWeight: '600',
-  },
-  heroTitle: {
-    fontSize: 15,
     fontWeight: '700',
+  },
+  subtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
 });

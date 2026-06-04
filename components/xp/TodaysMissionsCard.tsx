@@ -372,6 +372,10 @@ function LockedHint({ message, current, target, isDark }: LockedHintProps) {
   const progressPercent = target > 0 ? Math.min(current / target, 1) : 0;
   const progressWidth = Math.round(progressPercent * 100);
 
+  const benefitMessage = target > 0
+    ? `Reach Level ${target} to unlock a bonus mission slot — extra missions, more XP, faster level-ups.`
+    : message;
+
   return (
     <View
       style={[
@@ -387,11 +391,11 @@ function LockedHint({ message, current, target, isDark }: LockedHintProps) {
       <View style={styles.lockedHintHeader}>
         <Lock size={16} color={GOLD} />
         <Text style={[styles.lockedHintTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-          Unlock Extra Missions
+          Earn more XP every day
         </Text>
       </View>
       <Text style={[styles.lockedHintSubtitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-        {message}
+        {benefitMessage}
       </Text>
       <View style={styles.lockedProgressTrack}>
         <View style={[styles.lockedProgressFill, { width: progressWidth + '%' }]} />
