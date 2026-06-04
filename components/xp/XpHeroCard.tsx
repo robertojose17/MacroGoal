@@ -2,12 +2,11 @@
  * XpHeroCard
  *
  * Hero card at the top of the dashboard showing:
- * - Level number with circular progress ring
- * - Rank badge
- * - XP progress bar with label
- * - Streak indicator with optional freeze badge
+ * - Level number with circular progress ring (left column)
+ * - Rank badge below ring (left column)
+ * - XP progress bar, XP to next level, streak (right column)
  * - Premium boost badge
- * - Optional streak-at-risk warning
+ * - Optional streak-at-risk warning (full-width bottom)
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -132,6 +131,13 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
   const freezeAnimOut = () =>
     Animated.spring(freezeScale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
 
+  // Derived display strings for streak row
+  const streakNumberText = String(streak);
+  const streakLabelText = 'Day Streak';
+
+  // XP to next level copy
+  const xpToNextCopy = `${xpToNextLevelDisplay} XP to Level ${nextLevel}`;
+
   return (
     <LinearGradient
       colors={[isDark ? '#1E2035' : '#F0F2F7', isDark ? '#252740' : '#FFFFFF']}
@@ -139,86 +145,63 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      {/* Top row: streak + freeze badge on right */}
-      <View style={styles.topRow}>
-        <View style={styles.streakContainer}>
-          <Text style={styles.streakEmoji}>🔥</Text>
-          <Text style={[styles.streakNumber, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-            {streak}
-          </Text>
-          <Text style={[styles.streakLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            {streak === 1 ? 'Day Streak' : 'Day Streak'}
-          </Text>
+      {/* Two-column body */}
+      <View style={styles.columnsRow}>
 
-          {/* Freeze badge — only when freezes available */}
-          {showFreezeBadge && (
-            <Animated.View style={{ transform: [{ scale: freezeScale }] }}>
-              <Pressable
-                onPressIn={freezeAnimIn}
-                onPressOut={freezeAnimOut}
-                onPress={handleFreezePress}
-                style={[
-                  styles.freezeBadge,
-                  { backgroundColor: isDark ? 'rgba(96,165,250,0.15)' : 'rgba(96,165,250,0.12)' },
-                ]}
-              >
-                <Snowflake size={12} color="#60A5FA" strokeWidth={2.5} />
-                <Text style={styles.freezeText}>
-                  {freezeLabel}
-                </Text>
-              </Pressable>
-            </Animated.View>
-          )}
-        </View>
-      </View>
+        {/* ── LEFT COLUMN: ring + rank ── */}
+        <View style={styles.leftColumn}>
+          {/* Progress ring */}
+          <View style={styles.ringWrapper}>
+            {/* Background track */}
+            <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={isDark ? '#3A3C52' : '#E5E7EB'}
+                strokeWidth={RING_STROKE}
+                fill="none"
+              />
+            </Svg>
 
-      {/* Center: ring + level */}
-      <View style={styles.centerRow}>
-        <View style={styles.ringWrapper}>
-          {/* Background ring */}
-          <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
-            <Circle
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_RADIUS}
-              stroke={isDark ? '#3A3C52' : '#E5E7EB'}
-              strokeWidth={RING_STROKE}
-              fill="none"
-            />
-          </Svg>
+            {/* Animated progress arc */}
+            <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={gradStart}
+                strokeWidth={RING_STROKE}
+                fill="none"
+                strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                strokeDashoffset={RING_CIRCUMFERENCE * (1 - progressPercent / 100)}
+                strokeLinecap="round"
+                rotation="-90"
+                origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+              />
+            </Svg>
 
-          {/* Animated progress ring — use a static approach since AnimatedCircle needs special handling */}
-          <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
-            <Circle
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_RADIUS}
-              stroke={gradStart}
-              strokeWidth={RING_STROKE}
-              fill="none"
-              strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
-              strokeDashoffset={RING_CIRCUMFERENCE * (1 - progressPercent / 100)}
-              strokeLinecap="round"
-              rotation="-90"
-              origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
-            />
-          </Svg>
+            {/* Inside ring: "LEVEL" label + big number */}
+            <View style={styles.ringInner}>
+              <Text style={[styles.levelLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+                LEVEL
+              </Text>
+              <Text style={[styles.levelNumber, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
+                {level}
+              </Text>
+            </View>
+          </View>
 
-          {/* Level number inside ring */}
-          <View style={styles.ringInner}>
-            <Text style={[styles.levelNumber, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-              {level}
-            </Text>
-            <Text style={[styles.levelLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-              LEVEL
-            </Text>
+          {/* Rank badge centered below ring */}
+          <View style={styles.rankBadgeWrapper}>
+            <RankBadge rank={rank} size="md" />
           </View>
         </View>
 
-        {/* Right side: rank + XP info + premium badge */}
-        <View style={styles.infoColumn}>
-          <RankBadge rank={rank} size="md" />
+        {/* ── RIGHT COLUMN: XP info + bar + streak ── */}
+        <View style={styles.rightColumn}>
 
+          {/* XP current / needed */}
           <View style={styles.xpTextRow}>
             <Text style={[styles.xpCurrent, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
               {xpInLevelDisplay}
@@ -234,13 +217,56 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
             </Text>
           </View>
 
+          {/* Horizontal progress bar */}
+          <View style={[styles.barBackground, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
+            <Animated.View
+              style={[
+                styles.barFill,
+                {
+                  width: barWidth,
+                  backgroundColor: gradStart,
+                },
+              ]}
+            />
+          </View>
+
+          {/* XP to next level */}
           <Text style={[styles.xpToNext, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            {xpToNextLevelDisplay}
-            {' XP to Level '}
-            {nextLevel}
+            {xpToNextCopy}
           </Text>
 
-          {/* Premium boost badge — only when multiplier > 1 */}
+          {/* Streak row */}
+          <View style={styles.streakRow}>
+            <Text style={styles.streakEmoji}>🔥</Text>
+            <Text style={[styles.streakNumber, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
+              {streakNumberText}
+            </Text>
+            <Text style={[styles.streakLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
+              {streakLabelText}
+            </Text>
+
+            {/* Freeze badge inline */}
+            {showFreezeBadge && (
+              <Animated.View style={{ transform: [{ scale: freezeScale }] }}>
+                <Pressable
+                  onPressIn={freezeAnimIn}
+                  onPressOut={freezeAnimOut}
+                  onPress={handleFreezePress}
+                  style={[
+                    styles.freezeBadge,
+                    { backgroundColor: isDark ? 'rgba(96,165,250,0.15)' : 'rgba(96,165,250,0.12)' },
+                  ]}
+                >
+                  <Snowflake size={12} color="#60A5FA" strokeWidth={2.5} />
+                  <Text style={styles.freezeText}>
+                    {freezeLabel}
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            )}
+          </View>
+
+          {/* Premium boost badge */}
           {showPremiumBadge && (
             <LinearGradient
               colors={['#FFB547', '#FF8A5B']}
@@ -257,22 +283,7 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
         </View>
       </View>
 
-      {/* Progress bar */}
-      <View style={styles.barSection}>
-        <View style={[styles.barBackground, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-          <Animated.View
-            style={[
-              styles.barFill,
-              {
-                width: barWidth,
-                backgroundColor: gradStart,
-              },
-            ]}
-          />
-        </View>
-      </View>
-
-      {/* Streak at risk warning */}
+      {/* Streak at risk warning — full width below both columns */}
       {streakAtRisk && (
         <View style={[styles.warningRow, { backgroundColor: isDark ? 'rgba(251,146,60,0.15)' : 'rgba(251,146,60,0.1)' }]}>
           <Text style={styles.warningText}>
@@ -302,49 +313,17 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
-  topRow: {
+
+  // ── Two-column layout ──
+  columnsRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: spacing.sm,
-  },
-  streakContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  streakEmoji: {
-    fontSize: 18,
-  },
-  streakNumber: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  streakLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  freezeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 20,
-    marginLeft: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(96,165,250,0.3)',
-  },
-  freezeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#60A5FA',
-    letterSpacing: 0.2,
-  },
-  centerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.lg,
-    marginBottom: spacing.md,
+  },
+
+  // ── Left column ──
+  leftColumn: {
+    alignItems: 'center',
   },
   ringWrapper: {
     width: RING_SIZE,
@@ -356,25 +335,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  levelLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
   levelNumber: {
     fontSize: 40,
     fontWeight: '800',
     lineHeight: 46,
   },
-  levelLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1.2,
+  rankBadgeWrapper: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
   },
-  infoColumn: {
+
+  // ── Right column ──
+  rightColumn: {
     flex: 1,
     gap: spacing.sm,
+    paddingTop: 4,
   },
   xpTextRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     flexWrap: 'wrap',
-    marginTop: spacing.xs,
   },
   xpCurrent: {
     fontSize: 20,
@@ -392,29 +378,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
   },
-  xpToNext: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  premiumBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginTop: 2,
-  },
-  premiumBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  barSection: {
-    marginTop: spacing.xs,
-  },
   barBackground: {
     height: 6,
     borderRadius: borderRadius.full,
@@ -424,6 +387,65 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: borderRadius.full,
   },
+  xpToNext: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // ── Streak row ──
+  streakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  streakEmoji: {
+    fontSize: 15,
+  },
+  streakNumber: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  streakLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  freezeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginLeft: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(96,165,250,0.3)',
+  },
+  freezeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#60A5FA',
+    letterSpacing: 0.2,
+  },
+
+  // ── Premium badge ──
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  premiumBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+
+  // ── Warning row ──
   warningRow: {
     marginTop: spacing.sm,
     borderRadius: borderRadius.md,
