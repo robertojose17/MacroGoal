@@ -196,7 +196,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
           <View style={styles.captionsRow}>
             {/* Before caption */}
             <View style={styles.captionColumn}>
-              <Text style={styles.captionEyebrow}>BEFORE</Text>
               <Text style={styles.captionDate}>{beforeDateDisplay}</Text>
               {showBeforeWeight && (
                 <Text style={styles.captionWeight}>{beforeWeightDisplay}</Text>
@@ -205,7 +204,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 
             {/* After caption */}
             <View style={styles.captionColumn}>
-              <Text style={styles.captionEyebrow}>AFTER</Text>
               <Text style={styles.captionDate}>{afterDateDisplay}</Text>
               {showAfterWeight && (
                 <Text style={styles.captionWeight}>{afterWeightDisplay}</Text>
@@ -335,13 +333,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: 2,
-  },
-  captionEyebrow: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    color: 'rgba(255,255,255,0.45)',
-    textTransform: 'uppercase',
   },
   captionDate: {
     fontSize: 13,
