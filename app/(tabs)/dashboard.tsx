@@ -36,7 +36,6 @@ import { reportTodaySteps } from '@/utils/stepsReporter';
 import { reportDailyHealthMetrics } from '@/utils/healthMetricsReporter';
 import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useOneSignalTags } from '@/hooks/useOneSignalTags';
@@ -653,26 +652,52 @@ export default function DashboardScreen() {
         )}
 
         {/* ── Share My Progress button ── */}
-        <View style={styles.shareProgressButtonContainer}>
-          <TouchableOpacity
-            style={styles.shareProgressButton}
-            onPress={() => {
-              console.log('[Dashboard] Share My Progress pressed');
-              router.push('/share-progress?variant=level');
-            }}
-            activeOpacity={0.8}
+        <TouchableOpacity
+          style={[
+            styles.shareProgressButton,
+            {
+              backgroundColor: isDark ? colors.cardDark : colors.card,
+              borderColor: isDark ? '#3A3C52' : '#D4D6DA',
+            },
+          ]}
+          onPress={() => {
+            console.log('[Dashboard] Share My Progress pressed');
+            router.push('/share-progress?variant=level');
+          }}
+          activeOpacity={0.75}
+        >
+          <View
+            style={[
+              styles.shareProgressIconBg,
+              { backgroundColor: isDark ? colors.primary + '22' : colors.primary + '15' },
+            ]}
           >
-            <LinearGradient
-              colors={[colors.primary, '#FF8E3C']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.shareProgressGradient}
+            <Ionicons name="share-social" size={20} color={colors.primary} />
+          </View>
+          <View style={styles.shareProgressTextBlock}>
+            <Text
+              style={[
+                styles.shareProgressTitle,
+                { color: isDark ? '#F1F5F9' : '#2B2D42' },
+              ]}
             >
-              <Ionicons name="share-social" size={20} color="#fff" />
-              <Text style={styles.shareProgressButtonText}>Share My Progress</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+              Share My Progress
+            </Text>
+            <Text
+              style={[
+                styles.shareProgressSubtitle,
+                { color: isDark ? '#A0A2B8' : '#6B7280' },
+              ]}
+            >
+              Earn +100 XP
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={isDark ? '#A0A2B8' : '#6B7280'}
+          />
+        </TouchableOpacity>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -911,38 +936,45 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
   // ── Share progress button ─────────────────────────────────────────────────
-  shareProgressButtonContainer: {
+  shareProgressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     marginHorizontal: spacing.md,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
       },
-      android: { elevation: 8 },
+      android: { elevation: 2 },
     }),
   },
-  shareProgressButton: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    height: 56,
-  },
-  shareProgressGradient: {
-    flex: 1,
-    flexDirection: 'row',
+  shareProgressIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    borderRadius: 28,
   },
-  shareProgressButtonText: {
-    color: '#fff',
+  shareProgressTextBlock: {
+    flex: 1,
+  },
+  shareProgressTitle: {
     fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+  },
+  shareProgressSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   // ── Modal ─────────────────────────────────────────────────────────────────
   modalOverlay: {
