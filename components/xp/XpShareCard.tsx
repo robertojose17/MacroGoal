@@ -27,10 +27,6 @@ if (Platform.OS !== 'web') {
 }
 const CaptureWrapper: any = ViewShot || View;
 
-// ─── Logo asset ───────────────────────────────────────────────────────────────
-// app.json icon: ./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png
-const APP_LOGO = require('../../assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png');
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface XpShareCardHandle {
@@ -123,40 +119,30 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
         options={{ format: 'png', quality: 1, result: 'tmpfile', width: 1080, height: 1920 }}
         style={[styles.captureWrapper, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
       >
-        {/* Full-bleed dark gradient with rank accent */}
-        <LinearGradient
-          colors={['#0D0F1E', '#12152A', '#0D0F1E']}
-          style={styles.background}
-        >
-          {/* Rank glow overlay */}
-          <View
-            style={[
-              styles.glowOverlay,
-              { backgroundColor: rankColor.glow },
-            ]}
-            pointerEvents="none"
-          />
+        <View style={[styles.card, { width: CARD_WIDTH, height: CARD_HEIGHT }]}>
 
-          {/* Top accent bar */}
-          <LinearGradient
-            colors={[gradStart, gradEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.topBar}
-          />
+          {/* ── HEADER ── */}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <Image
+                source={require('@/assets/icon.png')}
+                style={styles.appIcon}
+                resizeMode="cover"
+              />
+              <Text style={styles.appName}>Macro Goal</Text>
+            </View>
+            <Text style={styles.headerDots}>•••</Text>
+          </View>
+          <View style={styles.headerDivider} />
 
           {/* ── CONTENT ── */}
           <View style={styles.content}>
 
-            {/* Logo row */}
-            <View style={styles.logoRow}>
-              <Image
-                source={resolveImageSource(APP_LOGO)}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-              <Text style={styles.appName}>Macro Goal</Text>
-            </View>
+            {/* Rank glow overlay */}
+            <View
+              style={[styles.glowOverlay, { backgroundColor: rankColor.glow }]}
+              pointerEvents="none"
+            />
 
             {/* Spacer */}
             <View style={styles.spacerTop} />
@@ -242,28 +228,18 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
               </View>
             )}
 
-            {/* Divider */}
-            <LinearGradient
-              colors={[gradStart, gradEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.divider}
-            />
-
-            {/* CTA */}
-            <Text style={styles.ctaText}>Join me on Macro Goal</Text>
+            {/* Handle */}
             <Text style={[styles.ctaHandle, { color: rankColor.text }]}>{handleDisplay}</Text>
 
           </View>
 
-          {/* Bottom accent bar */}
-          <LinearGradient
-            colors={[gradStart, gradEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.bottomBar}
-          />
-        </LinearGradient>
+          {/* ── FOOTER ── */}
+          <View style={styles.footerDivider} />
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Join me on Macro Goal</Text>
+          </View>
+
+        </View>
       </CaptureWrapper>
     );
   }
@@ -275,52 +251,66 @@ export default XpShareCard;
 
 const styles = StyleSheet.create({
   captureWrapper: {
-    borderRadius: 32,
+    borderRadius: 20,
     overflow: 'hidden',
   },
-  background: {
+  card: {
+    backgroundColor: '#0D0D0D',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  appIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+  },
+  appName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  headerDots: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 14,
+    letterSpacing: 2,
+  },
+  headerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  // ── Content ─────────────────────────────────────────────────────────────────
+  content: {
     flex: 1,
+    paddingHorizontal: 40,
+    paddingVertical: 24,
+    alignItems: 'center',
     position: 'relative',
   },
   glowOverlay: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.08,
   },
-  topBar: {
-    height: 4,
-    width: '100%',
-  },
-  bottomBar: {
-    height: 4,
-    width: '100%',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 40,
-    paddingVertical: 32,
-    alignItems: 'center',
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 10,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-  },
-  appName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 0.5,
-  },
   spacerTop: {
     flex: 1,
     maxHeight: 40,
-    minHeight: 20,
+    minHeight: 16,
   },
   levelLabel: {
     fontSize: 14,
@@ -429,7 +419,7 @@ const styles = StyleSheet.create({
   deficitRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   deficitValue: {
     fontSize: 22,
@@ -443,22 +433,28 @@ const styles = StyleSheet.create({
     color: 'rgba(52,211,153,0.6)',
     letterSpacing: 1.5,
   },
-  divider: {
-    width: 60,
-    height: 2,
-    borderRadius: 1,
-    marginBottom: 20,
-    opacity: 0.6,
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: 4,
-  },
   ctaHandle: {
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
+    marginTop: 8,
+  },
+
+  // ── Footer ───────────────────────────────────────────────────────────────────
+  footerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginTop: 'auto',
+  },
+  footer: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
   },
 });

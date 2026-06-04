@@ -448,11 +448,6 @@ function TrackerCard({
 
   const streak = stats ? Number(stats.current_streak) : 0;
   const completionPct = stats ? Math.round(Number(stats.completion_rate) * 100) : 0;
-  const statusColor =
-    stats?.status === 'on_track' ? colors.success :
-    stats?.status === 'improving' ? colors.primary :
-    colors.warning;
-
   const cardBg = isDark ? colors.cardDark : colors.card;
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -692,9 +687,6 @@ function TrackerCard({
     );
   }
 
-  // ── Status badge ────────────────────────────────────────────────────────────
-  const statusLabel = stats?.status === 'on_track' ? 'on track' : stats?.status === 'improving' ? 'improving' : stats?.status === 'behind' || stats?.status === 'off_track' ? 'behind' : null;
-
   return (
     <AnimatedPressable onPress={onPress} style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
       {/* Zone A — Header row */}
@@ -710,13 +702,6 @@ function TrackerCard({
             <Text style={[styles.trackerUnit, { color: subColor }]}>{tracker.unit}</Text>
           ) : null}
         </View>
-        {/* Status badge */}
-        {statusLabel ? (
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
-          </View>
-        ) : null}
         {/* Steps: action in header row */}
         {isSteps ? (
           <View style={{ marginLeft: 8 }}>
@@ -970,6 +955,26 @@ export default function CheckInsScreen() {
       getStats(tracker.id).then((newStats) => {
         setStatsMap((prev) => ({ ...prev, [tracker.id]: newStats }));
       }).catch(() => {});
+
+      // Also refresh community stats + leaderboard panel for steps/gym
+      const trackerType = getCheckInType(tracker.name);
+      if (trackerType === 'steps' || trackerType === 'gym') {
+        console.log('[CheckIns] Refreshing community stats for', tracker.name, 'after quick log');
+        const period = trackerType === 'steps' ? 'today' : 'month';
+        const lowerName = tracker.name.toLowerCase();
+        setCommunityLoadingMap((prev) => ({ ...prev, [lowerName]: true }));
+        fetchLeaderboard(lowerName, period)
+          .then((result) => {
+            setCommunityStatsMap((prev) => ({ ...prev, [lowerName]: result.stats }));
+          })
+          .catch(() => {
+            setCommunityStatsMap((prev) => ({ ...prev, [lowerName]: null }));
+          })
+          .finally(() => {
+            setCommunityLoadingMap((prev) => ({ ...prev, [lowerName]: false }));
+          });
+        setLeaderboardRefreshKey((k) => k + 1);
+      }
     } catch (err) {
       // 4) Rollback optimistic state
       console.error('[CheckIns] Quick log failed, rolling back:', err);
@@ -1371,25 +1376,6 @@ const styles = StyleSheet.create({
   statChipLabel: {
     fontSize: 12,
     fontWeight: '400',
-  },
-
-  // ── Status badge ─────────────────────────────────────────────────────────────
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: borderRadius.full,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
 
   // ── Action buttons ───────────────────────────────────────────────────────────
