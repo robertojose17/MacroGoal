@@ -111,7 +111,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
     const xpDisplay = Number(totalXp).toLocaleString();
     const showDeficit = (calorieDeficit ?? 0) > 0;
     const deficitDisplay = showDeficit ? Number(calorieDeficit).toLocaleString() : '';
-    const handleDisplay = `@${username ?? 'macrogoalapp'}`;
+    const footerHandle = username ? `@${username}` : '@you';
 
     return (
       <CaptureWrapper
@@ -123,15 +123,17 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
 
           {/* ── HEADER ── */}
           <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Image
-                source={require('@/assets/icon.png')}
-                style={styles.appIcon}
-                resizeMode="cover"
-              />
+            <Image
+              source={resolveImageSource(require('@/assets/icon.png'))}
+              style={styles.appIcon}
+              resizeMode="cover"
+            />
+            <View style={styles.headerTextColumn}>
               <Text style={styles.appName}>Macro Goal</Text>
+              <Text style={[styles.appTagline, { color: rankColor.text }]}>
+                Track. Improve. Transform.
+              </Text>
             </View>
-            <Text style={styles.headerDots}>•••</Text>
           </View>
           <View style={styles.headerDivider} />
 
@@ -228,15 +230,20 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
               </View>
             )}
 
-            {/* Handle */}
-            <Text style={[styles.ctaHandle, { color: rankColor.text }]}>{handleDisplay}</Text>
-
           </View>
 
           {/* ── FOOTER ── */}
           <View style={styles.footerDivider} />
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Join me on Macro Goal</Text>
+            <Text style={styles.footerHandle}>{footerHandle}</Text>
+            <View style={styles.footerRight}>
+              <Image
+                source={require('@/assets/icon.png')}
+                style={styles.footerIcon}
+                resizeMode="cover"
+              />
+              <Text style={styles.footerBrand}>Made with Macro Goal</Text>
+            </View>
           </View>
 
         </View>
@@ -264,31 +271,30 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 12,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   appIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  },
+  headerTextColumn: {
+    flexDirection: 'column',
   },
   appName: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     letterSpacing: 0.3,
   },
-  headerDots: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 14,
-    letterSpacing: 2,
+  appTagline: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginTop: 2,
   },
   headerDivider: {
     height: 1,
@@ -433,12 +439,6 @@ const styles = StyleSheet.create({
     color: 'rgba(52,211,153,0.6)',
     letterSpacing: 1.5,
   },
-  ctaHandle: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginTop: 8,
-  },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
   footerDivider: {
@@ -447,14 +447,30 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
   },
   footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    alignItems: 'center',
   },
-  footerText: {
-    fontSize: 12,
+  footerHandle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+  },
+  footerBrand: {
+    fontSize: 11,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.4)',
-    textAlign: 'center',
+    color: 'rgba(255,255,255,0.45)',
   },
 });
