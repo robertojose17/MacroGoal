@@ -12,8 +12,8 @@ import {
   Text,
   StyleSheet,
   Animated,
+  Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import type { SevenDayChallenge } from '@/types/challenge';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 
@@ -80,13 +80,17 @@ function StepNode({
   isCompleted,
   isCurrent,
   isDay7,
+  isDark,
 }: {
   dayNum: number;
   isCompleted: boolean;
   isCurrent: boolean;
   isDay7: boolean;
+  isDark: boolean;
 }) {
   const dayLabel = String(dayNum);
+  const futureTextColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)';
+  const futureBorderColor = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)';
 
   if (isCompleted) {
     return (
@@ -113,8 +117,8 @@ function StepNode({
   }
 
   return (
-    <View style={[styles.stepCircle, styles.stepFuture]}>
-      <Text style={styles.stepTextFuture}>{dayLabel}</Text>
+    <View style={[styles.stepCircle, styles.stepFuture, { borderColor: futureBorderColor }]}>
+      <Text style={[styles.stepTextFuture, { color: futureTextColor }]}>{dayLabel}</Text>
     </View>
   );
 }
@@ -123,6 +127,7 @@ function StepNode({
 
 export default function ChallengeDashboardCard({
   challenge,
+  isDark = false,
   onMissionCompleted,
   onCompleteTodaysMission,
 }: ChallengeDashboardCardProps) {
@@ -160,6 +165,18 @@ export default function ChallengeDashboardCard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mission?.current, mission?.target, isTodayDone]);
 
+  // Theme-derived values
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const titleColor = isDark ? colors.textDark : colors.text;
+  const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const dayPillBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const innerCardBg = isDark ? '#1F2937' : '#F8FAFC';
+  const innerCardBorder = isDark ? colors.borderDark : colors.border;
+  const footerBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+  const connectorInactiveBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
+  const progressTrackColor = isDark ? colors.borderDark : '#E8EEF0';
+
   // Derived display values
   const totalDays = 7;
   const dayText = 'Day ' + challenge.current_day + ' of ' + totalDays;
@@ -183,6 +200,7 @@ export default function ChallengeDashboardCard({
         isCompleted={isCompleted}
         isCurrent={isCurrent}
         isDay7={isDay7}
+        isDark={isDark}
       />
     );
     if (d < totalDays) {
@@ -193,7 +211,7 @@ export default function ChallengeDashboardCard({
           key={'connector-' + d}
           style={[
             styles.connector,
-            { backgroundColor: bothCompleted ? colors.primary : 'rgba(255,255,255,0.15)' },
+            { backgroundColor: bothCompleted ? colors.primary : connectorInactiveBg },
           ]}
         />
       );
@@ -201,43 +219,38 @@ export default function ChallengeDashboardCard({
   }
 
   return (
-    <LinearGradient
-      colors={['#0F2D31', '#0A1719']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.card}
-    >
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
       {/* Header row */}
       <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>{'🔥 7-Day Challenge'}</Text>
-        <View style={styles.dayPill}>
-          <Text style={styles.dayPillText}>{'📅 ' + dayText}</Text>
+        <Text style={[styles.headerTitle, { color: titleColor }]}>{'🔥 7-Day Challenge'}</Text>
+        <View style={[styles.dayPill, { backgroundColor: dayPillBg }]}>
+          <Text style={[styles.dayPillText, { color: mutedColor }]}>{'📅 ' + dayText}</Text>
         </View>
       </View>
 
       {/* Tagline */}
-      <Text style={styles.tagline}>{'BUILD THE HABIT. EARN THE BADGE.'}</Text>
+      <Text style={[styles.tagline, { color: mutedColor }]}>{'BUILD THE HABIT. EARN THE BADGE.'}</Text>
 
       {/* Step indicator */}
       <View style={styles.stepsRow}>
         {stepItems}
       </View>
 
-      {/* Inner white card — today's goal */}
-      <View style={styles.innerCard}>
+      {/* Inner card — today's goal */}
+      <View style={[styles.innerCard, { backgroundColor: innerCardBg, borderColor: innerCardBorder }]}>
         <Text style={styles.eyebrow}>{"TODAY'S GOAL"}</Text>
-        <Text style={styles.missionTitle}>{missionTitle}</Text>
+        <Text style={[styles.missionTitle, { color: titleColor }]}>{missionTitle}</Text>
 
         {isTodayDone ? (
           <Text style={styles.completedText}>{'✅ Day complete! Come back tomorrow.'}</Text>
         ) : (
           <>
-            <Text style={styles.missionProgressText}>{missionProgressText}</Text>
+            <Text style={[styles.missionProgressText, { color: mutedColor }]}>{missionProgressText}</Text>
             <ProgressBar
               progress={missionProgress}
               color={colors.primary}
               height={6}
-              trackColor="#E8EEF0"
+              trackColor={progressTrackColor}
             />
           </>
         )}
@@ -245,12 +258,12 @@ export default function ChallengeDashboardCard({
 
       {/* Footer reward hint */}
       {!isTodayDone && (
-        <View style={styles.footer}>
+        <View style={[styles.footer, { backgroundColor: footerBg }]}>
           <View style={styles.footerLeft}>
             <Text style={styles.footerMedal}>{'🏅'}</Text>
             <View style={styles.footerTextBlock}>
-              <Text style={styles.footerXp}>{'+500 XP'}</Text>
-              <Text style={styles.footerBadge}>{'Challenger Badge on Day 7'}</Text>
+              <Text style={[styles.footerXp, { color: titleColor }]}>{'+500 XP'}</Text>
+              <Text style={[styles.footerBadge, { color: mutedColor }]}>{'Challenger Badge on Day 7'}</Text>
             </View>
           </View>
           <View>
@@ -258,7 +271,7 @@ export default function ChallengeDashboardCard({
           </View>
         </View>
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -266,10 +279,19 @@ export default function ChallengeDashboardCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
     marginBottom: spacing.md,
-    overflow: 'hidden',
+    borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
   },
 
   // Header
@@ -281,10 +303,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
   },
   dayPill: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -292,7 +312,6 @@ const styles = StyleSheet.create({
   dayPillText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
 
   // Tagline
@@ -300,7 +319,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.2,
-    color: 'rgba(255,255,255,0.5)',
     textTransform: 'uppercase',
     marginTop: 4,
     marginBottom: 16,
@@ -339,7 +357,6 @@ const styles = StyleSheet.create({
   stepFuture: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.2)',
   },
   stepTextCompleted: {
     fontSize: 13,
@@ -359,18 +376,17 @@ const styles = StyleSheet.create({
   stepTextFuture: {
     fontSize: 13,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.4)',
   },
   connector: {
     flex: 1,
     height: 2,
   },
 
-  // Inner white card
+  // Inner card
   innerCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
+    borderWidth: 1,
   },
   eyebrow: {
     fontSize: 11,
@@ -383,14 +399,12 @@ const styles = StyleSheet.create({
   missionTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0A1719',
     lineHeight: 28,
     marginBottom: 8,
   },
   missionProgressText: {
     fontSize: 13,
     fontWeight: '500',
-    color: colors.textSecondary,
     marginBottom: 10,
   },
   completedText: {
@@ -411,7 +425,6 @@ const styles = StyleSheet.create({
   // Footer
   footer: {
     marginTop: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
@@ -432,12 +445,10 @@ const styles = StyleSheet.create({
   footerXp: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#FFFFFF',
   },
   footerBadge: {
     fontSize: 11,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
   },
   viewRewards: {
     fontSize: 13,
