@@ -130,7 +130,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
             />
             <View style={styles.headerTextColumn}>
               <Text style={styles.appName}>Macro Goal</Text>
-              <Text style={[styles.appTagline, { color: rankColor.text }]}>
+              <Text style={styles.appTagline}>
                 Track. Improve. Transform.
               </Text>
             </View>
@@ -295,6 +295,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.5,
     marginTop: 2,
+    color: '#C9A84C',
   },
   headerDivider: {
     height: 1,
