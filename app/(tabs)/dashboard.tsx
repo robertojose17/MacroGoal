@@ -90,17 +90,6 @@ function getGreeting(): string {
   return 'Hi';
 }
 
-function getWeekday(): string {
-  return new Date().toLocaleDateString('en-US', { weekday: 'long' });
-}
-
-function getDayOfJourney(journeyStartDate: string | null | undefined): number | null {
-  if (!journeyStartDate) return null;
-  const start = new Date(journeyStartDate);
-  const today = new Date();
-  const diff = Math.floor((today.getTime() - start.getTime()) / 86400000);
-  return diff + 1;
-}
 
 // ─── Skeleton block ───────────────────────────────────────────────────────────
 
@@ -464,12 +453,7 @@ export default function DashboardScreen() {
 
   // ─── Derived greeting values ─────────────────────────────────────────────
   const greeting = getGreeting();
-  const weekday = getWeekday();
   const firstName = user?.display_name?.split(' ')[0] || 'there';
-  const dayOfJourney = getDayOfJourney(user?.journey_start_date);
-  const subGreetingText = dayOfJourney != null
-    ? weekday + ' · Day ' + dayOfJourney + ' of your journey'
-    : weekday + ' · Let\'s go';
 
   if (loading) {
     return (
@@ -527,7 +511,7 @@ export default function DashboardScreen() {
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {greeting + ', ' + firstName + ' · ' + subGreetingText}
+              {greeting + ', ' + firstName}
             </Text>
           </View>
           <TouchableOpacity
