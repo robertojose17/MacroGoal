@@ -197,26 +197,30 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
           <View style={styles.captionsRow}>
             {/* Before caption */}
             <View style={styles.captionColumn}>
-              <Text style={styles.captionDate}>{beforeDateDisplay}</Text>
-              {showBeforeWeight && (
-                <Text style={styles.captionWeight}>{beforeWeightDisplay}</Text>
-              )}
+              <Text style={styles.captionLine}>
+                {showBeforeWeight
+                  ? beforeDateDisplay + '  ·  ' + beforeWeightDisplay
+                  : beforeDateDisplay}
+              </Text>
             </View>
 
             {/* After caption */}
             <View style={styles.captionColumn}>
-              <Text style={styles.captionDate}>{afterDateDisplay}</Text>
-              {showAfterWeight && (
-                <Text style={styles.captionWeight}>{afterWeightDisplay}</Text>
-              )}
+              <Text style={styles.captionLine}>
+                {showAfterWeight
+                  ? afterDateDisplay + '  ·  ' + afterWeightDisplay
+                  : afterDateDisplay}
+              </Text>
             </View>
           </View>
 
           {/* ── GOAL PROGRESS ── */}
           <View style={styles.goalDivider} />
           <View style={styles.goalBlock}>
-            <Text style={styles.goalEyebrow}>GOAL PROGRESS</Text>
-            <Text style={styles.goalPercent}>{progressPercent}</Text>
+            <View style={styles.goalTopRow}>
+              <Text style={styles.goalEyebrow}>GOAL PROGRESS</Text>
+              <Text style={styles.goalPercent}>{progressPercent}</Text>
+            </View>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: progressBarWidth }]} />
             </View>
@@ -257,6 +261,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D0D0D',
     borderRadius: 20,
     overflow: 'hidden',
+    flexDirection: 'column',
   },
 
   // ── Header ──────────────────────────────────────────────────────────────────
@@ -297,12 +302,12 @@ const styles = StyleSheet.create({
 
   // ── Photos ──────────────────────────────────────────────────────────────────
   photoRow: {
+    flex: 1,
     flexDirection: 'row',
     width: '100%',
   },
   photoContainer: {
     flex: 1,
-    aspectRatio: 1,
     backgroundColor: '#1A1A1A',
     overflow: 'hidden',
   },
@@ -334,23 +339,18 @@ const styles = StyleSheet.create({
   // ── Photo captions ──────────────────────────────────────────────────────────
   captionsRow: {
     flexDirection: 'row',
-    paddingVertical: 14,
+    paddingVertical: 10,
     paddingHorizontal: 16,
   },
   captionColumn: {
     flex: 1,
     alignItems: 'center',
-    gap: 2,
   },
-  captionDate: {
+  captionLine: {
     fontSize: 13,
     fontWeight: '600',
     color: '#FFFFFF',
-  },
-  captionWeight: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 0.2,
   },
 
   // ── Goal progress ────────────────────────────────────────────────────────────
@@ -359,9 +359,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   goalBlock: {
-    paddingTop: 20,
-    paddingBottom: 18,
+    paddingTop: 12,
+    paddingBottom: 14,
     paddingHorizontal: 16,
+  },
+  goalTopRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   goalEyebrow: {
     fontSize: 11,
@@ -369,25 +375,22 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: 'rgba(255,255,255,0.45)',
     textTransform: 'uppercase',
-    marginBottom: 4,
   },
   goalPercent: {
-    fontSize: 46,
+    fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -1.5,
-    lineHeight: 52,
-    marginBottom: 12,
+    letterSpacing: -0.3,
   },
   progressTrack: {
-    height: 10,
-    borderRadius: 5,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 5,
+    borderRadius: 3,
     backgroundColor: colors.primary,
   },
 
