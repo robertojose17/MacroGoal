@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   // ── Two-column layout ──
   columnsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.lg,
   },
 
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
   rightColumn: {
     flex: 1,
     gap: spacing.sm,
-    paddingTop: 4,
+    justifyContent: 'center',
   },
   xpTextRow: {
     flexDirection: 'row',
