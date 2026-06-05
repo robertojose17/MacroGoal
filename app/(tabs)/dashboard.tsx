@@ -87,11 +87,7 @@ interface DailySummary {
 // ─── Greeting helpers ─────────────────────────────────────────────────────────
 
 function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'Good morning';
-  if (hour >= 12 && hour < 17) return 'Good afternoon';
-  if (hour >= 17 && hour < 24) return 'Good evening';
-  return 'Working late';
+  return 'Hi';
 }
 
 function getWeekday(): string {
@@ -469,10 +465,7 @@ export default function DashboardScreen() {
   // ─── Derived greeting values ─────────────────────────────────────────────
   const greeting = getGreeting();
   const weekday = getWeekday();
-  const firstName = user?.display_name?.split(' ')[0]
-    || user?.username
-    || user?.email?.split('@')[0]
-    || 'there';
+  const firstName = user?.display_name?.split(' ')[0] || 'there';
   const dayOfJourney = getDayOfJourney(user?.journey_start_date);
   const subGreetingText = dayOfJourney != null
     ? weekday + ' · Day ' + dayOfJourney + ' of your journey'
