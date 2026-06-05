@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { SevenDayChallenge } from '@/types/challenge';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 
@@ -72,30 +73,62 @@ function ProgressBar({
   );
 }
 
+// ─── Step Node ────────────────────────────────────────────────────────────────
+
+function StepNode({
+  dayNum,
+  isCompleted,
+  isCurrent,
+  isDay7,
+}: {
+  dayNum: number;
+  isCompleted: boolean;
+  isCurrent: boolean;
+  isDay7: boolean;
+}) {
+  const dayLabel = String(dayNum);
+
+  if (isCompleted) {
+    return (
+      <View style={[styles.stepCircle, styles.stepCompleted]}>
+        <Text style={styles.stepTextCompleted}>{dayLabel}</Text>
+      </View>
+    );
+  }
+
+  if (isCurrent) {
+    return (
+      <View style={[styles.stepCircle, styles.stepCurrent]}>
+        <Text style={styles.stepTextCurrent}>{dayLabel}</Text>
+      </View>
+    );
+  }
+
+  if (isDay7) {
+    return (
+      <View style={[styles.stepCircle, styles.stepDay7]}>
+        <Text style={styles.stepTextDay7}>{dayLabel}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.stepCircle, styles.stepFuture]}>
+      <Text style={styles.stepTextFuture}>{dayLabel}</Text>
+    </View>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ChallengeDashboardCard({
   challenge,
-  isDark = false,
   onMissionCompleted,
   onCompleteTodaysMission,
 }: ChallengeDashboardCardProps) {
   const [autoCompleting, setAutoCompleting] = useState(false);
   const hasAutoCompletedRef = useRef(false);
 
-  // Theme tokens
-  const cardBg = isDark ? colors.cardDark : colors.card;
-  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
-  const titleColor = isDark ? colors.textDark : colors.text;
-  const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const trackColor = isDark ? colors.borderDark : colors.border;
-  const shadowStyle = isDark
-    ? {}
-    : { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)', elevation: 4 };
-
-  const completedCount = challenge.completed_days.length;
-  const totalDays = 7;
-  const overallProgress = completedCount / totalDays;
   const mission = challenge.todays_mission;
   const isTodayDone = challenge.is_today_completed === true;
 
@@ -128,76 +161,104 @@ export default function ChallengeDashboardCard({
   }, [mission?.current, mission?.target, isTodayDone]);
 
   // Derived display values
+  const totalDays = 7;
   const dayText = 'Day ' + challenge.current_day + ' of ' + totalDays;
-  const missionTitle = mission?.title_en ?? 'Complete today\'s mission';
+  const missionTitle = mission?.title_en ?? "Complete today's mission";
   const missionCurrent = mission?.current ?? 0;
   const missionTarget = mission?.target ?? 1;
   const missionUnit = mission?.unit ?? '';
   const missionProgress = missionTarget > 0 ? missionCurrent / missionTarget : 0;
-  const missionProgressText = missionCurrent + ' / ' + missionTarget + (missionUnit ? ' ' + missionUnit : '');
+  const missionProgressText = missionCurrent + ' / ' + missionTarget + (missionUnit ? ' ' + missionUnit + ' logged' : ' logged');
+
+  // Build step nodes array: [node, connector, node, connector, ..., node]
+  const stepItems: React.ReactNode[] = [];
+  for (let d = 1; d <= totalDays; d++) {
+    const isCompleted = challenge.completed_days.includes(d);
+    const isCurrent = d === challenge.current_day && !isCompleted;
+    const isDay7 = d === 7 && !isCompleted && !isCurrent;
+    stepItems.push(
+      <StepNode
+        key={'node-' + d}
+        dayNum={d}
+        isCompleted={isCompleted}
+        isCurrent={isCurrent}
+        isDay7={isDay7}
+      />
+    );
+    if (d < totalDays) {
+      const bothCompleted =
+        challenge.completed_days.includes(d) && challenge.completed_days.includes(d + 1);
+      stepItems.push(
+        <View
+          key={'connector-' + d}
+          style={[
+            styles.connector,
+            { backgroundColor: bothCompleted ? colors.primary : 'rgba(255,255,255,0.15)' },
+          ]}
+        />
+      );
+    }
+  }
 
   return (
-    <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }, shadowStyle as any]}>
-      {/* Left accent border */}
-      <View style={styles.leftAccent} />
-
-      <View style={styles.inner}>
-        {/* Header row */}
-        <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: titleColor }]}>
-            {'🔥 7-Day Challenge'}
-          </Text>
-          <Text style={[styles.dayCounter, { color: mutedColor }]}>
-            {dayText}
-          </Text>
+    <LinearGradient
+      colors={['#0F2D31', '#0A1719']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.card}
+    >
+      {/* Header row */}
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>{'🔥 7-Day Challenge'}</Text>
+        <View style={styles.dayPill}>
+          <Text style={styles.dayPillText}>{'📅 ' + dayText}</Text>
         </View>
+      </View>
 
-        {/* Overall progress bar */}
-        <View style={styles.progressSection}>
-          <ProgressBar progress={overallProgress} color={colors.success} height={4} trackColor={trackColor} />
-          <Text style={[styles.progressLabel, { color: mutedColor }]}>
-            {completedCount + ' / ' + totalDays + ' days complete'}
-          </Text>
-        </View>
+      {/* Tagline */}
+      <Text style={styles.tagline}>{'BUILD THE HABIT. EARN THE BADGE.'}</Text>
 
-        {/* Today's mission */}
-        <View style={styles.missionSection}>
-          <Text style={[styles.missionLabel, { color: mutedColor }]}>
-            {'Today:'}
-          </Text>
-          <Text style={[styles.missionTitle, { color: titleColor }]}>
-            {missionTitle}
-          </Text>
+      {/* Step indicator */}
+      <View style={styles.stepsRow}>
+        {stepItems}
+      </View>
 
-          {isTodayDone ? (
-            <View style={styles.completedRow}>
-              <Text style={styles.completedText}>
-                {'✅ Day complete! Come back tomorrow.'}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.missionProgressSection}>
-              <ProgressBar
-                progress={missionProgress}
-                color={colors.success}
-                height={6}
-                trackColor={trackColor}
-              />
-              <Text style={[styles.missionProgressText, { color: mutedColor }]}>
-                {missionProgressText}
-              </Text>
-            </View>
-          )}
-        </View>
+      {/* Inner white card — today's goal */}
+      <View style={styles.innerCard}>
+        <Text style={styles.eyebrow}>{"TODAY'S GOAL"}</Text>
+        <Text style={styles.missionTitle}>{missionTitle}</Text>
 
-        {/* Reward hint */}
-        {!isTodayDone && (
-          <Text style={[styles.rewardHint, { color: mutedColor }]}>
-            {'🏅 +500 XP · Challenger Badge on Day 7'}
-          </Text>
+        {isTodayDone ? (
+          <Text style={styles.completedText}>{'✅ Day complete! Come back tomorrow.'}</Text>
+        ) : (
+          <>
+            <Text style={styles.missionProgressText}>{missionProgressText}</Text>
+            <ProgressBar
+              progress={missionProgress}
+              color={colors.primary}
+              height={6}
+              trackColor="#E8EEF0"
+            />
+          </>
         )}
       </View>
-    </View>
+
+      {/* Footer reward hint */}
+      {!isTodayDone && (
+        <View style={styles.footer}>
+          <View style={styles.footerLeft}>
+            <Text style={styles.footerMedal}>{'🏅'}</Text>
+            <View style={styles.footerTextBlock}>
+              <Text style={styles.footerXp}>{'+500 XP'}</Text>
+              <Text style={styles.footerBadge}>{'Challenger Badge on Day 7'}</Text>
+            </View>
+          </View>
+          <View>
+            <Text style={styles.viewRewards}>{'View Rewards ›'}</Text>
+          </View>
+        </View>
+      )}
+    </LinearGradient>
   );
 }
 
@@ -205,37 +266,140 @@ export default function ChallengeDashboardCard({
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    borderRadius: borderRadius.lg,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: spacing.md,
     overflow: 'hidden',
-    borderWidth: 1,
   },
-  leftAccent: {
-    width: 4,
-    backgroundColor: colors.success,
-  },
-  inner: {
-    flex: 1,
-    padding: 14,
-    gap: 10,
-  },
+
+  // Header
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   headerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
-  dayCounter: {
+  dayPill: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  dayPillText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
-  progressSection: {
-    gap: 4,
+
+  // Tagline
+  tagline: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: 'rgba(255,255,255,0.5)',
+    textTransform: 'uppercase',
+    marginTop: 4,
+    marginBottom: 16,
   },
+
+  // Step indicator
+  stepsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCompleted: {
+    backgroundColor: colors.primary,
+  },
+  stepCurrent: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  stepDay7: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.warning,
+  },
+  stepFuture: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  stepTextCompleted: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  stepTextCurrent: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  stepTextDay7: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.warning,
+  },
+  stepTextFuture: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.4)',
+  },
+  connector: {
+    flex: 1,
+    height: 2,
+  },
+
+  // Inner white card
+  innerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  missionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0A1719',
+    lineHeight: 28,
+    marginBottom: 8,
+  },
+  missionProgressText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    marginBottom: 10,
+  },
+  completedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.success,
+  },
+
+  // Progress bar internals
   progressTrack: {
     borderRadius: 999,
     overflow: 'hidden',
@@ -243,41 +407,41 @@ const styles = StyleSheet.create({
   progressFill: {
     borderRadius: 999,
   },
-  progressLabel: {
+
+  // Footer
+  footer: {
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  footerMedal: {
+    fontSize: 24,
+  },
+  footerTextBlock: {
+    gap: 2,
+  },
+  footerXp: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  footerBadge: {
     fontSize: 11,
     fontWeight: '500',
+    color: 'rgba(255,255,255,0.6)',
   },
-  missionSection: {
-    gap: 4,
-  },
-  missionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  missionTitle: {
+  viewRewards: {
     fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  missionProgressSection: {
-    gap: 4,
-  },
-  missionProgressText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  completedRow: {
-    marginTop: 2,
-  },
-  completedText: {
-    fontSize: 13,
-    color: colors.success,
-    fontWeight: '600',
-  },
-  rewardHint: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
