@@ -9,6 +9,7 @@ import { isFavorite, toggleFavorite } from '@/utils/favoritesDatabase';
 import { useRouter } from 'expo-router';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
+import { emitMealLogged } from '@/utils/xpEvents';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -908,6 +909,9 @@ export default function FoodDetailsLayout({
           console.log('[FoodDetails] awarding meal XP, source_id:', xpSourceId);
           tryAwardMealLogged(xpSourceId, targetMealType);
           evaluateDailyGoals(targetDate);
+
+          // Notify challenge hook that a meal was logged
+          emitMealLogged();
 
           setTimeout(() => {
             router.back();

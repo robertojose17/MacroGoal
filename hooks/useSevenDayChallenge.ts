@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { SevenDayChallenge } from '@/types/challenge';
 import {
@@ -13,6 +14,7 @@ import {
   getChallenge,
   completeChallengeDay as apiCompleteChallengeDay,
 } from '@/utils/sevenDayChallengeApi';
+import { XP_EVENTS } from '@/utils/xpEvents';
 
 interface CompleteDayResult {
   completed: boolean;
@@ -66,6 +68,15 @@ export function useSevenDayChallenge(): UseSevenDayChallengeReturn {
       refresh();
     }, [refresh])
   );
+
+  // Re-fetch when a meal is logged anywhere in the app
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(XP_EVENTS.MEAL_LOGGED, () => {
+      console.log('[useSevenDayChallenge] meal:logged received — refreshing challenge');
+      refresh();
+    });
+    return () => sub.remove();
+  }, [refresh]);
 
   const acceptChallenge = useCallback(async () => {
     console.log('[useSevenDayChallenge] acceptChallenge called');

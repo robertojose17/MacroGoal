@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
+import { emitMealLogged } from '@/utils/xpEvents';
 
 export default function AddFoodSimpleScreen() {
   const router = useRouter();
@@ -215,6 +216,9 @@ export default function AddFoodSimpleScreen() {
       console.log('[AddFoodSimple] awarding meal XP, source_id:', xpSourceId);
       tryAwardMealLogged(xpSourceId, mealType);
       evaluateDailyGoals(date);
+
+      // Notify challenge hook that a meal was logged
+      emitMealLogged();
       
       // Success! Navigate back
       setSaving(false);

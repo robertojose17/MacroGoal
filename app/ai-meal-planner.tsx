@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
+import { emitMealLogged } from '@/utils/xpEvents';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -715,6 +716,9 @@ export default function AIMealPlannerScreen() {
       tryAwardMealLogged(xpSourceId, mealType);
       evaluateDailyGoals(todayStr);
 
+      // Notify challenge hook that a meal was logged
+      emitMealLogged();
+
       showToast(`Added to ${mealLabel} ✓`);
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddFood error:', e?.message || e);
@@ -760,6 +764,8 @@ export default function AIMealPlannerScreen() {
       });
       if (logIds.length > 0) {
         evaluateDailyGoals(todayStr);
+        // Notify challenge hook that meals were logged
+        emitMealLogged();
       }
 
       showToast(`All added to ${mealLabel} ✓`);

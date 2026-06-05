@@ -18,6 +18,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
 import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
+import { emitMealLogged } from '@/utils/xpEvents';
 import { formatServing } from '@/utils/servingFormat';
 
 /** Safely coerce any value to a finite number, defaulting to 0 on NaN/null/undefined */
@@ -1083,6 +1084,9 @@ export default function AddFoodScreen() {
       console.log('[AddFood] awarding meal XP for recent food, source_id:', xpSourceId);
       tryAwardMealLogged(xpSourceId, mealType);
       evaluateDailyGoals(date);
+
+      // Notify challenge hook that a meal was logged
+      emitMealLogged();
       
       // Show success banner (will interrupt if one is already showing)
       showSuccessBanner();
@@ -1396,6 +1400,9 @@ export default function AddFoodScreen() {
       console.log('[AddFood] awarding meal XP for favorite, source_id:', xpSourceId);
       tryAwardMealLogged(xpSourceId, mealType);
       evaluateDailyGoals(date);
+
+      // Notify challenge hook that a meal was logged
+      emitMealLogged();
       
       // Show success banner (will interrupt if one is already showing)
       showSuccessBanner();
@@ -1782,6 +1789,9 @@ export default function AddFoodScreen() {
       }
 
       console.log('[AddFood] ✅ Saved meal added successfully!');
+
+      // Notify challenge hook that a meal was logged
+      emitMealLogged();
       
       // Show success banner
       showSuccessBanner('Meal Added');
