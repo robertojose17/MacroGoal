@@ -224,7 +224,7 @@ export default function ChallengeDashboardCard({
       <View style={styles.headerRow}>
         <Text style={[styles.headerTitle, { color: titleColor }]}>{'🔥 7-Day Challenge'}</Text>
         <View style={[styles.dayPill, { backgroundColor: dayPillBg }]}>
-          <Text style={[styles.dayPillText, { color: mutedColor }]}>{'📅 ' + dayText}</Text>
+          <Text style={[styles.dayPillText, { color: mutedColor }]}>{dayText}</Text>
         </View>
       </View>
 
@@ -259,16 +259,11 @@ export default function ChallengeDashboardCard({
       {/* Footer reward hint */}
       {!isTodayDone && (
         <View style={[styles.footer, { backgroundColor: footerBg }]}>
-          <View style={styles.footerLeft}>
-            <Text style={styles.footerMedal}>{'🏅'}</Text>
-            <View style={styles.footerTextBlock}>
-              <Text style={[styles.footerXp, { color: titleColor }]}>{'+500 XP'}</Text>
-              <Text style={[styles.footerBadge, { color: mutedColor }]}>{'Challenger Badge on Day 7'}</Text>
-            </View>
-          </View>
-          <View>
-            <Text style={styles.viewRewards}>{'View Rewards ›'}</Text>
-          </View>
+          <Text style={styles.footerMedal}>{'🏅'}</Text>
+          <Text style={[styles.footerLine, { color: titleColor }]}>
+            <Text style={{ fontWeight: '800' }}>+500 XP</Text>
+            <Text style={[styles.footerLineMuted, { color: mutedColor }]}>{'  ·  Challenger Badge on Day 7'}</Text>
+          </Text>
         </View>
       )}
     </View>
@@ -429,30 +424,19 @@ const styles = StyleSheet.create({
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  footerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    justifyContent: 'flex-start',
+    gap: 8,
   },
   footerMedal: {
     fontSize: 24,
   },
-  footerTextBlock: {
-    gap: 2,
-  },
-  footerXp: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  footerBadge: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  viewRewards: {
+  footerLine: {
     fontSize: 13,
-    fontWeight: '700',
-    color: colors.primary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  footerLineMuted: {
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
