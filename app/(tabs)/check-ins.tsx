@@ -223,7 +223,7 @@ function CommunityFooter({
 
   const topLabel = `Top ${100 - pct}%`;
   const avgLabel = trackerType === 'steps'
-    ? `Community avg ${avg} today`
+    ? `Community avg ${avg} steps this week`
     : `Community avg ${avg} ${unit} this month`;
 
   return (
@@ -633,34 +633,12 @@ function TrackerCard({
   let heroMetric: React.ReactNode = null;
 
   if (isGym) {
-    // Gym: streak is the hero
-    heroMetric = (
-      <View style={styles.heroRow}>
-        <Text style={[styles.heroNumber, { color: textColor }]}>{streak}</Text>
-        <View style={styles.heroLabelCol}>
-          <Text style={[styles.heroUnit, { color: subColor }]}>day</Text>
-          <Text style={[styles.heroUnit, { color: subColor }]}>streak</Text>
-        </View>
-        {streak > 0 && <Text style={styles.heroFlame}>🔥</Text>}
-      </View>
-    );
+    // Gym: no hero section — streak pill is in the header row
+    heroMetric = null;
   } else if (isWeight) {
-    const currentVal = todayEntry ? Number(todayEntry.value).toFixed(1) : null;
+    // Weight: only WeightTrend — the value is already in the donePill in the header
     heroMetric = (
-      <View>
-        {currentVal ? (
-          <View style={styles.heroRow}>
-            <Text style={[styles.heroNumber, { color: textColor }]}>{currentVal}</Text>
-            <View style={styles.heroLabelCol}>
-              <Text style={[styles.heroUnit, { color: subColor }]}>lb</Text>
-              <Text style={[styles.heroUnit, { color: subColor }]}>today</Text>
-            </View>
-          </View>
-        ) : (
-          <Text style={[styles.heroPlaceholder, { color: subColor }]}>Log your weight</Text>
-        )}
-        <WeightTrend trackerId={tracker.id} isDark={isDark} />
-      </View>
+      <WeightTrend trackerId={tracker.id} isDark={isDark} />
     );
   } else if (isSteps) {
     // Steps hero is handled by StepsActionArea in the header row
@@ -687,6 +665,16 @@ function TrackerCard({
     );
   }
 
+  // Gym streak pill — shown inline in header between name and action
+  const gymStreakPill = isGym && streak > 0 ? (
+    <View style={[styles.streakPillCompact, { backgroundColor: colors.primary + '15' }]}>
+      <Text style={styles.streakPillCompactFlame}>🔥</Text>
+      <Text style={[styles.streakPillCompactText, { color: colors.primary }]}>
+        {streak}d
+      </Text>
+    </View>
+  ) : null;
+
   return (
     <AnimatedPressable onPress={onPress} style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
       {/* Zone A — Header row */}
@@ -702,36 +690,28 @@ function TrackerCard({
             <Text style={[styles.trackerUnit, { color: subColor }]}>{tracker.unit}</Text>
           ) : null}
         </View>
-        {/* Steps: action in header row */}
-        {isSteps ? (
-          <View style={{ marginLeft: 8 }}>
-            {actionArea}
-          </View>
-        ) : (
-          <View style={{ marginLeft: 8 }}>
-            {actionArea}
-          </View>
-        )}
+        {gymStreakPill}
+        <View style={{ marginLeft: 6 }}>
+          {actionArea}
+        </View>
         <ChevronRight size={16} color={subColor} strokeWidth={2} style={{ marginLeft: 4 }} />
       </View>
 
-      {/* Zone B — Main metric */}
+      {/* Zone B — Main metric (weight trend / generic stats) */}
       {heroMetric ? (
-        <>
-          <View style={[styles.divider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-          <View style={styles.heroSection}>
+        isWeight ? (
+          // Weight: no divider, just the trend row inline below header
+          <View style={styles.weightTrendSection}>
             {heroMetric}
-            {/* For gym: also show completion rate below streak */}
-            {isGym ? (
-              <View style={styles.gymSubRow}>
-                <CheckCircle2 size={12} color={colors.success} strokeWidth={2} />
-                <Text style={[styles.gymSubText, { color: subColor }]}>
-                  {completionPct}% completion rate
-                </Text>
-              </View>
-            ) : null}
           </View>
-        </>
+        ) : (
+          <>
+            <View style={[styles.divider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+            <View style={styles.heroSection}>
+              {heroMetric}
+            </View>
+          </>
+        )
       ) : null}
 
       {/* Zone C — Community insight footer */}
@@ -831,7 +811,7 @@ export default function CheckInsScreen() {
     await Promise.all(
       relevantTrackers.map(async (t) => {
         const type = getCheckInType(t.name);
-        const period = type === 'steps' ? 'today' : 'month';
+        const period = type === 'steps' ? 'week' : 'month';
         try {
           const result = await fetchLeaderboard(t.name.toLowerCase(), period);
           setCommunityStatsMap((prev) => ({ ...prev, [t.name.toLowerCase()]: result.stats }));
@@ -960,7 +940,7 @@ export default function CheckInsScreen() {
       const trackerType = getCheckInType(tracker.name);
       if (trackerType === 'steps' || trackerType === 'gym') {
         console.log('[CheckIns] Refreshing community stats for', tracker.name, 'after quick log');
-        const period = trackerType === 'steps' ? 'today' : 'month';
+        const period = trackerType === 'steps' ? 'week' : 'month';
         const lowerName = tracker.name.toLowerCase();
         setCommunityLoadingMap((prev) => ({ ...prev, [lowerName]: true }));
         fetchLeaderboard(lowerName, period)
@@ -1292,10 +1272,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 16,
   },
-  heroFlame: {
-    fontSize: 24,
-    paddingBottom: 4,
-  },
   heroPlaceholder: {
     fontSize: 15,
     fontWeight: '500',
@@ -1311,15 +1287,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  gymSubRow: {
+  // ── Gym streak pill (compact, in header row) ─────────────────────────────────
+  streakPillCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
   },
-  gymSubText: {
+  streakPillCompactFlame: {
+    fontSize: 11,
+  },
+  streakPillCompactText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '700',
+  },
+  // ── Weight trend section (below header, no divider) ───────────────────────────
+  weightTrendSection: {
+    marginTop: 6,
   },
 
   // ── Zone C: Community footer ─────────────────────────────────────────────────
