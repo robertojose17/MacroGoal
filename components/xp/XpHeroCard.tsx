@@ -181,7 +181,7 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
               />
             </Svg>
 
-            {/* Inside ring: "LEVEL" label + big number */}
+            {/* Inside ring: "LEVEL" label + big number + rank badge */}
             <View style={styles.ringInner}>
               <Text style={[styles.levelLabel, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
                 LEVEL
@@ -189,12 +189,10 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
               <Text style={[styles.levelNumber, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
                 {level}
               </Text>
+              <View style={styles.rankBadgeInside}>
+                <RankBadge rank={rank} size="sm" />
+              </View>
             </View>
-          </View>
-
-          {/* Rank badge centered below ring */}
-          <View style={styles.rankBadgeWrapper}>
-            <RankBadge rank={rank} size="md" />
           </View>
         </View>
 
@@ -339,15 +337,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 1.2,
-    marginBottom: 2,
+    marginBottom: 0,
   },
   levelNumber: {
-    fontSize: 40,
+    fontSize: 32,
     fontWeight: '800',
-    lineHeight: 46,
+    lineHeight: 36,
   },
-  rankBadgeWrapper: {
-    marginTop: spacing.sm,
+  rankBadgeInside: {
+    marginTop: 4,
     alignItems: 'center',
   },
 
