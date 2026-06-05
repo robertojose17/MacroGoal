@@ -634,7 +634,7 @@ export default function DashboardScreen() {
             styles.shareProgressButton,
             {
               backgroundColor: isDark ? colors.cardDark : colors.card,
-              borderColor: isDark ? '#3A3C52' : '#D4D6DA',
+              borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
             },
           ]}
           onPress={() => {
@@ -643,37 +643,14 @@ export default function DashboardScreen() {
           }}
           activeOpacity={0.75}
         >
-          <View
+          <Text
             style={[
-              styles.shareProgressIconBg,
-              { backgroundColor: isDark ? colors.primary + '22' : colors.primary + '15' },
+              styles.shareProgressTitle,
+              { color: isDark ? '#F1F5F9' : '#2B2D42' },
             ]}
           >
-            <Ionicons name="share-social" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.shareProgressTextBlock}>
-            <Text
-              style={[
-                styles.shareProgressTitle,
-                { color: isDark ? '#F1F5F9' : '#2B2D42' },
-              ]}
-            >
-              Share My Progress
-            </Text>
-            <Text
-              style={[
-                styles.shareProgressSubtitle,
-                { color: isDark ? '#A0A2B8' : '#6B7280' },
-              ]}
-            >
-              Earn +100 XP
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={isDark ? '#A0A2B8' : '#6B7280'}
-          />
+            Share My Progress
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.bottomSpacer} />
@@ -914,13 +891,13 @@ const styles = StyleSheet.create({
   },
   // ── Share progress button ─────────────────────────────────────────────────
   shareProgressButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    justifyContent: 'center',
     marginHorizontal: spacing.md,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
-    padding: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.xl,
     borderWidth: 1,
     ...Platform.select({
@@ -933,25 +910,10 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
-  shareProgressIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareProgressTextBlock: {
-    flex: 1,
-  },
   shareProgressTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.2,
-  },
-  shareProgressSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 2,
   },
   // ── Modal ─────────────────────────────────────────────────────────────────
   modalOverlay: {
