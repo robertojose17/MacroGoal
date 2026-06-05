@@ -44,7 +44,7 @@ export const Colors = {
 // ─── XP Rank Colors ───────────────────────────────────────────────────────────
 // Used by XpHeroCard, RankBadge, and LevelUpModal
 export const rankColors: Record<string, { gradient: [string, string]; text: string; glow: string }> = {
-  Rookie:     { gradient: ['#9CA3AF', '#6B7280'], text: '#9CA3AF', glow: 'rgba(156,163,175,0.4)' },
+  Rookie:     { gradient: ['#D6A77A', '#92400E'], text: '#B8732E', glow: 'rgba(184,115,46,0.4)' },
   Consistent: { gradient: ['#60A5FA', '#2563EB'], text: '#60A5FA', glow: 'rgba(96,165,250,0.4)' },
   Athlete:    { gradient: ['#34D399', '#059669'], text: '#34D399', glow: 'rgba(52,211,153,0.4)' },
   'Iron Mind':{ gradient: ['#A78BFA', '#7C3AED'], text: '#A78BFA', glow: 'rgba(167,139,250,0.4)' },
