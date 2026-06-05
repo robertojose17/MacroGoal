@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
+import { trackEvent } from '@/utils/analytics';
 import * as Linking from 'expo-linking';
 
 const BG_IMAGE = require('../../assets/images/73291328-4520-475d-9d5f-c23a5206eb1d.jpeg');
@@ -85,6 +86,7 @@ export default function SignUpScreen() {
       }
 
       console.log('[SignUp] ✅ Auth user created:', authData.user.id);
+      await trackEvent('account_created');
 
       const emailConfirmationRequired = !authData.session;
 

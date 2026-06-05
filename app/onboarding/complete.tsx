@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase/client';
+import { trackEvent } from '@/utils/analytics';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '@/utils/calculations';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
@@ -149,6 +150,9 @@ export default function CompleteOnboardingScreen() {
 
   const goNext = () => {
     console.log(`[Onboarding] Advancing from step ${step} to step ${step + 1}`);
+    if (step === 9) {
+      trackEvent('onboarding_completed');
+    }
     goToStep(step + 1);
   };
 

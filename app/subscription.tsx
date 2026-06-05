@@ -20,6 +20,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import { trackEvent } from '@/utils/analytics';
 import Constants from 'expo-constants';
 import Purchases, { LOG_LEVEL, isPurchasesAvailable } from '@/utils/purchases';
 
@@ -307,6 +308,10 @@ export default function SubscriptionScreen() {
 
   useEffect(() => {
     initializeRevenueCat();
+  }, []);
+
+  useEffect(() => {
+    trackEvent('paywall_viewed');
   }, []);
 
   // Auto-start yearly purchase when coming from onboarding
@@ -771,6 +776,7 @@ export default function SubscriptionScreen() {
   const handleSubscribe = () => {
     console.log('[Subscription] Subscribe button pressed, plan:', activePlan, selectedPkg?.identifier);
     if (!selectedPkg) return;
+    trackEvent('trial_clicked', { plan: selectedPkg.identifier });
     handlePurchase(selectedPkg);
   };
 
