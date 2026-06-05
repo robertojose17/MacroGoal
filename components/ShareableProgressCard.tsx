@@ -127,13 +127,14 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 
           {/* ── HEADER ── */}
           <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Image
-                source={require('@/assets/icon.png')}
-                style={styles.appIcon}
-                resizeMode="cover"
-              />
+            <Image
+              source={require('@/assets/icon.png')}
+              style={styles.appIcon}
+              resizeMode="cover"
+            />
+            <View style={styles.headerTextColumn}>
               <Text style={styles.appName}>Macro Goal</Text>
+              <Text style={styles.appTagline}>Track. Improve. Transform.</Text>
             </View>
           </View>
           <View style={styles.headerDivider} />
@@ -262,25 +263,32 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 12,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   appIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  },
+  headerTextColumn: {
+    flexDirection: 'column',
+    justifyContent: 'center',
   },
   appName: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  appTagline: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: '#C9A84C',
+    marginTop: 2,
   },
   headerDivider: {
     height: 1,
