@@ -16,7 +16,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -182,9 +181,9 @@ function CompactTile({
     : colors.textSecondary;
 
   const xpLabel = card.current_xp_earned > 0
-    ? '+' + card.current_xp_earned + ' XP'
+    ? '+' + card.current_xp_earned + 'XP'
     : card.max_xp > 0
-    ? '+' + card.max_xp + ' XP'
+    ? '+' + card.max_xp + 'XP'
     : '—';
 
   const xpColor = isComplete
@@ -214,7 +213,7 @@ function CompactTile({
     >
       {/* Icon area */}
       <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
-        <Ionicons name={iconName} size={20} color={iconColor} />
+        <Ionicons name={iconName} size={18} color={iconColor} />
         {isComplete && (
           <View style={styles.checkBadge}>
             <Ionicons name="checkmark" size={9} color="#fff" />
@@ -241,7 +240,7 @@ function CompactTile({
       />
 
       {/* XP value */}
-      <Text style={[styles.xpLabel, { color: xpColor }]}>{xpLabel}</Text>
+      <Text style={[styles.xpLabel, { color: xpColor }]} numberOfLines={1}>{xpLabel}</Text>
     </TouchableOpacity>
   );
 }
@@ -606,13 +605,8 @@ export default function TodaysChallengesCard({
         </View>
       </View>
 
-      {/* Horizontal scroll row */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        decelerationRate="fast"
-      >
+      {/* Fixed 5-column tile row */}
+      <View style={styles.tileRow}>
         {cards.map((card) => (
           <CompactTile
             key={card.challenge_type}
@@ -621,7 +615,7 @@ export default function TodaysChallengesCard({
             onPress={() => openSheet(card)}
           />
         ))}
-      </ScrollView>
+      </View>
 
       {/* Detail bottom sheet */}
       <DetailSheet
@@ -636,8 +630,6 @@ export default function TodaysChallengesCard({
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
-const TILE_WIDTH = 104;
 
 const styles = StyleSheet.create({
   card: {
@@ -677,26 +669,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  scrollContent: {
+  tileRow: {
+    flexDirection: 'row',
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    gap: 4,
   },
 
   // ── Compact tile ──
   tile: {
-    width: TILE_WIDTH,
+    flex: 1,
+    minWidth: 0,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 4,
     alignItems: 'center',
     gap: 4,
   },
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
@@ -715,18 +709,18 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   tileLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
     textAlign: 'center',
   },
   percentText: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '800',
     textAlign: 'center',
-    lineHeight: 26,
+    lineHeight: 20,
   },
   xpLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
   },
