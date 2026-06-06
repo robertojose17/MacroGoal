@@ -35,7 +35,7 @@ export default function EditGoalsScreen() {
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   
   // Macro preset
-  const [macroPreset, setMacroPreset] = useState<MacroPreset>('balanced');
+  const [macroPreset, setMacroPreset] = useState<MacroPreset>('lean_body');
   const [customProteinPercent, setCustomProteinPercent] = useState('30');
   const [customCarbsPercent, setCustomCarbsPercent] = useState('40');
   const [customFatsPercent, setCustomFatsPercent] = useState('30');
@@ -439,6 +439,17 @@ export default function EditGoalsScreen() {
             
             <View style={styles.presetOptions}>
               <MacroPresetOption
+                label="Lean Body Formula"
+                description="1g protein & 0.4g fat per lb of bodyweight · carbs fill the rest"
+                value="lean_body"
+                selected={macroPreset === 'lean_body'}
+                onPress={() => {
+                  console.log('[EditGoals] Preset selected: lean_body');
+                  setMacroPreset('lean_body');
+                }}
+                isDark={isDark}
+              />
+              <MacroPresetOption
                 label="Balanced"
                 description="30% protein / 40% carbs / 30% fats"
                 value="balanced"
@@ -460,17 +471,6 @@ export default function EditGoalsScreen() {
                 value="low_carb"
                 selected={macroPreset === 'low_carb'}
                 onPress={() => setMacroPreset('low_carb')}
-                isDark={isDark}
-              />
-              <MacroPresetOption
-                label="Lean Body Formula"
-                description="1g protein & 0.4g fat per lb of bodyweight · carbs fill the rest"
-                value="lean_body"
-                selected={macroPreset === 'lean_body'}
-                onPress={() => {
-                  console.log('[EditGoals] Preset selected: lean_body');
-                  setMacroPreset('lean_body');
-                }}
                 isDark={isDark}
               />
               <MacroPresetOption

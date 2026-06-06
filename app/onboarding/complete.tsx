@@ -23,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
-import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '@/utils/calculations';
+import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -247,7 +247,7 @@ export default function CompleteOnboardingScreen() {
         goalType,
         goalType === 'lose' ? lossRateLbsPerWeek : undefined
       );
-      const macros = calculateMacros(targetCalories, weightInKg, 'balanced');
+      const macros = calculateMacrosWithPreset(targetCalories, weightInKg, 'lean_body');
 
       console.log('[Onboarding] Calculated:', { bmr, tdee, targetCalories, macros });
 
