@@ -135,8 +135,22 @@ export function calculateMacros(
 export function calculateMacrosWithPreset(
   targetCalories: number,
   weight: number,
-  preset: 'balanced' | 'high_protein' | 'low_carb' | 'keto'
+  preset: 'balanced' | 'high_protein' | 'low_carb' | 'lean_body'
 ) {
+  console.log('[calculations] calculateMacrosWithPreset called:', { targetCalories, weight, preset });
+
+  if (preset === 'lean_body') {
+    // weight param is always kg (DB storage). Convert to lbs for the formula.
+    const weightLbs = weight * 2.20462;
+    const protein = Math.round(weightLbs * 1.0);
+    const fats = Math.round(weightLbs * 0.4);
+    const remainingCals = targetCalories - (protein * 4) - (fats * 9);
+    const carbs = Math.max(0, Math.round(remainingCals / 4));
+    const fiber = Math.round(targetCalories / 1000 * 14);
+    console.log('[calculations] lean_body result:', { weightLbs, protein, fats, carbs, fiber });
+    return { protein, carbs, fats, fiber };
+  }
+
   let proteinPercent = 0.30;
   let carbsPercent = 0.40;
   let fatsPercent = 0.30;
@@ -156,11 +170,6 @@ export function calculateMacrosWithPreset(
       proteinPercent = 0.35;
       carbsPercent = 0.25;
       fatsPercent = 0.40;
-      break;
-    case 'keto':
-      proteinPercent = 0.25;
-      carbsPercent = 0.05;
-      fatsPercent = 0.70;
       break;
   }
 

@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { IconSymbol } from '@/components/IconSymbol';
 
-type MacroPreset = 'balanced' | 'high_protein' | 'low_carb' | 'keto' | 'custom';
+type MacroPreset = 'balanced' | 'high_protein' | 'low_carb' | 'lean_body' | 'custom';
 
 export default function EditGoalsScreen() {
   const router = useRouter();
@@ -119,8 +119,6 @@ export default function EditGoalsScreen() {
           setMacroPreset('high_protein');
         } else if (Math.abs(proteinPercent - 35) <= 2 && Math.abs(carbsPercent - 25) <= 2 && Math.abs(fatsPercent - 40) <= 2) {
           setMacroPreset('low_carb');
-        } else if (Math.abs(proteinPercent - 25) <= 2 && Math.abs(carbsPercent - 5) <= 2 && Math.abs(fatsPercent - 70) <= 2) {
-          setMacroPreset('keto');
         } else {
           setMacroPreset('custom');
           setCustomProteinPercent(proteinPercent.toString());
@@ -465,11 +463,14 @@ export default function EditGoalsScreen() {
                 isDark={isDark}
               />
               <MacroPresetOption
-                label="Keto"
-                description="25% protein / 5% carbs / 70% fats"
-                value="keto"
-                selected={macroPreset === 'keto'}
-                onPress={() => setMacroPreset('keto')}
+                label="Lean Body Formula"
+                description="1g protein & 0.4g fat per lb of bodyweight · carbs fill the rest"
+                value="lean_body"
+                selected={macroPreset === 'lean_body'}
+                onPress={() => {
+                  console.log('[EditGoals] Preset selected: lean_body');
+                  setMacroPreset('lean_body');
+                }}
                 isDark={isDark}
               />
               <MacroPresetOption
