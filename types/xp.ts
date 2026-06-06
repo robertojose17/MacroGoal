@@ -164,6 +164,32 @@ export type XpStatus = {
   mission_tier?: number;
   /** @deprecated — replaced by unlock_slot_status */
   tier_progress?: TierProgress | null;
+
+  /** Unified today's challenges — optional until backend rolls out */
+  todays_challenges?: ChallengeCard[];
+};
+
+// ─── Today's Challenges (new unified card) ────────────────────────────────────
+
+export type ChallengeTier = {
+  tier: number;
+  threshold_label: string;
+  threshold_value: number;
+  xp_reward: number;
+  reached: boolean;
+};
+
+export type ChallengeCard = {
+  challenge_type: 'weight_checkin' | 'protein_goal' | 'calorie_goal' | 'steps' | 'workout';
+  label: string;
+  icon: string;                   // ionicons name
+  current_value: number;
+  goal_value: number;
+  progress_percent: number;       // 0-100
+  current_tier: number;
+  current_xp_earned: number;
+  max_xp: number;
+  tiers: ChallengeTier[];
 };
 
 // ─── Mission tier progress (kept for back-compat) ─────────────────────────────

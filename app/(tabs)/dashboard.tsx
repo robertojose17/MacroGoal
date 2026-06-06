@@ -26,13 +26,13 @@ import { toLocalDateString } from '@/utils/dateUtils';
 // ─── XP System ────────────────────────────────────────────────────────────────
 import { useXpStatus } from '@/hooks/useXpStatus';
 import XpHeroCard from '@/components/xp/XpHeroCard';
-import TodaysXpBreakdown from '@/components/xp/TodaysXpBreakdown';
 import LevelUpModal from '@/components/xp/LevelUpModal';
 import SocialComparisonCard from '@/components/xp/SocialComparisonCard';
 import StreakBadgeModal from '@/components/xp/StreakBadgeModal';
-import TodaysMissionsCard from '@/components/xp/TodaysMissionsCard';
+import TodaysChallengesCard from '@/components/xp/TodaysChallengesCard';
 import UnlockMissionModal from '@/components/xp/UnlockMissionModal';
 import { reportTodaySteps } from '@/utils/stepsReporter';
+import { useSteps } from '@/hooks/useSteps';
 import { reportDailyHealthMetrics } from '@/utils/healthMetricsReporter';
 import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
 import { Ionicons } from '@expo/vector-icons';
@@ -148,6 +148,9 @@ export default function DashboardScreen() {
   // ─── XP System ──────────────────────────────────────────────────────────────
   const xp = useXpStatus();
   const missionsScrollRef = useRef<ScrollView>(null);
+
+  // ─── Steps (for TodaysChallengesCard optimistic display) ────────────────────
+  const { steps: localSteps } = useSteps();
   const [pendingMilestone, setPendingMilestone] = useState<number | null>(null);
 
   // Track previous freeze count to detect when a freeze is consumed
@@ -570,37 +573,15 @@ export default function DashboardScreen() {
           </CardErrorBoundary>
         )}
 
-        {/* ── Unified Today's Missions (nutrition + daily missions) ── */}
-        <CardErrorBoundary label="TodaysMissionsCard">
-          <TodaysMissionsCard
-            missions={xp.status?.missions}
-            totalCalories={todaySummary?.total_calories ?? 0}
-            totalProtein={todaySummary?.total_protein ?? 0}
-            totalCarbs={todaySummary?.total_carbs ?? 0}
-            totalFats={todaySummary?.total_fats ?? 0}
-            goalCalories={goal?.daily_calories ?? 2000}
-            goalProtein={goal?.protein_g ?? 150}
-            goalCarbs={goal?.carbs_g ?? 200}
-            goalFats={goal?.fats_g ?? 65}
-            isDark={isDark}
-            missionTier={xp.status?.mission_tier}
-            tierProgress={xp.status?.tier_progress}
-            unlockSlotStatus={xp.status?.unlock_slot_status}
-            onUnlockPress={() => {
-              console.log('[Dashboard] Unlock a Mission button pressed — opening modal');
-              setUnlockModalVisible(true);
-            }}
-          />
-        </CardErrorBoundary>
-
-        {/* ── Today's XP Breakdown — horizontal grid ── */}
-        <CardErrorBoundary label="TodaysXpBreakdown">
-          <TodaysXpBreakdown
+        {/* ── Today's Challenges — unified card (replaces TodaysMissionsCard + TodaysXpBreakdown) ── */}
+        <CardErrorBoundary label="TodaysChallengesCard">
+          <TodaysChallengesCard
             status={xp.status}
             isDark={isDark}
-            onScrollToMissions={() => {
-              console.log('[Dashboard] scrolling to missions');
-              missionsScrollRef.current?.scrollTo({ y: 0, animated: true });
+            localSteps={localSteps}
+            onRefresh={() => {
+              console.log('[Dashboard] TodaysChallengesCard requested XP refresh');
+              xp.refresh();
             }}
           />
         </CardErrorBoundary>
