@@ -46,7 +46,6 @@ import ChallengeDashboardCard from '@/components/xp/SevenDayChallenge/ChallengeD
 import ChallengeCompleteModal from '@/components/xp/SevenDayChallenge/ChallengeCompleteModal';
 import { getChallenge } from '@/utils/sevenDayChallengeApi';
 
-const ONESIGNAL_PROMPT_KEY = 'onesignal_prompt_shown_v1';
 const CHALLENGE_SHOWN_KEY = 'seven_day_challenge_shown';
 
 // ─── Local error boundary so a crashing card doesn't blank the whole screen ───
@@ -135,7 +134,6 @@ export default function DashboardScreen() {
 
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
-  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
   // ─── 7-Day Challenge ────────────────────────────────────────────────────────
   const [showChallengePopup, setShowChallengePopup] = useState(false);
@@ -143,7 +141,7 @@ export default function DashboardScreen() {
   const challenge = useSevenDayChallenge();
 
   // ─── Notifications ──────────────────────────────────────────────────────────
-  const { hasPermission, requestPermission } = useNotifications();
+  useNotifications();
 
   // ─── XP System ──────────────────────────────────────────────────────────────
   const xp = useXpStatus();
@@ -175,27 +173,7 @@ export default function DashboardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // One-time notification permission prompt for existing users (post-update)
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    if (hasPermission) return; // already granted — no need to prompt
 
-    const checkAndShowPrompt = async () => {
-      try {
-        const shown = await AsyncStorage.getItem(ONESIGNAL_PROMPT_KEY);
-        if (shown) return; // already shown once
-        // Delay slightly so the dashboard finishes loading first
-        setTimeout(() => {
-          setShowNotifPrompt(true);
-        }, 2000);
-      } catch (e) {
-        console.warn('[Dashboard] notification prompt check failed:', e);
-      }
-    };
-
-    checkAndShowPrompt();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Streak-saved toast: fires when freeze count decreases but streak is intact
   useEffect(() => {
@@ -774,48 +752,6 @@ export default function DashboardScreen() {
         }}
       />
 
-      {/* ── One-time notification permission prompt ── */}
-      <Modal
-        visible={showNotifPrompt}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowNotifPrompt(false)}
-      >
-        <View style={styles.notifPromptOverlay}>
-          <View style={[styles.notifPromptCard, { backgroundColor: isDark ? colors.cardDark : '#fff' }]}>
-            <Text style={styles.notifPromptEmoji}>{'🔔'}</Text>
-            <Text style={[styles.notifPromptTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              {'Stay on track with reminders'}
-            </Text>
-            <Text style={[styles.notifPromptBody, { color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' }]}>
-              {"We'll notify you about your streak, daily missions, and level-ups."}
-            </Text>
-            <TouchableOpacity
-              style={styles.notifEnableBtn}
-              onPress={async () => {
-                console.log('[Dashboard] Notification prompt: Enable notifications pressed');
-                setShowNotifPrompt(false);
-                await AsyncStorage.setItem(ONESIGNAL_PROMPT_KEY, 'true');
-                await requestPermission();
-              }}
-            >
-              <Text style={styles.notifEnableBtnText}>{'Enable notifications'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.notifLaterBtn}
-              onPress={async () => {
-                console.log('[Dashboard] Notification prompt: Maybe later pressed');
-                setShowNotifPrompt(false);
-                await AsyncStorage.setItem(ONESIGNAL_PROMPT_KEY, 'true');
-              }}
-            >
-              <Text style={[styles.notifLaterBtnText, { color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)' }]}>
-                {'Maybe later'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -939,67 +875,5 @@ const styles = StyleSheet.create({
   },
   modalCancelText: {
     ...typography.bodyBold,
-  },
-  // ── Notification permission prompt ────────────────────────────────────────
-  notifPromptOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  notifPromptCard: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: borderRadius.xl,
-    padding: 28,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.18,
-        shadowRadius: 20,
-      },
-      android: { elevation: 10 },
-    }),
-  },
-  notifPromptEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  notifPromptTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 10,
-    lineHeight: 26,
-  },
-  notifPromptBody: {
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-  },
-  notifEnableBtn: {
-    width: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  notifEnableBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  notifLaterBtn: {
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  notifLaterBtnText: {
-    fontSize: 14,
-    fontWeight: '500',
   },
 });
