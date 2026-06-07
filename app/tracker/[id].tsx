@@ -13,6 +13,7 @@ import {
   Platform,
   TextInput,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -28,6 +29,7 @@ import {
   listTrackers,
   backfillWeightFromCheckIns,
   updateTrackerGoal,
+  updateEntry,
 } from '@/utils/trackersApi';
 import {
   Flame,
@@ -42,10 +44,15 @@ import {
   BarChart3,
   Pencil,
   RotateCw,
+  Camera,
 } from 'lucide-react-native';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import * as Haptics from 'expo-haptics';
 import { useSteps } from '@/hooks/useSteps';
+import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
+import { toLocalDateString } from '@/utils/dateUtils';
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -338,6 +345,546 @@ function DailyGoalSection({
   );
 }
 
+// ─── WeightEntryActions ───────────────────────────────────────────────────────
+// Per-row action buttons for the Weight tracker only.
+function WeightEntryActions({
+  entry,
+  trackerId,
+  isDark,
+  onReload,
+}: {
+  entry: TrackerEntry;
+  trackerId: string;
+  isDark: boolean;
+  onReload: () => Promise<void>;
+}) {
+  const btnBg = isDark ? '#2A2C40' : '#F1F3F8';
+  const iconColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+
+  // ── Camera state ──────────────────────────────────────────────────────────
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // ── Edit value modal state ────────────────────────────────────────────────
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // ── Edit date modal state ─────────────────────────────────────────────────
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [pickedDate, setPickedDate] = useState<Date>(() => {
+    const [y, m, d] = entry.date.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  });
+  const [savingDate, setSavingDate] = useState(false);
+
+  // ── Upload photo helper (mirrors check-in-form.tsx uploadPhoto) ───────────
+  const uploadPhoto = async (checkInId: string, imageUri: string): Promise<void> => {
+    console.log('[TrackerDetail] uploadPhoto — checkInId:', checkInId, 'uri:', imageUri);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('No session available for photo upload');
+
+    const baseUrl = `${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`;
+
+    // Step 1: Get signed upload URL
+    console.log('[TrackerDetail] Requesting upload URL from edge function');
+    const urlResponse = await fetch(`${baseUrl}/upload-url`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file_name: 'photo.jpg', content_type: 'image/jpeg' }),
+    });
+    if (!urlResponse.ok) {
+      const text = await urlResponse.text();
+      throw new Error(`Failed to get upload URL: ${urlResponse.status} ${text}`);
+    }
+    const { upload_url, storage_path, public_url } = await urlResponse.json();
+    console.log('[TrackerDetail] Got upload URL, storage_path:', storage_path);
+
+    // Step 2: Upload image binary
+    console.log('[TrackerDetail] Uploading image binary to storage');
+    const imageResponse = await fetch(imageUri);
+    const blob = await imageResponse.blob();
+    const putResponse = await fetch(upload_url, {
+      method: 'PUT',
+      body: blob,
+      headers: { 'Content-Type': 'image/jpeg' },
+    });
+    if (!putResponse.ok) {
+      const text = await putResponse.text();
+      throw new Error(`Failed to upload image: ${putResponse.status} ${text}`);
+    }
+    console.log('[TrackerDetail] Image uploaded successfully');
+
+    // Step 3: Save photo record
+    console.log('[TrackerDetail] Saving photo record to database');
+    const saveResponse = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ check_in_id: checkInId, photo_url: public_url, storage_path }),
+    });
+    if (!saveResponse.ok) {
+      const text = await saveResponse.text();
+      throw new Error(`Failed to save photo record: ${saveResponse.status} ${text}`);
+    }
+    console.log('[TrackerDetail] Photo record saved successfully');
+  };
+
+  // ── Ensure a check_in row exists for this entry's date, return its id ─────
+  const ensureCheckIn = async (userId: string): Promise<string> => {
+    console.log('[TrackerDetail] ensureCheckIn — date:', entry.date);
+    const { data: existing } = await supabase
+      .from('check_ins')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('date', entry.date)
+      .maybeSingle();
+
+    if (existing?.id) {
+      console.log('[TrackerDetail] Found existing check_in:', existing.id);
+      return existing.id;
+    }
+
+    // Insert a new check_in with the weight value converted back to kg
+    const weightKg = Number(entry.value) / 2.20462;
+    console.log('[TrackerDetail] Inserting new check_in — weight kg:', weightKg);
+    const { data: inserted, error } = await supabase
+      .from('check_ins')
+      .insert({ user_id: userId, date: entry.date, weight: weightKg })
+      .select('id')
+      .single();
+
+    if (error || !inserted) {
+      throw new Error(error?.message ?? 'Failed to create check_in for photo');
+    }
+    console.log('[TrackerDetail] Created new check_in:', inserted.id);
+    return inserted.id;
+  };
+
+  // ── Camera button handler ─────────────────────────────────────────────────
+  const handleCamera = () => {
+    console.log('[TrackerDetail] Camera button tapped — entry date:', entry.date);
+    const dateLabel = formatDate(entry.date);
+    Alert.alert(`Add a photo for ${dateLabel}`, undefined, [
+      {
+        text: 'Take Photo',
+        onPress: () => pickAndUpload('camera'),
+      },
+      {
+        text: 'Choose from Library',
+        onPress: () => pickAndUpload('library'),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const pickAndUpload = async (source: 'camera' | 'library') => {
+    console.log('[TrackerDetail] pickAndUpload — source:', source, 'entry:', entry.id);
+    try {
+      let result: ImagePicker.ImagePickerResult;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: true,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Photo library access is needed to select a photo.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: true,
+        });
+      }
+
+      if (result.canceled || result.assets.length === 0) {
+        console.log('[TrackerDetail] Photo picker cancelled');
+        return;
+      }
+
+      const uri = result.assets[0].uri;
+      console.log('[TrackerDetail] Photo selected, starting upload — uri:', uri);
+      setUploadingPhoto(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const checkInId = await ensureCheckIn(user.id);
+      await uploadPhoto(checkInId, uri);
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      console.log('[TrackerDetail] Photo upload complete for entry:', entry.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to upload photo';
+      console.error('[TrackerDetail] pickAndUpload error:', msg);
+      Alert.alert('Error', msg);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // ── Pencil (edit value) handler ───────────────────────────────────────────
+  const handlePencilPress = () => {
+    const currentLbs = Number(entry.value);
+    const display = currentLbs % 1 === 0 ? String(currentLbs) : currentLbs.toFixed(1);
+    console.log('[TrackerDetail] Pencil tapped — entry:', entry.id, 'current value:', display);
+    setEditValue(display);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    const parsed = parseFloat(editValue);
+    console.log('[TrackerDetail] Save edit value — raw:', editValue, 'parsed:', parsed);
+    if (isNaN(parsed) || parsed <= 0) {
+      Alert.alert('Invalid value', 'Please enter a valid weight greater than 0.');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      // Update tracker_entries
+      await updateEntry(trackerId, entry.id, { value: parsed });
+      console.log('[TrackerDetail] tracker_entries updated — new lbs:', parsed);
+
+      // Sync check_ins: convert lbs → kg
+      const weightKg = parsed / 2.20462;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: existing } = await supabase
+          .from('check_ins')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('date', entry.date)
+          .maybeSingle();
+
+        if (existing?.id) {
+          console.log('[TrackerDetail] Updating check_ins weight — id:', existing.id, 'kg:', weightKg);
+          await supabase.from('check_ins').update({ weight: weightKg }).eq('id', existing.id);
+        } else {
+          console.log('[TrackerDetail] Inserting new check_in for edited weight — kg:', weightKg);
+          await supabase.from('check_ins').insert({ user_id: user.id, date: entry.date, weight: weightKg });
+        }
+      }
+
+      setShowEditModal(false);
+      await onReload();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      console.log('[TrackerDetail] Edit value saved and entries reloaded');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update entry';
+      console.error('[TrackerDetail] handleSaveEdit error:', msg);
+      Alert.alert('Error', msg);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // ── Calendar (edit date) handler ──────────────────────────────────────────
+  const handleCalendarPress = () => {
+    console.log('[TrackerDetail] Calendar tapped — entry:', entry.id, 'date:', entry.date);
+    const [y, m, d] = entry.date.split('-').map(Number);
+    setPickedDate(new Date(y, m - 1, d));
+    setShowDateModal(true);
+  };
+
+  const handleSaveDate = async () => {
+    const newDateStr = toLocalDateString(pickedDate);
+    console.log('[TrackerDetail] Save date — old:', entry.date, 'new:', newDateStr);
+
+    if (newDateStr === entry.date) {
+      setShowDateModal(false);
+      return;
+    }
+
+    setSavingDate(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Check for duplicate date in tracker_entries
+      const { data: conflict } = await supabase
+        .from('tracker_entries')
+        .select('id')
+        .eq('tracker_id', trackerId)
+        .eq('user_id', user.id)
+        .eq('date', newDateStr)
+        .maybeSingle();
+
+      if (conflict) {
+        Alert.alert('Date conflict', 'An entry already exists for that date.');
+        setSavingDate(false);
+        return;
+      }
+
+      // Update tracker_entries date
+      const { error: teError } = await supabase
+        .from('tracker_entries')
+        .update({ date: newDateStr })
+        .eq('id', entry.id)
+        .eq('user_id', user.id);
+
+      if (teError) throw new Error(teError.message);
+      console.log('[TrackerDetail] tracker_entries date updated to:', newDateStr);
+
+      // Sync check_ins: find old row by (user_id, old_date) with weight not null
+      const { data: oldCheckIn } = await supabase
+        .from('check_ins')
+        .select('id, weight, steps, went_to_gym, notes')
+        .eq('user_id', user.id)
+        .eq('date', entry.date)
+        .not('weight', 'is', null)
+        .maybeSingle();
+
+      if (oldCheckIn) {
+        const hasOtherData =
+          oldCheckIn.steps != null ||
+          oldCheckIn.went_to_gym != null ||
+          oldCheckIn.notes != null;
+
+        if (!hasOtherData) {
+          // Safe to move the row's date
+          console.log('[TrackerDetail] Moving check_in date — id:', oldCheckIn.id, 'to:', newDateStr);
+          await supabase.from('check_ins').update({ date: newDateStr }).eq('id', oldCheckIn.id);
+        } else {
+          // Row has other data — null the weight on old row, upsert new row at new date
+          console.log('[TrackerDetail] check_in has other data — nulling weight on old row, upserting new');
+          await supabase.from('check_ins').update({ weight: null }).eq('id', oldCheckIn.id);
+          const weightKg = Number(entry.value) / 2.20462;
+          await supabase.from('check_ins').upsert(
+            { user_id: user.id, date: newDateStr, weight: weightKg },
+            { onConflict: 'user_id,date' }
+          );
+        }
+      }
+
+      setShowDateModal(false);
+      await onReload();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      console.log('[TrackerDetail] Date change saved and entries reloaded');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update date';
+      console.error('[TrackerDetail] handleSaveDate error:', msg);
+      Alert.alert('Error', msg);
+    } finally {
+      setSavingDate(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Three inline action buttons */}
+      <View style={styles.weightActionBtns}>
+        {/* Camera */}
+        <AnimatedPressable
+          onPress={handleCamera}
+          style={[styles.weightActionBtn, { backgroundColor: btnBg }]}
+          scaleValue={0.88}
+          disabled={uploadingPhoto}
+        >
+          {uploadingPhoto ? (
+            <ActivityIndicator size="small" color={iconColor} />
+          ) : (
+            <Camera size={16} color={iconColor} strokeWidth={2} />
+          )}
+        </AnimatedPressable>
+
+        {/* Pencil */}
+        <AnimatedPressable
+          onPress={handlePencilPress}
+          style={[styles.weightActionBtn, { backgroundColor: btnBg }]}
+          scaleValue={0.88}
+        >
+          <Pencil size={16} color={iconColor} strokeWidth={2} />
+        </AnimatedPressable>
+
+        {/* Calendar */}
+        <AnimatedPressable
+          onPress={handleCalendarPress}
+          style={[styles.weightActionBtn, { backgroundColor: btnBg }]}
+          scaleValue={0.88}
+        >
+          <Calendar size={16} color={iconColor} strokeWidth={2} />
+        </AnimatedPressable>
+      </View>
+
+      {/* Edit value modal */}
+      <Modal
+        visible={showEditModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <WeightEditModal
+          isDark={isDark}
+          editValue={editValue}
+          setEditValue={setEditValue}
+          saving={savingEdit}
+          onCancel={() => {
+            console.log('[TrackerDetail] Edit value modal cancelled');
+            setShowEditModal(false);
+          }}
+          onSave={handleSaveEdit}
+        />
+      </Modal>
+
+      {/* Edit date modal */}
+      <Modal
+        visible={showDateModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowDateModal(false)}
+      >
+        <WeightDateModal
+          isDark={isDark}
+          pickedDate={pickedDate}
+          setPickedDate={setPickedDate}
+          saving={savingDate}
+          onCancel={() => {
+            console.log('[TrackerDetail] Edit date modal cancelled');
+            setShowDateModal(false);
+          }}
+          onSave={handleSaveDate}
+        />
+      </Modal>
+    </>
+  );
+}
+
+// ─── WeightEditModal ──────────────────────────────────────────────────────────
+function WeightEditModal({
+  isDark,
+  editValue,
+  setEditValue,
+  saving,
+  onCancel,
+  onSave,
+}: {
+  isDark: boolean;
+  editValue: string;
+  setEditValue: (v: string) => void;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const inputBg = isDark ? '#2A2C40' : '#F1F3F8';
+
+  return (
+    <View style={styles.modalBackdrop}>
+      <View style={[styles.modalCard, { backgroundColor: cardBg }]}>
+        <Text style={[styles.modalTitle, { color: textColor }]}>Edit weight</Text>
+        <TextInput
+          style={[styles.modalInput, { backgroundColor: inputBg, color: textColor }]}
+          value={editValue}
+          onChangeText={setEditValue}
+          keyboardType="decimal-pad"
+          placeholder="Weight in lbs"
+          placeholderTextColor={subColor}
+          autoFocus
+          selectTextOnFocus
+        />
+        <View style={styles.modalBtnRow}>
+          <Pressable
+            onPress={onCancel}
+            style={[styles.modalBtn, { backgroundColor: isDark ? '#2A2C40' : '#F1F3F8' }]}
+          >
+            <Text style={[styles.modalBtnText, { color: subColor }]}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={onSave}
+            disabled={saving}
+            style={[styles.modalBtn, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={[styles.modalBtnText, { color: '#fff' }]}>Save</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── WeightDateModal ──────────────────────────────────────────────────────────
+function WeightDateModal({
+  isDark,
+  pickedDate,
+  setPickedDate,
+  saving,
+  onCancel,
+  onSave,
+}: {
+  isDark: boolean;
+  pickedDate: Date;
+  setPickedDate: (d: Date) => void;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+
+  return (
+    <View style={styles.modalBackdrop}>
+      <View style={[styles.modalCard, { backgroundColor: cardBg }]}>
+        <Text style={[styles.modalTitle, { color: textColor }]}>Edit date</Text>
+        <DateTimePicker
+          value={pickedDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          maximumDate={new Date()}
+          onChange={(_event, date) => {
+            if (date) {
+              console.log('[TrackerDetail] DateTimePicker changed:', toLocalDateString(date));
+              setPickedDate(date);
+            }
+          }}
+          style={{ alignSelf: 'center' }}
+          textColor={textColor}
+        />
+        <View style={styles.modalBtnRow}>
+          <Pressable
+            onPress={onCancel}
+            style={[styles.modalBtn, { backgroundColor: isDark ? '#2A2C40' : '#F1F3F8' }]}
+          >
+            <Text style={[styles.modalBtnText, { color: subColor }]}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={onSave}
+            disabled={saving}
+            style={[styles.modalBtn, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={[styles.modalBtnText, { color: '#fff' }]}>Confirm</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TrackerDetailScreen() {
   const router = useRouter();
@@ -386,6 +933,22 @@ export default function TrackerDetailScreen() {
       setRefreshing(false);
     }
   }, [id]);
+
+  // Lightweight reload (no skeleton flash) used by WeightEntryActions after edits
+  const reloadEntries = useCallback(async () => {
+    if (!id || !tracker) return;
+    console.log('[TrackerDetail] reloadEntries — tracker:', id);
+    try {
+      const [newStats, newEntries] = await Promise.all([
+        getStats(id),
+        listEntries(id, 500),
+      ]);
+      setStats(newStats);
+      setEntries(newEntries);
+    } catch (e) {
+      console.error('[TrackerDetail] reloadEntries error:', e);
+    }
+  }, [id, tracker]);
 
   useFocusEffect(
     useCallback(() => {
@@ -472,7 +1035,6 @@ export default function TrackerDetailScreen() {
       const currentSteps = stepsHook.steps;
       if (currentSteps !== null && currentSteps > 0) {
         const { logEntry } = await import('@/utils/trackersApi');
-        const { toLocalDateString } = await import('@/utils/dateUtils');
         const today = toLocalDateString(new Date());
         console.log('[TrackerDetail] Upserting steps entry from Health:', currentSteps);
         await logEntry(tracker.id, today, currentSteps);
@@ -505,6 +1067,7 @@ export default function TrackerDetailScreen() {
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
 
   const isStepsTracker = tracker?.is_default && tracker.name.toLowerCase() === 'steps';
+  const isWeightTracker = tracker?.name.toLowerCase() === 'weight';
 
   const trackerTitle = tracker ? `${tracker.emoji} ${tracker.name}` : '';
   const completionPct = stats ? Math.round(Number(stats.completion_rate)) : 0;
@@ -669,6 +1232,9 @@ export default function TrackerDetailScreen() {
                     </>
                   )}
                 </AnimatedPressable>
+              ) : isWeightTracker ? (
+                /* Weight: no button — user logs from check-ins tab */
+                null
               ) : (
                 <AnimatedPressable onPress={handleLogEntry} style={[styles.logEntryBtn, { backgroundColor: colors.primary }]} scaleValue={0.94}>
                   <Plus size={14} color="#fff" strokeWidth={2.5} />
@@ -683,6 +1249,8 @@ export default function TrackerDetailScreen() {
                 <Text style={[styles.emptyEntriesSub, { color: subColor }]}>
                   {isStepsTracker
                     ? 'Tap Refresh to sync your steps from Apple Health'
+                    : isWeightTracker
+                    ? 'Log your weight from the Check-ins tab'
                     : 'Log your first entry to start tracking progress'}
                 </Text>
               </View>
@@ -705,6 +1273,14 @@ export default function TrackerDetailScreen() {
                             </Text>
                           ) : null}
                         </View>
+                        {isWeightTracker && tracker ? (
+                          <WeightEntryActions
+                            entry={entry}
+                            trackerId={tracker.id}
+                            isDark={isDark}
+                            onReload={reloadEntries}
+                          />
+                        ) : null}
                         <Text style={[styles.entryValue, { color: colors.primary }]}>{valueDisplay}</Text>
                         <View style={[styles.deleteHint, { backgroundColor: colors.error + '18' }]}>
                           <Trash2 size={12} color={colors.error} strokeWidth={2} />
@@ -1009,5 +1585,65 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 15,
+  },
+  // Weight entry action buttons
+  weightActionBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  weightActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Modals
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    boxShadow: '0px 8px 24px rgba(0,0,0,0.2)',
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  modalInput: {
+    borderRadius: borderRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
