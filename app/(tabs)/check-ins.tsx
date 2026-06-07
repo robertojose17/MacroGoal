@@ -19,6 +19,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { listTrackers, getStats, listEntries, logEntry, Tracker, TrackerStats } from '@/utils/trackersApi';
 import { tryAwardWorkout, tryAwardWeightCheckin } from '@/utils/xpAwarder';
+import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { fetchLeaderboard, type LeaderboardStats } from '@/utils/leaderboardApi';
 import { CommunityLeaderboard } from '@/components/CommunityLeaderboard';
@@ -929,6 +930,14 @@ export default function CheckInsScreen() {
       } else if (tracker.is_default && lowerName === 'weight') {
         console.log('[CheckIns] Awarding weight_checkin XP for entry:', entry.id, 'value:', value);
         tryAwardWeightCheckin(entry.id, value);
+
+        // Only prompt for a progress photo on NEW entries (not edits)
+        if (!prevEntry) {
+          console.log('[CheckIns] New weight entry — prompting for progress photo');
+          promptForProgressPhoto(value, today).catch((e) =>
+            console.warn('[CheckIns] Progress photo prompt failed:', e),
+          );
+        }
       }
 
       // Refresh stats in background (non-blocking)
