@@ -345,6 +345,322 @@ function DailyGoalSection({
   );
 }
 
+// ─── GymEntryActions ─────────────────────────────────────────────────────────
+// Per-row action buttons for the Gym tracker only (Camera + Calendar, no Pencil).
+function GymEntryActions({
+  entry,
+  trackerId,
+  isDark,
+  onReload,
+}: {
+  entry: TrackerEntry;
+  trackerId: string;
+  isDark: boolean;
+  onReload: () => Promise<void>;
+}) {
+  const btnBg = isDark ? '#2A2C40' : '#F1F3F8';
+  const iconColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [pickedDate, setPickedDate] = useState<Date>(() => {
+    const [y, m, d] = entry.date.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  });
+  const [savingDate, setSavingDate] = useState(false);
+
+  // ── Upload photo helper (mirrors WeightEntryActions) ──────────────────────
+  const uploadPhoto = async (checkInId: string, imageUri: string): Promise<void> => {
+    console.log('[TrackerDetail][Gym] uploadPhoto — checkInId:', checkInId, 'uri:', imageUri);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('No session available for photo upload');
+
+    const baseUrl = `${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`;
+
+    console.log('[TrackerDetail][Gym] Requesting upload URL from edge function');
+    const urlResponse = await fetch(`${baseUrl}/upload-url`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file_name: 'photo.jpg', content_type: 'image/jpeg' }),
+    });
+    if (!urlResponse.ok) {
+      const text = await urlResponse.text();
+      throw new Error(`Failed to get upload URL: ${urlResponse.status} ${text}`);
+    }
+    const { upload_url, storage_path, public_url } = await urlResponse.json();
+    console.log('[TrackerDetail][Gym] Got upload URL, storage_path:', storage_path);
+
+    console.log('[TrackerDetail][Gym] Uploading image binary to storage');
+    const imageResponse = await fetch(imageUri);
+    const blob = await imageResponse.blob();
+    const putResponse = await fetch(upload_url, {
+      method: 'PUT',
+      body: blob,
+      headers: { 'Content-Type': 'image/jpeg' },
+    });
+    if (!putResponse.ok) {
+      const text = await putResponse.text();
+      throw new Error(`Failed to upload image: ${putResponse.status} ${text}`);
+    }
+    console.log('[TrackerDetail][Gym] Image uploaded successfully');
+
+    console.log('[TrackerDetail][Gym] Saving photo record to database');
+    const saveResponse = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ check_in_id: checkInId, photo_url: public_url, storage_path }),
+    });
+    if (!saveResponse.ok) {
+      const text = await saveResponse.text();
+      throw new Error(`Failed to save photo record: ${saveResponse.status} ${text}`);
+    }
+    console.log('[TrackerDetail][Gym] Photo record saved successfully');
+  };
+
+  // ── Ensure a check_in row exists for this gym entry's date ────────────────
+  const ensureGymCheckIn = async (userId: string): Promise<string> => {
+    console.log('[TrackerDetail][Gym] ensureGymCheckIn — date:', entry.date);
+    const { data: existing } = await supabase
+      .from('check_ins')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('date', entry.date)
+      .maybeSingle();
+
+    if (existing?.id) {
+      console.log('[TrackerDetail][Gym] Found existing check_in:', existing.id);
+      // Ensure went_to_gym is true on the existing row
+      await supabase.from('check_ins').update({ went_to_gym: true }).eq('id', existing.id);
+      return existing.id;
+    }
+
+    console.log('[TrackerDetail][Gym] Inserting new check_in with went_to_gym: true');
+    const { data: inserted, error } = await supabase
+      .from('check_ins')
+      .insert({ user_id: userId, date: entry.date, went_to_gym: true })
+      .select('id')
+      .single();
+
+    if (error || !inserted) {
+      throw new Error(error?.message ?? 'Failed to create check_in for photo');
+    }
+    console.log('[TrackerDetail][Gym] Created new check_in:', inserted.id);
+    return inserted.id;
+  };
+
+  // ── Camera button handler ─────────────────────────────────────────────────
+  const handleCamera = () => {
+    console.log('[TrackerDetail][Gym] Camera button tapped — entry date:', entry.date);
+    const dateLabel = formatDate(entry.date);
+    Alert.alert(`Add a photo for ${dateLabel}`, undefined, [
+      { text: 'Take Photo', onPress: () => pickAndUpload('camera') },
+      { text: 'Choose from Library', onPress: () => pickAndUpload('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const pickAndUpload = async (source: 'camera' | 'library') => {
+    console.log('[TrackerDetail][Gym] pickAndUpload — source:', source, 'entry:', entry.id);
+    try {
+      let result: ImagePicker.ImagePickerResult;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: true,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Photo library access is needed to select a photo.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: true,
+        });
+      }
+
+      if (result.canceled || result.assets.length === 0) {
+        console.log('[TrackerDetail][Gym] Photo picker cancelled');
+        return;
+      }
+
+      const uri = result.assets[0].uri;
+      console.log('[TrackerDetail][Gym] Photo selected, starting upload — uri:', uri);
+      setUploadingPhoto(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const checkInId = await ensureGymCheckIn(user.id);
+      await uploadPhoto(checkInId, uri);
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      console.log('[TrackerDetail][Gym] Photo upload complete for entry:', entry.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to upload photo';
+      console.error('[TrackerDetail][Gym] pickAndUpload error:', msg);
+      Alert.alert('Error', msg);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // ── Calendar (edit date) handler ──────────────────────────────────────────
+  const handleCalendarPress = () => {
+    console.log('[TrackerDetail][Gym] Calendar tapped — entry:', entry.id, 'date:', entry.date);
+    const [y, m, d] = entry.date.split('-').map(Number);
+    setPickedDate(new Date(y, m - 1, d));
+    setShowDateModal(true);
+  };
+
+  const handleSaveDate = async () => {
+    const newDateStr = toLocalDateString(pickedDate);
+    console.log('[TrackerDetail][Gym] Save date — old:', entry.date, 'new:', newDateStr);
+
+    if (newDateStr === entry.date) {
+      setShowDateModal(false);
+      return;
+    }
+
+    setSavingDate(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Check for duplicate date in tracker_entries
+      const { data: conflict } = await supabase
+        .from('tracker_entries')
+        .select('id')
+        .eq('tracker_id', trackerId)
+        .eq('user_id', user.id)
+        .eq('date', newDateStr)
+        .maybeSingle();
+
+      if (conflict) {
+        Alert.alert('Date conflict', 'An entry already exists for that date.');
+        setSavingDate(false);
+        return;
+      }
+
+      // Update tracker_entries date
+      const { error: teError } = await supabase
+        .from('tracker_entries')
+        .update({ date: newDateStr })
+        .eq('id', entry.id)
+        .eq('user_id', user.id);
+
+      if (teError) throw new Error(teError.message);
+      console.log('[TrackerDetail][Gym] tracker_entries date updated to:', newDateStr);
+
+      // Sync check_ins: find old row by (user_id, old_date) with went_to_gym = true
+      const { data: oldCheckIn } = await supabase
+        .from('check_ins')
+        .select('id, weight, steps, notes')
+        .eq('user_id', user.id)
+        .eq('date', entry.date)
+        .eq('went_to_gym', true)
+        .maybeSingle();
+
+      if (oldCheckIn) {
+        const hasOtherData =
+          oldCheckIn.weight != null ||
+          oldCheckIn.steps != null ||
+          oldCheckIn.notes != null;
+
+        if (!hasOtherData) {
+          // Safe to move the row's date
+          console.log('[TrackerDetail][Gym] Moving check_in date — id:', oldCheckIn.id, 'to:', newDateStr);
+          await supabase.from('check_ins').update({ date: newDateStr }).eq('id', oldCheckIn.id);
+        } else {
+          // Row has other data — set went_to_gym false on old row, upsert new row at new date
+          console.log('[TrackerDetail][Gym] check_in has other data — clearing gym on old row, upserting new');
+          await supabase.from('check_ins').update({ went_to_gym: false }).eq('id', oldCheckIn.id);
+          await supabase.from('check_ins').upsert(
+            { user_id: user.id, date: newDateStr, went_to_gym: true },
+            { onConflict: 'user_id,date' }
+          );
+        }
+      }
+
+      setShowDateModal(false);
+      await onReload();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      console.log('[TrackerDetail][Gym] Date change saved and entries reloaded');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update date';
+      console.error('[TrackerDetail][Gym] handleSaveDate error:', msg);
+      Alert.alert('Error', msg);
+    } finally {
+      setSavingDate(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Two inline action buttons: Camera + Calendar */}
+      <View style={styles.weightActionBtns}>
+        {/* Camera */}
+        <AnimatedPressable
+          onPress={handleCamera}
+          style={[styles.weightActionBtn, { backgroundColor: btnBg }]}
+          scaleValue={0.88}
+          disabled={uploadingPhoto}
+        >
+          {uploadingPhoto ? (
+            <ActivityIndicator size="small" color={iconColor} />
+          ) : (
+            <Camera size={16} color={iconColor} strokeWidth={2} />
+          )}
+        </AnimatedPressable>
+
+        {/* Calendar */}
+        <AnimatedPressable
+          onPress={handleCalendarPress}
+          style={[styles.weightActionBtn, { backgroundColor: btnBg }]}
+          scaleValue={0.88}
+        >
+          <Calendar size={16} color={iconColor} strokeWidth={2} />
+        </AnimatedPressable>
+      </View>
+
+      {/* Edit date modal */}
+      <Modal
+        visible={showDateModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowDateModal(false)}
+      >
+        <WeightDateModal
+          isDark={isDark}
+          pickedDate={pickedDate}
+          setPickedDate={setPickedDate}
+          saving={savingDate}
+          onCancel={() => {
+            console.log('[TrackerDetail][Gym] Edit date modal cancelled');
+            setShowDateModal(false);
+          }}
+          onSave={handleSaveDate}
+        />
+      </Modal>
+    </>
+  );
+}
+
 // ─── WeightEntryActions ───────────────────────────────────────────────────────
 // Per-row action buttons for the Weight tracker only.
 function WeightEntryActions({
@@ -1068,6 +1384,7 @@ export default function TrackerDetailScreen() {
 
   const isStepsTracker = tracker?.is_default && tracker.name.toLowerCase() === 'steps';
   const isWeightTracker = tracker?.name.toLowerCase() === 'weight';
+  const isGymTracker = tracker?.name.toLowerCase() === 'gym';
 
   const trackerTitle = tracker ? `${tracker.emoji} ${tracker.name}` : '';
   const completionPct = stats ? Math.round(Number(stats.completion_rate)) : 0;
@@ -1235,6 +1552,9 @@ export default function TrackerDetailScreen() {
               ) : isWeightTracker ? (
                 /* Weight: no button — user logs from check-ins tab */
                 null
+              ) : isGymTracker ? (
+                /* Gym: no button — user logs from check-ins tab */
+                null
               ) : (
                 <AnimatedPressable onPress={handleLogEntry} style={[styles.logEntryBtn, { backgroundColor: colors.primary }]} scaleValue={0.94}>
                   <Plus size={14} color="#fff" strokeWidth={2.5} />
@@ -1251,6 +1571,8 @@ export default function TrackerDetailScreen() {
                     ? 'Tap Refresh to sync your steps from Apple Health'
                     : isWeightTracker
                     ? 'Log your weight from the Check-ins tab'
+                    : isGymTracker
+                    ? 'Log your gym sessions from the Check-ins tab'
                     : 'Log your first entry to start tracking progress'}
                 </Text>
               </View>
@@ -1275,6 +1597,13 @@ export default function TrackerDetailScreen() {
                         </View>
                         {isWeightTracker && tracker ? (
                           <WeightEntryActions
+                            entry={entry}
+                            trackerId={tracker.id}
+                            isDark={isDark}
+                            onReload={reloadEntries}
+                          />
+                        ) : isGymTracker && tracker ? (
+                          <GymEntryActions
                             entry={entry}
                             trackerId={tracker.id}
                             isDark={isDark}
