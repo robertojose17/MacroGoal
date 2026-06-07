@@ -13,6 +13,42 @@ function json(data: unknown, status = 200) {
   });
 }
 
+/**
+ * Get the local date string (YYYY-MM-DD) for a given timezone.
+ * Falls back to UTC date if the timezone is invalid.
+ */
+function getLocalDateString(tz: string, now: Date): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(now);
+    const y = parts.find((p) => p.type === "year")?.value ?? "";
+    const m = parts.find((p) => p.type === "month")?.value ?? "";
+    const d = parts.find((p) => p.type === "day")?.value ?? "";
+    if (!y || !m || !d) return now.toISOString().split("T")[0];
+    return `${y}-${m}-${d}`;
+  } catch {
+    return now.toISOString().split("T")[0];
+  }
+}
+
+/**
+ * Add (or subtract) days from a YYYY-MM-DD string using pure UTC arithmetic.
+ * This avoids DST issues because we build the Date from explicit Y/M/D.
+ */
+function addDaysLocal(localDateStr: string, delta: number): string {
+  const [y, m, d] = localDateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -108,9 +144,18 @@ serve(async (req: Request) => {
     // GET /trackers/:id/stats
     if (method === "GET" && segments.length === 2 && segments[1] === "stats") {
       const now = new Date();
-      const thirtyDaysAgo = new Date(now);
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+
+      // ── Fetch user timezone ────────────────────────────────────────────────
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("timezone")
+        .eq("id", user.id)
+        .maybeSingle();
+      const userTz = (userRow?.timezone as string) || "UTC";
+
+      // ── Compute local today and 30-days-ago in user's timezone ───────────
+      const today = getLocalDateString(userTz, now);
+      const thirtyDaysAgoStr = addDaysLocal(today, -30);
 
       const { data: entries, error } = await supabase
         .from("tracker_entries")
@@ -131,19 +176,22 @@ serve(async (req: Request) => {
       const entryDates = new Set((entries || []).map((e: { date: string }) => e.date));
       const daysTracked = entryDates.size;
 
+      // ── Streak: walk backwards from today (or yesterday) in user-local dates ─
       let streak = 0;
-      const today = now.toISOString().split("T")[0];
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
+      const yesterdayStr = addDaysLocal(today, -1);
 
-      let checkDate: Date | null = entryDates.has(today) ? new Date(now) : (entryDates.has(yesterdayStr) ? new Date(yesterday) : null);
-      if (checkDate) {
+      // Start from today if logged, else yesterday if logged, else no streak
+      let checkDateStr: string | null = entryDates.has(today)
+        ? today
+        : entryDates.has(yesterdayStr)
+        ? yesterdayStr
+        : null;
+
+      if (checkDateStr) {
         while (true) {
-          const dateStr = checkDate.toISOString().split("T")[0];
-          if (entryDates.has(dateStr)) {
+          if (entryDates.has(checkDateStr)) {
             streak++;
-            checkDate.setDate(checkDate.getDate() - 1);
+            checkDateStr = addDaysLocal(checkDateStr, -1);
           } else {
             break;
           }
@@ -155,19 +203,16 @@ serve(async (req: Request) => {
         daysGoalMet = (entries || []).filter((e: { value: number }) => e.value >= tracker.goal_value).length;
       }
 
-      const dayOfWeek = now.getDay();
+      // ── Week boundaries in user's local timezone ─────────────────────────
+      // Parse localToday as a UTC-midnight Date so getUTCDay() gives the
+      // correct weekday for the user's local calendar date.
+      const [ty, tm, td] = today.split("-").map(Number);
+      const localTodayDate = new Date(Date.UTC(ty, tm - 1, td));
+      const dayOfWeek = localTodayDate.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
       const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const thisMonday = new Date(now);
-      thisMonday.setDate(now.getDate() + mondayOffset);
-      thisMonday.setHours(0, 0, 0, 0);
-      const lastMonday = new Date(thisMonday);
-      lastMonday.setDate(thisMonday.getDate() - 7);
-      const lastSunday = new Date(thisMonday);
-      lastSunday.setDate(thisMonday.getDate() - 1);
-
-      const thisMondayStr = thisMonday.toISOString().split("T")[0];
-      const lastMondayStr = lastMonday.toISOString().split("T")[0];
-      const lastSundayStr = lastSunday.toISOString().split("T")[0];
+      const thisMondayStr = addDaysLocal(today, mondayOffset);
+      const lastMondayStr = addDaysLocal(thisMondayStr, -7);
+      const lastSundayStr = addDaysLocal(thisMondayStr, -1);
 
       const thisWeekCount = (entries || []).filter((e: { date: string }) => e.date >= thisMondayStr).length;
       const lastWeekCount = (entries || []).filter((e: { date: string }) => e.date >= lastMondayStr && e.date <= lastSundayStr).length;

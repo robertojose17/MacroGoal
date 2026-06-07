@@ -834,7 +834,7 @@ export default function FoodDetailsLayout({
           }
 
           // Step 2: Find or create the meal record for this date + meal type
-          const targetDate = date || new Date().toISOString().split('T')[0];
+          const targetDate = date || toLocalDateString(new Date());
           const targetMealType = mealType || 'breakfast';
 
           console.log('[FoodDetails] handleSave: looking up meal, date=', targetDate, 'type=', targetMealType, 'user=', user.id);
