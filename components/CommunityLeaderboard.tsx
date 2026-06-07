@@ -76,11 +76,13 @@ function SkeletonLine({ width, height = 13, isDark }: { width: number | string; 
 function LeaderboardRow({
   entry,
   unit,
+  formatAsPercent,
   isDark,
   isLast,
 }: {
   entry: LeaderboardEntry;
   unit: string;
+  formatAsPercent?: boolean;
   isDark: boolean;
   isLast: boolean;
 }) {
@@ -88,7 +90,9 @@ function LeaderboardRow({
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const medal = MEDAL[entry.rank];
   const rankLabel = medal ?? String(entry.rank);
-  const totalFormatted = entry.totalValue.toLocaleString('en-US');
+  const avgFormatted = formatAsPercent
+    ? Math.round(entry.avgValue * 100) + '%'
+    : Math.round(entry.avgValue).toLocaleString('en-US');
   const youLabel = entry.isYou ? ' · You' : '';
   const rowBg = entry.isYou
     ? isDark
@@ -116,8 +120,8 @@ function LeaderboardRow({
         </Text>
       </View>
       <Text style={[styles.leaderValue, { color: entry.isYou ? colors.primary : textColor }]}>
-        {totalFormatted}
-        <Text style={[styles.leaderUnit, { color: subColor }]}> {unit}</Text>
+        {avgFormatted}
+        {unit ? <Text style={[styles.leaderUnit, { color: subColor }]}> {unit}</Text> : null}
       </Text>
     </View>
   );
@@ -243,7 +247,8 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
 
   const activeData = activeTab === 'steps' ? stepsData : gymData;
   const isLoading = activeTab === 'steps' ? loadingSteps : loadingGym;
-  const unit = activeTab === 'steps' ? 'steps' : 'sessions';
+  const unit = activeTab === 'steps' ? '/day' : '';
+  const formatAsPercent = activeTab === 'gym';
 
   const top5 = activeData?.leaderboard.slice(0, 5) ?? [];
   const userEntry = activeData?.leaderboard.find((e) => e.isYou);
@@ -322,6 +327,7 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
               key={entry.userId}
               entry={entry}
               unit={unit}
+              formatAsPercent={formatAsPercent}
               isDark={isDark}
               isLast={idx === top5.length - 1 && !showUserRow}
             />
@@ -334,6 +340,7 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
               <LeaderboardRow
                 entry={userEntry}
                 unit={unit}
+                formatAsPercent={formatAsPercent}
                 isDark={isDark}
                 isLast
               />

@@ -9,13 +9,13 @@ export type LeaderboardPeriod = 'today' | 'week' | 'month' | 'last30' | 'custom'
 export type LeaderboardEntry = {
   userId: string;
   username: string;
-  totalValue: number;
+  avgValue: number;
   rank: number;
   isYou: boolean;
 };
 
 export type LeaderboardStats = {
-  userTotal: number;
+  userAvg: number;
   userRank: number;
   totalUsers: number;
   percentile: number;
@@ -29,7 +29,7 @@ export type LeaderboardResponse = {
 
 const EMPTY_RESPONSE: LeaderboardResponse = {
   leaderboard: [],
-  stats: { userTotal: 0, userRank: 0, totalUsers: 0, percentile: 0, communityAvg: 0 },
+  stats: { userAvg: 0, userRank: 0, totalUsers: 0, percentile: 0, communityAvg: 0 },
 };
 
 export async function fetchLeaderboard(
