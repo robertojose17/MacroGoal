@@ -180,6 +180,41 @@ export default function ChallengeDashboardCard({
   // Derived display values
   const totalDays = 7;
   const dayText = 'Day ' + challenge.current_day + ' of ' + totalDays;
+
+  // Days-remaining badge
+  const daysRemaining = challenge.days_remaining;
+  const isExpired = challenge.status === 'expired';
+  const isCompleted = challenge.status === 'completed';
+
+  let daysLeftText: string | null = null;
+  let daysLeftColor: string = mutedColor;
+  let daysLeftWeight: '500' | '600' = '500';
+
+  if (isCompleted) {
+    daysLeftText = null;
+  } else if (isExpired) {
+    daysLeftText = 'Expired';
+    daysLeftColor = mutedColor;
+    daysLeftWeight = '500';
+  } else if (daysRemaining !== undefined) {
+    if (daysRemaining === 0) {
+      daysLeftText = 'Expires today';
+      daysLeftColor = colors.protein;
+      daysLeftWeight = '600';
+    } else if (daysRemaining === 1) {
+      daysLeftText = 'Last day!';
+      daysLeftColor = colors.protein;
+      daysLeftWeight = '600';
+    } else if (daysRemaining <= 3) {
+      daysLeftText = daysRemaining + ' days left';
+      daysLeftColor = colors.fats;
+      daysLeftWeight = '600';
+    } else {
+      daysLeftText = daysRemaining + ' days left';
+      daysLeftColor = mutedColor;
+      daysLeftWeight = '500';
+    }
+  }
   const missionTitle = mission?.title_en ?? "Complete today's mission";
   const missionCurrent = mission?.current ?? 0;
   const missionTarget = mission?.target ?? 1;
@@ -223,8 +258,15 @@ export default function ChallengeDashboardCard({
       {/* Header row */}
       <View style={styles.headerRow}>
         <Text style={[styles.headerTitle, { color: titleColor }]}>{'🔥 7-Day Challenge'}</Text>
-        <View style={[styles.dayPill, { backgroundColor: dayPillBg }]}>
-          <Text style={[styles.dayPillText, { color: mutedColor }]}>{dayText}</Text>
+        <View style={styles.dayPillColumn}>
+          <View style={[styles.dayPill, { backgroundColor: dayPillBg }]}>
+            <Text style={[styles.dayPillText, { color: mutedColor }]}>{dayText}</Text>
+          </View>
+          {daysLeftText !== null && (
+            <Text style={[styles.daysLeftText, { color: daysLeftColor, fontWeight: daysLeftWeight }]}>
+              {daysLeftText}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -299,6 +341,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
+  dayPillColumn: {
+    alignItems: 'flex-end',
+    gap: 3,
+  },
   dayPill: {
     borderRadius: 999,
     paddingHorizontal: 12,
@@ -307,6 +353,10 @@ const styles = StyleSheet.create({
   dayPillText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  daysLeftText: {
+    fontSize: 11,
+    textAlign: 'right',
   },
 
   // Tagline

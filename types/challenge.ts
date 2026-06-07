@@ -38,4 +38,5 @@ export interface SevenDayChallenge {
   badge_awarded: boolean;
   is_today_completed?: boolean;
   todays_mission?: ChallengeTodaysMission;
+  days_remaining?: number;
 }

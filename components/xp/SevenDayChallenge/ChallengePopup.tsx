@@ -232,7 +232,7 @@ export default function ChallengePopup({
               {'Your 7-Day Challenge\nStarts Now.'}
             </Text>
             <Animated.Text style={[styles.subtitle, { opacity: subtitleOpacity }]}>
-              {'Most people quit in week 1. You won\'t.'}
+              {'Most people quit in week 1. You won\'t. Complete all 7 days within 14 days to earn your badge.'}
             </Animated.Text>
           </Animated.View>
 
