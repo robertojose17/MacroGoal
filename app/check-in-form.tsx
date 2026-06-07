@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSteps } from '@/hooks/useSteps';
@@ -62,6 +63,10 @@ export default function CheckInFormScreen() {
   // Photo
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Post-save photo modal
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [pendingCheckInId, setPendingCheckInId] = useState<string | null>(null);
 
   const loadCheckInData = useCallback(async (userWithPrefs: any) => {
     if (!checkInId) return;
@@ -330,24 +335,12 @@ export default function CheckInFormScreen() {
         }
       }
 
-      // Upload photo non-blocking (only for weight check-ins with a selected photo)
-      if (selectedPhotoUri && savedCheckInId && checkInType === 'weight') {
-        setUploadingPhoto(true);
-        console.log('[CheckInForm] Uploading progress photo for check-in:', savedCheckInId);
-        uploadPhoto(savedCheckInId, selectedPhotoUri)
-          .then(() => {
-            console.log('[CheckInForm] ✅ Photo uploaded successfully');
-            // ── XP: award progress_photo (fire-and-forget) ──────────────
-            console.log('[CheckInForm] awarding progress_photo XP for check-in:', savedCheckInId);
-            tryAwardProgressPhoto(savedCheckInId!);
-          })
-          .catch((err) => {
-            console.error('[CheckInForm] Photo upload failed (non-blocking):', err);
-            Alert.alert('Photo Upload Failed', 'Your check-in was saved, but the photo could not be uploaded. You can try again later.');
-          })
-          .finally(() => {
-            setUploadingPhoto(false);
-          });
+      // For new weight check-ins: show the photo modal instead of immediately going back
+      if (!isEditing && checkInType === 'weight' && savedCheckInId) {
+        console.log('[CheckInForm] Showing post-save photo modal for check-in:', savedCheckInId);
+        setPendingCheckInId(savedCheckInId);
+        setShowPhotoModal(true);
+        return;
       }
 
       Alert.alert(
@@ -412,6 +405,60 @@ export default function CheckInFormScreen() {
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
+
+  const handleModalPickPhoto = async (source: 'library' | 'camera') => {
+    console.log('[CheckInForm] Modal photo picker — source:', source);
+    await handlePickPhoto(source);
+  };
+
+  const handleModalUploadAndFinish = async (photoUri: string) => {
+    if (!pendingCheckInId) {
+      console.warn('[CheckInForm] handleModalUploadAndFinish called without pendingCheckInId');
+      setShowPhotoModal(false);
+      Alert.alert('Success', 'Check-in saved successfully', [{ text: 'OK', onPress: () => router.back() }]);
+      return;
+    }
+    console.log('[CheckInForm] Modal: uploading photo for check-in:', pendingCheckInId);
+    setUploadingPhoto(true);
+    try {
+      await uploadPhoto(pendingCheckInId, photoUri);
+      console.log('[CheckInForm] ✅ Modal photo uploaded successfully');
+      console.log('[CheckInForm] awarding progress_photo XP for check-in:', pendingCheckInId);
+      tryAwardProgressPhoto(pendingCheckInId);
+      setShowPhotoModal(false);
+      setSelectedPhotoUri(null);
+      Alert.alert('Success', 'Check-in saved with photo!', [{ text: 'OK', onPress: () => router.back() }]);
+    } catch (err) {
+      console.error('[CheckInForm] Modal photo upload failed:', err);
+      setShowPhotoModal(false);
+      setSelectedPhotoUri(null);
+      Alert.alert(
+        'Photo Upload Failed',
+        'Your check-in was saved, but the photo could not be uploaded.',
+        [{ text: 'OK', onPress: () => router.back() }],
+      );
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleModalSkip = () => {
+    console.log('[CheckInForm] Photo modal skipped');
+    setShowPhotoModal(false);
+    setPendingCheckInId(null);
+    Alert.alert('Success', 'Check-in saved successfully', [{ text: 'OK', onPress: () => router.back() }]);
+  };
+
+  // When the photo modal is open and a photo gets selected, auto-trigger upload
+  const showPhotoModalRef = useRef(false);
+  showPhotoModalRef.current = showPhotoModal;
+  const pendingCheckInIdRef = useRef<string | null>(null);
+  pendingCheckInIdRef.current = pendingCheckInId;
+  useEffect(() => {
+    if (!showPhotoModalRef.current || !selectedPhotoUri) return;
+    handleModalUploadAndFinish(selectedPhotoUri);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPhotoUri]);
 
   const uploadPhoto = async (checkInId: string, imageUri: string): Promise<void> => {
     console.log('[CheckInForm] Starting photo upload for check-in:', checkInId);
@@ -740,74 +787,6 @@ export default function CheckInFormScreen() {
           />
         </View>
 
-        {/* Progress Photo (weight check-ins only) */}
-        {checkInType === 'weight' && (
-          <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Progress Photo (Optional)
-            </Text>
-
-            {selectedPhotoUri ? (
-              <View style={styles.photoPreviewContainer}>
-                <Image
-                  source={{ uri: selectedPhotoUri }}
-                  style={styles.photoPreview}
-                  resizeMode="cover"
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.removePhotoButton,
-                    { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border },
-                  ]}
-                  onPress={() => {
-                    console.log('[CheckInForm] Remove photo pressed');
-                    setSelectedPhotoUri(null);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <IconSymbol
-                    ios_icon_name="xmark"
-                    android_material_icon_name="close"
-                    size={16}
-                    color={isDark ? colors.textDark : colors.text}
-                  />
-                  <Text style={[styles.removePhotoText, { color: isDark ? colors.textDark : colors.text }]}>
-                    Remove
-                  </Text>
-                </TouchableOpacity>
-                {uploadingPhoto && (
-                  <View style={styles.uploadingOverlay}>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text style={styles.uploadingText}>Uploading...</Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.addPhotoButton,
-                  {
-                    borderColor: isDark ? colors.borderDark : colors.border,
-                    backgroundColor: isDark ? colors.backgroundDark : colors.background,
-                  },
-                ]}
-                onPress={handleAddPhotoPress}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="camera"
-                  android_material_icon_name="photo_camera"
-                  size={24}
-                  color={colors.primary}
-                />
-                <Text style={[styles.addPhotoText, { color: colors.primary }]}>
-                  Add Progress Photo (Optional)
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: colors.primary }]}
@@ -836,6 +815,100 @@ export default function CheckInFormScreen() {
         maxDate={new Date()}
         title="Select Date"
       />
+
+      {/* Post-Save Progress Photo Modal */}
+      <Modal
+        visible={showPhotoModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleModalSkip}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            {/* Icon */}
+            <View style={styles.modalIconCircle}>
+              <IconSymbol
+                ios_icon_name="camera.fill"
+                android_material_icon_name="photo_camera"
+                size={28}
+                color={colors.primary}
+              />
+            </View>
+
+            {/* Title */}
+            <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              Add Progress Photo
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Track your transformation visually
+            </Text>
+
+            {/* Buttons */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalActionButton, { backgroundColor: colors.primary, opacity: uploadingPhoto ? 0.6 : 1 }]}
+                onPress={() => {
+                  console.log('[CheckInForm] Modal: Take a Photo tapped');
+                  handleModalPickPhoto('camera');
+                }}
+                disabled={uploadingPhoto}
+                activeOpacity={0.85}
+              >
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <IconSymbol
+                    ios_icon_name="camera"
+                    android_material_icon_name="photo_camera"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                )}
+                <Text style={styles.modalActionButtonText}>
+                  Take a Photo
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalActionButton, { backgroundColor: colors.primary, opacity: uploadingPhoto ? 0.6 : 1 }]}
+                onPress={() => {
+                  console.log('[CheckInForm] Modal: Choose from Library tapped');
+                  handleModalPickPhoto('library');
+                }}
+                disabled={uploadingPhoto}
+                activeOpacity={0.85}
+              >
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <IconSymbol
+                    ios_icon_name="photo.on.rectangle"
+                    android_material_icon_name="photo_library"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                )}
+                <Text style={styles.modalActionButtonText}>
+                  Choose from Library
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Skip */}
+            <TouchableOpacity
+              onPress={handleModalSkip}
+              disabled={uploadingPhoto}
+              activeOpacity={0.7}
+              style={styles.modalSkipButton}
+            >
+              <Text style={[styles.modalSkipText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Skip for now
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1062,5 +1135,67 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.2)',
+    elevation: 8,
+  },
+  modalIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primary + '18',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    ...typography.h3,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  modalSubtitle: {
+    ...typography.caption,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  modalButtons: {
+    width: '100%',
+    gap: spacing.sm,
+  },
+  modalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    width: '100%',
+  },
+  modalActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSkipButton: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  modalSkipText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
