@@ -591,6 +591,11 @@ export default function ProfileScreen() {
     if (goal.start_date) {
       const storedDate = new Date(goal.start_date + 'T00:00:00');
       setSelectedDate(storedDate);
+    } else if (user?.created_at) {
+      // Default to account creation date so the picker opens on a sensible value
+      const createdDate = new Date(user.created_at);
+      createdDate.setHours(0, 0, 0, 0);
+      setSelectedDate(createdDate);
     } else {
       setSelectedDate(new Date());
     }
@@ -647,10 +652,12 @@ export default function ProfileScreen() {
   const subscriptionStatusText = isPremium ? 'Premium' : 'Free';
   console.log('[Profile] Displaying subscription status:', subscriptionStatusText, '(isPremium:', isPremium, ')');
 
-  const formatJourneyStartDate = (dateStr: string | null) => {
-    if (!dateStr) return 'Set Date';
+  const formatJourneyStartDate = (dateStr: string | null, fallbackDateStr: string | null) => {
+    const effective = dateStr || fallbackDateStr;
+    if (!effective) return 'Set Date';
     try {
-      const date = new Date(dateStr + 'T00:00:00');
+      const ymd = effective.slice(0, 10);
+      const date = new Date(ymd + 'T00:00:00');
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     } catch (error) {
       console.error('[Profile] Error formatting date:', error);
@@ -968,7 +975,7 @@ export default function ProfileScreen() {
                   </Text>
                   <TouchableOpacity onPress={openStartDatePicker} style={styles.dateButton}>
                     <Text style={[styles.dateButtonText, { color: colors.primary }]}>
-                      {formatJourneyStartDate(goal.start_date)}
+                      {formatJourneyStartDate(goal.start_date, user.created_at)}
                     </Text>
                     <IconSymbol
                       ios_icon_name="calendar"
