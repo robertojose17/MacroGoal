@@ -40,6 +40,23 @@ async function isThrottled(): Promise<boolean> {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const lastTs = Number(raw);
+
+    // Day-boundary check: if the last report was on a different LOCAL calendar
+    // day than now, never throttle. This guarantees the reporter fires at least
+    // once per day so the 7-Day Challenge card and xp_ledger refresh on a new day.
+    const lastDateStr = new Date(lastTs).toDateString();
+    const todayStr = new Date().toDateString();
+    if (lastDateStr !== todayStr) {
+      console.log(
+        '[stepsReporter] new calendar day since last report (',
+        lastDateStr,
+        '→',
+        todayStr,
+        ') — bypassing throttle'
+      );
+      return false;
+    }
+
     const elapsed = Date.now() - lastTs;
     const throttled = elapsed < THROTTLE_MS;
     if (throttled) {
