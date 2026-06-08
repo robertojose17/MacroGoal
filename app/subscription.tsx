@@ -645,22 +645,6 @@ export default function SubscriptionScreen() {
               pointerEvents="none"
             />
 
-            {/* Back button — top-left */}
-            <TouchableOpacity
-              onPress={() => {
-                console.log('[Subscription] Premium screen back button pressed');
-                router.back();
-              }}
-              style={styles.premiumBackButton}
-            >
-              <IconSymbol
-                ios_icon_name="chevron.left"
-                android_material_icon_name="arrow-back"
-                size={24}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-
             {/* Bottom-left hero content */}
             <View style={styles.heroBottomContent}>
               {/* Crown pill */}
@@ -798,22 +782,6 @@ export default function SubscriptionScreen() {
             style={styles.subHeroImage}
             resizeMode="cover"
           >
-            {/* Floating back button */}
-            <TouchableOpacity
-              onPress={() => {
-                console.log('[Subscription] Back button pressed');
-                router.back();
-              }}
-              style={styles.floatingBackButton}
-            >
-              <IconSymbol
-                ios_icon_name="chevron.left"
-                android_material_icon_name="arrow-back"
-                size={26}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-
             {/* Title block — top-left, respects safe area */}
             <SafeAreaView edges={['top']} style={styles.subHeroSafe}>
               <View style={styles.subHeroTextWrap}>
@@ -1225,17 +1193,6 @@ const styles = StyleSheet.create({
 
   // ── Dark paywall screen ────────────────────────────────────────────────────
 
-  // Floating back button (absolute, over the full-screen image)
-  floatingBackButton: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 40 : 54,
-    left: spacing.md,
-    padding: spacing.xs,
-    zIndex: 20,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 20,
-  },
-
   // Hero text
   heroTextContainer: {
     marginBottom: spacing.sm,
@@ -1496,15 +1453,6 @@ const styles = StyleSheet.create({
     height: 360,
     width: '100%',
     justifyContent: 'space-between',
-  },
-  premiumBackButton: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 40 : 58,
-    left: spacing.md,
-    padding: spacing.xs,
-    zIndex: 20,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 20,
   },
   heroBottomContent: {
     position: 'absolute',
