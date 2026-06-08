@@ -26,6 +26,7 @@ import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWi
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { toLocalDateString } from '@/utils/dateUtils';
 
 const ONESIGNAL_PROMPT_KEY = 'onesignal_prompt_shown_v1';
 
@@ -272,23 +273,41 @@ export default function CompleteOnboardingScreen() {
 
       // Save user profile
       console.log('[Onboarding] Saving user profile to Supabase...');
+
+      // Check if journey_start_date is already set (only set it once, on first completion)
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('journey_start_date')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const updatePayload: Record<string, unknown> = {
+        sex,
+        date_of_birth: dateOfBirth,
+        height: heightInCm,
+        current_weight: weightInKg,
+        goal_weight: goalWeightInKg,
+        activity_level: activityLevel,
+        preferred_units: units,
+        dietary_restrictions: dietaryRestrictions,
+        protein_preferences: proteinPreferences,
+        recipe_styles: recipeStyles,
+        disliked_foods: dislikedFoods,
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (!existingUser?.journey_start_date) {
+        const todayStr = toLocalDateString(new Date());
+        console.log('[Onboarding] Setting journey_start_date for first time:', todayStr);
+        updatePayload.journey_start_date = todayStr;
+      } else {
+        console.log('[Onboarding] journey_start_date already set, skipping');
+      }
+
       const { error: userError } = await supabase
         .from('users')
-        .update({
-          sex,
-          date_of_birth: dateOfBirth,
-          height: heightInCm,
-          current_weight: weightInKg,
-          goal_weight: goalWeightInKg,
-          activity_level: activityLevel,
-          preferred_units: units,
-          dietary_restrictions: dietaryRestrictions,
-          protein_preferences: proteinPreferences,
-          recipe_styles: recipeStyles,
-          disliked_foods: dislikedFoods,
-          onboarding_completed: true,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq('id', user.id);
 
       if (userError) {
