@@ -544,6 +544,10 @@ export default function CompleteOnboardingScreen() {
             totalWeeks={calcWeeks}
             goalWeight={goalWeight}
             weightUnit={weightUnit}
+            currentWeight={weight}
+            lossRateLbsPerWeek={lossRateLbsPerWeek}
+            units={units}
+            goalType={goalType}
           />
         )}
       </Animated.View>
@@ -1880,12 +1884,20 @@ function Step10({
   totalWeeks,
   goalWeight,
   weightUnit,
+  currentWeight,
+  lossRateLbsPerWeek,
+  units,
+  goalType,
 }: {
   onStartTrial: () => void;
   onSkip: () => void;
   totalWeeks: number;
   goalWeight: string;
   weightUnit: string;
+  currentWeight: string;
+  lossRateLbsPerWeek: number;
+  units: 'metric' | 'imperial';
+  goalType: 'lose' | 'gain' | 'maintain';
 }) {
   const milestoneWeeks = totalWeeks > 0 ? computeMilestoneWeeks(totalWeeks) : [];
 
@@ -1894,15 +1906,39 @@ function Step10({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const goalLine = `You reached your goal of ${goalWeight} ${weightUnit}`;
+  const currentWeightNum = parseFloat(currentWeight) || 0;
+  const goalWeightNum = parseFloat(goalWeight) || 0;
+  const goalWeightInt = Math.round(goalWeightNum);
+
+  const rateInUserUnit = units === 'imperial'
+    ? lossRateLbsPerWeek
+    : lossRateLbsPerWeek * 0.453592;
+  const gainRateInUserUnit = units === 'imperial' ? 0.5 : 0.5 * 0.453592;
+
+  const estimatedWeights: number[] = milestoneWeeks.slice(0, 3).map((week, i) => {
+    if (currentWeightNum === 0 || goalWeightNum === 0) return 0;
+    let est: number;
+    if (goalType === 'lose') {
+      est = currentWeightNum - rateInUserUnit * milestoneWeeks[i];
+      est = Math.max(est, goalWeightNum);
+    } else if (goalType === 'gain') {
+      est = currentWeightNum + gainRateInUserUnit * milestoneWeeks[i];
+      est = Math.min(est, goalWeightNum);
+    } else {
+      est = currentWeightNum;
+    }
+    return Math.round(est);
+  });
+  // Pad to length 3 in case milestoneWeeks has fewer entries
+  while (estimatedWeights.length < 3) estimatedWeights.push(0);
 
   const TIMELINE_NODES = [
     {
       weekLabel: 'Today',
-      title: 'Your journey starts here',
+      title: `Your Personalized Path to ${goalWeightInt} ${weightUnit} Is Ready 🎯`,
       lines: [
-        'Get Your Personalized Meal Plan',
-        'Get Your Grocery List',
+        'Personalized meal plan',
+        'Custom grocery list',
       ],
       isToday: true,
       isFinal: false,
@@ -1910,34 +1946,43 @@ function Step10({
     },
     {
       weekLabel: '',
-      title: 'Building Awareness',
-      lines: ['More control over meals'],
+      title: "It's Finally Working 📉",
+      lines: [
+        `Estimated Weight: ${estimatedWeights[0]} ${weightUnit}`,
+        "The scale is moving down & you're building real momentum",
+      ],
       isToday: false,
       isFinal: false,
       pctIndex: 0,
     },
     {
       weekLabel: '',
-      title: '"You look different."',
-      lines: ['People are starting to notice your progress'],
+      title: 'People Are Starting to Notice 👀',
+      lines: [
+        `Estimated Weight: ${estimatedWeights[1]} ${weightUnit}`,
+        'Your clothes are fitting better & the compliments are starting',
+      ],
       isToday: false,
       isFinal: false,
       pctIndex: 1,
     },
     {
       weekLabel: '',
-      title: 'More confidence',
-      lines: ['Healthy habits feel easier now'],
+      title: "You're Becoming a New You 🔥",
+      lines: [
+        `Estimated Weight: ${estimatedWeights[2]} ${weightUnit}`,
+        'The mirror reflects your progress & healthy habits feel natural',
+      ],
       isToday: false,
       isFinal: false,
       pctIndex: 2,
     },
     {
       weekLabel: '',
-      title: 'You transformed your body,\nmind, and energy',
+      title: 'You Finally Did It !!',
       lines: [
-        goalLine,
-        'And it shows.',
+        `Reached ${goalWeightInt} ${weightUnit}`,
+        'You love what you see in the mirror',
       ],
       isToday: false,
       isFinal: true,
