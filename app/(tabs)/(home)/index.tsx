@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
+import StreakRanksModal from '@/components/StreakRanksModal';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -290,6 +291,7 @@ export default function HomeScreen() {
   const { status: xpStatus } = useXpStatus();
   const streakDays = xpStatus?.current_streak ?? 0;
   const streakRank = getStreakRank(streakDays);
+  const [showRanksModal, setShowRanksModal] = useState(false);
 
   // ── Tracking state ──
   const [goal, setGoal] = useState<any>(null);
@@ -872,7 +874,11 @@ export default function HomeScreen() {
     <View>
       <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
         {/* ── Streak Rank ── */}
-        <View style={styles.streakRankContainer}>
+        <TouchableOpacity
+          style={styles.streakRankContainer}
+          activeOpacity={0.7}
+          onPress={() => setShowRanksModal(true)}
+        >
           <Text style={styles.streakRankEmoji}>{streakRank.emoji}</Text>
           <View>
             <Text style={[styles.streakRankName, { color: isDark ? colors.textDark : colors.text }]}>
@@ -883,7 +889,7 @@ export default function HomeScreen() {
               {' day streak'}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Calories</Text>
                 <NotificationBell />
@@ -1385,6 +1391,12 @@ export default function HomeScreen() {
           console.log('[Home] Streak rescue dismissed');
           dismissRescue();
         }}
+      />
+
+      <StreakRanksModal
+        visible={showRanksModal}
+        onClose={() => setShowRanksModal(false)}
+        currentStreakDays={streakDays}
       />
 
       {/* ── Day assignment bottom sheet Modal (root level to avoid ScrollView nesting) ── */}

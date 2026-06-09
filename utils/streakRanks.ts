@@ -145,3 +145,88 @@ export function getStreakRank(days: number): StreakRank {
     quote: 'Start today.',
   };
 }
+
+// ─── Rank list helpers (for the "All Ranks" modal) ───────────────────────────
+
+/**
+ * One entry in the full rank list — represents either a single sub-level of a
+ * weekly tier (e.g. "Recruit II", days 8–14) or a yearly tier (e.g. "Iron Will",
+ * days 730–1094).
+ */
+export interface RankListEntry {
+  emoji: string;
+  name: string;
+  subLevel: string;       // "" for yearly tiers, otherwise "I"…"VIII"
+  fullLabel: string;      // e.g. "Recruit II" or "Iron Will"
+  startDay: number;       // inclusive
+  endDay: number;         // inclusive (Infinity for the final tier)
+  quote: string;
+}
+
+/**
+ * Returns the full ordered list of every rank the user can earn — every weekly
+ * sub-level in order, followed by every yearly tier.
+ *
+ * Used by the StreakRanksModal to render the complete progression list.
+ */
+export function getAllRanks(): RankListEntry[] {
+  const list: RankListEntry[] = [];
+
+  // Weekly sub-levels — each sub-level is exactly 7 days (Living Legend has 8 sub-levels of 7 days each).
+  for (const tier of WEEKLY_TIERS) {
+    for (let i = 0; i < tier.subLevels.length; i++) {
+      const subLevel = tier.subLevels[i];
+      const startDay = tier.startDay + i * 7;
+      // For the last sub-level of a tier, endDay is the tier's endDay. Otherwise it's startDay + 6.
+      const endDay = i === tier.subLevels.length - 1 ? tier.endDay : startDay + 6;
+      list.push({
+        emoji: tier.emoji,
+        name: tier.name,
+        subLevel,
+        fullLabel: `${tier.name} ${subLevel}`,
+        startDay,
+        endDay,
+        quote: tier.quote,
+      });
+    }
+  }
+
+  // Yearly tiers (single rank per tier).
+  for (const tier of YEARLY_TIERS) {
+    list.push({
+      emoji: tier.emoji,
+      name: tier.name,
+      subLevel: '',
+      fullLabel: tier.name,
+      startDay: tier.startDay,
+      endDay: tier.endDay,
+      quote: tier.quote,
+    });
+  }
+
+  return list;
+}
+
+/**
+ * Returns the next rank above the user's current streak, or null if they have
+ * already reached the final rank (Macro Goal GOAT, day 3650+).
+ */
+export function getNextRank(currentDays: number): RankListEntry | null {
+  const all = getAllRanks();
+  for (const entry of all) {
+    if (entry.startDay > currentDays) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/**
+ * Days remaining until the user reaches the next rank. Returns null if there
+ * is no next rank (final rank reached).
+ */
+export function daysUntilNextRank(currentDays: number): number | null {
+  const next = getNextRank(currentDays);
+  if (!next) return null;
+  return next.startDay - currentDays;
+}

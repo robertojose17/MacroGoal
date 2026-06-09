@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
+import StreakRanksModal from '@/components/StreakRanksModal';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -111,6 +112,7 @@ export default function HomeScreen() {
   const { status: xpStatus } = useXpStatus();
   const streakDays = xpStatus?.current_streak ?? 0;
   const streakRank = getStreakRank(streakDays);
+  const [showRanksModal, setShowRanksModal] = useState(false);
 
   // Segmented control
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
@@ -598,7 +600,11 @@ export default function HomeScreen() {
     <View>
       <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
         {/* ── Streak Rank ── */}
-        <View style={styles.streakRankContainer}>
+        <TouchableOpacity
+          style={styles.streakRankContainer}
+          activeOpacity={0.7}
+          onPress={() => setShowRanksModal(true)}
+        >
           <Text style={styles.streakRankEmoji}>{streakRank.emoji}</Text>
           <View>
             <Text style={[styles.streakRankName, { color: isDark ? colors.textDark : colors.text }]}>
@@ -609,7 +615,7 @@ export default function HomeScreen() {
               {' day streak'}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Calories</Text>
         <View style={styles.caloriesContent}>
@@ -1043,6 +1049,12 @@ export default function HomeScreen() {
           console.log('[Home iOS] Streak rescue dismissed');
           dismissRescue();
         }}
+      />
+
+      <StreakRanksModal
+        visible={showRanksModal}
+        onClose={() => setShowRanksModal(false)}
+        currentStreakDays={streakDays}
       />
 
       {/* New Plan Modal */}
