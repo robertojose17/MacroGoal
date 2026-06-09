@@ -7,6 +7,8 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useXpStatus } from '@/hooks/useXpStatus';
+import { getStreakRank } from '@/utils/streakRanks';
 import { IconSymbol } from '@/components/IconSymbol';
 import { NotificationBell } from "@/components/NotificationBell";
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
@@ -91,6 +93,11 @@ export default function HomeScreen() {
     dismissRescue,
     refresh: refreshRescue,
   } = useStreakRescue();
+
+  // ── Streak rank ──
+  const { status: xpStatus } = useXpStatus();
+  const streakDays = xpStatus?.current_streak ?? 0;
+  const streakRank = getStreakRank(streakDays);
 
   const [goal, setGoal] = useState<any>(null);
   const [meals, setMeals] = useState<MealData[]>([
@@ -447,6 +454,20 @@ export default function HomeScreen() {
       )}
 
       <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+        {/* ── Streak Rank ── */}
+        <View style={styles.streakRankContainer}>
+          <Text style={styles.streakRankEmoji}>{streakRank.emoji}</Text>
+          <View>
+            <Text style={[styles.streakRankName, { color: isDark ? colors.textDark : colors.text }]}>
+              {streakRank.fullLabel}
+            </Text>
+            <Text style={[styles.streakRankDays, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {streakDays}
+              {' day streak'}
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Goal</Text>
@@ -734,6 +755,29 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
+  },
+  streakRankContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  streakRankEmoji: {
+    fontSize: 28,
+    lineHeight: 34,
+  },
+  streakRankName: {
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  streakRankDays: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 1,
   },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: spacing.md },
   summaryItem: { alignItems: 'center' },
