@@ -4,6 +4,8 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   RefreshControl, Alert, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
+import { useStreakRescue } from '@/hooks/useStreakRescue';
+import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -270,6 +272,17 @@ export default function HomeScreen() {
   const { tab } = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+
+  // ── Streak Rescue ──
+  const {
+    canRescue,
+    lostStreakValue,
+    priceLabel,
+    purchasing,
+    executePurchase,
+    dismissRescue,
+    refresh: refreshRescue,
+  } = useStreakRescue();
 
   // ── Tracking state ──
   const [goal, setGoal] = useState<any>(null);
@@ -1327,6 +1340,30 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.scrollContent}
+      />
+
+      {/* Streak Rescue Modal */}
+      <StreakRescueModal
+        visible={canRescue}
+        lostStreakValue={lostStreakValue}
+        priceLabel={priceLabel}
+        purchasing={purchasing}
+        onPurchase={async () => {
+          console.log('[Home] Streak rescue purchase initiated');
+          const result = await executePurchase();
+          if (result.success) {
+            console.log('[Home] Streak rescue purchase succeeded, streak restored to:', lostStreakValue);
+            Alert.alert('¡Racha restaurada!', `¡Tu racha de ${lostStreakValue} días fue restaurada!`);
+            await refreshRescue();
+          } else if (result.error) {
+            console.warn('[Home] Streak rescue purchase failed:', result.error);
+            Alert.alert('Error', result.error);
+          }
+        }}
+        onDismiss={() => {
+          console.log('[Home] Streak rescue dismissed');
+          dismissRescue();
+        }}
       />
 
       {/* ── Day assignment bottom sheet Modal (root level to avoid ScrollView nesting) ── */}

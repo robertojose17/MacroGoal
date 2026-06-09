@@ -5,6 +5,8 @@ import {
   RefreshControl, Alert, ActivityIndicator, ScrollView, ActionSheetIOS,
   Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
+import { useStreakRescue } from '@/hooks/useStreakRescue';
+import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -91,6 +93,17 @@ export default function HomeScreen() {
     console.log('[HomeScreen] Navigation context ready');
     setNavReady(true);
   }, []);
+
+  // ── Streak Rescue ──
+  const {
+    canRescue,
+    lostStreakValue,
+    priceLabel,
+    purchasing,
+    executePurchase,
+    dismissRescue,
+    refresh: refreshRescue,
+  } = useStreakRescue();
 
   // Segmented control
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
@@ -986,6 +999,30 @@ export default function HomeScreen() {
         {activeTab === 'tracking' ? renderTrackingContent() : renderPlanningContent()}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Streak Rescue Modal */}
+      <StreakRescueModal
+        visible={canRescue}
+        lostStreakValue={lostStreakValue}
+        priceLabel={priceLabel}
+        purchasing={purchasing}
+        onPurchase={async () => {
+          console.log('[Home iOS] Streak rescue purchase initiated');
+          const result = await executePurchase();
+          if (result.success) {
+            console.log('[Home iOS] Streak rescue purchase succeeded, streak restored to:', lostStreakValue);
+            Alert.alert('¡Racha restaurada!', `¡Tu racha de ${lostStreakValue} días fue restaurada!`);
+            await refreshRescue();
+          } else if (result.error) {
+            console.warn('[Home iOS] Streak rescue purchase failed:', result.error);
+            Alert.alert('Error', result.error);
+          }
+        }}
+        onDismiss={() => {
+          console.log('[Home iOS] Streak rescue dismissed');
+          dismissRescue();
+        }}
+      />
 
       {/* New Plan Modal */}
       <Modal

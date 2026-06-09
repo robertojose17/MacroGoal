@@ -1,6 +1,8 @@
 
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import { useStreakRescue } from '@/hooks/useStreakRescue';
+import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -78,6 +80,17 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+
+  // ── Streak Rescue ──
+  const {
+    canRescue,
+    lostStreakValue,
+    priceLabel,
+    purchasing,
+    executePurchase,
+    dismissRescue,
+    refresh: refreshRescue,
+  } = useStreakRescue();
 
   const [goal, setGoal] = useState<any>(null);
   const [meals, setMeals] = useState<MealData[]>([
@@ -625,6 +638,30 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.scrollContent}
+      />
+
+      {/* Streak Rescue Modal */}
+      <StreakRescueModal
+        visible={canRescue}
+        lostStreakValue={lostStreakValue}
+        priceLabel={priceLabel}
+        purchasing={purchasing}
+        onPurchase={async () => {
+          console.log('[Home Android] Streak rescue purchase initiated');
+          const result = await executePurchase();
+          if (result.success) {
+            console.log('[Home Android] Streak rescue purchase succeeded, streak restored to:', lostStreakValue);
+            Alert.alert('¡Racha restaurada!', `¡Tu racha de ${lostStreakValue} días fue restaurada!`);
+            await refreshRescue();
+          } else if (result.error) {
+            console.warn('[Home Android] Streak rescue purchase failed:', result.error);
+            Alert.alert('Error', result.error);
+          }
+        }}
+        onDismiss={() => {
+          console.log('[Home Android] Streak rescue dismissed');
+          dismissRescue();
+        }}
       />
     </SafeAreaView>
   );

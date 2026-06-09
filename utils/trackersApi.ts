@@ -340,7 +340,7 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
   const [entriesResult, trackerResult] = await Promise.all([
     supabase
       .from('tracker_entries')
-      .select('date, value')
+      .select('date, value, created_at')
       .eq('tracker_id', trackerId)
       .eq('user_id', userId)
       .gte('date', thirtyDaysAgoStr)
@@ -361,19 +361,40 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
   const entries = entriesResult.data ?? [];
   const tracker = trackerResult.data;
 
+  // All entry dates (for non-streak metrics — backdating still counts here)
   const entryDates = new Set(entries.map((e: { date: string }) => e.date));
   const daysTracked = entryDates.size;
 
-  // Calculate streak
-  let streak = 0;
+  // ── Piece 1A: streak-eligible dates (no backdating) ──
+  // An entry counts toward the streak only if it was logged on the same day
+  // or the very next day (e.g. logging at midnight). Entries logged 2+ days
+  // after their date are considered backdated and excluded from the streak.
   const today = toLocalDateString(now);
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = toLocalDateString(yesterday);
 
-  let checkDate: Date | null = entryDates.has(today)
+  const streakEligibleDates = new Set<string>();
+  for (const e of entries as { date: string; value: number; created_at: string }[]) {
+    // Allow logging on the same day OR the next day (midnight grace)
+    const entryDate = new Date(e.date + 'T00:00:00');
+    const oneDayAfterEntry = new Date(entryDate);
+    oneDayAfterEntry.setDate(entryDate.getDate() + 1);
+    const oneDayAfterStr = toLocalDateString(oneDayAfterEntry);
+
+    const createdAtDate = toLocalDateString(new Date(e.created_at));
+
+    // Entry is eligible if it was created on its own date or the next day
+    if (createdAtDate <= oneDayAfterStr || e.date >= yesterdayStr) {
+      streakEligibleDates.add(e.date);
+    }
+  }
+
+  // Calculate streak using only eligible dates
+  let streak = 0;
+  let checkDate: Date | null = streakEligibleDates.has(today)
     ? new Date(now)
-    : entryDates.has(yesterdayStr)
+    : streakEligibleDates.has(yesterdayStr)
     ? new Date(yesterday)
     : null;
 
@@ -381,13 +402,117 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
     let keepGoing = true;
     while (keepGoing) {
       const dateStr = toLocalDateString(checkDate);
-      if (entryDates.has(dateStr)) {
+      if (streakEligibleDates.has(dateStr)) {
         streak++;
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
         keepGoing = false;
       }
     }
+  }
+
+  // ── Piece 1B: update rescue state in users table (fire-and-forget) ──
+  (async () => {
+    try {
+      const { data: userRow, error: userErr } = await supabase
+        .from('users')
+        .select('last_streak_value, last_streak_lost_at, streak_rescue_used')
+        .eq('id', userId)
+        .single();
+
+      if (userErr || !userRow) {
+        console.warn('[TrackersApi] getStats — could not read user rescue state:', userErr?.message);
+        return;
+      }
+
+      const lastStreakValue: number = userRow.last_streak_value ?? 0;
+      const streakRescueUsed: boolean = userRow.streak_rescue_used ?? false;
+
+      if (streak > 0) {
+        if (streakRescueUsed && lastStreakValue > 0) {
+          // Rescued streak is still active — no DB update needed, just add below
+          console.log('[TrackersApi] Rescued streak active, base streak:', streak, '+ rescued:', lastStreakValue);
+        } else if (!streakRescueUsed && lastStreakValue > 0) {
+          // New streak started without rescuing — clear rescue state
+          console.log('[TrackersApi] New streak started without rescue, clearing rescue state');
+          await supabase
+            .from('users')
+            .update({ last_streak_value: 0, last_streak_lost_at: null, streak_rescue_used: false })
+            .eq('id', userId);
+        }
+        // else: normal streak, nothing to do
+      } else {
+        // streak === 0
+        if (lastStreakValue === 0 && !streakRescueUsed && daysTracked > 0) {
+          // Detect freshly lost streak: walk back from 2 days ago
+          const twoDaysAgo = new Date(now);
+          twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+          let lostValue = 0;
+          let walkDate: Date | null = streakEligibleDates.has(toLocalDateString(twoDaysAgo))
+            ? new Date(twoDaysAgo)
+            : null;
+
+          if (walkDate) {
+            let keepWalking = true;
+            while (keepWalking) {
+              const ds = toLocalDateString(walkDate);
+              if (streakEligibleDates.has(ds)) {
+                lostValue++;
+                walkDate.setDate(walkDate.getDate() - 1);
+              } else {
+                keepWalking = false;
+              }
+            }
+          }
+
+          if (lostValue > 0) {
+            console.log('[TrackersApi] Streak just lost, value was', lostValue, '— updating rescue state');
+            await supabase
+              .from('users')
+              .update({
+                last_streak_value: lostValue,
+                last_streak_lost_at: new Date().toISOString(),
+                streak_rescue_used: false,
+              })
+              .eq('id', userId);
+          }
+        } else if (streakRescueUsed) {
+          // User already paid/dismissed AND lost their rescued or post-rescue streak
+          // Clear so next loss can trigger modal again
+          console.log('[TrackersApi] Post-rescue streak lost, clearing rescue state for future use');
+          await supabase
+            .from('users')
+            .update({ last_streak_value: 0, last_streak_lost_at: null, streak_rescue_used: false })
+            .eq('id', userId);
+        }
+      }
+    } catch (e: any) {
+      console.warn('[TrackersApi] getStats rescue state update failed:', e?.message);
+    }
+  })();
+
+  // Compute final streak (add rescued value if applicable)
+  let finalStreak = streak;
+  // We read rescue state synchronously above — but since the IIFE is async,
+  // we need a second read here. To avoid a blocking extra query, we rely on
+  // the fact that the rescue state was already fetched in the IIFE. Instead,
+  // we do a lightweight synchronous check by re-reading from the DB inline.
+  // Actually, to keep this non-blocking we compute finalStreak after the IIFE
+  // by doing a separate fast read. We'll do it inline here:
+  try {
+    const { data: rescueRow } = await supabase
+      .from('users')
+      .select('last_streak_value, streak_rescue_used')
+      .eq('id', userId)
+      .single();
+
+    if (rescueRow && rescueRow.streak_rescue_used && rescueRow.last_streak_value > 0 && streak > 0) {
+      finalStreak = streak + rescueRow.last_streak_value;
+      console.log('[TrackersApi] Final streak with rescue bonus:', finalStreak, '(base:', streak, '+ rescued:', rescueRow.last_streak_value, ')');
+    }
+  } catch (_e) {
+    // Non-fatal — use base streak
   }
 
   // Days goal met
@@ -420,12 +545,12 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
 
   let status: TrackerStats['status'] = 'no_data';
   if (daysTracked > 0) {
-    status = streak > 0 || thisWeekCount > 0 ? 'on_track' : 'off_track';
+    status = finalStreak > 0 || thisWeekCount > 0 ? 'on_track' : 'off_track';
   }
 
   return {
-    current_streak: streak,
-    best_streak: streak,
+    current_streak: finalStreak,
+    best_streak: finalStreak,
     completion_rate: daysTracked / 30,
     days_tracked: daysTracked,
     days_goal_met: daysGoalMet,
