@@ -12,7 +12,8 @@
 
 import { awardXp } from '@/utils/xpApi';
 import { supabase } from '@/lib/supabase/client';
-import { emitXpRefresh } from '@/utils/xpEvents';
+import { emitXpRefresh, emitLeagueRefresh } from '@/utils/xpEvents';
+import { recordWeeklyXp } from '@/utils/leagueApi';
 import type { AwardXpResult } from '@/types/xp';
 
 // ─── Internal helper ──────────────────────────────────────────────────────────
@@ -21,6 +22,13 @@ function handleResult(result: AwardXpResult, label: string): void {
   console.log(`[xpAwarder] ${label} awarded=${result.awarded} level_up=${result.level_up} missions=${result.missions_just_completed.length}`);
   if (result.awarded > 0 || result.level_up || result.missions_just_completed.length > 0) {
     emitXpRefresh();
+  }
+  // Piggyback: record XP in the weekly league and refresh the league UI
+  if (result.awarded > 0) {
+    console.log(`[xpAwarder] ${label} — recording ${result.awarded} XP in weekly league`);
+    recordWeeklyXp(result.awarded)
+      .catch((err) => console.warn('[xpAwarder] recordWeeklyXp failed (non-fatal):', err?.message ?? err));
+    emitLeagueRefresh();
   }
 }
 

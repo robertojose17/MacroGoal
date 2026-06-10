@@ -9,7 +9,7 @@
  * - Optional streak-at-risk warning (full-width bottom)
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,10 @@ import { Zap, Snowflake } from 'lucide-react-native';
 import { rankColors } from '@/constants/Colors';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import RankBadge from './RankBadge';
+import LeagueBadge from './LeagueBadge';
+import LeagueLeaderboard from './LeagueLeaderboard';
+import LeagueWelcomeModal from './LeagueWelcomeModal';
+import { useLeague } from '@/hooks/useLeague';
 import type { XpStatus } from '@/types/xp';
 
 interface XpHeroCardProps {
@@ -42,6 +46,8 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
   const progressAnim = useRef(new Animated.Value(0)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
   const freezeScale = useRef(new Animated.Value(1)).current;
+  const [showLeagueModal, setShowLeagueModal] = useState(false);
+  const { status: leagueStatus } = useLeague();
 
   const rank = status?.current_rank ?? 'Rookie';
   const rankColor = rankColors[rank] ?? rankColors['Rookie'];
@@ -281,6 +287,16 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
         </View>
       </View>
 
+      {/* League badge — full width below the two-column section */}
+      <LeagueBadge
+        status={leagueStatus}
+        isDark={isDark}
+        onPress={() => {
+          console.log('[XpHeroCard] LeagueBadge pressed — opening leaderboard');
+          setShowLeagueModal(true);
+        }}
+      />
+
       {/* Streak at risk warning — full width below both columns */}
       {streakAtRisk && (
         <View style={[styles.warningRow, { backgroundColor: isDark ? 'rgba(251,146,60,0.15)' : 'rgba(251,146,60,0.1)' }]}>
@@ -291,6 +307,18 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
           </Text>
         </View>
       )}
+
+      {/* League leaderboard modal */}
+      <LeagueLeaderboard
+        visible={showLeagueModal}
+        onClose={() => {
+          console.log('[XpHeroCard] LeagueLeaderboard closed');
+          setShowLeagueModal(false);
+        }}
+      />
+
+      {/* League welcome modal — self-managing, shows once on first assignment */}
+      <LeagueWelcomeModal />
     </LinearGradient>
   );
 }
