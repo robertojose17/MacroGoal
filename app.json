@@ -2,7 +2,7 @@
   "expo": {
     "name": "Macro Goal",
     "slug": "macro-goal",
-    "version": "1.4.5",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -14,7 +14,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "322",
+      "buildNumber": "336",
       "bundleIdentifier": "com.robertojose17.macrogoal",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -40,7 +40,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "versionCode": 3,
+      "versionCode": 4,
       "package": "com.robertojose17.macrogoal",
       "permissions": [
         "android.permission.RECORD_AUDIO",
