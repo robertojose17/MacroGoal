@@ -39,7 +39,7 @@ export type AwardXpResult = {
   xp_today: number;
   total_xp: number;
   current_level: number;
-  current_rank: string;
+  current_rank?: string;
   level_up: boolean;
   pending_level_up_to: number | null;
   missions_just_completed: string[];
@@ -129,14 +129,14 @@ export type XpStatus = {
   /** Core user XP state */
   total_xp: number;
   current_level: number;
-  current_rank: string;
+  current_rank?: string;
   current_streak: number;
   longest_streak: number;
   xp_today: number;
   last_xp_date: string | null;
   pending_level_up: boolean;
   pending_level_up_to: number | null;
-  pending_rank_change: string | null;
+  pending_rank_change?: string | null;
 
   /** Derived progress info */
   level_progress: LevelProgress;

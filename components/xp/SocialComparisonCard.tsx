@@ -10,19 +10,18 @@ import { View, Text, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
-import { rankColors } from '@/constants/Colors';
 import type { UserRanking } from '@/types/xp';
+
+const ACCENT_COLOR = '#5B9AA8';
+const ACCENT_GRADIENT: [string, string] = ['#5B9AA815', '#5B9AA808'];
+const ACCENT_BORDER = '#5B9AA833';
 
 interface SocialComparisonCardProps {
   ranking: UserRanking | null;
-  currentRank: string;
   isDark: boolean;
 }
 
-export default function SocialComparisonCard({ ranking, currentRank, isDark }: SocialComparisonCardProps) {
-  const rankColor = rankColors[currentRank] ?? rankColors['Rookie'];
-  const [gradStart, gradEnd] = rankColor.gradient;
-
+export default function SocialComparisonCard({ ranking, isDark }: SocialComparisonCardProps) {
   const hasEnoughData = ranking !== null && ranking.total_users >= 5 && ranking.percentile !== null;
 
   // Pre-compute display values
@@ -32,19 +31,18 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
     ? (ranking!.consistency_percentile ?? 0).toFixed(0)
     : '0';
 
-
   return (
     <View style={styles.wrapper}>
       <LinearGradient
-        colors={[gradStart + '15', gradEnd + '08']}
+        colors={ACCENT_GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={[
           styles.pill,
-          { borderColor: rankColor.text + '33' },
+          { borderColor: ACCENT_BORDER },
         ]}
       >
-        <Ionicons name="globe-outline" size={16} color={rankColor.text} style={styles.globeIcon} />
+        <Ionicons name="globe-outline" size={16} color={ACCENT_COLOR} style={styles.globeIcon} />
 
         {hasEnoughData ? (
           <Text
@@ -53,7 +51,7 @@ export default function SocialComparisonCard({ ranking, currentRank, isDark }: S
             adjustsFontSizeToFit
             minimumFontScale={0.75}
           >
-            <Text style={[styles.statChip, { color: rankColor.text }]}>
+            <Text style={[styles.statChip, { color: ACCENT_COLOR }]}>
               {'TOP '}{topPercentDisplay}{'%'}
             </Text>
             <Text style={{ color: isDark ? '#3A3C52' : '#D4D6DA' }}>{'  ·  '}</Text>

@@ -405,7 +405,6 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
 
   // XP card props — use safe defaults when xpStatus not yet loaded
   const cardLevel = xpStatus?.current_level ?? 1;
-  const cardRank = xpStatus?.current_rank ?? 'Rookie';
   const cardTotalXp = xpStatus?.total_xp ?? 0;
   const cardStreak = xpStatus?.current_streak ?? 0;
   const cardPercentile = xpStatus?.ranking?.percentile ?? 50;
@@ -420,7 +419,6 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
         <XpShareCard
           ref={xpCardRef}
           level={cardLevel}
-          rank={cardRank}
           totalXp={cardTotalXp}
           currentStreak={cardStreak}
           consistencyScore={cardData.consistencyScore}

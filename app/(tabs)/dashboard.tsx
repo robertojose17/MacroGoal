@@ -521,7 +521,6 @@ export default function DashboardScreen() {
           <CardErrorBoundary label="SocialComparisonCard">
             <SocialComparisonCard
               ranking={xp.status.ranking}
-              currentRank={xp.status.current_rank}
               isDark={isDark}
             />
           </CardErrorBoundary>
@@ -697,8 +696,6 @@ export default function DashboardScreen() {
       <LevelUpModal
         visible={xp.status?.pending_level_up ?? false}
         level={xp.status?.pending_level_up_to ?? 0}
-        rank={xp.status?.pending_rank_change ?? xp.status?.current_rank ?? 'Rookie'}
-        pendingRankChange={xp.status?.pending_rank_change ?? null}
         onDismiss={() => {
           console.log('[Dashboard] LevelUpModal dismissed — refreshing XP');
           xp.refresh();

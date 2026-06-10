@@ -817,7 +817,6 @@ export default function ShareProgressScreen() {
                   <XpShareCard
                     ref={xpShotRef}
                     level={xpStatus.current_level}
-                    rank={xpStatus.current_rank}
                     totalXp={xpStatus.total_xp}
                     currentStreak={xpStatus.current_streak}
                     consistencyScore={cardData.consistencyScore}
@@ -851,7 +850,6 @@ export default function ShareProgressScreen() {
                     >
                       <XpShareCard
                         level={xpStatus.current_level}
-                        rank={xpStatus.current_rank}
                         totalXp={xpStatus.total_xp}
                         currentStreak={xpStatus.current_streak}
                         consistencyScore={cardData.consistencyScore}

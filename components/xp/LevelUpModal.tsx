@@ -19,11 +19,13 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { rankColors } from '@/constants/Colors';
 import { confirmLevelUpSeen } from '@/utils/xpApi';
-import RankBadge from './RankBadge';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+// Fixed accent for level-up celebration
+const ACCENT_COLOR = '#5B9AA8';
+const ACCENT_GLOW = 'rgba(91,154,168,0.4)';
 
 // ─── Confetti particle ────────────────────────────────────────────────────────
 
@@ -110,39 +112,32 @@ function usePulse() {
 interface LevelUpModalProps {
   visible: boolean;
   level: number;
-  rank: string;
-  pendingRankChange: string | null;
   onDismiss: () => void;
 }
 
 export default function LevelUpModal({
   visible,
   level,
-  rank,
-  pendingRankChange,
   onDismiss,
 }: LevelUpModalProps) {
   const particles = useRef<Particle[]>(createParticles()).current;
   const { scale, opacity } = usePulse();
-  const rankColor = rankColors[rank] ?? rankColors['Rookie'];
 
-  const isRankChange = !!pendingRankChange;
-  const headlineText = isRankChange ? 'NEW RANK UNLOCKED' : 'LEVEL UP!';
+  const headlineText = 'LEVEL UP!';
   const levelDisplay = 'Level ' + level;
 
   const handleDismiss = useCallback(async () => {
-    console.log('[LevelUpModal] dismissed — confirming level up seen');
+    console.log('[LevelUpModal] dismissed — confirming level up seen, level:', level);
     try {
       await confirmLevelUpSeen();
     } catch (e) {
       console.warn('[LevelUpModal] confirmLevelUpSeen error (non-fatal):', e);
     }
     onDismiss();
-  }, [onDismiss]);
+  }, [onDismiss, level]);
 
   const handleSharePress = useCallback(() => {
     console.log('[LevelUpModal] Share My Progress pressed — navigating to share-progress?variant=level');
-    // Dismiss modal first so it doesn't sit on top of the share screen
     handleDismiss().then(() => {
       router.push('/share-progress?variant=level');
     });
@@ -150,12 +145,11 @@ export default function LevelUpModal({
 
   useEffect(() => {
     if (visible) {
-      console.log('[LevelUpModal] visible — firing confetti, level:', level, 'rank:', rank);
-      // Small delay so modal renders first
+      console.log('[LevelUpModal] visible — firing confetti, level:', level);
       const t = setTimeout(() => fireConfetti(particles), 200);
       return () => clearTimeout(t);
     }
-  }, [visible, level, rank, particles]);
+  }, [visible, level, particles]);
 
   return (
     <Modal
@@ -206,7 +200,7 @@ export default function LevelUpModal({
             style={[
               styles.card,
               {
-                shadowColor: rankColor.glow,
+                shadowColor: ACCENT_GLOW,
                 shadowOpacity: 0.6,
                 shadowRadius: 24,
                 shadowOffset: { width: 0, height: 0 },
@@ -214,7 +208,7 @@ export default function LevelUpModal({
             ]}
           >
             {/* Headline */}
-            <Text style={[styles.headline, { color: rankColor.text }]}>
+            <Text style={[styles.headline, { color: ACCENT_COLOR }]}>
               {headlineText}
             </Text>
 
@@ -226,7 +220,7 @@ export default function LevelUpModal({
                   transform: [{ scale }],
                   opacity,
                   color: '#F1F5F9',
-                  textShadowColor: rankColor.glow,
+                  textShadowColor: ACCENT_GLOW,
                   textShadowRadius: 20,
                   textShadowOffset: { width: 0, height: 0 },
                 },
@@ -235,20 +229,15 @@ export default function LevelUpModal({
               {levelDisplay}
             </Animated.Text>
 
-            {/* Rank badge */}
-            <View style={styles.rankRow}>
-              <RankBadge rank={rank} size="lg" />
-            </View>
-
             {/* Divider */}
-            <View style={[styles.divider, { backgroundColor: rankColor.glow }]} />
+            <View style={[styles.divider, { backgroundColor: ACCENT_GLOW }]} />
 
             {/* Share button */}
             <TouchableOpacity
-              style={[styles.shareButton, { borderColor: rankColor.text }]}
+              style={[styles.shareButton, { borderColor: ACCENT_COLOR }]}
               onPress={handleSharePress}
             >
-              <Text style={[styles.shareButtonText, { color: rankColor.text }]}>
+              <Text style={[styles.shareButtonText, { color: ACCENT_COLOR }]}>
                 Share My Progress
               </Text>
             </TouchableOpacity>
@@ -308,10 +297,7 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: '900',
     lineHeight: 72,
-    marginBottom: 16,
-  },
-  rankRow: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   divider: {
     width: 60,

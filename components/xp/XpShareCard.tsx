@@ -17,7 +17,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { rankColors } from '@/constants/Colors';
+import { getStreakRank } from '@/utils/streakRanks';
 
 // react-native-view-shot — lazy import so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -27,6 +27,12 @@ if (Platform.OS !== 'web') {
 }
 const CaptureWrapper: any = ViewShot || View;
 
+// Fixed accent gradient for the share card
+const CARD_GRAD_START = '#5B9AA8';
+const CARD_GRAD_END = '#3A7A8A';
+const CARD_GLOW = 'rgba(91,154,168,0.35)';
+const CARD_ACCENT_TEXT = '#5B9AA8';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface XpShareCardHandle {
@@ -35,7 +41,6 @@ export interface XpShareCardHandle {
 
 export interface XpShareCardProps {
   level: number;
-  rank: string;
   totalXp: number;
   currentStreak: number;
   consistencyScore: number; // 0-100
@@ -59,11 +64,8 @@ function topPercent(percentile: number): string {
 }
 
 // ─── Card dimensions ──────────────────────────────────────────────────────────
-// Render at screen width, maintain 9:16 aspect ratio.
-// ViewShot captures at this size; the parent scales it down for preview.
 export const XP_CARD_WIDTH = Dimensions.get('window').width;
 export const XP_CARD_HEIGHT = Math.round((XP_CARD_WIDTH * 16) / 9);
-// Internal aliases for backward compat within this file
 const CARD_WIDTH = XP_CARD_WIDTH;
 const CARD_HEIGHT = XP_CARD_HEIGHT;
 
@@ -71,7 +73,7 @@ const CARD_HEIGHT = XP_CARD_HEIGHT;
 
 const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
   function XpShareCard(
-    { level, rank, totalXp, currentStreak, consistencyScore, percentile, calorieDeficit, username },
+    { level, totalXp, currentStreak, consistencyScore, percentile, calorieDeficit, username },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -80,7 +82,6 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
       captureWhenReady: (): Promise<string> => {
         console.log('[XpShareCard] captureWhenReady called');
         return new Promise((resolve, reject) => {
-          // Small settle delay so layout is fully painted
           setTimeout(() => {
             if (!viewShotRef.current) {
               reject(new Error('[XpShareCard] ViewShot ref not available'));
@@ -99,19 +100,20 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
       },
     }), []);
 
-    const rankColor = rankColors[rank] ?? rankColors['Rookie'];
-    const [gradStart, gradEnd] = rankColor.gradient;
+    // Streak rank for identity
+    const streakRank = getStreakRank(currentStreak);
+    const streakRankLabel = streakRank.fullLabel.toUpperCase();
+    const streakEmoji = streakRank.emoji;
 
     // Pre-compute display values (no logic in JSX)
     const levelDisplay = String(level);
-    const rankDisplay = rank.toUpperCase();
     const streakDisplay = String(currentStreak);
     const consistencyDisplay = String(Math.round(consistencyScore));
     const topPercentDisplay = topPercent(percentile);
     const xpDisplay = Number(totalXp).toLocaleString();
     const showDeficit = (calorieDeficit ?? 0) > 0;
     const deficitDisplay = showDeficit ? Number(calorieDeficit).toLocaleString() : '';
-    const footerHandle = username ? `@${username}` : '@you';
+    const footerHandle = username ? '@' + username : '@you';
 
     return (
       <CaptureWrapper
@@ -140,9 +142,9 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
           {/* ── CONTENT ── */}
           <View style={styles.content}>
 
-            {/* Rank glow overlay */}
+            {/* Glow overlay */}
             <View
-              style={[styles.glowOverlay, { backgroundColor: rankColor.glow }]}
+              style={[styles.glowOverlay, { backgroundColor: CARD_GLOW }]}
               pointerEvents="none"
             />
 
@@ -156,7 +158,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
                 styles.levelNumber,
                 {
                   color: '#F1F5F9',
-                  textShadowColor: rankColor.glow,
+                  textShadowColor: CARD_GLOW,
                   textShadowRadius: 40,
                   textShadowOffset: { width: 0, height: 0 },
                 },
@@ -165,14 +167,15 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
               {levelDisplay}
             </Text>
 
-            {/* Rank name */}
+            {/* Streak rank pill */}
             <LinearGradient
-              colors={[gradStart, gradEnd]}
+              colors={[CARD_GRAD_START, CARD_GRAD_END]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.rankPill}
             >
-              <Text style={styles.rankText}>{rankDisplay}</Text>
+              <Text style={styles.rankEmoji}>{streakEmoji}</Text>
+              <Text style={styles.rankText}>{streakRankLabel}</Text>
             </LinearGradient>
 
             {/* Spacer */}
@@ -183,19 +186,19 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
               {/* Streak */}
               <View style={styles.statBox}>
                 <Text style={styles.statEmoji}>🔥</Text>
-                <Text style={[styles.statValue, { color: rankColor.text }]}>
+                <Text style={[styles.statValue, { color: CARD_ACCENT_TEXT }]}>
                   {streakDisplay}
                 </Text>
                 <Text style={styles.statLabel}>DAY STREAK</Text>
               </View>
 
               {/* Divider */}
-              <View style={[styles.statDivider, { backgroundColor: rankColor.glow }]} />
+              <View style={[styles.statDivider, { backgroundColor: CARD_GLOW }]} />
 
               {/* Consistency */}
               <View style={styles.statBox}>
                 <Text style={styles.statEmoji}>📊</Text>
-                <Text style={[styles.statValue, { color: rankColor.text }]}>
+                <Text style={[styles.statValue, { color: CARD_ACCENT_TEXT }]}>
                   {consistencyDisplay}
                   <Text style={styles.statUnit}>%</Text>
                 </Text>
@@ -204,14 +207,14 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
             </View>
 
             {/* Top X% badge */}
-            <View style={[styles.topBadge, { borderColor: rankColor.text }]}>
-              <Text style={[styles.topBadgeText, { color: rankColor.text }]}>
+            <View style={[styles.topBadge, { borderColor: CARD_ACCENT_TEXT }]}>
+              <Text style={[styles.topBadgeText, { color: CARD_ACCENT_TEXT }]}>
                 TOP
               </Text>
-              <Text style={[styles.topBadgePercent, { color: rankColor.text }]}>
+              <Text style={[styles.topBadgePercent, { color: CARD_ACCENT_TEXT }]}>
                 {topPercentDisplay}%
               </Text>
-              <Text style={[styles.topBadgeText, { color: rankColor.text }]}>
+              <Text style={[styles.topBadgeText, { color: CARD_ACCENT_TEXT }]}>
                 OF ALL USERS
               </Text>
             </View>
@@ -333,16 +336,22 @@ const styles = StyleSheet.create({
     letterSpacing: -4,
   },
   rankPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderRadius: 100,
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     paddingVertical: 10,
     marginTop: 8,
   },
+  rankEmoji: {
+    fontSize: 20,
+  },
   rankText: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 3,
+    letterSpacing: 2,
   },
   spacerMid: {
     flex: 1,

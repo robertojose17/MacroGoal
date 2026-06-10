@@ -8,13 +8,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
-import { rankColors } from '@/constants/Colors';
 import { findNextUnlock } from '@/constants/xpRewards';
 import type { XpReward } from '@/constants/xpRewards';
 
+const ACCENT_COLOR = '#5B9AA8';
+
 interface NextUnlockCardProps {
   currentLevel: number;
-  currentRank: string;
   isDark: boolean;
 }
 
@@ -39,9 +39,8 @@ function RewardRow({ reward, isDark }: RewardRowProps) {
   );
 }
 
-export default function NextUnlockCard({ currentLevel, currentRank, isDark }: NextUnlockCardProps) {
+export default function NextUnlockCard({ currentLevel, isDark }: NextUnlockCardProps) {
   const nextUnlock = findNextUnlock(currentLevel);
-  const rankColor = rankColors[currentRank] ?? rankColors['Rookie'];
 
   const levelDisplay = nextUnlock ? 'Level ' + nextUnlock.level : null;
 
@@ -66,8 +65,8 @@ export default function NextUnlockCard({ currentLevel, currentRank, isDark }: Ne
       {nextUnlock ? (
         <>
           {/* Level milestone */}
-          <View style={[styles.levelBadge, { borderColor: rankColor.text }]}>
-            <Text style={[styles.levelBadgeText, { color: rankColor.text }]}>
+          <View style={[styles.levelBadge, { borderColor: ACCENT_COLOR }]}>
+            <Text style={[styles.levelBadgeText, { color: ACCENT_COLOR }]}>
               {levelDisplay}
             </Text>
           </View>
