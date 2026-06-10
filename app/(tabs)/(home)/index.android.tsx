@@ -3,15 +3,11 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator } from 'react-native';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
-import StreakRanksModal from '@/components/StreakRanksModal';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { useXpStatus } from '@/hooks/useXpStatus';
-import { getStreakRank } from '@/utils/streakRanks';
 import { IconSymbol } from '@/components/IconSymbol';
-import { NotificationBell } from "@/components/NotificationBell";
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
 import { listMealPlans, type MealPlan as ApiMealPlan } from '@/utils/mealPlansApi';
@@ -94,12 +90,6 @@ export default function HomeScreen() {
     dismissRescue,
     refresh: refreshRescue,
   } = useStreakRescue();
-
-  // ── Streak rank ──
-  const { status: xpStatus } = useXpStatus();
-  const streakDays = xpStatus?.current_streak ?? 0;
-  const streakRank = getStreakRank(streakDays);
-  const [showRanksModal, setShowRanksModal] = useState(false);
 
   const [goal, setGoal] = useState<any>(null);
   const [meals, setMeals] = useState<MealData[]>([
@@ -456,24 +446,6 @@ export default function HomeScreen() {
       )}
 
       <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-        {/* ── Streak Rank ── */}
-        <TouchableOpacity
-          style={styles.streakRankContainer}
-          activeOpacity={0.7}
-          onPress={() => setShowRanksModal(true)}
-        >
-          <Text style={styles.streakRankEmoji}>{streakRank.emoji}</Text>
-          <View>
-            <Text style={[styles.streakRankName, { color: isDark ? colors.textDark : colors.text }]}>
-              {streakRank.fullLabel}
-            </Text>
-            <Text style={[styles.streakRankDays, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {streakDays}
-              {' day streak'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Goal</Text>
@@ -518,9 +490,7 @@ export default function HomeScreen() {
           <View style={styles.mealHeader}>
             <View>
               <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{meal.label}</Text>
-                            <NotificationBell />
-              
-<Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{Math.round(meal.totalCalories)} kcal</Text>
+              <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{Math.round(meal.totalCalories)} kcal</Text>
             </View>
             <TouchableOpacity style={styles.addMealButton} onPress={() => handleAddFood(meal.type)}>
               <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add" size={28} color={colors.info} />
@@ -691,11 +661,6 @@ export default function HomeScreen() {
         }}
       />
 
-      <StreakRanksModal
-        visible={showRanksModal}
-        onClose={() => setShowRanksModal(false)}
-        currentStreakDays={streakDays}
-      />
     </SafeAreaView>
   );
 }
@@ -767,29 +732,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
-  },
-  streakRankContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  streakRankEmoji: {
-    fontSize: 28,
-    lineHeight: 34,
-  },
-  streakRankName: {
-    fontSize: 17,
-    fontWeight: '700',
-    lineHeight: 22,
-  },
-  streakRankDays: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 1,
   },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: spacing.md },
   summaryItem: { alignItems: 'center' },

@@ -7,14 +7,11 @@ import {
 } from 'react-native';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
-import StreakRanksModal from '@/components/StreakRanksModal';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import ProgressCircle from '@/components/ProgressCircle';
-import { useXpStatus } from '@/hooks/useXpStatus';
-import { getStreakRank } from '@/utils/streakRanks';
 import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
@@ -107,12 +104,6 @@ export default function HomeScreen() {
     dismissRescue,
     refresh: refreshRescue,
   } = useStreakRescue();
-
-  // ── Streak rank ──
-  const { status: xpStatus } = useXpStatus();
-  const streakDays = xpStatus?.current_streak ?? 0;
-  const streakRank = getStreakRank(streakDays);
-  const [showRanksModal, setShowRanksModal] = useState(false);
 
   // Segmented control
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
@@ -599,24 +590,6 @@ export default function HomeScreen() {
   const renderTrackingContent = () => (
     <View>
       <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-        {/* ── Streak Rank ── */}
-        <TouchableOpacity
-          style={styles.streakRankContainer}
-          activeOpacity={0.7}
-          onPress={() => setShowRanksModal(true)}
-        >
-          <Text style={styles.streakRankEmoji}>{streakRank.emoji}</Text>
-          <View>
-            <Text style={[styles.streakRankName, { color: isDark ? colors.textDark : colors.text }]}>
-              {streakRank.fullLabel}
-            </Text>
-            <Text style={[styles.streakRankDays, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {streakDays}
-              {' day streak'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
         <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Calories</Text>
         <View style={styles.caloriesContent}>
           <ProgressCircle
@@ -1051,12 +1024,6 @@ export default function HomeScreen() {
         }}
       />
 
-      <StreakRanksModal
-        visible={showRanksModal}
-        onClose={() => setShowRanksModal(false)}
-        currentStreakDays={streakDays}
-      />
-
       {/* New Plan Modal */}
       <Modal
         visible={newPlanModalVisible}
@@ -1221,29 +1188,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
-  },
-  streakRankContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  streakRankEmoji: {
-    fontSize: 28,
-    lineHeight: 34,
-  },
-  streakRankName: {
-    fontSize: 17,
-    fontWeight: '700',
-    lineHeight: 22,
-  },
-  streakRankDays: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 1,
   },
   cardTitle: { ...typography.h3, marginBottom: spacing.md },
   caloriesContent: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
