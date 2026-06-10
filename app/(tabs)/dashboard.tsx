@@ -398,7 +398,7 @@ export default function DashboardScreen() {
 
   // ─── Derived greeting values ─────────────────────────────────────────────
   const greeting = getGreeting();
-  const firstName = user?.display_name?.split(' ')[0] || 'there';
+  const firstName = user?.name?.split(' ')[0] || 'there';
 
   if (loading) {
     return (
