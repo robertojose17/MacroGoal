@@ -15,14 +15,18 @@ import {
   StyleSheet,
   Animated,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Zap } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
 import { getStreakRank } from '@/utils/streakRanks';
 import LeagueBadge from './LeagueBadge';
 import LeagueLeaderboard from './LeagueLeaderboard';
 import LeagueWelcomeModal from './LeagueWelcomeModal';
+import StreakRanksModal from '@/components/StreakRanksModal';
+import XpLevelsModal from '@/components/xp/XpLevelsModal';
 import { useLeague } from '@/hooks/useLeague';
 import type { XpStatus } from '@/types/xp';
 
@@ -36,6 +40,8 @@ const XP_BAR_FILL_COLOR = '#5B9AA8';
 export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const barAnim = useRef(new Animated.Value(0)).current;
   const [showLeagueModal, setShowLeagueModal] = useState(false);
+  const [showStreakRanks, setShowStreakRanks] = useState(false);
+  const [showXpLevels, setShowXpLevels] = useState(false);
   const { status: leagueStatus } = useLeague();
 
   const level = status?.current_level ?? 1;
@@ -99,76 +105,96 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
       ]}
     >
       {/* ── Section 1: Streak Identity ── */}
-      <View style={styles.identitySection}>
-        {/* Emoji + rank name row */}
-        <View style={styles.rankRow}>
-          <Text style={styles.rankEmoji}>
-            {streakEmoji}
-          </Text>
-          <Text style={[styles.rankName, { color: primaryTextColor }]}>
-            {streakRankName.toUpperCase()}
-          </Text>
-        </View>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => {
+          console.log('[XpHeroCard] open streak ranks modal');
+          setShowStreakRanks(true);
+        }}
+      >
+        <View style={styles.identitySection}>
+          {/* Emoji + rank name row */}
+          <View style={styles.rankRow}>
+            <Text style={styles.rankEmoji}>
+              {streakEmoji}
+            </Text>
+            <Text style={[styles.rankName, { color: primaryTextColor }]}>
+              {streakRankName.toUpperCase()}
+            </Text>
+            <IconSymbol name="chevron.right" size={14} color={secondaryTextColor} />
+          </View>
 
-        {/* Streak count */}
-        <View style={styles.streakSubRow}>
-          <Text style={[styles.streakDays, { color: secondaryTextColor }]}>
-            {streakDaysText}
-          </Text>
-          <Text style={[styles.streakDaysLabel, { color: secondaryTextColor }]}>
-            {' Day Streak'}
-          </Text>
+          {/* Streak count */}
+          <View style={styles.streakSubRow}>
+            <Text style={[styles.streakDays, { color: secondaryTextColor }]}>
+              {streakDaysText}
+            </Text>
+            <Text style={[styles.streakDaysLabel, { color: secondaryTextColor }]}>
+              {' Day Streak'}
+            </Text>
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* ── Divider 1 ── */}
       <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
       {/* ── Section 2: XP Progress ── */}
-      <View style={styles.xpSection}>
-        {/* Level + total XP row */}
-        <View style={styles.xpHeaderRow}>
-          <Text style={[styles.levelText, { color: primaryTextColor }]}>
-            {levelText}
-          </Text>
-          <Text style={[styles.totalXpText, { color: primaryTextColor }]}>
-            {totalXpText}
-          </Text>
-        </View>
-
-        {/* Horizontal progress bar */}
-        <View style={[styles.barBackground, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-          <Animated.View
-            style={[
-              styles.barFill,
-              {
-                width: barWidth,
-                backgroundColor: XP_BAR_FILL_COLOR,
-              },
-            ]}
-          />
-        </View>
-
-        {/* XP to next level */}
-        <Text style={[styles.xpToNext, { color: secondaryTextColor }]}>
-          {xpToNextText}
-        </Text>
-
-        {/* Premium boost badge */}
-        {showPremiumBadge && (
-          <LinearGradient
-            colors={['#FFB547', '#FF8A5B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.premiumBadge}
-          >
-            <Zap size={11} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
-            <Text style={styles.premiumBadgeText}>
-              1.5x Premium Boost
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => {
+          console.log('[XpHeroCard] open XP levels modal');
+          setShowXpLevels(true);
+        }}
+      >
+        <View style={styles.xpSection}>
+          {/* Level + total XP row */}
+          <View style={styles.xpHeaderRow}>
+            <Text style={[styles.levelText, { color: primaryTextColor }]}>
+              {levelText}
             </Text>
-          </LinearGradient>
-        )}
-      </View>
+            <View style={styles.xpHeaderRight}>
+              <Text style={[styles.totalXpText, { color: primaryTextColor }]}>
+                {totalXpText}
+              </Text>
+              <IconSymbol name="chevron.right" size={14} color={secondaryTextColor} />
+            </View>
+          </View>
+
+          {/* Horizontal progress bar */}
+          <View style={[styles.barBackground, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
+            <Animated.View
+              style={[
+                styles.barFill,
+                {
+                  width: barWidth,
+                  backgroundColor: XP_BAR_FILL_COLOR,
+                },
+              ]}
+            />
+          </View>
+
+          {/* XP to next level */}
+          <Text style={[styles.xpToNext, { color: secondaryTextColor }]}>
+            {xpToNextText}
+          </Text>
+
+          {/* Premium boost badge */}
+          {showPremiumBadge && (
+            <LinearGradient
+              colors={['#FFB547', '#FF8A5B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.premiumBadge}
+            >
+              <Zap size={11} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
+              <Text style={styles.premiumBadgeText}>
+                1.5x Premium Boost
+              </Text>
+            </LinearGradient>
+          )}
+        </View>
+      </TouchableOpacity>
 
       {/* ── Divider 2 ── */}
       <View style={[styles.divider, { backgroundColor: dividerColor }]} />
@@ -205,6 +231,29 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
 
       {/* ── League welcome modal ── */}
       <LeagueWelcomeModal />
+
+      {/* ── Streak ranks modal ── */}
+      <StreakRanksModal
+        visible={showStreakRanks}
+        onClose={() => {
+          console.log('[XpHeroCard] StreakRanksModal closed');
+          setShowStreakRanks(false);
+        }}
+        currentStreakDays={streak}
+      />
+
+      {/* ── XP levels modal ── */}
+      <XpLevelsModal
+        visible={showXpLevels}
+        onClose={() => {
+          console.log('[XpHeroCard] XpLevelsModal closed');
+          setShowXpLevels(false);
+        }}
+        currentLevel={level}
+        xpInCurrentLevel={xpInLevel}
+        xpNeededForNextLevel={xpNeeded}
+        totalXp={totalXp}
+      />
     </View>
   );
 }
@@ -276,6 +325,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  xpHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   levelText: {
     fontSize: 17,
