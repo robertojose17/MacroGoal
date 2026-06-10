@@ -154,8 +154,6 @@ export type XpStatus = {
   is_premium?: boolean;
   streak_multiplier?: number;      // current effective streak multiplier
   premium_multiplier?: number;     // 1.0 or 1.5
-  streak_freeze_count?: number;    // freezes available
-  weekly_freeze_max?: number;      // 1 for free, 3 for premium
 
   /** Unlock slot status — replaces mission_tier / tier_progress */
   unlock_slot_status?: UnlockSlotStatus;

@@ -15,11 +15,9 @@ import {
   StyleSheet,
   Animated,
   Platform,
-  Pressable,
-  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Zap, Snowflake } from 'lucide-react-native';
+import { Zap } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { getStreakRank } from '@/utils/streakRanks';
 import LeagueBadge from './LeagueBadge';
@@ -31,14 +29,12 @@ import type { XpStatus } from '@/types/xp';
 interface XpHeroCardProps {
   status: XpStatus | null;
   isDark: boolean;
-  onUpgradePress?: () => void;
 }
 
 const XP_BAR_FILL_COLOR = '#5B9AA8';
 
-export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCardProps) {
+export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const barAnim = useRef(new Animated.Value(0)).current;
-  const freezeScale = useRef(new Animated.Value(1)).current;
   const [showLeagueModal, setShowLeagueModal] = useState(false);
   const { status: leagueStatus } = useLeague();
 
@@ -55,13 +51,9 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
   const streakEmoji = streakRank.emoji;
   const streakRankName = streakRank.fullLabel;
 
-  // Premium / freeze fields
+  // Premium fields
   const premiumMultiplier = status?.premium_multiplier;
   const showPremiumBadge = premiumMultiplier !== undefined && premiumMultiplier > 1;
-  const freezeCount = status?.streak_freeze_count;
-  const showFreezeBadge = freezeCount !== undefined && freezeCount > 0;
-  const weeklyFreezeMax = status?.weekly_freeze_max ?? 1;
-  const isPremium = status?.is_premium === true;
 
   // Streak at risk: earned < 100 XP today
   const streakAtRisk = streak > 0 && xpToday < 100;
@@ -75,7 +67,6 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
   const levelText = 'Level ' + String(level);
   const totalXpText = Number(totalXp).toLocaleString() + ' XP';
   const xpToNextText = Number(xpToNextLevel).toLocaleString() + ' XP to Level ' + String(nextLevel);
-  const freezeLabel = freezeCount === 1 ? '1 freeze' : String(freezeCount) + ' freezes';
 
   // Animate bar on mount / status change
   useEffect(() => {
@@ -90,32 +81,6 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
-
-  const handleFreezePress = () => {
-    console.log('[XpHeroCard] Freeze badge tapped — freeze count:', freezeCount);
-    const maxText = weeklyFreezeMax === 1 ? '1 freeze' : String(weeklyFreezeMax) + ' freezes';
-    const message = `Streak Freezes protect your streak when you miss a day. You get ${maxText} every Monday. Premium members get 3 instead of 1.`;
-
-    if (isPremium) {
-      Alert.alert('Streak Freezes', message, [{ text: 'Got it' }]);
-    } else {
-      Alert.alert('Streak Freezes', message, [
-        { text: 'Got it', style: 'cancel' },
-        {
-          text: 'Upgrade to Premium',
-          onPress: () => {
-            console.log('[XpHeroCard] Upgrade to Premium pressed from freeze badge');
-            onUpgradePress?.();
-          },
-        },
-      ]);
-    }
-  };
-
-  const freezeAnimIn = () =>
-    Animated.spring(freezeScale, { toValue: 0.92, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
-  const freezeAnimOut = () =>
-    Animated.spring(freezeScale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
 
   const dividerColor = isDark ? '#3A3C52' : '#E5E7EB';
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -145,7 +110,7 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
           </Text>
         </View>
 
-        {/* Streak count + freeze badge */}
+        {/* Streak count */}
         <View style={styles.streakSubRow}>
           <Text style={[styles.streakDays, { color: secondaryTextColor }]}>
             {streakDaysText}
@@ -153,26 +118,6 @@ export default function XpHeroCard({ status, isDark, onUpgradePress }: XpHeroCar
           <Text style={[styles.streakDaysLabel, { color: secondaryTextColor }]}>
             {' Day Streak'}
           </Text>
-
-          {/* Freeze badge inline */}
-          {showFreezeBadge && (
-            <Animated.View style={{ transform: [{ scale: freezeScale }] }}>
-              <Pressable
-                onPressIn={freezeAnimIn}
-                onPressOut={freezeAnimOut}
-                onPress={handleFreezePress}
-                style={[
-                  styles.freezeBadge,
-                  { backgroundColor: isDark ? 'rgba(96,165,250,0.15)' : 'rgba(96,165,250,0.12)' },
-                ]}
-              >
-                <Snowflake size={12} color="#60A5FA" strokeWidth={2.5} />
-                <Text style={styles.freezeText}>
-                  {freezeLabel}
-                </Text>
-              </Pressable>
-            </Animated.View>
-          )}
         </View>
       </View>
 
@@ -317,24 +262,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  freezeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 20,
-    marginLeft: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(96,165,250,0.3)',
-  },
-  freezeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#60A5FA',
-    letterSpacing: 0.2,
-  },
-
   // ── Divider ──
   divider: {
     height: StyleSheet.hairlineWidth,
