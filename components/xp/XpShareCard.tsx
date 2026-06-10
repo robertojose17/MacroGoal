@@ -7,6 +7,7 @@
  */
 
 import React, { useRef, forwardRef, useImperativeHandle } from 'react';
+import { getXpRank, formatRankFullLabel } from '@/utils/xpRanks';
 import {
   View,
   Text,
@@ -100,7 +101,9 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
     }), []);
 
     // Pre-compute display values (no logic in JSX)
-    const levelDisplay = String(level);
+    const rank = getXpRank(level);
+    const rankNameDisplay = formatRankFullLabel(rank);
+    const levelTextDisplay = 'Level ' + String(level);
     const streakDisplay = String(currentStreak);
     const consistencyDisplay = String(Math.round(consistencyScore));
     const topPercentDisplay = topPercent(percentile);
@@ -145,20 +148,24 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
             {/* Spacer */}
             <View style={styles.spacerTop} />
 
-            {/* LEVEL number — the hero element */}
-            <Text style={styles.levelLabel}>LEVEL</Text>
+            {/* RANK — the identity */}
             <Text
               style={[
-                styles.levelNumber,
+                styles.rankName,
                 {
-                  color: '#F1F5F9',
-                  textShadowColor: CARD_GLOW,
-                  textShadowRadius: 40,
+                  color: rank.primaryColor,
+                  textShadowColor: rank.primaryColor,
+                  textShadowRadius: 30,
                   textShadowOffset: { width: 0, height: 0 },
                 },
               ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
             >
-              {levelDisplay}
+              {rankNameDisplay}
+            </Text>
+            <Text style={[styles.levelSubtitle, { color: 'rgba(255,255,255,0.7)' }]}>
+              {levelTextDisplay}
             </Text>
 
             {/* Streak display */}
@@ -318,18 +325,20 @@ const styles = StyleSheet.create({
     maxHeight: 40,
     minHeight: 16,
   },
-  levelLabel: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 6,
-    color: 'rgba(255,255,255,0.45)',
-    marginBottom: 4,
-  },
-  levelNumber: {
-    fontSize: 120,
+  rankName: {
+    fontSize: 64,
     fontWeight: '900',
-    lineHeight: 130,
-    letterSpacing: -4,
+    lineHeight: 72,
+    letterSpacing: 2,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  levelSubtitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 4,
+    marginBottom: 8,
   },
   streakDisplay: {
     flexDirection: 'row',

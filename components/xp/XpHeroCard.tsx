@@ -218,6 +218,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
       <LeagueBadge
         status={leagueStatus}
         isDark={isDark}
+        flat
         onPress={() => {
           console.log('[XpHeroCard] LeagueBadge pressed — opening leaderboard');
           setShowLeagueModal(true);

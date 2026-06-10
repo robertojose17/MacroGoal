@@ -27,6 +27,7 @@ interface LeagueBadgeProps {
   status: LeagueStatus | null;
   isDark: boolean;
   onPress: () => void;
+  flat?: boolean;
 }
 
 /** Format milliseconds remaining as "Xd Yh" */
@@ -41,7 +42,7 @@ function formatTimeRemaining(weekEndIso: string): string {
   return `${hours}h`;
 }
 
-export default function LeagueBadge({ status, isDark, onPress }: LeagueBadgeProps) {
+export default function LeagueBadge({ status, isDark, onPress, flat }: LeagueBadgeProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   if (!status) return null;
@@ -96,6 +97,10 @@ export default function LeagueBadge({ status, isDark, onPress }: LeagueBadgeProp
   const textSecondary = isDark ? '#A0A2B8' : '#6B7280';
   const barBg = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
 
+  const containerStyle = flat
+    ? [styles.containerFlat]
+    : [styles.container, { backgroundColor: glowColor ?? cardBg, borderColor: glowColor ? meta.accent : borderColor }];
+
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <Pressable
@@ -111,13 +116,7 @@ export default function LeagueBadge({ status, isDark, onPress }: LeagueBadgeProp
           console.log('[LeagueBadge] tapped — tier:', status.tier, 'position:', status.user_position);
           onPress();
         }}
-        style={[
-          styles.container,
-          {
-            backgroundColor: glowColor ?? cardBg,
-            borderColor: glowColor ? meta.accent : borderColor,
-          },
-        ]}
+        style={containerStyle}
       >
         {/* Left accent bar using tier gradient */}
         <LinearGradient
@@ -183,6 +182,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     marginTop: spacing.sm,
+  },
+  containerFlat: {
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderRadius: borderRadius.sm,
   },
   accentBar: {
     width: 4,
