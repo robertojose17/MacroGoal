@@ -204,18 +204,25 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
 
   const banner = status ? buildBannerCopy(status) : null;
 
-  // Partition leaderboard
+  // Partition leaderboard using full leaderboard length (includes bots)
+  // Promotion: top N by promotion_zone_size
   const promotionEntries = status
     ? status.leaderboard.filter((e) => e.rank <= status.promotion_zone_size)
     : [];
+
+  // Demotion: bottom N by total leaderboard size, excluding anyone already in promotion
+  const totalEntries = status ? status.leaderboard.length : 0;
+  const demotionThreshold = totalEntries - (status?.demotion_zone_size ?? 0);
   const demotionEntries = status
-    ? status.leaderboard.filter((e) => e.rank > status.member_count - status.demotion_zone_size)
+    ? status.leaderboard.filter(
+        (e) => e.rank > demotionThreshold && e.rank > status.promotion_zone_size
+      )
     : [];
+
+  // Middle: everything else (mutually exclusive with both zones)
   const middleEntries = status
     ? status.leaderboard.filter(
-        (e) =>
-          e.rank > status.promotion_zone_size &&
-          e.rank <= status.member_count - status.demotion_zone_size
+        (e) => e.rank > status.promotion_zone_size && e.rank <= demotionThreshold
       )
     : [];
 

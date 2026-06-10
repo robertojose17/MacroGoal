@@ -1,11 +1,13 @@
 /**
  * XpHeroCard
  *
- * Hero card at the top of the dashboard showing:
- * - Section 1: Streak identity (streak rank emoji + name + day count)
- * - Section 2: XP progress (level, bar, XP to next level)
- * - Section 3: League badge
- * - Optional streak-at-risk warning (full-width bottom)
+ * Single cohesive identity card showing:
+ * - XP rank badge (top-left, tappable → XpRanksModal)
+ * - Streak count (top-right, tappable → StreakBenefitsModal)
+ * - Level + total XP (tappable → XpLevelsModal)
+ * - Animated XP progress bar with glow
+ * - Boost badges (premium + streak multipliers)
+ * - League badge (flat, no nested card)
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -15,18 +17,17 @@ import {
   StyleSheet,
   Animated,
   Platform,
-  TouchableOpacity,
+  Pressable,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Zap } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
-import { getStreakRank } from '@/utils/streakRanks';
+import { getXpRank } from '@/utils/xpRanks';
+import XpRankBadge from '@/components/xp/XpRankBadge';
+import XpRanksModal from '@/components/xp/XpRanksModal';
+import StreakBenefitsModal from '@/components/xp/StreakBenefitsModal';
+import XpLevelsModal from '@/components/xp/XpLevelsModal';
 import LeagueBadge from './LeagueBadge';
 import LeagueLeaderboard from './LeagueLeaderboard';
 import LeagueWelcomeModal from './LeagueWelcomeModal';
-import StreakRanksModal from '@/components/StreakRanksModal';
-import XpLevelsModal from '@/components/xp/XpLevelsModal';
 import { useLeague } from '@/hooks/useLeague';
 import type { XpStatus } from '@/types/xp';
 
@@ -35,13 +36,15 @@ interface XpHeroCardProps {
   isDark: boolean;
 }
 
-const XP_BAR_FILL_COLOR = '#5B9AA8';
-
 export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const barAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const [showRanksModal, setShowRanksModal] = useState(false);
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [showLevelsModal, setShowLevelsModal] = useState(false);
   const [showLeagueModal, setShowLeagueModal] = useState(false);
-  const [showStreakRanks, setShowStreakRanks] = useState(false);
-  const [showXpLevels, setShowXpLevels] = useState(false);
+
   const { status: leagueStatus } = useLeague();
 
   const level = status?.current_level ?? 1;
@@ -51,48 +54,63 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const streak = status?.current_streak ?? 0;
   const xpToday = status?.xp_today ?? 0;
   const totalXp = status?.total_xp ?? 0;
+  const premiumMultiplier = status?.premium_multiplier ?? 1;
+  const streakMultiplier = status?.streak_multiplier ?? 1;
 
-  // Streak rank identity
-  const streakRank = getStreakRank(streak);
-  const streakEmoji = streakRank.emoji;
-  const streakRankName = streakRank.fullLabel;
-
-  // Premium fields
-  const premiumMultiplier = status?.premium_multiplier;
-  const showPremiumBadge = premiumMultiplier !== undefined && premiumMultiplier > 1;
-
-  // Streak at risk: earned < 100 XP today
   const streakAtRisk = streak > 0 && xpToday < 100;
-  const xpNeededForStreak = Math.max(0, 100 - xpToday);
-
   const xpToNextLevel = Math.max(0, xpNeeded - xpInLevel);
   const nextLevel = level + 1;
 
+  const rank = getXpRank(level);
+
   // Pre-compute display strings
-  const streakDaysText = String(streak);
   const levelText = 'Level ' + String(level);
   const totalXpText = Number(totalXp).toLocaleString() + ' XP';
   const xpToNextText = Number(xpToNextLevel).toLocaleString() + ' XP to Level ' + String(nextLevel);
+  const streakDisplay = String(streak);
+  const premiumBadgeText = '\u26A1 ' + Number(premiumMultiplier).toFixed(1) + 'x Premium';
+  const streakBadgeText = '\uD83D\uDD25 ' + Number(streakMultiplier).toFixed(2).replace(/\.?0+$/, '') + 'x Streak';
 
-  // Animate bar on mount / status change
+  const showPremiumBadge = premiumMultiplier > 1;
+  const showStreakBadge = streakMultiplier > 1;
+  const showBoostRow = showPremiumBadge || showStreakBadge;
+
+  // Animate XP bar on mount / level change
   useEffect(() => {
     Animated.timing(barAnim, {
       toValue: progressPercent / 100,
-      duration: 900,
+      duration: 800,
       useNativeDriver: false,
     }).start();
   }, [progressPercent, barAnim]);
+
+  // Pulse animation for streak-at-risk
+  useEffect(() => {
+    if (streakAtRisk) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 0.5, duration: 750, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.0, duration: 750, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      pulseAnim.setValue(1);
+      return undefined;
+    }
+  }, [streakAtRisk, pulseAnim]);
 
   const barWidth = barAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
 
-  const dividerColor = isDark ? '#3A3C52' : '#E5E7EB';
   const cardBg = isDark ? colors.cardDark : colors.card;
   const cardBorder = isDark ? '#3A3C52' : '#D4D6DA';
   const primaryTextColor = isDark ? '#F1F5F9' : '#2B2D42';
   const secondaryTextColor = isDark ? '#A0A2B8' : '#6B7280';
+  const trackColor = isDark ? '#3A3C52' : '#E5E7EB';
 
   return (
     <View
@@ -104,102 +122,99 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         },
       ]}
     >
-      {/* ── Section 1: Streak Identity ── */}
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => {
-          console.log('[XpHeroCard] open streak ranks modal');
-          setShowStreakRanks(true);
-        }}
-      >
-        <View style={styles.identitySection}>
-          {/* Emoji + rank name row */}
-          <View style={styles.rankRow}>
-            <Text style={styles.rankEmoji}>
-              {streakEmoji}
-            </Text>
-            <Text style={[styles.rankName, { color: primaryTextColor }]}>
-              {streakRankName.toUpperCase()}
-            </Text>
-            <IconSymbol name="chevron.right" size={14} color={secondaryTextColor} />
-          </View>
+      {/* ── Top row: rank badge + streak ── */}
+      <View style={styles.topRow}>
+        {/* Rank badge — tappable → XpRanksModal */}
+        <Pressable
+          onPress={() => {
+            console.log('[XpHeroCard] Rank badge pressed — opening XpRanksModal');
+            setShowRanksModal(true);
+          }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+        >
+          <XpRankBadge rank={rank} size="large" />
+        </Pressable>
 
-          {/* Streak count */}
-          <View style={styles.streakSubRow}>
-            <Text style={[styles.streakDays, { color: secondaryTextColor }]}>
-              {streakDaysText}
-            </Text>
-            <Text style={[styles.streakDaysLabel, { color: secondaryTextColor }]}>
-              {' Day Streak'}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      {/* ── Divider 1 ── */}
-      <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-
-      {/* ── Section 2: XP Progress ── */}
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => {
-          console.log('[XpHeroCard] open XP levels modal');
-          setShowXpLevels(true);
-        }}
-      >
-        <View style={styles.xpSection}>
-          {/* Level + total XP row */}
-          <View style={styles.xpHeaderRow}>
-            <Text style={[styles.levelText, { color: primaryTextColor }]}>
-              {levelText}
-            </Text>
-            <View style={styles.xpHeaderRight}>
-              <Text style={[styles.totalXpText, { color: primaryTextColor }]}>
-                {totalXpText}
-              </Text>
-              <IconSymbol name="chevron.right" size={14} color={secondaryTextColor} />
-            </View>
-          </View>
-
-          {/* Horizontal progress bar */}
-          <View style={[styles.barBackground, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-            <Animated.View
-              style={[
-                styles.barFill,
-                {
-                  width: barWidth,
-                  backgroundColor: XP_BAR_FILL_COLOR,
-                },
-              ]}
-            />
-          </View>
-
-          {/* XP to next level */}
-          <Text style={[styles.xpToNext, { color: secondaryTextColor }]}>
-            {xpToNextText}
+        {/* Streak — tappable → StreakBenefitsModal */}
+        <Pressable
+          onPress={() => {
+            console.log('[XpHeroCard] Streak pressed — opening StreakBenefitsModal');
+            setShowStreakModal(true);
+          }}
+          style={({ pressed }) => [styles.streakPressable, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Animated.Text style={[styles.streakFlame, { opacity: streakAtRisk ? pulseAnim : 1 }]}>
+            {'🔥'}
+          </Animated.Text>
+          <Text style={[styles.streakNumber, { color: primaryTextColor }]}>
+            {streakDisplay}
           </Text>
+        </Pressable>
+      </View>
 
-          {/* Premium boost badge */}
+      {/* ── Level + XP progress — tappable → XpLevelsModal ── */}
+      <Pressable
+        onPress={() => {
+          console.log('[XpHeroCard] Level row pressed — opening XpLevelsModal');
+          setShowLevelsModal(true);
+        }}
+        style={({ pressed }) => [styles.xpSection, { opacity: pressed ? 0.85 : 1 }]}
+      >
+        {/* Level + total XP row */}
+        <View style={styles.levelRow}>
+          <Text style={[styles.levelText, { color: primaryTextColor }]}>
+            {levelText}
+          </Text>
+          <Text style={[styles.totalXpText, { color: secondaryTextColor }]}>
+            {totalXpText}
+          </Text>
+        </View>
+
+        {/* XP bar */}
+        <View style={[styles.barBackground, { backgroundColor: trackColor }]}>
+          <Animated.View
+            style={[
+              styles.barFill,
+              {
+                width: barWidth,
+                backgroundColor: rank.primaryColor,
+                shadowColor: rank.primaryColor,
+                shadowOpacity: 0.5,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 0 },
+              },
+            ]}
+          />
+        </View>
+
+        {/* XP to next level */}
+        <Text style={[styles.xpToNext, { color: secondaryTextColor }]}>
+          {xpToNextText}
+        </Text>
+      </Pressable>
+
+      {/* ── Boost badges row ── */}
+      {showBoostRow && (
+        <View style={styles.boostRow}>
           {showPremiumBadge && (
-            <LinearGradient
-              colors={['#FFB547', '#FF8A5B']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.premiumBadge}
-            >
-              <Zap size={11} color="#FFFFFF" strokeWidth={2.5} fill="#FFFFFF" />
-              <Text style={styles.premiumBadgeText}>
-                1.5x Premium Boost
+            <View style={[styles.boostBadge, { backgroundColor: '#F59E0B' }]}>
+              <Text style={styles.boostBadgeText}>
+                {premiumBadgeText}
               </Text>
-            </LinearGradient>
+            </View>
+          )}
+          {showStreakBadge && (
+            <View style={[styles.boostBadge, { backgroundColor: '#3B82F6' }]}>
+              <Text style={styles.boostBadgeText}>
+                {streakBadgeText}
+              </Text>
+            </View>
           )}
         </View>
-      </TouchableOpacity>
+      )}
 
-      {/* ── Divider 2 ── */}
-      <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-
-      {/* ── Section 3: League badge ── */}
+      {/* ── League badge (flat, no nested card) ── */}
+      <View style={styles.leagueSeparator} />
       <LeagueBadge
         status={leagueStatus}
         isDark={isDark}
@@ -209,18 +224,39 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         }}
       />
 
-      {/* ── Streak at risk warning ── */}
-      {streakAtRisk && (
-        <View style={[styles.warningRow, { backgroundColor: isDark ? 'rgba(251,146,60,0.15)' : 'rgba(251,146,60,0.1)' }]}>
-          <Text style={styles.warningText}>
-            {'⚠️ Earn '}
-            {xpNeededForStreak}
-            {' more XP to protect your streak'}
-          </Text>
-        </View>
-      )}
+      {/* ── Modals ── */}
+      <XpRanksModal
+        visible={showRanksModal}
+        currentLevel={level}
+        onClose={() => {
+          console.log('[XpHeroCard] XpRanksModal closed');
+          setShowRanksModal(false);
+        }}
+        isDark={isDark}
+      />
 
-      {/* ── League leaderboard modal ── */}
+      <StreakBenefitsModal
+        visible={showStreakModal}
+        currentStreak={streak}
+        onClose={() => {
+          console.log('[XpHeroCard] StreakBenefitsModal closed');
+          setShowStreakModal(false);
+        }}
+        isDark={isDark}
+      />
+
+      <XpLevelsModal
+        visible={showLevelsModal}
+        onClose={() => {
+          console.log('[XpHeroCard] XpLevelsModal closed');
+          setShowLevelsModal(false);
+        }}
+        currentLevel={level}
+        xpInCurrentLevel={xpInLevel}
+        xpNeededForNextLevel={xpNeeded}
+        totalXp={totalXp}
+      />
+
       <LeagueLeaderboard
         visible={showLeagueModal}
         onClose={() => {
@@ -229,31 +265,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         }}
       />
 
-      {/* ── League welcome modal ── */}
       <LeagueWelcomeModal />
-
-      {/* ── Streak ranks modal ── */}
-      <StreakRanksModal
-        visible={showStreakRanks}
-        onClose={() => {
-          console.log('[XpHeroCard] StreakRanksModal closed');
-          setShowStreakRanks(false);
-        }}
-        currentStreakDays={streak}
-      />
-
-      {/* ── XP levels modal ── */}
-      <XpLevelsModal
-        visible={showXpLevels}
-        onClose={() => {
-          console.log('[XpHeroCard] XpLevelsModal closed');
-          setShowXpLevels(false);
-        }}
-        currentLevel={level}
-        xpInCurrentLevel={xpInLevel}
-        xpNeededForNextLevel={xpNeeded}
-        totalXp={totalXp}
-      />
     </View>
   );
 }
@@ -264,6 +276,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
+    gap: spacing.md,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -275,72 +288,47 @@ const styles = StyleSheet.create({
     }),
   },
 
-  // ── Section 1: Identity ──
-  identitySection: {
-    paddingBottom: spacing.md,
-    gap: spacing.xs,
-  },
-  rankRow: {
+  // ── Top row ──
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
-  rankEmoji: {
-    fontSize: 36,
-    lineHeight: 42,
-  },
-  rankName: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    flexShrink: 1,
-  },
-  streakSubRow: {
+  streakPressable: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    flexWrap: 'wrap',
-    marginTop: 2,
   },
-  streakDays: {
-    fontSize: 14,
-    fontWeight: '700',
+  streakFlame: {
+    fontSize: 22,
   },
-  streakDaysLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  // ── Divider ──
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: spacing.md,
+  streakNumber: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
 
-  // ── Section 2: XP Progress ──
+  // ── XP section ──
   xpSection: {
     gap: spacing.sm,
   },
-  xpHeaderRow: {
+  levelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  xpHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    alignItems: 'baseline',
   },
   levelText: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 40,
+    fontWeight: '900',
+    letterSpacing: -1,
+    lineHeight: 44,
   },
   totalXpText: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '500',
   },
   barBackground: {
-    height: 6,
+    height: 10,
     borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
@@ -353,35 +341,29 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ── Premium badge ──
-  premiumBadge: {
+  // ── Boost badges ──
+  boostRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 9,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  boostBadge: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
-    marginTop: 2,
+    alignSelf: 'flex-start',
   },
-  premiumBadgeText: {
+  boostBadgeText: {
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
-    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
 
-  // ── Warning row ──
-  warningRow: {
-    marginTop: spacing.sm,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  warningText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FB923C',
-    textAlign: 'center',
+  // ── League separator ──
+  leagueSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginHorizontal: -spacing.lg,
   },
 });

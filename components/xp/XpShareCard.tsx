@@ -17,7 +17,6 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getStreakRank } from '@/utils/streakRanks';
 
 // react-native-view-shot — lazy import so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -100,11 +99,6 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
       },
     }), []);
 
-    // Streak rank for identity
-    const streakRank = getStreakRank(currentStreak);
-    const streakRankLabel = streakRank.fullLabel.toUpperCase();
-    const streakEmoji = streakRank.emoji;
-
     // Pre-compute display values (no logic in JSX)
     const levelDisplay = String(level);
     const streakDisplay = String(currentStreak);
@@ -167,16 +161,18 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
               {levelDisplay}
             </Text>
 
-            {/* Streak rank pill */}
-            <LinearGradient
-              colors={[CARD_GRAD_START, CARD_GRAD_END]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.rankPill}
-            >
-              <Text style={styles.rankEmoji}>{streakEmoji}</Text>
-              <Text style={styles.rankText}>{streakRankLabel}</Text>
-            </LinearGradient>
+            {/* Streak display */}
+            <View style={styles.streakDisplay}>
+              <Text style={styles.streakFlame}>
+                {'🔥'}
+              </Text>
+              <Text style={styles.streakNumber}>
+                {streakDisplay}
+              </Text>
+              <Text style={styles.streakLabel}>
+                Day Streak
+              </Text>
+            </View>
 
             {/* Spacer */}
             <View style={styles.spacerMid} />
@@ -335,23 +331,28 @@ const styles = StyleSheet.create({
     lineHeight: 130,
     letterSpacing: -4,
   },
-  rankPill: {
+  streakDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 100,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
     marginTop: 8,
   },
-  rankEmoji: {
-    fontSize: 20,
+  streakFlame: {
+    fontSize: 28,
   },
-  rankText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 2,
+  streakNumber: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#F1F5F9',
+    letterSpacing: -1,
+  },
+  streakLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 1,
+    alignSelf: 'flex-end',
+    marginBottom: 4,
   },
   spacerMid: {
     flex: 1,
