@@ -2,7 +2,7 @@
   "expo": {
     "name": "Newly",
     "slug": "Newly",
-    "version": "1.6.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -13,12 +13,9 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.robertojose17.macrogoal",
-      "buildNumber": "345",
+      "bundleIdentifier": "com.placeholder.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSHealthUpdateUsageDescription": "This app uses HealthKit to write your nutrition and fitness data, helping you track your health goals.",
-        "NSHealthShareUsageDescription": "This app uses HealthKit to read your health and fitness data, so you can see your progress and stay on track with your goals."
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,8 +23,7 @@
         "foregroundImage": "./assets/images/newly.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.robertojose17.macrogoal",
-      "versionCode": 5
+      "package": "com.placeholder.app"
     },
     "web": {
       "favicon": "./assets/images/newly.png",
@@ -44,10 +40,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "27643cef-052f-491e-ac99-87e9e0a31802"
-      }
+      "router": {}
     }
   }
 }
