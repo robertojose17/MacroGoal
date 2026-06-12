@@ -6,14 +6,14 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && npx expo prebuild && node scripts/patch-folly.js"
+      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && node scripts/run-prebuild.js"
     },
     "preview": {
       "distribution": "internal",
-      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && npx expo prebuild && node scripts/patch-folly.js"
+      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && node scripts/run-prebuild.js"
     },
     "production": {
-      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && npx expo prebuild && node scripts/patch-folly.js"
+      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && node scripts/run-prebuild.js"
     }
   }
 }
