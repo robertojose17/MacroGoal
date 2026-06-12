@@ -5,6 +5,18 @@ const fs = require('fs');
 const path = require('path');
 
 const projectRoot = process.cwd();
+
+// Remove ios directory before prebuild (only when PATCH_FOLLY_CLEAN=1)
+if (process.env.PATCH_FOLLY_CLEAN === '1') {
+  const iosDir = path.join(projectRoot, 'ios');
+  if (fs.existsSync(iosDir)) {
+    fs.rmSync(iosDir, { recursive: true, force: true });
+    console.log('[patch-folly] Removed ios directory');
+  } else {
+    console.log('[patch-folly] ios directory not found (ok)');
+  }
+}
+
 let patched = 0, skipped = 0, missing = 0;
 
 const FOLLY_MARKER = 'patch-folly: disable Folly coroutines for Xcode 26';
