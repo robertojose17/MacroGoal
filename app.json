@@ -16,7 +16,9 @@
       "bundleIdentifier": "com.robertojose17.macrogoal",
       "buildNumber": "345",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSHealthUpdateUsageDescription": "This app uses HealthKit to write your nutrition and fitness data, helping you track your health goals.",
+        "NSHealthShareUsageDescription": "This app uses HealthKit to read your health and fitness data, so you can see your progress and stay on track with your goals."
       }
     },
     "android": {
