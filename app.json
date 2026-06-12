@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.placeholder.app",
+      "bundleIdentifier": "com.robertojose17.macrogoal",
       "buildNumber": "345",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/images/newly.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.placeholder.app",
+      "package": "com.robertojose17.macrogoal",
       "versionCode": 5
     },
     "web": {
@@ -42,7 +42,10 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "27643cef-052f-491e-ac99-87e9e0a31802"
+      }
     }
   }
 }
