@@ -5,15 +5,11 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && node scripts/run-prebuild.js"
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && node scripts/run-prebuild.js"
+      "distribution": "internal"
     },
-    "production": {
-      "prebuildCommand": "PATCH_FOLLY_CLEAN=1 node scripts/patch-folly.js && node scripts/run-prebuild.js"
-    }
+    "production": {}
   }
 }
