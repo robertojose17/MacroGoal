@@ -18,7 +18,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSHealthShareUsageDescription": "Macro Goal uses your health data to track your fitness progress and provide personalized nutrition recommendations.",
-        "NSHealthUpdateUsageDescription": "Macro Goal writes workout and nutrition data to Apple Health to keep your health records up to date."
+        "NSHealthUpdateUsageDescription": "Macro Goal writes workout and nutrition data to Apple Health to keep your health records up to date.",
+        "NSLocationWhenInUseUsageDescription": "Macro Goal uses your location to find nearby gyms, restaurants, and food stores to help you reach your nutrition goals."
       }
     },
     "android": {
