@@ -2,7 +2,7 @@
   "expo": {
     "name": "Newly",
     "slug": "Newly",
-    "version": "1.0.0",
+    "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -14,6 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.placeholder.app",
+      "buildNumber": "345",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -23,7 +24,8 @@
         "foregroundImage": "./assets/images/newly.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.placeholder.app"
+      "package": "com.placeholder.app",
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/images/newly.png",

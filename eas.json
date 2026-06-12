@@ -1,16 +1,19 @@
 {
+  "cli": {
+    "appVersionSource": "remote"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild --non-interactive && node scripts/patch-folly.js"
+      "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild && node scripts/patch-folly.js"
     },
     "preview": {
       "distribution": "internal",
-      "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild --non-interactive && node scripts/patch-folly.js"
+      "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild && node scripts/patch-folly.js"
     },
     "production": {
-      "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild --non-interactive && node scripts/patch-folly.js"
+      "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild && node scripts/patch-folly.js"
     }
   }
 }
