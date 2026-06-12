@@ -3,12 +3,10 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "autoIncrement": true,
       "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild --non-interactive && node scripts/patch-folly.js"
     },
     "preview": {
       "distribution": "internal",
-      "autoIncrement": true,
       "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild --non-interactive && node scripts/patch-folly.js"
     },
     "production": {
