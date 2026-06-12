@@ -12,7 +12,6 @@
       "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild --non-interactive && node scripts/patch-folly.js"
     },
     "production": {
-      "autoIncrement": "buildNumber",
       "prebuildCommand": "node scripts/patch-folly.js ; rm -rf ios && npx expo prebuild --non-interactive && node scripts/patch-folly.js"
     }
   }
