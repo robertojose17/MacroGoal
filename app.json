@@ -82,7 +82,8 @@
         "onesignal-expo-plugin",
         {
           "mode": "production",
-          "devTeam": "4XL64NZ55J"
+          "devTeam": "RQ6JHH38HA",
+          "appId": "9249650b-d254-4323-9e5e-d1c0d99c194a"
         }
       ],
       "./plugins/withFollyCoroutineFix"
@@ -93,6 +94,7 @@
     },
     "extra": {
       "router": {},
+      "oneSignalAppId": "9249650b-d254-4323-9e5e-d1c0d99c194a",
       "fooddataCentralApiKey": "2cILVFzO3AdhZSQjt8teTzmF0DMIdDTt0nHgGmCW",
       "revenueCat": {
         "iosApiKey": "appl_TZdEZxwrVNJdRUPcoavoXaVUCSE",

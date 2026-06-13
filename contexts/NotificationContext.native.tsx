@@ -25,7 +25,7 @@ import { supabase } from "@/lib/supabase/client";
 
 // Read App ID from app.json (expo.extra)
 const extra = Constants.expoConfig?.extra || {};
-const ONESIGNAL_APP_ID = extra.oneSignalAppId || "";
+const ONESIGNAL_APP_ID = extra.oneSignalAppId || "9249650b-d254-4323-9e5e-d1c0d99c194a";
 
 // Check if running on web
 const isWeb = Platform.OS === "web";
