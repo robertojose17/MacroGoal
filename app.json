@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Macro Goal",
-    "slug": "Newly",
+    "slug": "macro-goal",
     "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -47,7 +47,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "27643cef-052f-491e-ac99-87e9e0a31802"
+        "projectId": "b374d7d3-6b24-4cc0-a0ff-07afeb17af36"
       }
     }
   }
