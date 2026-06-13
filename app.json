@@ -46,14 +46,6 @@
       "expo-font",
       "expo-router",
       "expo-web-browser",
-      "expo-secure-store",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
-          "color": "#ffffff"
-        }
-      ],
       [
         "expo-camera",
         {
@@ -84,6 +76,13 @@
         {
           "androidAppId": "ca-app-pub-5592015069000241~5529470607",
           "iosAppId": "ca-app-pub-5592015069000241~5529470607"
+        }
+      ],
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production",
+          "devTeam": "4XL64NZ55J"
         }
       ],
       "./plugins/withFollyCoroutineFix"
