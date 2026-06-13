@@ -4,37 +4,47 @@
     "slug": "macro-goal",
     "version": "1.6.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/newly.png",
+      "image": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.robertojose17.macrogoal",
       "buildNumber": "347",
       "entitlements": {
-        "com.apple.security.application-groups": ["group.com.robertojose17.macrogoal"]
+        "com.apple.security.application-groups": [
+          "group.com.robertojose17.macrogoal"
+        ]
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSHealthShareUsageDescription": "Macro Goal uses your health data to track your fitness progress and provide personalized nutrition recommendations.",
-        "NSHealthUpdateUsageDescription": "Macro Goal writes workout and nutrition data to Apple Health to keep your health records up to date.",
+        "NSSpeechRecognitionUsageDescription": "Macro Goal uses speech recognition to transcribe your voice when you describe meals to the AI meal estimator.",
+        "NSPhotoLibraryUsageDescription": "Macro Goal needs access to your photo library so you can attach progress photos to your weight check-ins and track your transformation over time.",
+        "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
+        "NSHealthUpdateUsageDescription": "Macro Goal writes your nutrition data to Apple Health to keep your health profile in sync across all your apps.",
         "NSLocationWhenInUseUsageDescription": "Macro Goal uses your location to find nearby gyms, restaurants, and food stores to help you reach your nutrition goals."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/newly.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
+        "backgroundColor": "#000000"
       },
+      "edgeToEdgeEnabled": true,
+      "versionCode": 7,
       "package": "com.robertojose17.macrogoal",
-      "versionCode": 7
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACTIVITY_RECOGNITION"
+      ]
     },
     "web": {
-      "favicon": "./assets/images/newly.png",
+      "favicon": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
       "bundler": "metro"
     },
     "plugins": [
@@ -45,17 +55,43 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/newly.png",
+          "icon": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
           "color": "#ffffff"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Macro Goal uses your camera to scan barcodes on food packaging so you can quickly add accurate nutrition information."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Macro Goal uses your microphone so you can describe meals by voice to the AI meal estimator."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Macro Goal needs access to your photo library so you can attach progress photos to your weight check-ins and track your transformation over time."
         }
       ],
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Macro Goal uses your health data to track your fitness progress and provide personalized nutrition recommendations.",
-          "NSHealthUpdateUsageDescription": "Macro Goal writes workout and nutrition data to Apple Health to keep your health records up to date."
+          "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
+          "background": true
         }
-      ]
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-5592015069000241~5529470607",
+          "iosAppId": "ca-app-pub-5592015069000241~5529470607"
+        }
+      ],
+      "./plugins/withFollyCoroutineFix"
     ],
     "scheme": "macrogoal",
     "experiments": {
@@ -63,6 +99,13 @@
     },
     "extra": {
       "router": {},
+      "fooddataCentralApiKey": "2cILVFzO3AdhZSQjt8teTzmF0DMIdDTt0nHgGmCW",
+      "revenueCat": {
+        "iosApiKey": "appl_TZdEZxwrVNJdRUPcoavoXaVUCSE",
+        "androidApiKey": "goog_YOUR_ANDROID_KEY_HERE",
+        "offeringIdentifier": "Monthly_MG",
+        "entitlementIdentifier": "Macrogoal Pro"
+      },
       "eas": {
         "projectId": "b374d7d3-6b24-4cc0-a0ff-07afeb17af36"
       }
