@@ -2,7 +2,7 @@
   "expo": {
     "name": "Macro Goal",
     "slug": "macro-goal",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -14,7 +14,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.robertojose17.macrogoal",
-      "buildNumber": "346",
+      "buildNumber": "347",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.robertojose17.macrogoal"]
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSHealthShareUsageDescription": "Macro Goal uses your health data to track your fitness progress and provide personalized nutrition recommendations.",
@@ -28,7 +31,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.robertojose17.macrogoal",
-      "versionCode": 6
+      "versionCode": 7
     },
     "web": {
       "favicon": "./assets/images/newly.png",
@@ -38,7 +41,21 @@
       "expo-font",
       "expo-router",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/newly.png",
+          "color": "#ffffff"
+        }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Macro Goal uses your health data to track your fitness progress and provide personalized nutrition recommendations.",
+          "NSHealthUpdateUsageDescription": "Macro Goal writes workout and nutrition data to Apple Health to keep your health records up to date."
+        }
+      ]
     ],
     "scheme": "macrogoal",
     "experiments": {
