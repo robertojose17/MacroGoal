@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.robertojose17.macrogoal",
-      "buildNumber": "347",
+      "buildNumber": "351",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSpeechRecognitionUsageDescription": "Macro Goal uses speech recognition to transcribe your voice when you describe meals to the AI meal estimator.",
