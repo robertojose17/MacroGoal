@@ -82,8 +82,7 @@
         "onesignal-expo-plugin",
         {
           "mode": "production",
-          "devTeam": "RQ6JHH38HA",
-          "appId": "9249650b-d254-4323-9e5e-d1c0d99c194a"
+          "devTeam": "RQ6JHH38HA"
         }
       ],
       "./plugins/withFollyCoroutineFix"
