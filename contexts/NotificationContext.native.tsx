@@ -16,9 +16,10 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
   ReactNode,
 } from "react";
-import { Platform } from "react-native";
+import { Platform, InteractionManager } from "react-native";
 import { OneSignal, LogLevel, NotificationWillDisplayEvent } from "react-native-onesignal";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase/client";
@@ -65,7 +66,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const [loading, setLoading] = useState(true);
   const [lastNotification, setLastNotification] = useState<Record<string, unknown> | null>(null);
 
-  // Initialize OneSignal on mount
+  // Refs to hold cleanup handles across the async interaction boundary
+  const interactionTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
+  const removeListenersRef = useRef<(() => void) | null>(null);
+
+  // Initialize OneSignal on mount, deferred until after initial render interactions
   useEffect(() => {
     if (isWeb) {
       setLoading(false);
@@ -81,52 +86,62 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       return;
     }
 
-    try {
-      // Set verbose logging in dev
-      if (__DEV__) {
-        OneSignal.Debug.setLogLevel(LogLevel.Verbose);
+    interactionTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      try {
+        // Set verbose logging in dev
+        if (__DEV__) {
+          OneSignal.Debug.setLogLevel(LogLevel.Verbose);
+        }
+
+        // Initialize OneSignal
+        OneSignal.initialize(ONESIGNAL_APP_ID);
+        console.log("[OneSignal] Initialized with App ID:", ONESIGNAL_APP_ID.substring(0, 8) + "...");
+
+        // Check current permission status
+        const permissionStatus = OneSignal.Notifications.hasPermission();
+        setHasPermission(permissionStatus);
+
+        // Foreground notification handler — always display
+        const foregroundHandler = (event: NotificationWillDisplayEvent) => {
+          console.log("[OneSignal] Foreground notification received:", event.getNotification().title);
+          // Display the notification (don't preventDefault)
+          event.getNotification().display();
+
+          const notification = event.getNotification();
+          setLastNotification({
+            title: notification.title,
+            body: notification.body,
+            additionalData: notification.additionalData,
+          });
+        };
+        OneSignal.Notifications.addEventListener("foregroundWillDisplay", foregroundHandler);
+
+        // Listen for permission changes
+        const permissionHandler = (granted: boolean) => {
+          console.log("[OneSignal] Permission changed:", granted);
+          setHasPermission(granted);
+          setPermissionDenied(!granted);
+        };
+        OneSignal.Notifications.addEventListener("permissionChange", permissionHandler);
+
+        // Store listener cleanup so the useEffect cleanup can call it
+        removeListenersRef.current = () => {
+          OneSignal.Notifications.removeEventListener("foregroundWillDisplay", foregroundHandler);
+          OneSignal.Notifications.removeEventListener("permissionChange", permissionHandler);
+        };
+      } catch (error) {
+        console.error("[OneSignal] Failed to initialize:", error);
+      } finally {
+        setLoading(false);
       }
+    });
 
-      // Initialize OneSignal
-      OneSignal.initialize(ONESIGNAL_APP_ID);
-      console.log("[OneSignal] Initialized with App ID:", ONESIGNAL_APP_ID.substring(0, 8) + "...");
-
-      // Check current permission status
-      const permissionStatus = OneSignal.Notifications.hasPermission();
-      setHasPermission(permissionStatus);
-
-      // Foreground notification handler — always display
-      const foregroundHandler = (event: NotificationWillDisplayEvent) => {
-        console.log("[OneSignal] Foreground notification received:", event.getNotification().title);
-        // Display the notification (don't preventDefault)
-        event.getNotification().display();
-
-        const notification = event.getNotification();
-        setLastNotification({
-          title: notification.title,
-          body: notification.body,
-          additionalData: notification.additionalData,
-        });
-      };
-      OneSignal.Notifications.addEventListener("foregroundWillDisplay", foregroundHandler);
-
-      // Listen for permission changes
-      const permissionHandler = (granted: boolean) => {
-        console.log("[OneSignal] Permission changed:", granted);
-        setHasPermission(granted);
-        setPermissionDenied(!granted);
-      };
-      OneSignal.Notifications.addEventListener("permissionChange", permissionHandler);
-
-      return () => {
-        OneSignal.Notifications.removeEventListener("foregroundWillDisplay", foregroundHandler);
-        OneSignal.Notifications.removeEventListener("permissionChange", permissionHandler);
-      };
-    } catch (error) {
-      console.error("[OneSignal] Failed to initialize:", error);
-    } finally {
-      setLoading(false);
-    }
+    return () => {
+      // Cancel the pending task if the component unmounts before it fires
+      interactionTaskRef.current?.cancel();
+      // Remove event listeners if initialization already completed
+      removeListenersRef.current?.();
+    };
   }, []);
 
   // Link/unlink OneSignal to Supabase user ID on auth state changes
