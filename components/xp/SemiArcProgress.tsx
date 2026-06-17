@@ -109,11 +109,10 @@ export default function SemiArcProgress({
         style={[
           styles.childrenContainer,
           {
-            top: strokeWidth + 8,
+            top: strokeWidth + 4,
             bottom: 0,
             left: 0,
             right: 0,
-            paddingLeft: size * 0.18,
           },
         ]}
       >
@@ -130,6 +129,6 @@ const styles = StyleSheet.create({
   childrenContainer: {
     position: 'absolute',
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
 });

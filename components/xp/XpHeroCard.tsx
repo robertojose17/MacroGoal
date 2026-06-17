@@ -172,8 +172,10 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           }}
           style={({ pressed }) => [styles.statsColumn, { opacity: pressed ? 0.85 : 1 }]}
         >
-          <Text style={[styles.levelText, { color: primaryTextColor }]}>
-            {'Level '}
+          <Text style={[styles.levelLabel, { color: secondaryTextColor }]}>
+            {'LEVEL'}
+          </Text>
+          <Text style={[styles.levelNumber, { color: rank.primaryColor }]}>
             {String(level)}
           </Text>
           <Text style={[styles.totalXpText, { color: secondaryTextColor }]}>
@@ -182,8 +184,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           </Text>
           <Text style={[styles.xpToNextText, { color: secondaryTextColor }]}>
             {xpToNextDisplay}
-            {' XP to Level '}
-            {String(nextLevel)}
+            {' to next'}
           </Text>
         </Pressable>
       </View>
@@ -192,14 +193,14 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
       {showBoostRow && (
         <View style={styles.boostRow}>
           {showPremiumBadge && (
-            <View style={[styles.boostBadge, { borderColor: '#F59E0B' }]}>
+            <View style={[styles.boostBadge, { borderColor: '#F59E0B', backgroundColor: '#F59E0B18' }]}>
               <Text style={[styles.boostBadgeText, { color: '#F59E0B' }]}>
                 {premiumBadgeText}
               </Text>
             </View>
           )}
           {showStreakBadge && (
-            <View style={[styles.boostBadge, { borderColor: '#3B82F6' }]}>
+            <View style={[styles.boostBadge, { borderColor: '#3B82F6', backgroundColor: '#3B82F618' }]}>
               <Text style={[styles.boostBadgeText, { color: '#3B82F6' }]}>
                 {streakBadgeText}
               </Text>
@@ -208,10 +209,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         </View>
       )}
 
-      {/* 4. Clean separator */}
-      <View style={[styles.separator, { backgroundColor: rank.primaryColor + '20' }]} />
-
-      {/* 5. League badge (flat) */}
+      {/* 4. League badge (flat) */}
       <LeagueBadge
         status={leagueStatus}
         isDark={isDark}
@@ -274,7 +272,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    gap: spacing.md,
+    gap: spacing.sm,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -300,23 +298,24 @@ const styles = StyleSheet.create({
 
   // ── Inside arc ──
   rankNameInArc: {
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 15,
+    fontWeight: '800',
     letterSpacing: 0.5,
-    textAlign: 'left',
+    textAlign: 'center',
   },
   streakInArc: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
     marginTop: 4,
   },
   streakFlame: {
-    fontSize: 18,
+    fontSize: 20,
   },
   streakNumberInArc: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     letterSpacing: -0.5,
   },
 
@@ -324,24 +323,33 @@ const styles = StyleSheet.create({
   statsColumn: {
     flex: 1,
     alignItems: 'flex-end',
-    gap: 2,
   },
-  levelText: {
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: -0.5,
+  levelLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
     textAlign: 'right',
+    marginBottom: 0,
+  },
+  levelNumber: {
+    fontSize: 48,
+    fontWeight: '900',
+    letterSpacing: -2,
+    textAlign: 'right',
+    lineHeight: 52,
+    marginBottom: 2,
   },
   totalXpText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     textAlign: 'right',
+    marginBottom: 2,
   },
   xpToNextText: {
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'right',
-    marginTop: 2,
+    opacity: 0.7,
   },
 
   // ── Boost badges ──
@@ -355,17 +363,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1.5,
-    backgroundColor: 'transparent',
   },
   boostBadgeText: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.3,
-  },
-
-  // ── Separator ──
-  separator: {
-    height: 1,
-    marginHorizontal: -spacing.lg,
   },
 });
