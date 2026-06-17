@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,6 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
@@ -117,20 +116,8 @@ export default function CompleteOnboardingScreen() {
   const bullet2Anim = useRef(new Animated.Value(0)).current;
   const bullet3Anim = useRef(new Animated.Value(0)).current;
 
-  // Count-up animations for step 9
-  const caloriesAnim = useRef(new Animated.Value(0)).current;
-  const proteinAnim = useRef(new Animated.Value(0)).current;
-  const carbsAnim = useRef(new Animated.Value(0)).current;
-  const fatsAnim = useRef(new Animated.Value(0)).current;
-
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  // Animated display values for count-up
-  const [displayCalories, setDisplayCalories] = useState(0);
-  const [displayProtein, setDisplayProtein] = useState(0);
-  const [displayCarbs, setDisplayCarbs] = useState(0);
-  const [displayFats, setDisplayFats] = useState(0);
 
   // ─── Navigation ────────────────────────────────────────────────────────────
 
@@ -350,24 +337,6 @@ export default function CompleteOnboardingScreen() {
       }
 
       console.log('[Onboarding] Goal created successfully');
-
-      // Run count-up animations
-      caloriesAnim.setValue(0);
-      proteinAnim.setValue(0);
-      carbsAnim.setValue(0);
-      fatsAnim.setValue(0);
-
-      caloriesAnim.addListener(({ value }) => setDisplayCalories(Math.round(value)));
-      proteinAnim.addListener(({ value }) => setDisplayProtein(Math.round(value)));
-      carbsAnim.addListener(({ value }) => setDisplayCarbs(Math.round(value)));
-      fatsAnim.addListener(({ value }) => setDisplayFats(Math.round(value)));
-
-      Animated.parallel([
-        Animated.timing(caloriesAnim, { toValue: targetCalories, duration: 1200, useNativeDriver: false }),
-        Animated.timing(proteinAnim, { toValue: macros.protein, duration: 1200, useNativeDriver: false }),
-        Animated.timing(carbsAnim, { toValue: macros.carbs, duration: 1200, useNativeDriver: false }),
-        Animated.timing(fatsAnim, { toValue: macros.fats, duration: 1200, useNativeDriver: false }),
-      ]).start();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to save your information. Please try again.';
       console.error('[Onboarding] Save error:', error);
@@ -547,10 +516,10 @@ export default function CompleteOnboardingScreen() {
           <Step9
             saving={saving}
             saveError={saveError}
-            displayCalories={displayCalories}
-            displayProtein={displayProtein}
-            displayCarbs={displayCarbs}
-            displayFats={displayFats}
+            calories={calcCalories}
+            protein={calcProtein}
+            carbs={calcCarbs}
+            fats={calcFats}
             goalProjectionText={goalProjectionText}
             onRetry={runCalculationsAndSave}
             onNext={goNext}
@@ -1303,577 +1272,100 @@ function Step8({
   );
 }
 
-// ─── STEP 9 — CINEMATIC RESULTS ──────────────────────────────────────────────
-
-const ACCENT = '#8EFF7A';
-const BG_DARK = '#0a0a0a';
-const BG_MID = '#0d1a0f';
-
-const PARTICLE_CONFIG = [
-  { top: '8%', left: '12%', size: 5, duration: 3200, delay: 0, opacity: 0.4 },
-  { top: '15%', left: '78%', size: 4, duration: 4100, delay: 600, opacity: 0.3 },
-  { top: '28%', left: '88%', size: 6, duration: 3600, delay: 1200, opacity: 0.5 },
-  { top: '45%', left: '6%', size: 4, duration: 4800, delay: 300, opacity: 0.35 },
-  { top: '55%', left: '92%', size: 5, duration: 3900, delay: 900, opacity: 0.45 },
-  { top: '68%', left: '18%', size: 4, duration: 4300, delay: 1500, opacity: 0.3 },
-  { top: '78%', left: '72%', size: 6, duration: 3500, delay: 700, opacity: 0.5 },
-  { top: '88%', left: '42%', size: 5, duration: 4600, delay: 400, opacity: 0.4 },
-] as const;
-
-const PHASE_DURATIONS = [2800, 2800, 3500, 2800] as const;
-
-function FloatingParticles() {
-  const anims = useRef(
-    PARTICLE_CONFIG.map(() => ({
-      translateY: new Animated.Value(0),
-      opacity: new Animated.Value(0.3),
-    }))
-  ).current;
-
-  useEffect(() => {
-    anims.forEach((anim, i) => {
-      const cfg = PARTICLE_CONFIG[i];
-      const loopY = Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim.translateY, {
-            toValue: -20,
-            duration: cfg.duration,
-            delay: cfg.delay,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.translateY, {
-            toValue: 20,
-            duration: cfg.duration,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      const loopOp = Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim.opacity, {
-            toValue: cfg.opacity,
-            duration: cfg.duration / 2,
-            delay: cfg.delay,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.opacity, {
-            toValue: 0.15,
-            duration: cfg.duration / 2,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      loopY.start();
-      loopOp.start();
-    });
-  }, [anims]);
-
-  return (
-    <>
-      {PARTICLE_CONFIG.map((cfg, i) => (
-        <Animated.View
-          key={i}
-          style={[
-            styles.s9Particle,
-            {
-              top: cfg.top as string,
-              left: cfg.left as string,
-              width: cfg.size,
-              height: cfg.size,
-              borderRadius: cfg.size / 2,
-              opacity: anims[i].opacity,
-              transform: [{ translateY: anims[i].translateY }],
-            },
-          ]}
-        />
-      ))}
-    </>
-  );
-}
-
-function Phase1Saving({ progressAnim }: { progressAnim: Animated.Value }) {
-  const chipAnims = useRef(
-    Array.from({ length: 5 }, () => new Animated.Value(0.3))
-  ).current;
-
-  useEffect(() => {
-    chipAnims.forEach((anim, i) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim, {
-            toValue: 0.7,
-            duration: 1400,
-            delay: i * 280,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: 0.3,
-            duration: 1400,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    });
-  }, [chipAnims]);
-
-  const barWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 240],
-  });
-
-  const chipLabels = ['calories', 'protein', 'habits', 'meals', 'goals'];
-  const chipPositions = [
-    { top: -36, left: -20 },
-    { top: -36, right: -20 },
-    { top: 20, left: -40 },
-    { top: 20, right: -40 },
-    { top: 56, left: 80 },
-  ];
-
-  return (
-    <View style={styles.s9PhaseCenter}>
-      <Text style={styles.s9Phase1Title}>{'Analyzing your habits\u2026'}</Text>
-      <View style={styles.s9ProgressContainer}>
-        {chipLabels.map((label, i) => (
-          <Animated.Text
-            key={label}
-            style={[
-              styles.s9Chip,
-              {
-                opacity: chipAnims[i],
-                top: chipPositions[i].top,
-                left: 'left' in chipPositions[i] ? (chipPositions[i] as { top: number; left: number }).left : undefined,
-                right: 'right' in chipPositions[i] ? (chipPositions[i] as { top: number; right: number }).right : undefined,
-              },
-            ]}
-          >
-            {label}
-          </Animated.Text>
-        ))}
-        <View style={styles.s9ProgressTrack}>
-          <Animated.View
-            style={[
-              styles.s9ProgressFill,
-              { width: barWidth },
-            ]}
-          />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function Phase2({ underestimatePercent }: { underestimatePercent: number }) {
-  const barAnims = useRef(
-    Array.from({ length: 7 }, () => new Animated.Value(0))
-  ).current;
-
-  useEffect(() => {
-    barAnims.forEach((anim, i) => {
-      Animated.timing(anim, {
-        toValue: 0.9,
-        duration: 800,
-        delay: i * 100,
-        useNativeDriver: true,
-      }).start();
-    });
-  }, [barAnims]);
-
-  const barHeights = [20, 28, 22, 36, 30, 44, 38];
-  const percentText = underestimatePercent + '%';
-
-  return (
-    <View style={styles.s9PhaseCenter}>
-      <Text style={styles.s9Phase2Text}>
-        {'Most people with your profile\nunderestimate their calories by '}
-        <Text style={styles.s9Accent}>{percentText}</Text>
-        {'.'}
-      </Text>
-      <View style={styles.s9BarChart}>
-        {barHeights.map((h, i) => (
-          <Animated.View
-            key={i}
-            style={[
-              styles.s9Bar,
-              { height: h, opacity: barAnims[i] },
-            ]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function Phase3({
-  displayCalories,
-  displayProtein,
-  displayCarbs,
-  displayFats,
-}: {
-  displayCalories: number;
-  displayProtein: number;
-  displayCarbs: number;
-  displayFats: number;
-}) {
-  const dotAnims = useRef(
-    Array.from({ length: 4 }, () => new Animated.Value(0.4))
-  ).current;
-
-  useEffect(() => {
-    dotAnims.forEach((anim, i) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 1000,
-            delay: i * 250,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: 0.4,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    });
-  }, [dotAnims]);
-
-  const caloriesDisplay = Number(displayCalories).toLocaleString();
-  const proteinDisplay = String(displayProtein) + 'g';
-  const carbsDisplay = String(displayCarbs) + 'g';
-  const fatsDisplay = String(displayFats) + 'g';
-
-  const macros = [
-    { label: 'Daily Calories', value: caloriesDisplay, unit: 'kcal' },
-    { label: 'Protein', value: proteinDisplay, unit: '' },
-    { label: 'Carbs', value: carbsDisplay, unit: '' },
-    { label: 'Fat', value: fatsDisplay, unit: '' },
-  ];
-
-  return (
-    <View style={styles.s9PhaseCenter}>
-      <Text style={styles.s9Phase3Headline}>
-        {'Your personalized nutrition plan is ready'}
-      </Text>
-      <BlurView intensity={40} tint="dark" style={styles.s9GlassCard}>
-        <View style={styles.s9GlassOverlay}>
-          <View style={styles.s9MacroGrid}>
-            {macros.map((m, i) => (
-              <View key={m.label} style={styles.s9MacroItem}>
-                <View style={styles.s9MacroLabelRow}>
-                  <Animated.View
-                    style={[styles.s9MacroDot, { opacity: dotAnims[i] }]}
-                  />
-                  <Text style={styles.s9MacroLabel}>{m.label}</Text>
-                </View>
-                <Text style={styles.s9MacroValue}>{m.value}</Text>
-                {m.unit ? (
-                  <Text style={styles.s9MacroUnit}>{m.unit}</Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        </View>
-      </BlurView>
-      <Text style={styles.s9Phase3Sub}>
-        {'Built specifically for your body and goals.'}
-      </Text>
-    </View>
-  );
-}
-
-function Phase4({ weeksText }: { weeksText: string }) {
-  const timelineAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(timelineAnim, {
-      toValue: 260,
-      duration: 1800,
-      useNativeDriver: false,
-    }).start();
-  }, [timelineAnim]);
-
-  const nodePositions = [0, 65, 130, 195, 260];
-
-  return (
-    <View style={styles.s9PhaseCenter}>
-      <Text style={styles.s9Phase4Text}>
-        {'You could reach your goal\nin around '}
-        <Text style={styles.s9Accent}>{weeksText}</Text>
-        {'.'}
-      </Text>
-      <View style={styles.s9TimelineWrap}>
-        <View style={styles.s9TimelineTrack} />
-        <Animated.View
-          style={[styles.s9TimelineFill, { width: timelineAnim }]}
-        />
-        {nodePositions.map((pos, i) => (
-          <View
-            key={i}
-            style={[styles.s9TimelineNode, { left: pos - 4 }]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function Phase5({ onNext }: { onNext: () => void }) {
-  const foodEmojis = ['🍕', '🍔', '🍣', '🌮'];
-  const bounceAnims = useRef(
-    foodEmojis.map(() => ({
-      translateY: new Animated.Value(0),
-      scale: new Animated.Value(1),
-    }))
-  ).current;
-
-  useEffect(() => {
-    bounceAnims.forEach((anim, i) => {
-      const loopY = Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim.translateY, {
-            toValue: -4,
-            duration: 700,
-            delay: i * 180,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.translateY, {
-            toValue: 4,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      const loopS = Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim.scale, {
-            toValue: 1.05,
-            duration: 700,
-            delay: i * 180,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.scale, {
-            toValue: 1,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      loopY.start();
-      loopS.start();
-    });
-  }, [bounceAnims]);
-
-  return (
-    <View style={styles.s9PhaseCenter}>
-      <Text style={styles.s9Phase5Text}>
-        {'You don\u2019t need to stop eating\nyour favorite foods.'}
-      </Text>
-      <View style={styles.s9EmojiRow}>
-        {foodEmojis.map((emoji, i) => (
-          <Animated.View
-            key={emoji}
-            style={{
-              transform: [
-                { translateY: bounceAnims[i].translateY },
-                { scale: bounceAnims[i].scale },
-              ],
-            }}
-          >
-            <Text style={styles.s9FoodEmoji}>{emoji}</Text>
-          </Animated.View>
-        ))}
-      </View>
-      <Text style={styles.s9Phase5Sub}>{'Progress comes from consistency.'}</Text>
-      <TouchableOpacity
-        style={styles.s9ContinueBtn}
-        onPress={() => {
-          console.log('[Onboarding] Step 9 final phase: Continue pressed');
-          onNext();
-        }}
-      >
-        <Text style={styles.s9ContinueBtnText}>{'Continue'}</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
+// ─── STEP 9 — RESULTS ────────────────────────────────────────────────────────
 
 function Step9({
   saving,
   saveError,
-  displayCalories,
-  displayProtein,
-  displayCarbs,
-  displayFats,
+  calories,
+  protein,
+  carbs,
+  fats,
   goalProjectionText,
   onRetry,
   onNext,
 }: {
   saving: boolean;
   saveError: string | null;
-  displayCalories: number;
-  displayProtein: number;
-  displayCarbs: number;
-  displayFats: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
   goalProjectionText: string;
   onRetry: () => void;
   onNext: () => void;
 }) {
-  const [phase, setPhase] = useState(1);
-  const phaseOpacity = useRef(new Animated.Value(1)).current;
-  const phaseTranslateY = useRef(new Animated.Value(0)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasStarted = useRef(false);
-
-  const [underestimatePercent] = useState(() =>
-    Math.floor(Math.random() * (35 - 15 + 1)) + 15
-  );
-
-  const weeksText = useMemo(() => {
-    const match = goalProjectionText.match(/(\d+)\s*week/i);
-    if (match) {
-      const weeks = parseInt(match[1], 10);
-      return weeks + ' ' + (weeks === 1 ? 'week' : 'weeks');
-    }
-    return goalProjectionText;
-  }, [goalProjectionText]);
-
-  const advancePhase = (from: number) => {
-    const next = from + 1;
-    Animated.timing(phaseOpacity, {
-      toValue: 0,
-      duration: 400,
-      useNativeDriver: true,
-    }).start(() => {
-      phaseTranslateY.setValue(12);
-      setPhase(next);
-      Animated.parallel([
-        Animated.timing(phaseOpacity, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(phaseTranslateY, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-  };
-
-  // Start progress bar animation for phase 1 (loops continuously)
-  useEffect(() => {
-    progressAnim.setValue(0);
-    const loop = Animated.loop(
-      Animated.timing(progressAnim, {
-        toValue: 1,
-        duration: 1400,
-        useNativeDriver: false,
-      }),
-      { resetBeforeIteration: true }
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [progressAnim]);
-
-  // Phase auto-advance chain
-  useEffect(() => {
-    if (hasStarted.current) return;
-    hasStarted.current = true;
-
-    let currentPhase = 1;
-    const scheduleNext = (p: number) => {
-      if (p > PHASE_DURATIONS.length) return;
-      const duration = PHASE_DURATIONS[p - 1];
-      timerRef.current = setTimeout(() => {
-        advancePhase(p);
-        currentPhase = p + 1;
-        scheduleNext(currentPhase);
-      }, duration);
-    };
-    scheduleNext(currentPhase);
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const phaseTransform = [{ translateY: phaseTranslateY }];
-
-  if (saveError) {
-    return (
-      <View style={styles.s9Root}>
-        <LinearGradient
-          colors={[BG_DARK, BG_MID, BG_DARK]}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={styles.s9Glow} />
-        <FloatingParticles />
-        <View style={styles.s9ContentLayer}>
-          <View style={styles.errorBlock}>
-            <Text style={styles.errorText}>{saveError}</Text>
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={() => {
-                console.log('[Onboarding] Step 9: Retry pressed');
-                onRetry();
-              }}
-            >
-              <Text style={styles.retryBtnText}>{'Try Again'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.s9Root}>
+    <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
       <LinearGradient
-        colors={[BG_DARK, BG_MID, BG_DARK]}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={styles.s9Glow} />
-      <FloatingParticles />
-      <View style={styles.s9ContentLayer}>
-        <Animated.View
-          style={[
-            styles.s9AnimatedContent,
-            { opacity: phaseOpacity, transform: phaseTransform },
-          ]}
-        >
-          {phase === 1 && (
-            <>
-              <Phase1Saving progressAnim={progressAnim} />
-              {saving && (
-                <ActivityIndicator
-                  color={ACCENT}
-                  size="small"
-                  style={styles.s9Spinner}
-                />
-              )}
-            </>
-          )}
-          {phase === 2 && (
-            <Phase2 underestimatePercent={underestimatePercent} />
-          )}
-          {phase === 3 && (
-            <Phase3
-              displayCalories={displayCalories}
-              displayProtein={displayProtein}
-              displayCarbs={displayCarbs}
-              displayFats={displayFats}
-            />
-          )}
-          {phase === 4 && <Phase4 weeksText={weeksText} />}
-          {phase === 5 && <Phase5 onNext={onNext} />}
-        </Animated.View>
-      </View>
-    </View>
+        colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.95)', '#000000']}
+        locations={[0, 0.35, 0.55, 0.75, 1]}
+        style={styles.fullScreen}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+          <ScrollView
+            contentContainerStyle={styles.stepScroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <SafeAreaView edges={['top']} style={styles.safeTop} />
+
+            {saving ? (
+              <View style={styles.s9LoadingBlock}>
+                <ActivityIndicator size="large" color={PRIMARY} />
+                <Text style={styles.s9LoadingText}>Building your plan…</Text>
+              </View>
+            ) : saveError ? (
+              <View style={styles.s9ErrorBlock}>
+                <Text style={styles.s9ErrorText}>{saveError}</Text>
+                <TouchableOpacity style={styles.primaryBtn} onPress={onRetry}>
+                  <Text style={styles.primaryBtnText}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.stepTitle}>Your plan is ready 🎯</Text>
+                <Text style={styles.stepSubtitle}>{goalProjectionText}</Text>
+
+                <View style={styles.s9Grid}>
+                  <View style={styles.s9StatCard}>
+                    <Text style={styles.s9StatEmoji}>🔥</Text>
+                    <Text style={styles.s9StatValue}>{calories.toLocaleString()}</Text>
+                    <Text style={styles.s9StatUnit}>kcal</Text>
+                    <Text style={styles.s9StatLabel}>Daily Calories</Text>
+                  </View>
+                  <View style={styles.s9StatCard}>
+                    <Text style={styles.s9StatEmoji}>🥩</Text>
+                    <Text style={styles.s9StatValue}>{protein}g</Text>
+                    <Text style={styles.s9StatUnit}> </Text>
+                    <Text style={styles.s9StatLabel}>Protein</Text>
+                  </View>
+                  <View style={styles.s9StatCard}>
+                    <Text style={styles.s9StatEmoji}>🍚</Text>
+                    <Text style={styles.s9StatValue}>{carbs}g</Text>
+                    <Text style={styles.s9StatUnit}> </Text>
+                    <Text style={styles.s9StatLabel}>Carbs</Text>
+                  </View>
+                  <View style={styles.s9StatCard}>
+                    <Text style={styles.s9StatEmoji}>🥑</Text>
+                    <Text style={styles.s9StatValue}>{fats}g</Text>
+                    <Text style={styles.s9StatUnit}> </Text>
+                    <Text style={styles.s9StatLabel}>Fat</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={onNext}
+                >
+                  <Text style={styles.primaryBtnText}>Show Me My Roadmap →</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    </ImageBackground>
   );
 }
 
@@ -2194,101 +1686,65 @@ const styles = StyleSheet.create({
   },
 
   // Step 9
-  step9Scroll: {
-  },
-  step9Title: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  step9Sub: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.55)',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  loadingBlock: {
+  s9LoadingBlock: {
+    flex: 1,
     alignItems: 'center',
-    marginTop: 40,
+    justifyContent: 'center',
+    paddingTop: 80,
     gap: 16,
   },
-  loadingText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 15,
+  s9LoadingText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 16,
   },
-  errorBlock: {
+  s9ErrorBlock: {
+    flex: 1,
     alignItems: 'center',
-    marginTop: 40,
+    paddingTop: 60,
     gap: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 8,
   },
-  errorText: {
+  s9ErrorText: {
     color: '#FF6B6B',
     fontSize: 15,
     textAlign: 'center',
+    lineHeight: 22,
   },
-  retryBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  retryBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  statsGrid: {
+  s9Grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    width: '100%',
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  statCard: {
+  s9StatCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     padding: 16,
     alignItems: 'center',
   },
-  statEmoji: {
+  s9StatEmoji: {
     fontSize: 24,
     marginBottom: 6,
   },
-  statValue: {
+  s9StatValue: {
     fontSize: 28,
     fontWeight: '800',
     color: '#FFFFFF',
   },
-  statUnit: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  statLabel: {
-    fontSize: 12,
+  s9StatUnit: {
+    fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
-    marginTop: 2,
+    marginTop: 1,
   },
-  projectionBox: {
-    backgroundColor: 'rgba(76,175,80,0.12)',
-    borderColor: PRIMARY,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
+  s9StatLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.45)',
     marginTop: 4,
-    marginBottom: 24,
-    width: '100%',
-  },
-  projectionText: {
-    color: '#FFFFFF',
-    fontSize: 15,
     textAlign: 'center',
-    lineHeight: 22,
   },
 
   // Step 10
@@ -2752,253 +2208,5 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  // ── Step 9 cinematic ──────────────────────────────────────────────────────
-  s9Root: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
-  },
-  s9Glow: {
-    position: 'absolute',
-    width: 600,
-    height: 600,
-    borderRadius: 300,
-    backgroundColor: '#8EFF7A',
-    opacity: 0.06,
-    top: '50%',
-    left: '50%',
-    marginTop: -300,
-    marginLeft: -300,
-  },
-  s9Particle: {
-    position: 'absolute',
-    backgroundColor: '#8EFF7A',
-  },
-  s9ContentLayer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  s9AnimatedContent: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  s9PhaseCenter: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  // Phase 1
-  s9Phase1Title: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    textAlign: 'center',
-    marginBottom: 40,
-  },
-  s9ProgressContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 80,
-    width: 240,
-  },
-  s9ProgressTrack: {
-    width: 240,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
-  },
-  s9ProgressFill: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#8EFF7A',
-    shadowColor: '#8EFF7A',
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  s9Chip: {
-    position: 'absolute',
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  s9Spinner: {
-    marginTop: 24,
-  },
-  // Phase 2
-  s9Phase2Text: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    lineHeight: 32,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    marginBottom: 40,
-  },
-  s9Accent: {
-    color: '#8EFF7A',
-  },
-  s9BarChart: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: 8,
-  },
-  s9Bar: {
-    width: 4,
-    borderRadius: 2,
-    backgroundColor: '#8EFF7A',
-  },
-  // Phase 3
-  s9Phase3Headline: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 30,
-    paddingHorizontal: 32,
-    marginBottom: 24,
-  },
-  s9GlassCard: {
-    borderRadius: 24,
-    width: '85%',
-    maxWidth: 340,
-    overflow: 'hidden',
-  },
-  s9GlassOverlay: {
-    padding: 28,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  s9MacroGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 20,
-  },
-  s9MacroItem: {
-    width: '45%',
-  },
-  s9MacroLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  s9MacroDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#8EFF7A',
-  },
-  s9MacroLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  s9MacroValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  s9MacroUnit: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 2,
-  },
-  s9Phase3Sub: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.55)',
-    marginTop: 20,
-    textAlign: 'center',
-  },
-  // Phase 4
-  s9Phase4Text: {
-    fontSize: 24,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 34,
-    marginBottom: 48,
-    paddingHorizontal: 24,
-  },
-  s9TimelineWrap: {
-    width: 260,
-    height: 20,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  s9TimelineTrack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 1,
-  },
-  s9TimelineFill: {
-    position: 'absolute',
-    left: 0,
-    height: 2,
-    backgroundColor: '#8EFF7A',
-    borderRadius: 1,
-    shadowColor: '#8EFF7A',
-    shadowOpacity: 0.9,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  s9TimelineNode: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#8EFF7A',
-    top: 6,
-  },
-  // Phase 5
-  s9Phase5Text: {
-    fontSize: 24,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 34,
-    marginBottom: 28,
-  },
-  s9EmojiRow: {
-    flexDirection: 'row',
-    gap: 16,
-    alignItems: 'center',
-  },
-  s9FoodEmoji: {
-    fontSize: 36,
-  },
-  s9Phase5Sub: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 24,
-    textAlign: 'center',
-  },
-  s9ContinueBtn: {
-    backgroundColor: '#8EFF7A',
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    marginTop: 40,
-    shadowColor: '#8EFF7A',
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-  },
-  s9ContinueBtnText: {
-    color: '#0a0a0a',
-    fontWeight: '700',
-    fontSize: 16,
-  },
+
 });
