@@ -127,7 +127,12 @@ export default function XpRanksModal({
 
                   {/* Info */}
                   <View style={styles.tierInfo}>
-                    <Text style={[styles.tierName, { color: textColor }]}>
+                    <Text
+                      style={[styles.tierName, { color: textColor }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
                       {tierName}
                     </Text>
                     <Text style={[styles.tierRange, { color: textSecColor }]}>
@@ -217,7 +222,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-    gap: spacing.sm,
+    gap: 6,
   },
   tierRowCurrent: {
     borderRadius: borderRadius.md,
@@ -229,7 +234,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   badgeCol: {
-    width: 110,
+    width: 88,
     alignItems: 'flex-start',
   },
   tierInfo: {
@@ -237,7 +242,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tierName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   tierRange: {
@@ -245,7 +250,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   statusCol: {
-    width: 72,
+    width: 64,
     alignItems: 'flex-end',
   },
   currentBadge: {
