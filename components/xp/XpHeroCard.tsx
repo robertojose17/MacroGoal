@@ -143,7 +143,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
               <View style={styles.levelChip}>
-                <Text style={[styles.levelLabel, { color: textPrimary }]}>{'Level ' + String(level)}</Text>
+                <Text style={[styles.levelLabel, { color: '#FFFFFF' }]}>{'Level ' + String(level)}</Text>
               </View>
             </Pressable>
 
@@ -383,11 +383,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   levelChip: {
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
+    backgroundColor: '#14B8A6',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   levelStreakRow: {
     flexDirection: 'row',
