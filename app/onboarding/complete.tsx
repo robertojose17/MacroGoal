@@ -115,6 +115,8 @@ export default function CompleteOnboardingScreen() {
   const bullet1Anim = useRef(new Animated.Value(0)).current;
   const bullet2Anim = useRef(new Animated.Value(0)).current;
   const bullet3Anim = useRef(new Animated.Value(0)).current;
+  const bullet4Anim = useRef(new Animated.Value(0)).current;
+  const bullet5Anim = useRef(new Animated.Value(0)).current;
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -155,12 +157,18 @@ export default function CompleteOnboardingScreen() {
       bullet1Anim.setValue(0);
       bullet2Anim.setValue(0);
       bullet3Anim.setValue(0);
+      bullet4Anim.setValue(0);
+      bullet5Anim.setValue(0);
       Animated.sequence([
         Animated.timing(bullet1Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
         Animated.delay(200),
         Animated.timing(bullet2Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
         Animated.delay(200),
         Animated.timing(bullet3Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.delay(200),
+        Animated.timing(bullet4Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.delay(200),
+        Animated.timing(bullet5Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
       ]).start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -446,6 +454,8 @@ export default function CompleteOnboardingScreen() {
             bullet1Anim={bullet1Anim}
             bullet2Anim={bullet2Anim}
             bullet3Anim={bullet3Anim}
+            bullet4Anim={bullet4Anim}
+            bullet5Anim={bullet5Anim}
             onNext={goNext}
           />
         )}
@@ -657,19 +667,29 @@ function Step1({
 
 const HOPE_BULLETS = [
   {
-    icon: '✅',
-    title: 'Know exactly how much to eat',
-    body: 'Your daily calorie and macro targets, calculated for your body.',
+    icon: '😍',
+    title: 'Strangers and friends will notice — and compliment you',
+    body: '',
   },
   {
-    icon: '✅',
-    title: 'Meals already planned around your preferences',
-    body: 'No more guessing what fits your goals.',
+    icon: '👗',
+    title: "You'll wear what you want, not what hides you",
+    body: '',
   },
   {
-    icon: '✅',
-    title: 'A system built to help you stay consistent',
-    body: 'Weekly check-ins and progress tracking built in.',
+    icon: '⚡',
+    title: "You'll have more energy than you've had in years",
+    body: '',
+  },
+  {
+    icon: '🧒',
+    title: "You'll be the parent who runs around with their kids",
+    body: '',
+  },
+  {
+    icon: '❤️',
+    title: "You'll be healthier, longer, for everyone who loves you",
+    body: '',
   },
 ];
 
@@ -677,14 +697,18 @@ function Step2({
   bullet1Anim,
   bullet2Anim,
   bullet3Anim,
+  bullet4Anim,
+  bullet5Anim,
   onNext,
 }: {
   bullet1Anim: Animated.Value;
   bullet2Anim: Animated.Value;
   bullet3Anim: Animated.Value;
+  bullet4Anim: Animated.Value;
+  bullet5Anim: Animated.Value;
   onNext: () => void;
 }) {
-  const anims = [bullet1Anim, bullet2Anim, bullet3Anim];
+  const anims = [bullet1Anim, bullet2Anim, bullet3Anim, bullet4Anim, bullet5Anim];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -693,7 +717,7 @@ function Step2({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{'What changes when you stop guessing'}</Text>
+        <Text style={styles.stepTitle}>{'What your body transformation will really mean'}</Text>
         <Text style={styles.stepSubtitle}>{"Here's what your plan includes:"}</Text>
 
         <View style={styles.cardList}>
