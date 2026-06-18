@@ -360,16 +360,15 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   streakPill: {
-    borderWidth: 1.5,
-    borderColor: '#F97316',
+    backgroundColor: '#F97316',
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   streakPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#F97316',
+    color: '#FFFFFF',
   },
   levelLabel: {
     fontSize: 15,
