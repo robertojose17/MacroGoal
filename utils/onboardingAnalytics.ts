@@ -49,3 +49,17 @@ export async function trackOnboardingEvent(
     console.warn('[OnboardingAnalytics] Failed to track event:', e);
   }
 }
+
+const FIRST_MEAL_KEY = 'first_meal_tracked';
+
+export async function trackFirstMealIfNeeded(): Promise<void> {
+  try {
+    const already = await AsyncStorage.getItem(FIRST_MEAL_KEY);
+    if (already) return;
+    await AsyncStorage.setItem(FIRST_MEAL_KEY, 'true');
+    console.log('[OnboardingAnalytics] Firing first_meal_logged event');
+    await trackOnboardingEvent('first_meal_logged');
+  } catch (e) {
+    console.warn('[OnboardingAnalytics] Failed to track first meal:', e);
+  }
+}

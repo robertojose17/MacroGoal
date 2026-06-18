@@ -11,6 +11,7 @@ import { addToDraft } from '@/utils/myMealsDraft';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
+import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 
 export default function AddFoodSimpleScreen() {
   const router = useRouter();
@@ -219,6 +220,7 @@ export default function AddFoodSimpleScreen() {
 
       // Notify challenge hook that a meal was logged
       emitMealLogged();
+      trackFirstMealIfNeeded();
       
       // Success! Navigate back
       setSaving(false);

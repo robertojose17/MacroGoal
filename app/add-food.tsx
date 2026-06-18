@@ -19,6 +19,7 @@ import QuickAddHome from '@/components/QuickAddHome';
 import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
+import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 import { formatServing } from '@/utils/servingFormat';
 
 /** Safely coerce any value to a finite number, defaulting to 0 on NaN/null/undefined */
@@ -1087,6 +1088,7 @@ export default function AddFoodScreen() {
 
       // Notify challenge hook that a meal was logged
       emitMealLogged();
+      trackFirstMealIfNeeded();
       
       // Show success banner (will interrupt if one is already showing)
       showSuccessBanner();
@@ -1403,6 +1405,7 @@ export default function AddFoodScreen() {
 
       // Notify challenge hook that a meal was logged
       emitMealLogged();
+      trackFirstMealIfNeeded();
       
       // Show success banner (will interrupt if one is already showing)
       showSuccessBanner();
@@ -1792,6 +1795,7 @@ export default function AddFoodScreen() {
 
       // Notify challenge hook that a meal was logged
       emitMealLogged();
+      trackFirstMealIfNeeded();
       
       // Show success banner
       showSuccessBanner('Meal Added');
