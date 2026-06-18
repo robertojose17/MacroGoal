@@ -345,7 +345,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
-    marginHorizontal: 16,
     marginBottom: 12,
     overflow: 'visible',
     ...Platform.select({
@@ -369,7 +368,7 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   streakPill: {
-    backgroundColor: '#F97316',
+    backgroundColor: '#FF8A5B',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -387,12 +386,12 @@ const styles = StyleSheet.create({
   rankPlainText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#22C55E',
+    color: '#5CB97B',
     letterSpacing: 0.5,
     marginTop: 6,
   },
   levelChip: {
-    backgroundColor: '#14B8A6',
+    backgroundColor: '#5B9AA8',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -442,7 +441,7 @@ const styles = StyleSheet.create({
   progressFill: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#5CB97B',
   },
   progressThumb: {
     position: 'absolute',
@@ -452,10 +451,10 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
-    borderColor: '#22C55E',
+    borderColor: '#5CB97B',
     marginLeft: -7,
     ...Platform.select({
-      ios: { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 3 },
+      ios: { shadowColor: '#5CB97B', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 3 },
       android: { elevation: 2 },
     }),
   },
@@ -511,7 +510,7 @@ const styles = StyleSheet.create({
   leagueXp: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#22C55E',
+    color: '#5CB97B',
     marginTop: 4,
   },
   leagueXpLabel: {
@@ -521,7 +520,7 @@ const styles = StyleSheet.create({
   promotionText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#22C55E',
+    color: '#5CB97B',
     marginTop: 3,
   },
   demotionText: {
@@ -564,7 +563,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   consistencyValue: {
-    color: '#22C55E',
+    color: '#5CB97B',
   },
   statLabel: {
     fontSize: 10,
