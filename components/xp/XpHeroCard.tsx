@@ -104,25 +104,37 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   // Fetch lbs lost from check_ins
   useEffect(() => {
     async function fetchLbsLost() {
-      console.log('[XpHeroCard] fetching lbs lost from check_ins');
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase
+
+        // Get starting weight from user profile (set during onboarding)
+        const { data: userData } = await supabase
+          .from('users')
+          .select('current_weight')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        const startWeightKg = parseFloat(String(userData?.current_weight || '0'));
+        if (!startWeightKg || isNaN(startWeightKg) || startWeightKg <= 0) return;
+
+        // Get latest check-in weight
+        const { data: checkIns } = await supabase
           .from('check_ins')
-          .select('weight, date')
+          .select('weight')
           .eq('user_id', user.id)
           .not('weight', 'is', null)
-          .order('date', { ascending: true });
-        if (data && data.length >= 2) {
-          const earliest = Number(data[0].weight);
-          const latest = Number(data[data.length - 1].weight);
-          const lostKg = earliest - latest;
-          const lostLbs = lostKg * 2.20462;
-          const lost = Math.max(0, Math.round(lostLbs * 10) / 10);
-          console.log('[XpHeroCard] lbs lost computed:', lost);
-          setLbsLost(lost);
-        }
+          .order('date', { ascending: false })
+          .limit(1);
+
+        if (!checkIns || checkIns.length === 0) return;
+
+        const latestWeightKg = Number(checkIns[0].weight);
+        const lostKg = startWeightKg - latestWeightKg;
+        const lostLbs = lostKg * 2.20462;
+        const lost = Math.max(0, Math.round(lostLbs * 10) / 10);
+        console.log('[XpHeroCard] lbs lost computed:', lost);
+        setLbsLost(lost);
       } catch (err) {
         console.log('[XpHeroCard] error fetching lbs lost:', err);
       }
