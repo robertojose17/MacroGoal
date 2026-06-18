@@ -1,10 +1,9 @@
 /**
  * XpHeroCard
  *
- * Premium identity card showing:
- * - Dark teal/navy gradient background (always dark)
- * - LEFT: level number, rank name + icon, XP amount, progress bar
- * - RIGHT: 3D avatar (male/female based on user sex from DB)
+ * Light/white background card showing:
+ * - LEFT: rank pill + streak pill, level number (big), total XP, progress bar
+ * - RIGHT: league info column
  * - BOTTOM STRIP: Streak | League position | Consistency
  */
 
@@ -17,26 +16,30 @@ import {
   Platform,
   Pressable,
   TouchableOpacity,
-  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { getXpRank } from '@/utils/xpRanks';
-import RankIcon from '@/components/xp/RankIcon';
 import XpRanksModal from '@/components/xp/XpRanksModal';
 import StreakBenefitsModal from '@/components/xp/StreakBenefitsModal';
 import XpLevelsModal from '@/components/xp/XpLevelsModal';
 import LeagueLeaderboard from './LeagueLeaderboard';
 import LeagueWelcomeModal from './LeagueWelcomeModal';
 import { useLeague } from '@/hooks/useLeague';
-import { supabase } from '@/lib/supabase/client';
 import type { XpStatus } from '@/types/xp';
-
-const AVATAR_MALE = 'https://esgptfiofoaeguslgvcq.supabase.co/storage/v1/object/public/avatars/avatar_male.png';
-const AVATAR_FEMALE = 'https://esgptfiofoaeguslgvcq.supabase.co/storage/v1/object/public/avatars/avatar_female.png';
 
 interface XpHeroCardProps {
   status: XpStatus | null;
   isDark: boolean;
+}
+
+function computeTimeLeft(weekEndIso: string | undefined): string {
+  if (!weekEndIso) return '';
+  const diff = new Date(weekEndIso).getTime() - Date.now();
+  if (diff <= 0) return '0h left';
+  const totalHours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (days >= 1) return String(days) + 'd ' + String(hours) + 'h left';
+  return String(totalHours) + 'h left';
 }
 
 export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
@@ -48,24 +51,8 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const [showStreakModal, setShowStreakModal] = useState(false);
   const [showLevelsModal, setShowLevelsModal] = useState(false);
   const [showLeagueModal, setShowLeagueModal] = useState(false);
-  const [userSex, setUserSex] = useState<'male' | 'female'>('male');
 
   const { status: leagueStatus } = useLeague();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase.from('users').select('sex').eq('id', user.id).single()
-        .then(({ data }) => {
-          if (data?.sex) {
-            console.log('[XpHeroCard] fetched user sex:', data.sex);
-            setUserSex(data.sex as 'male' | 'female');
-          }
-        });
-    });
-  }, []);
-
-  const avatarUri = userSex === 'female' ? AVATAR_FEMALE : AVATAR_MALE;
 
   const level = status?.current_level ?? 1;
   const progressPercent = status?.level_progress?.progress_percent ?? 0;
@@ -76,15 +63,40 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const totalXp = status?.total_xp ?? 0;
 
   const streakAtRisk = streak > 0 && xpToday < 100;
-  const xpToNextLevel = Math.max(0, xpNeeded - xpInLevel);
   const nextLevel = level + 1;
-
   const rank = getXpRank(level);
 
   // Pre-compute display strings
   const streakDisplay = String(streak);
-  const totalXpDisplay = Number(totalXp).toLocaleString();
-  const xpToNextDisplay = Number(xpToNextLevel).toLocaleString();
+  const totalXpDisplay = Number(totalXp).toLocaleString() + ' XP';
+  const xpInLevelDisplay = Number(xpInLevel).toLocaleString() + ' XP';
+  const xpNeededDisplay = Number(xpNeeded).toLocaleString() + ' XP';
+  const xpToNextDisplay = Number(Math.max(0, xpNeeded - xpInLevel)).toLocaleString();
+  const xpTooltipText = xpInLevelDisplay + ' / to Level ' + String(nextLevel);
+
+  const consistencyValue =
+    status?.ranking?.consistency_percentile != null && status.ranking.consistency_percentile > 0
+      ? 'Top ' + String(Math.round(100 - status.ranking.consistency_percentile)) + '%'
+      : 'Top 5%';
+
+  const leaguePosition = '#' + String(leagueStatus?.user_position ?? 1);
+  const leagueMemberCount = String(leagueStatus?.member_count ?? 10);
+  const leagueTierLabel = leagueStatus?.tier_label ?? 'Bronze League';
+  const leagueTierEmoji = leagueStatus?.tier_emoji ?? '🥉';
+  const leagueXpThisWeek = String(leagueStatus?.user_xp_this_week ?? 0) + ' XP';
+  const timeLeft = computeTimeLeft(leagueStatus?.week_end_iso);
+  const positionTimeText = leaguePosition + '/' + leagueMemberCount + ' · ' + timeLeft;
+
+  const progressWidth = Math.min(100, Math.max(0, progressPercent));
+
+  // Colors
+  const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
+  const textPrimary = isDark ? '#FFFFFF' : '#111827';
+  const textSecondary = isDark ? 'rgba(255,255,255,0.5)' : '#6B7280';
+  const stripBg = isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6';
+  const dividerColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+  const progressTrackColor = isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB';
+  const separatorColor = isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB';
 
   // Pulse animation for streak-at-risk
   useEffect(() => {
@@ -103,8 +115,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
     }
   }, [streakAtRisk, pulseAnim]);
 
-  const xpTooltipText = xpInLevel + ' XP · ' + xpToNextDisplay + ' to Level ' + String(nextLevel);
-
   function handleProgressBarTap() {
     console.log('[XpHeroCard] progress bar tapped → showing XP tooltip');
     if (xpTooltipTimer.current) clearTimeout(xpTooltipTimer.current);
@@ -114,32 +124,43 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
     }, 2000);
   }
 
-  const consistencyValue = status?.ranking?.consistency_percentile != null && status.ranking.consistency_percentile > 0
-    ? 'Top ' + Math.round(100 - status.ranking.consistency_percentile) + '%'
-    : 'Top 5%';
-
-  const leaguePosition = '#' + String(leagueStatus?.user_position ?? 1);
-  const leagueTierLabel = leagueStatus?.tier_label ?? 'Bronze League';
-
   return (
-    <View style={styles.card}>
-      {/* Dark gradient background — always dark */}
-      <LinearGradient
-        colors={['#0D2137', '#0A2A2A', '#0D2B1F']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
+    <View style={[styles.card, { backgroundColor: cardBg }]}>
 
       {/* TOP SECTION */}
       <View style={styles.topSection}>
 
-        {/* LEFT CONTENT */}
+        {/* LEFT COLUMN */}
         <View style={styles.leftContent}>
-          <Text style={styles.levelLabel}>{'LEVEL'}</Text>
 
-          {/* Level number (big, top) */}
+          {/* Row 1: Rank pill + Streak pill */}
+          <View style={styles.pillRow}>
+            <Pressable
+              onPress={() => {
+                console.log('[XpHeroCard] rank pill tapped → XpRanksModal');
+                setShowRanksModal(true);
+              }}
+              style={({ pressed }) => [styles.rankPill, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Text style={styles.rankPillText} numberOfLines={1} adjustsFontSizeToFit>
+                {rank.tierName.toUpperCase()}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                console.log('[XpHeroCard] streak pill tapped → StreakBenefitsModal');
+                setShowStreakModal(true);
+              }}
+              style={({ pressed }) => [styles.streakPill, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Animated.Text style={[styles.streakPillText, { opacity: streakAtRisk ? pulseAnim : 1 }]} numberOfLines={1}>
+                {'🔥 ' + streakDisplay + ' day streak'}
+              </Animated.Text>
+            </Pressable>
+          </View>
+
+          {/* Row 2: Level number (big) */}
           <Pressable
             onPress={() => {
               console.log('[XpHeroCard] level number tapped → XpLevelsModal');
@@ -147,65 +168,77 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             }}
             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
           >
-            <Text style={styles.levelNumber}>{String(level)}</Text>
+            <Text style={[styles.levelNumber, { color: textPrimary }]}>{String(level)}</Text>
           </Pressable>
 
-          {/* Rank name + icon (below level number) */}
-          <Pressable
-            onPress={() => {
-              console.log('[XpHeroCard] rank name tapped → XpRanksModal');
-              setShowRanksModal(true);
-            }}
-            style={({ pressed }) => [styles.rankNameRow, { opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={styles.rankName} numberOfLines={1} adjustsFontSizeToFit>{rank.tierName}</Text>
-            <RankIcon tierIndex={rank.tierIndex} size={28} color={rank.primaryColor} gradientColor={rank.gradientColor} />
-          </Pressable>
+          {/* Row 3: Total XP */}
+          <Text style={[styles.totalXp, { color: textSecondary }]}>{totalXpDisplay}</Text>
 
-          {/* Progress bar */}
+          {/* Row 4: Progress bar */}
           <View style={styles.progressSection}>
-            <View style={styles.progressRow}>
-              <View style={styles.progressBarWrapper}>
-                <TouchableOpacity activeOpacity={0.8} onPress={handleProgressBarTap} style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: Math.min(100, Math.max(0, progressPercent)) + '%' as `${number}%` }]} />
-                </TouchableOpacity>
-                <Animated.View style={[styles.xpTooltip, { opacity: xpTooltipAnim }]} pointerEvents="none">
+            <View style={styles.progressLabels}>
+              <Text style={[styles.progressLabel, { color: textSecondary }]}>{xpInLevelDisplay}</Text>
+              <Text style={[styles.progressLabel, { color: textSecondary }]}>{xpNeededDisplay}</Text>
+            </View>
+            <View style={styles.progressBarWrapper}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handleProgressBarTap}
+                style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}
+              >
+                <View style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]} />
+                {/* Thumb dot */}
+                <View style={[styles.progressThumb, { left: progressWidth + '%' as `${number}%` }]} />
+              </TouchableOpacity>
+              {/* Tooltip above thumb */}
+              <Animated.View
+                style={[
+                  styles.xpTooltip,
+                  { left: progressWidth + '%' as `${number}%`, opacity: xpTooltipAnim },
+                ]}
+                pointerEvents="none"
+              >
+                <View style={styles.xpTooltipBubble}>
                   <Text style={styles.xpTooltipText}>{xpTooltipText}</Text>
-                </Animated.View>
-              </View>
-              <Text style={styles.progressPercent}>{Math.round(progressPercent)}%</Text>
+                </View>
+              </Animated.View>
             </View>
           </View>
+
         </View>
 
-        {/* RIGHT: Avatar with glow rings */}
-        <View style={styles.avatarContainer} pointerEvents="none">
-          <View style={styles.glowRing1} />
-          <View style={styles.glowRing2} />
-          <View style={styles.avatarImageWrapper}>
-            <Image source={{ uri: avatarUri }} style={styles.avatarImage} resizeMode="contain" />
-            {/* Bottom fade — blends avatar into card background */}
-            <LinearGradient
-              colors={['transparent', 'transparent', 'rgba(13,43,31,0.6)', 'rgba(13,43,31,0.95)']}
-              locations={[0, 0.5, 0.75, 1]}
-              style={styles.avatarBottomFade}
-              pointerEvents="none"
-            />
-            {/* Left fade — blends avatar into left content area */}
-            <LinearGradient
-              colors={['rgba(13,33,55,0.7)', 'transparent']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.avatarLeftFade}
-              pointerEvents="none"
-            />
-          </View>
-        </View>
+        {/* SEPARATOR */}
+        <View style={[styles.columnSeparator, { backgroundColor: separatorColor }]} />
+
+        {/* RIGHT COLUMN — League info */}
+        <Pressable
+          onPress={() => {
+            console.log('[XpHeroCard] league column tapped → LeagueLeaderboard');
+            setShowLeagueModal(true);
+          }}
+          style={({ pressed }) => [styles.rightContent, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Text style={styles.leagueMedal}>{leagueTierEmoji}</Text>
+          <Text style={[styles.leagueName, { color: textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+            {leagueTierLabel}
+          </Text>
+          <Text style={[styles.leaguePositionTime, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>
+            {positionTimeText}
+          </Text>
+          <Text style={styles.leagueXp}>{leagueXpThisWeek}</Text>
+          <Text style={[styles.leagueXpLabel, { color: textSecondary }]}>{'this week'}</Text>
+          {leagueStatus?.is_in_promotion_zone && (
+            <Text style={styles.promotionText}>{'↑ You\'re moving up'}</Text>
+          )}
+          {leagueStatus?.is_in_demotion_zone && (
+            <Text style={styles.demotionText}>{'↓ At risk'}</Text>
+          )}
+        </Pressable>
 
       </View>
 
       {/* BOTTOM STATS STRIP */}
-      <View style={styles.statsStrip}>
+      <View style={[styles.statsStrip, { backgroundColor: stripBg }]}>
 
         {/* Streak */}
         <Pressable
@@ -215,16 +248,14 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           }}
           style={({ pressed }) => [styles.statItem, { opacity: pressed ? 0.7 : 1 }]}
         >
-          <View style={styles.statIconCircle}>
-            <Animated.Text style={[styles.statEmoji, { opacity: streakAtRisk ? pulseAnim : 1 }]}>{'🔥'}</Animated.Text>
-          </View>
+          <Animated.Text style={[styles.statEmoji, { opacity: streakAtRisk ? pulseAnim : 1 }]}>{'🔥'}</Animated.Text>
           <View>
-            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{streakDisplay}</Text>
-            <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>{'Day Streak'}</Text>
+            <Text style={[styles.statValue, { color: textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>{streakDisplay}</Text>
+            <Text style={[styles.statLabel, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>{'Day Streak'}</Text>
           </View>
         </Pressable>
 
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, { backgroundColor: dividerColor }]} />
 
         {/* League */}
         <Pressable
@@ -234,16 +265,14 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           }}
           style={({ pressed }) => [styles.statItem, { opacity: pressed ? 0.7 : 1 }]}
         >
-          <View style={styles.statIconCircle}>
-            <Text style={styles.statEmoji}>{'🛡️'}</Text>
-          </View>
+          <Text style={styles.statEmoji}>{leagueTierEmoji}</Text>
           <View>
-            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{leaguePosition}</Text>
-            <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>{leagueTierLabel}</Text>
+            <Text style={[styles.statValue, { color: textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>{leaguePosition}</Text>
+            <Text style={[styles.statLabel, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>{leagueTierLabel}</Text>
           </View>
         </Pressable>
 
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, { backgroundColor: dividerColor }]} />
 
         {/* Consistency */}
         <Pressable
@@ -253,18 +282,16 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           }}
           style={({ pressed }) => [styles.statItem, { opacity: pressed ? 0.7 : 1 }]}
         >
-          <View style={styles.statIconCircle}>
-            <Text style={styles.statEmoji}>{'📈'}</Text>
-          </View>
+          <Text style={styles.statEmoji}>{'📈'}</Text>
           <View>
-            <Text style={[styles.statValue, { color: '#2DD4BF' }]} numberOfLines={1} adjustsFontSizeToFit>{consistencyValue}</Text>
-            <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>{'Consistency'}</Text>
+            <Text style={[styles.statValue, styles.consistencyValue]} numberOfLines={1} adjustsFontSizeToFit>{consistencyValue}</Text>
+            <Text style={[styles.statLabel, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>{'Consistency'}</Text>
           </View>
         </Pressable>
 
       </View>
 
-      {/* MODALS — keep all existing */}
+      {/* MODALS */}
       <XpRanksModal
         visible={showRanksModal}
         currentLevel={level}
@@ -311,156 +338,194 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginHorizontal: 16,
     marginBottom: 12,
-    overflow: 'hidden',
+    overflow: 'visible',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 16 },
-      android: { elevation: 8 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 },
+      android: { elevation: 4 },
     }),
   },
   topSection: {
     flexDirection: 'row',
-    paddingTop: 20,
-    paddingLeft: 20,
+    paddingTop: 18,
     paddingBottom: 16,
-    paddingRight: 0,
-    minHeight: 180,
+    paddingHorizontal: 16,
     overflow: 'hidden',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
+
+  // LEFT COLUMN
   leftContent: {
     flex: 1,
-    zIndex: 2,
-    paddingRight: 8,
+    paddingRight: 12,
   },
-  levelLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: 2,
-  },
-  levelNumber: {
-    fontSize: 64,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -3,
-    lineHeight: 68,
-    marginBottom: 2,
-  },
-  rankNameRow: {
+  pillRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexWrap: 'wrap',
     marginBottom: 4,
   },
-  rankName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
+  rankPill: {
+    borderWidth: 1.5,
+    borderColor: '#22C55E',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
+  rankPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#22C55E',
+    letterSpacing: 0.5,
+  },
+  streakPill: {
+    borderWidth: 1.5,
+    borderColor: '#F97316',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  streakPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F97316',
+  },
+  levelNumber: {
+    fontSize: 72,
+    fontWeight: '900',
+    letterSpacing: -4,
+    lineHeight: 76,
+    marginBottom: 0,
+  },
+  totalXp: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 10,
+  },
+
+  // Progress bar
   progressSection: {
-    marginTop: 14,
+    marginTop: 2,
   },
-  progressRow: {
+  progressLabels: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  progressLabel: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   progressBarWrapper: {
-    flex: 1,
     position: 'relative',
+    height: 20,
+    justifyContent: 'center',
   },
   progressTrack: {
-    height: 7,
+    height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    overflow: 'hidden',
+    overflow: 'visible',
+    position: 'relative',
   },
   progressFill: {
-    height: 7,
+    height: 8,
     borderRadius: 4,
-    backgroundColor: '#2DD4BF',
+    backgroundColor: '#22C55E',
   },
-  progressPercent: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    minWidth: 32,
-    textAlign: 'right',
+  progressThumb: {
+    position: 'absolute',
+    top: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#22C55E',
+    marginLeft: -7,
+    ...Platform.select({
+      ios: { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 3 },
+      android: { elevation: 2 },
+    }),
   },
   xpTooltip: {
     position: 'absolute',
-    bottom: 13,
-    left: 0,
-    right: 0,
+    bottom: 22,
     alignItems: 'center',
+    marginLeft: -60,
+    width: 120,
+  },
+  xpTooltipBubble: {
+    backgroundColor: '#111827',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   xpTooltipText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
-    backgroundColor: 'rgba(45,212,191,0.85)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: 'hidden',
   },
-  avatarContainer: {
-    width: 150,
-    alignSelf: 'stretch',
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+
+  // SEPARATOR
+  columnSeparator: {
+    width: 1,
+    marginVertical: 4,
+    marginHorizontal: 4,
   },
-  glowRing1: {
-    position: 'absolute',
+
+  // RIGHT COLUMN
+  rightContent: {
     width: 130,
-    height: 130,
-    borderRadius: 65,
-    borderWidth: 1,
-    borderColor: 'rgba(45,212,191,0.12)',
-    alignSelf: 'center',
-    bottom: 10,
+    paddingLeft: 12,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 2,
   },
-  glowRing2: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: 'rgba(45,212,191,0.08)',
-    alignSelf: 'center',
-    bottom: 20,
+  leagueMedal: {
+    fontSize: 32,
+    lineHeight: 38,
   },
-  avatarImageWrapper: {
-    width: 150,
-    height: 190,
-    overflow: 'hidden',
+  leagueName: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 2,
   },
-  avatarImage: {
-    width: 150,
-    height: 190,
-    backgroundColor: 'transparent',
+  leaguePositionTime: {
+    fontSize: 12,
+    fontWeight: '400',
+    marginTop: 1,
   },
-  avatarBottomFade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '60%',
+  leagueXp: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#22C55E',
+    marginTop: 4,
   },
-  avatarLeftFade: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: '40%',
+  leagueXpLabel: {
+    fontSize: 11,
+    fontWeight: '400',
   },
+  promotionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#22C55E',
+    marginTop: 3,
+  },
+  demotionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#EF4444',
+    marginTop: 3,
+  },
+
+  // BOTTOM STATS STRIP
   statsStrip: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.4)',
     paddingVertical: 10,
     paddingHorizontal: 6,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   statItem: {
     flex: 1,
@@ -469,32 +534,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  statIconCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   statEmoji: {
-    fontSize: 14,
+    fontSize: 22,
   },
   statValue: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#FFFFFF',
     letterSpacing: -0.3,
   },
+  consistencyValue: {
+    color: '#22C55E',
+  },
   statLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.5)',
     marginTop: 1,
   },
   statDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
     marginVertical: 4,
   },
 });
