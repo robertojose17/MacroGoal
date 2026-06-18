@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import XpRankBadge from '@/components/xp/XpRankBadge';
+import RankIcon from '@/components/xp/RankIcon';
 import { getXpRank } from '@/utils/xpRanks';
 
 interface XpRanksModalProps {
@@ -122,7 +123,12 @@ export default function XpRanksModal({
                 >
                   {/* Badge */}
                   <View style={styles.badgeCol}>
-                    <XpRankBadge rank={badgeRank} size="large" />
+                    <RankIcon
+                      tierIndex={tierIndex}
+                      size={44}
+                      color={badgeRank.primaryColor}
+                      gradientColor={badgeRank.gradientColor}
+                    />
                   </View>
 
                   {/* Info */}
