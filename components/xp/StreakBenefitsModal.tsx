@@ -323,10 +323,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   colDays: {
-    flex: 2,
+    flex: 1.5,
   },
   colMultiplier: {
-    flex: 1,
+    flex: 1.5,
     textAlign: 'center',
   },
   colExample: {
