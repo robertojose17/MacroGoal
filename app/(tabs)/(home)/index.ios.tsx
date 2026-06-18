@@ -41,6 +41,7 @@ interface FoodItem {
   fiber: number;
   serving_description: string | null;
   grams: number | null;
+  logged_at?: string | null;
   meal_type?: string;
   foods: {
     id: string;
@@ -201,6 +202,7 @@ export default function HomeScreen() {
             fiber,
             serving_description,
             grams,
+            logged_at,
             foods (
               id,
               name,
@@ -231,7 +233,7 @@ export default function HomeScreen() {
           mealsData.forEach((meal: any) => {
             if (meal.meal_items) {
               meal.meal_items.forEach((item: any) => {
-                mealsByType[meal.meal_type as MealType].push({ ...item, meal_type: meal.meal_type });
+                mealsByType[meal.meal_type as MealType].push({ ...item, meal_type: meal.meal_type, logged_at: item.logged_at ?? null });
                 totalCals += item.calories || 0;
                 totalP += item.protein || 0;
                 totalC += item.carbs || 0;
@@ -608,24 +610,52 @@ export default function HomeScreen() {
     </SwipeToDeleteRow>
   );
 
-  const getMealTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'breakfast': return 'Breakfast';
-      case 'lunch': return 'Lunch';
-      case 'dinner': return 'Dinner';
-      case 'snack': return 'Snack';
-      default: return type;
-    }
+  // ── Session grouping ──
+  const SESSION_GAP_MS = 20 * 60 * 1000; // 20 minutes
+
+  interface FoodSession {
+    sessionTime: Date;
+    items: (FoodItem & { meal_type: string; logged_at?: string | null })[];
+  }
+
+  const groupIntoSessions = (items: (FoodItem & { meal_type: string; logged_at?: string | null })[]): FoodSession[] => {
+    if (items.length === 0) return [];
+
+    const sorted = [...items].sort((a, b) => {
+      if (!a.logged_at && !b.logged_at) return 0;
+      if (!a.logged_at) return 1;
+      if (!b.logged_at) return -1;
+      return new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime();
+    });
+
+    const sessions: FoodSession[] = [];
+    let currentSession: FoodSession | null = null;
+
+    sorted.forEach(item => {
+      const itemTime = item.logged_at ? new Date(item.logged_at) : new Date();
+
+      if (!currentSession) {
+        currentSession = { sessionTime: itemTime, items: [item] };
+      } else {
+        const lastItem = currentSession.items[currentSession.items.length - 1];
+        const lastTime = lastItem.logged_at ? new Date(lastItem.logged_at) : new Date();
+        const gap = itemTime.getTime() - lastTime.getTime();
+
+        if (gap <= SESSION_GAP_MS) {
+          currentSession.items.push(item);
+        } else {
+          sessions.push(currentSession);
+          currentSession = { sessionTime: itemTime, items: [item] };
+        }
+      }
+    });
+
+    if (currentSession) sessions.push(currentSession);
+    return sessions;
   };
 
-  const getMealTypeColor = (type: string): string => {
-    switch (type) {
-      case 'breakfast': return '#F59E0B';
-      case 'lunch': return '#10B981';
-      case 'dinner': return '#6366F1';
-      case 'snack': return '#EC4899';
-      default: return colors.primary;
-    }
+  const formatSessionTime = (date: Date): string => {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
   const renderTrackingContent = () => {
@@ -635,6 +665,7 @@ export default function HomeScreen() {
     const dividerColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
     const itemCount = allFoodItems.length;
     const itemCountLabel = itemCount === 1 ? 'item' : 'items';
+    const sessions = groupIntoSessions(allFoodItems);
 
     return (
       <View>
@@ -659,7 +690,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Today's Food — single chronological list */}
+        {/* Today's Food — session-grouped list */}
         <View style={[styles.mealCard, { backgroundColor: cardBg }]}>
           {/* Header */}
           <View style={styles.mealHeader}>
@@ -690,7 +721,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Empty state */}
           {itemCount === 0 ? (
             <TouchableOpacity
               style={styles.emptyMeal}
@@ -702,87 +732,92 @@ export default function HomeScreen() {
               <Text style={[styles.emptyMealText, { color: textSec }]}>Tap to add food</Text>
             </TouchableOpacity>
           ) : (
-            /* Chronological food list */
             <View>
-              {allFoodItems.map((item, index) => {
-                const isLast = index === allFoodItems.length - 1;
-                const mealColor = getMealTypeColor(item.meal_type ?? 'snack');
-                const mealLabel = getMealTypeLabel(item.meal_type ?? 'snack');
-                const pillBg = mealColor + '22';
-                const servingText = getServingDisplayText(item);
-                const proteinRounded = Math.round(item.protein);
-                const carbsRounded = Math.round(item.carbs);
-                const fatsRounded = Math.round(item.fats);
-                const calsRounded = Math.round(item.calories);
-                const foodName = item.foods?.name || 'Unknown Food';
-                const foodBrand = item.foods?.brand;
+              {sessions.map((session, sessionIndex) => {
+                const sessionTimeLabel = formatSessionTime(session.sessionTime);
+                const isLastSession = sessionIndex === sessions.length - 1;
                 return (
-                  <View key={item.id}>
-                    <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
-                      {(isSwiping: boolean) => (
-                        <TouchableOpacity
-                          style={styles.foodItem}
-                          onPress={() => handleEditFood(item, isSwiping)}
-                          activeOpacity={0.7}
-                          disabled={isSwiping}
-                        >
-                          {/* Meal type color dot */}
-                          <View style={[styles.mealTypeDot, { backgroundColor: mealColor }]} />
-                          <View style={styles.foodInfo}>
-                            <Text style={[styles.foodName, { color: textPrimary }]}>
-                              {foodName}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {foodBrand && (
-                                <Text style={[styles.foodBrand, { color: textSec }]}>
-                                  {foodBrand}
-                                </Text>
-                              )}
-                              <View style={[styles.mealTypePill, { backgroundColor: pillBg }]}>
-                                <Text style={[styles.mealTypePillText, { color: mealColor }]}>
-                                  {mealLabel}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <Text style={[styles.foodDetails, { color: textSec }]}>
-                                {servingText}
-                              </Text>
-                              <Text style={[styles.foodDetails, { color: textSec }]}>
-                                {'  ·  '}
-                              </Text>
-                              <Text style={[styles.foodDetails, { color: colors.protein }]}>
-                                {proteinRounded}
-                                {'P'}
-                              </Text>
-                              <Text style={[styles.foodDetails, { color: textSec }]}>
-                                {'  '}
-                              </Text>
-                              <Text style={[styles.foodDetails, { color: colors.carbs }]}>
-                                {carbsRounded}
-                                {'C'}
-                              </Text>
-                              <Text style={[styles.foodDetails, { color: textSec }]}>
-                                {'  '}
-                              </Text>
-                              <Text style={[styles.foodDetails, { color: colors.fats }]}>
-                                {fatsRounded}
-                                {'F'}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.foodCalories}>
-                            <Text style={[styles.foodCaloriesValue, { color: textPrimary }]}>
-                              {calsRounded}
-                            </Text>
-                            <Text style={[styles.foodCaloriesLabel, { color: textSec }]}>
-                              kcal
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                    </SwipeToDeleteRow>
-                    {!isLast && <View style={[styles.itemSeparator, { backgroundColor: dividerColor }]} />}
+                  <View key={sessionIndex}>
+                    {/* Session time header */}
+                    <View style={styles.sessionHeader}>
+                      <Text style={[styles.sessionTime, { color: colors.primary }]}>
+                        {sessionTimeLabel}
+                      </Text>
+                      <View style={[styles.sessionLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+                    </View>
+                    {/* Items in this session */}
+                    {session.items.map((item, itemIndex) => {
+                      const isLastInSession = itemIndex === session.items.length - 1;
+                      const servingText = getServingDisplayText(item);
+                      const proteinRounded = Math.round(item.protein);
+                      const carbsRounded = Math.round(item.carbs);
+                      const fatsRounded = Math.round(item.fats);
+                      const calsRounded = Math.round(item.calories);
+                      const foodName = item.foods?.name || 'Unknown Food';
+                      const foodBrand = item.foods?.brand;
+                      return (
+                        <View key={item.id}>
+                          <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
+                            {(isSwiping: boolean) => (
+                              <TouchableOpacity
+                                style={styles.foodItem}
+                                onPress={() => handleEditFood(item, isSwiping)}
+                                activeOpacity={0.7}
+                                disabled={isSwiping}
+                              >
+                                <View style={styles.foodInfo}>
+                                  <Text style={[styles.foodName, { color: textPrimary }]}>
+                                    {foodName}
+                                  </Text>
+                                  {foodBrand && (
+                                    <Text style={[styles.foodBrand, { color: textSec }]}>
+                                      {foodBrand}
+                                    </Text>
+                                  )}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {servingText}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {'  ·  '}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: colors.protein }]}>
+                                      {proteinRounded}
+                                      {'P'}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {'  '}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: colors.carbs }]}>
+                                      {carbsRounded}
+                                      {'C'}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {'  '}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: colors.fats }]}>
+                                      {fatsRounded}
+                                      {'F'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <View style={styles.foodCalories}>
+                                  <Text style={[styles.foodCaloriesValue, { color: textPrimary }]}>
+                                    {calsRounded}
+                                  </Text>
+                                  <Text style={[styles.foodCaloriesLabel, { color: textSec }]}>
+                                    kcal
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            )}
+                          </SwipeToDeleteRow>
+                          {!isLastInSession && <View style={[styles.itemSeparator, { backgroundColor: dividerColor }]} />}
+                        </View>
+                      );
+                    })}
+                    {/* Gap between sessions */}
+                    {!isLastSession && <View style={{ height: 8 }} />}
                   </View>
                 );
               })}
@@ -1353,22 +1388,22 @@ const styles = StyleSheet.create({
   emptyMealText: { ...typography.body },
   itemSeparator: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginVertical: spacing.xs },
   foodItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
-  mealTypeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 10,
-    marginTop: 4,
-    flexShrink: 0,
+  sessionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: 4,
+    gap: 8,
   },
-  mealTypePill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+  sessionTime: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  mealTypePillText: {
-    fontSize: 10,
-    fontWeight: '600',
+  sessionLine: {
+    flex: 1,
+    height: 1,
   },
   foodInfo: { flex: 1 },
   foodName: { ...typography.bodyBold, marginBottom: 2 },
