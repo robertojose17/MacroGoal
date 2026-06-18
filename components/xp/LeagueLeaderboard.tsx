@@ -458,7 +458,6 @@ const styles = StyleSheet.create({
   bannerCard: {
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    borderLeftWidth: 4,
     marginBottom: spacing.xs,
   },
   bannerTitle: {
