@@ -46,7 +46,7 @@ export default function GoPremiumFloatingBadge() {
 
   if (!visible || isPremium) return null;
 
-  const bottomOffset = insets.bottom + 100;
+  const bottomOffset = insets.bottom + 90;
 
   return (
     <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="box-none">
