@@ -133,31 +133,16 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         {/* LEFT COLUMN */}
         <View style={styles.leftContent}>
 
-          {/* Row 1: Rank pill only */}
-          <View style={styles.pillRow}>
-            <Pressable
-              onPress={() => {
-                console.log('[XpHeroCard] rank pill tapped → XpRanksModal');
-                setShowRanksModal(true);
-              }}
-              style={({ pressed }) => [styles.rankPill, { opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Text style={styles.rankPillText} numberOfLines={1} adjustsFontSizeToFit>
-                {rank.tierName.toUpperCase()}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Row 2: Level number + streak pill side by side */}
+          {/* Row 1: Level label + streak pill */}
           <View style={styles.levelStreakRow}>
             <Pressable
               onPress={() => {
-                console.log('[XpHeroCard] level number tapped → XpLevelsModal');
+                console.log('[XpHeroCard] level label tapped → XpLevelsModal');
                 setShowLevelsModal(true);
               }}
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
-              <Text style={[styles.levelNumber, { color: textPrimary }]}>{String(level)}</Text>
+              <Text style={[styles.levelLabel, { color: textPrimary }]}>{'Level ' + String(level)}</Text>
             </Pressable>
 
             <Pressable
@@ -172,6 +157,17 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               </Animated.Text>
             </Pressable>
           </View>
+
+          {/* Row 2: Rank plain text */}
+          <Pressable
+            onPress={() => {
+              console.log('[XpHeroCard] rank text tapped → XpRanksModal');
+              setShowRanksModal(true);
+            }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={styles.rankPlainText}>{rank.tierName.toUpperCase()}</Text>
+          </Pressable>
 
           {/* Row 3: Total XP */}
           <Text style={[styles.totalXp, { color: textSecondary }]}>{totalXpDisplay}</Text>
@@ -361,26 +357,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 12,
   },
-  pillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-    marginBottom: 4,
-  },
-  rankPill: {
-    borderWidth: 1.5,
-    borderColor: '#22C55E',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  rankPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#22C55E',
-    letterSpacing: 0.5,
-  },
   streakPill: {
     borderWidth: 1.5,
     borderColor: '#F97316',
@@ -393,18 +369,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#F97316',
   },
-  levelNumber: {
-    fontSize: 38,
-    fontWeight: '900',
-    letterSpacing: -1,
-    lineHeight: 44,
-    marginBottom: 0,
+  levelLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  rankPlainText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#22C55E',
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
   levelStreakRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 6,
+    marginTop: 0,
     marginBottom: 2,
   },
   totalXp: {
