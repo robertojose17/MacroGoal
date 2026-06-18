@@ -133,7 +133,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         {/* LEFT COLUMN */}
         <View style={styles.leftContent}>
 
-          {/* Row 1: Rank pill + Streak pill */}
+          {/* Row 1: Rank pill only */}
           <View style={styles.pillRow}>
             <Pressable
               onPress={() => {
@@ -145,6 +145,19 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               <Text style={styles.rankPillText} numberOfLines={1} adjustsFontSizeToFit>
                 {rank.tierName.toUpperCase()}
               </Text>
+            </Pressable>
+          </View>
+
+          {/* Row 2: Level number + streak pill side by side */}
+          <View style={styles.levelStreakRow}>
+            <Pressable
+              onPress={() => {
+                console.log('[XpHeroCard] level number tapped → XpLevelsModal');
+                setShowLevelsModal(true);
+              }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Text style={[styles.levelNumber, { color: textPrimary }]}>{String(level)}</Text>
             </Pressable>
 
             <Pressable
@@ -159,17 +172,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               </Animated.Text>
             </Pressable>
           </View>
-
-          {/* Row 2: Level number (big) */}
-          <Pressable
-            onPress={() => {
-              console.log('[XpHeroCard] level number tapped → XpLevelsModal');
-              setShowLevelsModal(true);
-            }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={[styles.levelNumber, { color: textPrimary }]}>{String(level)}</Text>
-          </Pressable>
 
           {/* Row 3: Total XP */}
           <Text style={[styles.totalXp, { color: textSecondary }]}>{totalXpDisplay}</Text>
@@ -392,11 +394,18 @@ const styles = StyleSheet.create({
     color: '#F97316',
   },
   levelNumber: {
-    fontSize: 72,
+    fontSize: 38,
     fontWeight: '900',
-    letterSpacing: -4,
-    lineHeight: 76,
+    letterSpacing: -1,
+    lineHeight: 44,
     marginBottom: 0,
+  },
+  levelStreakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 2,
   },
   totalXp: {
     fontSize: 13,
