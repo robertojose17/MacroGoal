@@ -20,6 +20,7 @@
 export interface OpenFoodFactsProduct {
   code: string;
   product_name?: string;
+  image_url?: string;
   generic_name?: string;
   brands?: string;
   serving_size?: string;

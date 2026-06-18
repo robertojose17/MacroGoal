@@ -76,7 +76,7 @@ async function fetchSupabaseSearch(
     const products: OpenFoodFactsProduct[] = Array.isArray(data?.products) ? data.products : [];
     console.log('[HybridSearch] Supabase returned', products.length, 'products');
 
-    if (products.length < 3) {
+    if (products.length < 1) {
       console.log('[HybridSearch] Supabase returned <3 products — skipping callback');
       return null;
     }
