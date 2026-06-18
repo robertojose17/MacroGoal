@@ -494,7 +494,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   leagueMedal: {
-    fontSize: 32,
+    fontSize: 22,
+    lineHeight: 26,
     lineHeight: 38,
   },
   leagueName: {
