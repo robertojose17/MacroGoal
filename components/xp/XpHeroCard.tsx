@@ -16,6 +16,7 @@ import {
   Animated,
   Platform,
   Pressable,
+  TouchableOpacity,
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,6 +41,8 @@ interface XpHeroCardProps {
 
 export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const xpTooltipAnim = useRef(new Animated.Value(0)).current;
+  const xpTooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showRanksModal, setShowRanksModal] = useState(false);
   const [showStreakModal, setShowStreakModal] = useState(false);
@@ -100,6 +103,17 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
     }
   }, [streakAtRisk, pulseAnim]);
 
+  const xpTooltipText = xpInLevel + ' XP · ' + xpToNextDisplay + ' to Level ' + String(nextLevel);
+
+  function handleProgressBarTap() {
+    console.log('[XpHeroCard] progress bar tapped → showing XP tooltip');
+    if (xpTooltipTimer.current) clearTimeout(xpTooltipTimer.current);
+    Animated.timing(xpTooltipAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    xpTooltipTimer.current = setTimeout(() => {
+      Animated.timing(xpTooltipAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+    }, 2000);
+  }
+
   const consistencyValue = status?.ranking?.consistency_percentile != null && status.ranking.consistency_percentile > 0
     ? 'Top ' + Math.round(100 - status.ranking.consistency_percentile) + '%'
     : 'Top 5%';
@@ -125,38 +139,39 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         <View style={styles.leftContent}>
           <Text style={styles.levelLabel}>{'LEVEL'}</Text>
 
-          {/* Level number + rank info row */}
-          <View style={styles.levelRow}>
-            <Pressable
-              onPress={() => {
-                console.log('[XpHeroCard] level number tapped → XpLevelsModal');
-                setShowLevelsModal(true);
-              }}
-              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Text style={styles.levelNumber}>{String(level)}</Text>
-            </Pressable>
-            <View style={styles.rankInfo}>
-              <Pressable
-                onPress={() => {
-                  console.log('[XpHeroCard] rank name tapped → XpRanksModal');
-                  setShowRanksModal(true);
-                }}
-                style={({ pressed }) => [styles.rankNameRow, { opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Text style={styles.rankName} numberOfLines={1} adjustsFontSizeToFit>{rank.tierName}</Text>
-                <RankIcon tierIndex={rank.tierIndex} size={28} color={rank.primaryColor} gradientColor={rank.gradientColor} />
-              </Pressable>
-              <Text style={styles.xpAmount}>{totalXpDisplay} XP</Text>
-            </View>
-          </View>
+          {/* Level number (big, top) */}
+          <Pressable
+            onPress={() => {
+              console.log('[XpHeroCard] level number tapped → XpLevelsModal');
+              setShowLevelsModal(true);
+            }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={styles.levelNumber}>{String(level)}</Text>
+          </Pressable>
+
+          {/* Rank name + icon (below level number) */}
+          <Pressable
+            onPress={() => {
+              console.log('[XpHeroCard] rank name tapped → XpRanksModal');
+              setShowRanksModal(true);
+            }}
+            style={({ pressed }) => [styles.rankNameRow, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={styles.rankName} numberOfLines={1} adjustsFontSizeToFit>{rank.tierName}</Text>
+            <RankIcon tierIndex={rank.tierIndex} size={28} color={rank.primaryColor} gradientColor={rank.gradientColor} />
+          </Pressable>
 
           {/* Progress bar */}
           <View style={styles.progressSection}>
-            <Text style={styles.xpToNext}>{xpToNextDisplay} XP to Level {String(nextLevel)}</Text>
             <View style={styles.progressRow}>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: Math.min(100, Math.max(0, progressPercent)) + '%' as `${number}%` }]} />
+              <View style={styles.progressBarWrapper}>
+                <TouchableOpacity activeOpacity={0.8} onPress={handleProgressBarTap} style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: Math.min(100, Math.max(0, progressPercent)) + '%' as `${number}%` }]} />
+                </TouchableOpacity>
+                <Animated.View style={[styles.xpTooltip, { opacity: xpTooltipAnim }]} pointerEvents="none">
+                  <Text style={styles.xpTooltipText}>{xpTooltipText}</Text>
+                </Animated.View>
               </View>
               <Text style={styles.progressPercent}>{Math.round(progressPercent)}%</Text>
             </View>
@@ -323,28 +338,19 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     marginBottom: 2,
   },
-  levelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
-  },
   levelNumber: {
     fontSize: 64,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -3,
     lineHeight: 68,
-  },
-  rankInfo: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 4,
+    marginBottom: 2,
   },
   rankNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 4,
   },
   rankName: {
     fontSize: 18,
@@ -352,28 +358,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
-  xpAmount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#2DD4BF',
-    letterSpacing: 0.2,
-  },
   progressSection: {
     marginTop: 14,
-  },
-  xpToNext: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: 6,
   },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  progressTrack: {
+  progressBarWrapper: {
     flex: 1,
+    position: 'relative',
+  },
+  progressTrack: {
     height: 7,
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.15)',
@@ -390,6 +387,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     minWidth: 32,
     textAlign: 'right',
+  },
+  xpTooltip: {
+    position: 'absolute',
+    bottom: 13,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  xpTooltipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(45,212,191,0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   avatarContainer: {
     width: 150,
