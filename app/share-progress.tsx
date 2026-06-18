@@ -10,19 +10,17 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import ShareableProgressCard, { ShareableProgressCardHandle, PROGRESS_CARD_WIDTH, PROGRESS_CARD_HEIGHT } from '@/components/ShareableProgressCard';
-import XpShareCard, { XpShareCardHandle, XP_CARD_WIDTH, XP_CARD_HEIGHT } from '@/components/xp/XpShareCard';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { TouchableOpacity } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { useXpStatus } from '@/hooks/useXpStatus';
 
 const PHOTOS_ENDPOINT = `${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`;
 
@@ -49,25 +47,17 @@ interface CardData {
   afterWeight?: number | null;
 }
 
-type CardVariant = 'progress' | 'level';
-
 export default function ShareProgressScreen() {
   const router = useRouter();
-  const { variant } = useLocalSearchParams<{ variant?: CardVariant }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { width: screenWidth } = useWindowDimensions();
 
-  const [selected, setSelected] = useState<CardVariant>(variant === 'level' ? 'level' : 'progress');
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [cardData, setCardData] = useState<CardData | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const viewShotRef = useRef<ShareableProgressCardHandle>(null);
-  const xpShotRef = useRef<XpShareCardHandle>(null);
-
-  // XP data for the Level variant
-  const { status: xpStatus, loading: xpLoading } = useXpStatus();
 
   // ─── Preview scale computation ────────────────────────────────────────────
   // Available width = screenWidth - horizontal padding (spacing.md * 2 = 32)
@@ -75,9 +65,6 @@ export default function ShareProgressScreen() {
 
   const progressScale = availableWidth / PROGRESS_CARD_WIDTH;
   const progressPreviewHeight = PROGRESS_CARD_HEIGHT * progressScale;
-
-  const xpScale = availableWidth / XP_CARD_WIDTH;
-  const xpPreviewHeight = XP_CARD_HEIGHT * xpScale;
 
   const calculateProteinAccuracyScore = useCallback((proteinLogged: number, proteinTarget: number): number => {
     if (proteinTarget === 0) {
@@ -377,7 +364,7 @@ export default function ShareProgressScreen() {
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
       ]);
 
-      // Store username for XP card
+      // Store username for progress card
       if (userData?.username) {
         setUsername(userData.username);
       }
@@ -568,19 +555,18 @@ export default function ShareProgressScreen() {
   }, [loadCardData]);
 
   const handleShare = async () => {
-    console.log('[ShareProgress] Share button pressed — variant:', selected);
+    console.log('[ShareProgress] Share button pressed');
 
-    const activeRef = selected === 'level' ? xpShotRef.current : viewShotRef.current;
-    if (!activeRef) {
-      console.log('[ShareProgress] ViewShot ref not available for variant:', selected);
+    if (!viewShotRef.current) {
+      console.log('[ShareProgress] ViewShot ref not available');
       return;
     }
 
     try {
       setSharing(true);
-      console.log('[ShareProgress] Capturing card for variant:', selected);
+      console.log('[ShareProgress] Capturing progress card...');
 
-      const uri = await activeRef.captureWhenReady();
+      const uri = await viewShotRef.current.captureWhenReady();
       console.log('[ShareProgress] Card captured:', uri);
 
       const isAvailable = await Sharing.isAvailableAsync();
@@ -609,8 +595,6 @@ export default function ShareProgressScreen() {
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const textSecColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const segBgColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const activeSegBg = isDark ? colors.cardDark : '#FFFFFF';
 
   if (loading) {
     return (
@@ -690,180 +674,62 @@ export default function ShareProgressScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Segmented control ── */}
-        <View style={[styles.segmentedControl, { backgroundColor: segBgColor }]}>
-          <TouchableOpacity
-            style={[
-              styles.segmentButton,
-              selected === 'progress' && [
-                styles.segmentButtonActive,
-                { backgroundColor: activeSegBg },
-              ],
-            ]}
-            onPress={() => {
-              console.log('[ShareProgress] Switched to Progress variant');
-              setSelected('progress');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[
-              styles.segmentText,
-              { color: selected === 'progress' ? textColor : textSecColor },
-              selected === 'progress' && styles.segmentTextActive,
-            ]}>
-              Progress
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.segmentButton,
-              selected === 'level' && [
-                styles.segmentButtonActive,
-                { backgroundColor: activeSegBg },
-              ],
-            ]}
-            onPress={() => {
-              console.log('[ShareProgress] Switched to Level variant');
-              setSelected('level');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[
-              styles.segmentText,
-              { color: selected === 'level' ? textColor : textSecColor },
-              selected === 'level' && styles.segmentTextActive,
-            ]}>
-              Level
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* ── Progress card ── */}
-        {selected === 'progress' && (
-          <>
-            {/* Off-screen full-res capture target */}
+        <>
+          {/* Off-screen full-res capture target */}
+          <View
+            style={[styles.offScreenCapture, { width: PROGRESS_CARD_WIDTH, height: PROGRESS_CARD_HEIGHT }]}
+            pointerEvents="none"
+          >
+            <ShareableProgressCard
+              ref={viewShotRef}
+              beforePhoto={cardData.beforePhotoUrl}
+              afterPhoto={cardData.afterPhotoUrl}
+              beforeDate={cardData.beforeDateLabel}
+              afterDate={cardData.afterDateLabel}
+              beforeWeight={cardData.beforeWeight}
+              afterWeight={cardData.afterWeight}
+              weightGoalProgress={cardData.weightGoalProgress}
+              username={username}
+            />
+          </View>
+
+          {/* On-screen scaled preview */}
+          <View style={styles.previewCenterContainer}>
             <View
-              style={[styles.offScreenCapture, { width: PROGRESS_CARD_WIDTH, height: PROGRESS_CARD_HEIGHT }]}
-              pointerEvents="none"
+              style={[
+                styles.previewWrapper,
+                {
+                  width: PROGRESS_CARD_WIDTH * progressScale,
+                  height: progressPreviewHeight,
+                },
+              ]}
             >
-              <ShareableProgressCard
-                ref={viewShotRef}
-                beforePhoto={cardData.beforePhotoUrl}
-                afterPhoto={cardData.afterPhotoUrl}
-                beforeDate={cardData.beforeDateLabel}
-                afterDate={cardData.afterDateLabel}
-                beforeWeight={cardData.beforeWeight}
-                afterWeight={cardData.afterWeight}
-                weightGoalProgress={cardData.weightGoalProgress}
-                username={username}
-              />
-            </View>
-
-            {/* On-screen scaled preview */}
-            <View style={styles.previewCenterContainer}>
               <View
-                style={[
-                  styles.previewWrapper,
-                  {
-                    width: PROGRESS_CARD_WIDTH * progressScale,
-                    height: progressPreviewHeight,
-                  },
-                ]}
+                style={{
+                  width: PROGRESS_CARD_WIDTH,
+                  height: PROGRESS_CARD_HEIGHT,
+                  transform: [{ scale: progressScale }],
+                  transformOrigin: 'top left',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                }}
               >
-                <View
-                  style={{
-                    width: PROGRESS_CARD_WIDTH,
-                    height: PROGRESS_CARD_HEIGHT,
-                    transform: [{ scale: progressScale }],
-                    transformOrigin: 'top left',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                  }}
-                >
-                  <ShareableProgressCard
-                    beforePhoto={cardData.beforePhotoUrl}
-                    afterPhoto={cardData.afterPhotoUrl}
-                    beforeDate={cardData.beforeDateLabel}
-                    afterDate={cardData.afterDateLabel}
-                    beforeWeight={cardData.beforeWeight}
-                    afterWeight={cardData.afterWeight}
-                    weightGoalProgress={cardData.weightGoalProgress}
-                    username={username}
-                  />
-                </View>
+                <ShareableProgressCard
+                  beforePhoto={cardData.beforePhotoUrl}
+                  afterPhoto={cardData.afterPhotoUrl}
+                  beforeDate={cardData.beforeDateLabel}
+                  afterDate={cardData.afterDateLabel}
+                  beforeWeight={cardData.beforeWeight}
+                  afterWeight={cardData.afterWeight}
+                  weightGoalProgress={cardData.weightGoalProgress}
+                  username={username}
+                />
               </View>
             </View>
-          </>
-        )}
-
-        {/* ── Level / XP card ── */}
-        {selected === 'level' && (
-          <>
-            {xpLoading || !xpStatus ? (
-              <View style={styles.xpLoadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.loadingText, { color: textColor }]}>
-                  Loading XP data...
-                </Text>
-              </View>
-            ) : (
-              <>
-                {/* Off-screen full-res capture target */}
-                <View
-                  style={[styles.offScreenCapture, { width: XP_CARD_WIDTH, height: XP_CARD_HEIGHT }]}
-                  pointerEvents="none"
-                >
-                  <XpShareCard
-                    ref={xpShotRef}
-                    level={xpStatus.current_level}
-                    totalXp={xpStatus.total_xp}
-                    currentStreak={xpStatus.current_streak}
-                    consistencyScore={cardData.consistencyScore}
-                    percentile={xpStatus.ranking?.percentile ?? 50}
-                    calorieDeficit={cardData.calorieDeficit}
-                    username={username}
-                  />
-                </View>
-
-                {/* On-screen scaled preview */}
-                <View style={styles.previewCenterContainer}>
-                  <View
-                    style={[
-                      styles.previewWrapper,
-                      {
-                        width: XP_CARD_WIDTH * xpScale,
-                        height: xpPreviewHeight,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={{
-                        width: XP_CARD_WIDTH,
-                        height: XP_CARD_HEIGHT,
-                        transform: [{ scale: xpScale }],
-                        transformOrigin: 'top left',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                      }}
-                    >
-                      <XpShareCard
-                        level={xpStatus.current_level}
-                        totalXp={xpStatus.total_xp}
-                        currentStreak={xpStatus.current_streak}
-                        consistencyScore={cardData.consistencyScore}
-                        percentile={xpStatus.ranking?.percentile ?? 50}
-                        calorieDeficit={cardData.calorieDeficit}
-                        username={username}
-                      />
-                    </View>
-                  </View>
-                </View>
-              </>
-            )}
-          </>
-        )}
+          </View>
+        </>
 
         {/* ── Username banner (shown when no username set) ── */}
         {!username && (
@@ -962,30 +828,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 40,
   },
-  // ── Segmented control ──────────────────────────────────────────────────────
-  segmentedControl: {
-    flexDirection: 'row',
-    borderRadius: borderRadius.full,
-    padding: 4,
-    marginBottom: spacing.lg,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: 'center',
-    borderRadius: borderRadius.full,
-  },
-  segmentButtonActive: {
-    boxShadow: '0px 1px 3px rgba(0,0,0,0.12)',
-    elevation: 2,
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  segmentTextActive: {
-    fontWeight: '700',
-  },
   // ── Off-screen capture target ──────────────────────────────────────────────
   offScreenCapture: {
     position: 'absolute',
@@ -1024,13 +866,6 @@ const styles = StyleSheet.create({
   usernameBannerLink: {
     fontSize: 13,
     fontWeight: '700',
-  },
-  // ── XP loading ────────────────────────────────────────────────────────────
-  xpLoadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl * 2,
-    gap: spacing.md,
   },
   // ── Share button ──────────────────────────────────────────────────────────
   shareButton: {
