@@ -77,7 +77,6 @@ export default function TabLayout() {
         name="premium"
         options={{
           title: '',
-          href: null,
           tabBarButton: () => (
             <TouchableOpacity
               style={styles.quickAddWrapper}
