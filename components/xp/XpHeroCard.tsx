@@ -25,6 +25,7 @@ import LeagueLeaderboard from './LeagueLeaderboard';
 import LeagueWelcomeModal from './LeagueWelcomeModal';
 import { useLeague } from '@/hooks/useLeague';
 import type { XpStatus } from '@/types/xp';
+import RankIcon from '@/components/xp/RankIcon';
 
 interface XpHeroCardProps {
   status: XpStatus | null;
@@ -149,19 +150,31 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
 
           </View>
 
-          {/* Row 2: Rank plain text */}
-          <Pressable
-            onPress={() => {
-              console.log('[XpHeroCard] rank text tapped → XpRanksModal');
-              setShowRanksModal(true);
-            }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={styles.rankPlainText}>{rank.tierName.toUpperCase()}</Text>
-          </Pressable>
+          {/* Row 2+3: Rank text + Total XP (left) with RankIcon badge (right) */}
+          <View style={styles.rankRow}>
+            <View>
+              {/* Row 2: Rank plain text */}
+              <Pressable
+                onPress={() => {
+                  console.log('[XpHeroCard] rank text tapped → XpRanksModal');
+                  setShowRanksModal(true);
+                }}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={styles.rankPlainText}>{rank.tierName.toUpperCase()}</Text>
+              </Pressable>
 
-          {/* Row 3: Total XP */}
-          <Text style={[styles.totalXp, { color: textSecondary }]}>{totalXpDisplay}</Text>
+              {/* Row 3: Total XP */}
+              <Text style={[styles.totalXp, { color: textSecondary }]}>{totalXpDisplay}</Text>
+            </View>
+
+            <RankIcon
+              tierIndex={rank.tierIndex}
+              color={rank.primaryColor}
+              gradientColor={rank.gradientColor}
+              size={52}
+            />
+          </View>
 
           {/* Row 4: Progress bar */}
           <View style={styles.progressSection}>
@@ -390,6 +403,11 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 0,
     marginBottom: 2,
+  },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   totalXp: {
     fontSize: 13,
