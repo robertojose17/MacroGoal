@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
+import { trackOnboardingEvent } from '@/utils/onboardingAnalytics';
 import * as Linking from 'expo-linking';
 
 const BG_IMAGE = require('../../assets/images/73291328-4520-475d-9d5f-c23a5206eb1d.jpeg');
@@ -36,8 +37,14 @@ export default function SignUpScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const confirmPasswordRef = useRef<View>(null);
 
+  useEffect(() => {
+    console.log('[SignUp] Screen viewed');
+    trackOnboardingEvent('auth_signup_screen_viewed');
+  }, []);
+
   const handleSignUp = async () => {
     console.log('[SignUp] Button pressed — starting signup process');
+    trackOnboardingEvent('auth_signup_attempted');
 
     if (!name || !email || !password || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -87,6 +94,7 @@ export default function SignUpScreen() {
 
       console.log('[SignUp] ✅ Auth user created:', authData.user.id);
       await trackEvent('account_created');
+      trackOnboardingEvent('auth_signup_completed', undefined, { userId: authData.user.id });
 
       const emailConfirmationRequired = !authData.session;
 

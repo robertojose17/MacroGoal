@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
+import { trackOnboardingEvent } from '@/utils/onboardingAnalytics';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
@@ -140,6 +141,7 @@ export default function CompleteOnboardingScreen() {
     if (step === 9) {
       trackEvent('onboarding_completed');
     }
+    trackOnboardingEvent('onboarding_step_completed', step);
     goToStep(step + 1);
   };
 
@@ -171,6 +173,14 @@ export default function CompleteOnboardingScreen() {
         Animated.timing(bullet5Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
       ]).start();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // ─── Step viewed tracking ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    console.log(`[Onboarding] Step ${step} viewed`);
+    trackOnboardingEvent('onboarding_step_viewed', step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -381,11 +391,13 @@ export default function CompleteOnboardingScreen() {
 
   const handleStartTrial = async () => {
     console.log('[Onboarding] Start Free Trial pressed — requesting notification permission then navigating to subscription');
+    trackOnboardingEvent('onboarding_paywall_start_trial');
     await showNotifPromptThen(() => router.push('/subscription?autoStart=true'));
   };
 
   const handleSkipTrial = async () => {
     console.log('[Onboarding] Skip trial pressed — requesting notification permission then navigating home');
+    trackOnboardingEvent('onboarding_paywall_skip');
     await showNotifPromptThen(() => router.replace('/(tabs)/(home)/'));
   };
 
