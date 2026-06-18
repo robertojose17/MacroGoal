@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   statusCol: {
-    width: 64,
+    width: 80,
     alignItems: 'flex-end',
   },
   currentBadge: {
