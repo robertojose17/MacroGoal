@@ -1,6 +1,6 @@
 
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, Animated, Dimensions, ScrollView } from 'react-native';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -79,6 +79,8 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const screenWidth = Dimensions.get('window').width;
 
   // ── Streak Rescue ──
   const {
@@ -344,6 +346,13 @@ export default function HomeScreen() {
   const handleTabPress = (tab: 'tracking' | 'planning') => {
     console.log('[Home Android] Segmented control pressed:', tab);
     setActiveTab(tab);
+    Animated.spring(slideAnim, {
+      toValue: tab === 'tracking' ? 0 : -screenWidth,
+      damping: 20,
+      stiffness: 120,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handlePlanPress = (plan: MealPlan) => {
@@ -583,59 +592,60 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      {/* Top header: pill control in Tracking mode, underline tabs in Planning mode */}
-      {activeTab === 'tracking' ? (
-        <View style={[styles.segmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-          <View style={[styles.segmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
-            <TouchableOpacity
-              style={[styles.segmentButton, activeTab === 'tracking' && { backgroundColor: colors.primary }]}
-              onPress={() => handleTabPress('tracking')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentButtonText, { color: activeTab === 'tracking' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                Tracking
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentButton, activeTab === 'planning' && { backgroundColor: colors.primary }]}
-              onPress={() => handleTabPress('planning')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                Planning
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <View style={[styles.planningHeaderRow, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
+      {/* Top header: always-visible segmented control */}
+      <View style={[styles.segmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        <View style={[styles.segmentedControl, { backgroundColor: isDark ? colors.cardDark : '#E8EAF0' }]}>
           <TouchableOpacity
-            style={styles.planningBackButton}
-            onPress={() => {
-              console.log('[Home Android] Planning back button pressed — returning to Tracking');
-              handleTabPress('tracking');
-            }}
-            activeOpacity={0.7}
+            style={[styles.segmentButton, activeTab === 'tracking' && { backgroundColor: colors.primary }]}
+            onPress={() => handleTabPress('tracking')}
+            activeOpacity={0.8}
           >
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="chevron-left" size={16} color={colors.primary} />
-            <Text style={[styles.planningBackText, { color: colors.primary }]}>Tracking</Text>
+            <Text style={[styles.segmentButtonText, { color: activeTab === 'tracking' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Tracking
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentButton, activeTab === 'planning' && { backgroundColor: colors.primary }]}
+            onPress={() => handleTabPress('planning')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Planning
+            </Text>
           </TouchableOpacity>
         </View>
-      )}
+      </View>
 
-      <FlatList
-        data={[{ key: 'content' }]}
-        renderItem={() => (
-          <View>
-            {activeTab === 'tracking' ? renderTrackingContent() : renderPlanningContent()}
+      <View style={{ flex: 1, overflow: 'hidden' }}>
+        <Animated.View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            width: screenWidth * 2,
+            transform: [{ translateX: slideAnim }],
+          }}
+        >
+          {/* Tracking panel */}
+          <ScrollView
+            style={{ width: screenWidth }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {renderTrackingContent()}
             <View style={styles.bottomSpacer} />
-          </View>
-        )}
-        keyExtractor={(item) => item.key}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={styles.scrollContent}
-      />
+          </ScrollView>
+          {/* Planning panel */}
+          <ScrollView
+            style={{ width: screenWidth }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {renderPlanningContent()}
+            <View style={styles.bottomSpacer} />
+          </ScrollView>
+        </Animated.View>
+      </View>
 
       {/* Streak Rescue Modal */}
       <StreakRescueModal
@@ -691,24 +701,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentButtonText: { fontSize: 14, fontWeight: '600' },
-  planningHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  planningBackButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingRight: spacing.sm,
-    minWidth: 80,
-  },
-  planningBackText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
   dateNavigation: {
     flexDirection: 'row',
