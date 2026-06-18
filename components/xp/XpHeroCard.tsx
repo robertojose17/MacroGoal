@@ -147,17 +147,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               </View>
             </Pressable>
 
-            <Pressable
-              onPress={() => {
-                console.log('[XpHeroCard] streak pill tapped → StreakBenefitsModal');
-                setShowStreakModal(true);
-              }}
-              style={({ pressed }) => [styles.streakPill, { opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Animated.Text style={[styles.streakPillText, { opacity: streakAtRisk ? pulseAnim : 1 }]} numberOfLines={1}>
-                {'🔥 ' + streakDisplay + ' day streak'}
-              </Animated.Text>
-            </Pressable>
           </View>
 
           {/* Row 2: Rank plain text */}
@@ -218,13 +207,18 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           }}
           style={({ pressed }) => [styles.rightContent, { opacity: pressed ? 0.7 : 1 }]}
         >
-          <Text style={styles.leagueMedal}>{leagueTierEmoji}</Text>
-          <Text style={[styles.leagueName, { color: textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
-            {leagueTierLabel}
-          </Text>
-          <Text style={[styles.leaguePositionTime, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>
-            {positionTimeText}
-          </Text>
+          {/* Medal + League name + position on same row */}
+          <View style={styles.leagueTopRow}>
+            <Text style={styles.leagueMedal}>{leagueTierEmoji}</Text>
+            <View style={styles.leagueTextStack}>
+              <Text style={[styles.leagueName, { color: textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+                {leagueTierLabel}
+              </Text>
+              <Text style={[styles.leaguePositionTime, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>
+                {positionTimeText}
+              </Text>
+            </View>
+          </View>
           <Text style={styles.leagueXp}>{leagueXpThisWeek}</Text>
           <Text style={[styles.leagueXpLabel, { color: textSecondary }]}>{'this week'}</Text>
           {leagueStatus?.is_in_promotion_zone && (
@@ -376,11 +370,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   rankPlainText: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
     color: '#22C55E',
     letterSpacing: 0.5,
-    marginTop: 2,
+    marginTop: 6,
   },
   levelChip: {
     backgroundColor: '#14B8A6',
@@ -514,6 +508,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#EF4444',
     marginTop: 3,
+  },
+  leagueTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  leagueTextStack: {
+    flex: 1,
   },
 
   // BOTTOM STATS STRIP
