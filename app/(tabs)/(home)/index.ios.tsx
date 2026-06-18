@@ -41,6 +41,7 @@ interface FoodItem {
   fiber: number;
   serving_description: string | null;
   grams: number | null;
+  meal_type?: string;
   foods: {
     id: string;
     name: string;
@@ -118,6 +119,7 @@ export default function HomeScreen() {
     { type: 'dinner', label: 'Dinner', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
     { type: 'snack', label: 'Snacks', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
   ]);
+  const [allFoodItems, setAllFoodItems] = useState<(FoodItem & { meal_type: string })[]>([]);
   const [totalCalories, setTotalCalories] = useState(0);
   const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
   const [loading, setLoading] = useState(true);
@@ -215,6 +217,7 @@ export default function HomeScreen() {
       if (mealsError) {
         console.error('[Home iOS] Error loading meals:', mealsError);
         setError('Failed to load meals. Please try refreshing.');
+        setAllFoodItems([]);
       } else {
         console.log('[Home iOS] Meals loaded for', dateString, ':', mealsData?.length || 0, 'meals');
 
@@ -228,7 +231,7 @@ export default function HomeScreen() {
           mealsData.forEach((meal: any) => {
             if (meal.meal_items) {
               meal.meal_items.forEach((item: any) => {
-                mealsByType[meal.meal_type as MealType].push(item);
+                mealsByType[meal.meal_type as MealType].push({ ...item, meal_type: meal.meal_type });
                 totalCals += item.calories || 0;
                 totalP += item.protein || 0;
                 totalC += item.carbs || 0;
@@ -258,6 +261,13 @@ export default function HomeScreen() {
         ]);
         setTotalCalories(totalCals);
         setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
+
+        // Flatten all items into a single chronological list
+        const flat: (FoodItem & { meal_type: string })[] = [];
+        (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).forEach(type => {
+          mealsByType[type].forEach(item => flat.push({ ...item, meal_type: type }));
+        });
+        setAllFoodItems(flat);
       }
     } catch (err: any) {
       console.error('[Home iOS] Error in loadData:', err);
@@ -371,6 +381,8 @@ export default function HomeScreen() {
         console.log('[Home iOS] UI state updated - item removed from list');
         return newMeals;
       });
+
+      setAllFoodItems(prev => prev.filter(i => i.id !== itemId));
 
       if (deletedItem) {
         setTotalCalories(prev => prev - ((deletedItem as FoodItem).calories || 0));
@@ -596,71 +608,190 @@ export default function HomeScreen() {
     </SwipeToDeleteRow>
   );
 
-  const renderTrackingContent = () => (
-    <View>
-      <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Calories</Text>
-        <View style={styles.caloriesContent}>
-          <ProgressCircle
-            current={totalCalories}
-            target={goal?.daily_calories || 2000}
-            size={140}
-            strokeWidth={12}
-            color={colors.calories}
-            label="kcal"
-          />
-          <View style={styles.macroSummaryCompact}>
-            <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-            <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-            <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-            <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+  const getMealTypeLabel = (type: string): string => {
+    switch (type) {
+      case 'breakfast': return 'Breakfast';
+      case 'lunch': return 'Lunch';
+      case 'dinner': return 'Dinner';
+      case 'snack': return 'Snack';
+      default: return type;
+    }
+  };
+
+  const getMealTypeColor = (type: string): string => {
+    switch (type) {
+      case 'breakfast': return '#F59E0B';
+      case 'lunch': return '#10B981';
+      case 'dinner': return '#6366F1';
+      case 'snack': return '#EC4899';
+      default: return colors.primary;
+    }
+  };
+
+  const renderTrackingContent = () => {
+    const cardBg = isDark ? colors.cardDark : colors.card;
+    const textPrimary = isDark ? colors.textDark : colors.text;
+    const textSec = isDark ? colors.textSecondaryDark : colors.textSecondary;
+    const dividerColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+    const itemCount = allFoodItems.length;
+    const itemCountLabel = itemCount === 1 ? 'item' : 'items';
+
+    return (
+      <View>
+        {/* Calories + macros summary card */}
+        <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
+          <Text style={[styles.cardTitle, { color: textPrimary }]}>Calories</Text>
+          <View style={styles.caloriesContent}>
+            <ProgressCircle
+              current={totalCalories}
+              target={goal?.daily_calories || 2000}
+              size={140}
+              strokeWidth={12}
+              color={colors.calories}
+              label="kcal"
+            />
+            <View style={styles.macroSummaryCompact}>
+              <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+              <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+              <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+              <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+            </View>
           </View>
         </View>
-      </View>
 
-      {meals.map((meal) => (
-        <View key={meal.type} style={[styles.mealCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+        {/* Today's Food — single chronological list */}
+        <View style={[styles.mealCard, { backgroundColor: cardBg }]}>
+          {/* Header */}
           <View style={styles.mealHeader}>
             <View style={styles.mealHeaderLeft}>
-              <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{meal.label}</Text>
-              <View style={styles.mealMacroRow}>
-                <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {Math.round(meal.totalCalories)} kcal
+              <Text style={[styles.mealTitle, { color: textPrimary }]}>Today's Food</Text>
+              {itemCount > 0 && (
+                <Text style={[styles.mealCalories, { color: textSec }]}>
+                  {itemCount}
+                  {' '}
+                  {itemCountLabel}
                 </Text>
-                {meal.totalCalories > 0 && (
-                  <>
-                    <Text style={[styles.mealMacroDot, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{'  ·  '}</Text>
-                    <Text style={[styles.mealMacroValue, { color: colors.protein }]}>{Math.round(meal.totalProtein)}P</Text>
-                    <Text style={[styles.mealMacroDot, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{'  '}</Text>
-                    <Text style={[styles.mealMacroValue, { color: colors.carbs }]}>{Math.round(meal.totalCarbs)}C</Text>
-                    <Text style={[styles.mealMacroDot, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{'  '}</Text>
-                    <Text style={[styles.mealMacroValue, { color: colors.fats }]}>{Math.round(meal.totalFats)}F</Text>
-                  </>
-                )}
-              </View>
+              )}
             </View>
-            <TouchableOpacity style={styles.addMealButton} onPress={() => handleAddFood(meal.type)}>
+            <TouchableOpacity
+              style={styles.addMealButton}
+              onPress={() => {
+                const hour = new Date().getHours();
+                let mealType: MealType = 'snack';
+                if (hour >= 6 && hour < 10) mealType = 'breakfast';
+                else if (hour >= 10 && hour < 15) mealType = 'lunch';
+                else if (hour >= 15 && hour < 18) mealType = 'snack';
+                else if (hour >= 18 && hour < 22) mealType = 'dinner';
+                console.log('[Home iOS] Add food pressed, smart meal type:', mealType);
+                handleAddFood(mealType);
+              }}
+            >
               <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add" size={28} color={colors.info} />
             </TouchableOpacity>
           </View>
 
-          {meal.items.length === 0 ? (
-            <TouchableOpacity style={styles.emptyMeal} onPress={() => handleAddFood(meal.type)}>
-              <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Tap to add food</Text>
+          {/* Empty state */}
+          {itemCount === 0 ? (
+            <TouchableOpacity
+              style={styles.emptyMeal}
+              onPress={() => {
+                console.log('[Home iOS] Empty state tapped, adding breakfast');
+                handleAddFood('breakfast');
+              }}
+            >
+              <Text style={[styles.emptyMealText, { color: textSec }]}>Tap to add food</Text>
             </TouchableOpacity>
           ) : (
-            <FlatList
-              data={meal.items}
-              renderItem={renderFoodItem}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
-            />
+            /* Chronological food list */
+            <View>
+              {allFoodItems.map((item, index) => {
+                const isLast = index === allFoodItems.length - 1;
+                const mealColor = getMealTypeColor(item.meal_type ?? 'snack');
+                const mealLabel = getMealTypeLabel(item.meal_type ?? 'snack');
+                const pillBg = mealColor + '22';
+                const servingText = getServingDisplayText(item);
+                const proteinRounded = Math.round(item.protein);
+                const carbsRounded = Math.round(item.carbs);
+                const fatsRounded = Math.round(item.fats);
+                const calsRounded = Math.round(item.calories);
+                const foodName = item.foods?.name || 'Unknown Food';
+                const foodBrand = item.foods?.brand;
+                return (
+                  <View key={item.id}>
+                    <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
+                      {(isSwiping: boolean) => (
+                        <TouchableOpacity
+                          style={styles.foodItem}
+                          onPress={() => handleEditFood(item, isSwiping)}
+                          activeOpacity={0.7}
+                          disabled={isSwiping}
+                        >
+                          {/* Meal type color dot */}
+                          <View style={[styles.mealTypeDot, { backgroundColor: mealColor }]} />
+                          <View style={styles.foodInfo}>
+                            <Text style={[styles.foodName, { color: textPrimary }]}>
+                              {foodName}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              {foodBrand && (
+                                <Text style={[styles.foodBrand, { color: textSec }]}>
+                                  {foodBrand}
+                                </Text>
+                              )}
+                              <View style={[styles.mealTypePill, { backgroundColor: pillBg }]}>
+                                <Text style={[styles.mealTypePillText, { color: mealColor }]}>
+                                  {mealLabel}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Text style={[styles.foodDetails, { color: textSec }]}>
+                                {servingText}
+                              </Text>
+                              <Text style={[styles.foodDetails, { color: textSec }]}>
+                                {'  ·  '}
+                              </Text>
+                              <Text style={[styles.foodDetails, { color: colors.protein }]}>
+                                {proteinRounded}
+                                {'P'}
+                              </Text>
+                              <Text style={[styles.foodDetails, { color: textSec }]}>
+                                {'  '}
+                              </Text>
+                              <Text style={[styles.foodDetails, { color: colors.carbs }]}>
+                                {carbsRounded}
+                                {'C'}
+                              </Text>
+                              <Text style={[styles.foodDetails, { color: textSec }]}>
+                                {'  '}
+                              </Text>
+                              <Text style={[styles.foodDetails, { color: colors.fats }]}>
+                                {fatsRounded}
+                                {'F'}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.foodCalories}>
+                            <Text style={[styles.foodCaloriesValue, { color: textPrimary }]}>
+                              {calsRounded}
+                            </Text>
+                            <Text style={[styles.foodCaloriesLabel, { color: textSec }]}>
+                              kcal
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                    </SwipeToDeleteRow>
+                    {!isLast && <View style={[styles.itemSeparator, { backgroundColor: dividerColor }]} />}
+                  </View>
+                );
+              })}
+            </View>
           )}
         </View>
-      ))}
-    </View>
-  );
+      </View>
+    );
+  };
 
   const renderPlanningContent = () => {
     if (plansLoading) {
@@ -1221,7 +1352,24 @@ const styles = StyleSheet.create({
   },
   emptyMealText: { ...typography.body },
   itemSeparator: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginVertical: spacing.xs },
-  foodItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
+  foodItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
+  mealTypeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 10,
+    marginTop: 4,
+    flexShrink: 0,
+  },
+  mealTypePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  mealTypePillText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
   foodInfo: { flex: 1 },
   foodName: { ...typography.bodyBold, marginBottom: 2 },
   foodBrand: { ...typography.caption, marginBottom: 2 },
