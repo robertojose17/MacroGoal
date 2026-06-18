@@ -167,7 +167,24 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         <View style={styles.avatarContainer} pointerEvents="none">
           <View style={styles.glowRing1} />
           <View style={styles.glowRing2} />
-          <Image source={{ uri: avatarUri }} style={styles.avatarImage} resizeMode="contain" />
+          <View style={styles.avatarImageWrapper}>
+            <Image source={{ uri: avatarUri }} style={styles.avatarImage} resizeMode="contain" />
+            {/* Bottom fade — blends avatar into card background */}
+            <LinearGradient
+              colors={['transparent', 'transparent', 'rgba(13,43,31,0.6)', 'rgba(13,43,31,0.95)']}
+              locations={[0, 0.5, 0.75, 1]}
+              style={styles.avatarBottomFade}
+              pointerEvents="none"
+            />
+            {/* Left fade — blends avatar into left content area */}
+            <LinearGradient
+              colors={['rgba(13,33,55,0.7)', 'transparent']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.avatarLeftFade}
+              pointerEvents="none"
+            />
+          </View>
         </View>
 
       </View>
@@ -187,8 +204,8 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             <Animated.Text style={[styles.statEmoji, { opacity: streakAtRisk ? pulseAnim : 1 }]}>{'🔥'}</Animated.Text>
           </View>
           <View>
-            <Text style={styles.statValue}>{streakDisplay}</Text>
-            <Text style={styles.statLabel}>{'Day Streak'}</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{streakDisplay}</Text>
+            <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>{'Day Streak'}</Text>
           </View>
         </Pressable>
 
@@ -206,8 +223,8 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             <Text style={styles.statEmoji}>{'🛡️'}</Text>
           </View>
           <View>
-            <Text style={styles.statValue}>{leaguePosition}</Text>
-            <Text style={styles.statLabel}>{leagueTierLabel}</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{leaguePosition}</Text>
+            <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>{leagueTierLabel}</Text>
           </View>
         </Pressable>
 
@@ -225,8 +242,8 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             <Text style={styles.statEmoji}>{'📈'}</Text>
           </View>
           <View>
-            <Text style={[styles.statValue, { color: '#2DD4BF' }]}>{consistencyValue}</Text>
-            <Text style={styles.statLabel}>{'Consistency'}</Text>
+            <Text style={[styles.statValue, { color: '#2DD4BF' }]} numberOfLines={1} adjustsFontSizeToFit>{consistencyValue}</Text>
+            <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit>{'Consistency'}</Text>
           </View>
         </Pressable>
 
@@ -401,42 +418,62 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     bottom: 20,
   },
+  avatarImageWrapper: {
+    width: 150,
+    height: 190,
+    overflow: 'hidden',
+  },
   avatarImage: {
     width: 150,
     height: 190,
+    backgroundColor: 'transparent',
+  },
+  avatarBottomFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '60%',
+  },
+  avatarLeftFade: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: '40%',
   },
   statsStrip: {
     flexDirection: 'row',
     backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
   },
   statItem: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   statIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   statEmoji: {
-    fontSize: 16,
+    fontSize: 14,
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.3,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.5)',
     marginTop: 1,
