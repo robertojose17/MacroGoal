@@ -26,6 +26,7 @@ import LeagueWelcomeModal from './LeagueWelcomeModal';
 import { useLeague } from '@/hooks/useLeague';
 import type { XpStatus } from '@/types/xp';
 import RankIcon from '@/components/xp/RankIcon';
+import { supabase } from '@/lib/supabase/client';
 
 interface XpHeroCardProps {
   status: XpStatus | null;
@@ -52,6 +53,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const [showStreakModal, setShowStreakModal] = useState(false);
   const [showLevelsModal, setShowLevelsModal] = useState(false);
   const [showLeagueModal, setShowLeagueModal] = useState(false);
+  const [lbsLost, setLbsLost] = useState(0);
 
   const { status: leagueStatus } = useLeague();
 
@@ -98,6 +100,33 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const dividerColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
   const progressTrackColor = isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB';
   const separatorColor = isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB';
+
+  // Fetch lbs lost from check_ins
+  useEffect(() => {
+    async function fetchLbsLost() {
+      console.log('[XpHeroCard] fetching lbs lost from check_ins');
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('check_ins')
+          .select('weight, date')
+          .eq('user_id', user.id)
+          .not('weight', 'is', null)
+          .order('date', { ascending: true });
+        if (data && data.length >= 2) {
+          const earliest = Number(data[0].weight);
+          const latest = Number(data[data.length - 1].weight);
+          const lost = Math.max(0, Math.round((earliest - latest) * 10) / 10);
+          console.log('[XpHeroCard] lbs lost computed:', lost);
+          setLbsLost(lost);
+        }
+      } catch (err) {
+        console.log('[XpHeroCard] error fetching lbs lost:', err);
+      }
+    }
+    fetchLbsLost();
+  }, [status]);
 
   // Pulse animation for streak-at-risk
   useEffect(() => {
@@ -266,20 +295,14 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
 
         <View style={[styles.statDivider, { backgroundColor: dividerColor }]} />
 
-        {/* League */}
-        <Pressable
-          onPress={() => {
-            console.log('[XpHeroCard] league stat tapped → LeagueLeaderboard');
-            setShowLeagueModal(true);
-          }}
-          style={({ pressed }) => [styles.statItem, { opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Text style={styles.statEmoji}>{leagueTierEmoji}</Text>
+        {/* Lbs Lost */}
+        <View style={styles.statItem}>
+          <Text style={styles.statEmoji}>{'⚖️'}</Text>
           <View>
-            <Text style={[styles.statValue, { color: textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>{leaguePosition}</Text>
-            <Text style={[styles.statLabel, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>{leagueTierLabel}</Text>
+            <Text style={[styles.statValue, { color: textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>{lbsLost.toFixed(1) + ' lbs'}</Text>
+            <Text style={[styles.statLabel, { color: textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>{'Lbs Lost'}</Text>
           </View>
-        </Pressable>
+        </View>
 
         <View style={[styles.statDivider, { backgroundColor: dividerColor }]} />
 
