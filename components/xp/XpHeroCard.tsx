@@ -117,7 +117,9 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         if (data && data.length >= 2) {
           const earliest = Number(data[0].weight);
           const latest = Number(data[data.length - 1].weight);
-          const lost = Math.max(0, Math.round((earliest - latest) * 10) / 10);
+          const lostKg = earliest - latest;
+          const lostLbs = lostKg * 2.20462;
+          const lost = Math.max(0, Math.round(lostLbs * 10) / 10);
           console.log('[XpHeroCard] lbs lost computed:', lost);
           setLbsLost(lost);
         }
