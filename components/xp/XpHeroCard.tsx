@@ -219,8 +219,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               </Text>
             </View>
           </View>
-          <Text style={styles.leagueXp}>{leagueXpThisWeek}</Text>
-          <Text style={[styles.leagueXpLabel, { color: textSecondary }]}>{'this week'}</Text>
+          <Text style={styles.leagueXp}>{leagueXpThisWeek + ' this week'}</Text>
           {leagueStatus?.is_in_promotion_zone && (
             <Text style={styles.promotionText}>{'↑ You\'re moving up'}</Text>
           )}
