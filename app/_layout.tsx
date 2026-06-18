@@ -26,6 +26,7 @@ import { reportTodaySteps } from "@/utils/stepsReporter";
 import { setUserTimezone } from "@/utils/macroXpApi";
 import type { Session } from "@supabase/supabase-js";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import GoPremiumFloatingBadge from "@/components/GoPremiumFloatingBadge";
 import Constants from "expo-constants";
 import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
 import mobileAds from "@/utils/mobileAds";
@@ -691,6 +692,7 @@ export default function RootLayout() {
               </Stack>
           </WidgetProvider>
         </ThemeProvider>
+        <GoPremiumFloatingBadge />
       </SafeAreaProvider>
     </ErrorBoundary>
     </NotificationProvider>
