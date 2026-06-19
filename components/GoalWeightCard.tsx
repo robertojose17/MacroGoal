@@ -7,11 +7,113 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase/client';
 
 const KG_TO_LBS = 2.20462;
-const CHART_HEIGHT = 70;
+const CHART_HEIGHT = 120;
+const CHART_LINE_COLOR = '#5B9AA8';
+const CHART_GRADIENT_START = 'rgba(91,154,168,0.3)';
+const CHART_GRADIENT_END = 'rgba(91,154,168,0)';
+
+interface CheckIn {
+  date: string;
+  weight: number;
+}
+
+// ─── WeightMiniChart ──────────────────────────────────────────────────────────
+
+interface WeightMiniChartProps {
+  checkIns: CheckIn[];
+  isDark: boolean;
+  width: number;
+}
+
+function WeightMiniChart({ checkIns, isDark, width }: WeightMiniChartProps) {
+  if (checkIns.length < 2 || width <= 0) {
+    const placeholderColor = isDark ? 'rgba(255,255,255,0.15)' : '#E5E7EB';
+    return (
+      <View style={[styles.miniChartPlaceholder, { borderColor: placeholderColor }]}>
+        <Text style={[styles.miniChartPlaceholderText, { color: isDark ? 'rgba(255,255,255,0.3)' : '#9CA3AF' }]}>
+          Log check-ins to see trend
+        </Text>
+      </View>
+    );
+  }
+
+  const pad = 8;
+  const h = CHART_HEIGHT;
+  const w = width;
+
+  const weights = checkIns.map((c) => c.weight);
+  const minW = Math.min(...weights);
+  const maxW = Math.max(...weights);
+  const range = maxW - minW || 1;
+
+  const pts = checkIns.map((c, i) => ({
+    x: pad + (i / (checkIns.length - 1)) * (w - pad * 2),
+    y: pad + ((maxW - c.weight) / range) * (h - pad * 2),
+  }));
+
+  // Smooth cubic bezier path
+  let linePath = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const cpx = (prev.x + curr.x) / 2;
+    linePath += ` C ${cpx} ${prev.y} ${cpx} ${curr.y} ${curr.x} ${curr.y}`;
+  }
+
+  // Fill path: go down to bottom, back to start
+  const fillPath =
+    `M ${pts[0].x} ${h}` +
+    ` L ${pts[0].x} ${pts[0].y}` +
+    linePath.slice(linePath.indexOf(' ')) +
+    ` L ${pts[pts.length - 1].x} ${h} Z`;
+
+  const lastPt = pts[pts.length - 1];
+
+  return (
+    <Svg width={w} height={h}>
+      <Defs>
+        <LinearGradient id="wgGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={CHART_GRADIENT_START} stopOpacity="1" />
+          <Stop offset="1" stopColor={CHART_GRADIENT_END} stopOpacity="0" />
+        </LinearGradient>
+      </Defs>
+
+      {/* Gradient fill */}
+      <Path d={fillPath} fill="url(#wgGrad)" />
+
+      {/* Line */}
+      <Path d={linePath} stroke={CHART_LINE_COLOR} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Dots — all small, last one highlighted */}
+      {pts.map((p, i) => {
+        const isLast = i === pts.length - 1;
+        return (
+          <React.Fragment key={`dot-${i}`}>
+            {isLast && (
+              <Circle cx={p.x} cy={p.y} r={7} fill={CHART_LINE_COLOR} opacity={0.15} />
+            )}
+            <Circle
+              cx={p.x}
+              cy={p.y}
+              r={isLast ? 4 : 2.5}
+              fill={isLast ? CHART_LINE_COLOR : CHART_LINE_COLOR}
+              opacity={isLast ? 1 : 0.45}
+              stroke={isLast ? (isDark ? '#1C1C1E' : '#FFFFFF') : 'none'}
+              strokeWidth={isLast ? 1.5 : 0}
+            />
+          </React.Fragment>
+        );
+      })}
+    </Svg>
+  );
+}
+
+// ─── GoalWeightCard ───────────────────────────────────────────────────────────
 
 interface GoalWeightCardProps {
   userId: string;
@@ -29,7 +131,7 @@ export default function GoalWeightCard({
   startWeightKg: propStart,
 }: GoalWeightCardProps) {
   const router = useRouter();
-  const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [chartWidth, setChartWidth] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -61,29 +163,25 @@ export default function GoalWeightCard({
   const textSecondary = isDark ? 'rgba(255,255,255,0.5)' : '#6B7280';
   const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB';
 
-  // While loading, show skeleton card
+  // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={[styles.card, { backgroundColor: bg }]}>
-        <View style={styles.row}>
+        <View style={styles.headerRow}>
           <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
         </View>
         <View style={[styles.skeletonChart, { backgroundColor: trackBg }]} />
         <View style={[styles.skeletonBar, { backgroundColor: trackBg }]} />
-        <View style={styles.row}>
+        <View style={styles.headerRow}>
           <View style={[styles.skeletonLabel, { backgroundColor: trackBg }]} />
           <View style={[styles.skeletonLabel, { backgroundColor: trackBg }]} />
         </View>
-        <ActivityIndicator
-          size="small"
-          color={textSecondary}
-          style={{ marginTop: 8 }}
-        />
+        <ActivityIndicator size="small" color={textSecondary} style={{ marginTop: 8 }} />
       </View>
     );
   }
 
-  // No goal set — show prompt only after loading is complete
+  // ── No goal set ───────────────────────────────────────────────────────────
   if (!propGoal) {
     return (
       <View style={[styles.card, { backgroundColor: bg }]}>
@@ -108,19 +206,17 @@ export default function GoalWeightCard({
   // Use last check-in weight as fallback for current weight
   const currentKg = propCurrent ?? (checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null);
 
-  // No current weight data at all — show informational state, never return null
+  // ── No current weight ─────────────────────────────────────────────────────
   if (!currentKg) {
     return (
       <View style={[styles.card, { backgroundColor: bg }]}>
-        <View style={styles.row}>
+        <View style={styles.headerRow}>
           <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
         </View>
-        <View style={[styles.chartArea, { height: CHART_HEIGHT }]}>
-          <View style={styles.noChartPlaceholder}>
-            <Text style={[styles.noChartText, { color: textSecondary }]}>
-              Log a weight check-in to start tracking progress
-            </Text>
-          </View>
+        <View style={[styles.noDataArea, { height: CHART_HEIGHT }]}>
+          <Text style={[styles.noDataText, { color: textSecondary }]}>
+            Log a weight check-in to start tracking progress
+          </Text>
         </View>
         <TouchableOpacity
           style={styles.btn}
@@ -136,6 +232,7 @@ export default function GoalWeightCard({
     );
   }
 
+  // ── Derived values ────────────────────────────────────────────────────────
   const startKg = propStart ?? (checkIns.length > 0 ? checkIns[0].weight : currentKg);
   const currentLbs = Math.round(currentKg * KG_TO_LBS);
   const goalLbs = Math.round(propGoal * KG_TO_LBS);
@@ -162,24 +259,6 @@ export default function GoalWeightCard({
     }
   }
 
-  const hasChart = checkIns.length >= 2 && chartWidth > 0;
-  let pts: { x: number; y: number }[] = [];
-
-  if (hasChart) {
-    const ws = checkIns.map((c) => c.weight);
-    const minW = Math.min(...ws);
-    const maxW = Math.max(...ws);
-    const range = maxW - minW || 1;
-    const pad = 8;
-    pts = checkIns.map((c, i) => ({
-      x: (i / (checkIns.length - 1)) * chartWidth,
-      y:
-        pad +
-        ((isLosing ? c.weight - minW : maxW - c.weight) / range) *
-          (CHART_HEIGHT - pad * 2),
-    }));
-  }
-
   const badgeBg = isOnTrack ? 'rgba(92,185,123,0.12)' : 'rgba(255,138,91,0.12)';
   const badgeColor = isOnTrack ? '#5CB97B' : '#FF8A5B';
   const badgeLabel = isOnTrack ? '✓ ON TRACK' : 'BEHIND';
@@ -189,94 +268,51 @@ export default function GoalWeightCard({
   return (
     <View style={[styles.card, { backgroundColor: bg }]}>
       {/* Header */}
-      <View style={styles.row}>
+      <View style={styles.headerRow}>
         <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
           <Text style={[styles.badgeText, { color: badgeColor }]}>{badgeLabel}</Text>
         </View>
       </View>
 
-      {/* Chart */}
-      <View
-        style={[styles.chartArea, { height: CHART_HEIGHT }]}
-        onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}
-      >
-        {hasChart &&
-          pts.slice(0, -1).map((a, i) => {
-            const b = pts[i + 1];
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const len = Math.sqrt(dx * dx + dy * dy);
-            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-            const cx = a.x + dx / 2;
-            const cy = a.y + dy / 2;
-            return (
-              <View
-                key={`seg-${i}`}
-                style={{
-                  position: 'absolute',
-                  left: cx,
-                  top: cy,
-                  width: len,
-                  height: 2,
-                  marginLeft: -len / 2,
-                  marginTop: -1,
-                  backgroundColor: '#5B9AA8',
-                  opacity: 0.8,
-                  transform: [{ rotate: `${angle}deg` }],
-                }}
-              />
-            );
-          })}
-        {hasChart &&
-          pts.map((p, i) => (
-            <View
-              key={`dot-${i}`}
-              style={{
-                position: 'absolute',
-                left: p.x - 3,
-                top: p.y - 3,
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: '#5B9AA8',
-                opacity: i === pts.length - 1 ? 1 : 0.4,
-              }}
-            />
-          ))}
-        {!hasChart && (
-          <View style={styles.noChartPlaceholder}>
-            <Text style={[styles.noChartText, { color: textSecondary }]}>
-              Log weight check-ins to see your trend
-            </Text>
-          </View>
-        )}
+      {/* Two-column body */}
+      <View style={styles.bodyRow}>
+        {/* Left column — empty, reserved for future content */}
+        <View style={{ flex: 1 }} />
+
+        {/* Right column — SVG weight chart */}
+        <View
+          style={styles.chartColumn}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w > 0 && w !== chartWidth) {
+              setChartWidth(w);
+            }
+          }}
+        >
+          <WeightMiniChart checkIns={checkIns} isDark={isDark} width={chartWidth} />
+        </View>
       </View>
 
       {/* Progress bar */}
       <View style={[styles.track, { backgroundColor: trackBg }]}>
         <View style={[styles.fill, { width: `${progressPct}%` as any }]} />
-        <View
-          style={[
-            styles.dot,
-            { left: `${progressPct}%` as any, borderColor: bg },
-          ]}
-        />
+        <View style={[styles.progressDot, { left: `${progressPct}%` as any, borderColor: bg }]} />
       </View>
 
       {/* Weight labels */}
-      <View style={styles.row}>
+      <View style={styles.headerRow}>
         <View>
           <Text style={[styles.weightNum, { color: textPrimary }]}>
-            {currentLbs}{' '}
-            <Text style={[styles.weightUnit, { color: textSecondary }]}>lbs</Text>
+            {currentLbs}
+            <Text style={[styles.weightUnit, { color: textSecondary }]}> lbs</Text>
           </Text>
           <Text style={[styles.weightLabel, { color: textSecondary }]}>Current</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[styles.weightNum, { color: textPrimary }]}>
-            {goalLbs}{' '}
-            <Text style={[styles.weightUnit, { color: textSecondary }]}>lbs</Text>
+            {goalLbs}
+            <Text style={[styles.weightUnit, { color: textSecondary }]}> lbs</Text>
           </Text>
           <Text style={[styles.weightLabel, { color: textSecondary }]}>Goal</Text>
         </View>
@@ -303,7 +339,7 @@ const styles = StyleSheet.create({
       android: { elevation: 3 },
     }),
   },
-  row: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -312,9 +348,32 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700' },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
-  chartArea: { marginBottom: 12, overflow: 'hidden' },
-  noChartPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  noChartText: { fontSize: 12 },
+  // Two-column body
+  bodyRow: {
+    flexDirection: 'row',
+    height: CHART_HEIGHT,
+    marginBottom: 12,
+  },
+  chartColumn: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  // Mini chart placeholder
+  miniChartPlaceholder: {
+    flex: 1,
+    height: CHART_HEIGHT,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+  miniChartPlaceholderText: {
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  // Progress bar
   track: {
     height: 6,
     borderRadius: 3,
@@ -323,7 +382,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   fill: { height: '100%', borderRadius: 3, backgroundColor: '#5B9AA8' },
-  dot: {
+  progressDot: {
     position: 'absolute',
     top: -4,
     width: 14,
@@ -333,11 +392,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     marginLeft: -7,
   },
+  // Weight labels
   weightNum: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
   weightUnit: { fontSize: 13, fontWeight: '500' },
   weightLabel: { fontSize: 11, fontWeight: '500', marginTop: 2 },
+  // Footer
   footer: { fontSize: 12, fontWeight: '500', textAlign: 'center', marginTop: 8 },
+  // No goal / no data states
   noGoal: { fontSize: 14, lineHeight: 20, marginVertical: 8 },
+  noDataArea: { alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  noDataText: { fontSize: 12, textAlign: 'center' },
+  // Buttons
   btn: {
     backgroundColor: '#5B9AA8',
     borderRadius: 10,
@@ -346,6 +411,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   btnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  // Skeleton
   skeletonChart: {
     height: CHART_HEIGHT,
     borderRadius: 8,
