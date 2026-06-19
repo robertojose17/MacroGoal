@@ -36,7 +36,13 @@ export default function GoalWeightCard({
   // We still need check-ins to derive currentKg fallback, weekNum, estText, and startKg
   const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [goalData, setGoalData] = useState<{ dailyCalories: number; maintenanceCalories: number } | null>(null);
+  const [goalData, setGoalData] = useState<{
+    dailyCalories: number;
+    maintenanceCalories: number;
+    lossRateLbsPerWeek: number;
+  } | null>(null);
+  const [startWeightFromGoal, setStartWeightFromGoal] = useState<number | null>(null);
+  const [goalWeightKgDirect, setGoalWeightKgDirect] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,29 +61,32 @@ export default function GoalWeightCard({
             .order('date', { ascending: true }),
           supabase
             .from('goals')
-            .select('daily_calories, loss_rate_lbs_per_week')
+            .select('daily_calories, loss_rate_lbs_per_week, start_date, maintenance_calories')
             .eq('user_id', authUser.id)
             .eq('is_active', true)
             .order('created_at', { ascending: false })
             .limit(1),
           supabase
             .from('users')
-            .select('maintenance_calories')
+            .select('maintenance_calories, goal_weight, journey_start_weight, current_weight')
             .eq('id', authUser.id)
             .maybeSingle(),
         ]);
 
         if (cancelled) return;
 
-        if (checkInsResult.error) {
-          console.log('[GoalWeightCard] check-ins fetch error:', checkInsResult.error.message);
-        } else if (checkInsResult.data) {
-          const points = checkInsResult.data
+        const points = (() => {
+          if (checkInsResult.error) {
+            console.log('[GoalWeightCard] check-ins fetch error:', checkInsResult.error.message);
+            return [];
+          }
+          return (checkInsResult.data ?? [])
             .filter((c: any) => c.weight != null)
             .map((c: any) => ({ date: c.date, weight: Number(c.weight) }));
-          console.log('[GoalWeightCard] loaded', points.length, 'weight check-ins');
-          setCheckIns(points);
-        }
+        })();
+
+        console.log('[GoalWeightCard] loaded', points.length, 'weight check-ins');
+        setCheckIns(points);
 
         if (goalsResult.error) {
           console.log('[GoalWeightCard] goals fetch error:', goalsResult.error.message);
@@ -87,12 +96,38 @@ export default function GoalWeightCard({
         }
 
         const goal = goalsResult.data?.[0];
-        const user = userResult.data;
-        if (goal && user) {
-          console.log('[GoalWeightCard] loaded goal data — dailyCalories:', goal.daily_calories, 'maintenanceCalories:', user.maintenance_calories);
+        const userData = userResult.data;
+
+        // Bug 2 fix: load goal_weight directly from users table as authoritative source
+        if (userData?.goal_weight != null) {
+          console.log('[GoalWeightCard] goalWeightKgDirect from users table:', userData.goal_weight);
+          setGoalWeightKgDirect(Number(userData.goal_weight));
+        }
+
+        // Bug 1 fix: compute start weight from check-in closest to goal.start_date
+        let startWeightKg: number | null = null;
+        if (goal?.start_date && points.length > 0) {
+          const startDate = new Date(goal.start_date + 'T00:00:00');
+          const closest = points.reduce((prev: { date: string; weight: number }, curr: { date: string; weight: number }) => {
+            const prevDiff = Math.abs(new Date(prev.date).getTime() - startDate.getTime());
+            const currDiff = Math.abs(new Date(curr.date).getTime() - startDate.getTime());
+            return currDiff < prevDiff ? curr : prev;
+          });
+          startWeightKg = closest.weight;
+          console.log('[GoalWeightCard] startWeightKg from closest check-in to goal.start_date:', startWeightKg, '(start_date:', goal.start_date, ')');
+        } else if (points.length > 0) {
+          startWeightKg = points[0].weight;
+          console.log('[GoalWeightCard] startWeightKg from earliest check-in:', startWeightKg);
+        }
+        setStartWeightFromGoal(startWeightKg);
+
+        if (goal) {
+          const maintenanceCals = goal.maintenance_calories ?? userData?.maintenance_calories ?? 2000;
+          console.log('[GoalWeightCard] loaded goal data — dailyCalories:', goal.daily_calories, 'maintenanceCalories:', maintenanceCals, 'lossRateLbsPerWeek:', goal.loss_rate_lbs_per_week);
           setGoalData({
             dailyCalories: goal.daily_calories ?? 2000,
-            maintenanceCalories: user.maintenance_calories ?? 2000,
+            maintenanceCalories: maintenanceCals,
+            lossRateLbsPerWeek: parseFloat(goal.loss_rate_lbs_per_week) || 0,
           });
         }
       } catch (err) {
@@ -128,7 +163,7 @@ export default function GoalWeightCard({
   }
 
   // ── No goal set ───────────────────────────────────────────────────────────
-  if (!propGoal) {
+  if (!goalWeightKgDirect && !propGoal) {
     return (
       <View style={[styles.card, { backgroundColor: bg }]}>
         <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
@@ -179,12 +214,15 @@ export default function GoalWeightCard({
   }
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const startKg = propStart ?? (checkIns.length > 0 ? checkIns[0].weight : currentKg);
+  // Bug 1 fix: use start weight derived from goal start_date check-in
+  const startKg = startWeightFromGoal ?? propStart ?? (checkIns.length > 0 ? checkIns[0].weight : currentKg);
+  // Bug 2 fix: use goal_weight loaded directly from users table as authoritative source
+  const resolvedGoalKg = goalWeightKgDirect ?? propGoal;
   const currentLbs = Math.round(currentKg * KG_TO_LBS);
-  const goalLbs = Math.round(propGoal * KG_TO_LBS);
+  const goalLbs = Math.round(resolvedGoalKg * KG_TO_LBS);
 
-  const isLosing = propGoal < startKg;
-  const totalRange = Math.abs(startKg - propGoal) || 1;
+  const isLosing = resolvedGoalKg < startKg;
+  const totalRange = Math.abs(startKg - resolvedGoalKg) || 1;
   const progress = Math.min(1, Math.max(0, Math.abs(startKg - currentKg) / totalRange));
   const isOnTrack = isLosing ? currentKg < startKg : currentKg > startKg;
 
@@ -195,21 +233,35 @@ export default function GoalWeightCard({
 
   const startLbs = Math.round(startKg * KG_TO_LBS);
   const lastCheckInKg = checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null;
+  // Bug 2 fix: both lastCheckInKg and resolvedGoalKg are in kg — multiplication is correct
   const lbsToGo = lastCheckInKg != null
-    ? Math.max(0, Math.round(Math.abs(lastCheckInKg - propGoal) * KG_TO_LBS))
-    : Math.max(0, Math.round(Math.abs((currentKg ?? 0) - propGoal) * KG_TO_LBS));
+    ? Math.max(0, Math.round(Math.abs(lastCheckInKg - resolvedGoalKg) * KG_TO_LBS))
+    : Math.max(0, Math.round(Math.abs((currentKg ?? 0) - resolvedGoalKg) * KG_TO_LBS));
+  console.log('[GoalWeightCard] lastCheckInKg:', lastCheckInKg, 'resolvedGoalKg (kg):', resolvedGoalKg, 'lbsToGo:', lbsToGo);
   const goalReached = progress >= 1;
 
-  // Est. arrival from caloric deficit
+  // Bug 3 fix: use loss_rate_lbs_per_week as primary, caloric deficit as fallback
   let estDateLabel = '';
-  if (goalData && lbsToGo > 0) {
-    const dailyDeficit = goalData.maintenanceCalories - goalData.dailyCalories;
-    if (dailyDeficit > 0) {
-      const lbsPerDay = dailyDeficit / 3500;
-      const daysToGoal = lbsToGo / lbsPerDay;
+  if (lbsToGo > 0) {
+    let lbsPerWeek = 0;
+
+    if (goalData?.lossRateLbsPerWeek && goalData.lossRateLbsPerWeek > 0) {
+      lbsPerWeek = goalData.lossRateLbsPerWeek;
+      console.log('[GoalWeightCard] est arrival using lossRateLbsPerWeek:', lbsPerWeek);
+    } else if (goalData && goalData.maintenanceCalories > goalData.dailyCalories) {
+      const dailyDeficit = goalData.maintenanceCalories - goalData.dailyCalories;
+      lbsPerWeek = (dailyDeficit * 7) / 3500;
+      console.log('[GoalWeightCard] est arrival using caloric deficit, lbsPerWeek:', lbsPerWeek);
+    }
+
+    if (lbsPerWeek > 0) {
+      const weeksToGoal = lbsToGo / lbsPerWeek;
+      const daysToGoal = Math.round(weeksToGoal * 7);
       const estDate = new Date();
-      estDate.setDate(estDate.getDate() + Math.round(daysToGoal));
-      estDateLabel = estDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      estDate.setDate(estDate.getDate() + daysToGoal);
+      // Bug 4 fix: include day in the date format
+      estDateLabel = estDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      console.log('[GoalWeightCard] estDateLabel:', estDateLabel, '(daysToGoal:', daysToGoal, ')');
     }
   }
 
