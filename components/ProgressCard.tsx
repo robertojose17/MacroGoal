@@ -1154,6 +1154,524 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
   );
 }
 
+// ─── WeightProgressMiniChart ──────────────────────────────────────────────────
+// Standalone export: renders only the SVG chart from ProgressCard, sized to fit
+// the available container width. Accepts userId + isDark + optional height.
+
+interface WeightProgressMiniChartProps {
+  userId: string;
+  isDark: boolean;
+  height?: number;
+}
+
+export function WeightProgressMiniChart({ userId, isDark, height = 120 }: WeightProgressMiniChartProps) {
+  const [miniLoading, setMiniLoading] = useState(true);
+  const [miniProfileData, setMiniProfileData] = useState<ProfileData | null>(null);
+  const [miniCalorieLogs, setMiniCalorieLogs] = useState<CalorieLog[]>([]);
+  const [miniActualWeightPoints, setMiniActualWeightPoints] = useState<WeightCheckIn[]>([]);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const loadMiniCalorieLogs = async (uid: string, startDate: Date) => {
+    try {
+      const today = new Date();
+      const startDateStr = toLocalDateString(startDate);
+      const todayStr = toLocalDateString(today);
+
+      const { data: mealsData, error: mealsError } = await supabase
+        .from('meals')
+        .select(`date, meal_items ( calories )`)
+        .eq('user_id', uid)
+        .gte('date', startDateStr)
+        .lte('date', todayStr);
+
+      if (mealsError) {
+        console.error('[WeightProgressMiniChart] Error loading calorie logs:', mealsError);
+        return;
+      }
+
+      const caloriesByDate: { [key: string]: number } = {};
+      if (mealsData && mealsData.length > 0) {
+        mealsData.forEach((meal: any) => {
+          if (meal.meal_items) {
+            meal.meal_items.forEach((item: any) => {
+              if (!caloriesByDate[meal.date]) caloriesByDate[meal.date] = 0;
+              caloriesByDate[meal.date] += item.calories || 0;
+            });
+          }
+        });
+      }
+
+      const logs: CalorieLog[] = Object.entries(caloriesByDate).map(([dateStr, cals]) => ({
+        date: new Date(dateStr + 'T00:00:00'),
+        calories: cals,
+      }));
+
+      console.log('[WeightProgressMiniChart] Calorie logs loaded:', logs.length, 'days');
+      setMiniCalorieLogs(logs);
+    } catch (err: any) {
+      console.error('[WeightProgressMiniChart] Error loading calorie logs:', err);
+    }
+  };
+
+  const loadMiniWeightCheckIns = async (uid: string, startDate: Date) => {
+    try {
+      const today = new Date();
+      const startDateStr = toLocalDateString(startDate);
+      const todayStr = toLocalDateString(today);
+
+      const { data: checkInsData, error: checkInsError } = await supabase
+        .from('check_ins')
+        .select('date, weight')
+        .eq('user_id', uid)
+        .gte('date', startDateStr)
+        .lte('date', todayStr)
+        .not('weight', 'is', null)
+        .order('date', { ascending: true });
+
+      if (checkInsError) {
+        console.error('[WeightProgressMiniChart] Error loading weight check-ins:', checkInsError);
+        return;
+      }
+
+      if (!checkInsData || checkInsData.length === 0) {
+        setMiniActualWeightPoints([]);
+        return;
+      }
+
+      const weightPoints: WeightCheckIn[] = checkInsData.map((checkIn: any) => ({
+        date: new Date(checkIn.date + 'T00:00:00'),
+        weightLbs: checkIn.weight * 2.20462,
+      }));
+
+      console.log('[WeightProgressMiniChart] Weight check-ins loaded:', weightPoints.length, 'points');
+      setMiniActualWeightPoints(weightPoints);
+    } catch (err: any) {
+      console.error('[WeightProgressMiniChart] Error loading weight check-ins:', err);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setMiniLoading(true);
+        console.log('[WeightProgressMiniChart] Loading data for userId:', userId);
+
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('current_weight, goal_weight, preferred_units, maintenance_calories, created_at')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (userError || !userData) {
+          console.error('[WeightProgressMiniChart] Error loading user data:', userError);
+          if (!cancelled) setMiniLoading(false);
+          return;
+        }
+
+        const parsedStartingWeight = parseFloat(userData.current_weight);
+        const parsedGoalWeight = parseFloat(userData.goal_weight);
+
+        if (
+          !userData.goal_weight || isNaN(parsedGoalWeight) || parsedGoalWeight <= 0 ||
+          !userData.current_weight || isNaN(parsedStartingWeight) || parsedStartingWeight <= 0
+        ) {
+          if (!cancelled) setMiniLoading(false);
+          return;
+        }
+
+        const startWeightLbs = parsedStartingWeight * 2.20462;
+        const goalWeightLbs = parsedGoalWeight * 2.20462;
+
+        let goalData: any = null;
+        const { data: activeGoalData } = await supabase
+          .from('goals')
+          .select('start_date, loss_rate_lbs_per_week, daily_calories, is_active')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .order('start_date', { ascending: false })
+          .limit(1);
+
+        if (activeGoalData && activeGoalData.length > 0) {
+          goalData = activeGoalData[0];
+        } else {
+          const { data: recentGoalData } = await supabase
+            .from('goals')
+            .select('start_date, loss_rate_lbs_per_week, daily_calories, is_active')
+            .eq('user_id', userId)
+            .order('start_date', { ascending: false })
+            .limit(1);
+          if (recentGoalData && recentGoalData.length > 0) goalData = recentGoalData[0];
+        }
+
+        let startDate: Date;
+        if (goalData && goalData.start_date) {
+          startDate = new Date(goalData.start_date + 'T00:00:00');
+        } else if (userData.created_at) {
+          startDate = new Date(userData.created_at);
+          startDate.setHours(0, 0, 0, 0);
+        } else {
+          startDate = new Date();
+          startDate.setHours(0, 0, 0, 0);
+        }
+
+        const rawLossRate = goalData?.loss_rate_lbs_per_week;
+        const weeklyLossLbs = parseFloat(rawLossRate) > 0 ? parseFloat(rawLossRate) : 1.0;
+        const maintenanceCalories = userData.maintenance_calories || 2000;
+        const dailyCalories = goalData?.daily_calories || maintenanceCalories || 2000;
+
+        if (!cancelled) {
+          setMiniProfileData({ startDate, startWeightLbs, goalWeightLbs, weeklyLossLbs, maintenanceCalories, dailyCalories });
+          await loadMiniCalorieLogs(userId, startDate);
+          await loadMiniWeightCheckIns(userId, startDate);
+          setMiniLoading(false);
+        }
+      } catch (err: any) {
+        console.error('[WeightProgressMiniChart] Error:', err);
+        if (!cancelled) setMiniLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const miniPlannedData = useMemo(() => {
+    if (!miniProfileData) return null;
+    const { startDate, startWeightLbs, goalWeightLbs, weeklyLossLbs } = miniProfileData;
+    const totalWeightChange = Math.abs(goalWeightLbs - startWeightLbs);
+    let totalDays: number;
+    if (totalWeightChange < 0.1) {
+      totalDays = 90;
+    } else {
+      const totalWeeks = totalWeightChange / Math.max(weeklyLossLbs, 0.1);
+      totalDays = Math.max(Math.ceil(totalWeeks * 7), 2);
+    }
+    const dataPoints: { date: Date; weightLbs: number }[] = [];
+    for (let i = 0; i <= totalDays; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(currentDate.getDate() + i);
+      const weight = totalDays > 0
+        ? startWeightLbs + (goalWeightLbs - startWeightLbs) * (i / totalDays)
+        : startWeightLbs;
+      dataPoints.push({ date: currentDate, weightLbs: weight });
+    }
+    return dataPoints;
+  }, [miniProfileData]);
+
+  const miniCalorieProjectionData = useMemo(() => {
+    if (!miniProfileData || !miniPlannedData || miniPlannedData.length === 0) return null;
+    const { dailyCalories } = miniProfileData;
+    const logsByDate: { [key: string]: number } = {};
+    miniCalorieLogs.forEach((log) => { logsByDate[toLocalDateString(log.date)] = log.calories; });
+    let cumulativeDeviation = 0;
+    const projectionPoints: { date: Date; weightLbs: number }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 0; i < miniPlannedData.length; i++) {
+      const plannedPoint = miniPlannedData[i];
+      const currentDate = new Date(plannedPoint.date);
+      currentDate.setHours(0, 0, 0, 0);
+      const dateStr = toLocalDateString(currentDate);
+      if (currentDate <= today) {
+        const actualCalories = logsByDate[dateStr];
+        if (actualCalories !== undefined && actualCalories !== null) {
+          cumulativeDeviation += (actualCalories - dailyCalories) / 3500;
+        }
+      }
+      projectionPoints.push({ date: currentDate, weightLbs: plannedPoint.weightLbs + cumulativeDeviation });
+    }
+    return projectionPoints;
+  }, [miniProfileData, miniPlannedData, miniCalorieLogs]);
+
+  const miniChartConfig = useMemo(() => {
+    if (!miniProfileData || !miniPlannedData || miniPlannedData.length === 0 || containerWidth <= 0) return null;
+
+    const { startWeightLbs, goalWeightLbs } = miniProfileData;
+    const yAxisWidth = 40;
+    const xAxisHeight = 20;
+    const topPadding = 8;
+    const chartAreaWidth = containerWidth - yAxisWidth - 4;
+    const chartAreaHeight = height - xAxisHeight - topPadding;
+    const totalWidth = containerWidth;
+    const totalHeight = height;
+
+    let minWeight = Math.min(startWeightLbs, goalWeightLbs);
+    let maxWeight = Math.max(startWeightLbs, goalWeightLbs);
+
+    if (miniCalorieProjectionData && miniCalorieProjectionData.length > 0) {
+      const ws = miniCalorieProjectionData.map(p => p.weightLbs);
+      minWeight = Math.min(minWeight, ...ws);
+      maxWeight = Math.max(maxWeight, ...ws);
+    }
+    if (miniActualWeightPoints && miniActualWeightPoints.length > 0) {
+      const ws = miniActualWeightPoints.map(p => p.weightLbs);
+      minWeight = Math.min(minWeight, ...ws);
+      maxWeight = Math.max(maxWeight, ...ws);
+    }
+
+    const weightPadding = 3;
+    const yMin = Math.max(0, minWeight - weightPadding);
+    const yMax = maxWeight + weightPadding;
+    const yRange = yMax - yMin;
+
+    const numYTicks = 4;
+    const yTicks: { value: number; label: string; y: number }[] = [];
+    for (let i = 0; i < numYTicks; i++) {
+      const value = yMax - (yRange * i / (numYTicks - 1));
+      const y = topPadding + (chartAreaHeight * i / (numYTicks - 1));
+      yTicks.push({ value, label: `${Math.round(value)}`, y });
+    }
+
+    const totalPoints = miniPlannedData.length;
+    const numXTicks = 4;
+    const xTickIndices: number[] = [];
+    if (totalPoints <= numXTicks) {
+      for (let i = 0; i < totalPoints; i++) xTickIndices.push(i);
+    } else {
+      for (let i = 0; i < numXTicks; i++) {
+        xTickIndices.push(Math.round((totalPoints - 1) * i / (numXTicks - 1)));
+      }
+    }
+    const xTicks = xTickIndices.map((index) => {
+      const point = miniPlannedData[index];
+      const month = (point.date.getMonth() + 1).toString().padStart(2, '0');
+      const day = point.date.getDate().toString().padStart(2, '0');
+      return { index, label: `${month}/${day}`, x: yAxisWidth + (chartAreaWidth * index / (totalPoints - 1)) };
+    });
+
+    const plannedPathPoints = miniPlannedData.map((point, index) => ({
+      x: yAxisWidth + (chartAreaWidth * index / (totalPoints - 1)),
+      y: topPadding + (chartAreaHeight * (1 - (point.weightLbs - yMin) / yRange)),
+    }));
+
+    let plannedPathData = `M ${plannedPathPoints[0].x} ${plannedPathPoints[0].y}`;
+    for (let i = 1; i < plannedPathPoints.length; i++) {
+      plannedPathData += ` L ${plannedPathPoints[i].x} ${plannedPathPoints[i].y}`;
+    }
+
+    const chartBottom = topPadding + chartAreaHeight;
+    let fillPathData = `M ${plannedPathPoints[0].x} ${chartBottom}`;
+    fillPathData += ` L ${plannedPathPoints[0].x} ${plannedPathPoints[0].y}`;
+    for (let i = 1; i < plannedPathPoints.length; i++) {
+      fillPathData += ` L ${plannedPathPoints[i].x} ${plannedPathPoints[i].y}`;
+    }
+    fillPathData += ` L ${plannedPathPoints[plannedPathPoints.length - 1].x} ${chartBottom} Z`;
+
+    let projectionPathData: string | null = null;
+    if (miniCalorieProjectionData && miniCalorieProjectionData.length > 0) {
+      const pts = miniCalorieProjectionData.map((point, index) => ({
+        x: yAxisWidth + (chartAreaWidth * index / (totalPoints - 1)),
+        y: topPadding + (chartAreaHeight * (1 - (point.weightLbs - yMin) / yRange)),
+      }));
+      projectionPathData = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 1; i < pts.length; i++) projectionPathData += ` L ${pts[i].x} ${pts[i].y}`;
+    }
+
+    const actualWeightCircles: { x: number; y: number; weightLbs: number }[] = [];
+    if (miniActualWeightPoints && miniActualWeightPoints.length > 0) {
+      miniActualWeightPoints.forEach((point) => {
+        let closestIndex = 0;
+        let minDiff = Math.abs(point.date.getTime() - miniPlannedData[0].date.getTime());
+        for (let i = 1; i < miniPlannedData.length; i++) {
+          const diff = Math.abs(point.date.getTime() - miniPlannedData[i].date.getTime());
+          if (diff < minDiff) { minDiff = diff; closestIndex = i; }
+        }
+        actualWeightCircles.push({
+          x: yAxisWidth + (chartAreaWidth * closestIndex / (totalPoints - 1)),
+          y: topPadding + (chartAreaHeight * (1 - (point.weightLbs - yMin) / yRange)),
+          weightLbs: point.weightLbs,
+        });
+      });
+    }
+
+    let trendPathData: string | null = null;
+    if (miniActualWeightPoints && miniActualWeightPoints.length >= 3) {
+      const window = 3;
+      const smoothed: { x: number; y: number }[] = [];
+      for (let i = 0; i < actualWeightCircles.length; i++) {
+        const start = Math.max(0, i - Math.floor(window / 2));
+        const end = Math.min(actualWeightCircles.length - 1, i + Math.floor(window / 2));
+        let sum = 0;
+        for (let j = start; j <= end; j++) sum += actualWeightCircles[j].y;
+        smoothed.push({ x: actualWeightCircles[i].x, y: sum / (end - start + 1) });
+      }
+      if (smoothed.length >= 2) {
+        trendPathData = `M ${smoothed[0].x} ${smoothed[0].y}`;
+        for (let i = 1; i < smoothed.length; i++) {
+          trendPathData += ` L ${smoothed[i].x} ${smoothed[i].y}`;
+        }
+      }
+    }
+
+    // Graph status pill
+    let graphStatus: 'on_track' | 'ahead' | 'behind' = 'on_track';
+    if (miniCalorieProjectionData && miniCalorieProjectionData.length > 0 && miniPlannedData.length > 0) {
+      const lastProjected = miniCalorieProjectionData[miniCalorieProjectionData.length - 1].weightLbs;
+      const lastPlanned = miniPlannedData[miniPlannedData.length - 1].weightLbs;
+      const diff = lastProjected - lastPlanned;
+      if (diff > 0.5) graphStatus = 'behind';
+      else if (diff < -0.5) graphStatus = 'ahead';
+    }
+
+    return {
+      totalWidth, totalHeight, chartAreaWidth, chartAreaHeight,
+      yAxisWidth, xAxisHeight, topPadding,
+      yTicks, xTicks,
+      pathData: plannedPathData, fillPathData, projectionPathData,
+      actualWeightCircles, yMin, yMax,
+      trendPathData, graphStatus,
+    };
+  }, [miniProfileData, miniPlannedData, miniCalorieProjectionData, miniActualWeightPoints, containerWidth, height]);
+
+  if (miniLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!miniChartConfig) return null;
+
+  const labelColor = isDark ? colors.textDark : colors.text;
+  const gridColor = isDark ? colors.borderDark : colors.border;
+  const lineColor = colors.success;
+  const projectionColor = colors.primary;
+  const actualWeightColor = colors.warning;
+  const cardBg = isDark ? colors.cardDark : colors.card;
+
+  const graphStatusConfig = {
+    'on_track': { label: '● On track', pillFill: '#3B82F6', textFill: '#FFFFFF' },
+    'ahead': { label: '↑ Ahead', pillFill: '#22C55E', textFill: '#FFFFFF' },
+    'behind': { label: '↓ Behind', pillFill: '#F97316', textFill: '#FFFFFF' },
+  }[miniChartConfig.graphStatus];
+
+  return (
+    <View
+      style={{ flex: 1 }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && w !== containerWidth) {
+          console.log('[WeightProgressMiniChart] Container width measured:', w);
+          setContainerWidth(w);
+        }
+      }}
+    >
+      {containerWidth > 0 && (
+        <Svg width={miniChartConfig.totalWidth} height={miniChartConfig.totalHeight}>
+          <Defs>
+            <LinearGradient id="miniLineGradient" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={lineColor} stopOpacity="0.3" />
+              <Stop offset="1" stopColor={lineColor} stopOpacity="0.05" />
+            </LinearGradient>
+          </Defs>
+
+          {/* Grid lines */}
+          {miniChartConfig.yTicks.map((tick, index) => (
+            <Line
+              key={`mini-grid-h-${index}`}
+              x1={miniChartConfig.yAxisWidth}
+              y1={tick.y}
+              x2={miniChartConfig.yAxisWidth + miniChartConfig.chartAreaWidth}
+              y2={tick.y}
+              stroke={gridColor}
+              strokeWidth="1"
+              strokeDasharray="3 3"
+            />
+          ))}
+
+          {/* Planned fill + line */}
+          <Path d={miniChartConfig.fillPathData} fill="url(#miniLineGradient)" />
+          <Path d={miniChartConfig.pathData} stroke={lineColor} strokeWidth="2" fill="none" />
+
+          {/* Calorie projection */}
+          {miniChartConfig.projectionPathData && (
+            <Path d={miniChartConfig.projectionPathData} stroke={projectionColor} strokeWidth="1.5" fill="none" />
+          )}
+
+          {/* Trend line */}
+          {miniChartConfig.trendPathData && (
+            <Path
+              d={miniChartConfig.trendPathData}
+              stroke="#8B5CF6"
+              strokeWidth="1.5"
+              strokeOpacity="0.7"
+              strokeDasharray="5 3"
+              fill="none"
+            />
+          )}
+
+          {/* Actual weight dots */}
+          {miniChartConfig.actualWeightCircles.map((circle, index) => (
+            <Circle
+              key={`mini-actual-weight-${index}`}
+              cx={circle.x}
+              cy={circle.y}
+              r="4"
+              fill={actualWeightColor}
+              stroke={cardBg}
+              strokeWidth="1.5"
+            />
+          ))}
+
+          {/* Y-axis labels */}
+          {miniChartConfig.yTicks.map((tick, index) => (
+            <SvgText
+              key={`mini-y-label-${index}`}
+              x={miniChartConfig.yAxisWidth - 4}
+              y={tick.y + 4}
+              fontSize="9"
+              fill={labelColor}
+              textAnchor="end"
+            >
+              {tick.label}
+            </SvgText>
+          ))}
+
+          {/* X-axis labels */}
+          {miniChartConfig.xTicks.map((tick, index) => (
+            <SvgText
+              key={`mini-x-label-${index}`}
+              x={tick.x}
+              y={miniChartConfig.topPadding + miniChartConfig.chartAreaHeight + 14}
+              fontSize="8"
+              fill={labelColor}
+              textAnchor="middle"
+            >
+              {tick.label}
+            </SvgText>
+          ))}
+
+          {/* Status pill */}
+          {graphStatusConfig && (
+            <>
+              <Rect
+                x={miniChartConfig.yAxisWidth + miniChartConfig.chartAreaWidth - 72}
+                y={miniChartConfig.topPadding + 3}
+                width={70}
+                height={16}
+                rx={8}
+                ry={8}
+                fill={graphStatusConfig.pillFill}
+                opacity={0.9}
+              />
+              <SvgText
+                x={miniChartConfig.yAxisWidth + miniChartConfig.chartAreaWidth - 37}
+                y={miniChartConfig.topPadding + 14}
+                fontSize="8"
+                fontWeight="600"
+                fill={graphStatusConfig.textFill}
+                textAnchor="middle"
+              >
+                {graphStatusConfig.label}
+              </SvgText>
+            </>
+          )}
+        </Svg>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: borderRadius.lg,

@@ -7,111 +7,12 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase/client';
+import { WeightProgressMiniChart } from '@/components/ProgressCard';
 
 const KG_TO_LBS = 2.20462;
 const CHART_HEIGHT = 120;
-const CHART_LINE_COLOR = '#5B9AA8';
-const CHART_GRADIENT_START = 'rgba(91,154,168,0.3)';
-const CHART_GRADIENT_END = 'rgba(91,154,168,0)';
-
-interface CheckIn {
-  date: string;
-  weight: number;
-}
-
-// ─── WeightMiniChart ──────────────────────────────────────────────────────────
-
-interface WeightMiniChartProps {
-  checkIns: CheckIn[];
-  isDark: boolean;
-  width: number;
-}
-
-function WeightMiniChart({ checkIns, isDark, width }: WeightMiniChartProps) {
-  if (checkIns.length < 2 || width <= 0) {
-    const placeholderColor = isDark ? 'rgba(255,255,255,0.15)' : '#E5E7EB';
-    return (
-      <View style={[styles.miniChartPlaceholder, { borderColor: placeholderColor }]}>
-        <Text style={[styles.miniChartPlaceholderText, { color: isDark ? 'rgba(255,255,255,0.3)' : '#9CA3AF' }]}>
-          Log check-ins to see trend
-        </Text>
-      </View>
-    );
-  }
-
-  const pad = 8;
-  const h = CHART_HEIGHT;
-  const w = width;
-
-  const weights = checkIns.map((c) => c.weight);
-  const minW = Math.min(...weights);
-  const maxW = Math.max(...weights);
-  const range = maxW - minW || 1;
-
-  const pts = checkIns.map((c, i) => ({
-    x: pad + (i / (checkIns.length - 1)) * (w - pad * 2),
-    y: pad + ((maxW - c.weight) / range) * (h - pad * 2),
-  }));
-
-  // Smooth cubic bezier path
-  let linePath = `M ${pts[0].x} ${pts[0].y}`;
-  for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1];
-    const curr = pts[i];
-    const cpx = (prev.x + curr.x) / 2;
-    linePath += ` C ${cpx} ${prev.y} ${cpx} ${curr.y} ${curr.x} ${curr.y}`;
-  }
-
-  // Fill path: go down to bottom, back to start
-  const fillPath =
-    `M ${pts[0].x} ${h}` +
-    ` L ${pts[0].x} ${pts[0].y}` +
-    linePath.slice(linePath.indexOf(' ')) +
-    ` L ${pts[pts.length - 1].x} ${h} Z`;
-
-  const lastPt = pts[pts.length - 1];
-
-  return (
-    <Svg width={w} height={h}>
-      <Defs>
-        <LinearGradient id="wgGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={CHART_GRADIENT_START} stopOpacity="1" />
-          <Stop offset="1" stopColor={CHART_GRADIENT_END} stopOpacity="0" />
-        </LinearGradient>
-      </Defs>
-
-      {/* Gradient fill */}
-      <Path d={fillPath} fill="url(#wgGrad)" />
-
-      {/* Line */}
-      <Path d={linePath} stroke={CHART_LINE_COLOR} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-
-      {/* Dots — all small, last one highlighted */}
-      {pts.map((p, i) => {
-        const isLast = i === pts.length - 1;
-        return (
-          <React.Fragment key={`dot-${i}`}>
-            {isLast && (
-              <Circle cx={p.x} cy={p.y} r={7} fill={CHART_LINE_COLOR} opacity={0.15} />
-            )}
-            <Circle
-              cx={p.x}
-              cy={p.y}
-              r={isLast ? 4 : 2.5}
-              fill={isLast ? CHART_LINE_COLOR : CHART_LINE_COLOR}
-              opacity={isLast ? 1 : 0.45}
-              stroke={isLast ? (isDark ? '#1C1C1E' : '#FFFFFF') : 'none'}
-              strokeWidth={isLast ? 1.5 : 0}
-            />
-          </React.Fragment>
-        );
-      })}
-    </Svg>
-  );
-}
 
 // ─── GoalWeightCard ───────────────────────────────────────────────────────────
 
@@ -131,8 +32,8 @@ export default function GoalWeightCard({
   startWeightKg: propStart,
 }: GoalWeightCardProps) {
   const router = useRouter();
-  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
-  const [chartWidth, setChartWidth] = useState(0);
+  // We still need check-ins to derive currentKg fallback, weekNum, estText, and startKg
+  const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -167,7 +68,7 @@ export default function GoalWeightCard({
       }
     })();
     return () => { cancelled = true; };
-  }, []); // empty deps — runs once on mount, uses auth directly
+  }, []);
 
   const bg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textPrimary = isDark ? '#F1F5F9' : '#111827';
@@ -291,17 +192,9 @@ export default function GoalWeightCard({
         {/* Left column — empty, reserved for future content */}
         <View style={{ flex: 1 }} />
 
-        {/* Right column — SVG weight chart */}
-        <View
-          style={styles.chartColumn}
-          onLayout={(e) => {
-            const w = e.nativeEvent.layout.width;
-            if (w > 0 && w !== chartWidth) {
-              setChartWidth(w);
-            }
-          }}
-        >
-          <WeightMiniChart checkIns={checkIns} isDark={isDark} width={chartWidth} />
+        {/* Right column — full ProgressCard chart reused */}
+        <View style={styles.chartColumn}>
+          <WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} />
         </View>
       </View>
 
@@ -368,21 +261,6 @@ const styles = StyleSheet.create({
   chartColumn: {
     flex: 1,
     overflow: 'hidden',
-  },
-  // Mini chart placeholder
-  miniChartPlaceholder: {
-    flex: 1,
-    height: CHART_HEIGHT,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
-  },
-  miniChartPlaceholderText: {
-    fontSize: 11,
-    textAlign: 'center',
   },
   // Progress bar
   track: {
