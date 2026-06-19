@@ -17,8 +17,8 @@ export default function TabLayout() {
   const tabBarBackgroundColor = isDark ? colors.cardDark : colors.card;
   const tabBarBorderColor = isDark ? colors.borderDark : colors.border;
 
-  const quickAddBtnBg = isDark ? '#FFFFFF' : '#0F172A';
-  const quickAddPlusColor = isDark ? '#0F172A' : '#FFFFFF';
+  const quickAddBtnBg = '#5B9AA8';
+  const quickAddPlusColor = '#FFFFFF';
 
   const handleQuickAddPress = () => {
     console.log('[TabLayout iOS] Quick Add "+" button pressed');
