@@ -1255,12 +1255,21 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
     (async () => {
       try {
         setMiniLoading(true);
-        console.log('[WeightProgressMiniChart] Loading data for userId:', userId);
+        console.log('[WeightProgressMiniChart] Loading data via auth.getUser()');
+
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser || cancelled) {
+          console.log('[WeightProgressMiniChart] No authenticated user found');
+          if (!cancelled) setMiniLoading(false);
+          return;
+        }
+        const uid = authUser.id;
+        console.log('[WeightProgressMiniChart] Authenticated uid:', uid);
 
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('current_weight, goal_weight, preferred_units, maintenance_calories, created_at')
-          .eq('id', userId)
+          .eq('id', uid)
           .maybeSingle();
 
         if (userError || !userData) {
@@ -1287,7 +1296,7 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
         const { data: activeGoalData } = await supabase
           .from('goals')
           .select('start_date, loss_rate_lbs_per_week, daily_calories, is_active')
-          .eq('user_id', userId)
+          .eq('user_id', uid)
           .eq('is_active', true)
           .order('start_date', { ascending: false })
           .limit(1);
@@ -1298,7 +1307,7 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
           const { data: recentGoalData } = await supabase
             .from('goals')
             .select('start_date, loss_rate_lbs_per_week, daily_calories, is_active')
-            .eq('user_id', userId)
+            .eq('user_id', uid)
             .order('start_date', { ascending: false })
             .limit(1);
           if (recentGoalData && recentGoalData.length > 0) goalData = recentGoalData[0];
@@ -1322,8 +1331,8 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
 
         if (!cancelled) {
           setMiniProfileData({ startDate, startWeightLbs, goalWeightLbs, weeklyLossLbs, maintenanceCalories, dailyCalories });
-          await loadMiniCalorieLogs(userId, startDate);
-          await loadMiniWeightCheckIns(userId, startDate);
+          await loadMiniCalorieLogs(uid, startDate);
+          await loadMiniWeightCheckIns(uid, startDate);
           setMiniLoading(false);
         }
       } catch (err: any) {
@@ -1332,7 +1341,7 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
       }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, []);
 
   const miniPlannedData = useMemo(() => {
     if (!miniProfileData) return null;
@@ -1522,16 +1531,6 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
     };
   }, [miniProfileData, miniPlannedData, miniCalorieProjectionData, miniActualWeightPoints, containerWidth, height]);
 
-  if (miniLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="small" color={colors.primary} />
-      </View>
-    );
-  }
-
-  if (!miniChartConfig) return null;
-
   const labelColor = isDark ? colors.textDark : colors.text;
   const gridColor = isDark ? colors.borderDark : colors.border;
   const lineColor = colors.success;
@@ -1539,11 +1538,11 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
   const actualWeightColor = colors.warning;
   const cardBg = isDark ? colors.cardDark : colors.card;
 
-  const graphStatusConfig = {
+  const graphStatusConfig = miniChartConfig ? {
     'on_track': { label: '● On track', pillFill: '#3B82F6', textFill: '#FFFFFF' },
     'ahead': { label: '↑ Ahead', pillFill: '#22C55E', textFill: '#FFFFFF' },
     'behind': { label: '↓ Behind', pillFill: '#F97316', textFill: '#FFFFFF' },
-  }[miniChartConfig.graphStatus];
+  }[miniChartConfig.graphStatus] : null;
 
   return (
     <View
@@ -1556,8 +1555,13 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
         }
       }}
     >
-      {containerWidth > 0 && (
-        <Svg width={miniChartConfig.totalWidth} height={miniChartConfig.totalHeight}>
+      {miniLoading && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      )}
+      {!miniLoading && miniChartConfig && containerWidth > 0 && (
+        <Svg width={containerWidth} height={miniChartConfig.totalHeight}>
           <Defs>
             <LinearGradient id="miniLineGradient" x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor={lineColor} stopOpacity="0.3" />
