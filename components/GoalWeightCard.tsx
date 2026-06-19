@@ -78,11 +78,17 @@ export default function GoalWeightCard({ userId, isDark }: GoalWeightCardProps) 
     async function load() {
       console.log('[GoalWeightCard] Loading data for user:', userId);
       try {
-        const [userRes, checkInsRes] = await Promise.all([
+        const [userRes, goalsRes, checkInsRes] = await Promise.all([
           supabase
             .from('users')
             .select('current_weight, goal_weight, journey_start_weight')
             .eq('id', userId)
+            .maybeSingle(),
+          supabase
+            .from('goals')
+            .select('goal_weight')
+            .eq('user_id', userId)
+            .eq('is_active', true)
             .maybeSingle(),
           supabase
             .from('check_ins')
@@ -93,10 +99,18 @@ export default function GoalWeightCard({ userId, isDark }: GoalWeightCardProps) 
             .limit(8),
         ]);
 
+        console.log('[GoalWeightCard] userRes:', userRes.data, 'error:', userRes.error);
+        console.log('[GoalWeightCard] goalsRes:', goalsRes.data, 'error:', goalsRes.error);
+        console.log('[GoalWeightCard] goalWeightKg resolved:', userRes.data?.goal_weight ?? goalsRes.data?.goal_weight);
+
         if (userRes.data) {
           setCurrentWeightKg(userRes.data.current_weight ?? null);
-          setGoalWeightKg(userRes.data.goal_weight ?? null);
+          // Use goal_weight from users first, fallback to goals table
+          const gw = userRes.data.goal_weight ?? goalsRes.data?.goal_weight ?? null;
+          setGoalWeightKg(gw);
           setStartWeightKg(userRes.data.journey_start_weight ?? null);
+        } else if (goalsRes.data?.goal_weight) {
+          setGoalWeightKg(goalsRes.data.goal_weight);
         }
 
         if (checkInsRes.data && checkInsRes.data.length > 0) {
