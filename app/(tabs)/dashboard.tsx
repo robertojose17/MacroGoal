@@ -31,6 +31,7 @@ import SocialComparisonCard from '@/components/xp/SocialComparisonCard';
 import StreakBadgeModal from '@/components/xp/StreakBadgeModal';
 import TodaysChallengesCard from '@/components/xp/TodaysChallengesCard';
 import UnlockMissionModal from '@/components/xp/UnlockMissionModal';
+import GoalWeightCard from '@/components/GoalWeightCard';
 import { reportTodaySteps } from '@/utils/stepsReporter';
 import { useSteps } from '@/hooks/useSteps';
 import { reportDailyHealthMetrics } from '@/utils/healthMetricsReporter';
@@ -86,7 +87,10 @@ interface DailySummary {
 // ─── Greeting helpers ─────────────────────────────────────────────────────────
 
 function getGreeting(): string {
-  return 'Hi';
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning,';
+  if (hour < 18) return 'Good afternoon,';
+  return 'Good evening,';
 }
 
 
@@ -400,6 +404,19 @@ export default function DashboardScreen() {
   const greeting = getGreeting();
   const firstName = user?.name?.split(' ')[0] || 'there';
 
+  // ─── Smart insight text ───────────────────────────────────────────────────
+  const KG_TO_LBS = 2.20462;
+  let insightText = "Let's make today count 💪";
+  if (goal?.goal_weight && todayCheckIn?.weight) {
+    const diffLbs = Math.abs(
+      Math.round((Number(todayCheckIn.weight) - Number(goal.goal_weight)) * KG_TO_LBS * 10) / 10
+    );
+    insightText = `You're ${diffLbs} lbs from your goal 💙`;
+  } else if ((xp.status?.current_streak ?? 0) > 0) {
+    const streak = xp.status!.current_streak;
+    insightText = `🔥 ${streak}-day streak — keep it going!`;
+  }
+
   if (loading) {
     return (
       <SafeAreaView
@@ -448,15 +465,17 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         scrollEventThrottle={16}
       >
-        {/* ── Header with personalized greeting ── */}
+        {/* ── Header inteligente ── */}
         <View style={styles.header}>
           <View style={styles.greetingColumn}>
-            <Text
-              style={[styles.greetingText, { color: isDark ? colors.textDark : colors.text }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {greeting + ', ' + firstName}
+            <Text style={[styles.greetingSmall, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {greeting}
+            </Text>
+            <Text style={[styles.greetingName, { color: isDark ? colors.textDark : colors.text }]}>
+              {firstName}
+            </Text>
+            <Text style={[styles.greetingInsight, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {insightText}
             </Text>
           </View>
           <TouchableOpacity
@@ -474,6 +493,13 @@ export default function DashboardScreen() {
             />
           </TouchableOpacity>
         </View>
+
+        {/* ── Goal Weight Card ── */}
+        {user && (
+          <CardErrorBoundary label="GoalWeightCard">
+            <GoalWeightCard userId={user.id} isDark={isDark} />
+          </CardErrorBoundary>
+        )}
 
         {/* ── XP Hero Card ── */}
         <CardErrorBoundary label="XpHeroCard">
@@ -732,10 +758,20 @@ const styles = StyleSheet.create({
   greetingColumn: {
     flex: 1,
   },
-  greetingText: {
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 26,
+  greetingSmall: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginBottom: 2,
+  },
+  greetingName: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  greetingInsight: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 4,
   },
   shareButton: {
     padding: spacing.xs,
