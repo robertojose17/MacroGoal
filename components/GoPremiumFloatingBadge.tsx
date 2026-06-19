@@ -1,41 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePremium } from '@/hooks/usePremium';
-
-const DISMISSED_KEY = '@go_premium_badge_dismissed_date';
 
 export default function GoPremiumFloatingBadge() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isPremium } = usePremium();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
 
-  useEffect(() => {
-    async function checkDismissed() {
-      try {
-        const stored = await AsyncStorage.getItem(DISMISSED_KEY);
-        if (!stored) {
-          setVisible(true);
-          return;
-        }
-        const today = new Date().toISOString().slice(0, 10);
-        if (stored !== today) {
-          setVisible(true);
-        }
-      } catch {
-        setVisible(true);
-      }
-    }
-    if (!isPremium) checkDismissed();
-  }, [isPremium]);
-
-  const handleDismiss = async () => {
+  const handleDismiss = () => {
     console.log('[GoPremiumBadge] Dismissed by user');
-    const today = new Date().toISOString().slice(0, 10);
-    await AsyncStorage.setItem(DISMISSED_KEY, today);
     setVisible(false);
   };
 
