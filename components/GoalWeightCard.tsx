@@ -1,19 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase/client';
-import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 
 const KG_TO_LBS = 2.20462;
-const CHART_HEIGHT = 60;
-const CHART_PADDING_V = 8;
+const CHART_HEIGHT = 70;
 
 interface GoalWeightCardProps {
   userId: string;
@@ -23,279 +20,214 @@ interface GoalWeightCardProps {
   startWeightKg?: number | null;
 }
 
-interface WeightPoint {
-  date: string;
-  weight: number; // kg
-}
-
-function kgToLbs(kg: number): number {
-  return Math.round(kg * KG_TO_LBS);
-}
-
-function getEstimatedDate(
-  checkIns: WeightPoint[],
-  currentWeightKg: number,
-  goalWeightKg: number
-): string | null {
-  if (checkIns.length < 2) return null;
-  const first = checkIns[0];
-  const last = checkIns[checkIns.length - 1];
-  const firstDate = new Date(first.date);
-  const lastDate = new Date(last.date);
-  const daysDiff = Math.max(
-    1,
-    (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  const weightChange = first.weight - last.weight; // kg lost
-  if (weightChange <= 0) return null;
-  const ratePerDay = weightChange / daysDiff;
-  const remaining = currentWeightKg - goalWeightKg;
-  if (remaining <= 0) return null;
-  const daysLeft = remaining / ratePerDay;
-  const estDate = new Date();
-  estDate.setDate(estDate.getDate() + daysLeft);
-  return estDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-}
-
-function getWeekOfJourney(firstCheckInDate: string | null): number {
-  if (!firstCheckInDate) return 1;
-  const start = new Date(firstCheckInDate);
-  const now = new Date();
-  const diffMs = now.getTime() - start.getTime();
-  const weeks = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7));
-  return Math.max(1, weeks + 1);
-}
-
 export default function GoalWeightCard({
   userId,
   isDark,
-  currentWeightKg: propCurrentWeightKg,
-  goalWeightKg: propGoalWeightKg,
-  startWeightKg: propStartWeightKg,
+  currentWeightKg: propCurrent,
+  goalWeightKg: propGoal,
+  startWeightKg: propStart,
 }: GoalWeightCardProps) {
   const router = useRouter();
-  const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
-  const [goalWeightKg, setGoalWeightKg] = useState<number | null>(null);
-  const [startWeightKg, setStartWeightKg] = useState<number | null>(null);
-  const [checkIns, setCheckIns] = useState<WeightPoint[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const cardWidth = Dimensions.get('window').width - spacing.md * 2 - spacing.md * 2;
-  const chartWidth = cardWidth - spacing.md * 2;
+  const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
+  const [chartWidth, setChartWidth] = useState(0);
 
   useEffect(() => {
-    async function load() {
-      console.log('[GoalWeightCard] props received — currentWeightKg:', propCurrentWeightKg, 'goalWeightKg:', propGoalWeightKg, 'startWeightKg:', propStartWeightKg);
+    console.log('[GoalWeightCard] fetching check-ins for userId:', userId);
+    supabase
+      .from('check_ins')
+      .select('date, weight')
+      .eq('user_id', userId)
+      .not('weight', 'is', null)
+      .order('date', { ascending: true })
+      .limit(10)
+      .then(({ data, error }) => {
+        if (error) {
+          console.log('[GoalWeightCard] check-ins fetch error:', error.message);
+          return;
+        }
+        if (data) {
+          const points = data
+            .filter((c: any) => c.weight != null)
+            .map((c: any) => ({ date: c.date, weight: Number(c.weight) }));
+          console.log('[GoalWeightCard] loaded', points.length, 'weight check-ins');
+          setCheckIns(points);
+        }
+      });
+  }, [userId]);
 
-      // Use prop values directly
-      setCurrentWeightKg(propCurrentWeightKg ?? null);
-      setGoalWeightKg(propGoalWeightKg ?? null);
-      setStartWeightKg(propStartWeightKg ?? null);
+  const bg = isDark ? '#1C1C1E' : '#FFFFFF';
+  const textPrimary = isDark ? '#F1F5F9' : '#111827';
+  const textSecondary = isDark ? 'rgba(255,255,255,0.5)' : '#6B7280';
+  const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB';
 
-      // Only fetch check_ins from Supabase
-      const checkInsRes = await supabase
-        .from('check_ins')
-        .select('date, weight')
-        .eq('user_id', userId)
-        .not('weight', 'is', null)
-        .order('date', { ascending: true })
-        .limit(8);
-
-      if (checkInsRes.data && checkInsRes.data.length > 0) {
-        const points = checkInsRes.data
-          .filter((c: any) => c.weight != null)
-          .map((c: any) => ({ date: c.date, weight: Number(c.weight) }));
-        setCheckIns(points);
-        console.log('[GoalWeightCard] Loaded', points.length, 'weight check-ins');
-      }
-      setLoading(false);
-    }
-    load();
-  }, [userId, propCurrentWeightKg, propGoalWeightKg, propStartWeightKg]);
-
-  const bg = isDark ? colors.cardDark : '#FFFFFF';
-  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
-  const textPrimary = isDark ? colors.textDark : colors.primaryText;
-  const textSecondary = isDark ? colors.textSecondaryDark : colors.textSecondary;
-
-  if (loading) return null;
-
-  // No goal weight set
-  if (!goalWeightKg) {
+  // No goal set — show prompt immediately, no loading gate
+  if (!propGoal) {
     return (
-      <View style={[styles.card, { backgroundColor: bg, borderColor }]}>
-        <Text style={[styles.cardTitle, { color: textPrimary }]}>Goal Weight</Text>
-        <Text style={[styles.noGoalText, { color: textSecondary }]}>
-          Set your goal weight in Profile to track your progress here.
+      <View style={[styles.card, { backgroundColor: bg }]}>
+        <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
+        <Text style={[styles.noGoal, { color: textSecondary }]}>
+          Set your goal weight in Profile to track progress here.
         </Text>
         <TouchableOpacity
-          style={styles.setGoalButton}
+          style={styles.btn}
           onPress={() => {
-            console.log('[GoalWeightCard] Set goal weight button pressed — navigating to /profile');
-            router.push('/profile');
+            console.log('[GoalWeightCard] Set Goal Weight button pressed');
+            router.push('/profile' as any);
           }}
           activeOpacity={0.75}
         >
-          <Text style={styles.setGoalButtonText}>Set Goal Weight</Text>
+          <Text style={styles.btnText}>Set Goal Weight</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const currentKg = currentWeightKg ?? (checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null);
+  const currentKg = propCurrent ?? (checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null);
   if (!currentKg) return null;
 
-  const currentLbs = kgToLbs(currentKg);
-  const goalLbs = kgToLbs(goalWeightKg);
-  const startKg = startWeightKg ?? (checkIns.length > 0 ? checkIns[0].weight : currentKg);
-  const startLbs = kgToLbs(startKg);
+  const startKg = propStart ?? (checkIns.length > 0 ? checkIns[0].weight : currentKg);
+  const currentLbs = Math.round(currentKg * KG_TO_LBS);
+  const goalLbs = Math.round(propGoal * KG_TO_LBS);
 
-  // Progress bar: 0 = start, 1 = goal
-  const totalRange = Math.abs(startKg - goalWeightKg);
-  const progressRaw = totalRange > 0 ? Math.abs(startKg - currentKg) / totalRange : 0;
-  const progress = Math.min(1, Math.max(0, progressRaw));
+  const isLosing = propGoal < startKg;
+  const totalRange = Math.abs(startKg - propGoal) || 1;
+  const progress = Math.min(1, Math.max(0, Math.abs(startKg - currentKg) / totalRange));
+  const isOnTrack = isLosing ? currentKg < startKg : currentKg > startKg;
 
-  // On track: losing weight (or gaining if goal > start)
-  const isLosing = goalWeightKg < startKg;
-  const isOnTrack = isLosing ? currentKg <= startKg : currentKg >= startKg;
+  const firstDate = checkIns.length > 0 ? new Date(checkIns[0].date) : new Date();
+  const weekNum = Math.max(1, Math.floor((Date.now() - firstDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1);
 
-  // Week of journey
-  const firstCheckInDate = checkIns.length > 0 ? checkIns[0].date : null;
-  const weekNum = getWeekOfJourney(firstCheckInDate);
+  let estText = '';
+  if (checkIns.length >= 2) {
+    const first = checkIns[0];
+    const last = checkIns[checkIns.length - 1];
+    const days = Math.max(1, (new Date(last.date).getTime() - new Date(first.date).getTime()) / (24 * 60 * 60 * 1000));
+    const rate = (first.weight - last.weight) / days;
+    const remaining = currentKg - propGoal;
+    if (rate > 0 && remaining > 0) {
+      const est = new Date();
+      est.setDate(est.getDate() + remaining / rate);
+      estText = ' · Est. ' + est.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    }
+  }
 
-  // Estimated completion
-  const estDate = getEstimatedDate(checkIns, currentKg, goalWeightKg);
-
-  // Chart rendering
-  const hasChart = checkIns.length >= 2;
-  let chartPoints: { x: number; y: number }[] = [];
+  const hasChart = checkIns.length >= 2 && chartWidth > 0;
+  let pts: { x: number; y: number }[] = [];
 
   if (hasChart) {
-    const weights = checkIns.map((c) => c.weight);
-    const minW = Math.min(...weights);
-    const maxW = Math.max(...weights);
-    const wRange = maxW - minW || 1;
-    const usableH = CHART_HEIGHT - CHART_PADDING_V * 2;
-
-    chartPoints = checkIns.map((c, i) => ({
+    const ws = checkIns.map((c) => c.weight);
+    const minW = Math.min(...ws);
+    const maxW = Math.max(...ws);
+    const range = maxW - minW || 1;
+    const pad = 8;
+    pts = checkIns.map((c, i) => ({
       x: (i / (checkIns.length - 1)) * chartWidth,
       y:
-        CHART_PADDING_V +
-        (isLosing
-          ? ((c.weight - minW) / wRange) * usableH
-          : ((maxW - c.weight) / wRange) * usableH),
+        pad +
+        ((isLosing ? c.weight - minW : maxW - c.weight) / range) *
+          (CHART_HEIGHT - pad * 2),
     }));
   }
 
-  const badgeLabel = isOnTrack ? 'ON TRACK' : 'BEHIND';
-  const badgeBg = isOnTrack
-    ? isDark ? 'rgba(92,185,123,0.18)' : 'rgba(92,185,123,0.12)'
-    : isDark ? 'rgba(255,138,91,0.18)' : 'rgba(255,138,91,0.12)';
-  const badgeColor = isOnTrack ? colors.success : colors.warning;
-
-  const footerText = estDate
-    ? `Week ${weekNum} of journey · Est. ${estDate}`
-    : `Week ${weekNum} of journey`;
+  const badgeBg = isOnTrack ? 'rgba(92,185,123,0.12)' : 'rgba(255,138,91,0.12)';
+  const badgeColor = isOnTrack ? '#5CB97B' : '#FF8A5B';
+  const badgeLabel = isOnTrack ? '✓ ON TRACK' : 'BEHIND';
+  const progressPct = Math.round(progress * 100);
+  const footerText = `Week ${weekNum} of journey${estText}`;
 
   return (
-    <View style={[styles.card, { backgroundColor: bg, borderColor }]}>
-      {/* Header row */}
-      <View style={styles.headerRow}>
-        <Text style={[styles.cardTitle, { color: textPrimary }]}>Goal Weight</Text>
+    <View style={[styles.card, { backgroundColor: bg }]}>
+      {/* Header */}
+      <View style={styles.row}>
+        <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-          <Text style={[styles.badgeText, { color: badgeColor }]}>
-            {isOnTrack ? '✓ ' : ''}
-            {badgeLabel}
-          </Text>
+          <Text style={[styles.badgeText, { color: badgeColor }]}>{badgeLabel}</Text>
         </View>
       </View>
 
-      {/* Mini line chart */}
-      {hasChart && (
-        <View style={[styles.chartArea, { width: chartWidth, height: CHART_HEIGHT }]}>
-          {/* Connecting lines */}
-          {chartPoints.slice(0, -1).map((pt, i) => {
-            const next = chartPoints[i + 1];
-            const dx = next.x - pt.x;
-            const dy = next.y - pt.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
-            const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      {/* Chart */}
+      <View
+        style={[styles.chartArea, { height: CHART_HEIGHT }]}
+        onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}
+      >
+        {hasChart &&
+          pts.slice(0, -1).map((a, i) => {
+            const b = pts[i + 1];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            const cx = a.x + dx / 2;
+            const cy = a.y + dy / 2;
             return (
               <View
-                key={`line-${i}`}
+                key={`seg-${i}`}
                 style={{
                   position: 'absolute',
-                  left: pt.x,
-                  top: pt.y - 1,
-                  width: length,
+                  left: cx,
+                  top: cy,
+                  width: len,
                   height: 2,
-                  backgroundColor: colors.primary,
-                  opacity: 0.7,
+                  marginLeft: -len / 2,
+                  marginTop: -1,
+                  backgroundColor: '#5B9AA8',
+                  opacity: 0.8,
                   transform: [{ rotate: `${angle}deg` }],
-                  transformOrigin: '0 50%',
                 }}
               />
             );
           })}
-          {/* Dots */}
-          {chartPoints.map((pt, i) => (
+        {hasChart &&
+          pts.map((p, i) => (
             <View
               key={`dot-${i}`}
               style={{
                 position: 'absolute',
-                left: pt.x - 3,
-                top: pt.y - 3,
+                left: p.x - 3,
+                top: p.y - 3,
                 width: 6,
                 height: 6,
                 borderRadius: 3,
-                backgroundColor:
-                  i === chartPoints.length - 1 ? colors.primary : colors.primary,
-                opacity: i === chartPoints.length - 1 ? 1 : 0.5,
+                backgroundColor: '#5B9AA8',
+                opacity: i === pts.length - 1 ? 1 : 0.4,
               }}
             />
           ))}
-        </View>
-      )}
+        {!hasChart && (
+          <View style={styles.noChartPlaceholder}>
+            <Text style={[styles.noChartText, { color: textSecondary }]}>
+              Log weight check-ins to see your trend
+            </Text>
+          </View>
+        )}
+      </View>
 
       {/* Progress bar */}
-      <View style={styles.progressSection}>
-        <View style={[styles.progressTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${Math.round(progress * 100)}%`,
-                backgroundColor: colors.primary,
-              },
-            ]}
-          />
-          {/* Indicator dot */}
-          <View
-            style={[
-              styles.progressDot,
-              {
-                left: `${Math.round(progress * 100)}%`,
-                backgroundColor: colors.primary,
-                borderColor: bg,
-              },
-            ]}
-          />
-        </View>
+      <View style={[styles.track, { backgroundColor: trackBg }]}>
+        <View style={[styles.fill, { width: `${progressPct}%` as any }]} />
+        <View
+          style={[
+            styles.dot,
+            { left: `${progressPct}%` as any, borderColor: bg },
+          ]}
+        />
+      </View>
 
-        {/* Labels */}
-        <View style={styles.progressLabels}>
-          <View style={styles.labelGroup}>
-            <Text style={[styles.weightValue, { color: textPrimary }]}>{currentLbs}</Text>
-            <Text style={[styles.weightUnit, { color: textSecondary }]}> lbs</Text>
-          </View>
-          <View style={[styles.labelGroup, { alignItems: 'flex-end' }]}>
-            <Text style={[styles.weightValue, { color: textPrimary }]}>{goalLbs}</Text>
-            <Text style={[styles.weightUnit, { color: textSecondary }]}> lbs</Text>
-          </View>
+      {/* Weight labels */}
+      <View style={styles.row}>
+        <View>
+          <Text style={[styles.weightNum, { color: textPrimary }]}>
+            {currentLbs}{' '}
+            <Text style={[styles.weightUnit, { color: textSecondary }]}>lbs</Text>
+          </Text>
+          <Text style={[styles.weightLabel, { color: textSecondary }]}>Current</Text>
         </View>
-        <View style={styles.progressSubLabels}>
-          <Text style={[styles.subLabel, { color: textSecondary }]}>Current</Text>
-          <Text style={[styles.subLabel, { color: textSecondary }]}>Goal</Text>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.weightNum, { color: textPrimary }]}>
+            {goalLbs}{' '}
+            <Text style={[styles.weightUnit, { color: textSecondary }]}>lbs</Text>
+          </Text>
+          <Text style={[styles.weightLabel, { color: textSecondary }]}>Goal</Text>
         </View>
       </View>
 
@@ -308,117 +240,59 @@ export default function GoalWeightCard({
 const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
+    padding: 16,
+    marginBottom: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
+        shadowOpacity: 0.08,
         shadowRadius: 10,
       },
       android: { elevation: 3 },
     }),
   },
-  headerRow: {
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  chartArea: {
-    marginBottom: spacing.sm,
-    overflow: 'hidden',
-  },
-  progressSection: {
-    marginTop: spacing.xs,
-  },
-  progressTrack: {
+  title: { fontSize: 16, fontWeight: '700' },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  badgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  chartArea: { marginBottom: 12, overflow: 'hidden' },
+  noChartPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  noChartText: { fontSize: 12 },
+  track: {
     height: 6,
     borderRadius: 3,
+    marginBottom: 10,
     overflow: 'visible',
     position: 'relative',
-    marginBottom: spacing.sm,
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  progressDot: {
+  fill: { height: '100%', borderRadius: 3, backgroundColor: '#5B9AA8' },
+  dot: {
     position: 'absolute',
     top: -4,
     width: 14,
     height: 14,
     borderRadius: 7,
+    backgroundColor: '#5B9AA8',
     borderWidth: 2,
     marginLeft: -7,
   },
-  progressLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: spacing.xs,
-  },
-  labelGroup: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  weightValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  weightUnit: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  progressSubLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  subLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  footer: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
-  noGoalText: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: spacing.md,
-    marginTop: spacing.xs,
-  },
-  setGoalButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
+  weightNum: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  weightUnit: { fontSize: 13, fontWeight: '500' },
+  weightLabel: { fontSize: 11, fontWeight: '500', marginTop: 2 },
+  footer: { fontSize: 12, fontWeight: '500', textAlign: 'center', marginTop: 8 },
+  noGoal: { fontSize: 14, lineHeight: 20, marginVertical: 8 },
+  btn: {
+    backgroundColor: '#5B9AA8',
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: 'center',
+    marginTop: 4,
   },
-  setGoalButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  btnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
