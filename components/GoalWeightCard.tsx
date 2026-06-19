@@ -136,15 +136,21 @@ export default function GoalWeightCard({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[GoalWeightCard] fetching check-ins for userId:', userId);
-    supabase
-      .from('check_ins')
-      .select('date, weight')
-      .eq('user_id', userId)
-      .not('weight', 'is', null)
-      .order('date', { ascending: true })
-      .limit(10)
-      .then(({ data, error }) => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser || cancelled) return;
+        console.log('[GoalWeightCard] fetching check-ins for userId:', authUser.id);
+
+        const { data, error } = await supabase
+          .from('check_ins')
+          .select('date, weight')
+          .eq('user_id', authUser.id)
+          .not('weight', 'is', null)
+          .order('date', { ascending: true });
+
+        if (cancelled) return;
         if (error) {
           console.log('[GoalWeightCard] check-ins fetch error:', error.message);
         } else if (data) {
@@ -154,9 +160,14 @@ export default function GoalWeightCard({
           console.log('[GoalWeightCard] loaded', points.length, 'weight check-ins');
           setCheckIns(points);
         }
-        setLoading(false);
-      });
-  }, [userId]);
+      } catch (err) {
+        console.log('[GoalWeightCard] error:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // empty deps — runs once on mount, uses auth directly
 
   const bg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textPrimary = isDark ? '#F1F5F9' : '#111827';
