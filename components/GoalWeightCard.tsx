@@ -68,7 +68,7 @@ export default function GoalWeightCard({
             .limit(1),
           supabase
             .from('users')
-            .select('maintenance_calories, goal_weight, journey_start_weight, current_weight')
+            .select('maintenance_calories, goal_weight, current_weight')
             .eq('id', authUser.id)
             .maybeSingle(),
         ]);
@@ -104,10 +104,10 @@ export default function GoalWeightCard({
           setGoalWeightKgDirect(Number(userData.goal_weight));
         }
 
-        // Use journey_start_weight from users table as the authoritative start weight
-        if (userData?.journey_start_weight != null) {
-          console.log('[GoalWeightCard] startWeightKg from users.journey_start_weight:', userData.journey_start_weight);
-          setStartWeightFromGoal(Number(userData.journey_start_weight));
+        // Use earliest check-in as the authoritative start weight
+        if (points.length > 0) {
+          setStartWeightFromGoal(points[0].weight);
+          console.log('[GoalWeightCard] startWeightFromGoal from earliest check-in:', points[0].weight, 'kg =', Math.round(points[0].weight * 2.20462), 'lbs');
         }
 
         if (goal) {
