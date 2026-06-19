@@ -36,6 +36,7 @@ export default function GoalWeightCard({
   // We still need check-ins to derive currentKg fallback, weekNum, estText, and startKg
   const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [goalData, setGoalData] = useState<{ dailyCalories: number; maintenanceCalories: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,24 +44,56 @@ export default function GoalWeightCard({
       try {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser || cancelled) return;
-        console.log('[GoalWeightCard] fetching check-ins for userId:', authUser.id);
+        console.log('[GoalWeightCard] fetching check-ins and goals for userId:', authUser.id);
 
-        const { data, error } = await supabase
-          .from('check_ins')
-          .select('date, weight')
-          .eq('user_id', authUser.id)
-          .not('weight', 'is', null)
-          .order('date', { ascending: true });
+        const [checkInsResult, goalsResult, userResult] = await Promise.all([
+          supabase
+            .from('check_ins')
+            .select('date, weight')
+            .eq('user_id', authUser.id)
+            .not('weight', 'is', null)
+            .order('date', { ascending: true }),
+          supabase
+            .from('goals')
+            .select('daily_calories, loss_rate_lbs_per_week')
+            .eq('user_id', authUser.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          supabase
+            .from('users')
+            .select('maintenance_calories')
+            .eq('id', authUser.id)
+            .maybeSingle(),
+        ]);
 
         if (cancelled) return;
-        if (error) {
-          console.log('[GoalWeightCard] check-ins fetch error:', error.message);
-        } else if (data) {
-          const points = data
+
+        if (checkInsResult.error) {
+          console.log('[GoalWeightCard] check-ins fetch error:', checkInsResult.error.message);
+        } else if (checkInsResult.data) {
+          const points = checkInsResult.data
             .filter((c: any) => c.weight != null)
             .map((c: any) => ({ date: c.date, weight: Number(c.weight) }));
           console.log('[GoalWeightCard] loaded', points.length, 'weight check-ins');
           setCheckIns(points);
+        }
+
+        if (goalsResult.error) {
+          console.log('[GoalWeightCard] goals fetch error:', goalsResult.error.message);
+        }
+        if (userResult.error) {
+          console.log('[GoalWeightCard] users fetch error:', userResult.error.message);
+        }
+
+        const goal = goalsResult.data?.[0];
+        const user = userResult.data;
+        if (goal && user) {
+          console.log('[GoalWeightCard] loaded goal data — dailyCalories:', goal.daily_calories, 'maintenanceCalories:', user.maintenance_calories);
+          setGoalData({
+            dailyCalories: goal.daily_calories ?? 2000,
+            maintenanceCalories: user.maintenance_calories ?? 2000,
+          });
         }
       } catch (err) {
         console.log('[GoalWeightCard] error:', err);
@@ -155,46 +188,28 @@ export default function GoalWeightCard({
   const progress = Math.min(1, Math.max(0, Math.abs(startKg - currentKg) / totalRange));
   const isOnTrack = isLosing ? currentKg < startKg : currentKg > startKg;
 
-  const firstDate = checkIns.length > 0 ? new Date(checkIns[0].date) : new Date();
-  const weekNum = Math.max(1, Math.floor((Date.now() - firstDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1);
-
-  let estText = '';
-  if (checkIns.length >= 2) {
-    const first = checkIns[0];
-    const last = checkIns[checkIns.length - 1];
-    const days = Math.max(1, (new Date(last.date).getTime() - new Date(first.date).getTime()) / (24 * 60 * 60 * 1000));
-    const rate = (first.weight - last.weight) / days;
-    const remaining = currentKg - propGoal;
-    if (rate > 0 && remaining > 0) {
-      const est = new Date();
-      est.setDate(est.getDate() + remaining / rate);
-      estText = ' · Est. ' + est.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-    }
-  }
-
   const badgeBg = isOnTrack ? 'rgba(92,185,123,0.12)' : 'rgba(255,138,91,0.12)';
   const badgeColor = isOnTrack ? '#5CB97B' : '#FF8A5B';
   const badgeLabel = isOnTrack ? '✓ ON TRACK' : 'BEHIND';
   const progressPct = Math.round(progress * 100);
 
   const startLbs = Math.round(startKg * KG_TO_LBS);
-  const lbsToGo = isLosing
-    ? Math.max(0, Math.round((currentKg - propGoal) * KG_TO_LBS))
-    : Math.max(0, Math.round((propGoal - currentKg) * KG_TO_LBS));
+  const lastCheckInKg = checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null;
+  const lbsToGo = lastCheckInKg != null
+    ? Math.max(0, Math.round(Math.abs(lastCheckInKg - propGoal) * KG_TO_LBS))
+    : Math.max(0, Math.round(Math.abs((currentKg ?? 0) - propGoal) * KG_TO_LBS));
   const goalReached = progress >= 1;
 
-  // Parse estimated date from estText (" · Est. Mar 2026") or recalculate
+  // Est. arrival from caloric deficit
   let estDateLabel = '';
-  if (checkIns.length >= 2) {
-    const first = checkIns[0];
-    const last = checkIns[checkIns.length - 1];
-    const days = Math.max(1, (new Date(last.date).getTime() - new Date(first.date).getTime()) / (24 * 60 * 60 * 1000));
-    const rate = (first.weight - last.weight) / days;
-    const remaining = currentKg - propGoal;
-    if (rate > 0 && remaining > 0) {
-      const est = new Date();
-      est.setDate(est.getDate() + remaining / rate);
-      estDateLabel = est.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  if (goalData && lbsToGo > 0) {
+    const dailyDeficit = goalData.maintenanceCalories - goalData.dailyCalories;
+    if (dailyDeficit > 0) {
+      const lbsPerDay = dailyDeficit / 3500;
+      const daysToGoal = lbsToGo / lbsPerDay;
+      const estDate = new Date();
+      estDate.setDate(estDate.getDate() + Math.round(daysToGoal));
+      estDateLabel = estDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     }
   }
 
@@ -212,20 +227,13 @@ export default function GoalWeightCard({
       <View style={styles.bodyRow}>
         {/* Left column — premium weight progress */}
         <View style={[styles.leftColumn]}>
-          {/* Start → Goal weights */}
-          <View style={styles.weightStack}>
-            <View style={styles.weightRow}>
-              <Text style={[styles.weightBig, { color: textPrimary }]}>{startLbs}</Text>
-              <Text style={[styles.weightBigUnit, { color: textSecondary }]}> lbs</Text>
-            </View>
-            <Text style={[styles.arrowDown, { color: textSecondary }]}>↓</Text>
-            <View>
-              <View style={styles.weightRow}>
-                <Text style={[styles.weightBig, { color: '#5B9AA8' }]}>{goalLbs}</Text>
-                <Text style={[styles.weightBigUnit, { color: '#5B9AA8' }]}> lbs</Text>
-              </View>
-              <Text style={[styles.goalLabel, { color: textSecondary }]}>Goal</Text>
-            </View>
+          {/* Start → Goal weights (horizontal) */}
+          <View style={styles.weightHorizontalRow}>
+            <Text style={[styles.weightInlineValue, { color: textPrimary }]}>{startLbs}</Text>
+            <Text style={[styles.weightInlineUnit, { color: textPrimary }]}> lbs</Text>
+            <Text style={[styles.weightArrow, { color: textSecondary }]}>  →  </Text>
+            <Text style={[styles.weightInlineValue, { color: '#5B9AA8' }]}>{goalLbs}</Text>
+            <Text style={[styles.weightInlineUnit, { color: '#5B9AA8' }]}> lbs</Text>
           </View>
 
           {/* Progress bar */}
@@ -308,32 +316,24 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  // Weight stack (start → goal)
-  weightStack: {
-    gap: 2,
-  },
-  weightRow: {
+  // Weight row (start → goal, horizontal)
+  weightHorizontalRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
   },
-  weightBig: {
-    fontSize: 18,
+  weightInlineValue: {
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
-  weightBigUnit: {
-    fontSize: 12,
-    fontWeight: '500',
+  weightInlineUnit: {
+    fontSize: 16,
+    fontWeight: '700',
   },
-  arrowDown: {
-    fontSize: 13,
+  weightArrow: {
+    fontSize: 14,
     fontWeight: '400',
-    marginVertical: 1,
-  },
-  goalLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: 1,
+    paddingHorizontal: 2,
   },
   // Progress bar section
   progressSection: {
