@@ -110,6 +110,10 @@ export default function GoalWeightCard({
           console.log('[GoalWeightCard] startWeightFromGoal from earliest check-in:', points[0].weight, 'kg =', Math.round(points[0].weight * 2.20462), 'lbs');
         }
 
+        if (userData?.current_weight != null) {
+          setStartWeightFromGoal(Number(userData.current_weight));
+        }
+
         if (goal) {
           const maintenanceCals = goal.maintenance_calories ?? userData?.maintenance_calories ?? 2000;
           console.log('[GoalWeightCard] loaded goal data — dailyCalories:', goal.daily_calories, 'maintenanceCalories:', maintenanceCals, 'lossRateLbsPerWeek:', goal.loss_rate_lbs_per_week);
