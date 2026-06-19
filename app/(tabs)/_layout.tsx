@@ -6,7 +6,6 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AdBannerFooter } from '@/components/AdBannerFooter';
-import GoPremiumFloatingBadge from '@/components/GoPremiumFloatingBadge';
 import QuickAddSheet from '@/components/QuickAddSheet';
 
 export default function TabLayout() {
@@ -128,7 +127,6 @@ export default function TabLayout() {
     <View style={{ flex: 1 }}>
       {tabs}
       <AdBannerFooter />
-      <GoPremiumFloatingBadge />
       <QuickAddSheet visible={sheetVisible} onClose={handleSheetClose} />
     </View>
   );
