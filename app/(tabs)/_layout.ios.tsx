@@ -1,23 +1,34 @@
 
-import React from 'react';
-import { View, Text } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AdBannerFooter } from '@/components/AdBannerFooter';
-import { usePremium } from '@/hooks/usePremium';
+import QuickAddSheet from '@/components/QuickAddSheet';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { isPremium } = usePremium();
+  const [sheetVisible, setSheetVisible] = useState(false);
 
   const tabBarInactiveTintColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const tabBarBackgroundColor = isDark ? colors.cardDark : colors.card;
   const tabBarBorderColor = isDark ? colors.borderDark : colors.border;
 
-  const premiumHref = isPremium ? null : '/subscription';
+  const quickAddBtnBg = isDark ? '#FFFFFF' : '#0F172A';
+  const quickAddPlusColor = isDark ? '#0F172A' : '#FFFFFF';
+
+  const handleQuickAddPress = () => {
+    console.log('[TabLayout iOS] Quick Add "+" button pressed');
+    setSheetVisible(true);
+  };
+
+  const handleSheetClose = () => {
+    console.log('[TabLayout iOS] QuickAddSheet closed');
+    setSheetVisible(false);
+  };
 
   const tabs = (
     <Tabs
@@ -64,57 +75,17 @@ export default function TabLayout() {
       <Tabs.Screen
         name="premium"
         options={{
-          title: 'Go Premium',
-          href: premiumHref,
-          tabBarLabel: () => (
-            <Text
-              style={{
-                fontSize: 10,
-                fontWeight: '700',
-                color: '#F5A623',
-                marginTop: -2,
-              }}
+          title: '',
+          tabBarButton: () => (
+            <TouchableOpacity
+              style={styles.quickAddWrapper}
+              onPress={handleQuickAddPress}
+              activeOpacity={0.85}
             >
-              Go Premium
-            </Text>
-          ),
-          tabBarIcon: () => (
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: '#F5A623',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: -18,
-                shadowColor: '#F5A623',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.4,
-                shadowRadius: 8,
-                elevation: 8,
-              }}
-            >
-              <IconSymbol
-                ios_icon_name="crown.fill"
-                android_material_icon_name="star"
-                size={26}
-                color="#FFFFFF"
-              />
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 2,
-                  right: 2,
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: '#FF3B30',
-                  borderWidth: 2,
-                  borderColor: '#FFFFFF',
-                }}
-              />
-            </View>
+              <View style={[styles.quickAddBtn, { backgroundColor: quickAddBtnBg }]}>
+                <Text style={[styles.quickAddPlus, { color: quickAddPlusColor }]}>+</Text>
+              </View>
+            </TouchableOpacity>
           ),
         }}
       />
@@ -156,6 +127,34 @@ export default function TabLayout() {
     <View style={{ flex: 1 }}>
       {tabs}
       <AdBannerFooter />
+      <QuickAddSheet visible={sheetVisible} onClose={handleSheetClose} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  quickAddWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickAddBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  quickAddPlus: {
+    fontSize: 28,
+    fontWeight: '200',
+    lineHeight: 32,
+    marginTop: -1,
+  },
+});
