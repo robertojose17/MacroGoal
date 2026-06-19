@@ -104,22 +104,11 @@ export default function GoalWeightCard({
           setGoalWeightKgDirect(Number(userData.goal_weight));
         }
 
-        // Bug 1 fix: compute start weight from check-in closest to goal.start_date
-        let startWeightKg: number | null = null;
-        if (goal?.start_date && points.length > 0) {
-          const startDate = new Date(goal.start_date + 'T00:00:00');
-          const closest = points.reduce((prev: { date: string; weight: number }, curr: { date: string; weight: number }) => {
-            const prevDiff = Math.abs(new Date(prev.date).getTime() - startDate.getTime());
-            const currDiff = Math.abs(new Date(curr.date).getTime() - startDate.getTime());
-            return currDiff < prevDiff ? curr : prev;
-          });
-          startWeightKg = closest.weight;
-          console.log('[GoalWeightCard] startWeightKg from closest check-in to goal.start_date:', startWeightKg, '(start_date:', goal.start_date, ')');
-        } else if (points.length > 0) {
-          startWeightKg = points[0].weight;
-          console.log('[GoalWeightCard] startWeightKg from earliest check-in:', startWeightKg);
+        // Use journey_start_weight from users table as the authoritative start weight
+        if (userData?.journey_start_weight != null) {
+          console.log('[GoalWeightCard] startWeightKg from users.journey_start_weight:', userData.journey_start_weight);
+          setStartWeightFromGoal(Number(userData.journey_start_weight));
         }
-        setStartWeightFromGoal(startWeightKg);
 
         if (goal) {
           const maintenanceCals = goal.maintenance_calories ?? userData?.maintenance_calories ?? 2000;
