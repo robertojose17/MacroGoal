@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase/client';
@@ -30,6 +31,7 @@ export default function GoalWeightCard({
   const router = useRouter();
   const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
   const [chartWidth, setChartWidth] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     console.log('[GoalWeightCard] fetching check-ins for userId:', userId);
@@ -43,15 +45,14 @@ export default function GoalWeightCard({
       .then(({ data, error }) => {
         if (error) {
           console.log('[GoalWeightCard] check-ins fetch error:', error.message);
-          return;
-        }
-        if (data) {
+        } else if (data) {
           const points = data
             .filter((c: any) => c.weight != null)
             .map((c: any) => ({ date: c.date, weight: Number(c.weight) }));
           console.log('[GoalWeightCard] loaded', points.length, 'weight check-ins');
           setCheckIns(points);
         }
+        setLoading(false);
       });
   }, [userId]);
 
@@ -60,7 +61,29 @@ export default function GoalWeightCard({
   const textSecondary = isDark ? 'rgba(255,255,255,0.5)' : '#6B7280';
   const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB';
 
-  // No goal set — show prompt immediately, no loading gate
+  // While loading, show skeleton card
+  if (loading) {
+    return (
+      <View style={[styles.card, { backgroundColor: bg }]}>
+        <View style={styles.row}>
+          <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
+        </View>
+        <View style={[styles.skeletonChart, { backgroundColor: trackBg }]} />
+        <View style={[styles.skeletonBar, { backgroundColor: trackBg }]} />
+        <View style={styles.row}>
+          <View style={[styles.skeletonLabel, { backgroundColor: trackBg }]} />
+          <View style={[styles.skeletonLabel, { backgroundColor: trackBg }]} />
+        </View>
+        <ActivityIndicator
+          size="small"
+          color={textSecondary}
+          style={{ marginTop: 8 }}
+        />
+      </View>
+    );
+  }
+
+  // No goal set — show prompt only after loading is complete
   if (!propGoal) {
     return (
       <View style={[styles.card, { backgroundColor: bg }]}>
@@ -82,8 +105,36 @@ export default function GoalWeightCard({
     );
   }
 
+  // Use last check-in weight as fallback for current weight
   const currentKg = propCurrent ?? (checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null);
-  if (!currentKg) return null;
+
+  // No current weight data at all — show informational state, never return null
+  if (!currentKg) {
+    return (
+      <View style={[styles.card, { backgroundColor: bg }]}>
+        <View style={styles.row}>
+          <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
+        </View>
+        <View style={[styles.chartArea, { height: CHART_HEIGHT }]}>
+          <View style={styles.noChartPlaceholder}>
+            <Text style={[styles.noChartText, { color: textSecondary }]}>
+              Log a weight check-in to start tracking progress
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={() => {
+            console.log('[GoalWeightCard] Log Check-in button pressed');
+            router.push('/check-in-form' as any);
+          }}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.btnText}>Log Check-in</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const startKg = propStart ?? (checkIns.length > 0 ? checkIns[0].weight : currentKg);
   const currentLbs = Math.round(currentKg * KG_TO_LBS);
@@ -295,4 +346,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   btnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  skeletonChart: {
+    height: CHART_HEIGHT,
+    borderRadius: 8,
+    marginBottom: 12,
+    opacity: 0.5,
+  },
+  skeletonBar: {
+    height: 6,
+    borderRadius: 3,
+    marginBottom: 10,
+    opacity: 0.5,
+  },
+  skeletonLabel: {
+    height: 36,
+    width: 70,
+    borderRadius: 6,
+    opacity: 0.5,
+  },
 });
