@@ -35,6 +35,7 @@ export default function GoalWeightCard({
   const router = useRouter();
   // We still need check-ins to derive currentKg fallback, weekNum, estText, and startKg
   const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
+  const [trackerEntries, setTrackerEntries] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [goalData, setGoalData] = useState<{
     dailyCalories: number;
@@ -72,6 +73,31 @@ export default function GoalWeightCard({
             .eq('id', authUser.id)
             .maybeSingle(),
         ]);
+
+        // Step 1: find the weight tracker for this user
+        const { data: weightTracker } = await supabase
+          .from('trackers')
+          .select('id')
+          .eq('user_id', authUser.id)
+          .eq('name', 'weight')
+          .eq('is_default', true)
+          .maybeSingle();
+
+        // Step 2: if found, get all entries ordered by date ascending
+        let fetchedTrackerEntries: { date: string; value: number }[] = [];
+        if (weightTracker?.id) {
+          const { data: entriesData } = await supabase
+            .from('tracker_entries')
+            .select('date, value')
+            .eq('tracker_id', weightTracker.id)
+            .eq('user_id', authUser.id)
+            .order('date', { ascending: true });
+          if (entriesData) {
+            fetchedTrackerEntries = entriesData.map((e: any) => ({ date: e.date, value: Number(e.value) }));
+          }
+        }
+        console.log('[GoalWeightCard] loaded', fetchedTrackerEntries.length, 'tracker_entries (lbs)');
+        if (!cancelled) setTrackerEntries(fetchedTrackerEntries);
 
         if (cancelled) return;
 
@@ -216,8 +242,17 @@ export default function GoalWeightCard({
 
   const lastCheckInKg = checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null;
 
-  // Progress: how far has the user moved from start toward goal, based on last check-in
-  const activeWeightKg = lastCheckInKg ?? currentKg; // last check-in is the source of truth
+  // Last check-in from tracker_entries (in lbs) — source of truth matching check-in tab
+  const lastTrackerEntryLbs = trackerEntries.length > 0
+    ? trackerEntries[trackerEntries.length - 1].value
+    : null;
+
+  // Convert to kg for comparison with goal (which is in kg)
+  const lastTrackerEntryKg = lastTrackerEntryLbs != null ? lastTrackerEntryLbs / KG_TO_LBS : null;
+
+  // Use tracker entry as active weight for progress bar
+  const activeWeightKg = lastTrackerEntryKg ?? lastCheckInKg ?? currentKg;
+
   const isLosing = resolvedGoalKg < startKg;
   const totalRange = Math.abs(startKg - resolvedGoalKg) || 1;
   const progress = Math.min(1, Math.max(0, Math.abs(startKg - activeWeightKg) / totalRange));
@@ -229,11 +264,11 @@ export default function GoalWeightCard({
   const progressPct = Math.round(progress * 100);
 
   const startLbs = Math.round(startKg * KG_TO_LBS);
-  // lbs to go: from last check-in to goal
-  const lbsToGo = lastCheckInKg != null
-    ? Math.max(0, Math.round(Math.abs(lastCheckInKg - resolvedGoalKg) * KG_TO_LBS))
+  // lbs to go: from last tracker entry (lbs) to goal
+  const lbsToGo = lastTrackerEntryLbs != null
+    ? Math.max(0, Math.round(Math.abs(lastTrackerEntryLbs - (resolvedGoalKg * KG_TO_LBS))))
     : Math.max(0, Math.round(Math.abs((currentKg ?? 0) - resolvedGoalKg) * KG_TO_LBS));
-  console.log('[GoalWeightCard] lastCheckInKg:', lastCheckInKg, 'resolvedGoalKg (kg):', resolvedGoalKg, 'lbsToGo:', lbsToGo);
+  console.log('[GoalWeightCard] lastTrackerEntryLbs:', lastTrackerEntryLbs, 'lastTrackerEntryKg:', lastTrackerEntryKg, 'resolvedGoalKg (kg):', resolvedGoalKg, 'lbsToGo:', lbsToGo);
   const goalReached = progress >= 1;
 
   // Bug 3 fix: use loss_rate_lbs_per_week as primary, caloric deficit as fallback
