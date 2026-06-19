@@ -214,10 +214,14 @@ export default function GoalWeightCard({
   const currentLbs = Math.round(currentKg * KG_TO_LBS);
   const goalLbs = Math.round(resolvedGoalKg * KG_TO_LBS);
 
+  const lastCheckInKg = checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null;
+
+  // Progress: how far has the user moved from start toward goal, based on last check-in
+  const activeWeightKg = lastCheckInKg ?? currentKg; // last check-in is the source of truth
   const isLosing = resolvedGoalKg < startKg;
   const totalRange = Math.abs(startKg - resolvedGoalKg) || 1;
-  const progress = Math.min(1, Math.max(0, Math.abs(startKg - currentKg) / totalRange));
-  const isOnTrack = isLosing ? currentKg < startKg : currentKg > startKg;
+  const progress = Math.min(1, Math.max(0, Math.abs(startKg - activeWeightKg) / totalRange));
+  const isOnTrack = isLosing ? activeWeightKg < startKg : activeWeightKg > startKg;
 
   const badgeBg = isOnTrack ? 'rgba(92,185,123,0.12)' : 'rgba(255,138,91,0.12)';
   const badgeColor = isOnTrack ? '#5CB97B' : '#FF8A5B';
@@ -225,8 +229,7 @@ export default function GoalWeightCard({
   const progressPct = Math.round(progress * 100);
 
   const startLbs = Math.round(startKg * KG_TO_LBS);
-  const lastCheckInKg = checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null;
-  // Bug 2 fix: both lastCheckInKg and resolvedGoalKg are in kg — multiplication is correct
+  // lbs to go: from last check-in to goal
   const lbsToGo = lastCheckInKg != null
     ? Math.max(0, Math.round(Math.abs(lastCheckInKg - resolvedGoalKg) * KG_TO_LBS))
     : Math.max(0, Math.round(Math.abs((currentKg ?? 0) - resolvedGoalKg) * KG_TO_LBS));
