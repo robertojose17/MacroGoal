@@ -497,7 +497,13 @@ export default function DashboardScreen() {
         {/* ── Goal Weight Card ── */}
         {user && (
           <CardErrorBoundary label="GoalWeightCard">
-            <GoalWeightCard userId={user.id} isDark={isDark} />
+            <GoalWeightCard
+              userId={user.id}
+              isDark={isDark}
+              currentWeightKg={user.current_weight ?? null}
+              goalWeightKg={user.goal_weight ?? null}
+              startWeightKg={user.journey_start_weight ?? null}
+            />
           </CardErrorBoundary>
         )}
 
