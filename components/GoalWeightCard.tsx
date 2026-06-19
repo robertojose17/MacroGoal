@@ -271,30 +271,18 @@ export default function GoalWeightCard({
   console.log('[GoalWeightCard] lastTrackerEntryLbs:', lastTrackerEntryLbs, 'lastTrackerEntryKg:', lastTrackerEntryKg, 'resolvedGoalKg (kg):', resolvedGoalKg, 'lbsToGo:', lbsToGo);
   const goalReached = progress >= 1;
 
-  // Bug 3 fix: use loss_rate_lbs_per_week as primary, caloric deficit as fallback
   let estDateLabel = '';
-  if (lbsToGo > 0) {
-    let lbsPerWeek = 0;
-
-    if (goalData?.lossRateLbsPerWeek && goalData.lossRateLbsPerWeek > 0) {
-      lbsPerWeek = goalData.lossRateLbsPerWeek;
-      console.log('[GoalWeightCard] est arrival using lossRateLbsPerWeek:', lbsPerWeek);
-    } else if (goalData && goalData.maintenanceCalories > goalData.dailyCalories) {
-      const dailyDeficit = goalData.maintenanceCalories - goalData.dailyCalories;
-      lbsPerWeek = (dailyDeficit * 7) / 3500;
-      console.log('[GoalWeightCard] est arrival using caloric deficit, lbsPerWeek:', lbsPerWeek);
-    }
-
-    if (lbsPerWeek > 0) {
-      const weeksToGoal = lbsToGo / lbsPerWeek;
-      const daysToGoal = Math.round(weeksToGoal * 7);
+  if (lbsToGo > 0 && goalData) {
+    const dailyDeficit = goalData.maintenanceCalories - goalData.dailyCalories;
+    if (dailyDeficit > 50) { // at least 50 cal deficit to avoid absurd dates
+      const lbsPerDay = dailyDeficit / 3500;
+      const daysToGoal = Math.round(lbsToGo / lbsPerDay);
       const estDate = new Date();
       estDate.setDate(estDate.getDate() + daysToGoal);
-      // Bug 4 fix: include day in the date format
-      estDateLabel = estDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      console.log('[GoalWeightCard] estDateLabel:', estDateLabel, '(daysToGoal:', daysToGoal, ')');
+      estDateLabel = estDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
   }
+  console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'maintenance:', goalData?.maintenanceCalories, 'daily:', goalData?.dailyCalories, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
 
   return (
     <View style={[styles.card, { backgroundColor: bg }]}>
