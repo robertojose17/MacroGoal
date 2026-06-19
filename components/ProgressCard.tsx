@@ -673,7 +673,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
           if (diff < minDiff) { minDiff = diff; closestIndex = i; }
         }
         actualWeightCircles.push({
-          x: yAxisWidth + (chartAreaWidth * closestIndex / (totalPoints - 1)),
+          x: chartAreaWidth * closestIndex / (totalPoints - 1),
           y: topPadding + (chartAreaHeight * (1 - (point.weightLbs - yMin) / yRange)),
           weightLbs: point.weightLbs,
         });
@@ -1395,10 +1395,11 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
     if (!miniProfileData || !miniPlannedData || miniPlannedData.length === 0 || containerWidth <= 0) return null;
 
     const { startWeightLbs, goalWeightLbs } = miniProfileData;
-    const yAxisWidth = 40;
+    const yAxisWidth = 0;
+    const yAxisRightWidth = 36;
     const xAxisHeight = 20;
     const topPadding = 8;
-    const chartAreaWidth = containerWidth - yAxisWidth - 4;
+    const chartAreaWidth = containerWidth - yAxisRightWidth - 4;
     const chartAreaHeight = height - xAxisHeight - topPadding;
     const totalWidth = containerWidth;
     const totalHeight = height;
@@ -1444,11 +1445,11 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
       const point = miniPlannedData[index];
       const month = (point.date.getMonth() + 1).toString().padStart(2, '0');
       const day = point.date.getDate().toString().padStart(2, '0');
-      return { index, label: `${month}/${day}`, x: yAxisWidth + (chartAreaWidth * index / (totalPoints - 1)) };
+      return { index, label: `${month}/${day}`, x: chartAreaWidth * index / (totalPoints - 1) };
     });
 
     const plannedPathPoints = miniPlannedData.map((point, index) => ({
-      x: yAxisWidth + (chartAreaWidth * index / (totalPoints - 1)),
+      x: chartAreaWidth * index / (totalPoints - 1),
       y: topPadding + (chartAreaHeight * (1 - (point.weightLbs - yMin) / yRange)),
     }));
 
@@ -1468,7 +1469,7 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
     let projectionPathData: string | null = null;
     if (miniCalorieProjectionData && miniCalorieProjectionData.length > 0) {
       const pts = miniCalorieProjectionData.map((point, index) => ({
-        x: yAxisWidth + (chartAreaWidth * index / (totalPoints - 1)),
+        x: chartAreaWidth * index / (totalPoints - 1),
         y: topPadding + (chartAreaHeight * (1 - (point.weightLbs - yMin) / yRange)),
       }));
       projectionPathData = `M ${pts[0].x} ${pts[0].y}`;
@@ -1511,23 +1512,13 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
       }
     }
 
-    // Graph status pill
-    let graphStatus: 'on_track' | 'ahead' | 'behind' = 'on_track';
-    if (miniCalorieProjectionData && miniCalorieProjectionData.length > 0 && miniPlannedData.length > 0) {
-      const lastProjected = miniCalorieProjectionData[miniCalorieProjectionData.length - 1].weightLbs;
-      const lastPlanned = miniPlannedData[miniPlannedData.length - 1].weightLbs;
-      const diff = lastProjected - lastPlanned;
-      if (diff > 0.5) graphStatus = 'behind';
-      else if (diff < -0.5) graphStatus = 'ahead';
-    }
-
     return {
       totalWidth, totalHeight, chartAreaWidth, chartAreaHeight,
-      yAxisWidth, xAxisHeight, topPadding,
+      yAxisRightWidth, xAxisHeight, topPadding,
       yTicks, xTicks,
       pathData: plannedPathData, fillPathData, projectionPathData,
       actualWeightCircles, yMin, yMax,
-      trendPathData, graphStatus,
+      trendPathData,
     };
   }, [miniProfileData, miniPlannedData, miniCalorieProjectionData, miniActualWeightPoints, containerWidth, height]);
 
@@ -1537,12 +1528,6 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
   const projectionColor = colors.primary;
   const actualWeightColor = colors.warning;
   const cardBg = isDark ? colors.cardDark : colors.card;
-
-  const graphStatusConfig = miniChartConfig ? {
-    'on_track': { label: '● On track', pillFill: '#3B82F6', textFill: '#FFFFFF' },
-    'ahead': { label: '↑ Ahead', pillFill: '#22C55E', textFill: '#FFFFFF' },
-    'behind': { label: '↓ Behind', pillFill: '#F97316', textFill: '#FFFFFF' },
-  }[miniChartConfig.graphStatus] : null;
 
   return (
     <View
@@ -1573,9 +1558,9 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
           {miniChartConfig.yTicks.map((tick, index) => (
             <Line
               key={`mini-grid-h-${index}`}
-              x1={miniChartConfig.yAxisWidth}
+              x1={0}
               y1={tick.y}
-              x2={miniChartConfig.yAxisWidth + miniChartConfig.chartAreaWidth}
+              x2={miniChartConfig.chartAreaWidth}
               y2={tick.y}
               stroke={gridColor}
               strokeWidth="1"
@@ -1617,15 +1602,15 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
             />
           ))}
 
-          {/* Y-axis labels */}
+          {/* Y-axis labels (right side) */}
           {miniChartConfig.yTicks.map((tick, index) => (
             <SvgText
               key={`mini-y-label-${index}`}
-              x={miniChartConfig.yAxisWidth - 4}
+              x={miniChartConfig.chartAreaWidth + 4}
               y={tick.y + 4}
               fontSize="9"
               fill={labelColor}
-              textAnchor="end"
+              textAnchor="start"
             >
               {tick.label}
             </SvgText>
@@ -1645,31 +1630,7 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
             </SvgText>
           ))}
 
-          {/* Status pill */}
-          {graphStatusConfig && (
-            <>
-              <Rect
-                x={miniChartConfig.yAxisWidth + miniChartConfig.chartAreaWidth - 72}
-                y={miniChartConfig.topPadding + 3}
-                width={70}
-                height={16}
-                rx={8}
-                ry={8}
-                fill={graphStatusConfig.pillFill}
-                opacity={0.9}
-              />
-              <SvgText
-                x={miniChartConfig.yAxisWidth + miniChartConfig.chartAreaWidth - 37}
-                y={miniChartConfig.topPadding + 14}
-                fontSize="8"
-                fontWeight="600"
-                fill={graphStatusConfig.textFill}
-                textAnchor="middle"
-              >
-                {graphStatusConfig.label}
-              </SvgText>
-            </>
-          )}
+
         </Svg>
       )}
     </View>
