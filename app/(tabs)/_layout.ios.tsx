@@ -7,6 +7,7 @@ import { colors } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AdBannerFooter } from '@/components/AdBannerFooter';
 import QuickAddSheet from '@/components/QuickAddSheet';
+import GoPremiumFloatingBadge from '@/components/GoPremiumFloatingBadge';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -128,6 +129,7 @@ export default function TabLayout() {
       {tabs}
       <AdBannerFooter />
       <QuickAddSheet visible={sheetVisible} onClose={handleSheetClose} />
+      <GoPremiumFloatingBadge />
     </View>
   );
 }
