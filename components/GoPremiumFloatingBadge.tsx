@@ -22,7 +22,9 @@ export default function GoPremiumFloatingBadge() {
 
   if (!visible || isPremium) return null;
 
-  const bottomOffset = insets.bottom + 90;
+  const TAB_BAR_HEIGHT = 80;
+  const AD_BANNER_HEIGHT = 50;
+  const bottomOffset = insets.bottom + TAB_BAR_HEIGHT + AD_BANNER_HEIGHT + 8;
 
   return (
     <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="box-none">
