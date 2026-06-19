@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { WeightProgressMiniChart } from '@/components/ProgressCard';
 
@@ -175,7 +176,27 @@ export default function GoalWeightCard({
   const badgeColor = isOnTrack ? '#5CB97B' : '#FF8A5B';
   const badgeLabel = isOnTrack ? '✓ ON TRACK' : 'BEHIND';
   const progressPct = Math.round(progress * 100);
-  const footerText = `Week ${weekNum} of journey${estText}`;
+
+  const startLbs = Math.round(startKg * KG_TO_LBS);
+  const lbsToGo = isLosing
+    ? Math.max(0, Math.round((currentKg - propGoal) * KG_TO_LBS))
+    : Math.max(0, Math.round((propGoal - currentKg) * KG_TO_LBS));
+  const goalReached = progress >= 1;
+
+  // Parse estimated date from estText (" · Est. Mar 2026") or recalculate
+  let estDateLabel = '';
+  if (checkIns.length >= 2) {
+    const first = checkIns[0];
+    const last = checkIns[checkIns.length - 1];
+    const days = Math.max(1, (new Date(last.date).getTime() - new Date(first.date).getTime()) / (24 * 60 * 60 * 1000));
+    const rate = (first.weight - last.weight) / days;
+    const remaining = currentKg - propGoal;
+    if (rate > 0 && remaining > 0) {
+      const est = new Date();
+      est.setDate(est.getDate() + remaining / rate);
+      estDateLabel = est.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    }
+  }
 
   return (
     <View style={[styles.card, { backgroundColor: bg }]}>
@@ -189,41 +210,61 @@ export default function GoalWeightCard({
 
       {/* Two-column body */}
       <View style={styles.bodyRow}>
-        {/* Left column — empty, reserved for future content */}
-        <View style={{ flex: 1 }} />
+        {/* Left column — premium weight progress */}
+        <View style={[styles.leftColumn]}>
+          {/* Start → Goal weights */}
+          <View style={styles.weightStack}>
+            <View style={styles.weightRow}>
+              <Text style={[styles.weightBig, { color: textPrimary }]}>{startLbs}</Text>
+              <Text style={[styles.weightBigUnit, { color: textSecondary }]}> lbs</Text>
+            </View>
+            <Text style={[styles.arrowDown, { color: textSecondary }]}>↓</Text>
+            <View>
+              <View style={styles.weightRow}>
+                <Text style={[styles.weightBig, { color: '#5B9AA8' }]}>{goalLbs}</Text>
+                <Text style={[styles.weightBigUnit, { color: '#5B9AA8' }]}> lbs</Text>
+              </View>
+              <Text style={[styles.goalLabel, { color: textSecondary }]}>Goal</Text>
+            </View>
+          </View>
 
-        {/* Right column — full ProgressCard chart reused */}
+          {/* Progress bar */}
+          <View style={styles.progressSection}>
+            <View style={styles.barRow}>
+              <View style={[styles.track, { backgroundColor: trackBg, flex: 1 }]}>
+                <LinearGradient
+                  colors={['#5B9AA8', '#7BC8D4']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.fill, { width: `${progressPct}%` as any }]}
+                />
+                <View style={[styles.progressDot, { left: `${progressPct}%` as any, borderColor: bg }]} />
+              </View>
+              <Text style={styles.pctText}>{progressPct}%</Text>
+            </View>
+            {goalReached ? (
+              <Text style={[styles.lbsToGo, { color: '#5CB97B' }]}>Goal reached! 🎉</Text>
+            ) : (
+              <Text style={[styles.lbsToGo, { color: textSecondary }]}>{lbsToGo} lbs to go</Text>
+            )}
+          </View>
+
+          {/* Estimated arrival */}
+          <View style={styles.estSection}>
+            <Text style={[styles.estLabel, { color: textSecondary }]}>EST. ARRIVAL</Text>
+            {estDateLabel ? (
+              <Text style={[styles.estDate, { color: textPrimary }]}>{estDateLabel}</Text>
+            ) : (
+              <Text style={[styles.estDate, { color: textSecondary }]}>Calculating...</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Right column — mini chart */}
         <View style={styles.chartColumn}>
           <WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} />
         </View>
       </View>
-
-      {/* Progress bar */}
-      <View style={[styles.track, { backgroundColor: trackBg }]}>
-        <View style={[styles.fill, { width: `${progressPct}%` as any }]} />
-        <View style={[styles.progressDot, { left: `${progressPct}%` as any, borderColor: bg }]} />
-      </View>
-
-      {/* Weight labels */}
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={[styles.weightNum, { color: textPrimary }]}>
-            {currentLbs}
-            <Text style={[styles.weightUnit, { color: textSecondary }]}> lbs</Text>
-          </Text>
-          <Text style={[styles.weightLabel, { color: textSecondary }]}>Current</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.weightNum, { color: textPrimary }]}>
-            {goalLbs}
-            <Text style={[styles.weightUnit, { color: textSecondary }]}> lbs</Text>
-          </Text>
-          <Text style={[styles.weightLabel, { color: textSecondary }]}>Goal</Text>
-        </View>
-      </View>
-
-      {/* Footer */}
-      <Text style={[styles.footer, { color: textSecondary }]}>{footerText}</Text>
     </View>
   );
 }
@@ -256,21 +297,60 @@ const styles = StyleSheet.create({
   bodyRow: {
     flexDirection: 'row',
     height: CHART_HEIGHT,
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  leftColumn: {
+    flex: 1,
+    paddingRight: 12,
+    justifyContent: 'space-between',
   },
   chartColumn: {
     flex: 1,
     overflow: 'hidden',
   },
-  // Progress bar
+  // Weight stack (start → goal)
+  weightStack: {
+    gap: 2,
+  },
+  weightRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  weightBig: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  weightBigUnit: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  arrowDown: {
+    fontSize: 13,
+    fontWeight: '400',
+    marginVertical: 1,
+  },
+  goalLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  // Progress bar section
+  progressSection: {
+    gap: 3,
+  },
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   track: {
     height: 6,
-    borderRadius: 3,
-    marginBottom: 10,
+    borderRadius: 6,
     overflow: 'visible',
     position: 'relative',
   },
-  fill: { height: '100%', borderRadius: 3, backgroundColor: '#5B9AA8' },
+  fill: { height: '100%', borderRadius: 6 },
   progressDot: {
     position: 'absolute',
     top: -4,
@@ -281,12 +361,31 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     marginLeft: -7,
   },
-  // Weight labels
-  weightNum: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
-  weightUnit: { fontSize: 13, fontWeight: '500' },
-  weightLabel: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-  // Footer
-  footer: { fontSize: 12, fontWeight: '500', textAlign: 'center', marginTop: 8 },
+  pctText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#5B9AA8',
+    minWidth: 30,
+    textAlign: 'right',
+  },
+  lbsToGo: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  // Estimated arrival
+  estSection: {
+    gap: 2,
+  },
+  estLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  estDate: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   // No goal / no data states
   noGoal: { fontSize: 14, lineHeight: 20, marginVertical: 8 },
   noDataArea: { alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
