@@ -42,6 +42,7 @@ const PARTICLE_CONFIG = [
 interface ChallengeCompleteModalProps {
   visible: boolean;
   onClose: () => void;
+  xpConfig?: Record<string, number>;
 }
 
 // ─── Floating Particles ───────────────────────────────────────────────────────
@@ -120,7 +121,10 @@ function FloatingParticles() {
 export default function ChallengeCompleteModal({
   visible,
   onClose,
+  xpConfig,
 }: ChallengeCompleteModalProps) {
+  const challengeXp = xpConfig?.['seven_day_challenge'] ?? 500;
+  const challengeXpText = '+' + challengeXp + ' XP earned';
   const medalScale = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const glowOpacity = useRef(new Animated.Value(0)).current;
@@ -230,7 +234,7 @@ export default function ChallengeCompleteModal({
 
             {/* XP earned */}
             <Text style={styles.xpText}>
-              {'+500 XP earned'}
+              {challengeXpText}
             </Text>
 
             {/* Buttons */}

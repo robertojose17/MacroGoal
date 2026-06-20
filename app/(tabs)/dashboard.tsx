@@ -525,6 +525,7 @@ export default function DashboardScreen() {
             <ChallengeDashboardCard
               challenge={challenge.challenge}
               isDark={isDark}
+              xpConfig={xp.status?.xp_config}
               onCompleteTodaysMission={challenge.completeTodaysMission}
               onMissionCompleted={(result) => {
                 console.log('[Dashboard] Challenge mission completed — badge:', result.badgeEarned, 'xp:', result.xpAwarded);
@@ -722,6 +723,7 @@ export default function DashboardScreen() {
           challenge.refresh();
         }}
         onAcceptChallenge={challenge.acceptChallenge}
+        xpConfig={xp.status?.xp_config}
       />
 
       {/* ── 7-Day Challenge Complete Modal ── */}
@@ -731,6 +733,7 @@ export default function DashboardScreen() {
           console.log('[Dashboard] ChallengeCompleteModal closed');
           setShowCompleteModal(false);
         }}
+        xpConfig={xp.status?.xp_config}
       />
 
     </SafeAreaView>

@@ -22,6 +22,7 @@ import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 interface ChallengeDashboardCardProps {
   challenge: SevenDayChallenge;
   isDark?: boolean;
+  xpConfig?: Record<string, number>;
   onMissionCompleted?: (result: {
     badgeEarned: boolean;
     xpAwarded: number;
@@ -128,6 +129,7 @@ function StepNode({
 export default function ChallengeDashboardCard({
   challenge,
   isDark = false,
+  xpConfig,
   onMissionCompleted,
   onCompleteTodaysMission,
 }: ChallengeDashboardCardProps) {
@@ -303,7 +305,7 @@ export default function ChallengeDashboardCard({
         <View style={[styles.footer, { backgroundColor: footerBg }]}>
           <Text style={styles.footerMedal}>{'🏅'}</Text>
           <Text style={[styles.footerLine, { color: titleColor }]}>
-            <Text style={{ fontWeight: '800' }}>+500 XP</Text>
+            <Text style={{ fontWeight: '800' }}>{'+' + (xpConfig?.['seven_day_challenge'] ?? 500) + ' XP'}</Text>
             <Text style={[styles.footerLineMuted, { color: mutedColor }]}>{'  ·  Challenger Badge on Day 7'}</Text>
           </Text>
         </View>

@@ -56,6 +56,7 @@ interface ChallengePopupProps {
   onClose: () => void;
   onAccepted: () => void;
   onAcceptChallenge: () => Promise<void>;
+  xpConfig?: Record<string, number>;
 }
 
 // ─── Floating Particles ───────────────────────────────────────────────────────
@@ -150,6 +151,7 @@ export default function ChallengePopup({
   onClose,
   onAccepted,
   onAcceptChallenge,
+  xpConfig,
 }: ChallengePopupProps) {
   const [accepting, setAccepting] = useState(false);
 
@@ -251,7 +253,7 @@ export default function ChallengePopup({
           {/* Reward pill */}
           <Animated.View style={[styles.rewardPill, { opacity: rewardAnim, transform: [{ scale: rewardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
             <Text style={styles.rewardText}>
-              {'🏅 +500 XP · Challenger Badge'}
+              {'🏅 +' + (xpConfig?.['seven_day_challenge'] ?? 500) + ' XP · Challenger Badge'}
             </Text>
           </Animated.View>
 

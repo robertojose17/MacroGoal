@@ -315,12 +315,14 @@ function DetailSheet({
   visible,
   onClose,
   onLogWeight,
+  xpConfig,
 }: {
   card: ChallengeCard | null;
   isDark: boolean;
   visible: boolean;
   onClose: () => void;
   onLogWeight: () => void;
+  xpConfig?: Record<string, number>;
 }) {
   if (!card) return null;
 
@@ -463,13 +465,13 @@ function DetailSheet({
               <View style={styles.weightHintItem}>
                 <Ionicons name="scale-outline" size={14} color={subColor} />
                 <Text style={[styles.weightHintText, { color: subColor }]}>
-                  {'Weight only  +50 XP'}
+                  {'Weight only  +' + (xpConfig?.['weight_checkin'] ?? 50) + ' XP'}
                 </Text>
               </View>
               <View style={styles.weightHintItem}>
                 <Ionicons name="camera-outline" size={14} color={colors.primary} />
                 <Text style={[styles.weightHintText, { color: colors.primary }]}>
-                  {'Weight + Photo  +100 XP'}
+                  {'Weight + Photo  +' + ((xpConfig?.['weight_checkin'] ?? 50) + (xpConfig?.['progress_photo'] ?? 50)) + ' XP'}
                 </Text>
               </View>
             </View>
@@ -624,6 +626,7 @@ export default function TodaysChallengesCard({
         visible={sheetVisible}
         onClose={closeSheet}
         onLogWeight={handleLogWeight}
+        xpConfig={status?.xp_config}
       />
     </View>
   );

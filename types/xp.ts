@@ -165,6 +165,9 @@ export type XpStatus = {
 
   /** Unified today's challenges — optional until backend rolls out */
   todays_challenges?: ChallengeCard[];
+
+  /** XP config from xp_event_config table — event_type → xp_amount */
+  xp_config?: Record<string, number>;
 };
 
 // ─── Today's Challenges (new unified card) ────────────────────────────────────

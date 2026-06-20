@@ -24,9 +24,7 @@ import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
   getMacroTier,
-  totalLiveXp,
   MACRO_KEYS,
-  MAX_MACRO_XP,
   type MacroKey,
 } from '@/utils/macroTier';
 import { setMacroTier } from '@/utils/macroXpApi';
@@ -45,6 +43,7 @@ interface NutritionMissionCardProps {
   goalCarbs: number;
   goalFats: number;
   isDark: boolean;
+  xpConfig?: Record<string, number>;
 }
 
 // ─── Tier dot colors ──────────────────────────────────────────────────────────
@@ -130,6 +129,7 @@ export default function NutritionMissionCard({
   goalCarbs,
   goalFats,
   isDark,
+  xpConfig,
 }: NutritionMissionCardProps) {
   const router = useRouter();
 
@@ -149,9 +149,19 @@ export default function NutritionMissionCard({
   );
 
   const onTrackCount = tiers.filter((t) => t.tier > 0).length;
-  const liveXp = totalLiveXp(macroInputs);
-  const remaining = MAX_MACRO_XP - liveXp;
-  const isMaxXp = liveXp === MAX_MACRO_XP;
+
+  // XP values come from backend xp_event_config — use config with fallbacks
+  const calorieXp = xpConfig?.['calorie_goal'] ?? 15;
+  const proteinXp = xpConfig?.['protein_goal'] ?? 20;
+  // Max XP is the sum of calorie + protein goal rewards (the two nutrition events)
+  const maxNutritionXp = calorieXp + proteinXp;
+
+  // Compute live XP based on which tiers are reached and config values
+  const calorieTier = tiers[0]; // calories
+  const proteinTier = tiers[1]; // protein
+  const liveXp = (calorieTier.tier > 0 ? calorieXp : 0) + (proteinTier.tier > 0 ? proteinXp : 0);
+  const remaining = maxNutritionXp - liveXp;
+  const isMaxXp = liveXp >= maxNutritionXp;
 
   const onTrackText = onTrackCount + ' of 4 macros earning XP';
   const xpBadgeText = '+' + liveXp + ' XP';

@@ -17,12 +17,18 @@ export interface TierResult {
 
 export const MACRO_KEYS: MacroKey[] = ['calories', 'protein', 'carbs', 'fats'];
 
-/** Maximum possible XP across all 4 macros (50 + 40 + 20 + 20). */
-export const MAX_MACRO_XP = 130;
+/**
+ * Maximum possible XP across all 4 macros.
+ * Set to 0 — real XP values come from the backend xp_event_config table.
+ */
+export const MAX_MACRO_XP = 0;
 
 /**
  * Compute the XP tier for a single macro.
  * Must match the backend `getMacroTier` function EXACTLY.
+ *
+ * NOTE: xp is always 0 here — real XP comes from the backend.
+ * Only the tier (0/1/2) is used for local UI feedback.
  */
 export function getMacroTier(macro: MacroKey, current: number, goal: number): TierResult {
   if (goal <= 0) return { tier: 0, xp: 0 };
@@ -31,20 +37,20 @@ export function getMacroTier(macro: MacroKey, current: number, goal: number): Ti
   switch (macro) {
     case 'calories': {
       const dev = Math.abs(ratio - 1);
-      if (dev <= 0.05) return { tier: 1, xp: 50 };
-      if (dev <= 0.10) return { tier: 2, xp: 30 };
+      if (dev <= 0.05) return { tier: 1, xp: 0 };
+      if (dev <= 0.10) return { tier: 2, xp: 0 };
       return { tier: 0, xp: 0 };
     }
     case 'protein': {
-      if (ratio >= 1.00) return { tier: 1, xp: 40 };
-      if (ratio >= 0.80) return { tier: 2, xp: 20 };
+      if (ratio >= 1.00) return { tier: 1, xp: 0 };
+      if (ratio >= 0.80) return { tier: 2, xp: 0 };
       return { tier: 0, xp: 0 };
     }
     case 'carbs':
     case 'fats': {
       const dev = Math.abs(ratio - 1);
-      if (dev <= 0.10) return { tier: 1, xp: 20 };
-      if (dev <= 0.20) return { tier: 2, xp: 10 };
+      if (dev <= 0.10) return { tier: 1, xp: 0 };
+      if (dev <= 0.20) return { tier: 2, xp: 0 };
       return { tier: 0, xp: 0 };
     }
   }
@@ -52,9 +58,10 @@ export function getMacroTier(macro: MacroKey, current: number, goal: number): Ti
 
 /**
  * Sum the live XP across all provided macros.
+ * Always returns 0 — real XP comes from the backend xp_event_config table.
  */
 export function totalLiveXp(
-  macros: { macro: MacroKey; current: number; goal: number }[]
+  _macros: { macro: MacroKey; current: number; goal: number }[]
 ): number {
-  return macros.reduce((sum, m) => sum + getMacroTier(m.macro, m.current, m.goal).xp, 0);
+  return 0;
 }

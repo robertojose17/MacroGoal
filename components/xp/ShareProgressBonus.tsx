@@ -49,6 +49,7 @@ const PENDING_TTL_MS = 30 * 60 * 1000; // 30 minutes
 interface ShareProgressBonusProps {
   allDone: boolean;
   isDark: boolean;
+  xpConfig?: Record<string, number>;
 }
 
 // ─── Minimal card data needed for XpShareCard ─────────────────────────────────
@@ -61,7 +62,7 @@ interface XpCardData {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBonusProps) {
+export default function ShareProgressBonus({ allDone, isDark, xpConfig }: ShareProgressBonusProps) {
   const router = useRouter();
 
   const [todayCount, setTodayCount] = useState(0);
@@ -86,6 +87,10 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
   // Pulse animation for hero state
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // XP amount from backend config — used in alerts and display text
+  const shareXp = xpConfig?.['share_progress'] ?? 100;
+  const shareXpLabel = '+' + shareXp + ' XP';
 
   // Track previous AppState to detect background→active transition only
   const prevAppState = useRef<AppStateStatus>(AppState.currentState);
@@ -213,7 +218,7 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
 
       Alert.alert(
         'Did you share your progress?',
-        'Confirm to claim your +100 XP bonus.',
+        'Confirm to claim your ' + shareXpLabel + ' bonus.',
         [
           {
             text: 'Not yet',
@@ -261,7 +266,7 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
     } catch (err) {
       console.warn('[ShareProgressBonus] checkPendingFlag error:', err);
     }
-  }, [userClaimedToday]);
+  }, [userClaimedToday, shareXpLabel]);
 
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
@@ -372,14 +377,14 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
   const primaryTextColor = isDark ? colors.textDark : colors.text;
 
   if (isClaimed) {
-    titleText = justEarned ? '✓ +100 XP earned!' : '+100 XP Earned';
+    titleText = justEarned ? ('✓ ' + shareXpLabel + ' earned!') : (shareXpLabel + ' Earned');
     subtitleText = 'Come back tomorrow to share again';
     titleColor = colors.success;
     IconComponent = CheckCircle2;
     iconColor = colors.success;
     isDisabled = true;
   } else if (isHero) {
-    titleText = 'Share & Earn +100 XP';
+    titleText = 'Share & Earn ' + shareXpLabel;
     subtitleText = 'All missions complete — claim your bonus';
     titleColor = primaryTextColor;
     IconComponent = Flame;
@@ -387,7 +392,7 @@ export default function ShareProgressBonus({ allDone, isDark }: ShareProgressBon
     isDisabled = false;
   } else {
     titleText = 'Share Progress';
-    subtitleText = 'Earn +100 XP today';
+    subtitleText = 'Earn ' + shareXpLabel + ' today';
     titleColor = primaryTextColor;
     IconComponent = Camera;
     iconColor = colors.primary;

@@ -54,6 +54,8 @@ interface TodaysMissionsCardProps {
   goalCarbs: number;
   goalFats: number;
   isDark: boolean;
+  /** XP config from backend xp_event_config — event_type → xp_amount */
+  xpConfig?: Record<string, number>;
   /** @deprecated — replaced by unlockSlotStatus */
   missionTier?: number;
   /** @deprecated — replaced by unlockSlotStatus */
@@ -417,6 +419,7 @@ export default function TodaysMissionsCard({
   goalCarbs,
   goalFats,
   isDark,
+  xpConfig,
   unlockSlotStatus,
   onUnlockPress,
 }: TodaysMissionsCardProps) {
@@ -594,7 +597,7 @@ export default function TodaysMissionsCard({
           current={totalCalories}
           goal={goalCalories}
           unit="kcal"
-          xpReward={15}
+          xpReward={xpConfig?.['calorie_goal'] ?? 15}
           isDark={isDark}
           isLast={false}
         />
@@ -606,7 +609,7 @@ export default function TodaysMissionsCard({
           current={totalProtein}
           goal={goalProtein}
           unit="g"
-          xpReward={20}
+          xpReward={xpConfig?.['protein_goal'] ?? 20}
           isDark={isDark}
           isLast={!hasStep && !hasSlots}
         />
@@ -670,7 +673,7 @@ export default function TodaysMissionsCard({
       )}
 
       {/* ── Share Progress Bonus (always visible) ── */}
-      <ShareProgressBonus allDone={allDone} isDark={isDark} />
+      <ShareProgressBonus allDone={allDone} isDark={isDark} xpConfig={xpConfig} />
     </View>
   );
 }
