@@ -188,17 +188,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             </View>
           </View>
 
-          {/* Progress labels row */}
-          <View style={styles.progressLabels}>
-            <View style={styles.xpToNextRow}>
-              <Text style={[styles.xpDot, { color: rank.primaryColor }]}>{'●'}</Text>
-              <Text style={[styles.xpToNextLabel, { color: textSecondary }]}>{xpToNextText}</Text>
-            </View>
-            <Text style={[styles.xpFraction, { color: textSecondary }]}>{xpInLevelDisplay}</Text>
-            <Text style={[styles.xpFraction, { color: textSecondary }]}>{' / '}</Text>
-            <Text style={[styles.xpFraction, { color: textSecondary }]}>{xpNeededDisplay}</Text>
-          </View>
-
           {/* Progress bar */}
           <View style={styles.progressBarWrapper}>
             <TouchableOpacity
@@ -212,7 +201,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
                 end={{ x: 1, y: 0 }}
                 style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
               />
-              <View style={[styles.progressThumb, { left: progressWidth + '%' as `${number}%`, borderColor: rank.primaryColor }]} />
+              <View style={[styles.progressDot, { left: progressWidth + '%' as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
             </TouchableOpacity>
             <Animated.View
               style={[
@@ -247,7 +236,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               <Animated.Text style={[styles.statEmoji, { opacity: streakAtRisk ? pulseAnim : 1 }]}>{'🔥'}</Animated.Text>
               <Text style={[styles.statValue, { color: textPrimary }]}>{streakDisplay}</Text>
             </View>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>{'Day Streak'}</Text>
           </Pressable>
 
           {/* Total XP stat */}
@@ -410,30 +398,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Progress labels row
-  progressLabels: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  xpToNextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flex: 1,
-  },
-  xpDot: {
-    fontSize: 8,
-  },
-  xpToNextLabel: {
-    fontSize: 10,
-    fontWeight: '400',
-  },
-  xpFraction: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-
   // Progress bar
   progressBarWrapper: {
     position: 'relative',
@@ -450,19 +414,14 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  progressThumb: {
+  progressDot: {
     position: 'absolute',
-    top: -3,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    top: -4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 2,
-    marginLeft: -6,
-    ...Platform.select({
-      ios: { shadowColor: '#5CB97B', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 3 },
-      android: { elevation: 2 },
-    }),
+    marginLeft: -7,
   },
   xpTooltip: {
     position: 'absolute',
@@ -512,7 +471,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statEmoji: {
-    fontSize: 16,
+    fontSize: 13,
   },
   statValue: {
     fontSize: 20,
