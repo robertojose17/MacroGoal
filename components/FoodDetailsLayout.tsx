@@ -907,7 +907,7 @@ export default function FoodDetailsLayout({
           // We don't have the new meal_item id here (no .select()), so use mealId+foodId as source
           const xpSourceId = `${mealId}_${foodId}_${targetDate}`;
           console.log('[FoodDetails] awarding meal XP, source_id:', xpSourceId);
-          tryAwardMealLogged(xpSourceId, targetMealType);
+          tryAwardMealLogged(xpSourceId, targetMealType, targetDate);
           evaluateDailyGoals(targetDate);
 
           // Notify challenge hook that a meal was logged

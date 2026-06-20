@@ -1083,7 +1083,7 @@ export default function AddFoodScreen() {
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = `${mealId}_${food.id}_${date}`;
       console.log('[AddFood] awarding meal XP for recent food, source_id:', xpSourceId);
-      tryAwardMealLogged(xpSourceId, mealType);
+      tryAwardMealLogged(xpSourceId, mealType, date);
       evaluateDailyGoals(date);
 
       // Notify challenge hook that a meal was logged
@@ -1400,7 +1400,7 @@ export default function AddFoodScreen() {
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = `${mealId}_${foodId}_${date}`;
       console.log('[AddFood] awarding meal XP for favorite, source_id:', xpSourceId);
-      tryAwardMealLogged(xpSourceId, mealType);
+      tryAwardMealLogged(xpSourceId, mealType, date);
       evaluateDailyGoals(date);
 
       // Notify challenge hook that a meal was logged

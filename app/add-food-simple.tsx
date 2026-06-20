@@ -215,7 +215,7 @@ export default function AddFoodSimpleScreen() {
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = mealItemData?.id ?? `${mealId}_${foodData.id}_${date}`;
       console.log('[AddFoodSimple] awarding meal XP, source_id:', xpSourceId);
-      tryAwardMealLogged(xpSourceId, mealType);
+      tryAwardMealLogged(xpSourceId, mealType, date);
       evaluateDailyGoals(date);
 
       // Notify challenge hook that a meal was logged

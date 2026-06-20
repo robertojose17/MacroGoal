@@ -39,12 +39,13 @@ function handleResult(result: AwardXpResult, label: string): void {
  * @param meal_item_id  The newly inserted meal_items.id (used as source_id for dedup)
  * @param meal_type     breakfast | lunch | dinner | snack
  */
-export function tryAwardMealLogged(meal_item_id: string, meal_type: string): void {
-  console.log('[xpAwarder] tryAwardMealLogged', meal_item_id, meal_type);
+export function tryAwardMealLogged(meal_item_id: string, meal_type: string, meal_date?: string): void {
+  const today = new Date().toISOString().split('T')[0];
+  console.log('[xpAwarder] tryAwardMealLogged', meal_item_id, meal_type, meal_date ?? today);
   awardXp({
     event_type: 'meal_logged',
     source_id: meal_item_id,
-    metadata: { meal_type },
+    metadata: { meal_type, meal_date: meal_date ?? today },
   })
     .then((result) => handleResult(result, 'meal_logged'))
     .catch((err) => console.warn('[xpAwarder] meal_logged award failed (non-fatal):', err?.message ?? err));
