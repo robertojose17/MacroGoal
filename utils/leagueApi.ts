@@ -75,27 +75,10 @@ export async function getLeagueStatus(): Promise<LeagueStatus> {
 }
 
 /**
- * Record XP earned this week for the league leaderboard.
- * Prefers the Supabase RPC (one less round trip); falls back to POST if the
- * RPC is not yet deployed. Swallows all errors — never throws.
+ * @deprecated The league now reads XP directly from xp_ledger.
+ * This function is a no-op and will be removed in a future cleanup.
  */
 export async function recordWeeklyXp(xp: number): Promise<void> {
-  console.log('[leagueApi] recordWeeklyXp called with xp:', xp);
-  try {
-    const { error } = await supabase.rpc('record_weekly_xp', { p_xp: xp });
-    if (error) {
-      console.warn('[leagueApi] RPC record_weekly_xp failed, falling back to POST:', error.message);
-      // Fallback: POST to edge function
-      await callFunction<{ ok: boolean; week_start: string; xp_earned: number }>(
-        'league-weekly',
-        'POST',
-        { action: 'record_xp', xp }
-      );
-    } else {
-      console.log('[leagueApi] recordWeeklyXp RPC succeeded for xp:', xp);
-    }
-  } catch (err) {
-    // Swallow — league XP recording must never break the primary action
-    console.warn('[leagueApi] recordWeeklyXp error (non-fatal):', (err as Error)?.message ?? err);
-  }
+  console.log('[leagueApi] recordWeeklyXp called — deprecated, no-op', xp);
+  // No-op: league XP is now calculated from xp_ledger directly
 }
