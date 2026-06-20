@@ -208,15 +208,13 @@ function CompactTile({
     ? colors.textSecondaryDark
     : colors.textSecondary;
 
-  const xpLabel = card.current_xp_earned > 0
-    ? '+' + card.current_xp_earned + ' XP'
-    : card.max_xp > 0
+  const xpLabel = card.max_xp > 0
     ? '+' + card.max_xp + ' XP'
     : '—';
 
   const xpColor = isComplete
     ? colors.success
-    : card.current_xp_earned > 0
+    : hasProgress
     ? colors.primary
     : isDark
     ? colors.textSecondaryDark
