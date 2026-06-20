@@ -474,9 +474,6 @@ export default function DashboardScreen() {
             <Text style={[styles.greetingName, { color: isDark ? colors.textDark : colors.text }]}>
               {firstName}
             </Text>
-            <Text style={[styles.greetingInsight, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {insightText}
-            </Text>
           </View>
           <TouchableOpacity
             style={styles.shareButton}
@@ -773,11 +770,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: -0.5,
-  },
-  greetingInsight: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 4,
   },
   shareButton: {
     padding: spacing.xs,

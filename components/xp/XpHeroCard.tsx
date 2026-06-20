@@ -195,12 +195,14 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               onPress={handleProgressBarTap}
               style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}
             >
-              <LinearGradient
-                colors={[rank.primaryColor, rank.gradientColor]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
-              />
+              <View style={styles.progressClip}>
+                <LinearGradient
+                  colors={[rank.primaryColor, rank.gradientColor]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
+                />
+              </View>
               <View style={[styles.progressDot, { left: progressWidth + '%' as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
             </TouchableOpacity>
             <Animated.View
@@ -351,7 +353,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
     marginBottom: 12,
-    padding: 16,
+    padding: 12,
     overflow: 'visible',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16 },
@@ -372,12 +374,12 @@ const styles = StyleSheet.create({
   // LEFT SECTION
   leftSection: {
     flex: 1.6,
-    gap: 10,
+    gap: 6,
   },
   iconTextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   rankTextStack: {
     flex: 1,
@@ -409,6 +411,15 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'visible',
     position: 'relative',
+  },
+  progressClip: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 3,
+    overflow: 'hidden',
   },
   progressFill: {
     height: 6,
@@ -455,13 +466,13 @@ const styles = StyleSheet.create({
     width: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 8,
   },
   statBlock: {
     alignItems: 'center',
     gap: 1,
     borderRadius: 12,
-    paddingVertical: 8,
+    paddingVertical: 5,
     paddingHorizontal: 10,
     minWidth: 80,
   },
