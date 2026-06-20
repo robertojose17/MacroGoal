@@ -20,7 +20,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { NotificationBell } from "@/components/NotificationBell";
 import PhotoProgressCard from '@/components/PhotoProgressCard';
 import CompactConsistencyCard from '@/components/CompactConsistencyCard';
-import CompactProgressCard from '@/components/CompactProgressCard';
+
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 // ─── XP System ────────────────────────────────────────────────────────────────
@@ -556,20 +556,11 @@ export default function DashboardScreen() {
           />
         </CardErrorBoundary>
 
-        {/* ── Consistency Score + Weight Progress — side by side ── */}
+        {/* ── Consistency Score ── */}
         {user && (
-          <View style={styles.sideBySideRow}>
-            <View style={styles.sideBySideItem}>
-              <CardErrorBoundary label="CompactConsistencyCard">
-                <CompactConsistencyCard userId={user.id} isDark={isDark} />
-              </CardErrorBoundary>
-            </View>
-            <View style={styles.sideBySideItem}>
-              <CardErrorBoundary label="CompactProgressCard">
-                <CompactProgressCard userId={user.id} isDark={isDark} />
-              </CardErrorBoundary>
-            </View>
-          </View>
+          <CardErrorBoundary label="CompactConsistencyCard">
+            <CompactConsistencyCard userId={user.id} isDark={isDark} />
+          </CardErrorBoundary>
         )}
 
         {/* ── Photo Progress Card ── */}
