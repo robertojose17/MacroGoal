@@ -67,46 +67,54 @@ const FALLBACK_ICONS: Record<ChallengeCard['challenge_type'], IoniconsName> = {
 };
 
 const FALLBACK_MAX_XP: Record<ChallengeCard['challenge_type'], number> = {
-  weight_checkin: 50,
-  protein_goal: 20,
-  calorie_goal: 15,
-  steps: 20,
-  workout: 75,
+  weight_checkin: 100,   // max is weight+photo tier
+  protein_goal:   200,   // max is perfect tier
+  calorie_goal:   200,   // max is perfect tier
+  steps:          200,   // max is 20k steps tier
+  workout:        75,
 };
 
 const FALLBACK_TIERS: Record<ChallengeCard['challenge_type'], ChallengeTier[]> = {
-  weight_checkin: [{ tier: 1, threshold_label: 'Log weight', threshold_value: 1, xp_reward: 50, reached: false }],
-  protein_goal:   [{ tier: 1, threshold_label: '80% of goal', threshold_value: 0, xp_reward: 20, reached: false }],
-  calorie_goal:   [{ tier: 1, threshold_label: '90-110% of goal', threshold_value: 0, xp_reward: 15, reached: false }],
-  steps:          [
-    { tier: 1, threshold_label: '5,000 steps', threshold_value: 5000, xp_reward: 10, reached: false },
-    { tier: 2, threshold_label: '10,000 steps', threshold_value: 10000, xp_reward: 20, reached: false },
+  weight_checkin: [
+    { tier: 1, threshold_label: 'Log weight',       threshold_value: 1, xp_reward: 50,  reached: false },
+    { tier: 2, threshold_label: 'Weight + photo',   threshold_value: 1, xp_reward: 100, reached: false },
   ],
-  workout:        [{ tier: 1, threshold_label: 'Complete workout', threshold_value: 1, xp_reward: 75, reached: false }],
+  protein_goal: [
+    { tier: 1, threshold_label: '≥70% of goal',     threshold_value: 0.7,  xp_reward: 75,  reached: false },
+    { tier: 2, threshold_label: '≥80% of goal',     threshold_value: 0.8,  xp_reward: 100, reached: false },
+    { tier: 3, threshold_label: '≥90% of goal',     threshold_value: 0.9,  xp_reward: 150, reached: false },
+    { tier: 4, threshold_label: '95–105% (perfect)', threshold_value: 0.95, xp_reward: 200, reached: false },
+  ],
+  calorie_goal: [
+    { tier: 1, threshold_label: '80–90% of goal',   threshold_value: 0.8,  xp_reward: 100, reached: false },
+    { tier: 2, threshold_label: '90–110% of goal',  threshold_value: 0.9,  xp_reward: 150, reached: false },
+    { tier: 3, threshold_label: '95–105% (perfect)', threshold_value: 0.95, xp_reward: 200, reached: false },
+  ],
+  steps: [
+    { tier: 1, threshold_label: '5,000 steps',  threshold_value: 5000,  xp_reward: 100, reached: false },
+    { tier: 2, threshold_label: '10,000 steps', threshold_value: 10000, xp_reward: 125, reached: false },
+    { tier: 3, threshold_label: '12,000 steps', threshold_value: 12000, xp_reward: 150, reached: false },
+    { tier: 4, threshold_label: '15,000 steps', threshold_value: 15000, xp_reward: 175, reached: false },
+    { tier: 5, threshold_label: '20,000 steps', threshold_value: 20000, xp_reward: 200, reached: false },
+  ],
+  workout: [
+    { tier: 1, threshold_label: 'Complete workout', threshold_value: 1, xp_reward: 75, reached: false },
+  ],
 };
 
 function buildFallbackCards(xpConfig?: Record<string, number>): ChallengeCard[] {
-  return FALLBACK_TYPES.map((t) => {
-    const maxXp = xpConfig?.[t] ?? FALLBACK_MAX_XP[t];
-    const tiers = FALLBACK_TIERS[t].map((tier) => ({
-      ...tier,
-      xp_reward: t === 'steps'
-        ? (tier.tier === 1 ? Math.round(maxXp / 2) : maxXp)
-        : (xpConfig?.[t] ?? tier.xp_reward),
-    }));
-    return {
-      challenge_type: t,
-      label: FALLBACK_LABELS[t],
-      icon: FALLBACK_ICONS[t],
-      current_value: 0,
-      goal_value: 0,
-      progress_percent: 0,
-      current_tier: 0,
-      current_xp_earned: 0,
-      max_xp: maxXp,
-      tiers,
-    };
-  });
+  return FALLBACK_TYPES.map((t) => ({
+    challenge_type: t,
+    label: FALLBACK_LABELS[t],
+    icon: FALLBACK_ICONS[t],
+    current_value: 0,
+    goal_value: 0,
+    progress_percent: 0,
+    current_tier: 0,
+    current_xp_earned: 0,
+    max_xp: FALLBACK_MAX_XP[t],
+    tiers: FALLBACK_TIERS[t],
+  }));
 }
 
 // ─── Animated percentage number ───────────────────────────────────────────────
@@ -491,13 +499,13 @@ function DetailSheet({
               <View style={styles.weightHintItem}>
                 <Ionicons name="scale-outline" size={14} color={subColor} />
                 <Text style={[styles.weightHintText, { color: subColor }]}>
-                  {'Weight only  +' + (xpConfig?.['weight_checkin'] ?? 50) + ' XP'}
+                  {'Weight only  +50 XP'}
                 </Text>
               </View>
               <View style={styles.weightHintItem}>
                 <Ionicons name="camera-outline" size={14} color={colors.primary} />
                 <Text style={[styles.weightHintText, { color: colors.primary }]}>
-                  {'Weight + Photo  +' + ((xpConfig?.['weight_checkin'] ?? 50) + (xpConfig?.['progress_photo'] ?? 50)) + ' XP'}
+                  {'Weight + Photo  +100 XP'}
                 </Text>
               </View>
             </View>
