@@ -70,8 +70,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const xpToNextText = xpToNextDisplay + ' XP to next rank';
 
   const progressWidth = Math.min(100, Math.max(0, progressPercent));
-  // Clamp tooltip left position so it never clips off either edge
-  const tooltipLeft = Math.min(Math.max(progressWidth, 15), 75);
 
   // Colors
   const cardBg = isDark ? '#1C1C1E' : '#F5F3EE';
@@ -210,7 +208,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             <Animated.View
               style={[
                 styles.xpTooltip,
-                { left: tooltipLeft + '%' as `${number}%`, opacity: xpTooltipAnim },
+                { opacity: xpTooltipAnim },
               ]}
               pointerEvents="none"
             >
@@ -377,6 +375,7 @@ const styles = StyleSheet.create({
   leftSection: {
     flex: 1.6,
     gap: 6,
+    overflow: 'visible',
   },
   iconTextRow: {
     flexDirection: 'row',
@@ -407,6 +406,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     height: 18,
     justifyContent: 'center',
+    overflow: 'visible',
   },
   progressTrack: {
     height: 6,
@@ -439,9 +439,10 @@ const styles = StyleSheet.create({
   xpTooltip: {
     position: 'absolute',
     bottom: 20,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    marginLeft: -60,
-    width: 120,
+    pointerEvents: 'none',
   },
   xpTooltipBubble: {
     backgroundColor: '#111827',
