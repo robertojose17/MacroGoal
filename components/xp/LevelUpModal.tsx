@@ -18,7 +18,6 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import { confirmLevelUpSeen } from '@/utils/xpApi';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -136,13 +135,6 @@ export default function LevelUpModal({
     onDismiss();
   }, [onDismiss, level]);
 
-  const handleSharePress = useCallback(() => {
-    console.log('[LevelUpModal] Share My Progress pressed — navigating to share-progress?variant=level');
-    handleDismiss().then(() => {
-      router.push('/share-progress?variant=level');
-    });
-  }, [handleDismiss]);
-
   useEffect(() => {
     if (visible) {
       console.log('[LevelUpModal] visible — firing confetti, level:', level);
@@ -232,16 +224,6 @@ export default function LevelUpModal({
             {/* Divider */}
             <View style={[styles.divider, { backgroundColor: ACCENT_GLOW }]} />
 
-            {/* Share button */}
-            <TouchableOpacity
-              style={[styles.shareButton, { borderColor: ACCENT_COLOR }]}
-              onPress={handleSharePress}
-            >
-              <Text style={[styles.shareButtonText, { color: ACCENT_COLOR }]}>
-                Share My Progress
-              </Text>
-            </TouchableOpacity>
-
             {/* Dismiss hint */}
             <Text style={styles.dismissHint}>
               Tap anywhere to continue
@@ -305,17 +287,6 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     marginBottom: 20,
     opacity: 0.5,
-  },
-  shareButton: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    marginBottom: 16,
-  },
-  shareButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   dismissHint: {
     fontSize: 12,
