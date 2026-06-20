@@ -863,7 +863,6 @@ export default function HomeScreen() {
   const renderTrackingContent = () => (
     <View>
       <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Calories</Text>
         <View style={styles.caloriesContent}>
           <ProgressCircle
             current={totalCalories}
