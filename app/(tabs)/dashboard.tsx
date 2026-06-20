@@ -491,6 +491,11 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── XP Hero Card ── */}
+        <CardErrorBoundary label="XpHeroCard">
+          <XpHeroCard status={xp.status} isDark={isDark} />
+        </CardErrorBoundary>
+
         {/* ── Goal Weight Card ── */}
         {user && (
           <CardErrorBoundary label="GoalWeightCard">
@@ -503,11 +508,6 @@ export default function DashboardScreen() {
             />
           </CardErrorBoundary>
         )}
-
-        {/* ── XP Hero Card ── */}
-        <CardErrorBoundary label="XpHeroCard">
-          <XpHeroCard status={xp.status} isDark={isDark} />
-        </CardErrorBoundary>
 
         {/* ── Social Comparison — compact sub-hero pill ── */}
         {xp.status && (
