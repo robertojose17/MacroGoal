@@ -19,7 +19,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { NotificationBell } from "@/components/NotificationBell";
 import PhotoProgressCard from '@/components/PhotoProgressCard';
-import CompactConsistencyCard from '@/components/CompactConsistencyCard';
+import ConsistencyScore from '@/components/ConsistencyScore';
 
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
@@ -558,8 +558,8 @@ export default function DashboardScreen() {
 
         {/* ── Consistency Score ── */}
         {user && (
-          <CardErrorBoundary label="CompactConsistencyCard">
-            <CompactConsistencyCard userId={user.id} isDark={isDark} />
+          <CardErrorBoundary label="ConsistencyScore">
+            <ConsistencyScore userId={user.id} isDark={isDark} />
           </CardErrorBoundary>
         )}
 
