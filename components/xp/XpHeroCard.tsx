@@ -64,7 +64,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const xpInLevelDisplay = Number(xpInLevel).toLocaleString();
   const xpNeededDisplay = Number(xpNeeded).toLocaleString();
   const xpToNextDisplay = Number(Math.max(0, xpNeeded - xpInLevel)).toLocaleString();
-  const xpTooltipText = xpInLevelDisplay + ' XP / to Level ' + String(nextLevel);
+  const xpTooltipText = xpInLevelDisplay + ' / ' + xpNeededDisplay + ' XP → Lvl ' + String(nextLevel);
   const totalXpLocalized = Number(totalXp).toLocaleString();
   const levelText = 'Level ' + String(level);
   const xpToNextText = xpToNextDisplay + ' XP to next rank';
