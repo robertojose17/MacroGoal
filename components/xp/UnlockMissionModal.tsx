@@ -80,11 +80,12 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onUnlocked: () => void;
+  xpConfig?: Record<string, number>;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function UnlockMissionModal({ visible, onClose, onUnlocked }: Props) {
+export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpConfig }: Props) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [loading, setLoading] = useState(false);
@@ -98,8 +99,9 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked }: Pro
 
   function handleMissionPress(mission: PoolMission) {
     console.log('[UnlockMissionModal] Mission row tapped:', mission.mission_type);
+    const resolvedXp = xpConfig?.[mission.mission_type] ?? mission.xp;
     const alertTitle = 'Unlock Mission?';
-    const alertMsg = `${mission.title} (+${mission.xp} XP) — you'll also earn a +50 XP unlock bonus right now.`;
+    const alertMsg = `${mission.title} (+${resolvedXp} XP) — you'll also earn a +50 XP unlock bonus right now.`;
 
     Alert.alert(alertTitle, alertMsg, [
       { text: 'Cancel', style: 'cancel', onPress: () => console.log('[UnlockMissionModal] Unlock cancelled') },
@@ -177,7 +179,8 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked }: Pro
         >
           {UNLOCK_POOL.map((mission, index) => {
             const isLast = index === UNLOCK_POOL.length - 1;
-            const xpText = '+' + mission.xp + ' XP';
+            const resolvedXp = xpConfig?.[mission.mission_type] ?? mission.xp;
+            const xpText = '+' + resolvedXp + ' XP';
             return (
               <TouchableOpacity
                 key={mission.mission_type}

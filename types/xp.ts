@@ -168,6 +168,12 @@ export type XpStatus = {
 
   /** XP config from xp_event_config table — event_type → xp_amount */
   xp_config?: Record<string, number>;
+
+  /** Daily XP cap — defaults to 500 if not returned by backend */
+  daily_cap?: number;
+
+  /** Unlock pool from backend — mission_type + xp for each available mission */
+  unlock_pool?: { mission_type: string; xp: number }[];
 };
 
 // ─── Today's Challenges (new unified card) ────────────────────────────────────

@@ -241,35 +241,7 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  const calculateStreak = useCallback((sortedDates: string[]): number => {
-    if (sortedDates.length === 0) return 0;
 
-    let currentStreak = 1;
-    const today = toLocalDateString();
-
-    const lastDate = sortedDates[sortedDates.length - 1];
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = toLocalDateString(yesterday);
-
-    if (lastDate !== today && lastDate !== yesterdayStr) {
-      return 0;
-    }
-
-    for (let i = sortedDates.length - 2; i >= 0; i--) {
-      const currentDate = new Date(sortedDates[i + 1]);
-      const prevDate = new Date(sortedDates[i]);
-      const diffDays = Math.floor((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 1) {
-        currentStreak++;
-      } else {
-        break;
-      }
-    }
-
-    return currentStreak;
-  }, []); // No dependencies needed - pure function
 
 
 
@@ -304,14 +276,6 @@ export default function DashboardScreen() {
 
       if (goalData) {
         setGoal(goalData);
-      } else {
-        setGoal({
-          daily_calories: 2000,
-          protein_g: 150,
-          carbs_g: 200,
-          fats_g: 65,
-          fiber_g: 30,
-        });
       }
 
       const today = toLocalDateString();
@@ -698,6 +662,7 @@ export default function DashboardScreen() {
           console.log('[Dashboard] Mission unlocked — refreshing XP status');
           xp.refresh();
         }}
+        xpConfig={xp.status?.xp_config}
       />
 
       {/* ── Streak Badge Modal ── */}

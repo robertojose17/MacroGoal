@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import type { XpStatus, XpBreakdownEntry } from '@/types/xp';
 
-const DAILY_CAP = 500;
+
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
@@ -119,8 +119,9 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
   });
 
   // CTA banner
-  const xpRemaining = Math.max(0, DAILY_CAP - xpToday);
-  const capReached = xpToday >= DAILY_CAP;
+  const dailyCap = status?.daily_cap ?? 500;
+  const xpRemaining = Math.max(0, dailyCap - xpToday);
+  const capReached = xpToday >= dailyCap;
   const bannerText = capReached
     ? 'Daily cap reached!'
     : 'Earn ' + xpRemaining + ' XP more today to reach your daily goal';
