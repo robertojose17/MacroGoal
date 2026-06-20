@@ -66,19 +66,47 @@ const FALLBACK_ICONS: Record<ChallengeCard['challenge_type'], IoniconsName> = {
   workout: 'barbell-outline',
 };
 
-function buildFallbackCards(): ChallengeCard[] {
-  return FALLBACK_TYPES.map((t) => ({
-    challenge_type: t,
-    label: FALLBACK_LABELS[t],
-    icon: FALLBACK_ICONS[t],
-    current_value: 0,
-    goal_value: 0,
-    progress_percent: 0,
-    current_tier: 0,
-    current_xp_earned: 0,
-    max_xp: 0,
-    tiers: [],
-  }));
+const FALLBACK_MAX_XP: Record<ChallengeCard['challenge_type'], number> = {
+  weight_checkin: 50,
+  protein_goal: 20,
+  calorie_goal: 15,
+  steps: 20,
+  workout: 75,
+};
+
+const FALLBACK_TIERS: Record<ChallengeCard['challenge_type'], ChallengeTier[]> = {
+  weight_checkin: [{ tier: 1, threshold_label: 'Log weight', threshold_value: 1, xp_reward: 50, reached: false }],
+  protein_goal:   [{ tier: 1, threshold_label: '80% of goal', threshold_value: 0, xp_reward: 20, reached: false }],
+  calorie_goal:   [{ tier: 1, threshold_label: '90-110% of goal', threshold_value: 0, xp_reward: 15, reached: false }],
+  steps:          [
+    { tier: 1, threshold_label: '5,000 steps', threshold_value: 5000, xp_reward: 10, reached: false },
+    { tier: 2, threshold_label: '10,000 steps', threshold_value: 10000, xp_reward: 20, reached: false },
+  ],
+  workout:        [{ tier: 1, threshold_label: 'Complete workout', threshold_value: 1, xp_reward: 75, reached: false }],
+};
+
+function buildFallbackCards(xpConfig?: Record<string, number>): ChallengeCard[] {
+  return FALLBACK_TYPES.map((t) => {
+    const maxXp = xpConfig?.[t] ?? FALLBACK_MAX_XP[t];
+    const tiers = FALLBACK_TIERS[t].map((tier) => ({
+      ...tier,
+      xp_reward: t === 'steps'
+        ? (tier.tier === 1 ? Math.round(maxXp / 2) : maxXp)
+        : (xpConfig?.[t] ?? tier.xp_reward),
+    }));
+    return {
+      challenge_type: t,
+      label: FALLBACK_LABELS[t],
+      icon: FALLBACK_ICONS[t],
+      current_value: 0,
+      goal_value: 0,
+      progress_percent: 0,
+      current_tier: 0,
+      current_xp_earned: 0,
+      max_xp: maxXp,
+      tiers,
+    };
+  });
 }
 
 // ─── Animated percentage number ───────────────────────────────────────────────
@@ -181,9 +209,9 @@ function CompactTile({
     : colors.textSecondary;
 
   const xpLabel = card.current_xp_earned > 0
-    ? '+' + card.current_xp_earned + 'XP'
+    ? '+' + card.current_xp_earned + ' XP'
     : card.max_xp > 0
-    ? '+' + card.max_xp + 'XP'
+    ? '+' + card.max_xp + ' XP'
     : '—';
 
   const xpColor = isComplete
@@ -533,7 +561,10 @@ export default function TodaysChallengesCard({
   }, [localSteps, status?.todays_challenges, onRefresh]);
 
   // Build display cards — prefer backend data, fall back to skeleton
-  const rawCards: ChallengeCard[] = status?.todays_challenges ?? buildFallbackCards();
+  const backendCards = status?.todays_challenges;
+  const rawCards: ChallengeCard[] = backendCards && backendCards.length > 0
+    ? backendCards
+    : buildFallbackCards(status?.xp_config);
 
   // Ensure order: weight, protein, calories, steps, workout
   const ORDER: ChallengeCard['challenge_type'][] = [
@@ -556,18 +587,7 @@ export default function TodaysChallengesCard({
       }
       return found;
     }
-    return {
-      challenge_type: type,
-      label: FALLBACK_LABELS[type],
-      icon: FALLBACK_ICONS[type],
-      current_value: 0,
-      goal_value: 0,
-      progress_percent: 0,
-      current_tier: 0,
-      current_xp_earned: 0,
-      max_xp: 0,
-      tiers: [],
-    };
+    return buildFallbackCards(status?.xp_config).find((c) => c.challenge_type === type)!;
   });
 
   const doneCount = cards.filter((c) => c.progress_percent >= 100).length;
