@@ -118,13 +118,7 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
     xpByLabel[entry.label] = (xpByLabel[entry.label] ?? 0) + entry.xp;
   });
 
-  // CTA banner
-  const dailyCap = status?.daily_cap ?? 500;
-  const xpRemaining = Math.max(0, dailyCap - xpToday);
-  const capReached = xpToday >= dailyCap;
-  const bannerText = capReached
-    ? 'Daily cap reached!'
-    : 'Earn ' + xpRemaining + ' XP more today to reach your daily goal';
+
 
   return (
     <View
@@ -177,27 +171,16 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
         </TouchableOpacity>
       )}
 
-      {/* CTA banner replacing daily cap bar */}
+      {/* Motivational banner */}
       <View
         style={[
           styles.banner,
-          {
-            backgroundColor: capReached
-              ? (isDark ? '#34D39922' : '#34D39915')
-              : (isDark ? colors.primary + '22' : colors.primary + '15'),
-          },
+          { backgroundColor: isDark ? '#34D39922' : '#34D39915' },
         ]}
       >
-        {capReached && (
-          <Ionicons name="flame" size={14} color="#34D399" style={styles.bannerIcon} />
-        )}
-        <Text
-          style={[
-            styles.bannerText,
-            { color: capReached ? '#34D399' : colors.primary },
-          ]}
-        >
-          {bannerText}
+        <Ionicons name="flame" size={14} color="#34D399" style={styles.bannerIcon} />
+        <Text style={[styles.bannerText, { color: '#34D399' }]}>
+          Keep going! 🔥
         </Text>
       </View>
     </View>
