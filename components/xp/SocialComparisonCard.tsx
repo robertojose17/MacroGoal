@@ -22,7 +22,7 @@ interface SocialComparisonCardProps {
 }
 
 export default function SocialComparisonCard({ ranking, isDark }: SocialComparisonCardProps) {
-  const hasEnoughData = ranking !== null && ranking.total_users >= 5 && ranking.percentile !== null;
+  const hasEnoughData = ranking !== null && ranking.total_users >= 2 && ranking.percentile !== null;
 
   // Pre-compute display values
   const topPercent = hasEnoughData ? Math.max(1, Math.round(100 - (ranking!.percentile ?? 0))) : 0;
