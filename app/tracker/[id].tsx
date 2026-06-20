@@ -18,6 +18,7 @@ import {
 import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
+import { tryAwardWorkout } from '@/utils/xpAwarder';
 import {
   Tracker,
   TrackerEntry,
@@ -437,6 +438,7 @@ function GymEntryActions({
       console.log('[TrackerDetail][Gym] Found existing check_in:', existing.id);
       // Ensure went_to_gym is true on the existing row
       await supabase.from('check_ins').update({ went_to_gym: true }).eq('id', existing.id);
+      tryAwardWorkout(existing.id);
       return existing.id;
     }
 
@@ -451,6 +453,7 @@ function GymEntryActions({
       throw new Error(error?.message ?? 'Failed to create check_in for photo');
     }
     console.log('[TrackerDetail][Gym] Created new check_in:', inserted.id);
+    tryAwardWorkout(inserted.id);
     return inserted.id;
   };
 
