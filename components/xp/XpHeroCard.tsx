@@ -253,10 +253,10 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           {/* Total XP stat */}
           <View style={[styles.statBlock, { backgroundColor: statChipBg }]}>
             <View style={styles.statValueRow}>
-              <Text style={styles.statEmoji}>{'💎'}</Text>
-              <Text style={[styles.statValue, styles.xpGreen]}>{totalXpLocalized}</Text>
+              <Text style={[styles.statValue, styles.xpGreen]}>
+                {totalXpLocalized}<Text style={styles.xpSuffix}>{' XP'}</Text>
+              </Text>
             </View>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>{'XP'}</Text>
           </View>
 
         </View>
@@ -520,6 +520,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   xpGreen: {
+    color: '#5CB97B',
+  },
+  xpSuffix: {
+    fontSize: 11,
+    fontWeight: '500',
     color: '#5CB97B',
   },
   statLabel: {
