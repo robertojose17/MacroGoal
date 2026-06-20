@@ -17,6 +17,7 @@ import {
   Pressable,
   TouchableOpacity,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { getXpRank } from '@/utils/xpRanks';
 import XpRanksModal from '@/components/xp/XpRanksModal';
 import StreakBenefitsModal from '@/components/xp/StreakBenefitsModal';
@@ -60,9 +61,10 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
 
   // Pre-compute display strings
   const streakDisplay = String(streak);
-  const xpInLevelDisplay = Number(xpInLevel).toLocaleString() + ' XP';
+  const xpInLevelDisplay = Number(xpInLevel).toLocaleString();
+  const xpNeededDisplay = Number(xpNeeded).toLocaleString();
   const xpToNextDisplay = Number(Math.max(0, xpNeeded - xpInLevel)).toLocaleString();
-  const xpTooltipText = xpInLevelDisplay + ' / to Level ' + String(nextLevel);
+  const xpTooltipText = xpInLevelDisplay + ' XP / to Level ' + String(nextLevel);
   const totalXpLocalized = Number(totalXp).toLocaleString();
   const levelText = 'Level ' + String(level);
   const xpToNextText = xpToNextDisplay + ' XP to next rank';
@@ -75,6 +77,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const textSecondary = isDark ? 'rgba(255,255,255,0.5)' : '#6B7280';
   const progressTrackColor = isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB';
   const separatorColor = isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB';
+  const statChipBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(92,185,123,0.07)';
 
   // Fetch lbs lost from check_ins
   useEffect(() => {
@@ -143,9 +146,8 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
     }, 2000);
   }
 
-  return (
-    <View style={[styles.card, { backgroundColor: cardBg }]}>
-
+  const cardContent = (
+    <>
       {/* MAIN ROW */}
       <View style={styles.mainRow}>
 
@@ -171,7 +173,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
                 }}
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
-                <Text style={[styles.rankTierName, { color: textPrimary }]}>{rank.tierName}</Text>
+                <Text style={[styles.rankTierName, { color: rank.primaryColor }]}>{rank.tierName}</Text>
               </Pressable>
 
               <Pressable
@@ -186,6 +188,17 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             </View>
           </View>
 
+          {/* Progress labels row */}
+          <View style={styles.progressLabels}>
+            <View style={styles.xpToNextRow}>
+              <Text style={[styles.xpDot, { color: rank.primaryColor }]}>{'●'}</Text>
+              <Text style={[styles.xpToNextLabel, { color: textSecondary }]}>{xpToNextText}</Text>
+            </View>
+            <Text style={[styles.xpFraction, { color: textSecondary }]}>{xpInLevelDisplay}</Text>
+            <Text style={[styles.xpFraction, { color: textSecondary }]}>{' / '}</Text>
+            <Text style={[styles.xpFraction, { color: textSecondary }]}>{xpNeededDisplay}</Text>
+          </View>
+
           {/* Progress bar */}
           <View style={styles.progressBarWrapper}>
             <TouchableOpacity
@@ -193,8 +206,13 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               onPress={handleProgressBarTap}
               style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}
             >
-              <View style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]} />
-              <View style={[styles.progressThumb, { left: progressWidth + '%' as `${number}%` }]} />
+              <LinearGradient
+                colors={[rank.primaryColor, rank.gradientColor]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
+              />
+              <View style={[styles.progressThumb, { left: progressWidth + '%' as `${number}%`, borderColor: rank.primaryColor }]} />
             </TouchableOpacity>
             <Animated.View
               style={[
@@ -208,9 +226,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               </View>
             </Animated.View>
           </View>
-
-          {/* XP to next rank */}
-          <Text style={[styles.xpToNextLabel, { color: textSecondary }]}>{xpToNextText}</Text>
 
         </View>
 
@@ -226,7 +241,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
               console.log('[XpHeroCard] streak stat tapped → StreakBenefitsModal');
               setShowStreakModal(true);
             }}
-            style={({ pressed }) => [styles.statBlock, { opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [styles.statBlock, { backgroundColor: statChipBg, opacity: pressed ? 0.7 : 1 }]}
           >
             <View style={styles.statValueRow}>
               <Animated.Text style={[styles.statEmoji, { opacity: streakAtRisk ? pulseAnim : 1 }]}>{'🔥'}</Animated.Text>
@@ -236,17 +251,23 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           </Pressable>
 
           {/* Total XP stat */}
-          <View style={styles.statBlock}>
+          <View style={[styles.statBlock, { backgroundColor: statChipBg }]}>
             <View style={styles.statValueRow}>
               <Text style={styles.statEmoji}>{'💎'}</Text>
               <Text style={[styles.statValue, styles.xpGreen]}>{totalXpLocalized}</Text>
             </View>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>{'Points'}</Text>
+            <Text style={[styles.statLabel, { color: textSecondary }]}>{'XP'}</Text>
           </View>
 
         </View>
 
       </View>
+    </>
+  );
+
+  return isDark ? (
+    <View style={[styles.card, { backgroundColor: cardBg }]}>
+      {cardContent}
 
       {/* MODALS */}
       <XpRanksModal
@@ -287,6 +308,54 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
       />
       <LeagueWelcomeModal />
     </View>
+  ) : (
+    <LinearGradient
+      colors={['#FFFFFF', '#F0F7F4']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={[styles.card, styles.cardLight]}
+    >
+      {cardContent}
+
+      {/* MODALS */}
+      <XpRanksModal
+        visible={showRanksModal}
+        currentLevel={level}
+        onClose={() => {
+          console.log('[XpHeroCard] XpRanksModal closed');
+          setShowRanksModal(false);
+        }}
+        isDark={isDark}
+      />
+      <StreakBenefitsModal
+        visible={showStreakModal}
+        currentStreak={streak}
+        onClose={() => {
+          console.log('[XpHeroCard] StreakBenefitsModal closed');
+          setShowStreakModal(false);
+        }}
+        isDark={isDark}
+      />
+      <XpLevelsModal
+        visible={showLevelsModal}
+        onClose={() => {
+          console.log('[XpHeroCard] XpLevelsModal closed');
+          setShowLevelsModal(false);
+        }}
+        currentLevel={level}
+        xpInCurrentLevel={xpInLevel}
+        xpNeededForNextLevel={xpNeeded}
+        totalXp={totalXp}
+      />
+      <LeagueLeaderboard
+        visible={showLeagueModal}
+        onClose={() => {
+          console.log('[XpHeroCard] LeagueLeaderboard closed');
+          setShowLeagueModal(false);
+        }}
+      />
+      <LeagueWelcomeModal />
+    </LinearGradient>
   );
 }
 
@@ -297,9 +366,13 @@ const styles = StyleSheet.create({
     padding: 16,
     overflow: 'visible',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 },
-      android: { elevation: 4 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16 },
+      android: { elevation: 3 },
     }),
+  },
+  cardLight: {
+    borderWidth: 1,
+    borderColor: 'rgba(92,185,123,0.12)',
   },
 
   // MAIN ROW
@@ -325,45 +398,67 @@ const styles = StyleSheet.create({
   rankLabel: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     color: '#5CB97B',
   },
   rankTierName: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
   },
   levelText: {
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // Progress labels row
+  progressLabels: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  xpToNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  xpDot: {
+    fontSize: 8,
+  },
+  xpToNextLabel: {
+    fontSize: 10,
+    fontWeight: '400',
+  },
+  xpFraction: {
+    fontSize: 10,
     fontWeight: '500',
   },
 
   // Progress bar
   progressBarWrapper: {
     position: 'relative',
-    height: 20,
+    height: 18,
     justifyContent: 'center',
   },
   progressTrack: {
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
     overflow: 'visible',
     position: 'relative',
   },
   progressFill: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#5CB97B',
+    height: 6,
+    borderRadius: 3,
   },
   progressThumb: {
     position: 'absolute',
     top: -3,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
-    borderColor: '#5CB97B',
-    marginLeft: -7,
+    marginLeft: -6,
     ...Platform.select({
       ios: { shadowColor: '#5CB97B', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 3 },
       android: { elevation: 2 },
@@ -371,7 +466,7 @@ const styles = StyleSheet.create({
   },
   xpTooltip: {
     position: 'absolute',
-    bottom: 22,
+    bottom: 20,
     alignItems: 'center',
     marginLeft: -60,
     width: 120,
@@ -388,16 +483,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  xpToNextLabel: {
-    fontSize: 11,
-    fontWeight: '400',
-  },
-
   // VERTICAL DIVIDER
   verticalDivider: {
     width: 1,
     alignSelf: 'stretch',
-    marginHorizontal: 12,
+    marginHorizontal: 14,
+    opacity: 0.6,
   },
 
   // RIGHT SECTION
@@ -405,11 +496,15 @@ const styles = StyleSheet.create({
     width: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 12,
   },
   statBlock: {
     alignItems: 'center',
-    gap: 2,
+    gap: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minWidth: 80,
   },
   statValueRow: {
     flexDirection: 'row',
@@ -417,10 +512,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statEmoji: {
-    fontSize: 18,
+    fontSize: 16,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
@@ -428,7 +523,7 @@ const styles = StyleSheet.create({
     color: '#5CB97B',
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
   },
 });
