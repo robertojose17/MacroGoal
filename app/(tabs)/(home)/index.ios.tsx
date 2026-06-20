@@ -671,7 +671,6 @@ export default function HomeScreen() {
       <View>
         {/* Calories + macros summary card */}
         <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
-          <Text style={[styles.cardTitle, { color: textPrimary }]}>Calories</Text>
           <View style={styles.caloriesContent}>
             <ProgressCircle
               current={totalCalories}
