@@ -62,7 +62,7 @@ export default function GoalWeightCard({
             .order('date', { ascending: true }),
           supabase
             .from('goals')
-            .select('daily_calories, loss_rate_lbs_per_week, start_date, maintenance_calories')
+            .select('daily_calories, loss_rate_lbs_per_week, start_date')
             .eq('user_id', authUser.id)
             .eq('is_active', true)
             .order('created_at', { ascending: false })
@@ -141,7 +141,7 @@ export default function GoalWeightCard({
         }
 
         if (goal) {
-          const maintenanceCals = goal.maintenance_calories ?? userData?.maintenance_calories ?? 2000;
+          const maintenanceCals = userData?.maintenance_calories ?? 2000;
           console.log('[GoalWeightCard] loaded goal data — dailyCalories:', goal.daily_calories, 'maintenanceCalories:', maintenanceCals, 'lossRateLbsPerWeek:', goal.loss_rate_lbs_per_week);
           setGoalData({
             dailyCalories: goal.daily_calories ?? 2000,
@@ -273,16 +273,25 @@ export default function GoalWeightCard({
 
   let estDateLabel = '';
   if (lbsToGo > 0 && goalData) {
+    const lossRateLbsPerWeek = goalData.lossRateLbsPerWeek;
     const dailyDeficit = goalData.maintenanceCalories - goalData.dailyCalories;
-    if (dailyDeficit > 50) { // at least 50 cal deficit to avoid absurd dates
-      const lbsPerDay = dailyDeficit / 3500;
-      const daysToGoal = Math.round(lbsToGo / lbsPerDay);
+    let daysToGoal: number | null = null;
+
+    if (lossRateLbsPerWeek > 0) {
+      // Primary: use loss_rate_lbs_per_week directly (always populated)
+      daysToGoal = Math.round(lbsToGo / (lossRateLbsPerWeek / 7));
+    } else if (dailyDeficit > 50) {
+      // Fallback: caloric deficit only if loss rate is missing
+      daysToGoal = Math.round(lbsToGo / (dailyDeficit / 3500));
+    }
+
+    if (daysToGoal != null) {
       const estDate = new Date();
       estDate.setDate(estDate.getDate() + daysToGoal);
       estDateLabel = estDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
   }
-  console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'maintenance:', goalData?.maintenanceCalories, 'daily:', goalData?.dailyCalories, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
+  console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'lossRateLbsPerWeek:', goalData?.lossRateLbsPerWeek, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
 
   return (
     <View style={[styles.card, { backgroundColor: bg }]}>
