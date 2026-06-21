@@ -699,7 +699,7 @@ export default function ProfileScreen() {
         }
       >
         <View style={[styles.profileCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.primary }]}>
             <Text style={styles.avatarText}>
               {user.name ? user.name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
             </Text>
@@ -710,7 +710,7 @@ export default function ProfileScreen() {
           </Text>
 
           {user.username ? (
-            <Text style={styles.usernameText}>
+            <Text style={[styles.usernameText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               {'@'}
               {user.username}
             </Text>
@@ -735,10 +735,14 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
-          <Text style={[styles.subscriptionStatus, { color: isPremium ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-            {subscriptionStatusText}
-          </Text>
-          
+          {isPremium && (
+            <View style={styles.premiumBadge}>
+              <Text style={styles.premiumBadgeText}>
+                PREMIUM MEMBER
+              </Text>
+            </View>
+          )}
+
           <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {user.email || 'Guest User'}
           </Text>
@@ -753,6 +757,13 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* ACCOUNT section label — only shown when premium card is visible */}
+        {!isPremium && (
+          <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            ACCOUNT
+          </Text>
+        )}
 
         {/* Subscription Card */}
         {!isPremium && (
@@ -787,6 +798,11 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         )}
+
+        {/* GOALS & NUTRITION section label */}
+        <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          {'GOALS & NUTRITION'}
+        </Text>
 
         {/* Calorie & Goals Settings Card */}
         {user.onboarding_completed && (
@@ -1053,62 +1069,109 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Invite Friends & Earn XP */}
-        <TouchableOpacity
-          style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card, marginBottom: 12 }]}
-          onPress={() => {
-            console.log('[Profile iOS] Invite Friends & Earn XP pressed');
-            router.push('/referrals');
-          }}
-        >
-          <View style={styles.feedbackRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        {/* MORE section label */}
+        <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          MORE
+        </Text>
+
+        {/* Grouped Actions Card — iOS Settings style */}
+        <View style={[styles.groupedCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          {/* Invite Friends & Earn XP */}
+          <TouchableOpacity
+            style={styles.groupedRow}
+            onPress={() => {
+              console.log('[Profile iOS] Invite Friends & Earn XP pressed');
+              router.push('/referrals');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.groupedIconWrap, { backgroundColor: '#14B8A6' }]}>
               <IconSymbol
                 ios_icon_name="person.2.fill"
                 android_material_icon_name="group"
-                size={20}
-                color="#14B8A6"
+                size={16}
+                color="#FFFFFF"
               />
-              <Text style={[styles.feedbackRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Invite Friends & Earn XP
-              </Text>
             </View>
+            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+              {'Invite Friends & Earn XP'}
+            </Text>
             <IconSymbol
               ios_icon_name="chevron.right"
               android_material_icon_name="arrow-forward"
-              size={16}
+              size={15}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        {/* Feedback Section */}
-        <TouchableOpacity
-          style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-          onPress={() => {
-            console.log('[Profile iOS] Send Feedback button pressed');
-            const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
-            Linking.openURL(mailtoUrl).catch((err) => {
-              console.error('[Profile iOS] Failed to open mail app:', err);
-              Alert.alert('Error', 'Could not open the mail app. Please email us at macrogoalapp@gmail.com');
-            });
-          }}
-        >
-          <View style={styles.feedbackRow}>
-            <Text style={[styles.feedbackRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+
+          {/* Send Feedback */}
+          <TouchableOpacity
+            style={styles.groupedRow}
+            onPress={() => {
+              console.log('[Profile iOS] Send Feedback button pressed');
+              const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
+              Linking.openURL(mailtoUrl).catch((err) => {
+                console.error('[Profile iOS] Failed to open mail app:', err);
+                Alert.alert('Error', 'Could not open the mail app. Please email us at macrogoalapp@gmail.com');
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.groupedIconWrap, { backgroundColor: '#3B82F6' }]}>
+              <IconSymbol
+                ios_icon_name="envelope.fill"
+                android_material_icon_name="email"
+                size={16}
+                color="#FFFFFF"
+              />
+            </View>
+            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
               Send Feedback
             </Text>
             <IconSymbol
               ios_icon_name="chevron.right"
               android_material_icon_name="arrow-forward"
-              size={16}
+              size={15}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
+          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+
+          {/* Notification Preferences */}
+          <TouchableOpacity
+            style={styles.groupedRow}
+            onPress={() => {
+              console.log('[Profile iOS] Notification Preferences pressed');
+              router.push('/notification-preferences');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.groupedIconWrap, { backgroundColor: '#F97316' }]}>
+              <IconSymbol
+                ios_icon_name="bell.fill"
+                android_material_icon_name="notifications"
+                size={16}
+                color="#FFFFFF"
+              />
+            </View>
+            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+              Notification Preferences
+            </Text>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={15}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Log Out — outline style */}
         <TouchableOpacity
-          style={[styles.logoutButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: colors.error }]}
+          style={[styles.logoutButton, { borderColor: colors.error }]}
           onPress={handleLogout}
         >
           <Text style={[styles.logoutText, { color: colors.error }]}>
@@ -1603,20 +1666,22 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
   },
   userName: {
-    ...typography.h2,
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 28,
     marginBottom: spacing.xs,
   },
   subscriptionStatus: {
@@ -1628,11 +1693,32 @@ const styles = StyleSheet.create({
     ...typography.body,
   },
   usernameText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '400',
     marginTop: 2,
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  premiumBadge: {
+    backgroundColor: '#0D9488',
+    borderRadius: borderRadius.full,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  premiumBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginTop: 24,
+    paddingHorizontal: 4,
   },
   setUsernameRow: {
     flexDirection: 'row',
@@ -1819,16 +1905,48 @@ const styles = StyleSheet.create({
   feedbackRowLabel: {
     ...typography.body,
   },
-  logoutButton: {
+  groupedCard: {
     borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  groupedRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
+    paddingVertical: 13,
+    paddingHorizontal: spacing.md,
+    gap: 12,
+  },
+  groupedIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupedRowLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  groupedDivider: {
+    height: 1,
+    marginLeft: 46,
+  },
+  logoutButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    marginTop: 8,
     marginBottom: spacing.md,
+    backgroundColor: 'transparent',
   },
   logoutText: {
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 15,
   },
   footerLinksContainer: {
     alignItems: 'center',
