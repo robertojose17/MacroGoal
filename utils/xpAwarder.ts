@@ -193,3 +193,19 @@ export async function evaluateDailyGoals(date: string): Promise<void> {
     console.warn('[xpAwarder] evaluateDailyGoals error (non-fatal):', (err as Error)?.message ?? err);
   }
 }
+
+/**
+ * Award XP for completing a Flash Challenge.
+ * @param challengeId  The flash_challenges.id (used as source_id for dedup)
+ * @param xpReward     The XP amount (500 for medium, 750 for hard)
+ */
+export function tryAwardFlashChallenge(challengeId: string, xpReward: number): void {
+  console.log('[xpAwarder] tryAwardFlashChallenge', challengeId, xpReward);
+  awardXp({
+    event_type: 'flash_challenge',
+    source_id: challengeId,
+    metadata: { xp_reward: xpReward },
+  })
+    .then((result) => handleResult(result, 'flash_challenge'))
+    .catch((err) => console.warn('[xpAwarder] flash_challenge award failed (non-fatal):', err?.message ?? err));
+}

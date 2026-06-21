@@ -48,6 +48,7 @@ import ChallengePopup from '@/components/xp/SevenDayChallenge/ChallengePopup';
 import ChallengeDashboardCard from '@/components/xp/SevenDayChallenge/ChallengeDashboardCard';
 import ChallengeCompleteModal from '@/components/xp/SevenDayChallenge/ChallengeCompleteModal';
 import { getChallenge } from '@/utils/sevenDayChallengeApi';
+import FlashChallengesCard from '@/components/FlashChallengesCard';
 
 const CHALLENGE_SHOWN_KEY = 'seven_day_challenge_shown';
 
@@ -526,6 +527,17 @@ export default function DashboardScreen() {
             />
           </CardErrorBoundary>
         )}
+
+        {/* ── Flash Challenges ── */}
+        <CardErrorBoundary label="FlashChallengesCard">
+          <FlashChallengesCard
+            isDark={isDark}
+            onXpAwarded={() => {
+              console.log('[Dashboard] Flash challenge XP awarded, refreshing');
+              xp.refresh();
+            }}
+          />
+        </CardErrorBoundary>
 
         {/* ── Today's Challenges — unified card (replaces TodaysMissionsCard + TodaysXpBreakdown) ── */}
         <CardErrorBoundary label="TodaysChallengesCard">
