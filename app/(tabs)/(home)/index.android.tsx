@@ -245,6 +245,13 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('[Home Android] Screen focused, loading data');
+      // Auto-advance to today if the date has changed (e.g. app left open overnight)
+      setSelectedDate(prev => {
+        const today = new Date();
+        const prevStr = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-${String(prev.getDate()).padStart(2,'0')}`;
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        return prevStr === todayStr ? prev : today;
+      });
       loadData();
       loadPlans();
     }, [loadData, loadPlans])
