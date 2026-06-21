@@ -11,6 +11,7 @@
  */
 
 import { awardXp } from '@/utils/xpApi';
+import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase } from '@/lib/supabase/client';
 import { emitXpRefresh, emitLeagueRefresh } from '@/utils/xpEvents';
 import type { AwardXpResult } from '@/types/xp';
@@ -35,7 +36,7 @@ function handleResult(result: AwardXpResult, label: string): void {
  * @param meal_type     breakfast | lunch | dinner | snack
  */
 export function tryAwardMealLogged(meal_item_id: string, meal_type: string, meal_date?: string): void {
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   console.log('[xpAwarder] tryAwardMealLogged', meal_item_id, meal_type, meal_date ?? today);
   awardXp({
     event_type: 'meal_logged',
