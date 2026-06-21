@@ -188,16 +188,17 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           </View>
 
           {/* Progress bar */}
-          <View style={styles.progressBarWrapper}>
-            <Pressable onPress={handleProgressBarTap} style={StyleSheet.absoluteFill} />
-            <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
-              <LinearGradient
-                colors={[rank.primaryColor, rank.gradientColor]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.progressFill, { width: `${progressWidth}%` as `${number}%` }]}
-              />
-              <View style={[styles.progressDot, { left: `${progressWidth}%` as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
+          <Pressable onPress={handleProgressBarTap} style={styles.progressBarWrapper}>
+            <View style={styles.barRow}>
+              <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
+                <LinearGradient
+                  colors={[rank.primaryColor, rank.gradientColor]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressFill, { width: `${progressWidth}%` as `${number}%` }]}
+                />
+                <View style={[styles.progressDot, { left: `${progressWidth}%` as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
+              </View>
             </View>
             <Animated.View
               style={[styles.xpTooltip, { opacity: xpTooltipAnim }]}
@@ -207,7 +208,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
                 <Text style={styles.xpTooltipText}>{xpTooltipText}</Text>
               </View>
             </Animated.View>
-          </View>
+          </Pressable>
 
         </View>
 
@@ -395,20 +396,21 @@ const styles = StyleSheet.create({
   // Progress bar
   progressBarWrapper: {
     position: 'relative',
-    height: 18,
-    justifyContent: 'center',
     overflow: 'visible',
-    alignSelf: 'stretch',
+  },
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   progressTrack: {
+    flex: 1,
     height: 6,
     borderRadius: 6,
     overflow: 'visible',
     position: 'relative',
-    alignSelf: 'stretch',
   },
   progressFill: {
-    height: 6,
+    height: '100%',
     borderRadius: 6,
   },
   progressDot: {
