@@ -175,7 +175,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
           )}
         </View>
         <Text style={[styles.challengeDesc, { color: mutedColor }]} numberOfLines={1}>
-          {isReferral ? `${weekReferrals} / 3 friends referred this week` : challenge.description}
+          {isReferral ? `${weekReferrals} / 3 friends referred today` : challenge.description}
         </Text>
         <View style={styles.progressRow}>
           <ProgressBar pct={isReferral ? referralProgressPct : challenge.progressPct} completed={referralComplete} isDark={isDark} />
