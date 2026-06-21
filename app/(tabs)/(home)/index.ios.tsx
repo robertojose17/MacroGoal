@@ -150,19 +150,37 @@ export default function HomeScreen() {
   useEffect(() => {
     const checkReferralPrompt = async () => {
       try {
-        const shown = await AsyncStorage.getItem(REFERRAL_PROMPT_KEY);
-        if (!shown) {
-          console.log('[Home iOS] First launch — showing referral code prompt');
-          setReferralModalVisible(true);
-          Animated.spring(referralSlideAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 65,
-            friction: 11,
-          }).start();
+        // Fast local check first — if already shown locally, skip
+        const shownLocally = await AsyncStorage.getItem(REFERRAL_PROMPT_KEY);
+        if (shownLocally) return;
+
+        // Check Supabase — source of truth (survives sign out/sign in)
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: profile } = await supabase
+          .from('users')
+          .select('referral_prompt_shown')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (profile?.referral_prompt_shown) {
+          // Already shown on another device/session — save locally and skip
+          await AsyncStorage.setItem(REFERRAL_PROMPT_KEY, 'true');
+          return;
         }
+
+        // First time ever — show the modal
+        console.log('[Home iOS] First launch — showing referral code prompt');
+        setReferralModalVisible(true);
+        Animated.spring(referralSlideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+        }).start();
       } catch (e) {
-        console.warn('[Home iOS] Failed to check referral prompt key:', e);
+        console.warn('[Home iOS] Failed to check referral prompt:', e);
       }
     };
     checkReferralPrompt();
@@ -177,9 +195,18 @@ export default function HomeScreen() {
       useNativeDriver: true,
     }).start(() => setReferralModalVisible(false));
     try {
+      // Save locally
       await AsyncStorage.setItem(REFERRAL_PROMPT_KEY, 'true');
+      // Save to Supabase — survives sign out/sign in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('users')
+          .update({ referral_prompt_shown: true })
+          .eq('id', user.id);
+      }
     } catch (e) {
-      console.warn('[Home iOS] Failed to save referral prompt key:', e);
+      console.warn('[Home iOS] Failed to save referral prompt flag:', e);
     }
   };
 
