@@ -1,5 +1,7 @@
-import { supabase } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
+
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA';
 
 export interface Tracker {
   id: string;
@@ -365,73 +367,56 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
   const entryDates = new Set(entries.map((e: { date: string }) => e.date));
   const daysTracked = entryDates.size;
 
-  // ── Piece 1A: streak-eligible dates (no backdating) ──
-  // An entry counts toward the streak only if it was logged on the same day
-  // or the very next day (e.g. logging at midnight). Entries logged 2+ days
-  // after their date are considered backdated and excluded from the streak.
-  const today = toLocalDateString(now);
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = toLocalDateString(yesterday);
+  // ── Get authoritative streak from user_xp via sync-streak edge function ──
+  let finalStreak = 0;
+  let bestStreak = 0;
+  let syncData: {
+    current_streak: number;
+    longest_streak: number;
+    last_xp_date: string;
+    last_streak_value: number;
+    last_streak_lost_at: string | null;
+    streak_rescue_used: boolean;
+  } | null = null;
 
-  const streakEligibleDates = new Set<string>();
-  for (const e of entries as { date: string; value: number; created_at: string }[]) {
-    // Allow logging on the same day OR the next day (midnight grace)
-    const entryDate = new Date(e.date + 'T00:00:00');
-    const oneDayAfterEntry = new Date(entryDate);
-    oneDayAfterEntry.setDate(entryDate.getDate() + 1);
-    const oneDayAfterStr = toLocalDateString(oneDayAfterEntry);
-
-    const createdAtDate = toLocalDateString(new Date(e.created_at));
-
-    // Entry is eligible if it was created on its own date or the next day
-    if (createdAtDate <= oneDayAfterStr || e.date >= yesterdayStr) {
-      streakEligibleDates.add(e.date);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? '';
+    console.log('[TrackersApi] getStats — calling sync-streak edge function');
+    const syncRes = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/sync-streak`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    if (syncRes.ok) {
+      syncData = await syncRes.json();
+      finalStreak = syncData?.current_streak ?? 0;
+      bestStreak = syncData?.longest_streak ?? 0;
+      console.log('[TrackersApi] sync-streak response — current_streak:', finalStreak, 'longest_streak:', bestStreak);
+    } else {
+      const errText = await syncRes.text();
+      console.warn('[TrackersApi] sync-streak returned', syncRes.status, ':', errText);
     }
+  } catch (e) {
+    console.warn('[TrackersApi] sync-streak failed, using 0:', e);
   }
 
-  // Calculate streak using only eligible dates
-  let streak = 0;
-  let checkDate: Date | null = streakEligibleDates.has(today)
-    ? new Date(now)
-    : streakEligibleDates.has(yesterdayStr)
-    ? new Date(yesterday)
-    : null;
-
-  if (checkDate) {
-    let keepGoing = true;
-    while (keepGoing) {
-      const dateStr = toLocalDateString(checkDate);
-      if (streakEligibleDates.has(dateStr)) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        keepGoing = false;
-      }
-    }
-  }
-
-  // ── Piece 1B: update rescue state in users table (fire-and-forget) ──
+  // ── Rescue modal detection using sync-streak response data (fire-and-forget) ──
   (async () => {
     try {
-      const { data: userRow, error: userErr } = await supabase
-        .from('users')
-        .select('last_streak_value, last_streak_lost_at, streak_rescue_used')
-        .eq('id', userId)
-        .single();
-
-      if (userErr || !userRow) {
-        console.warn('[TrackersApi] getStats — could not read user rescue state:', userErr?.message);
+      if (!syncData) {
+        console.warn('[TrackersApi] getStats — skipping rescue state update, no sync-streak data');
         return;
       }
 
-      const lastStreakValue: number = userRow.last_streak_value ?? 0;
-      const streakRescueUsed: boolean = userRow.streak_rescue_used ?? false;
+      const lastStreakValue: number = syncData.last_streak_value ?? 0;
+      const streakRescueUsed: boolean = syncData.streak_rescue_used ?? false;
 
-      if (streak > 0) {
+      if (finalStreak > 0) {
         if (streakRescueUsed && lastStreakValue > 0) {
-          // Rescued streak is still active — no DB update needed, just add below
-          console.log('[TrackersApi] Rescued streak active, base streak:', streak, '+ rescued:', lastStreakValue);
+          // Rescued streak is still active — no DB update needed
+          console.log('[TrackersApi] Rescued streak active, current_streak:', finalStreak, '+ rescued:', lastStreakValue);
         } else if (!streakRescueUsed && lastStreakValue > 0) {
           // New streak started without rescuing — clear rescue state
           console.log('[TrackersApi] New streak started without rescue, clearing rescue state');
@@ -442,41 +427,26 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
         }
         // else: normal streak, nothing to do
       } else {
-        // streak === 0
+        // finalStreak === 0
         if (lastStreakValue === 0 && !streakRescueUsed && daysTracked > 0) {
-          // Detect freshly lost streak: walk back from 2 days ago
-          const twoDaysAgo = new Date(now);
-          twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-
-          let lostValue = 0;
-          let walkDate: Date | null = streakEligibleDates.has(toLocalDateString(twoDaysAgo))
-            ? new Date(twoDaysAgo)
-            : null;
-
-          if (walkDate) {
-            let keepWalking = true;
-            while (keepWalking) {
-              const ds = toLocalDateString(walkDate);
-              if (streakEligibleDates.has(ds)) {
-                lostValue++;
-                walkDate.setDate(walkDate.getDate() - 1);
-              } else {
-                keepWalking = false;
-              }
-            }
+          // Detect freshly lost streak from sync-streak's last_streak_value
+          // sync-streak already tracks this — if last_streak_value > 0 it means a streak was lost
+          // but since it's 0 here, check last_streak_lost_at to see if it was recently set
+          const lostAt = syncData.last_streak_lost_at;
+          if (lostAt) {
+            console.log('[TrackersApi] Streak was lost at:', lostAt, '— rescue state already tracked by sync-streak');
           }
-
-          if (lostValue > 0) {
-            console.log('[TrackersApi] Streak just lost, value was', lostValue, '— updating rescue state');
-            await supabase
-              .from('users')
-              .update({
-                last_streak_value: lostValue,
-                last_streak_lost_at: new Date().toISOString(),
-                streak_rescue_used: false,
-              })
-              .eq('id', userId);
-          }
+        } else if (lastStreakValue > 0 && !streakRescueUsed) {
+          // sync-streak reports a lost streak that hasn't been rescued yet — mirror to users table
+          console.log('[TrackersApi] Streak just lost (from sync-streak), value was', lastStreakValue, '— updating rescue state');
+          await supabase
+            .from('users')
+            .update({
+              last_streak_value: lastStreakValue,
+              last_streak_lost_at: syncData.last_streak_lost_at ?? new Date().toISOString(),
+              streak_rescue_used: false,
+            })
+            .eq('id', userId);
         } else if (streakRescueUsed) {
           // User already paid/dismissed AND lost their rescued or post-rescue streak
           // Clear so next loss can trigger modal again
@@ -491,29 +461,6 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
       console.warn('[TrackersApi] getStats rescue state update failed:', e?.message);
     }
   })();
-
-  // Compute final streak (add rescued value if applicable)
-  let finalStreak = streak;
-  // We read rescue state synchronously above — but since the IIFE is async,
-  // we need a second read here. To avoid a blocking extra query, we rely on
-  // the fact that the rescue state was already fetched in the IIFE. Instead,
-  // we do a lightweight synchronous check by re-reading from the DB inline.
-  // Actually, to keep this non-blocking we compute finalStreak after the IIFE
-  // by doing a separate fast read. We'll do it inline here:
-  try {
-    const { data: rescueRow } = await supabase
-      .from('users')
-      .select('last_streak_value, streak_rescue_used')
-      .eq('id', userId)
-      .single();
-
-    if (rescueRow && rescueRow.streak_rescue_used && rescueRow.last_streak_value > 0 && streak > 0) {
-      finalStreak = streak + rescueRow.last_streak_value;
-      console.log('[TrackersApi] Final streak with rescue bonus:', finalStreak, '(base:', streak, '+ rescued:', rescueRow.last_streak_value, ')');
-    }
-  } catch (_e) {
-    // Non-fatal — use base streak
-  }
 
   // Days goal met
   let daysGoalMet = 0;
@@ -550,7 +497,7 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
 
   return {
     current_streak: finalStreak,
-    best_streak: finalStreak,
+    best_streak: bestStreak,
     completion_rate: daysTracked / 30,
     days_tracked: daysTracked,
     days_goal_met: daysGoalMet,
