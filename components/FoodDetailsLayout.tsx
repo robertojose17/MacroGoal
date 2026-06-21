@@ -951,7 +951,7 @@ export default function FoodDetailsLayout({
     ...(customUnitLabel
       ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
       : []),
-    { key: 'default', label: defaultServingInfo.description || `1 serving (${defaultServingInfo.grams}g)`, gramsPerUnit: defaultServingInfo.grams },
+    { key: 'default', label: defaultServingInfo.displayText || defaultServingInfo.description || `1 serving (${defaultServingInfo.grams}g)`, gramsPerUnit: defaultServingInfo.grams },
     { key: 'g', label: '1 g', gramsPerUnit: 1 },
     { key: 'oz', label: '1 oz', gramsPerUnit: 28.35 },
     { key: 'lb', label: '1 lb', gramsPerUnit: 453.592 },

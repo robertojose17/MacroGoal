@@ -118,16 +118,42 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
     isEstimated: false,
   };
 
-  // If no serving_size at all, return default immediately
+  // If no serving_size at all, check serving_quantity before falling back to 100g
   if (!product.serving_size || typeof product.serving_size !== 'string') {
+    if (product.serving_quantity) {
+      const grams = parseFloat(String(product.serving_quantity));
+      if (!isNaN(grams) && grams > 0) {
+        console.log('[OpenFoodFacts] No serving_size but serving_quantity found, using:', grams);
+        return {
+          description: `${parseFloat(grams.toFixed(2))} g`,
+          grams,
+          displayText: `${parseFloat(grams.toFixed(2))} g`,
+          hasValidGrams: true,
+          isEstimated: false,
+        };
+      }
+    }
     console.log('[OpenFoodFacts] No serving_size found, using default 100g');
     return defaultServing;
   }
 
   const servingSize = product.serving_size.trim();
   
-  // Empty string check
+  // Empty string check — also try serving_quantity before falling back
   if (servingSize.length === 0) {
+    if (product.serving_quantity) {
+      const grams = parseFloat(String(product.serving_quantity));
+      if (!isNaN(grams) && grams > 0) {
+        console.log('[OpenFoodFacts] Empty serving_size but serving_quantity found, using:', grams);
+        return {
+          description: `${parseFloat(grams.toFixed(2))} g`,
+          grams,
+          displayText: `${parseFloat(grams.toFixed(2))} g`,
+          hasValidGrams: true,
+          isEstimated: false,
+        };
+      }
+    }
     console.log('[OpenFoodFacts] Empty serving_size, using default 100g');
     return defaultServing;
   }
