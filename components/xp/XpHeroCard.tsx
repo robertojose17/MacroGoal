@@ -193,7 +193,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleProgressBarTap}
-              style={{ flex: 1 }}
+              style={{ flex: 1, height: 6 }}
             >
               <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
                 <LinearGradient
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   progressFill: {
-    height: '100%',
+    height: 6,
     borderRadius: 6,
   },
   progressDot: {
