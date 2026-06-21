@@ -196,7 +196,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             >
               {trackWidth > 0 && (
                 <LinearGradient
-                  colors={[rank.primaryColor, rank.gradientColor]}
+                  colors={[rank.primaryColor, rank.gradientColor ?? rank.primaryColor]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressFill, { width: trackWidth * (progressWidth / 100) }]}
