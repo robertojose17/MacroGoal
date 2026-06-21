@@ -25,6 +25,7 @@ import { listTrackers, logEntry as logTrackerEntry } from '@/utils/trackersApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { tryAwardWorkout, tryAwardWeightCheckin, tryAwardProgressPhoto } from '@/utils/xpAwarder';
+import { emitXpRefresh } from '@/utils/xpEvents';
 
 type CheckInType = 'weight' | 'steps' | 'gym';
 
@@ -335,6 +336,9 @@ export default function CheckInFormScreen() {
         }
       }
 
+      console.log('[CheckInForm] emitting xp:refresh after check-in save');
+      emitXpRefresh();
+
       // For new weight check-ins: show the photo modal instead of immediately going back
       if (!isEditing && checkInType === 'weight' && savedCheckInId) {
         console.log('[CheckInForm] Showing post-save photo modal for check-in:', savedCheckInId);
@@ -425,6 +429,8 @@ export default function CheckInFormScreen() {
       console.log('[CheckInForm] ✅ Modal photo uploaded successfully');
       console.log('[CheckInForm] awarding progress_photo XP for check-in:', pendingCheckInId);
       tryAwardProgressPhoto(pendingCheckInId);
+      console.log('[CheckInForm] emitting xp:refresh after progress photo upload');
+      emitXpRefresh();
       setShowPhotoModal(false);
       setSelectedPhotoUri(null);
       Alert.alert('Success', 'Check-in saved with photo!', [{ text: 'OK', onPress: () => router.back() }]);
