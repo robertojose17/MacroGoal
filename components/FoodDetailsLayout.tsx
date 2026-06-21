@@ -283,6 +283,13 @@ export default function FoodDetailsLayout({
   // NOT from extractServingSize — so they stay in sync.
   const [editDefaultGramsPerUnit, setEditDefaultGramsPerUnit] = useState<number | null>(null);
 
+  // In edit mode, store the macro values saved in the DB so the initial display
+  // matches the food log list exactly (instead of recalculating from OFF _100g fields).
+  const [savedMacros, setSavedMacros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
+  // Track whether the user has changed the serving since the edit screen opened.
+  // While false, calculateMacros returns savedMacros directly.
+  const [userChangedServing, setUserChangedServing] = useState(false);
+
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
 
@@ -432,6 +439,17 @@ export default function FoodDetailsLayout({
         }
       }
 
+      // Store the saved DB macros so the initial display matches the food log list exactly.
+      console.log('[FoodDetails] loadEditItem: saving DB macros — calories=', mealItem.calories, 'protein=', mealItem.protein, 'carbs=', mealItem.carbs, 'fats=', mealItem.fats, 'fiber=', mealItem.fiber);
+      setSavedMacros({
+        calories: mealItem.calories || 0,
+        protein: mealItem.protein || 0,
+        carbs: mealItem.carbs || 0,
+        fats: mealItem.fats || 0,
+        fiber: mealItem.fiber || 0,
+      });
+      setUserChangedServing(false);
+
       await checkFavoriteStatus(mockProduct);
     } catch (error) {
       console.error('Error in loadEditItem:', error);
@@ -537,6 +555,7 @@ export default function FoodDetailsLayout({
 
   const handleServingOptionChange = (option: ServingOption) => {
     console.log('[FoodDetails] Serving unit changed to:', option.label, 'gramsPerUnit=', option.gramsPerUnit);
+    setUserChangedServing(true);
     const totalGrams = servingAmount * (parseFloat(numberOfServings) || 1);
     const newNumberOfServings = totalGrams / option.gramsPerUnit;
     setServingAmount(option.gramsPerUnit);
@@ -554,6 +573,8 @@ export default function FoodDetailsLayout({
   };
 
   const handleNumberOfServingsChange = (newServings: string) => {
+    console.log('[FoodDetails] Number of servings changed to:', newServings);
+    setUserChangedServing(true);
     setNumberOfServings(newServings);
   };
 
@@ -565,6 +586,13 @@ export default function FoodDetailsLayout({
   const calculateMacros = () => {
     if (!product) {
       return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+    }
+
+    // In edit mode, if the user hasn't changed the serving yet, return the saved DB values
+    // so the initial display matches the food log list exactly.
+    if (mode === 'edit' && savedMacros && !userChangedServing) {
+      console.log('[FoodDetails] calculateMacros: returning savedMacros (user has not changed serving):', savedMacros);
+      return savedMacros;
     }
 
     const totalGrams = getTotalGrams();
