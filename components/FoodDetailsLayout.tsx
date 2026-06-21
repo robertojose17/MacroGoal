@@ -283,12 +283,8 @@ export default function FoodDetailsLayout({
   // NOT from extractServingSize — so they stay in sync.
   const [editDefaultGramsPerUnit, setEditDefaultGramsPerUnit] = useState<number | null>(null);
 
-  // In edit mode, store the macro values saved in the DB so the initial display
-  // matches the food log list exactly (instead of recalculating from OFF _100g fields).
-  const [savedMacros, setSavedMacros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
-  // Track whether the user has changed the serving since the edit screen opened.
-  // While false, calculateMacros returns savedMacros directly.
-  const [userChangedServing, setUserChangedServing] = useState(false);
+  // Per-100g macros from the foods table — the immutable calculation reference
+  const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
 
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
@@ -308,6 +304,15 @@ export default function FoodDetailsLayout({
     try {
       const parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
       setProduct(parsedProduct);
+
+      const nutrition = extractNutrition(parsedProduct);
+      setPer100Macros({
+        calories: safeNum(nutrition.calories),
+        protein: safeNum(nutrition.protein),
+        carbs: safeNum(nutrition.carbs),
+        fats: safeNum(nutrition.fat),
+        fiber: safeNum(nutrition.fiber),
+      });
 
       const servingInfo = extractServingSize(parsedProduct);
       setServingAmount(servingInfo.grams);
@@ -378,6 +383,14 @@ export default function FoodDetailsLayout({
 
       setProduct(mockProduct);
 
+      setPer100Macros({
+        calories: safeNum(food.calories),
+        protein: safeNum(food.protein),
+        carbs: safeNum(food.carbs),
+        fats: safeNum(food.fats),
+        fiber: safeNum(food.fiber || 0),
+      });
+
       // ── Source of truth: the grams saved in DB ──────────────────────────
       // mealItem.grams is what the user actually ate. Reconstruct state from it.
       const totalGrams = mealItem.grams || 100;
@@ -438,17 +451,6 @@ export default function FoodDetailsLayout({
           setEditDefaultGramsPerUnit(gramsPerUnit);
         }
       }
-
-      // Store the saved DB macros so the initial display matches the food log list exactly.
-      console.log('[FoodDetails] loadEditItem: saving DB macros — calories=', mealItem.calories, 'protein=', mealItem.protein, 'carbs=', mealItem.carbs, 'fats=', mealItem.fats, 'fiber=', mealItem.fiber);
-      setSavedMacros({
-        calories: mealItem.calories || 0,
-        protein: mealItem.protein || 0,
-        carbs: mealItem.carbs || 0,
-        fats: mealItem.fats || 0,
-        fiber: mealItem.fiber || 0,
-      });
-      setUserChangedServing(false);
 
       await checkFavoriteStatus(mockProduct);
     } catch (error) {
@@ -555,7 +557,6 @@ export default function FoodDetailsLayout({
 
   const handleServingOptionChange = (option: ServingOption) => {
     console.log('[FoodDetails] Serving unit changed to:', option.label, 'gramsPerUnit=', option.gramsPerUnit);
-    setUserChangedServing(true);
     const totalGrams = servingAmount * (parseFloat(numberOfServings) || 1);
     const newNumberOfServings = totalGrams / option.gramsPerUnit;
     setServingAmount(option.gramsPerUnit);
@@ -574,7 +575,6 @@ export default function FoodDetailsLayout({
 
   const handleNumberOfServingsChange = (newServings: string) => {
     console.log('[FoodDetails] Number of servings changed to:', newServings);
-    setUserChangedServing(true);
     setNumberOfServings(newServings);
   };
 
@@ -584,29 +584,17 @@ export default function FoodDetailsLayout({
   };
 
   const calculateMacros = () => {
-    if (!product) {
+    if (!per100Macros) {
       return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
     }
-
-    // In edit mode, if the user hasn't changed the serving yet, return the saved DB values
-    // so the initial display matches the food log list exactly.
-    if (mode === 'edit' && savedMacros && !userChangedServing) {
-      console.log('[FoodDetails] calculateMacros: returning savedMacros (user has not changed serving):', savedMacros);
-      return savedMacros;
-    }
-
     const totalGrams = getTotalGrams();
-    const nutrition = extractNutrition(product);
-
     const multiplier = totalGrams / 100;
-
-    // extractNutrition returns `fat` (not `fats`); use safeNum to guard against NaN/null/undefined
     return {
-      calories: Math.round(safeNum(nutrition.calories) * multiplier),
-      protein: Math.round(safeNum(nutrition.protein) * multiplier),
-      carbs: Math.round(safeNum(nutrition.carbs) * multiplier),
-      fats: Math.round(safeNum(nutrition.fat) * multiplier),
-      fiber: Math.round(safeNum(nutrition.fiber) * multiplier),
+      calories: Math.round(per100Macros.calories * multiplier),
+      protein: Math.round(per100Macros.protein * multiplier),
+      carbs: Math.round(per100Macros.carbs * multiplier),
+      fats: Math.round(per100Macros.fats * multiplier),
+      fiber: Math.round(per100Macros.fiber * multiplier),
     };
   };
 
