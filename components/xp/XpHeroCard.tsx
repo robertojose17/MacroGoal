@@ -43,6 +43,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const [showLevelsModal, setShowLevelsModal] = useState(false);
   const [showLeagueModal, setShowLeagueModal] = useState(false);
   const [lbsLost, setLbsLost] = useState(0);
+  const [trackWidth, setTrackWidth] = useState(0);
 
   const { status: leagueStatus } = useLeague();
 
@@ -189,16 +190,28 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
 
           {/* Progress bar */}
           <Pressable onPress={handleProgressBarTap} style={styles.progressBarWrapper}>
-            <View style={styles.barRow}>
-              <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
+            <View
+              style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}
+              onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+            >
+              {trackWidth > 0 && (
                 <LinearGradient
                   colors={[rank.primaryColor, rank.gradientColor]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.progressFill, { width: `${progressWidth}%` as `${number}%` }]}
+                  style={[styles.progressFill, { width: trackWidth * (progressWidth / 100) }]}
                 />
-                <View style={[styles.progressDot, { left: `${progressWidth}%` as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
-              </View>
+              )}
+              <View
+                style={[
+                  styles.progressDot,
+                  {
+                    left: trackWidth > 0 ? trackWidth * (progressWidth / 100) - 7 : 0,
+                    backgroundColor: rank.primaryColor,
+                    borderColor: cardBg,
+                  },
+                ]}
+              />
             </View>
             <Animated.View
               style={[styles.xpTooltip, { opacity: xpTooltipAnim }]}
@@ -395,23 +408,21 @@ const styles = StyleSheet.create({
 
   // Progress bar
   progressBarWrapper: {
-    position: 'relative',
-    overflow: 'visible',
     width: '100%',
+    overflow: 'visible',
   },
   barRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   progressTrack: {
-    flex: 1,
+    width: '100%',
     height: 6,
     borderRadius: 6,
     overflow: 'visible',
-    position: 'relative',
   },
   progressFill: {
-    height: '100%',
+    height: 6,
     borderRadius: 6,
   },
   progressDot: {
@@ -421,7 +432,7 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 2,
-    marginLeft: -7,
+    marginLeft: 0,
   },
   xpTooltip: {
     position: 'absolute',
