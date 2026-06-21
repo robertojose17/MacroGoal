@@ -15,7 +15,6 @@ import {
   Animated,
   Platform,
   Pressable,
-  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getXpRank } from '@/utils/xpRanks';
@@ -189,19 +188,16 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           </View>
 
           {/* Progress bar */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={handleProgressBarTap}
-            style={styles.progressBarWrapper}
-          >
+          <View style={styles.progressBarWrapper}>
+            <Pressable onPress={handleProgressBarTap} style={StyleSheet.absoluteFill} />
             <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
               <LinearGradient
                 colors={[rank.primaryColor, rank.gradientColor]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
+                style={[styles.progressFill, { width: `${progressWidth}%` as `${number}%` }]}
               />
-              <View style={[styles.progressDot, { left: progressWidth + '%' as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
+              <View style={[styles.progressDot, { left: `${progressWidth}%` as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
             </View>
             <Animated.View
               style={[styles.xpTooltip, { opacity: xpTooltipAnim }]}
@@ -211,7 +207,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
                 <Text style={styles.xpTooltipText}>{xpTooltipText}</Text>
               </View>
             </Animated.View>
-          </TouchableOpacity>
+          </View>
 
         </View>
 
@@ -402,14 +398,14 @@ const styles = StyleSheet.create({
     height: 18,
     justifyContent: 'center',
     overflow: 'visible',
-    // width comes from leftSection (flex: 1.6) — no flex needed here
+    alignSelf: 'stretch',
   },
   progressTrack: {
     height: 6,
     borderRadius: 6,
     overflow: 'visible',
     position: 'relative',
-    // fills full width of progressBarWrapper which inherits from leftSection
+    alignSelf: 'stretch',
   },
   progressFill: {
     height: 6,
