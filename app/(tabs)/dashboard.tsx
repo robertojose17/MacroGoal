@@ -354,8 +354,19 @@ export default function DashboardScreen() {
     }, [loadData])
   );
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
+    console.log('[Dashboard] Pull-to-refresh triggered');
     setRefreshing(true);
+    // Force steps sync on manual refresh (bypass throttle by clearing the key)
+    try {
+      await AsyncStorage.removeItem('steps_reporter_last_report_ts');
+      console.log('[Dashboard] Cleared steps throttle key for forced sync');
+    } catch {}
+    const stepsResult = await reportTodaySteps();
+    console.log('[Dashboard] Steps sync result:', stepsResult);
+    if (stepsResult.reported) {
+      emitXpRefresh();
+    }
     loadData();
   }, [loadData]);
 
