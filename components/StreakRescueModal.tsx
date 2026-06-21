@@ -26,11 +26,11 @@ export default function StreakRescueModal({
   onPurchase,
   onDismiss,
 }: Props) {
-  const titleText = `¡Perdiste tu racha de ${lostStreakValue} días!`;
-  const subtitleText = 'No dejes que todo ese esfuerzo desaparezca.';
-  const rescueLabel = 'Rescatar mi racha';
-  const dismissLabel = 'No, empezar de nuevo';
-  const priceLine = priceLabel ? `Solo ${priceLabel}` : '';
+  const titleText = `You lost your ${lostStreakValue}-day streak!`;
+  const subtitleText = "Don't let all that hard work disappear.";
+  const rescueLabel = 'Rescue my streak';
+  const dismissLabel = 'No, start over';
+  const priceLine = priceLabel ? `Only ${priceLabel}` : '';
 
   return (
     <Modal
@@ -68,7 +68,7 @@ export default function StreakRescueModal({
           <TouchableOpacity
             style={[styles.primaryButton, purchasing && styles.primaryButtonDisabled]}
             onPress={() => {
-              console.log('[StreakRescueModal] Rescatar mi racha pressed');
+              console.log('[StreakRescueModal] Rescue my streak pressed');
               onPurchase();
             }}
             activeOpacity={0.85}
