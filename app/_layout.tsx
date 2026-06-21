@@ -688,6 +688,22 @@ export default function RootLayout() {
                     title: 'Weight Progress',
                   }}
                 />
+                <Stack.Screen
+                  name="referrals"
+                  options={{
+                    headerShown: true,
+                    headerBackButtonDisplayMode: 'minimal',
+                    title: 'Invite Friends',
+                  }}
+                />
+                <Stack.Screen
+                  name="affiliate-apply"
+                  options={{
+                    headerShown: true,
+                    headerBackButtonDisplayMode: 'minimal',
+                    title: 'Affiliate Application',
+                  }}
+                />
               </Stack>
           </WidgetProvider>
         </ThemeProvider>

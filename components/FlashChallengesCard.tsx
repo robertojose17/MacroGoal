@@ -1,10 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Animated,
   ActivityIndicator,
+  TouchableOpacity,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -12,6 +14,7 @@ import { useFlashChallenges } from '@/hooks/useFlashChallenges';
 import { tryAwardFlashChallenge } from '@/utils/xpAwarder';
 import type { FlashChallengeWithProgress } from '@/hooks/useFlashChallenges';
 import type { MetricType } from '@/utils/flashChallengesApi';
+import { supabase } from '@/lib/supabase/client';
 
 const GOLD = '#FFB547';
 const MEDIUM_COLOR = '#3B82F6';
@@ -32,6 +35,7 @@ function metricIcon(metric: MetricType): keyof typeof Ionicons.glyphMap {
     case 'distance': return 'map-outline';
     case 'floors': return 'trending-up-outline';
     case 'running_pace': return 'speedometer-outline';
+    case 'referral': return 'people-outline';
     default: return 'flash-outline';
   }
 }
@@ -91,6 +95,29 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
   const difficultyColor = challenge.difficulty === 'medium' ? MEDIUM_COLOR : HARD_COLOR;
   const difficultyLabel = challenge.difficulty === 'medium' ? 'MEDIUM' : 'HARD';
   const isComplete = challenge.completed || challenge.progressPct >= 100;
+  const isReferral = challenge.metric_type === 'referral';
+
+  // Referral-specific: count referrals this week
+  const [weekReferrals, setWeekReferrals] = useState(0);
+  useEffect(() => {
+    if (!isReferral) return;
+    const fetchWeekReferrals = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const now = new Date();
+      const daysSinceMonday = (now.getDay() + 6) % 7;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - daysSinceMonday);
+      const weekStart = monday.toISOString().split('T')[0];
+      const { count } = await supabase
+        .from('referrals')
+        .select('id', { count: 'exact', head: true })
+        .eq('referrer_id', user.id)
+        .gte('created_at', weekStart);
+      setWeekReferrals(count ?? 0);
+    };
+    fetchWeekReferrals();
+  }, [isReferral]);
 
   // Award XP once when progress hits 100%
   useEffect(() => {
@@ -102,7 +129,28 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
     }
   }, [challenge.progressPct, challenge.completed, challenge.id, challenge.xp_reward, onXpAwarded, awardedRef]);
 
-  const progressText = isComplete ? 'Completed!' : `${challenge.progressPct}%`;
+  const handleShareCode = async () => {
+    console.log('[FlashChallengesCard] Share Code pressed for referral challenge');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: rc } = await supabase
+        .from('referral_codes')
+        .select('code, custom_code')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const code = rc?.custom_code || rc?.code || '';
+      await Share.share({
+        message: `I've been tracking my macros with Macro Goal. Join with my code ${code} and we both earn 1,000 XP 💪`,
+      });
+    } catch (e) {
+      console.warn('[FlashChallengesCard] share failed:', e);
+    }
+  };
+
+  const referralProgressPct = isReferral ? Math.min((weekReferrals / 3) * 100, 100) : challenge.progressPct;
+  const referralComplete = isReferral ? weekReferrals >= 3 : isComplete;
+  const progressText = referralComplete ? 'Completed!' : isReferral ? `${weekReferrals} / 3` : `${challenge.progressPct}%`;
   const xpLabel = `${challenge.xp_reward} XP`;
 
   return (
@@ -112,29 +160,39 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
         <Ionicons
           name={metricIcon(challenge.metric_type)}
           size={20}
-          color={isComplete ? COMPLETE_GREEN : GOLD}
+          color={referralComplete ? COMPLETE_GREEN : GOLD}
         />
       </View>
 
-      {/* Center: title + description + progress bar */}
+      {/* Center: title + description + progress */}
       <View style={styles.challengeCenter}>
         <View style={styles.challengeTitleRow}>
           <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
             {challenge.title}
           </Text>
-          {isComplete && (
+          {referralComplete && (
             <Ionicons name="checkmark-circle" size={16} color={COMPLETE_GREEN} style={{ marginLeft: 4 }} />
           )}
         </View>
         <Text style={[styles.challengeDesc, { color: mutedColor }]} numberOfLines={1}>
-          {challenge.description}
+          {isReferral ? `${weekReferrals} / 3 friends referred this week` : challenge.description}
         </Text>
         <View style={styles.progressRow}>
-          <ProgressBar pct={challenge.progressPct} completed={isComplete} isDark={isDark} />
-          <Text style={[styles.progressLabel, { color: isComplete ? COMPLETE_GREEN : mutedColor }]}>
+          <ProgressBar pct={isReferral ? referralProgressPct : challenge.progressPct} completed={referralComplete} isDark={isDark} />
+          <Text style={[styles.progressLabel, { color: referralComplete ? COMPLETE_GREEN : mutedColor }]}>
             {progressText}
           </Text>
         </View>
+        {isReferral && !referralComplete && (
+          <TouchableOpacity
+            style={[styles.shareCodeButton, { backgroundColor: '#14B8A6' + '22' }]}
+            onPress={handleShareCode}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="share-outline" size={13} color="#14B8A6" />
+            <Text style={[styles.shareCodeText, { color: '#14B8A6' }]}>Share Code</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Right: XP badge + difficulty pill */}
@@ -402,6 +460,20 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  shareCodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+  },
+  shareCodeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   // Expired / empty
   expiredContainer: {

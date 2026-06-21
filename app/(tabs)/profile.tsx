@@ -1129,6 +1129,35 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Invite Friends & Earn XP */}
+        <TouchableOpacity
+          style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+          onPress={() => {
+            console.log('[Profile] Invite Friends & Earn XP pressed');
+            router.push('/referrals');
+          }}
+        >
+          <View style={styles.feedbackRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <IconSymbol
+                ios_icon_name="person.2.fill"
+                android_material_icon_name="group"
+                size={20}
+                color={TEAL}
+              />
+              <Text style={[styles.feedbackRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                Invite Friends & Earn XP
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={16}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </View>
+        </TouchableOpacity>
+
         {/* Feedback Section */}
         <TouchableOpacity
           style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}

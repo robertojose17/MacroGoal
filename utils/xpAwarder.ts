@@ -209,3 +209,18 @@ export function tryAwardFlashChallenge(challengeId: string, xpReward: number): v
     .then((result) => handleResult(result, 'flash_challenge'))
     .catch((err) => console.warn('[xpAwarder] flash_challenge award failed (non-fatal):', err?.message ?? err));
 }
+
+/**
+ * Award XP for completing a referral.
+ * @param referralId  The referrals.id (used as source_id for dedup)
+ */
+export function tryAwardReferral(referralId: string): void {
+  console.log('[xpAwarder] tryAwardReferral', referralId);
+  awardXp({
+    event_type: 'referral_completed',
+    source_id: referralId,
+    metadata: { xp_reward: 1000 },
+  })
+    .then((result) => handleResult(result, 'referral_completed'))
+    .catch((err) => console.warn('[xpAwarder] referral award failed (non-fatal):', err?.message ?? err));
+}
