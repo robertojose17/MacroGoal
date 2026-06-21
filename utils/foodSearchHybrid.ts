@@ -150,7 +150,7 @@ export async function hybridSearch(
         console.log('[HybridSearch] Aborted after Supabase stage');
         return;
       }
-      if (products && products.length >= 3) {
+      if (products && products.length >= 1) {
         console.log('[HybridSearch] Supabase HIT — emitting', products.length, 'products');
         callbacks.onSupabaseHit?.(products);
       }
