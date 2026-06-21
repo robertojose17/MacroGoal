@@ -32,6 +32,7 @@ import StreakBadgeModal from '@/components/xp/StreakBadgeModal';
 import TodaysChallengesCard from '@/components/xp/TodaysChallengesCard';
 import UnlockMissionModal from '@/components/xp/UnlockMissionModal';
 import GoalWeightCard from '@/components/GoalWeightCard';
+import LeagueCard from '@/components/xp/LeagueCard';
 import { reportTodaySteps } from '@/utils/stepsReporter';
 import { emitXpRefresh } from '@/utils/xpEvents';
 import { useSteps } from '@/hooks/useSteps';
@@ -474,6 +475,9 @@ export default function DashboardScreen() {
         <CardErrorBoundary label="XpHeroCard">
           <XpHeroCard status={xp.status} isDark={isDark} />
         </CardErrorBoundary>
+
+        {/* ── League Card ── */}
+        <LeagueCard isDark={isDark} />
 
         {/* ── Goal Weight Card ── */}
         {user && (
