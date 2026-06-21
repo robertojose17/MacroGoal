@@ -33,6 +33,7 @@ import TodaysChallengesCard from '@/components/xp/TodaysChallengesCard';
 import UnlockMissionModal from '@/components/xp/UnlockMissionModal';
 import GoalWeightCard from '@/components/GoalWeightCard';
 import { reportTodaySteps } from '@/utils/stepsReporter';
+import { emitXpRefresh } from '@/utils/xpEvents';
 import { useSteps } from '@/hooks/useSteps';
 import { reportDailyHealthMetrics } from '@/utils/healthMetricsReporter';
 import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
@@ -167,6 +168,9 @@ export default function DashboardScreen() {
     ])
       .then(([stepsResult, metricsResult]) => {
         console.log('[Dashboard] steps report:', stepsResult.reported, '| metrics events:', metricsResult.eventsPosted);
+        if (stepsResult.reported) {
+          emitXpRefresh();
+        }
         xp.refresh();
       })
       .catch(() => {});

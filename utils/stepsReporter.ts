@@ -17,11 +17,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTodaySteps } from '@/utils/healthKit';
 import { awardXp } from '@/utils/xpApi';
+import { emitXpRefresh } from '@/utils/xpEvents';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'steps_reporter_last_report_ts';
-const THROTTLE_MS = 30 * 60 * 1000; // 30 minutes
+const THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_STEPS = 50000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ export async function reportTodaySteps(): Promise<ReportResult> {
     console.log('[stepsReporter] XP awarded:', xpResult.awarded, 'total_xp:', xpResult.total_xp);
 
     await markReported();
+    emitXpRefresh();
     return { reported: true, steps };
   } catch (e) {
     // Never let a reporting error crash the app
