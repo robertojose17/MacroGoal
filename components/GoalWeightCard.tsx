@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { WeightProgressMiniChart } from '@/components/ProgressCard';
+import { colors, borderRadius as br, spacing } from '@/styles/commonStyles';
 
 const KG_TO_LBS = 2.20462;
 const CHART_HEIGHT = 120;
@@ -158,15 +159,16 @@ export default function GoalWeightCard({
     return () => { cancelled = true; };
   }, []);
 
-  const bg = isDark ? '#1C1C1E' : '#FFFFFF';
-  const textPrimary = isDark ? '#F1F5F9' : '#111827';
-  const textSecondary = isDark ? 'rgba(255,255,255,0.5)' : '#6B7280';
+  const bg = isDark ? colors.cardDark : colors.card;
+  const cardBorderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const textPrimary = isDark ? '#F1F5F9' : '#2B2D42';
+  const textSecondary = isDark ? '#A0A2B8' : '#6B7280';
   const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB';
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={[styles.card, { backgroundColor: bg }]}>
+      <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
         <View style={styles.headerRow}>
           <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
         </View>
@@ -184,7 +186,7 @@ export default function GoalWeightCard({
   // ── No goal set ───────────────────────────────────────────────────────────
   if (!goalWeightKgDirect && !propGoal) {
     return (
-      <View style={[styles.card, { backgroundColor: bg }]}>
+      <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
         <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
         <Text style={[styles.noGoal, { color: textSecondary }]}>
           Set your goal weight in Profile to track progress here.
@@ -209,7 +211,7 @@ export default function GoalWeightCard({
   // ── No current weight ─────────────────────────────────────────────────────
   if (!currentKg) {
     return (
-      <View style={[styles.card, { backgroundColor: bg }]}>
+      <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
         <View style={styles.headerRow}>
           <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
         </View>
@@ -294,7 +296,7 @@ export default function GoalWeightCard({
   console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'lossRateLbsPerWeek:', goalData?.lossRateLbsPerWeek, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
 
   return (
-    <View style={[styles.card, { backgroundColor: bg }]}>
+    <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
       {/* Header */}
       <View style={styles.headerRow}>
         <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
@@ -359,17 +361,18 @@ export default function GoalWeightCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
       },
-      android: { elevation: 3 },
+      android: { elevation: 2 },
     }),
   },
   headerRow: {

@@ -149,7 +149,7 @@ interface DatePillProps {
 }
 
 function DatePill({ label, isDark, onPress }: DatePillProps) {
-  const pillBg = isDark ? 'rgba(91,154,168,0.18)' : 'rgba(91,154,168,0.12)';
+  const pillBg = isDark ? '#1E2035' : '#F0F2F7';
   return (
     <TouchableOpacity
       style={[styles.datePill, { backgroundColor: pillBg }]}
@@ -379,7 +379,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
             style={[
               styles.photoWrapper,
               styles.placeholderWrapper,
-              { height: photoHeight, borderColor: isDark ? colors.borderDark : colors.border },
+              { height: photoHeight, borderColor: isDark ? '#3A3C52' : '#D4D6DA' },
             ]}
           >
             <IconSymbol
@@ -482,7 +482,15 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
     overflow: 'hidden',
   },
   cardHeader: {

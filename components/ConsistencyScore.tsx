@@ -534,7 +534,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={() => handleInfoPress('today')}
-                style={[styles.statCell, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                style={[styles.statCell, { backgroundColor: isDark ? '#1E2035' : '#F7F8FC' }]}
               >
                 <View style={styles.statCellHeader}>
                   <Text style={[styles.statValue, { color: todayStatusColor, fontSize: 13 }]}>
@@ -549,7 +549,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={() => handleInfoPress('consistency')}
-                style={[styles.statCell, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                style={[styles.statCell, { backgroundColor: isDark ? '#1E2035' : '#F7F8FC' }]}
               >
                 <View style={styles.statCellHeader}>
                   <Text style={[styles.statValue, { color: isDark ? colors.textDark : colors.text }]}>
@@ -567,7 +567,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={() => handleInfoPress('calories')}
-                style={[styles.statCell, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                style={[styles.statCell, { backgroundColor: isDark ? '#1E2035' : '#F7F8FC' }]}
               >
                 <View style={styles.statCellHeader}>
                   <Text style={[styles.statValue, { color: colors.calories }]}>
@@ -585,7 +585,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={() => handleInfoPress('protein')}
-                style={[styles.statCell, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                style={[styles.statCell, { backgroundColor: isDark ? '#1E2035' : '#F7F8FC' }]}
               >
                 <View style={styles.statCellHeader}>
                   <Text style={[styles.statValue, { color: colors.protein }]}>
@@ -603,7 +603,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
             </View>
 
             {/* Date Range Control */}
-            <View style={[styles.dateRangeSection, { borderTopColor: (isDark ? colors.borderDark : colors.border) + '50' }]}>
+            <View style={[styles.dateRangeSection, { borderTopColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
               <View style={styles.dateRangeHeader}>
                 <Text style={[styles.dateRangeLabel, { color: isDark ? colors.textDark : colors.text }]}>
                   Date range
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
     elevation: 2,
   },
   loadingContainer: {
@@ -773,12 +773,12 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 8,
-    borderRadius: borderRadius.full,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: borderRadius.full,
+    borderRadius: 8,
   },
   dateRangeSection: {
     marginTop: spacing.xs,
