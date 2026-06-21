@@ -261,9 +261,6 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
         },
       ]}
     >
-      {/* Gold left accent border */}
-      <View style={styles.goldAccent} />
-
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -335,16 +332,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  goldAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: GOLD,
-    borderTopLeftRadius: borderRadius.lg,
-    borderBottomLeftRadius: borderRadius.lg,
-  },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
