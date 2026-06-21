@@ -198,7 +198,7 @@ export default function StreakBenefitsModal({
           {/* ── Explanation ── */}
           <View style={[styles.explanationCard, { backgroundColor: cardBg }]}>
             <Text style={[styles.explanationText, { color: textSecColor }]}>
-              {'Your streak boost stacks with Premium (1.5x) for up to 3.0x XP per action. Keep your streak alive — log at least one meal every day.'}
+              {'Your streak boost stacks with Premium (1.5x) for a maximum of 3.0x XP on every action. A 365-day streak + Premium is the fastest path to the top ranks.'}
             </Text>
           </View>
         </ScrollView>
