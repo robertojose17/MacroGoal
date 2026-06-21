@@ -193,17 +193,17 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleProgressBarTap}
-              style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}
+              style={{ flex: 1 }}
             >
-              <View style={styles.progressClip}>
+              <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
                 <LinearGradient
                   colors={[rank.primaryColor, rank.gradientColor]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
                 />
+                <View style={[styles.progressDot, { left: progressWidth + '%' as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
               </View>
-              <View style={[styles.progressDot, { left: progressWidth + '%' as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
             </TouchableOpacity>
             <Animated.View
               style={[
@@ -410,22 +410,13 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 6,
-    borderRadius: 3,
+    borderRadius: 6,
     overflow: 'visible',
     position: 'relative',
   },
-  progressClip: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
   progressFill: {
-    height: 6,
-    borderRadius: 3,
+    height: '100%',
+    borderRadius: 6,
   },
   progressDot: {
     position: 'absolute',
