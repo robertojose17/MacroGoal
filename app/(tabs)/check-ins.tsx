@@ -19,6 +19,8 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { listTrackers, getStats, listEntries, logEntry, Tracker, TrackerStats } from '@/utils/trackersApi';
 import { tryAwardWorkout, tryAwardWeightCheckin } from '@/utils/xpAwarder';
+import { emitXpRefresh } from '@/utils/xpEvents';
+import { supabase } from '@/lib/supabase/client';
 import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { fetchLeaderboard, type LeaderboardStats } from '@/utils/leaderboardApi';
@@ -926,7 +928,30 @@ export default function CheckInsScreen() {
       const lowerName = tracker.name.toLowerCase();
       if (tracker.is_default && lowerName === 'gym') {
         console.log('[CheckIns] Awarding workout XP for entry:', entry.id);
-        tryAwardWorkout(entry.id);
+        // Sync to check_ins so get-xp-status can detect the workout
+        const { data: { user: gymUser } } = await supabase.auth.getUser();
+        if (gymUser) {
+          const { data: existingCheckIn } = await supabase
+            .from('check_ins')
+            .select('id')
+            .eq('user_id', gymUser.id)
+            .eq('date', today)
+            .maybeSingle();
+
+          if (existingCheckIn) {
+            await supabase
+              .from('check_ins')
+              .update({ went_to_gym: true, updated_at: new Date().toISOString() })
+              .eq('id', existingCheckIn.id);
+          } else {
+            await supabase
+              .from('check_ins')
+              .insert({ user_id: gymUser.id, date: today, went_to_gym: true });
+          }
+          console.log('[CheckIns] Synced went_to_gym=true to check_ins for date:', today);
+        }
+        await tryAwardWorkout(entry.id);
+        emitXpRefresh();
       } else if (tracker.is_default && lowerName === 'weight') {
         console.log('[CheckIns] Awarding weight_checkin XP for entry:', entry.id, 'value:', value);
         tryAwardWeightCheckin(entry.id, value);
