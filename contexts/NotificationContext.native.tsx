@@ -206,20 +206,20 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           return;
         }
 
-        // Build scheduled times for 12:00 PM and 5:00 PM local time today
+        // Build scheduled times for 12:00 AM (midnight) and 5:00 PM local time today
         const now = new Date();
 
-        const noon = new Date();
-        noon.setHours(12, 0, 0, 0);
+        const midnight = new Date();
+        midnight.setHours(0, 0, 0, 0);
 
         const fivePm = new Date();
         fivePm.setHours(17, 0, 0, 0);
 
         const notifications: { sendAfterMs: number; title: string; body: string }[] = [];
 
-        if (noon.getTime() > now.getTime()) {
+        if (midnight.getTime() > now.getTime()) {
           notifications.push({
-            sendAfterMs: noon.getTime() - now.getTime(),
+            sendAfterMs: midnight.getTime() - now.getTime(),
             title: "⚡ Flash Challenges",
             body: "Don't miss today's bonus XP — 1,250 XP up for grabs!",
           });
