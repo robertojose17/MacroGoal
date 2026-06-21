@@ -21,6 +21,74 @@ import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 import { formatServing } from '@/utils/servingFormat';
+import { hybridSearch } from '@/utils/foodSearchHybrid';
+
+// Source tag for progressive UI
+type ResultSource = 'local' | 'supabase' | 'off';
+
+interface SearchResultItem {
+  product: OpenFoodFactsProduct;
+  displayCalories: number;
+  displayProtein: number;
+  displayCarbs: number;
+  displayFats: number;
+  displayFiber: number;
+  servingText: string;
+  hasNutrition: boolean;
+  source: ResultSource;
+}
+
+function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
+  const servingInfo = extractServingSize(product);
+  const nutrition = extractNutrition(product);
+  const multiplier = servingInfo.grams / 100;
+  return {
+    product,
+    displayCalories: nutrition.calories * multiplier,
+    displayProtein: nutrition.protein * multiplier,
+    displayCarbs: nutrition.carbs * multiplier,
+    displayFats: nutrition.fat * multiplier,
+    displayFiber: nutrition.fiber * multiplier,
+    servingText: servingInfo.displayText,
+    hasNutrition: nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0,
+    source,
+  };
+}
+
+function mergeProducts(
+  existing: Map<string, SearchResultItem>,
+  incoming: OpenFoodFactsProduct[],
+  source: ResultSource,
+  query: string,
+): SearchResultItem[] {
+  const sourcePriority: Record<ResultSource, number> = { supabase: 3, off: 2, local: 1 };
+  const incomingPriority = sourcePriority[source];
+  for (const product of incoming) {
+    const key = product.code || `${product.product_name || ''}-${product.brands || ''}`;
+    if (!key) continue;
+    const existing_ = existing.get(key);
+    if (!existing_ || sourcePriority[existing_.source] < incomingPriority) {
+      existing.set(key, buildResultItem(product, source));
+    }
+  }
+  const q = query.toLowerCase().trim();
+  const items = Array.from(existing.values());
+  items.sort((a, b) => {
+    const score = (item: SearchResultItem) => {
+      const name = (item.product.product_name || item.product.generic_name || '').toLowerCase().trim();
+      const words = name.split(/\s+/);
+      if (name === q) return 1000;
+      if (words[0] === q && words.length === 1) return 900;
+      if (words[0] === q && words.length === 2) return 800;
+      if (words[0] === q) return 700;
+      if (name.startsWith(q)) return 600;
+      if (name.includes(q)) return 400;
+      return 0;
+    };
+    return score(b) - score(a);
+  });
+  return items.filter(item => item.hasNutrition).slice(0, 80);
+}
 
 /** Safely coerce any value to a finite number, defaulting to 0 on NaN/null/undefined */
 function safeNum(value: unknown, fallback = 0): number {
@@ -80,13 +148,16 @@ export default function AddFoodScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingSavedMeals, setLoadingSavedMeals] = useState(false);
 
-  // INLINE SEARCH STATE
+  // INLINE SEARCH STATE — hybrid engine
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<OpenFoodFactsProduct[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const latestQueryRef = useRef<string>('');
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchResultsMapRef = useRef<Map<string, SearchResultItem>>(new Map());
+  const currentSearchQueryRef = useRef<string>('');
 
   // BANNER QUEUE SYSTEM - INTERRUPT + STACK CONFIRMATIONS
   const [bannerQueue, setBannerQueue] = useState<BannerEvent[]>([]);
@@ -240,9 +311,8 @@ export default function AddFoodScreen() {
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
+      searchAbortRef.current?.abort();
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
       if (bannerTimerRef.current) {
         clearTimeout(bannerTimerRef.current);
       }
@@ -357,146 +427,62 @@ export default function AddFoodScreen() {
   }, [currentBanner, bannerOpacity, processNextBanner]);
 
   /**
-   * INLINE SEARCH LOGIC
-   * Performs actual OpenFoodFacts API call
+   * INLINE SEARCH LOGIC — hybrid engine (local cache → Supabase → OpenFoodFacts)
    */
-  const performSearch = useCallback(async (query: string) => {
-    console.log('[AddFood] ========== PERFORM SEARCH ==========');
+  const performSearch = useCallback((query: string) => {
+    console.log('[AddFood] ========== PERFORM HYBRID SEARCH ==========');
     console.log('[AddFood] Query:', query);
-    console.log('[AddFood] Latest query ref:', latestQueryRef.current);
-    
-    // Update latest query ref
-    latestQueryRef.current = query;
-    
-    // Clear previous results and errors
+
+    if (searchAbortRef.current) {
+      console.log('[AddFood] Aborting previous search');
+      searchAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    currentSearchQueryRef.current = query;
+    searchResultsMapRef.current = new Map();
     setSearchResults([]);
     setSearchError(null);
-    
-    // Empty query - do nothing (Recent Foods will show)
-    if (query.trim().length === 0) {
-      console.log('[AddFood] Empty query, showing Recent Foods');
-      setIsSearching(false);
-      return;
-    }
-    
-    // Less than 2 characters - do nothing
-    if (query.trim().length < 2) {
-      console.log('[AddFood] Query too short, waiting for more characters');
-      setIsSearching(false);
-      return;
-    }
-    
-    // Start searching
+    setHasSearched(true);
     setIsSearching(true);
-    console.log('[AddFood] Starting OpenFoodFacts search...');
-    
-    try {
-      // URL-encode the query
-      const encodedQuery = encodeURIComponent(query.trim());
-      
-      // Use the exact endpoint specified in requirements
-      const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodedQuery}&search_simple=1&action=process&json=1&page_size=100&sort_by=unique_scans_n&fields=code,product_name,generic_name,brands,serving_size,serving_quantity,nutriments`;
-      
-      console.log('[AddFood] Fetching:', url);
-      
-      // Fetch with User-Agent header
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'EliteMacroTracker/1.0 (iOS)',
+
+    hybridSearch(
+      query,
+      {
+        onLocalCacheHit: (products) => {
+          if (controller.signal.aborted) return;
+          console.log('[AddFood] onLocalCacheHit —', products.length, 'products');
+          const merged = mergeProducts(searchResultsMapRef.current, products, 'local', query);
+          setSearchResults(merged);
         },
-      });
-      
-      console.log('[AddFood] Response status:', response.status);
-      
-      // Check if this search is still relevant
-      if (query !== latestQueryRef.current) {
-        console.log('[AddFood] Search result outdated, ignoring');
-        return;
-      }
-      
-      if (!response.ok) {
-        console.error('[AddFood] HTTP error:', response.status);
-        const msg = response.status === 503
-          ? 'The food database is temporarily busy. Please try again in a moment.'
-          : 'Network error. Please check your connection and try again.';
-        setSearchError(msg);
-        setSearchResults([]);
-        setIsSearching(false);
-        return;
-      }
-      
-      const data = await response.json();
-      
-      console.log('[AddFood] Response data:', {
-        hasProducts: !!data.products,
-        isArray: Array.isArray(data.products),
-        count: data.products?.length || 0,
-      });
-      
-      // Check if this search is still relevant (again, after async operation)
-      if (query !== latestQueryRef.current) {
-        console.log('[AddFood] Search result outdated after parsing, ignoring');
-        return;
-      }
-      
-      // Safe parsing - handle missing or invalid products array
-      const products = Array.isArray(data.products) ? data.products : [];
-      
-      if (products.length === 0) {
-        console.log('[AddFood] No products found');
-        setSearchError('No foods found. Try a different search term.');
-        setSearchResults([]);
-      } else {
-        console.log('[AddFood] Found', products.length, 'products, filtering and re-ranking by name relevance');
-        // Filter out products with no nutrition data
-        const withNutrition = products.slice(0, 100).filter((item: OpenFoodFactsProduct) => {
-          const n = item.nutriments || {};
-          const calories = n['energy-kcal_100g'] || n['energy-kcal'] || 0;
-          const protein = n['proteins_100g'] || n['proteins'] || 0;
-          const carbs = n['carbohydrates_100g'] || n['carbohydrates'] || 0;
-          const fat = n['fat_100g'] || n['fat'] || 0;
-          return calories > 0 || protein > 0 || carbs > 0 || fat > 0;
-        });
-        console.log('[AddFood] 🔍 Filtered to', withNutrition.length, 'items with nutrition data (removed', Math.min(products.length, 100) - withNutrition.length, 'without)');
-        // RE-RANK by name relevance: exact match first, then starts-with, then compound names
-        const q = query.trim().toLowerCase();
-        withNutrition.sort((a: OpenFoodFactsProduct, b: OpenFoodFactsProduct) => {
-          const score = (item: OpenFoodFactsProduct) => {
-            const name = (item.product_name || item.generic_name || '').toLowerCase().trim();
-            const words = name.split(/\s+/);
-            if (name === q) return 1000;                          // exact match: "banana"
-            if (words[0] === q && words.length === 1) return 900; // single word exact
-            if (words[0] === q && words.length === 2) return 800; // "banana X" (two words, starts with query)
-            if (words[0] === q) return 700;                       // "banana X Y Z..." (starts with query)
-            if (name.startsWith(q)) return 600;                   // starts with query string
-            if (name.includes(q)) return 400;                     // contains query anywhere
-            return 0;
-          };
-          return score(b) - score(a);
-        });
-        // Show top 50 after re-ranking
-        const displayProducts = withNutrition.slice(0, 50);
-        console.log('[AddFood] Displaying top', displayProducts.length, 'results after re-ranking for query:', q);
-        setSearchResults(displayProducts);
-        setSearchError(null);
-      }
-    } catch (error) {
-      console.error('[AddFood] Search error:', error);
-      
-      // Check if this search is still relevant
-      if (query !== latestQueryRef.current) {
-        console.log('[AddFood] Search error for outdated query, ignoring');
-        return;
-      }
-      
-      setSearchError('An error occurred. Please try again.');
-      setSearchResults([]);
-    } finally {
-      // Only update loading state if this is still the latest query
-      if (query === latestQueryRef.current) {
-        setIsSearching(false);
-      }
-    }
+        onSupabaseHit: (products) => {
+          if (controller.signal.aborted) return;
+          console.log('[AddFood] onSupabaseHit —', products.length, 'products');
+          const merged = mergeProducts(searchResultsMapRef.current, products, 'supabase', query);
+          setSearchResults(merged);
+        },
+        onOpenFoodFactsHit: (products) => {
+          if (controller.signal.aborted) return;
+          console.log('[AddFood] onOpenFoodFactsHit —', products.length, 'products');
+          const merged = mergeProducts(searchResultsMapRef.current, products, 'off', query);
+          setSearchResults(merged);
+        },
+        onError: (_stage, _error) => {
+          if (controller.signal.aborted) return;
+          console.warn('[AddFood] Search error at stage:', _stage, _error.message);
+          setSearchResults(prev => {
+            if (prev.length === 0) setSearchError('Connection issue. Please check your internet and try again.');
+            return prev;
+          });
+        },
+        onComplete: () => {
+          if (controller.signal.aborted) return;
+          console.log('[AddFood] Hybrid search complete for query:', query);
+          setIsSearching(false);
+        },
+      },
+      controller.signal,
+    );
   }, []);
 
   /**
@@ -505,30 +491,28 @@ export default function AddFoodScreen() {
   const handleSearchChange = useCallback((text: string) => {
     console.log('[AddFood] Search input changed:', text);
     setSearchQuery(text);
-    
-    // Clear previous timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    // If query is empty, clear results immediately
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
     if (text.trim().length === 0) {
+      searchAbortRef.current?.abort();
+      searchResultsMapRef.current = new Map();
       setSearchResults([]);
       setSearchError(null);
+      setHasSearched(false);
       setIsSearching(false);
-      latestQueryRef.current = '';
       return;
     }
-    
-    // Show searching state immediately for queries >= 2 chars
-    if (text.trim().length >= 2) {
-      setIsSearching(true);
+
+    if (text.trim().length < 2) {
+      setIsSearching(false);
+      return;
     }
-    
-    // Debounce search with 500ms delay
-    searchTimeoutRef.current = setTimeout(() => {
-      performSearch(text);
-    }, 500);
+
+    setIsSearching(true);
+    searchDebounceRef.current = setTimeout(() => {
+      performSearch(text.trim());
+    }, 350);
   }, [performSearch]);
 
   /**
@@ -536,16 +520,17 @@ export default function AddFoodScreen() {
    */
   const handleRetrySearch = useCallback(() => {
     console.log('[AddFood] Retrying search');
-    performSearch(searchQuery);
+    const trimmed = searchQuery.trim();
+    if (trimmed.length >= 2) performSearch(trimmed);
   }, [searchQuery, performSearch]);
 
   /**
    * Open food details for a search result
    * CRITICAL: Pass context through to Food Details
    */
-  const handleOpenSearchResultDetails = useCallback((product: OpenFoodFactsProduct) => {
+  const handleOpenSearchResultDetails = useCallback((item: SearchResultItem) => {
     console.log('[AddFood] ========== OPENING SEARCH RESULT DETAILS ==========');
-    console.log('[AddFood] Product:', product.product_name);
+    console.log('[AddFood] Product:', item.product.product_name, '| source:', item.source);
     console.log('[AddFood] Context:', context);
     console.log('[AddFood] Mode:', mode);
     console.log('[AddFood] Plan ID:', planId);
@@ -554,7 +539,7 @@ export default function AddFoodScreen() {
     router.push({
       pathname: '/food-details',
       params: {
-        offData: JSON.stringify(product),
+        offData: JSON.stringify(item.product),
         meal: mealType,
         date: date,
         context: context || '',
@@ -569,8 +554,9 @@ export default function AddFoodScreen() {
    * FAST ADD: Add search result directly to meal plan
    * Only available in meal-plan mode
    */
-  const handleQuickAddSearchResultToMealPlan = useCallback(async (product: OpenFoodFactsProduct) => {
+  const handleQuickAddSearchResultToMealPlan = useCallback(async (item: SearchResultItem) => {
     if (mode !== 'meal-plan' || !planId) return;
+    const product = item.product;
     try {
       const nutrition = extractNutrition(product);
       const serving = extractServingSize(product);
@@ -601,9 +587,10 @@ export default function AddFoodScreen() {
    * FAST ADD: Add search result directly to My Meal draft
    * Only available in my_meals_builder context
    */
-  const handleQuickAddSearchResult = useCallback(async (product: OpenFoodFactsProduct) => {
+  const handleQuickAddSearchResult = useCallback(async (item: SearchResultItem) => {
+    const product = item.product;
     console.log('[AddFood] ========== QUICK ADD SEARCH RESULT ==========');
-    console.log('[AddFood] Product:', product.product_name);
+    console.log('[AddFood] Product:', product.product_name, '| source:', item.source);
     console.log('[AddFood] Context:', context);
 
     if (context !== 'my_meals_builder') {
@@ -1516,27 +1503,23 @@ export default function AddFoodScreen() {
     );
   }, [isDark, context, handleOpenRecentFoodDetails, handleQuickAddRecentFood, handleAddRecentFood]);
 
-  const renderSearchResultItem = useCallback((product: OpenFoodFactsProduct, index: number) => {
-    const nutrition = extractNutrition(product);
-    const serving = extractServingSize(product);
-    
-    const displayName = product.product_name || 'Unknown Product';
-    const displayBrand = product.brands || '';
-    const servingText = serving.displayText;
-    const calories = Math.round(nutrition.calories * (serving.grams / 100));
-    const protein = Math.round(nutrition.protein * (serving.grams / 100));
-    const carbs = Math.round(nutrition.carbs * (serving.grams / 100));
-    const fat = Math.round(nutrition.fat * (serving.grams / 100));
+  const renderSearchResultItem = useCallback((item: SearchResultItem, index: number) => {
+    const displayName = item.product.product_name || 'Unknown Product';
+    const displayBrand = item.product.brands || '';
+    const calories = Math.round(item.displayCalories);
+    const protein = Math.round(isFinite(item.displayProtein) ? item.displayProtein : 0);
+    const carbs = Math.round(isFinite(item.displayCarbs) ? item.displayCarbs : 0);
+    const fat = Math.round(isFinite(item.displayFats) ? item.displayFats : 0);
     const macrosText = `P: ${protein}g • C: ${carbs}g • F: ${fat}g`;
     
     return (
-      <React.Fragment key={product.code ?? `search-result-${index}`}>
+      <React.Fragment key={item.product.code ?? `search-result-${index}`}>
         <TouchableOpacity 
           style={[
             styles.foodCard,
             { backgroundColor: isDark ? colors.cardDark : colors.card }
           ]}
-          onPress={() => handleOpenSearchResultDetails(product)}
+          onPress={() => handleOpenSearchResultDetails(item)}
           activeOpacity={0.7}
         >
           <View style={styles.foodInfo}>
@@ -1544,7 +1527,7 @@ export default function AddFoodScreen() {
               {displayName}
             </Text>
             <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {displayBrand ? `${displayBrand} • ` : ''}{servingText} • {calories} cal
+              {displayBrand ? `${displayBrand} • ` : ''}{item.servingText} • {calories} cal
             </Text>
             <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               {macrosText}
@@ -1557,7 +1540,7 @@ export default function AddFoodScreen() {
               style={styles.addButton}
               onPress={(e) => {
                 e.stopPropagation();
-                handleQuickAddSearchResult(product);
+                handleQuickAddSearchResult(item);
               }}
               activeOpacity={0.7}
             >
@@ -1573,7 +1556,7 @@ export default function AddFoodScreen() {
               style={styles.addButton}
               onPress={(e) => {
                 e.stopPropagation();
-                handleQuickAddSearchResultToMealPlan(product);
+                handleQuickAddSearchResultToMealPlan(item);
               }}
               activeOpacity={0.7}
             >
@@ -1887,7 +1870,7 @@ export default function AddFoodScreen() {
         );
       }
       
-      if (isSearching) {
+      if (isSearching && searchResults.length === 0) {
         return (
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -1927,7 +1910,12 @@ export default function AddFoodScreen() {
             <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Search Results ({searchResults.length})
             </Text>
-            {searchResults.map((product, index) => renderSearchResultItem(product, index))}
+            {searchResults.map((item, index) => renderSearchResultItem(item, index))}
+            {isSearching && (
+              <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            )}
           </React.Fragment>
         );
       }
