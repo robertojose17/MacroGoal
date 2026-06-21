@@ -279,6 +279,9 @@ export default function FoodDetailsLayout({
   const [selectedServingOptionKey, setSelectedServingOptionKey] = useState('default');
   const [customUnitLabel, setCustomUnitLabel] = useState<string | null>(null);
   const [customUnitGramsPerUnit, setCustomUnitGramsPerUnit] = useState<number>(100);
+  // In edit mode, the 'default' option gramsPerUnit is derived from the saved DB grams,
+  // NOT from extractServingSize — so they stay in sync.
+  const [editDefaultGramsPerUnit, setEditDefaultGramsPerUnit] = useState<number | null>(null);
 
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
@@ -367,45 +370,66 @@ export default function FoodDetailsLayout({
       };
 
       setProduct(mockProduct);
+
+      // ── Source of truth: the grams saved in DB ──────────────────────────
+      // mealItem.grams is what the user actually ate. Reconstruct state from it.
+      const totalGrams = mealItem.grams || 100;
       const rawQuantity = mealItem.quantity || 1;
-      const gramsPerServing = (mealItem.grams || 100) / rawQuantity;
-      setServingAmount(gramsPerServing);
       setServingUnit('serving');
 
-      // Detect whether the saved serving was a discrete unit (cookie/slice/piece) or a gram amount.
-      // If serving_description matches a "<number> g" / "<number> oz" / "<number> lb" pattern,
-      // it was saved with a continuous unit and `quantity` may legitimately be fractional.
-      // Otherwise, treat it as discrete and round to a whole number (minimum 1).
       const desc = (mealItem.serving_description || '').toLowerCase().trim();
       const isContinuousUnit = /\d+(\.\d+)?\s*(g|oz|lb|ml)\b/.test(desc);
+
       if (isContinuousUnit) {
-        setNumberOfServings(rawQuantity.toString());
-        // Pick the matching servingOptionKey based on the unit found in the description
-        if (/\bg\b/.test(desc)) setSelectedServingOptionKey('g');
-        else if (/\boz\b/.test(desc)) setSelectedServingOptionKey('oz');
-        else if (/\blb\b/.test(desc)) setSelectedServingOptionKey('lb');
-        else setSelectedServingOptionKey('default');
+        // Saved with a continuous unit (g/oz/lb) — servingAmount = gramsPerUnit of that unit,
+        // numberOfServings = how many of those units were consumed.
+        if (/\bg\b/.test(desc)) {
+          setServingAmount(1);
+          setNumberOfServings(totalGrams.toString());
+          setSelectedServingOptionKey('g');
+        } else if (/\boz\b/.test(desc)) {
+          setServingAmount(28.35);
+          setNumberOfServings((totalGrams / 28.35).toFixed(2));
+          setSelectedServingOptionKey('oz');
+        } else if (/\blb\b/.test(desc)) {
+          setServingAmount(453.592);
+          setNumberOfServings((totalGrams / 453.592).toFixed(2));
+          setSelectedServingOptionKey('lb');
+        } else {
+          // ml or unknown continuous — fall back to grams
+          setServingAmount(1);
+          setNumberOfServings(totalGrams.toString());
+          setSelectedServingOptionKey('g');
+        }
         setCustomUnitLabel(null);
+        setEditDefaultGramsPerUnit(null);
+        console.log('[FoodDetails] Edit load (continuous): desc=', desc, 'totalGrams=', totalGrams, 'key=', selectedServingOptionKey);
       } else {
+        // Saved with a discrete unit (serving / cookie / slice / etc.)
+        // gramsPerUnit = totalGrams / quantity — this is the canonical value.
+        const gramsPerUnit = rawQuantity > 0 ? totalGrams / rawQuantity : totalGrams;
+        setServingAmount(gramsPerUnit);
+        setNumberOfServings(Math.max(1, Math.round(rawQuantity)).toString());
+
         // Try to extract the unit token from serving_description (e.g. "4 slices" → "slice")
-        // Format is typically "<number> <unit>" or just "<unit>"
         const unitMatch = desc.match(/^\d+(\.\d+)?\s+(.+)$/) || desc.match(/^(.+)$/);
         const rawUnit = unitMatch ? (unitMatch[2] || unitMatch[1] || '').trim() : '';
-
         const singularUnit = rawUnit ? singularizeUnit(rawUnit) : '';
-        const computedGramsPerUnit = rawQuantity > 0 ? (mealItem.grams || 100) / rawQuantity : (mealItem.grams || 100);
 
-        if (singularUnit && singularUnit !== 'serving') {
-          console.log('[FoodDetails] Edit load: parsed unit=', singularUnit, 'gramsPerUnit=', computedGramsPerUnit, 'from desc=', desc);
+        if (singularUnit && singularUnit !== 'serving' && singularUnit !== 'g') {
+          console.log('[FoodDetails] Edit load (custom unit): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
           setCustomUnitLabel(`1 ${singularUnit}`);
-          setCustomUnitGramsPerUnit(computedGramsPerUnit);
+          setCustomUnitGramsPerUnit(gramsPerUnit);
           setSelectedServingOptionKey('custom');
+          setEditDefaultGramsPerUnit(null);
         } else {
-          console.log('[FoodDetails] Edit load: no custom unit found, desc=', desc, 'falling back to default');
+          // Default serving — CRITICAL: store gramsPerUnit so the 'default' picker option
+          // is built with this value, keeping servingAmount and gramsPerUnit in sync.
+          console.log('[FoodDetails] Edit load (default serving): gramsPerUnit=', gramsPerUnit, 'totalGrams=', totalGrams, 'desc=', desc);
           setCustomUnitLabel(null);
           setSelectedServingOptionKey('default');
+          setEditDefaultGramsPerUnit(gramsPerUnit);
         }
-        setNumberOfServings(Math.max(1, Math.round(rawQuantity)).toString());
       }
 
       await checkFavoriteStatus(mockProduct);
@@ -947,11 +971,21 @@ export default function FoodDetailsLayout({
   const macros = calculateMacros();
 
   const defaultServingInfo = extractServingSize(product);
+  // In edit mode, the 'default' option must use the gramsPerUnit derived from the saved DB grams
+  // (not from extractServingSize) so that servingAmount and gramsPerUnit stay in sync.
+  const defaultGramsPerUnit =
+    mode === 'edit' && editDefaultGramsPerUnit !== null
+      ? editDefaultGramsPerUnit
+      : defaultServingInfo.grams;
+  const defaultOptionLabel =
+    mode === 'edit' && editDefaultGramsPerUnit !== null
+      ? `1 serving (${Number.isInteger(editDefaultGramsPerUnit) ? editDefaultGramsPerUnit : editDefaultGramsPerUnit.toFixed(1)}g)`
+      : (defaultServingInfo.displayText || defaultServingInfo.description || `1 serving (${defaultServingInfo.grams}g)`);
   const servingOptions: ServingOption[] = [
     ...(customUnitLabel
       ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
       : []),
-    { key: 'default', label: defaultServingInfo.displayText || defaultServingInfo.description || `1 serving (${defaultServingInfo.grams}g)`, gramsPerUnit: defaultServingInfo.grams },
+    { key: 'default', label: defaultOptionLabel, gramsPerUnit: defaultGramsPerUnit },
     { key: 'g', label: '1 g', gramsPerUnit: 1 },
     { key: 'oz', label: '1 oz', gramsPerUnit: 28.35 },
     { key: 'lb', label: '1 lb', gramsPerUnit: 453.592 },
