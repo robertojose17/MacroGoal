@@ -324,19 +324,20 @@ export default function CheckInFormScreen() {
         await syncToTrackerEntries(authUser.id, checkInType, dateString, checkInData, notes);
       }
 
-      // ── XP: award check-in XP (fire-and-forget) ──────────────────────────
+      // ── XP: award check-in XP (await so refresh fires after DB write) ──
       if (savedCheckInId) {
         if (checkInType === 'gym' && checkInData.went_to_gym === true) {
           console.log('[CheckInForm] awarding workout XP for check-in:', savedCheckInId);
-          tryAwardWorkout(savedCheckInId);
+          await tryAwardWorkout(savedCheckInId);
         }
         if (checkInType === 'weight' && checkInData.weight != null) {
           console.log('[CheckInForm] awarding weight_checkin XP for check-in:', savedCheckInId);
-          tryAwardWeightCheckin(savedCheckInId, checkInData.weight as number);
+          await tryAwardWeightCheckin(savedCheckInId, checkInData.weight as number);
         }
       }
 
       console.log('[CheckInForm] emitting xp:refresh after check-in save');
+      await new Promise(resolve => setTimeout(resolve, 300));
       emitXpRefresh();
 
       // For new weight check-ins: show the photo modal instead of immediately going back

@@ -50,15 +50,18 @@ export function tryAwardMealLogged(meal_item_id: string, meal_type: string, meal
  * Award XP for a gym workout check-in.
  * @param check_in_id  The check_ins.id (used as source_id for dedup)
  */
-export function tryAwardWorkout(check_in_id: string): void {
+export async function tryAwardWorkout(check_in_id: string): Promise<void> {
   console.log('[xpAwarder] tryAwardWorkout', check_in_id);
-  awardXp({
-    event_type: 'workout',
-    source_id: check_in_id,
-    metadata: { completed: true },
-  })
-    .then((result) => handleResult(result, 'workout'))
-    .catch((err) => console.warn('[xpAwarder] workout award failed (non-fatal):', err?.message ?? err));
+  try {
+    const result = await awardXp({
+      event_type: 'workout',
+      source_id: check_in_id,
+      metadata: { completed: true },
+    });
+    handleResult(result, 'workout');
+  } catch (err) {
+    console.warn('[xpAwarder] workout award failed (non-fatal):', (err as Error)?.message ?? err);
+  }
 }
 
 /**
@@ -66,15 +69,18 @@ export function tryAwardWorkout(check_in_id: string): void {
  * @param check_in_id  The check_ins.id (used as source_id for dedup)
  * @param weight       Weight value (in kg, as stored in DB)
  */
-export function tryAwardWeightCheckin(check_in_id: string, weight: number): void {
+export async function tryAwardWeightCheckin(check_in_id: string, weight: number): Promise<void> {
   console.log('[xpAwarder] tryAwardWeightCheckin', check_in_id, weight);
-  awardXp({
-    event_type: 'weight_checkin',
-    source_id: check_in_id,
-    metadata: { weight },
-  })
-    .then((result) => handleResult(result, 'weight_checkin'))
-    .catch((err) => console.warn('[xpAwarder] weight_checkin award failed (non-fatal):', err?.message ?? err));
+  try {
+    const result = await awardXp({
+      event_type: 'weight_checkin',
+      source_id: check_in_id,
+      metadata: { weight },
+    });
+    handleResult(result, 'weight_checkin');
+  } catch (err) {
+    console.warn('[xpAwarder] weight_checkin award failed (non-fatal):', (err as Error)?.message ?? err);
+  }
 }
 
 /**
