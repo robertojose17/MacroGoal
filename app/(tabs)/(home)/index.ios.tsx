@@ -22,6 +22,7 @@ import {
   type MealPlan,
 } from '@/utils/mealPlansApi';
 import { formatServing } from '@/utils/servingFormat';
+import { toLocalDateString } from '@/utils/dateUtils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -64,13 +65,6 @@ interface MealData {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const formatDateForStorage = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const getServingDisplayText = (item: FoodItem): string => {
   if (item.serving_description) return item.serving_description;
@@ -183,7 +177,7 @@ export default function HomeScreen() {
         setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
       }
 
-      const dateString = formatDateForStorage(selectedDate);
+      const dateString = toLocalDateString(selectedDate);
       console.log('[Home iOS] Loading meals for date:', dateString);
 
       const { data: mealsData, error: mealsError } = await supabase
@@ -332,8 +326,8 @@ export default function HomeScreen() {
       // Auto-advance to today if the date has changed (e.g. app left open overnight)
       setSelectedDate(prev => {
         const today = new Date();
-        const prevStr = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-${String(prev.getDate()).padStart(2,'0')}`;
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        const prevStr = toLocalDateString(prev);
+        const todayStr = toLocalDateString(today);
         return prevStr === todayStr ? prev : today;
       });
       loadData();
@@ -350,7 +344,7 @@ export default function HomeScreen() {
   // ── Tracking handlers ──
   const handleAddFood = (mealType: MealType) => {
     console.log('[Home iOS] Opening add food for meal:', mealType);
-    const dateString = formatDateForStorage(selectedDate);
+    const dateString = toLocalDateString(selectedDate);
     console.log('[Home iOS] Passing date to add-food:', dateString);
     router.push(`/add-food?meal=${mealType}&date=${dateString}`);
   };
@@ -361,7 +355,7 @@ export default function HomeScreen() {
       return;
     }
     console.log('[Home iOS] Opening edit food:', item.id);
-    const dateString = formatDateForStorage(selectedDate);
+    const dateString = toLocalDateString(selectedDate);
     router.push({ pathname: '/edit-food', params: { itemId: item.id, date: dateString } });
   };
 

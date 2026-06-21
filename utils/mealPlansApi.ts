@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { toLocalDateString } from '@/utils/dateUtils';
 
 async function getCurrentUserId(): Promise<string> {
   const { data: { user }, error } = await supabase.auth.getUser();
@@ -95,17 +96,10 @@ export async function createMealPlan(body: { name: string; start_date: string; e
 
   // Ensure dates are valid strings — never pass null/undefined to Supabase
   const today = new Date();
-  const formatDate = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
-  const startDate = body.start_date && body.start_date.length === 10 ? body.start_date : formatDate(today);
+  const startDate = body.start_date && body.start_date.length === 10 ? body.start_date : toLocalDateString(today);
   const nextWeek = new Date(today);
   nextWeek.setDate(today.getDate() + 6);
-  const endDate = body.end_date && body.end_date.length === 10 ? body.end_date : formatDate(nextWeek);
+  const endDate = body.end_date && body.end_date.length === 10 ? body.end_date : toLocalDateString(nextWeek);
 
   console.log('[MealPlansApi] Inserting with dates:', startDate, endDate);
 

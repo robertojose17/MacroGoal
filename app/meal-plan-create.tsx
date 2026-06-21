@@ -11,13 +11,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
-
-const formatDateForStorage = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { toLocalDateString } from '@/utils/dateUtils';
 
 const formatDateDisplay = (date: Date): string => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -101,8 +95,8 @@ export default function MealPlanCreateScreen() {
         .insert({
           user_id: user.id,
           name: planName.trim(),
-          start_date: formatDateForStorage(startDate),
-          end_date: formatDateForStorage(endDate),
+          start_date: toLocalDateString(startDate),
+          end_date: toLocalDateString(endDate),
         })
         .select()
         .single();
