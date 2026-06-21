@@ -192,6 +192,7 @@ export default function AddFoodSimpleScreen() {
         fiber: finalFiber,
         serving_description: '1 serving',
         grams: null,
+        logged_at: new Date().toISOString(),
       };
 
       console.log('[AddFoodSimple] Creating meal item with payload:', mealItemPayload);

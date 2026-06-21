@@ -1069,6 +1069,7 @@ export default function AddFoodScreen() {
           fiber: safeNum(fiber),
           serving_description: servingDescription,
           grams: gramsToAdd,
+          logged_at: new Date().toISOString(),
         });
 
       if (mealItemError) {
@@ -1386,6 +1387,7 @@ export default function AddFoodScreen() {
           fiber: safeNum(fiber),
           serving_description: favorite.serving_size || formatServing(favorite.default_grams, 'g'),
           grams: favorite.default_grams,
+          logged_at: new Date().toISOString(),
         });
 
       if (mealItemError) {
@@ -1776,6 +1778,7 @@ export default function AddFoodScreen() {
           fiber: food.fiber * multiplier,
           serving_description: `${item.serving_amount} ${item.serving_unit}`,
           grams: item.serving_amount,
+          logged_at: new Date().toISOString(),
         };
       });
 
