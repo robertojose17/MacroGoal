@@ -397,6 +397,7 @@ const styles = StyleSheet.create({
   progressBarWrapper: {
     position: 'relative',
     overflow: 'visible',
+    width: '100%',
   },
   barRow: {
     flexDirection: 'row',
