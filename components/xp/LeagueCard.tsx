@@ -14,7 +14,6 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLeague } from '@/hooks/useLeague';
 import { TIER_METADATA } from '@/types/leagues';
 import LeagueLeaderboard from '@/components/xp/LeagueLeaderboard';
@@ -76,14 +75,6 @@ export default function LeagueCard({ isDark }: LeagueCardProps) {
           !isDark && styles.cardLight,
         ]}
       >
-        {/* Left gradient accent bar */}
-        <LinearGradient
-          colors={meta.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.accentBar}
-        />
-
         {/* Main content */}
         <View style={styles.content}>
           {/* Left: emoji + league name */}
@@ -130,9 +121,6 @@ const styles = StyleSheet.create({
   cardLight: {
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.07)',
-  },
-  accentBar: {
-    width: 4,
   },
   content: {
     flex: 1,
