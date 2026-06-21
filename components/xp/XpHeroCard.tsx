@@ -189,34 +189,29 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
           </View>
 
           {/* Progress bar */}
-          <View style={styles.progressBarWrapper}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={handleProgressBarTap}
-              style={{ flex: 1, height: 6 }}
-            >
-              <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
-                <LinearGradient
-                  colors={[rank.primaryColor, rank.gradientColor]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
-                />
-                <View style={[styles.progressDot, { left: progressWidth + '%' as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
-              </View>
-            </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handleProgressBarTap}
+            style={styles.progressBarWrapper}
+          >
+            <View style={[styles.progressTrack, { backgroundColor: progressTrackColor }]}>
+              <LinearGradient
+                colors={[rank.primaryColor, rank.gradientColor]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.progressFill, { width: progressWidth + '%' as `${number}%` }]}
+              />
+              <View style={[styles.progressDot, { left: progressWidth + '%' as `${number}%`, backgroundColor: rank.primaryColor, borderColor: cardBg }]} />
+            </View>
             <Animated.View
-              style={[
-                styles.xpTooltip,
-                { opacity: xpTooltipAnim },
-              ]}
+              style={[styles.xpTooltip, { opacity: xpTooltipAnim }]}
               pointerEvents="none"
             >
               <View style={styles.xpTooltipBubble}>
                 <Text style={styles.xpTooltipText}>{xpTooltipText}</Text>
               </View>
             </Animated.View>
-          </View>
+          </TouchableOpacity>
 
         </View>
 
@@ -407,12 +402,14 @@ const styles = StyleSheet.create({
     height: 18,
     justifyContent: 'center',
     overflow: 'visible',
+    // width comes from leftSection (flex: 1.6) — no flex needed here
   },
   progressTrack: {
     height: 6,
     borderRadius: 6,
     overflow: 'visible',
     position: 'relative',
+    // fills full width of progressBarWrapper which inherits from leftSection
   },
   progressFill: {
     height: 6,
