@@ -64,7 +64,13 @@ export async function getReferralStats(): Promise<{
     .eq('user_id', user.id)
     .maybeSingle();
 
-  const code = rc?.custom_code || rc?.code || null;
+  let code = rc?.custom_code || rc?.code || null;
+
+  // If no code exists yet, create one now so the Share button always works
+  if (!code) {
+    console.log('[referralApi] no code found, creating one via getOrCreateReferralCode');
+    code = await getOrCreateReferralCode();
+  }
 
   const { data: referrals } = await supabase
     .from('referrals')
