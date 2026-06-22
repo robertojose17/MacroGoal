@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -27,18 +27,22 @@ const RECIPE_STYLE_OPTIONS = [
 ];
 
 type EditField = 'name' | 'height' | 'weight' | 'goalWeight' | 'age' | 'sex' | 'activity' | 'lossRate' | 'startDate' | null;
+type AccordionSection = 'profile' | 'goal' | null;
 
 export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
+
   const { isPremium, loading: premiumLoading, refreshPremiumStatus } = usePremium();
 
   const [user, setUser] = useState<any>(null);
   const [goal, setGoal] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Accordion state — 'profile' open by default
+  const [openSection, setOpenSection] = useState<AccordionSection>('profile');
 
   // Edit modal state
   const [editingField, setEditingField] = useState<EditField>(null);
@@ -141,6 +145,12 @@ export default function ProfileScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([loadUserData(), refreshPremiumStatus()]);
+  };
+
+  const toggleSection = (section: AccordionSection) => {
+    console.log('[Profile iOS] Accordion section toggled:', section);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenSection((prev) => (prev === section ? null : section));
   };
 
   const saveFoodPrefs = async () => {
@@ -261,7 +271,7 @@ export default function ProfileScreen() {
   const openEditModal = (field: EditField) => {
     console.log('[Profile iOS] Opening edit modal for field:', field);
     const units = user?.preferred_units || 'metric';
-    
+
     switch (field) {
       case 'name':
         setEditValue(user.name || '');
@@ -297,7 +307,7 @@ export default function ProfileScreen() {
         setEditValue((goal?.loss_rate_lbs_per_week || 1.0).toString());
         break;
     }
-    
+
     setEditingField(field);
   };
 
@@ -310,7 +320,7 @@ export default function ProfileScreen() {
   const recalculateGoals = async (updatedUser: any, updatedGoal: any) => {
     try {
       console.log('[Profile iOS] Recalculating goals with updated data...');
-      
+
       const age = calculateAge(updatedUser.date_of_birth);
       if (!age || !updatedUser.height || !updatedUser.current_weight || !updatedUser.sex || !updatedUser.activity_level) {
         console.log('[Profile iOS] Missing required data for calculation');
@@ -359,7 +369,7 @@ export default function ProfileScreen() {
       if (goalError) throw goalError;
 
       console.log('[Profile iOS] Goals recalculated and updated');
-      
+
       await loadUserData();
     } catch (error) {
       console.error('[Profile iOS] Error recalculating goals:', error);
@@ -508,7 +518,7 @@ export default function ProfileScreen() {
 
       if (Object.keys(updateData).length > 0) {
         updateData.updated_at = new Date().toISOString();
-        
+
         console.log('[Profile iOS] Saving to Supabase:', updateData);
         const { error } = await supabase
           .from('users')
@@ -546,7 +556,7 @@ export default function ProfileScreen() {
 
     if (date && goal) {
       setSelectedDate(date);
-      
+
       if (Platform.OS === 'ios') {
         return;
       }
@@ -559,9 +569,9 @@ export default function ProfileScreen() {
     try {
       setSaving(true);
       const dateString = toLocalDateString(date);
-      
+
       console.log('[Profile iOS] Saving Journey Start Date:', dateString);
-      
+
       const { error } = await supabase
         .from('goals')
         .update({ start_date: dateString, updated_at: new Date().toISOString() })
@@ -570,13 +580,13 @@ export default function ProfileScreen() {
       if (error) throw error;
 
       console.log('[Profile iOS] Journey Start Date saved successfully:', dateString);
-      
+
       await loadUserData();
-      
+
       if (Platform.OS === 'ios') {
         setShowDatePicker(false);
       }
-      
+
       Alert.alert('Success', 'Journey Start Date updated successfully');
     } catch (error: any) {
       console.error('[Profile iOS] Error saving start date:', error);
@@ -592,12 +602,11 @@ export default function ProfileScreen() {
       Alert.alert('No Goal', 'Please set up your goals first');
       return;
     }
-    
+
     if (goal.start_date) {
       const storedDate = new Date(goal.start_date + 'T00:00:00');
       setSelectedDate(storedDate);
     } else if (user?.created_at) {
-      // Default to account creation date so the picker opens on a sensible value
       const createdDate = new Date(user.created_at);
       createdDate.setHours(0, 0, 0, 0);
       setSelectedDate(createdDate);
@@ -667,7 +676,7 @@ export default function ProfileScreen() {
 
   const units = user.preferred_units || 'metric';
   const age = calculateAge(user.date_of_birth);
-  
+
   const subscriptionStatusText = isPremium ? 'Premium' : 'Free';
   console.log('[Profile iOS] Displaying subscription status:', subscriptionStatusText, '(isPremium:', isPremium, ')');
 
@@ -683,6 +692,17 @@ export default function ProfileScreen() {
   }
   const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : 'No preferences set';
 
+  const sexDisplayValue = user.sex === 'male' ? 'Male' : user.sex === 'female' ? 'Female' : user.sex ? 'Other' : 'Tap to set';
+  const activityDisplayValue = user.activity_level
+    ? user.activity_level.charAt(0).toUpperCase() + user.activity_level.slice(1).replace('_', ' ')
+    : 'Tap to set';
+  const unitsDisplayValue = units === 'imperial' ? 'Imperial' : 'Metric';
+  const goalTypeDisplayValue = goal?.goal_type === 'lose' ? '📉 Lose Weight' : goal?.goal_type === 'gain' ? '📈 Gain Weight' : goal?.goal_type === 'maintain' ? '⚖️ Maintain' : 'Tap to set';
+  const journeyStartDisplay = goal ? formatJourneyStartDate(goal.start_date, user.created_at) : 'No goal set';
+
+  const isProfileOpen = openSection === 'profile';
+  const isGoalOpen = openSection === 'goal';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
@@ -691,20 +711,21 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* ── Avatar Card ─────────────────────────────────────────────────── */}
         <View style={[styles.profileCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
             <Text style={styles.avatarText}>
               {user.name ? user.name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
             </Text>
           </View>
-          
+
           <Text style={[styles.userName, { color: isDark ? colors.textDark : colors.text }]}>
             {user.name || 'User'}
           </Text>
@@ -718,7 +739,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={styles.setUsernameRow}
               onPress={() => {
-                console.log('[Profile] Set username pressed');
+                console.log('[Profile iOS] Set username pressed from avatar card');
                 router.push('/choose-username');
               }}
               activeOpacity={0.7}
@@ -738,12 +759,11 @@ export default function ProfileScreen() {
           <Text style={[styles.subscriptionStatus, { color: isPremium ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
             {subscriptionStatusText}
           </Text>
-          
+
           <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {user.email || 'Guest User'}
           </Text>
 
-          {/* Challenger Badge */}
           {user.challenger_badge && (
             <View style={styles.badgeRow}>
               <View style={styles.challengerBadgePill}>
@@ -754,7 +774,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Subscription Card */}
+        {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
         {!isPremium && (
           <TouchableOpacity
             style={[styles.subscriptionCard, { backgroundColor: colors.primary }]}
@@ -788,77 +808,60 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Calorie & Goals Settings Card */}
-        {user.onboarding_completed && (
-          <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginBottom: 0 }]}>
-                Calorie & Goals Settings
-              </Text>
-              <TouchableOpacity onPress={handleEditGoals}>
-                <Text style={[styles.advancedLink, { color: colors.primary }]}>
-                  Advanced
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.sectionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Edit any value to recalculate your daily targets
-            </Text>
+        {/* ── Accordion Card ──────────────────────────────────────────────── */}
+        <View style={[styles.accordionCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
 
-            {/* Editable Fields */}
-            <View style={styles.settingsGrid}>
-              <EditableSettingItem
-                label="Name"
-                value={user.name || 'Tap to set your name'}
-                onPress={() => openEditModal('name')}
-                isDark={isDark}
-                highlight={!user.name}
-              />
-              <EditableSettingItem
-                label="Username"
-                value={user.username ? `@${user.username}` : 'Set username'}
-                onPress={() => {
-                  console.log('[Profile iOS] Username row tapped');
-                  router.push('/choose-username');
-                }}
-                isDark={isDark}
-                highlight={!user.username}
-              />
-              {user.height && (
+          {/* ── Section A: My Profile ──────────────────────────────────────── */}
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => toggleSection('profile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.accordionHeaderLeft}>
+              <Text style={styles.accordionHeaderEmoji}>{'👤'}</Text>
+              <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                My Profile
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name={isProfileOpen ? 'chevron.up' : 'chevron.down'}
+              android_material_icon_name={isProfileOpen ? 'expand-less' : 'expand-more'}
+              size={18}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {isProfileOpen && (
+            <View>
+              <View style={[styles.accordionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
+              <View style={styles.accordionContent}>
                 <EditableSettingItem
-                  label="Height"
-                  value={formatHeight(user.height, units)}
-                  onPress={() => openEditModal('height')}
+                  label="Name"
+                  value={user.name || 'Tap to set your name'}
+                  onPress={() => openEditModal('name')}
                   isDark={isDark}
+                  highlight={!user.name}
                 />
-              )}
-              {user.current_weight && (
                 <EditableSettingItem
-                  label="Current Weight"
-                  value={formatWeight(user.current_weight, units)}
-                  onPress={() => openEditModal('weight')}
+                  label="Username"
+                  value={user.username ? `@${user.username}` : 'Set username'}
+                  onPress={() => {
+                    console.log('[Profile iOS] Username row tapped');
+                    router.push('/choose-username');
+                  }}
                   isDark={isDark}
+                  highlight={!user.username}
                 />
-              )}
-              <EditableSettingItem
-                label="Goal Weight"
-                value={user.goal_weight ? formatWeight(user.goal_weight, units) : 'Tap to set your goal weight'}
-                onPress={() => openEditModal('goalWeight')}
-                isDark={isDark}
-                highlight={!user.goal_weight}
-              />
-              {age && (
                 <EditableSettingItem
                   label="Age"
-                  value={`${age} years`}
+                  value={age ? `${age} years` : 'Tap to set'}
                   onPress={() => openEditModal('age')}
                   isDark={isDark}
+                  highlight={!age}
                 />
-              )}
-              {user.sex && (
                 <EditableSettingItem
                   label="Sex"
-                  value={user.sex === 'male' ? 'Male' : user.sex === 'female' ? 'Female' : 'Other'}
+                  value={sexDisplayValue}
                   onPress={() => {
                     console.log('[Profile iOS] Sex field tapped');
                     Alert.alert(
@@ -884,12 +887,81 @@ export default function ProfileScreen() {
                     );
                   }}
                   isDark={isDark}
+                  highlight={!user.sex}
                 />
-              )}
-              {user.activity_level && (
+                <EditableSettingItem
+                  label="Height"
+                  value={user.height ? formatHeight(user.height, units) : 'Tap to set'}
+                  onPress={() => openEditModal('height')}
+                  isDark={isDark}
+                  highlight={!user.height}
+                />
+                <EditableSettingItem
+                  label="Weight"
+                  value={user.current_weight ? formatWeight(user.current_weight, units) : 'Tap to set'}
+                  onPress={() => openEditModal('weight')}
+                  isDark={isDark}
+                  highlight={!user.current_weight}
+                />
+                <EditableSettingItem
+                  label="Goal Weight"
+                  value={user.goal_weight ? formatWeight(user.goal_weight, units) : 'Tap to set goal weight'}
+                  onPress={() => openEditModal('goalWeight')}
+                  isDark={isDark}
+                  highlight={!user.goal_weight}
+                />
+                <EditableSettingItem
+                  label="Units"
+                  value={unitsDisplayValue}
+                  onPress={() => {
+                    console.log('[Profile iOS] Units field tapped');
+                    Alert.alert(
+                      'Select Units',
+                      '',
+                      [
+                        {
+                          text: 'Metric (kg, cm)',
+                          onPress: async () => {
+                            console.log('[Profile iOS] Units changed to metric');
+                            try {
+                              const { error } = await supabase
+                                .from('users')
+                                .update({ preferred_units: 'metric', updated_at: new Date().toISOString() })
+                                .eq('id', user.id);
+                              if (error) throw error;
+                              await loadUserData();
+                            } catch (err: any) {
+                              console.error('[Profile iOS] Error saving units:', err);
+                              Alert.alert('Error', err.message || 'Failed to save units');
+                            }
+                          },
+                        },
+                        {
+                          text: 'Imperial (lbs, ft/in)',
+                          onPress: async () => {
+                            console.log('[Profile iOS] Units changed to imperial');
+                            try {
+                              const { error } = await supabase
+                                .from('users')
+                                .update({ preferred_units: 'imperial', updated_at: new Date().toISOString() })
+                                .eq('id', user.id);
+                              if (error) throw error;
+                              await loadUserData();
+                            } catch (err: any) {
+                              console.error('[Profile iOS] Error saving units:', err);
+                              Alert.alert('Error', err.message || 'Failed to save units');
+                            }
+                          },
+                        },
+                        { text: 'Cancel', style: 'cancel' },
+                      ]
+                    );
+                  }}
+                  isDark={isDark}
+                />
                 <EditableSettingItem
                   label="Activity Level"
-                  value={user.activity_level.charAt(0).toUpperCase() + user.activity_level.slice(1).replace('_', ' ')}
+                  value={activityDisplayValue}
                   onPress={() => {
                     console.log('[Profile iOS] Activity level field tapped');
                     Alert.alert(
@@ -929,148 +1001,268 @@ export default function ProfileScreen() {
                     );
                   }}
                   isDark={isDark}
+                  highlight={!user.activity_level}
                 />
-              )}
-              {goal?.goal_type === 'lose' && goal?.loss_rate_lbs_per_week && (
-                <EditableSettingItem
-                  label="Weight Loss Rate"
-                  value={getLossRateDisplayText(goal.loss_rate_lbs_per_week)}
-                  onPress={() => openEditModal('lossRate')}
-                  isDark={isDark}
-                />
-              )}
+              </View>
             </View>
+          )}
 
-            {/* Current Goals Display */}
-            {goal && (
-              <View style={styles.currentGoalsSection}>
-                <Text style={[styles.currentGoalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Current Daily Targets
-                </Text>
-                <View style={styles.goalsRow}>
-                  <View style={styles.goalItemCompact}>
-                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Calories
-                    </Text>
-                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
-                      {goal.daily_calories}
-                    </Text>
-                  </View>
-                  <View style={styles.goalItemCompact}>
-                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Protein
-                    </Text>
-                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
-                      {goal.protein_g}g
-                    </Text>
-                  </View>
-                  <View style={styles.goalItemCompact}>
-                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Carbs
-                    </Text>
-                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
-                      {goal.carbs_g}g
-                    </Text>
-                  </View>
-                  <View style={styles.goalItemCompact}>
-                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Fats
-                    </Text>
-                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
-                      {goal.fats_g}g
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
+          {/* Divider between sections */}
+          <View style={[styles.sectionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
 
-            {/* Start Date */}
-            {goal && (
-              <View style={styles.startDateSection}>
-                <View style={styles.startDateHeader}>
-                  <Text style={[styles.startDateLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                    Journey Start Date
-                  </Text>
-                  <TouchableOpacity onPress={openStartDatePicker} style={styles.dateButton}>
-                    <Text style={[styles.dateButtonText, { color: colors.primary }]}>
-                      {formatJourneyStartDate(goal.start_date, user.created_at)}
-                    </Text>
-                    <IconSymbol
-                      ios_icon_name="calendar"
-                      android_material_icon_name="event"
-                      size={16}
-                      color={colors.primary}
+          {/* ── Section B: My Goal ────────────────────────────────────────── */}
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => toggleSection('goal')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.accordionHeaderLeft}>
+              <Text style={styles.accordionHeaderEmoji}>{'🎯'}</Text>
+              <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                My Goal
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name={isGoalOpen ? 'chevron.up' : 'chevron.down'}
+              android_material_icon_name={isGoalOpen ? 'expand-less' : 'expand-more'}
+              size={18}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {isGoalOpen && (
+            <View>
+              <View style={[styles.accordionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
+              <View style={styles.accordionContent}>
+                {user.onboarding_completed ? (
+                  <>
+                    {/* Goal Type */}
+                    <EditableSettingItem
+                      label="Goal"
+                      value={goalTypeDisplayValue}
+                      onPress={() => {
+                        console.log('[Profile iOS] Goal type field tapped');
+                        Alert.alert(
+                          'Select Goal',
+                          '',
+                          [
+                            {
+                              text: '📉 Lose Weight',
+                              onPress: () => {
+                                console.log('[Profile iOS] Goal type changed to lose');
+                                if (goal) {
+                                  recalculateGoals(user, { ...goal, goal_type: 'lose', loss_rate_lbs_per_week: goal?.loss_rate_lbs_per_week || 1.0 });
+                                }
+                              },
+                            },
+                            {
+                              text: '⚖️ Maintain',
+                              onPress: () => {
+                                console.log('[Profile iOS] Goal type changed to maintain');
+                                if (goal) {
+                                  recalculateGoals(user, { ...goal, goal_type: 'maintain' });
+                                }
+                              },
+                            },
+                            {
+                              text: '📈 Gain Weight',
+                              onPress: () => {
+                                console.log('[Profile iOS] Goal type changed to gain');
+                                if (goal) {
+                                  recalculateGoals(user, { ...goal, goal_type: 'gain' });
+                                }
+                              },
+                            },
+                            { text: 'Cancel', style: 'cancel' },
+                          ]
+                        );
+                      }}
+                      isDark={isDark}
+                      highlight={!goal?.goal_type}
                     />
-                  </TouchableOpacity>
-                </View>
-                <Text style={[styles.startDateHelper, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Track your progress from this date
+
+                    {/* Loss Rate — only if goal_type === 'lose' */}
+                    {goal?.goal_type === 'lose' && (
+                      <EditableSettingItem
+                        label="Loss Rate"
+                        value={goal?.loss_rate_lbs_per_week ? getLossRateDisplayText(goal.loss_rate_lbs_per_week) : 'Tap to set'}
+                        onPress={() => openEditModal('lossRate')}
+                        isDark={isDark}
+                      />
+                    )}
+
+                    {/* Journey Start */}
+                    <EditableSettingItem
+                      label="Journey Start"
+                      value={journeyStartDisplay}
+                      onPress={() => {
+                        console.log('[Profile iOS] Journey Start Date row tapped');
+                        openStartDatePicker();
+                      }}
+                      isDark={isDark}
+                    />
+
+                    {/* Daily Targets */}
+                    {goal && (
+                      <View style={styles.dailyTargetsSection}>
+                        <Text style={[styles.dailyTargetsTitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                          Daily Targets
+                        </Text>
+                        <View style={styles.goalsRow}>
+                          <View style={styles.goalItemCompact}>
+                            <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                              Calories
+                            </Text>
+                            <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                              {goal.daily_calories}
+                            </Text>
+                          </View>
+                          <View style={styles.goalItemCompact}>
+                            <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                              Protein
+                            </Text>
+                            <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                              {goal.protein_g}
+                              {'g'}
+                            </Text>
+                          </View>
+                          <View style={styles.goalItemCompact}>
+                            <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                              Carbs
+                            </Text>
+                            <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                              {goal.carbs_g}
+                              {'g'}
+                            </Text>
+                          </View>
+                          <View style={styles.goalItemCompact}>
+                            <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                              Fats
+                            </Text>
+                            <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                              {goal.fats_g}
+                              {'g'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Recalculate Goals button */}
+                    <TouchableOpacity
+                      style={[styles.recalculateButton, { borderColor: colors.primary }]}
+                      onPress={() => {
+                        console.log('[Profile iOS] Recalculate Goals button pressed');
+                        handleEditGoals();
+                      }}
+                    >
+                      <IconSymbol
+                        ios_icon_name="arrow.clockwise"
+                        android_material_icon_name="refresh"
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text style={[styles.recalculateButtonText, { color: colors.primary }]}>
+                        Recalculate Goals
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <View style={styles.noGoalContainer}>
+                    <Text style={[styles.noGoalText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Complete onboarding to set your nutrition goals
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.editButton, { backgroundColor: colors.primary }]}
+                      onPress={handleEditGoals}
+                    >
+                      <Text style={styles.editButtonText}>Set Up Goals</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Divider between sections */}
+          <View style={[styles.sectionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
+
+          {/* ── Section C: Food Preferences (non-accordion row) ───────────── */}
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => {
+              console.log('[Profile iOS] Food Preferences row pressed');
+              setShowFoodPrefsModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.accordionHeaderLeft}>
+              <Text style={styles.accordionHeaderEmoji}>{'🍽'}</Text>
+              <View style={styles.accordionHeaderTextStack}>
+                <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  Food Preferences
+                </Text>
+                <Text style={[styles.accordionHeaderSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  {foodPrefsSummary}
                 </Text>
               </View>
-            )}
-          </View>
-        )}
-
-        {!user.onboarding_completed && (
-          <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              No Goals Set
-            </Text>
-            <Text style={[styles.noGoalText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Complete onboarding to set your nutrition goals
-            </Text>
-            <TouchableOpacity
-              style={[styles.editButton, { backgroundColor: colors.primary }]}
-              onPress={handleEditGoals}
-            >
-              <Text style={styles.editButtonText}>Set Up Goals</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Food Preferences Card */}
-        <TouchableOpacity
-          style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-          onPress={() => {
-            console.log('[Profile iOS] Food Preferences card pressed');
-            setShowFoodPrefsModal(true);
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginBottom: 0 }]}>
-              Food Preferences
-            </Text>
+            </View>
             <IconSymbol
               ios_icon_name="chevron.right"
               android_material_icon_name="arrow-forward"
-              size={16}
+              size={18}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
-          </View>
-          <Text style={[styles.sectionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginBottom: 0 }]}>
-            {foodPrefsSummary}
-          </Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        {/* Invite Friends & Earn XP */}
-        <TouchableOpacity
-          style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card, marginBottom: 12 }]}
-          onPress={() => {
-            console.log('[Profile iOS] Invite Friends & Earn XP pressed');
-            router.push('/referrals');
-          }}
-        >
-          <View style={styles.feedbackRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <IconSymbol
-                ios_icon_name="person.2.fill"
-                android_material_icon_name="group"
-                size={20}
-                color="#14B8A6"
-              />
-              <Text style={[styles.feedbackRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+          {/* Divider between sections */}
+          <View style={[styles.sectionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
+
+          {/* ── Section D: Invite Friends & Earn XP (non-accordion row) ──── */}
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => {
+              console.log('[Profile iOS] Invite Friends & Earn XP pressed');
+              router.push('/referrals');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.accordionHeaderLeft}>
+              <Text style={styles.accordionHeaderEmoji}>{'👥'}</Text>
+              <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
                 Invite Friends & Earn XP
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={18}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+        </View>
+
+        {/* ── Actions ─────────────────────────────────────────────────────── */}
+        <View style={[styles.actionsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          {/* Notifications */}
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => {
+              console.log('[Profile iOS] Notifications row pressed');
+              router.push('/notification-preferences');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionRowLeft}>
+              <IconSymbol
+                ios_icon_name="bell.fill"
+                android_material_icon_name="notifications"
+                size={18}
+                color={colors.primary}
+              />
+              <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                Notifications
               </Text>
             </View>
             <IconSymbol
@@ -1079,34 +1271,44 @@ export default function ProfileScreen() {
               size={16}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        {/* Feedback Section */}
-        <TouchableOpacity
-          style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-          onPress={() => {
-            console.log('[Profile iOS] Send Feedback button pressed');
-            const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
-            Linking.openURL(mailtoUrl).catch((err) => {
-              console.error('[Profile iOS] Failed to open mail app:', err);
-              Alert.alert('Error', 'Could not open the mail app. Please email us at macrogoalapp@gmail.com');
-            });
-          }}
-        >
-          <View style={styles.feedbackRow}>
-            <Text style={[styles.feedbackRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Send Feedback
-            </Text>
+          <View style={[styles.actionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
+
+          {/* Send Feedback */}
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => {
+              console.log('[Profile iOS] Send Feedback button pressed');
+              const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
+              Linking.openURL(mailtoUrl).catch((err) => {
+                console.error('[Profile iOS] Failed to open mail app:', err);
+                Alert.alert('Error', 'Could not open the mail app. Please email us at macrogoalapp@gmail.com');
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionRowLeft}>
+              <IconSymbol
+                ios_icon_name="envelope.fill"
+                android_material_icon_name="email"
+                size={18}
+                color={colors.primary}
+              />
+              <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                Send Feedback
+              </Text>
+            </View>
             <IconSymbol
               ios_icon_name="chevron.right"
               android_material_icon_name="arrow-forward"
               size={16}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
 
+        {/* Log Out */}
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: colors.error }]}
           onPress={handleLogout}
@@ -1119,7 +1321,10 @@ export default function ProfileScreen() {
         {/* Footer Links */}
         <View style={styles.footerLinksContainer}>
           <View style={styles.footerLinksRow}>
-            <TouchableOpacity onPress={() => router.push('/privacy-policy')}>
+            <TouchableOpacity onPress={() => {
+              console.log('[Profile iOS] Privacy Policy link pressed');
+              router.push('/privacy-policy');
+            }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Privacy Policy
               </Text>
@@ -1127,7 +1332,10 @@ export default function ProfileScreen() {
             <Text style={[styles.footerSeparator, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               {' · '}
             </Text>
-            <TouchableOpacity onPress={() => router.push('/terms-of-service')}>
+            <TouchableOpacity onPress={() => {
+              console.log('[Profile iOS] Terms of Service link pressed');
+              router.push('/terms-of-service');
+            }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Terms of Service
               </Text>
@@ -1135,7 +1343,10 @@ export default function ProfileScreen() {
             <Text style={[styles.footerSeparator, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               {' · '}
             </Text>
-            <TouchableOpacity onPress={() => router.push('/terms-of-use-eula')}>
+            <TouchableOpacity onPress={() => {
+              console.log('[Profile iOS] Terms of Use (EULA) link pressed');
+              router.push('/terms-of-use-eula');
+            }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Terms of Use (EULA)
               </Text>
@@ -1143,7 +1354,10 @@ export default function ProfileScreen() {
             <Text style={[styles.footerSeparator, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               {' · '}
             </Text>
-            <TouchableOpacity onPress={() => router.push('/delete-account')}>
+            <TouchableOpacity onPress={() => {
+              console.log('[Profile iOS] Delete Account link pressed');
+              router.push('/delete-account');
+            }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Delete Account
               </Text>
@@ -1152,19 +1366,19 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* Edit Modal */}
+      {/* ── Edit Modal ──────────────────────────────────────────────────────── */}
       <Modal
         visible={editingField !== null && editingField !== 'sex' && editingField !== 'activity'}
         transparent
         animationType="fade"
         onRequestClose={closeEditModal}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={closeEditModal}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.modalContent, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
             activeOpacity={1}
           >
@@ -1249,19 +1463,19 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Goal Weight Prompt Modal */}
+      {/* ── Goal Weight Prompt Modal ─────────────────────────────────────────── */}
       <Modal
         visible={showGoalWeightPrompt}
         transparent
         animationType="fade"
         onRequestClose={handleGoalWeightPromptSkip}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={handleGoalWeightPromptSkip}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.modalContent, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
             activeOpacity={1}
           >
@@ -1317,7 +1531,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Food Preferences Modal */}
+      {/* ── Food Preferences Modal ───────────────────────────────────────────── */}
       <Modal
         visible={showFoodPrefsModal}
         transparent
@@ -1467,7 +1681,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Date Picker */}
+      {/* ── Date Picker ─────────────────────────────────────────────────────── */}
       {showDatePicker && (
         Platform.OS === 'ios' ? (
           <Modal
@@ -1476,12 +1690,12 @@ export default function ProfileScreen() {
             animationType="slide"
             onRequestClose={() => setShowDatePicker(false)}
           >
-            <TouchableOpacity 
-              style={styles.modalOverlay} 
-              activeOpacity={1} 
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
               onPress={() => setShowDatePicker(false)}
             >
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.datePickerModal, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
                 activeOpacity={1}
               >
@@ -1529,11 +1743,11 @@ export default function ProfileScreen() {
 
 function EditableSettingItem({ label, value, onPress, isDark, highlight }: any) {
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
         styles.settingItem,
         highlight && { backgroundColor: colors.primary + '10', borderLeftWidth: 3, borderLeftColor: colors.primary }
-      ]} 
+      ]}
       onPress={onPress}
     >
       <View style={styles.settingItemContent}>
@@ -1542,7 +1756,7 @@ function EditableSettingItem({ label, value, onPress, isDark, highlight }: any) 
         </Text>
         <View style={styles.settingItemValueRow}>
           <Text style={[
-            styles.settingItemValue, 
+            styles.settingItemValue,
             { color: highlight ? colors.primary : (isDark ? colors.textDark : colors.text) },
             highlight && { fontWeight: '600' }
           ]}>
@@ -1594,6 +1808,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 120,
   },
+  // ── Avatar Card ──────────────────────────────────────────────────────────
   profileCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
@@ -1647,6 +1862,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  // ── Subscription Card ────────────────────────────────────────────────────
   subscriptionCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
@@ -1680,35 +1896,55 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 14,
   },
-  goalsCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+  // ── Accordion Card ───────────────────────────────────────────────────────
+  accordionCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
-  sectionHeader: {
+  accordionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
-  sectionTitle: {
-    ...typography.h3,
-    marginBottom: spacing.md,
+  accordionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
   },
-  sectionSubtitle: {
-    ...typography.caption,
-    marginBottom: spacing.md,
+  accordionHeaderEmoji: {
+    fontSize: 18,
   },
-  advancedLink: {
-    ...typography.bodyBold,
-    fontSize: 14,
+  accordionHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
   },
-  settingsGrid: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+  accordionHeaderTextStack: {
+    flex: 1,
   },
+  accordionHeaderSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  accordionDivider: {
+    height: 1,
+    marginHorizontal: 16,
+  },
+  accordionContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    paddingTop: 4,
+  },
+  sectionDivider: {
+    height: 1,
+    marginHorizontal: 0,
+  },
+  // ── Setting Items ────────────────────────────────────────────────────────
   settingItem: {
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
@@ -1731,14 +1967,19 @@ const styles = StyleSheet.create({
   settingItemValue: {
     ...typography.bodyBold,
   },
-  currentGoalsSection: {
+  // ── Daily Targets ────────────────────────────────────────────────────────
+  dailyTargetsSection: {
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border + '20',
+    marginBottom: spacing.sm,
   },
-  currentGoalsTitle: {
-    ...typography.bodyBold,
+  dailyTargetsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: spacing.sm,
   },
   goalsRow: {
@@ -1759,34 +2000,26 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     fontSize: 16,
   },
-  startDateSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '20',
-  },
-  startDateHeader: {
+  // ── Recalculate Button ───────────────────────────────────────────────────
+  recalculateButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderWidth: 1.5,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.sm,
     marginBottom: spacing.xs,
   },
-  startDateLabel: {
-    ...typography.bodyBold,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  dateButtonText: {
-    ...typography.bodyBold,
+  recalculateButtonText: {
     fontSize: 14,
+    fontWeight: '600',
   },
-  startDateHelper: {
-    ...typography.caption,
+  // ── No Goal ──────────────────────────────────────────────────────────────
+  noGoalContainer: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
   },
   noGoalText: {
     ...typography.body,
@@ -1796,29 +2029,42 @@ const styles = StyleSheet.create({
   editButton: {
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
-    marginTop: spacing.md,
   },
   editButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
   },
-  feedbackCard: {
+  // ── Actions Card ─────────────────────────────────────────────────────────
+  actionsCard: {
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
     marginBottom: spacing.md,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
+    overflow: 'hidden',
   },
-  feedbackRow: {
+  actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  feedbackRowLabel: {
+  actionRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  actionRowLabel: {
     ...typography.body,
+    fontSize: 15,
   },
+  actionDivider: {
+    height: 1,
+    marginHorizontal: spacing.lg,
+  },
+  // ── Log Out ──────────────────────────────────────────────────────────────
   logoutButton: {
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
@@ -1830,6 +2076,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  // ── Footer Links ─────────────────────────────────────────────────────────
   footerLinksContainer: {
     alignItems: 'center',
     marginTop: spacing.xs,
@@ -1848,6 +2095,7 @@ const styles = StyleSheet.create({
   footerSeparator: {
     fontSize: 12,
   },
+  // ── Modals ───────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
