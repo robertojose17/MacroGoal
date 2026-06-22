@@ -1176,6 +1176,13 @@ export default function ProfileScreen() {
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'low_carb' });
                               },
                             },
+                            {
+                              text: 'Custom',
+                              onPress: () => {
+                                console.log('[Profile] Macro preset: navigating to custom edit-goals');
+                                if (goal) router.push('/edit-goals');
+                              },
+                            },
                             { text: 'Cancel', style: 'cancel' },
                           ]
                         );
