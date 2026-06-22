@@ -4,6 +4,48 @@ import { toLocalDateString } from '@/utils/dateUtils';
 export type MetricType = 'steps' | 'active_calories' | 'exercise_minutes' | 'distance' | 'floors' | 'running_pace' | 'referral';
 export type Difficulty = 'medium' | 'hard';
 
+type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'very_active';
+
+// Baseline targets by activity level — used when no HealthKit history exists
+// These mirror what top fitness apps use for new user onboarding
+const ACTIVITY_BASELINES: Record<ActivityLevel, Record<string, { medium: number; hard: number }>> = {
+  sedentary: {
+    steps:            { medium: 4000,  hard: 6000  },
+    active_calories:  { medium: 150,   hard: 250   },
+    exercise_minutes: { medium: 10,    hard: 20    },
+    distance:         { medium: 1.5,   hard: 2.5   },
+    floors:           { medium: 3,     hard: 6     },
+    running_pace:     { medium: 14,    hard: 12    },
+  },
+  light: {
+    steps:            { medium: 6000,  hard: 9000  },
+    active_calories:  { medium: 250,   hard: 400   },
+    exercise_minutes: { medium: 20,    hard: 35    },
+    distance:         { medium: 2.5,   hard: 4.0   },
+    floors:           { medium: 5,     hard: 10    },
+    running_pace:     { medium: 12,    hard: 10    },
+  },
+  moderate: {
+    steps:            { medium: 8000,  hard: 12000 },
+    active_calories:  { medium: 350,   hard: 550   },
+    exercise_minutes: { medium: 30,    hard: 50    },
+    distance:         { medium: 4.0,   hard: 6.0   },
+    floors:           { medium: 8,     hard: 15    },
+    running_pace:     { medium: 10,    hard: 8     },
+  },
+  very_active: {
+    steps:            { medium: 12000, hard: 18000 },
+    active_calories:  { medium: 500,   hard: 750   },
+    exercise_minutes: { medium: 45,    hard: 70    },
+    distance:         { medium: 6.0,   hard: 10.0  },
+    floors:           { medium: 12,    hard: 20    },
+    running_pace:     { medium: 8,     hard: 6.5   },
+  },
+};
+
+// Fallback if activity_level is unknown
+const DEFAULT_BASELINES = ACTIVITY_BASELINES['light'];
+
 export interface FlashChallenge {
   id: string;
   user_id: string;
@@ -85,27 +127,36 @@ function roundNice(value: number, metric: MetricType): number {
 // Generate target from baseline using percentile approach
 // medium = percentile 60 of last 7 days × 1.2 (20% above median)
 // hard   = percentile 90 of last 7 days × 1.4 (40% above high end)
-function generateTarget(history: number[], difficulty: Difficulty, metric: MetricType): number {
-  if (history.length === 0) return 0;
+// Falls back to activity-level baselines when no history exists
+function generateTarget(
+  history: number[],
+  difficulty: Difficulty,
+  metric: MetricType,
+  baselines: Record<string, { medium: number; hard: number }>
+): number {
+  const baseline = baselines[metric];
+
+  if (history.length === 0) {
+    // No history — use activity-level baseline (calibration week)
+    return baseline ? baseline[difficulty] : (difficulty === 'medium' ? 100 : 200);
+  }
+
   const sorted = [...history].sort((a, b) => a - b);
+  let target: number;
+
   if (difficulty === 'medium') {
     const base = percentile(sorted, 60);
-    return roundNice(base * 1.2, metric);
+    target = roundNice(base * 1.2, metric);
   } else {
     const base = percentile(sorted, 90);
-    return roundNice(base * 1.4, metric);
+    target = roundNice(base * 1.4, metric);
   }
-}
 
-const MINIMUM_TARGETS: Record<MetricType, number> = {
-  steps: 5000,
-  active_calories: 200,
-  exercise_minutes: 20,
-  distance: 2,
-  floors: 5,
-  running_pace: 12,
-  referral: 3,
-};
+  // Never go below the baseline for the user's activity level
+  // This prevents absurdly low targets if the user had a bad week
+  const floor = baseline ? baseline[difficulty] * 0.5 : 1;
+  return Math.max(target, floor);
+}
 
 // Pick 2 metric types that don't repeat from yesterday
 // Always one medium and one hard, different metric types
@@ -133,6 +184,16 @@ export async function loadOrGenerateFlashChallenges(
     console.log('[flashChallengesApi] no user, returning empty');
     return [];
   }
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('activity_level')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const activityLevel = (userData?.activity_level as ActivityLevel) ?? 'light';
+  const baselines = ACTIVITY_BASELINES[activityLevel] ?? DEFAULT_BASELINES;
+  console.log('[flashChallengesApi] activity level:', activityLevel);
 
   const today = toLocalDateString();
 
@@ -169,14 +230,20 @@ export async function loadOrGenerateFlashChallenges(
 
   for (const [metric, difficulty] of [[mediumMetric, 'medium'], [hardMetric, 'hard']] as [MetricType, Difficulty][]) {
     const history = healthKitHistory[metric] ?? [];
-    let target = generateTarget(history, difficulty, metric);
-    if (target <= 0) {
-      target = MINIMUM_TARGETS[metric] ?? 1;
-      console.log('[flashChallengesApi] no history for', metric, '— using minimum target:', target);
-    }
+    const target = generateTarget(history, difficulty, metric, baselines);
+    const isCalibrating = history.length === 0;
 
     const tmpl = CHALLENGE_TEMPLATES[metric];
     const unit = tmpl.unit;
+    const baseDescription = tmpl.description(target, unit);
+    const description = isCalibrating
+      ? baseDescription + ' · Calibrating to your level'
+      : baseDescription;
+
+    if (isCalibrating) {
+      console.log('[flashChallengesApi] no history for', metric, '— using', activityLevel, 'baseline target:', target);
+    }
+
     challenges.push({
       user_id: user.id,
       date: today,
@@ -185,7 +252,7 @@ export async function loadOrGenerateFlashChallenges(
       target_value: target,
       target_unit: unit,
       title: tmpl.title(target, unit),
-      description: tmpl.description(target, unit),
+      description,
       xp_reward: XP_REWARDS[difficulty],
       expires_at: expiresAt.toISOString(),
       completed: false,
