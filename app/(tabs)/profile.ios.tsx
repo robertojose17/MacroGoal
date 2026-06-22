@@ -41,8 +41,8 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Accordion state — 'profile' open by default
-  const [openSection, setOpenSection] = useState<AccordionSection>('profile');
+  // Accordion state — collapsed by default
+  const [openSection, setOpenSection] = useState<AccordionSection>(null);
 
   // Edit modal state
   const [editingField, setEditingField] = useState<EditField>(null);
@@ -775,35 +775,46 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
-        {!isPremium && (
+        {!isPremium && !premiumLoading && (
           <TouchableOpacity
-            style={[styles.subscriptionCard, { backgroundColor: colors.primary }]}
             onPress={() => {
               console.log('[Profile iOS] Upgrade to Premium button pressed');
               router.push('/subscription');
             }}
+            activeOpacity={0.85}
+            style={{
+              marginBottom: spacing.md,
+              borderRadius: 16,
+              overflow: 'hidden',
+              backgroundColor: '#0d0d0d',
+              borderWidth: 1,
+              borderColor: '#c9a84c',
+            }}
           >
-            <View style={styles.subscriptionContent}>
-              <View style={styles.subscriptionIcon}>
-                <IconSymbol
-                  ios_icon_name="star.fill"
-                  android_material_icon_name="star"
-                  size={32}
-                  color="#FFFFFF"
-                />
-              </View>
-              <View style={styles.subscriptionText}>
-                <Text style={styles.subscriptionTitle}>Upgrade to Premium</Text>
-                <Text style={styles.subscriptionSubtitle}>
-                  Unlock advanced analytics, custom recipes, and more
+            <View style={{ padding: spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={12} color="#c9a84c" />
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: '#c9a84c', textTransform: 'uppercase' }}>
+                  Macro Goal Premium
                 </Text>
               </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color="#FFFFFF"
-              />
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#fff', marginBottom: 4 }}>
+                Unlock your full potential
+              </Text>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 16, lineHeight: 18 }}>
+                AI meal planning, advanced analytics, unlimited tracking & more
+              </Text>
+              <View style={{
+                alignSelf: 'flex-start',
+                backgroundColor: '#c9a84c',
+                borderRadius: 10,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+              }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#000', letterSpacing: 0.3 }}>
+                  Upgrade Now
+                </Text>
+              </View>
             </View>
           </TouchableOpacity>
         )}
@@ -818,10 +829,12 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.accordionHeaderLeft}>
-              <Text style={styles.accordionHeaderEmoji}>{'👤'}</Text>
-              <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                My Profile
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <IconSymbol ios_icon_name="person" android_material_icon_name="person" size={18} color={isDark ? '#aaa' : '#666'} />
+                <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  My Profile
+                </Text>
+              </View>
             </View>
             <IconSymbol
               ios_icon_name={isProfileOpen ? 'chevron.up' : 'chevron.down'}
@@ -1017,10 +1030,12 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.accordionHeaderLeft}>
-              <Text style={styles.accordionHeaderEmoji}>{'🎯'}</Text>
-              <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                My Goal
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <IconSymbol ios_icon_name="target" android_material_icon_name="flag" size={18} color={isDark ? '#aaa' : '#666'} />
+                <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  My Goal
+                </Text>
+              </View>
             </View>
             <IconSymbol
               ios_icon_name={isGoalOpen ? 'chevron.up' : 'chevron.down'}
@@ -1197,7 +1212,7 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.accordionHeaderLeft}>
-              <Text style={styles.accordionHeaderEmoji}>{'🍽'}</Text>
+              <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={18} color={isDark ? '#aaa' : '#666'} />
               <View style={styles.accordionHeaderTextStack}>
                 <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
                   Food Preferences
@@ -1228,10 +1243,12 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.accordionHeaderLeft}>
-              <Text style={styles.accordionHeaderEmoji}>{'👥'}</Text>
-              <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                Invite Friends & Earn XP
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <IconSymbol ios_icon_name="person.2" android_material_icon_name="group" size={18} color={isDark ? '#aaa' : '#666'} />
+                <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  Invite Friends & Earn XP
+                </Text>
+              </View>
             </View>
             <IconSymbol
               ios_icon_name="chevron.right"
