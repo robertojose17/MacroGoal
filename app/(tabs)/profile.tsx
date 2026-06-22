@@ -1179,8 +1179,8 @@ export default function ProfileScreen() {
                             {
                               text: 'Custom',
                               onPress: () => {
-                                console.log('[Profile] Macro preset: navigating to custom edit-goals');
-                                if (goal) router.push('/edit-goals');
+                                console.log('[Profile] Macro preset: navigating to custom-macros screen');
+                                router.push('/custom-macros');
                               },
                             },
                             { text: 'Cancel', style: 'cancel' },

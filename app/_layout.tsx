@@ -635,6 +635,10 @@ export default function RootLayout() {
                   }}
                 />
                 <Stack.Screen
+                  name="custom-macros"
+                  options={{ headerShown: false, presentation: "modal" }}
+                />
+                <Stack.Screen
                   name="subscription"
                   options={{ headerShown: false, presentation: "modal" }}
                 />
