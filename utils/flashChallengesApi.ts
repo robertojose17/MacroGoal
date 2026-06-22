@@ -97,6 +97,16 @@ function generateTarget(history: number[], difficulty: Difficulty, metric: Metri
   }
 }
 
+const MINIMUM_TARGETS: Record<MetricType, number> = {
+  steps: 5000,
+  active_calories: 200,
+  exercise_minutes: 20,
+  distance: 2,
+  floors: 5,
+  running_pace: 12,
+  referral: 3,
+};
+
 // Pick 2 metric types that don't repeat from yesterday
 // Always one medium and one hard, different metric types
 function pickMetricTypes(yesterday: MetricType[]): [MetricType, MetricType] {
@@ -133,7 +143,7 @@ export async function loadOrGenerateFlashChallenges(
     .eq('user_id', user.id)
     .eq('date', today);
 
-  if (existing && existing.length >= 2) {
+  if (existing && existing.length >= 1) {
     console.log('[flashChallengesApi] returning existing challenges for today:', existing.length);
     return existing as FlashChallenge[];
   }
@@ -159,10 +169,10 @@ export async function loadOrGenerateFlashChallenges(
 
   for (const [metric, difficulty] of [[mediumMetric, 'medium'], [hardMetric, 'hard']] as [MetricType, Difficulty][]) {
     const history = healthKitHistory[metric] ?? [];
-    const target = generateTarget(history, difficulty, metric);
+    let target = generateTarget(history, difficulty, metric);
     if (target <= 0) {
-      console.log('[flashChallengesApi] skipping', metric, difficulty, '— target is 0 (no history)');
-      continue;
+      target = MINIMUM_TARGETS[metric] ?? 1;
+      console.log('[flashChallengesApi] no history for', metric, '— using minimum target:', target);
     }
 
     const tmpl = CHALLENGE_TEMPLATES[metric];
@@ -230,7 +240,7 @@ export async function loadOrGenerateFlashChallenges(
   console.log('[flashChallengesApi] upserting', challenges.length, 'challenges');
   const { data: inserted } = await supabase
     .from('flash_challenges')
-    .upsert(challenges, { onConflict: 'user_id,date,difficulty', ignoreDuplicates: false })
+    .upsert(challenges, { onConflict: 'user_id,date,metric_type', ignoreDuplicates: true })
     .select();
 
   console.log('[flashChallengesApi] inserted:', inserted?.length ?? 0, 'challenges');
