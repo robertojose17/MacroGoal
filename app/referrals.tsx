@@ -98,7 +98,7 @@ export default function ReferralsScreen() {
     console.log('[Referrals] Share button pressed, code:', code);
     try {
       await Share.share({
-        message: `I've been tracking my macros with Macro Goal. Join with my code ${code} and we both earn 1,000 XP 💪`,
+        message: `I've been tracking my macros with Macro Goal. Join with my code ${code} and we both earn 1,000 XP 💪\n\nDownload the app: https://apps.apple.com/us/app/macro-goal/id6755788871`,
       });
       console.log('[Referrals] Share sheet opened successfully');
     } catch (e) {
