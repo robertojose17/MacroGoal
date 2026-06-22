@@ -17,7 +17,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { NotificationBell } from "@/components/NotificationBell";
 import PhotoProgressCard from '@/components/PhotoProgressCard';
 import ConsistencyScore from '@/components/ConsistencyScore';
 
@@ -40,7 +39,6 @@ import { reportDailyHealthMetrics } from '@/utils/healthMetricsReporter';
 import { getPendingMilestone, markMilestoneCelebrated, resetMilestones } from '@/utils/streakMilestones';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNotifications } from '@/contexts/NotificationContext';
 import { useOneSignalTags } from '@/hooks/useOneSignalTags';
 // ─── 7-Day Challenge ──────────────────────────────────────────────────────────
 import { useSevenDayChallenge } from '@/hooks/useSevenDayChallenge';
@@ -146,9 +144,6 @@ export default function DashboardScreen() {
   const [showChallengePopup, setShowChallengePopup] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const challenge = useSevenDayChallenge();
-
-  // ─── Notifications ──────────────────────────────────────────────────────────
-  useNotifications();
 
   // ─── XP System ──────────────────────────────────────────────────────────────
   const xp = useXpStatus();

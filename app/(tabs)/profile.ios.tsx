@@ -1261,36 +1261,6 @@ export default function ProfileScreen() {
 
         {/* ── Actions ─────────────────────────────────────────────────────── */}
         <View style={[styles.actionsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          {/* Notifications */}
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => {
-              console.log('[Profile iOS] Notifications row pressed');
-              router.push('/notification-preferences');
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.actionRowLeft}>
-              <IconSymbol
-                ios_icon_name="bell.fill"
-                android_material_icon_name="notifications"
-                size={18}
-                color={colors.primary}
-              />
-              <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Notifications
-              </Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="arrow-forward"
-              size={16}
-              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <View style={[styles.actionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
-
           {/* Send Feedback */}
           <TouchableOpacity
             style={styles.actionRow}
