@@ -193,43 +193,54 @@ export async function loadOrGenerateFlashChallenges(
     });
   }
 
-  // Add referral challenge once per week (any day, but only if not already shown this week)
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...6=Sat
-  // Get Monday of current week
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
-  const mondayStr = monday.toISOString().split('T')[0];
+  // Referral challenge: only show if user has fewer than 3 lifetime referrals
+  // Once they've referred 3 friends total, it permanently exits rotation
+  const { count: lifetimeReferrals } = await supabase
+    .from('referrals')
+    .select('id', { count: 'exact', head: true })
+    .eq('referrer_id', user.id);
 
-  const { data: existingReferralThisWeek } = await supabase
-    .from('flash_challenges')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('metric_type', 'referral')
-    .gte('date', mondayStr)
-    .maybeSingle();
+  const hasCompletedReferralGoal = (lifetimeReferrals ?? 0) >= 3;
 
-  if (!existingReferralThisWeek) {
-    console.log('[flashChallengesApi] adding referral challenge (once per week)');
-    // 24-hour timer — expires at midnight tonight (same as all other challenges)
-    const referralExpiry = new Date();
-    referralExpiry.setHours(23, 59, 59, 999);
+  if (!hasCompletedReferralGoal) {
+    // Only show once per week
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+    const mondayStr = monday.toISOString().split('T')[0];
 
-    challenges.push({
-      user_id: user.id,
-      date: today,
-      metric_type: 'referral' as any,
-      difficulty: 'medium',
-      target_value: 3,
-      target_unit: 'friends',
-      title: 'Refer 3 Friends Today',
-      description: 'Share your referral code with 3 friends who join Macro Goal today.',
-      xp_reward: 3000,
-      expires_at: referralExpiry.toISOString(),
-      completed: false,
-      completed_at: null,
-    });
+    const { data: existingReferralThisWeek } = await supabase
+      .from('flash_challenges')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('metric_type', 'referral')
+      .gte('date', mondayStr)
+      .maybeSingle();
+
+    if (!existingReferralThisWeek) {
+      console.log('[flashChallengesApi] adding referral challenge (once per week, user has < 3 lifetime referrals)');
+      const referralExpiry = new Date();
+      referralExpiry.setHours(23, 59, 59, 999);
+
+      challenges.push({
+        user_id: user.id,
+        date: today,
+        metric_type: 'referral' as any,
+        difficulty: 'medium',
+        target_value: 3,
+        target_unit: 'friends',
+        title: 'Refer 3 Friends Today',
+        description: 'Share your referral code with 3 friends who join Macro Goal today.',
+        xp_reward: 3000,
+        expires_at: referralExpiry.toISOString(),
+        completed: false,
+        completed_at: null,
+      });
+    }
+  } else {
+    console.log('[flashChallengesApi] skipping referral challenge — user already has 3+ lifetime referrals');
   }
 
   if (challenges.length === 0) {
