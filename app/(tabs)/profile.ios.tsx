@@ -335,7 +335,7 @@ export default function ProfileScreen() {
         updatedGoal.goal_type === 'lose' ? updatedGoal.loss_rate_lbs_per_week : undefined
       );
 
-      const macros = calculateMacrosWithPreset(targetCalories, updatedUser.current_weight, 'balanced');
+      const macros = calculateMacrosWithPreset(targetCalories, updatedUser.current_weight, updatedGoal.macro_preset || 'lean_body');
 
       console.log('[Profile iOS] New calculations:', { bmr, tdee, targetCalories, macros });
 
@@ -699,6 +699,28 @@ export default function ProfileScreen() {
   const unitsDisplayValue = units === 'imperial' ? 'Imperial' : 'Metric';
   const goalTypeDisplayValue = goal?.goal_type === 'lose' ? '📉 Lose Weight' : goal?.goal_type === 'gain' ? '📈 Gain Weight' : goal?.goal_type === 'maintain' ? '⚖️ Maintain' : 'Tap to set';
   const journeyStartDisplay = goal ? formatJourneyStartDate(goal.start_date, user.created_at) : 'No goal set';
+
+  type MacroPreset = 'balanced' | 'high_protein' | 'low_carb' | 'lean_body' | 'custom';
+
+  const detectMacroPreset = (g: any): MacroPreset => {
+    if (!g || !g.daily_calories) return 'lean_body';
+    const totalCals = g.daily_calories;
+    const proteinPercent = Math.round((g.protein_g * 4 / totalCals) * 100);
+    const carbsPercent = Math.round((g.carbs_g * 4 / totalCals) * 100);
+    const fatsPercent = Math.round((g.fats_g * 9 / totalCals) * 100);
+    if (Math.abs(proteinPercent - 30) <= 3 && Math.abs(carbsPercent - 40) <= 3 && Math.abs(fatsPercent - 30) <= 3) return 'balanced';
+    if (Math.abs(proteinPercent - 40) <= 3 && Math.abs(carbsPercent - 35) <= 3 && Math.abs(fatsPercent - 25) <= 3) return 'high_protein';
+    if (Math.abs(proteinPercent - 35) <= 3 && Math.abs(carbsPercent - 25) <= 3 && Math.abs(fatsPercent - 40) <= 3) return 'low_carb';
+    if (proteinPercent >= 35) return 'lean_body';
+    return 'custom';
+  };
+
+  const currentMacroPreset = detectMacroPreset(goal);
+  const macroPresetDisplayValue = currentMacroPreset === 'lean_body' ? 'Lean Body Formula'
+    : currentMacroPreset === 'balanced' ? 'Balanced'
+    : currentMacroPreset === 'high_protein' ? 'High Protein'
+    : currentMacroPreset === 'low_carb' ? 'Low Carb'
+    : 'Custom';
 
   const isProfileOpen = openSection === 'profile';
   const isGoalOpen = openSection === 'goal';
@@ -1116,6 +1138,51 @@ export default function ProfileScreen() {
                       isDark={isDark}
                     />
 
+                    {/* Macro Split */}
+                    <EditableSettingItem
+                      label="Macro Split"
+                      value={macroPresetDisplayValue}
+                      onPress={() => {
+                        console.log('[Profile iOS] Macro Split row tapped, current preset:', currentMacroPreset);
+                        Alert.alert(
+                          'Select Macro Split',
+                          '',
+                          [
+                            {
+                              text: 'Lean Body Formula',
+                              onPress: () => {
+                                console.log('[Profile iOS] Macro preset changed to lean_body');
+                                if (goal) recalculateGoals(user, { ...goal, macro_preset: 'lean_body' });
+                              },
+                            },
+                            {
+                              text: 'Balanced (30/40/30)',
+                              onPress: () => {
+                                console.log('[Profile iOS] Macro preset changed to balanced');
+                                if (goal) recalculateGoals(user, { ...goal, macro_preset: 'balanced' });
+                              },
+                            },
+                            {
+                              text: 'High Protein (40/35/25)',
+                              onPress: () => {
+                                console.log('[Profile iOS] Macro preset changed to high_protein');
+                                if (goal) recalculateGoals(user, { ...goal, macro_preset: 'high_protein' });
+                              },
+                            },
+                            {
+                              text: 'Low Carb (35/25/40)',
+                              onPress: () => {
+                                console.log('[Profile iOS] Macro preset changed to low_carb');
+                                if (goal) recalculateGoals(user, { ...goal, macro_preset: 'low_carb' });
+                              },
+                            },
+                            { text: 'Cancel', style: 'cancel' },
+                          ]
+                        );
+                      }}
+                      isDark={isDark}
+                    />
+
                     {/* Daily Targets */}
                     {goal && (
                       <View style={styles.dailyTargetsSection}>
@@ -1165,9 +1232,18 @@ export default function ProfileScreen() {
                     {/* Recalculate Goals button */}
                     <TouchableOpacity
                       style={[styles.recalculateButton, { borderColor: colors.primary }]}
-                      onPress={() => {
+                      onPress={async () => {
                         console.log('[Profile iOS] Recalculate Goals button pressed');
-                        handleEditGoals();
+                        if (!user || !goal) return;
+                        setSaving(true);
+                        try {
+                          await recalculateGoals(user, goal);
+                          Alert.alert('Goals Updated!', 'Your goals have been recalculated based on your current data.');
+                        } catch (e: any) {
+                          Alert.alert('Error', e.message || 'Failed to recalculate goals');
+                        } finally {
+                          setSaving(false);
+                        }
                       }}
                     >
                       <IconSymbol
