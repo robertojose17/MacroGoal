@@ -684,7 +684,7 @@ export default function ProfileScreen() {
   const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : 'No preferences set';
 
   const goalSubtitle = goal
-    ? `${goal.daily_calories} cal · ${goal.protein_g}g protein`
+    ? `${goal.daily_calories} cal · ${goal.protein_g}g P · ${goal.carbs_g}g C · ${goal.fats_g}g F`
     : 'Set your daily targets';
 
   const personalInfoSubtitle = user.name || 'Tap to set';
@@ -782,10 +782,56 @@ export default function ProfileScreen() {
           >
             <View style={styles.groupedRowContent}>
               <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Calorie & Macro Goals
+                Personal Info, Calorie, Macro & Goals
               </Text>
               <Text style={[styles.groupedRowSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 {goalSubtitle}
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={15}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.groupedRow}
+            onPress={handleEditGoals}
+            activeOpacity={0.7}
+          >
+            <View style={styles.groupedRowContent}>
+              <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                Goal
+              </Text>
+              <Text style={[styles.groupedRowSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {goal?.goal_type === 'lose' ? 'Lose Weight' : goal?.goal_type === 'gain' ? 'Gain Weight' : goal?.goal_type === 'maintain' ? 'Maintain Weight' : 'Not set'}
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={15}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+
+          <TouchableOpacity
+            style={styles.groupedRow}
+            onPress={handleEditGoals}
+            activeOpacity={0.7}
+          >
+            <View style={styles.groupedRowContent}>
+              <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                Macro Split
+              </Text>
+              <Text style={[styles.groupedRowSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {goal ? `${goal.protein_g}g P · ${goal.carbs_g}g C · ${goal.fats_g}g F` : 'Not set'}
               </Text>
             </View>
             <IconSymbol
