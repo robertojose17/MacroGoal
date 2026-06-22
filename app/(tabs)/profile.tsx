@@ -783,38 +783,37 @@ export default function ProfileScreen() {
             }}
             activeOpacity={0.85}
             style={{
+              marginHorizontal: spacing.md,
               marginBottom: spacing.md,
               borderRadius: 16,
-              overflow: 'hidden',
-              backgroundColor: '#0d0d0d',
-              borderWidth: 1,
-              borderColor: '#c9a84c',
+              backgroundColor: isDark ? '#1E2D35' : '#EBF4F6',
+              borderWidth: 1.5,
+              borderColor: '#5B9AA8',
+              padding: spacing.lg,
             }}
           >
-            <View style={{ padding: spacing.lg }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={12} color="#c9a84c" />
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: '#c9a84c', textTransform: 'uppercase' }}>
-                  Macro Goal Premium
-                </Text>
-              </View>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: '#fff', marginBottom: 4 }}>
-                Unlock your full potential
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={11} color="#5B9AA8" />
+              <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: '#5B9AA8', textTransform: 'uppercase' }}>
+                Premium
               </Text>
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 16, lineHeight: 18 }}>
-                AI meal planning, advanced analytics, unlimited tracking & more
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? '#F1F5F9' : '#2B2D42', marginBottom: 4 }}>
+              Unlock your full potential
+            </Text>
+            <Text style={{ fontSize: 13, color: isDark ? '#A0A2B8' : '#6B7280', marginBottom: 14, lineHeight: 18 }}>
+              AI meal planning, advanced analytics, unlimited tracking & more
+            </Text>
+            <View style={{
+              alignSelf: 'flex-start',
+              backgroundColor: '#5B9AA8',
+              borderRadius: 10,
+              paddingHorizontal: 18,
+              paddingVertical: 9,
+            }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff', letterSpacing: 0.3 }}>
+                Upgrade Now
               </Text>
-              <View style={{
-                alignSelf: 'flex-start',
-                backgroundColor: '#c9a84c',
-                borderRadius: 10,
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-              }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#000', letterSpacing: 0.3 }}>
-                  Upgrade Now
-                </Text>
-              </View>
             </View>
           </TouchableOpacity>
         )}
