@@ -775,7 +775,7 @@ export default function ProfileScreen() {
           <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginBottom: 0 }]}>
-                Calorie & Goals Settings
+                Personal Info, Calorie, Macro & Goals
               </Text>
               <TouchableOpacity onPress={handleEditGoals}>
                 <Text style={[styles.advancedLink, { color: colors.primary }]}>
@@ -784,7 +784,9 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             <Text style={[styles.sectionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Edit any value to recalculate your daily targets
+              {goal
+                ? `${goal.daily_calories} cal · ${goal.protein_g}g P · ${goal.carbs_g}g C · ${goal.fats_g}g F`
+                : 'Edit any value to recalculate your daily targets'}
             </Text>
 
             {/* Editable Fields */}
@@ -918,6 +920,34 @@ export default function ProfileScreen() {
                   label="Weight Loss Rate"
                   value={getLossRateDisplayText(goal.loss_rate_lbs_per_week)}
                   onPress={() => openEditModal('lossRate')}
+                  isDark={isDark}
+                />
+              )}
+              {goal?.goal_type && (
+                <EditableSettingItem
+                  label="Goal"
+                  value={
+                    goal.goal_type === 'lose'
+                      ? 'Lose Weight'
+                      : goal.goal_type === 'gain'
+                      ? 'Gain Weight'
+                      : 'Maintain Weight'
+                  }
+                  onPress={() => {
+                    console.log('[Profile] Goal type row tapped');
+                    router.push('/edit-goals');
+                  }}
+                  isDark={isDark}
+                />
+              )}
+              {goal && (
+                <EditableSettingItem
+                  label="Macro Split"
+                  value={`${goal.protein_g}g P · ${goal.carbs_g}g C · ${goal.fats_g}g F`}
+                  onPress={() => {
+                    console.log('[Profile] Macro split row tapped');
+                    router.push('/edit-goals');
+                  }}
                   isDark={isDark}
                 />
               )}
