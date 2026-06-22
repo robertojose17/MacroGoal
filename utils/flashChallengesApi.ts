@@ -198,11 +198,15 @@ export async function loadOrGenerateFlashChallenges(
   const today = toLocalDateString();
 
   // Check if already generated for today
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from('flash_challenges')
     .select('*')
     .eq('user_id', user.id)
     .eq('date', today);
+
+  if (existingError) {
+    console.error('[flashChallengesApi] error fetching existing challenges:', existingError);
+  }
 
   if (existing && existing.length >= 1) {
     console.log('[flashChallengesApi] returning existing challenges for today:', existing.length);
@@ -316,11 +320,34 @@ export async function loadOrGenerateFlashChallenges(
   }
 
   console.log('[flashChallengesApi] upserting', challenges.length, 'challenges');
-  const { data: inserted } = await supabase
+  const { data: inserted, error: upsertError } = await supabase
     .from('flash_challenges')
-    .upsert(challenges, { onConflict: 'user_id,date,metric_type', ignoreDuplicates: true })
+    .upsert(challenges, { onConflict: 'user_id,date,metric_type', ignoreDuplicates: false })
     .select();
 
-  console.log('[flashChallengesApi] inserted:', inserted?.length ?? 0, 'challenges');
-  return (inserted ?? []) as FlashChallenge[];
+  if (upsertError) {
+    console.error('[flashChallengesApi] upsert error:', upsertError);
+    // Fall back to fetching existing rows for today
+    const { data: fallback } = await supabase
+      .from('flash_challenges')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('date', today);
+    console.log('[flashChallengesApi] fallback fetch returned:', fallback?.length ?? 0, 'challenges');
+    return (fallback ?? []) as FlashChallenge[];
+  }
+
+  if (!inserted || inserted.length === 0) {
+    console.log('[flashChallengesApi] upsert returned 0 rows — fetching existing for today');
+    const { data: fallback } = await supabase
+      .from('flash_challenges')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('date', today);
+    console.log('[flashChallengesApi] fallback fetch returned:', fallback?.length ?? 0, 'challenges');
+    return (fallback ?? []) as FlashChallenge[];
+  }
+
+  console.log('[flashChallengesApi] inserted:', inserted.length, 'challenges');
+  return inserted as FlashChallenge[];
 }
