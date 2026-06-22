@@ -26,6 +26,16 @@ const XP_REWARDS: Record<Difficulty, number> = {
   hard: 750,
 };
 
+// Fallback targets when there is no Apple Health history
+const FALLBACK_TARGETS: Record<string, { medium: number; hard: number }> = {
+  steps:            { medium: 7500,  hard: 10000 },
+  active_calories:  { medium: 300,   hard: 500   },
+  exercise_minutes: { medium: 30,    hard: 45    },
+  distance:         { medium: 3,     hard: 5     },
+  floors:           { medium: 8,     hard: 15    },
+  running_pace:     { medium: 10,    hard: 8     },
+};
+
 // Challenge templates
 const CHALLENGE_TEMPLATES: Record<MetricType, {
   title: (target: number, unit: string) => string;
@@ -159,9 +169,14 @@ export async function loadOrGenerateFlashChallenges(
 
   for (const [metric, difficulty] of [[mediumMetric, 'medium'], [hardMetric, 'hard']] as [MetricType, Difficulty][]) {
     const history = healthKitHistory[metric] ?? [];
-    const target = generateTarget(history, difficulty, metric);
+    let target = generateTarget(history, difficulty, metric);
     if (target <= 0) {
-      console.log('[flashChallengesApi] skipping', metric, difficulty, '— target is 0 (no history)');
+      // No Apple Health history — use sensible defaults so challenges always appear
+      target = FALLBACK_TARGETS[metric]?.[difficulty] ?? 0;
+      console.log('[flashChallengesApi] using fallback target for', metric, difficulty, ':', target);
+    }
+    if (target <= 0) {
+      console.log('[flashChallengesApi] skipping', metric, difficulty, '— unknown metric, no fallback');
       continue;
     }
 
