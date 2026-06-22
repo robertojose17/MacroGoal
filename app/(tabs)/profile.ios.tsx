@@ -258,17 +258,6 @@ export default function ProfileScreen() {
     return `${Math.round(weightKg)} kg`;
   };
 
-  const formatActivityLevel = (level: string) => {
-    const map: Record<string, string> = {
-      sedentary: 'Sedentary',
-      lightly_active: 'Lightly Active',
-      moderately_active: 'Moderately Active',
-      very_active: 'Very Active',
-      extra_active: 'Extra Active',
-    };
-    return map[level] || level;
-  };
-
   const openEditModal = (field: EditField) => {
     console.log('[Profile iOS] Opening edit modal for field:', field);
     const units = user?.preferred_units || 'metric';
@@ -694,16 +683,6 @@ export default function ProfileScreen() {
   }
   const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : 'No preferences set';
 
-  const goalSubtitle = goal
-    ? `${goal.daily_calories} cal · ${goal.protein_g}g P · ${goal.carbs_g}g C · ${goal.fats_g}g F`
-    : 'Set your daily targets';
-
-  const personalInfoSubtitle = user.name || 'Tap to set';
-
-  const avatarInitial = user.name
-    ? user.name.charAt(0).toUpperCase()
-    : user.email?.charAt(0).toUpperCase() || 'U';
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
@@ -712,27 +691,26 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      <ScrollView
+      <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <View style={styles.profileHeader}>
-          <View style={[styles.avatar, { borderColor: colors.primary }]}>
+        <View style={[styles.profileCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
             <Text style={styles.avatarText}>
-              {avatarInitial}
+              {user.name ? user.name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
             </Text>
           </View>
-
+          
           <Text style={[styles.userName, { color: isDark ? colors.textDark : colors.text }]}>
             {user.name || 'User'}
           </Text>
 
           {user.username ? (
-            <Text style={[styles.usernameText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            <Text style={styles.usernameText}>
               {'@'}
               {user.username}
             </Text>
@@ -757,18 +735,15 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
-          {isPremium && (
-            <View style={styles.premiumBadge}>
-              <Text style={styles.premiumBadgeText}>
-                {'✦ PREMIUM'}
-              </Text>
-            </View>
-          )}
-
+          <Text style={[styles.subscriptionStatus, { color: isPremium ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+            {subscriptionStatusText}
+          </Text>
+          
           <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {user.email || 'Guest User'}
           </Text>
 
+          {/* Challenger Badge */}
           {user.challenger_badge && (
             <View style={styles.badgeRow}>
               <View style={styles.challengerBadgePill}>
@@ -779,577 +754,369 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── GOALS & NUTRITION ──────────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          {'GOALS & NUTRITION'}
-        </Text>
-
-        <View style={[styles.groupedCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          {/* Card title + macro subtitle + Advanced button */}
-          <View style={styles.goalsCardTitleRow}>
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Personal Info, Calorie, Macro & Goals
-            </Text>
-          </View>
-          <View style={styles.goalsCardSubtitleRow}>
-            <Text style={[styles.goalsCardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {goalSubtitle}
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                console.log('[Profile iOS] Advanced goals button pressed from subtitle row');
-                handleEditGoals();
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.advancedButton}>
-                Advanced
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Name */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Name row pressed');
-              openEditModal('name');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Name
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {user.name || 'Tap to set'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Username */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Username row pressed');
-              router.push('/choose-username');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Username
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {user.username ? '@' + user.username : 'Set @username'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Height */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Height row pressed');
-              openEditModal('height');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Height
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {user.height ? formatHeight(user.height, units) : '—'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Current Weight */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Current Weight row pressed');
-              openEditModal('weight');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Current Weight
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {user.current_weight ? formatWeight(user.current_weight, units) : '—'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Goal Weight */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Goal Weight row pressed');
-              openEditModal('goalWeight');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Goal Weight
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {user.goal_weight ? formatWeight(user.goal_weight, units) : 'Tap to set'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Age */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Age row pressed');
-              openEditModal('age');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Age
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {age ? age + ' years' : '—'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Sex */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Sex row pressed');
-              Alert.alert('Select Sex', '', [
-                { text: 'Male', onPress: () => saveFieldDirectly('sex', 'male') },
-                { text: 'Female', onPress: () => saveFieldDirectly('sex', 'female') },
-                { text: 'Cancel', style: 'cancel' },
-              ]);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Sex
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {user.sex ? (user.sex.charAt(0).toUpperCase() + user.sex.slice(1)) : '—'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Activity Level */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Activity Level row pressed');
-              Alert.alert('Select Activity Level', '', [
-                { text: 'Sedentary', onPress: () => saveFieldDirectly('activity', 'sedentary') },
-                { text: 'Lightly Active', onPress: () => saveFieldDirectly('activity', 'lightly_active') },
-                { text: 'Moderately Active', onPress: () => saveFieldDirectly('activity', 'moderately_active') },
-                { text: 'Very Active', onPress: () => saveFieldDirectly('activity', 'very_active') },
-                { text: 'Extra Active', onPress: () => saveFieldDirectly('activity', 'extra_active') },
-                { text: 'Cancel', style: 'cancel' },
-              ]);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Activity Level
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {user.activity_level ? formatActivityLevel(user.activity_level) : '—'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Goal */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Goal row pressed');
-              handleEditGoals();
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Goal
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {goal?.goal_type === 'lose' ? 'Lose Weight' : goal?.goal_type === 'gain' ? 'Gain Weight' : goal?.goal_type === 'maintain' ? 'Maintain Weight' : 'Not set'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          {goal?.goal_type === 'lose' && (
-            <>
-              <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-              {/* Weight Loss Rate */}
-              <TouchableOpacity
-                style={styles.groupedRow}
-                onPress={() => {
-                  console.log('[Profile iOS] Weight Loss Rate row pressed');
-                  openEditModal('lossRate');
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                  Weight Loss Rate
-                </Text>
-                <View style={styles.groupedRowRight}>
-                  <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {getLossRateDisplayText(goal.loss_rate_lbs_per_week)}
-                  </Text>
-                  <IconSymbol
-                    ios_icon_name="chevron.right"
-                    android_material_icon_name="arrow-forward"
-                    size={15}
-                    color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                  />
-                </View>
-              </TouchableOpacity>
-            </>
-          )}
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Macro Split */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Macro Split row pressed');
-              handleEditGoals();
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Macro Split
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {goal ? goal.protein_g + 'g P · ' + goal.carbs_g + 'g C · ' + goal.fats_g + 'g F' : 'Not set'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Food Preferences */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Food Preferences row pressed');
-              setShowFoodPrefsModal(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Food Preferences
-            </Text>
-            <View style={styles.groupedRowRight}>
-              <Text style={[styles.groupedRowValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {foodPrefsSummary}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={15}
-                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Current Daily Targets */}
-          <View style={styles.dailyTargetsSection}>
-            <Text style={[styles.dailyTargetsTitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Current Daily Targets
-            </Text>
-            <View style={styles.dailyTargetsRow}>
-              <View style={styles.dailyTargetItem}>
-                <Text style={[styles.dailyTargetValue, { color: isDark ? colors.textDark : colors.text }]}>
-                  {goal ? String(goal.daily_calories) : '—'}
-                </Text>
-                <Text style={[styles.dailyTargetLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Calories
-                </Text>
-              </View>
-              <View style={styles.dailyTargetItem}>
-                <Text style={[styles.dailyTargetValue, { color: isDark ? colors.textDark : colors.text }]}>
-                  {goal ? goal.protein_g + 'g' : '—'}
-                </Text>
-                <Text style={[styles.dailyTargetLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Protein
-                </Text>
-              </View>
-              <View style={styles.dailyTargetItem}>
-                <Text style={[styles.dailyTargetValue, { color: isDark ? colors.textDark : colors.text }]}>
-                  {goal ? goal.carbs_g + 'g' : '—'}
-                </Text>
-                <Text style={[styles.dailyTargetLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Carbs
-                </Text>
-              </View>
-              <View style={styles.dailyTargetItem}>
-                <Text style={[styles.dailyTargetValue, { color: isDark ? colors.textDark : colors.text }]}>
-                  {goal ? goal.fats_g + 'g' : '—'}
-                </Text>
-                <Text style={[styles.dailyTargetLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Fat
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Journey Start Date */}
-          <View style={styles.journeyDateRow}>
-            <Text style={[styles.journeyDateLabel, { color: isDark ? colors.textDark : colors.text }]}>
-              Journey Start Date
-            </Text>
-            <View style={styles.journeyDateRight}>
-              <Text style={[styles.journeyDateValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {formatJourneyStartDate(goal?.start_date ?? null, user?.created_at ?? null)}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[Profile iOS] Journey Start Date calendar button pressed');
-                  openStartDatePicker();
-                }}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="calendar"
-                  android_material_icon_name="calendar-today"
-                  size={20}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* ── ACCOUNT (non-premium only) ─────────────────────────────────── */}
+        {/* Subscription Card */}
         {!isPremium && (
-          <>
-            <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              ACCOUNT
-            </Text>
-
-            <View style={[styles.groupedCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-              <TouchableOpacity
-                style={styles.groupedRow}
-                onPress={() => {
-                  console.log('[Profile iOS] Upgrade to Premium button pressed');
-                  router.push('/subscription');
-                }}
-                activeOpacity={0.7}
-              >
+          <TouchableOpacity
+            style={[styles.subscriptionCard, { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[Profile iOS] Upgrade to Premium button pressed');
+              router.push('/subscription');
+            }}
+          >
+            <View style={styles.subscriptionContent}>
+              <View style={styles.subscriptionIcon}>
                 <IconSymbol
                   ios_icon_name="star.fill"
                   android_material_icon_name="star"
-                  size={18}
-                  color={colors.primary}
+                  size={32}
+                  color="#FFFFFF"
                 />
-                <View style={[styles.groupedRowContent, { marginLeft: 10 }]}>
-                  <Text style={[styles.groupedRowLabel, { color: colors.primary, fontWeight: '600' }]}>
-                    Upgrade to Premium
-                  </Text>
-                </View>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="arrow-forward"
-                  size={15}
-                  color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                />
-              </TouchableOpacity>
+              </View>
+              <View style={styles.subscriptionText}>
+                <Text style={styles.subscriptionTitle}>Upgrade to Premium</Text>
+                <Text style={styles.subscriptionSubtitle}>
+                  Unlock advanced analytics, custom recipes, and more
+                </Text>
+              </View>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="arrow-forward"
+                size={20}
+                color="#FFFFFF"
+              />
             </View>
-          </>
+          </TouchableOpacity>
         )}
 
-        {/* ── MORE ───────────────────────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          MORE
-        </Text>
-
-        <View style={[styles.groupedCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          {/* Invite Friends & Earn XP */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Invite Friends & Earn XP pressed');
-              router.push('/referrals');
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.groupedRowContent}>
-              <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                {'Invite Friends & Earn XP'}
+        {/* Calorie & Goals Settings Card */}
+        {user.onboarding_completed && (
+          <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginBottom: 0 }]}>
+                Calorie & Goals Settings
               </Text>
+              <TouchableOpacity onPress={handleEditGoals}>
+                <Text style={[styles.advancedLink, { color: colors.primary }]}>
+                  Advanced
+                </Text>
+              </TouchableOpacity>
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="arrow-forward"
-              size={15}
-              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-            />
-          </TouchableOpacity>
+            <Text style={[styles.sectionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Edit any value to recalculate your daily targets
+            </Text>
 
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
-          {/* Notifications */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Notification Preferences pressed');
-              router.push('/notification-preferences');
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.groupedRowContent}>
-              <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Notifications
-              </Text>
+            {/* Editable Fields */}
+            <View style={styles.settingsGrid}>
+              <EditableSettingItem
+                label="Name"
+                value={user.name || 'Tap to set your name'}
+                onPress={() => openEditModal('name')}
+                isDark={isDark}
+                highlight={!user.name}
+              />
+              <EditableSettingItem
+                label="Username"
+                value={user.username ? `@${user.username}` : 'Set username'}
+                onPress={() => {
+                  console.log('[Profile iOS] Username row tapped');
+                  router.push('/choose-username');
+                }}
+                isDark={isDark}
+                highlight={!user.username}
+              />
+              {user.height && (
+                <EditableSettingItem
+                  label="Height"
+                  value={formatHeight(user.height, units)}
+                  onPress={() => openEditModal('height')}
+                  isDark={isDark}
+                />
+              )}
+              {user.current_weight && (
+                <EditableSettingItem
+                  label="Current Weight"
+                  value={formatWeight(user.current_weight, units)}
+                  onPress={() => openEditModal('weight')}
+                  isDark={isDark}
+                />
+              )}
+              <EditableSettingItem
+                label="Goal Weight"
+                value={user.goal_weight ? formatWeight(user.goal_weight, units) : 'Tap to set your goal weight'}
+                onPress={() => openEditModal('goalWeight')}
+                isDark={isDark}
+                highlight={!user.goal_weight}
+              />
+              {age && (
+                <EditableSettingItem
+                  label="Age"
+                  value={`${age} years`}
+                  onPress={() => openEditModal('age')}
+                  isDark={isDark}
+                />
+              )}
+              {user.sex && (
+                <EditableSettingItem
+                  label="Sex"
+                  value={user.sex === 'male' ? 'Male' : user.sex === 'female' ? 'Female' : 'Other'}
+                  onPress={() => {
+                    console.log('[Profile iOS] Sex field tapped');
+                    Alert.alert(
+                      'Select Sex',
+                      '',
+                      [
+                        {
+                          text: 'Male',
+                          onPress: () => {
+                            console.log('[Profile iOS] Sex changed to male');
+                            saveFieldDirectly('sex', 'male');
+                          },
+                        },
+                        {
+                          text: 'Female',
+                          onPress: () => {
+                            console.log('[Profile iOS] Sex changed to female');
+                            saveFieldDirectly('sex', 'female');
+                          },
+                        },
+                        { text: 'Cancel', style: 'cancel' },
+                      ]
+                    );
+                  }}
+                  isDark={isDark}
+                />
+              )}
+              {user.activity_level && (
+                <EditableSettingItem
+                  label="Activity Level"
+                  value={user.activity_level.charAt(0).toUpperCase() + user.activity_level.slice(1).replace('_', ' ')}
+                  onPress={() => {
+                    console.log('[Profile iOS] Activity level field tapped');
+                    Alert.alert(
+                      'Select Activity Level',
+                      '',
+                      [
+                        {
+                          text: 'Sedentary',
+                          onPress: () => {
+                            console.log('[Profile iOS] Activity level changed to sedentary');
+                            saveFieldDirectly('activity', 'sedentary');
+                          },
+                        },
+                        {
+                          text: 'Light',
+                          onPress: () => {
+                            console.log('[Profile iOS] Activity level changed to light');
+                            saveFieldDirectly('activity', 'light');
+                          },
+                        },
+                        {
+                          text: 'Moderate',
+                          onPress: () => {
+                            console.log('[Profile iOS] Activity level changed to moderate');
+                            saveFieldDirectly('activity', 'moderate');
+                          },
+                        },
+                        {
+                          text: 'Very Active',
+                          onPress: () => {
+                            console.log('[Profile iOS] Activity level changed to very_active');
+                            saveFieldDirectly('activity', 'very_active');
+                          },
+                        },
+                        { text: 'Cancel', style: 'cancel' },
+                      ]
+                    );
+                  }}
+                  isDark={isDark}
+                />
+              )}
+              {goal?.goal_type === 'lose' && goal?.loss_rate_lbs_per_week && (
+                <EditableSettingItem
+                  label="Weight Loss Rate"
+                  value={getLossRateDisplayText(goal.loss_rate_lbs_per_week)}
+                  onPress={() => openEditModal('lossRate')}
+                  isDark={isDark}
+                />
+              )}
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="arrow-forward"
-              size={15}
-              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-            />
-          </TouchableOpacity>
 
-          <View style={[styles.groupedDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+            {/* Current Goals Display */}
+            {goal && (
+              <View style={styles.currentGoalsSection}>
+                <Text style={[styles.currentGoalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  Current Daily Targets
+                </Text>
+                <View style={styles.goalsRow}>
+                  <View style={styles.goalItemCompact}>
+                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Calories
+                    </Text>
+                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                      {goal.daily_calories}
+                    </Text>
+                  </View>
+                  <View style={styles.goalItemCompact}>
+                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Protein
+                    </Text>
+                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                      {goal.protein_g}g
+                    </Text>
+                  </View>
+                  <View style={styles.goalItemCompact}>
+                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Carbs
+                    </Text>
+                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                      {goal.carbs_g}g
+                    </Text>
+                  </View>
+                  <View style={styles.goalItemCompact}>
+                    <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Fats
+                    </Text>
+                    <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
+                      {goal.fats_g}g
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
 
-          {/* Send Feedback */}
-          <TouchableOpacity
-            style={styles.groupedRow}
-            onPress={() => {
-              console.log('[Profile iOS] Send Feedback button pressed');
-              const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
-              Linking.openURL(mailtoUrl).catch((err) => {
-                console.error('[Profile iOS] Failed to open mail app:', err);
-                Alert.alert('Error', 'Could not open the mail app. Please email us at macrogoalapp@gmail.com');
-              });
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.groupedRowContent}>
-              <Text style={[styles.groupedRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Send Feedback
-              </Text>
-            </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="arrow-forward"
-              size={15}
-              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
+            {/* Start Date */}
+            {goal && (
+              <View style={styles.startDateSection}>
+                <View style={styles.startDateHeader}>
+                  <Text style={[styles.startDateLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                    Journey Start Date
+                  </Text>
+                  <TouchableOpacity onPress={openStartDatePicker} style={styles.dateButton}>
+                    <Text style={[styles.dateButtonText, { color: colors.primary }]}>
+                      {formatJourneyStartDate(goal.start_date, user.created_at)}
+                    </Text>
+                    <IconSymbol
+                      ios_icon_name="calendar"
+                      android_material_icon_name="event"
+                      size={16}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.startDateHelper, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  Track your progress from this date
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
-        {/* ── Log Out ────────────────────────────────────────────────────── */}
+        {!user.onboarding_completed && (
+          <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              No Goals Set
+            </Text>
+            <Text style={[styles.noGoalText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Complete onboarding to set your nutrition goals
+            </Text>
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: colors.primary }]}
+              onPress={handleEditGoals}
+            >
+              <Text style={styles.editButtonText}>Set Up Goals</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Food Preferences Card */}
         <TouchableOpacity
-          style={styles.logoutTouchable}
+          style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+          onPress={() => {
+            console.log('[Profile iOS] Food Preferences card pressed');
+            setShowFoodPrefsModal(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginBottom: 0 }]}>
+              Food Preferences
+            </Text>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={16}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </View>
+          <Text style={[styles.sectionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginBottom: 0 }]}>
+            {foodPrefsSummary}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Invite Friends & Earn XP */}
+        <TouchableOpacity
+          style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card, marginBottom: 12 }]}
+          onPress={() => {
+            console.log('[Profile iOS] Invite Friends & Earn XP pressed');
+            router.push('/referrals');
+          }}
+        >
+          <View style={styles.feedbackRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <IconSymbol
+                ios_icon_name="person.2.fill"
+                android_material_icon_name="group"
+                size={20}
+                color="#14B8A6"
+              />
+              <Text style={[styles.feedbackRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                Invite Friends & Earn XP
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={16}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </View>
+        </TouchableOpacity>
+
+        {/* Feedback Section */}
+        <TouchableOpacity
+          style={[styles.feedbackCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+          onPress={() => {
+            console.log('[Profile iOS] Send Feedback button pressed');
+            const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
+            Linking.openURL(mailtoUrl).catch((err) => {
+              console.error('[Profile iOS] Failed to open mail app:', err);
+              Alert.alert('Error', 'Could not open the mail app. Please email us at macrogoalapp@gmail.com');
+            });
+          }}
+        >
+          <View style={styles.feedbackRow}>
+            <Text style={[styles.feedbackRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+              Send Feedback
+            </Text>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={16}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: colors.error }]}
           onPress={handleLogout}
-          activeOpacity={0.6}
         >
           <Text style={[styles.logoutText, { color: colors.error }]}>
             Log Out
           </Text>
         </TouchableOpacity>
 
-        {/* ── Footer Links — DO NOT TOUCH ────────────────────────────────── */}
+        {/* Footer Links */}
         <View style={styles.footerLinksContainer}>
           <View style={styles.footerLinksRow}>
             <TouchableOpacity onPress={() => router.push('/privacy-policy')}>
@@ -1827,30 +1594,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 120,
   },
-  profileHeader: {
+  profileCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    paddingVertical: 28,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
   },
   userName: {
-    fontSize: 22,
-    fontWeight: '600',
-    lineHeight: 28,
-    marginBottom: 2,
+    ...typography.h2,
+    marginBottom: spacing.xs,
   },
   subscriptionStatus: {
     fontSize: 14,
@@ -1858,37 +1625,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   email: {
-    fontSize: 12,
-    marginTop: 2,
+    ...typography.body,
   },
   usernameText: {
-    fontSize: 13,
-    fontWeight: '400',
-    marginTop: 2,
-    marginBottom: 2,
-  },
-  premiumBadge: {
-    backgroundColor: colors.primary + '22',
-    borderRadius: 20,
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  premiumBadgeText: {
     color: colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-    marginTop: 28,
-    paddingHorizontal: 4,
-    textTransform: 'uppercase',
+    fontSize: 15,
+    fontWeight: '500',
+    marginTop: 2,
+    marginBottom: 4,
   },
   setUsernameRow: {
     flexDirection: 'row',
@@ -2075,48 +1819,16 @@ const styles = StyleSheet.create({
   feedbackRowLabel: {
     ...typography.body,
   },
-  groupedCard: {
-    borderRadius: 14,
-    marginBottom: 8,
-    overflow: 'hidden',
-  },
-  groupedRow: {
-    flexDirection: 'row',
+  logoutButton: {
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 52,
-  },
-  groupedRowContent: {
-    flex: 1,
-  },
-  groupedIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groupedRowLabel: {
-    fontSize: 16,
-    fontWeight: '400',
-  },
-  groupedRowSubtitle: {
-    fontSize: 13,
-    marginTop: 1,
-  },
-  groupedDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 16,
-  },
-  logoutTouchable: {
-    marginTop: 32,
-    marginBottom: 16,
-    alignItems: 'center',
+    borderWidth: 2,
+    marginBottom: spacing.md,
   },
   logoutText: {
+    fontWeight: '600',
     fontSize: 16,
-    textAlign: 'center',
   },
   footerLinksContainer: {
     alignItems: 'center',
@@ -2277,88 +1989,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 16,
-  },
-  // ── Goals & Nutrition card ────────────────────────────────────────────────
-  goalsCardTitleRow: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 4,
-  },
-  goalsCardSubtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  goalsCardSubtitle: {
-    fontSize: 13,
-    flex: 1,
-  },
-  advancedButton: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-    marginLeft: 8,
-  },
-  groupedRowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flexShrink: 1,
-    maxWidth: '55%',
-  },
-  groupedRowValue: {
-    fontSize: 15,
-    textAlign: 'right',
-    flexShrink: 1,
-  },
-  dailyTargetsSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  dailyTargetsTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-  },
-  dailyTargetsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dailyTargetItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  dailyTargetValue: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  dailyTargetLabel: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  journeyDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  journeyDateLabel: {
-    fontSize: 16,
-    fontWeight: '400',
-  },
-  journeyDateRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  journeyDateValue: {
-    fontSize: 15,
-    fontWeight: '500',
   },
   // ── Challenger Badge ──────────────────────────────────────────────────────
   badgeRow: {
