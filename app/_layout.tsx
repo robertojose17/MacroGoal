@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import {
-  Alert,
   AppState,
   AppStateStatus,
   Platform,
@@ -349,122 +348,6 @@ export default function RootLayout() {
       console.log("[DeepLink] Processing URL:", url);
       const { hostname, path, queryParams } = Linking.parse(url);
       console.log("[DeepLink] Parsed:", { hostname, path, queryParams });
-
-      if (queryParams?.subscription_success === "true") {
-        console.log("[DeepLink] Checkout success detected");
-        console.log("[DeepLink] Session ID:", queryParams.session_id);
-
-        Alert.alert(
-          "Payment Successful!",
-          "Processing your subscription... This will take just a moment.",
-          [{ text: "OK" }]
-        );
-
-        setTimeout(() => {
-          router.replace("/(tabs)/profile");
-        }, 300);
-
-        const syncWithRetries = async (
-          maxRetries = 10,
-          delayMs = 2000
-        ) => {
-          for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-              console.log(
-                `[DeepLink] Sync attempt ${attempt}/${maxRetries}`
-              );
-              const {
-                data: { session: currentSession },
-              } = await supabase.auth.getSession();
-              if (!currentSession) {
-                console.error("[DeepLink] No session found");
-                break;
-              }
-
-              const { data, error } = await supabase.functions.invoke(
-                "sync-subscription",
-                {
-                  headers: {
-                    Authorization: `Bearer ${currentSession.access_token}`,
-                  },
-                }
-              );
-
-              if (error) {
-                console.error(
-                  `[DeepLink] Sync attempt ${attempt} failed:`,
-                  error
-                );
-              } else {
-                console.log(
-                  `[DeepLink] Sync attempt ${attempt} succeeded:`,
-                  data
-                );
-              }
-
-              const { data: userData } = await supabase
-                .from("users")
-                .select("user_type")
-                .eq("id", currentSession.user.id)
-                .maybeSingle();
-
-              if (userData?.user_type === "premium") {
-                console.log("[DeepLink] Premium status confirmed");
-                Alert.alert(
-                  "Welcome to Premium!",
-                  "Your subscription is now active. Enjoy unlimited AI-powered meal estimates and all premium features!",
-                  [{ text: "Awesome!" }]
-                );
-                return;
-              }
-
-              if (attempt < maxRetries) {
-                await new Promise((resolve) =>
-                  setTimeout(resolve, delayMs)
-                );
-              }
-            } catch (error) {
-              console.error(
-                `[DeepLink] Error in sync attempt ${attempt}:`,
-                error
-              );
-            }
-          }
-
-          console.log(
-            "[DeepLink] Premium status not confirmed after all retries"
-          );
-          Alert.alert(
-            "Processing...",
-            "Your payment is being processed. Premium features will be unlocked shortly.",
-            [{ text: "OK" }]
-          );
-        };
-
-        syncWithRetries().catch((error) => {
-          console.error("[DeepLink] Error in syncWithRetries:", error);
-        });
-      } else if (queryParams?.subscription_cancelled === "true") {
-        console.log("[DeepLink] Checkout cancelled");
-        setTimeout(() => {
-          router.replace("/subscription");
-        }, 300);
-        Alert.alert(
-          "Checkout Cancelled",
-          "You can subscribe anytime to unlock premium features.",
-          [{ text: "OK" }]
-        );
-      } else if (queryParams?.subscription_error === "true") {
-        console.log("[DeepLink] Subscription error detected");
-        setTimeout(() => {
-          router.replace("/(tabs)/profile");
-        }, 300);
-        Alert.alert(
-          "Processing Issue",
-          "There was an issue processing your payment. Please check your subscription status or contact support if you were charged.",
-          [{ text: "OK" }]
-        );
-      }
     } catch (error) {
       console.error("[DeepLink] Error handling deep link:", error);
     }
@@ -493,40 +376,6 @@ export default function RootLayout() {
         // Non-blocking: report today's steps to the XP system (throttled to once/30 min)
         reportTodaySteps().catch((e) =>
           console.warn("[AppState] reportTodaySteps error (non-fatal):", e)
-        );
-
-        const syncTimeout = new Promise<void>((resolve) =>
-          setTimeout(resolve, 5000)
-        );
-
-        const doSync = async () => {
-          try {
-            const {
-              data: { session: currentSession },
-            } = await supabase.auth.getSession();
-            if (!currentSession) return;
-
-            const { data, error } = await supabase.functions.invoke(
-              "sync-subscription",
-              {
-                headers: {
-                  Authorization: `Bearer ${currentSession.access_token}`,
-                },
-              }
-            );
-
-            if (error) {
-              console.error("[AppState] Error syncing subscription:", error);
-            } else {
-              console.log("[AppState] Subscription synced:", data);
-            }
-          } catch (error) {
-            console.error("[AppState] Error in sync:", error);
-          }
-        };
-
-        Promise.race([doSync(), syncTimeout]).catch((err) =>
-          console.error("[AppState] Sync race error:", err)
         );
       }
     );

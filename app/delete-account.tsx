@@ -43,7 +43,6 @@ export default function DeleteAccountScreen() {
               // Note: This assumes RLS policies allow users to delete their own data
               await supabase.from('meal_items').delete().eq('user_id', user.id);
               await supabase.from('meals').delete().eq('user_id', user.id);
-              await supabase.from('daily_summaries').delete().eq('user_id', user.id);
               await supabase.from('check_ins').delete().eq('user_id', user.id);
               await supabase.from('goals').delete().eq('user_id', user.id);
               await supabase.from('subscriptions').delete().eq('user_id', user.id);
