@@ -168,7 +168,7 @@ export default function ChallengeDashboardCard({
   }, [mission?.current, mission?.target, isTodayDone]);
 
   // Theme-derived values
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const titleColor = isDark ? colors.textDark : colors.text;
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;

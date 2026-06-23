@@ -159,7 +159,7 @@ export default function GoalWeightCard({
     return () => { cancelled = true; };
   }, []);
 
-  const bg = isDark ? colors.cardDark : colors.card;
+  const bg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textPrimary = isDark ? '#F1F5F9' : '#2B2D42';
   const textSecondary = isDark ? '#A0A2B8' : '#6B7280';

@@ -245,7 +245,7 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
   // Track which challenge IDs have already had XP awarded this session
   const awardedRef = useRef<Set<string>>(new Set());
 
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;

@@ -271,7 +271,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
     loadPhotos();
   }, [loadPhotos]);
 
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subtextColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
