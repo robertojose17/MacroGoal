@@ -417,17 +417,29 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('[Home iOS] Screen focused, loading data');
-      // Auto-advance to today if the date has changed (e.g. app left open overnight)
+      // Auto-advance to today only if the stored date is in the future
       setSelectedDate(prev => {
         const today = new Date();
-        const prevStr = toLocalDateString(prev);
-        const todayStr = toLocalDateString(today);
-        return prevStr === todayStr ? prev : today;
+        const prevDate = new Date(prev);
+        prevDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        // Solo avanza a hoy si la fecha es futura (no resetea fechas pasadas)
+        return prevDate > today ? new Date() : prev;
       });
       loadData();
       loadPlans();
     }, [loadData, loadPlans])
   );
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    console.log('[Home iOS] selectedDate changed — reloading data for:', toLocalDateString(selectedDate));
+    loadData();
+  }, [selectedDate, loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);
