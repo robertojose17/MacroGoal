@@ -953,8 +953,39 @@ export default function CheckInsScreen() {
         await tryAwardWorkout(entry.id);
         emitXpRefresh();
       } else if (tracker.is_default && lowerName === 'weight') {
-        console.log('[CheckIns] Awarding weight_checkin XP for entry:', entry.id, 'value:', value);
-        tryAwardWeightCheckin(entry.id, value);
+        const weightInKg = value / 2.20462;
+        console.log('[CheckIns] Awarding weight_checkin XP for entry, value lbs:', value, 'kg:', weightInKg);
+        const { data: { user: weightUser } } = await supabase.auth.getUser();
+        if (weightUser) {
+          const { data: existingWeightCheckIn } = await supabase
+            .from('check_ins')
+            .select('id')
+            .eq('user_id', weightUser.id)
+            .eq('date', today)
+            .maybeSingle();
+
+          let weightCheckInId: string | null = null;
+          if (existingWeightCheckIn) {
+            await supabase
+              .from('check_ins')
+              .update({ weight: weightInKg, updated_at: new Date().toISOString() })
+              .eq('id', existingWeightCheckIn.id);
+            weightCheckInId = existingWeightCheckIn.id;
+            console.log('[CheckIns] Updated existing check_in with weight (kg):', weightInKg, 'id:', weightCheckInId);
+          } else {
+            const { data: newWeightCheckIn } = await supabase
+              .from('check_ins')
+              .insert({ user_id: weightUser.id, date: today, weight: weightInKg })
+              .select('id')
+              .single();
+            weightCheckInId = newWeightCheckIn?.id ?? null;
+            console.log('[CheckIns] Inserted new check_in with weight (kg):', weightInKg, 'id:', weightCheckInId);
+          }
+
+          if (weightCheckInId) {
+            tryAwardWeightCheckin(weightCheckInId, weightInKg);
+          }
+        }
 
         // Only prompt for a progress photo on NEW entries (not edits)
         if (!prevEntry) {
