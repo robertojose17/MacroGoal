@@ -71,8 +71,7 @@ export default function LeagueCard({ isDark }: LeagueCardProps) {
         onPress={handlePress}
         style={({ pressed }) => [
           styles.card,
-          { backgroundColor: cardBg, opacity: pressed ? 0.85 : 1 },
-          !isDark && styles.cardLight,
+          { backgroundColor: cardBg, borderColor: isDark ? '#3A3C52' : 'rgba(0,0,0,0.07)', opacity: pressed ? 0.85 : 1 },
         ]}
       >
         {/* Main content */}
@@ -112,6 +111,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 16,
     marginBottom: 12,
+    borderWidth: 1,
     overflow: 'hidden',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
@@ -119,7 +119,6 @@ const styles = StyleSheet.create({
     }),
   },
   cardLight: {
-    borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.07)',
   },
   content: {

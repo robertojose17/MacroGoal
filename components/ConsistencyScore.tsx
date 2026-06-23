@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { toLocalDateString } from '@/utils/dateUtils';
@@ -660,11 +661,18 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
 const styles = StyleSheet.create({
   card: {
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+    padding: spacing.md,
+    marginBottom: 12,
     borderWidth: 1,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
   },
   loadingContainer: {
     alignItems: 'center',
@@ -714,7 +722,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   cardTitle: {
-    ...typography.h3,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 24,
     marginBottom: spacing.xs,
   },
   subtitle: {

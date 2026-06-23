@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: 12,
     overflow: 'hidden',
     ...Platform.select({
       ios: {

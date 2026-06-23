@@ -74,7 +74,7 @@ export default function SocialComparisonCard({ ranking, isDark }: SocialComparis
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
   pill: {
     flexDirection: 'row',
@@ -87,11 +87,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
       },
-      android: { elevation: 1 },
+      android: { elevation: 2 },
     }),
   },
   globeIcon: {

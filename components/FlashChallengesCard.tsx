@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Share,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -323,14 +324,17 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    marginBottom: spacing.md,
+    marginBottom: 12,
     overflow: 'hidden',
-    // shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
   },
 
   header: {
@@ -348,6 +352,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...typography.bodyBold,
+    fontWeight: '700',
     marginLeft: spacing.xs,
   },
   timerPill: {

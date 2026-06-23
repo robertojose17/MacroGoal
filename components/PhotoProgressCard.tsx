@@ -480,7 +480,7 @@ export default PhotoProgressCardErrorBoundary;
 const styles = StyleSheet.create({
   card: {
     borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
+    marginBottom: 12,
     borderWidth: 1,
     ...Platform.select({
       ios: {
@@ -502,7 +502,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   cardTitle: {
-    ...typography.h3,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 24,
   },
   loadingContainer: {
     alignItems: 'center',
