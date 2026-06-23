@@ -410,7 +410,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
       <View
         style={[
           styles.card,
-          { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder },
+          { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.cardBorderDark : colors.cardBorder },
         ]}
       >
         <View style={styles.loadingContainer}>
@@ -483,7 +483,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
       <View
         style={[
           styles.card,
-          { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder },
+          { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.cardBorderDark : colors.cardBorder },
         ]}
       >
         {/* Main Score Row */}
