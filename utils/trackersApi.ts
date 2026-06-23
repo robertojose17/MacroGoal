@@ -367,100 +367,23 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
   const entryDates = new Set(entries.map((e: { date: string }) => e.date));
   const daysTracked = entryDates.size;
 
-  // ── Get authoritative streak from user_xp via sync-streak edge function ──
+  // ── Get streak from user_xp (single source of truth) ──
   let finalStreak = 0;
   let bestStreak = 0;
-  let syncData: {
-    current_streak: number;
-    longest_streak: number;
-    last_xp_date: string;
-    last_streak_value: number;
-    last_streak_lost_at: string | null;
-    streak_rescue_used: boolean;
-  } | null = null;
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token ?? '';
-    console.log('[TrackersApi] getStats — calling sync-streak edge function');
-    const syncRes = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/sync-streak`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'apikey': SUPABASE_ANON_KEY,
-      },
-    });
-    if (syncRes.ok) {
-      syncData = await syncRes.json();
-      finalStreak = syncData?.current_streak ?? 0;
-      bestStreak = syncData?.longest_streak ?? 0;
-      console.log('[TrackersApi] sync-streak response — current_streak:', finalStreak, 'longest_streak:', bestStreak);
-    } else {
-      const errText = await syncRes.text();
-      console.warn('[TrackersApi] sync-streak returned', syncRes.status, ':', errText);
-    }
+    const { data: userXpData } = await supabase
+      .from('user_xp')
+      .select('current_streak, longest_streak')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    finalStreak = userXpData?.current_streak ?? 0;
+    bestStreak = userXpData?.longest_streak ?? 0;
+    console.log('[TrackersApi] streak from user_xp — current:', finalStreak, 'best:', bestStreak);
   } catch (e) {
-    console.warn('[TrackersApi] sync-streak failed, using 0:', e);
+    console.warn('[TrackersApi] user_xp streak read failed, using 0:', e);
   }
-
-  // ── Rescue modal detection using sync-streak response data (fire-and-forget) ──
-  (async () => {
-    try {
-      if (!syncData) {
-        console.warn('[TrackersApi] getStats — skipping rescue state update, no sync-streak data');
-        return;
-      }
-
-      const lastStreakValue: number = syncData.last_streak_value ?? 0;
-      const streakRescueUsed: boolean = syncData.streak_rescue_used ?? false;
-
-      if (finalStreak > 0) {
-        if (streakRescueUsed && lastStreakValue > 0) {
-          // Rescued streak is still active — no DB update needed
-          console.log('[TrackersApi] Rescued streak active, current_streak:', finalStreak, '+ rescued:', lastStreakValue);
-        } else if (!streakRescueUsed && lastStreakValue > 0) {
-          // New streak started without rescuing — clear rescue state
-          console.log('[TrackersApi] New streak started without rescue, clearing rescue state');
-          await supabase
-            .from('users')
-            .update({ last_streak_value: 0, last_streak_lost_at: null, streak_rescue_used: false })
-            .eq('id', userId);
-        }
-        // else: normal streak, nothing to do
-      } else {
-        // finalStreak === 0
-        if (lastStreakValue === 0 && !streakRescueUsed && daysTracked > 0) {
-          // Detect freshly lost streak from sync-streak's last_streak_value
-          // sync-streak already tracks this — if last_streak_value > 0 it means a streak was lost
-          // but since it's 0 here, check last_streak_lost_at to see if it was recently set
-          const lostAt = syncData.last_streak_lost_at;
-          if (lostAt) {
-            console.log('[TrackersApi] Streak was lost at:', lostAt, '— rescue state already tracked by sync-streak');
-          }
-        } else if (lastStreakValue > 0 && !streakRescueUsed) {
-          // sync-streak reports a lost streak that hasn't been rescued yet — mirror to users table
-          console.log('[TrackersApi] Streak just lost (from sync-streak), value was', lastStreakValue, '— updating rescue state');
-          await supabase
-            .from('users')
-            .update({
-              last_streak_value: lastStreakValue,
-              last_streak_lost_at: syncData.last_streak_lost_at ?? new Date().toISOString(),
-              streak_rescue_used: false,
-            })
-            .eq('id', userId);
-        } else if (streakRescueUsed) {
-          // User already paid/dismissed AND lost their rescued or post-rescue streak
-          // Clear so next loss can trigger modal again
-          console.log('[TrackersApi] Post-rescue streak lost, clearing rescue state for future use');
-          await supabase
-            .from('users')
-            .update({ last_streak_value: 0, last_streak_lost_at: null, streak_rescue_used: false })
-            .eq('id', userId);
-        }
-      }
-    } catch (e: any) {
-      console.warn('[TrackersApi] getStats rescue state update failed:', e?.message);
-    }
-  })();
 
   // Days goal met
   let daysGoalMet = 0;
