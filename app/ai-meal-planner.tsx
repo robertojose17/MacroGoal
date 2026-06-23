@@ -691,27 +691,81 @@ export default function AIMealPlannerScreen() {
       if (!user) { Alert.alert('Error', 'Not authenticated'); return; }
 
       const todayStr = getTodayStr();
-      console.log('[AIMealPlanner] inserting food_log:', food.name, mealType, todayStr);
-      const { data: insertedLog, error } = await supabase.from('food_logs').insert({
-        user_id: user.id,
-        date: todayStr,
-        meal_type: mealType,
-        food_name: food.name,
-        calories: Math.round(Number(food.calories) || 0),
-        protein: Math.round(Number(food.protein) || 0),
-        carbs: Math.round(Number(food.carbs) || 0),
-        fats: Math.round(Number(food.fats) || 0),
-        fiber: Math.round(Number(food.fiber) || 0),
-        quantity: 1,
-        serving_description: food.serving_description || '1 serving',
-      }).select('id').single();
-      if (error) throw new Error(error.message);
+      const servingGrams = food.serving_unit === 'g' && food.serving_size > 0 ? food.serving_size : 100;
+
+      // Step 1: Upsert food into foods table (store per-100g values)
+      console.log('[AIMealPlanner] inserting food into foods table:', food.name);
+      const ratio = servingGrams > 0 ? 100 / servingGrams : 1;
+      const { data: foodData, error: foodError } = await supabase
+        .from('foods')
+        .insert({
+          name: food.name,
+          brand: food.brand || null,
+          serving_amount: 100,
+          serving_unit: 'g',
+          calories: Math.round((Number(food.calories) || 0) * ratio),
+          protein: Math.round((Number(food.protein) || 0) * ratio * 10) / 10,
+          carbs: Math.round((Number(food.carbs) || 0) * ratio * 10) / 10,
+          fats: Math.round((Number(food.fats) || 0) * ratio * 10) / 10,
+          fiber: Math.round((Number(food.fiber) || 0) * ratio * 10) / 10,
+          user_created: true,
+          created_by: user.id,
+        })
+        .select('id')
+        .single();
+      if (foodError) throw new Error(`Failed to create food: ${foodError.message}`);
+      console.log('[AIMealPlanner] food created in foods table, id:', foodData.id);
+
+      // Step 2: Find or create meals row for user/date/meal_type
+      const { data: existingMeal } = await supabase
+        .from('meals')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', todayStr)
+        .eq('meal_type', mealType)
+        .maybeSingle();
+
+      let mealId = existingMeal?.id;
+      if (!mealId) {
+        console.log('[AIMealPlanner] creating new meal row for', mealType, 'on', todayStr);
+        const { data: newMeal, error: mealError } = await supabase
+          .from('meals')
+          .insert({ user_id: user.id, date: todayStr, meal_type: mealType })
+          .select('id')
+          .single();
+        if (mealError) throw new Error(`Failed to create meal: ${mealError.message}`);
+        mealId = newMeal.id;
+        console.log('[AIMealPlanner] new meal created, id:', mealId);
+      } else {
+        console.log('[AIMealPlanner] using existing meal, id:', mealId);
+      }
+
+      // Step 3: Insert into meal_items
+      console.log('[AIMealPlanner] inserting meal_item for', food.name, 'meal_id:', mealId);
+      const { data: insertedItem, error: itemError } = await supabase
+        .from('meal_items')
+        .insert({
+          meal_id: mealId,
+          food_id: foodData.id,
+          quantity: food.serving_size > 0 ? food.serving_size : 1,
+          calories: Math.round(Number(food.calories) || 0),
+          protein: Math.round(Number(food.protein) || 0),
+          carbs: Math.round(Number(food.carbs) || 0),
+          fats: Math.round(Number(food.fats) || 0),
+          fiber: Math.round(Number(food.fiber) || 0),
+          serving_description: food.serving_description || '1 serving',
+          grams: servingGrams,
+          logged_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+      if (itemError) throw new Error(`Failed to create meal item: ${itemError.message}`);
 
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-      console.log('[AIMealPlanner] food added to log successfully:', food.name);
+      console.log('[AIMealPlanner] food added to meal_items successfully:', food.name, 'item_id:', insertedItem.id);
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
-      const xpSourceId = insertedLog?.id ?? `food_log_${user.id}_${todayStr}_${food.name}`;
+      const xpSourceId = insertedItem.id;
       console.log('[AIMealPlanner] awarding meal XP, source_id:', xpSourceId);
       tryAwardMealLogged(xpSourceId, mealType);
       evaluateDailyGoals(todayStr);
@@ -735,34 +789,94 @@ export default function AIMealPlannerScreen() {
       if (!user) { Alert.alert('Error', 'Not authenticated'); return; }
 
       const todayStr = getTodayStr();
-      const inserts = foods.map(food => ({
-        user_id: user.id,
-        date: todayStr,
-        meal_type: mealType,
-        food_name: food.name,
-        calories: Math.round(Number(food.calories) || 0),
-        protein: Math.round(Number(food.protein) || 0),
-        carbs: Math.round(Number(food.carbs) || 0),
-        fats: Math.round(Number(food.fats) || 0),
-        fiber: Math.round(Number(food.fiber) || 0),
-        quantity: 1,
-        serving_description: food.serving_description || '1 serving',
-      }));
 
-      console.log('[AIMealPlanner] inserting', inserts.length, 'food_logs for', mealType);
-      const { data: insertedLogs, error } = await supabase.from('food_logs').insert(inserts).select('id');
-      if (error) throw new Error(error.message);
+      // Step 1: Find or create meals row for user/date/meal_type
+      const { data: existingMeal } = await supabase
+        .from('meals')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', todayStr)
+        .eq('meal_type', mealType)
+        .maybeSingle();
+
+      let mealId = existingMeal?.id;
+      if (!mealId) {
+        console.log('[AIMealPlanner] creating new meal row for bulk add:', mealType, 'on', todayStr);
+        const { data: newMeal, error: mealError } = await supabase
+          .from('meals')
+          .insert({ user_id: user.id, date: todayStr, meal_type: mealType })
+          .select('id')
+          .single();
+        if (mealError) throw new Error(`Failed to create meal: ${mealError.message}`);
+        mealId = newMeal.id;
+        console.log('[AIMealPlanner] new meal created for bulk add, id:', mealId);
+      } else {
+        console.log('[AIMealPlanner] using existing meal for bulk add, id:', mealId);
+      }
+
+      // Step 2: For each food, insert into foods then meal_items
+      const insertedItemIds: string[] = [];
+      for (const food of foods) {
+        const servingGrams = food.serving_unit === 'g' && food.serving_size > 0 ? food.serving_size : 100;
+        const ratio = servingGrams > 0 ? 100 / servingGrams : 1;
+
+        console.log('[AIMealPlanner] bulk: inserting food into foods table:', food.name);
+        const { data: foodData, error: foodError } = await supabase
+          .from('foods')
+          .insert({
+            name: food.name,
+            brand: food.brand || null,
+            serving_amount: 100,
+            serving_unit: 'g',
+            calories: Math.round((Number(food.calories) || 0) * ratio),
+            protein: Math.round((Number(food.protein) || 0) * ratio * 10) / 10,
+            carbs: Math.round((Number(food.carbs) || 0) * ratio * 10) / 10,
+            fats: Math.round((Number(food.fats) || 0) * ratio * 10) / 10,
+            fiber: Math.round((Number(food.fiber) || 0) * ratio * 10) / 10,
+            user_created: true,
+            created_by: user.id,
+          })
+          .select('id')
+          .single();
+        if (foodError) {
+          console.error('[AIMealPlanner] bulk: failed to create food:', food.name, foodError.message);
+          continue;
+        }
+
+        console.log('[AIMealPlanner] bulk: inserting meal_item for', food.name, 'food_id:', foodData.id);
+        const { data: itemData, error: itemError } = await supabase
+          .from('meal_items')
+          .insert({
+            meal_id: mealId,
+            food_id: foodData.id,
+            quantity: food.serving_size > 0 ? food.serving_size : 1,
+            calories: Math.round(Number(food.calories) || 0),
+            protein: Math.round(Number(food.protein) || 0),
+            carbs: Math.round(Number(food.carbs) || 0),
+            fats: Math.round(Number(food.fats) || 0),
+            fiber: Math.round(Number(food.fiber) || 0),
+            serving_description: food.serving_description || '1 serving',
+            grams: servingGrams,
+            logged_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+        if (itemError) {
+          console.error('[AIMealPlanner] bulk: failed to create meal_item:', food.name, itemError.message);
+          continue;
+        }
+        insertedItemIds.push(itemData.id);
+      }
 
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-      console.log('[AIMealPlanner] all foods added to', mealType);
+      console.log('[AIMealPlanner] bulk add complete:', insertedItemIds.length, 'of', foods.length, 'items added to', mealType);
 
-      // ── XP: award meal_logged for each inserted log (fire-and-forget) ────
-      const logIds: string[] = (insertedLogs ?? []).map((r: any) => r.id as string);
-      logIds.forEach((logId, idx) => {
-        console.log('[AIMealPlanner] awarding meal XP for bulk log', idx, 'source_id:', logId);
-        tryAwardMealLogged(logId, mealType);
+      // ── XP: award meal_logged for each inserted item (fire-and-forget) ────
+      insertedItemIds.forEach((itemId, idx) => {
+        console.log('[AIMealPlanner] awarding meal XP for bulk item', idx, 'source_id:', itemId);
+        tryAwardMealLogged(itemId, mealType);
       });
-      if (logIds.length > 0) {
+      if (insertedItemIds.length > 0) {
         evaluateDailyGoals(todayStr);
         // Notify challenge hook that meals were logged
         emitMealLogged();
