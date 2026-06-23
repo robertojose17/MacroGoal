@@ -93,8 +93,6 @@ interface ChallengeRowProps {
 function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeRowProps) {
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const difficultyColor = challenge.difficulty === 'medium' ? MEDIUM_COLOR : HARD_COLOR;
-  const difficultyLabel = challenge.difficulty === 'medium' ? 'MEDIUM' : 'HARD';
   const isComplete = challenge.completed || challenge.progressPct >= 100;
   const isReferral = challenge.metric_type === 'referral';
 
@@ -171,9 +169,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
           <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
             {challenge.title}
           </Text>
-          {referralComplete && (
-            <Ionicons name="checkmark-circle" size={16} color={COMPLETE_GREEN} style={{ marginLeft: 4 }} />
-          )}
+
         </View>
         <Text style={[styles.challengeDesc, { color: mutedColor }]} numberOfLines={1}>
           {isReferral ? `${weekReferrals} / 3 friends referred today` : challenge.description}
@@ -201,9 +197,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
         <View style={styles.xpBadge}>
           <Text style={styles.xpBadgeText}>{xpLabel}</Text>
         </View>
-        <View style={[styles.difficultyPill, { backgroundColor: difficultyColor + '22' }]}>
-          <Text style={[styles.difficultyText, { color: difficultyColor }]}>{difficultyLabel}</Text>
-        </View>
+
       </View>
     </View>
   );
@@ -434,7 +428,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   xpBadge: {
-    backgroundColor: GOLD + '22',
+    backgroundColor: '#3B82F6' + '22',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: borderRadius.full,
@@ -442,17 +436,7 @@ const styles = StyleSheet.create({
   xpBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: GOLD,
-  },
-  difficultyPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-  },
-  difficultyText: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    color: '#3B82F6',
   },
   shareCodeButton: {
     flexDirection: 'row',
