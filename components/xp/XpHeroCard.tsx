@@ -173,7 +173,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
                 }}
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
-                <Text style={[styles.rankTierName, { color: rank.primaryColor }]}>{rank.tierName}</Text>
+                <Text style={[styles.rankTierName, { color: rank.primaryColor }]}>{rank.tierName} {rank.romanNumeral}</Text>
               </Pressable>
 
               <Pressable
