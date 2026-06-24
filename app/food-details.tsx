@@ -5,6 +5,7 @@ import { Alert } from 'react-native';
 import FoodDetailsLayout from '@/components/FoodDetailsLayout';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { addMealPlanItem } from '@/utils/mealPlansApi';
+import type { FoodLogSource } from '@/utils/logFoodUsage';
 
 export default function FoodDetailsScreen() {
   const params = useLocalSearchParams();
@@ -20,8 +21,9 @@ export default function FoodDetailsScreen() {
   const returnTo = (params.returnTo as string) || undefined;
   const itemId = (params.itemId as string) || undefined;
   const planId = (params.planId as string) || undefined;
+  const source = (params.source as FoodLogSource) || 'search';
 
-  console.log('[FoodDetails] Screen mounted, layoutMode:', layoutMode, 'isMealPlanMode:', isMealPlanMode, 'mealType:', mealType, 'date:', date, 'context:', context, 'planId:', planId);
+  console.log('[FoodDetails] Screen mounted, layoutMode:', layoutMode, 'isMealPlanMode:', isMealPlanMode, 'mealType:', mealType, 'date:', date, 'context:', context, 'planId:', planId, 'source:', source);
 
   if (isMealPlanMode && planId) {
     // Meal-plan mode: intercept save to POST to meal plan items API
@@ -75,6 +77,7 @@ export default function FoodDetailsScreen() {
         returnTo={returnTo}
         itemId={itemId}
         planId={planId}
+        source={source}
         onMealPlanSave={handleMealPlanSave}
       />
     );
@@ -89,6 +92,7 @@ export default function FoodDetailsScreen() {
       context={context}
       returnTo={returnTo}
       itemId={itemId}
+      source={source}
     />
   );
 }

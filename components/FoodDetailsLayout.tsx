@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
+import { logFoodUsage, type FoodLogSource } from '@/utils/logFoodUsage';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -53,6 +54,7 @@ interface FoodDetailsLayoutProps {
   returnTo?: string;
   itemId?: string;
   planId?: string;
+  source?: FoodLogSource;
   onSaveComplete?: () => void;
   onMealPlanSave?: (foodData: {
     food_name: string;
@@ -261,6 +263,7 @@ export default function FoodDetailsLayout({
   returnTo,
   itemId,
   planId,
+  source = 'search',
   onSaveComplete,
   onMealPlanSave,
 }: FoodDetailsLayoutProps) {
@@ -942,6 +945,10 @@ export default function FoodDetailsLayout({
 
           console.log('[FoodDetails] handleSave: meal_item inserted successfully');
           setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Food added to meal', timestamp: Date.now() }]);
+
+          // ── Log food usage (fire-and-forget) ─────────────────────────────
+          console.log('[FoodDetails] Logging food usage, food_id:', foodId, 'source:', source);
+          logFoodUsage(foodId, source);
 
           // ── XP: award meal_logged (fire-and-forget) ──────────────────────
           // We don't have the new meal_item id here (no .select()), so use mealId+foodId as source

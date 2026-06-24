@@ -22,6 +22,7 @@ import { emitMealLogged } from '@/utils/xpEvents';
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 import { formatServing } from '@/utils/servingFormat';
 import { hybridSearch } from '@/utils/foodSearchHybrid';
+import { logFoodUsage } from '@/utils/logFoodUsage';
 
 // Source tag for progressive UI
 type ResultSource = 'local' | 'supabase' | 'off';
@@ -1068,6 +1069,10 @@ export default function AddFoodScreen() {
       console.log('[AddFood] ✅ Recent food added successfully!');
       console.log('[AddFood] Triggering success banner');
 
+      // ── Log food usage (fire-and-forget) ─────────────────────────────────
+      console.log('[AddFood] Logging food usage for recent food, food_id:', food.id);
+      logFoodUsage(food.id, 'search');
+
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = `${mealId}_${food.id}_${date}`;
       console.log('[AddFood] awarding meal XP for recent food, source_id:', xpSourceId);
@@ -1385,6 +1390,10 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] ✅ Favorite added to meal successfully');
       console.log('[AddFood] Triggering success banner');
+
+      // ── Log food usage (fire-and-forget) ─────────────────────────────────
+      console.log('[AddFood] Logging food usage for favorite, food_id:', foodId);
+      logFoodUsage(foodId, 'search');
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = `${mealId}_${foodId}_${date}`;
@@ -1778,6 +1787,12 @@ export default function AddFoodScreen() {
       }
 
       console.log('[AddFood] ✅ Saved meal added successfully!');
+
+      // ── Log food usage for each item (fire-and-forget) ───────────────────
+      itemsToInsert.forEach((item: any) => {
+        console.log('[AddFood] Logging food usage for saved meal item, food_id:', item.food_id);
+        logFoodUsage(item.food_id, 'search');
+      });
 
       // Notify challenge hook that a meal was logged
       emitMealLogged();

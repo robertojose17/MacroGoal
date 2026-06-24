@@ -12,6 +12,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
+import { logFoodUsage } from '@/utils/logFoodUsage';
 
 export default function AddFoodSimpleScreen() {
   const router = useRouter();
@@ -212,6 +213,10 @@ export default function AddFoodSimpleScreen() {
 
       console.log('[AddFoodSimple] ✅ Meal item created successfully:', mealItemData);
       console.log('[AddFoodSimple] Quick Add complete! Dismissing modal back to diary...');
+
+      // ── Log food usage (fire-and-forget) ─────────────────────────────────
+      console.log('[AddFoodSimple] Logging food usage, food_id:', foodData.id);
+      logFoodUsage(foodData.id, 'search');
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = mealItemData?.id ?? `${mealId}_${foodData.id}_${date}`;

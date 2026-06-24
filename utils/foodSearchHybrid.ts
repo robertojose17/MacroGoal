@@ -1,7 +1,7 @@
 
 import { searchOpenFoodFacts, type OpenFoodFactsProduct } from './openFoodFacts';
 import { getLocalCache, setLocalCache } from './foodSearchCache';
-import { SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA';
 const SUPABASE_TIMEOUT_MS = 5000;
@@ -49,6 +49,16 @@ async function fetchSupabaseSearch(
   const url = `${SUPABASE_PROJECT_URL}/functions/v1/search-foods`;
   console.log('[HybridSearch] Supabase search-foods URL:', url);
 
+  // Get user_id best-effort for personalized scoring
+  let userId: string | undefined;
+  try {
+    const { data } = await supabase.auth.getSession();
+    userId = data?.session?.user?.id;
+    console.log('[HybridSearch] user_id for personalized search:', userId ?? 'anonymous');
+  } catch {
+    // Non-blocking — fall back to global scoring
+  }
+
   try {
     const response = await fetchWithAbortAndTimeout(
       url,
@@ -58,7 +68,7 @@ async function fetchSupabaseSearch(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ query, limit: 30 }),
+        body: JSON.stringify({ query, limit: 30, user_id: userId ?? undefined }),
       },
       SUPABASE_TIMEOUT_MS,
       abortSignal,
