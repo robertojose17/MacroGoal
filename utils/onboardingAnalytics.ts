@@ -34,16 +34,85 @@ export async function trackOnboardingEvent(
   try {
     const session_id = await getOrCreateSessionId();
     const { data: { user } } = await supabase.auth.getUser();
+    const user_id = user?.id ?? null;
 
-    console.log('[OnboardingAnalytics] Tracking event:', event, { step, session_id, userId: user?.id ?? null });
+    console.log('[OnboardingAnalytics] Tracking event:', event, { step, session_id, userId: user_id });
 
-    await supabase.from('onboarding_events').insert({
+    // Fire-and-forget: insert the raw event
+    supabase.from('onboarding_events').insert({
       session_id,
-      user_id: user?.id ?? null,
+      user_id,
       event,
       step: step ?? null,
       properties: properties ?? null,
+    }).then(({ error }) => {
+      if (error) console.warn('[OnboardingAnalytics] Insert error:', error.message);
     });
+
+    // Upsert the funnel row (fire-and-forget)
+    void (async () => {
+      try {
+        const isStepEvent =
+          event === 'onboarding_step_viewed' || event === 'onboarding_step_completed';
+
+        if (isStepEvent && step !== undefined && step !== null) {
+          // Fetch current max_step_reached so we can take the max client-side
+          const { data: existing } = await supabase
+            .from('onboarding_funnel')
+            .select('max_step_reached')
+            .eq('session_id', session_id)
+            .maybeSingle();
+
+          const currentMax = existing?.max_step_reached ?? 0;
+          const newMax = Math.max(currentMax, step);
+
+          await supabase.from('onboarding_funnel').upsert(
+            {
+              session_id,
+              user_id,
+              max_step_reached: newMax,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'session_id' }
+          );
+        } else if (event === 'onboarding_completed') {
+          await supabase.from('onboarding_funnel').upsert(
+            {
+              session_id,
+              user_id,
+              completed: true,
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'session_id' }
+          );
+        } else if (event === 'onboarding_paywall_start_trial') {
+          await supabase.from('onboarding_funnel').upsert(
+            {
+              session_id,
+              user_id,
+              paywall_shown: true,
+              trial_started: true,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'session_id' }
+          );
+        } else if (event === 'onboarding_paywall_skip') {
+          await supabase.from('onboarding_funnel').upsert(
+            {
+              session_id,
+              user_id,
+              paywall_shown: true,
+              trial_skipped: true,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'session_id' }
+          );
+        }
+      } catch (funnelErr) {
+        console.warn('[OnboardingAnalytics] Funnel upsert error:', funnelErr);
+      }
+    })();
   } catch (e) {
     // Never crash the app for analytics
     console.warn('[OnboardingAnalytics] Failed to track event:', e);
