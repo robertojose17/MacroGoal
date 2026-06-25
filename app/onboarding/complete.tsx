@@ -148,6 +148,7 @@ export default function CompleteOnboardingScreen() {
   const goBack = () => {
     if (step > 0) {
       console.log(`[Onboarding] Going back from step ${step} to step ${step - 1}`);
+      trackOnboardingEvent('onboarding_back_tapped', step);
       goToStep(step - 1);
     }
   };

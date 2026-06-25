@@ -26,6 +26,7 @@ import { setUserTimezone } from "@/utils/macroXpApi";
 import type { Session } from "@supabase/supabase-js";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Constants from "expo-constants";
+import { trackOnboardingEvent } from "@/utils/onboardingAnalytics";
 import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
 import mobileAds from "@/utils/mobileAds";
 
@@ -140,6 +141,7 @@ export default function RootLayout() {
         );
         setSession(resolvedSession);
         setIsReady(true);
+        trackOnboardingEvent('app_opened');
         runPostInitSideEffects(resolvedSession);
       });
 

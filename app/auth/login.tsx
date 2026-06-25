@@ -37,6 +37,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     console.log('[Login] Button pressed — starting login process');
+    trackOnboardingEvent('auth_login_attempted');
 
     if (!email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -81,6 +82,7 @@ export default function LoginScreen() {
       }
 
       console.log('[Login] ✅ User logged in:', data.user.id);
+      trackOnboardingEvent('auth_login_completed', undefined, { userId: data.user.id });
       console.log('[Login] Auth state change will handle navigation via _layout.tsx');
     } catch (error: any) {
       console.error('[Login] Unexpected error:', error);
@@ -109,6 +111,7 @@ export default function LoginScreen() {
 
   const handleGoToSignUp = () => {
     console.log('[Login] Navigate to Sign Up tapped');
+    trackOnboardingEvent('login_signup_link_tapped');
     router.replace('/auth/signup');
   };
 

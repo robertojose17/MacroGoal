@@ -228,6 +228,7 @@ export default function SignUpScreen() {
 
   const handleGoToLogin = () => {
     console.log('[SignUp] Navigate to Log In tapped');
+    trackOnboardingEvent('signup_login_link_tapped');
     router.replace('/auth/login');
   };
 
