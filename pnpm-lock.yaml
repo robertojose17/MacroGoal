@@ -169,7 +169,7 @@ importers:
         version: 2.32.0(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-google-mobile-ads:
         specifier: ^16.2.3
-        version: 16.3.4(expo@54.0.35)(react@19.1.0)
+        version: 16.4.0(expo@54.0.35)(react@19.1.0)
       react-native-health-connect:
         specifier: ^3.5.3
         version: 3.5.3(@expo/config-plugins@56.0.9(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -5186,8 +5186,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  react-native-google-mobile-ads@16.3.4:
-    resolution: {integrity: sha512-UDwyymhXZ//AqQVTcnEGD6Nt2M14LNL332jwi9HEHBsGK+N6VKm+IOgsb/b26mtUHxHW+XrQBilbGtiENdrqTA==}
+  react-native-google-mobile-ads@16.4.0:
+    resolution: {integrity: sha512-I+H9huEO30XaNZ4InPLCZS2DsnbegGjWqFavJMFssDnm78OPJkAOodY6OSCsEtonq0pdG2YbhchhIuZmE427Mw==}
     peerDependencies:
       expo: '>=47.0.0'
     peerDependenciesMeta:
@@ -12447,7 +12447,7 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
 
-  react-native-google-mobile-ads@16.3.4(expo@54.0.35)(react@19.1.0):
+  react-native-google-mobile-ads@16.4.0(expo@54.0.35)(react@19.1.0):
     dependencies:
       '@iabtcf/core': 1.5.6
       use-deep-compare-effect: 1.8.1(react@19.1.0)
