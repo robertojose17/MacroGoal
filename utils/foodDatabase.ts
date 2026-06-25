@@ -185,6 +185,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       .select(`
         id,
         food_id,
+        food_item_id,
         serving_description,
         grams,
         calories,
@@ -258,6 +259,8 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         is_favorite: false,
         // Store the last used serving description for display
         last_serving_description: item.serving_description || undefined,
+        // Carry through the catalog ID so logFoodUsage gets the right table's ID
+        food_item_id: (item as any).food_item_id ?? undefined,
       };
 
       uniqueFoods.push(food);

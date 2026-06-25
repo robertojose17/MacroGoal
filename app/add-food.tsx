@@ -1069,9 +1069,13 @@ export default function AddFoodScreen() {
       console.log('[AddFood] ✅ Recent food added successfully!');
       console.log('[AddFood] Triggering success banner');
 
-      // ── Log food usage (fire-and-forget) ─────────────────────────────────
-      console.log('[AddFood] Logging food usage for recent food, food_id:', food.id);
-      logFoodUsage(food.id, 'search');
+      // ── Log food usage (fire-and-forget) — use catalog food_item_id, not foods.id ──
+      if (food.food_item_id) {
+        console.log('[AddFood] Logging food usage for recent food, food_item_id:', food.food_item_id);
+        logFoodUsage(food.food_item_id, 'search');
+      } else {
+        console.log('[AddFood] Skipping logFoodUsage for recent food — no catalog food_item_id');
+      }
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = `${mealId}_${food.id}_${date}`;
@@ -1391,9 +1395,23 @@ export default function AddFoodScreen() {
       console.log('[AddFood] ✅ Favorite added to meal successfully');
       console.log('[AddFood] Triggering success banner');
 
-      // ── Log food usage (fire-and-forget) ─────────────────────────────────
-      console.log('[AddFood] Logging food usage for favorite, food_id:', foodId);
-      logFoodUsage(foodId, 'search');
+      // ── Log food usage (fire-and-forget) — resolve catalog food_item_id first ──
+      {
+        const { data: miRow } = await supabase
+          .from('meal_items')
+          .select('food_item_id')
+          .eq('food_id', foodId)
+          .not('food_item_id', 'is', null)
+          .limit(1)
+          .maybeSingle();
+        const catalogId: string | null = miRow?.food_item_id ?? null;
+        if (catalogId) {
+          console.log('[AddFood] Logging food usage for favorite, food_item_id:', catalogId);
+          logFoodUsage(catalogId, 'search');
+        } else {
+          console.log('[AddFood] Skipping logFoodUsage for favorite — no catalog food_item_id found for food_id:', foodId);
+        }
+      }
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = `${mealId}_${foodId}_${date}`;
@@ -1788,11 +1806,23 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] ✅ Saved meal added successfully!');
 
-      // ── Log food usage for each item (fire-and-forget) ───────────────────
-      itemsToInsert.forEach((item: any) => {
-        console.log('[AddFood] Logging food usage for saved meal item, food_id:', item.food_id);
-        logFoodUsage(item.food_id, 'search');
-      });
+      // ── Log food usage for each item (fire-and-forget) — resolve catalog IDs ──
+      for (const item of itemsToInsert as any[]) {
+        const { data: miRow } = await supabase
+          .from('meal_items')
+          .select('food_item_id')
+          .eq('food_id', item.food_id)
+          .not('food_item_id', 'is', null)
+          .limit(1)
+          .maybeSingle();
+        const catalogId: string | null = miRow?.food_item_id ?? null;
+        if (catalogId) {
+          console.log('[AddFood] Logging food usage for saved meal item, food_item_id:', catalogId);
+          logFoodUsage(catalogId, 'search');
+        } else {
+          console.log('[AddFood] Skipping logFoodUsage for saved meal item — no catalog food_item_id for food_id:', item.food_id);
+        }
+      }
 
       // Notify challenge hook that a meal was logged
       emitMealLogged();

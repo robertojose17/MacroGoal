@@ -24,7 +24,7 @@ import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
-import { logFoodUsage } from '@/utils/logFoodUsage';
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -765,9 +765,8 @@ export default function AIMealPlannerScreen() {
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
       console.log('[AIMealPlanner] food added to meal_items successfully:', food.name, 'item_id:', insertedItem.id);
 
-      // ── Log food usage (fire-and-forget) ─────────────────────────────────
-      console.log('[AIMealPlanner] Logging food usage for planner food, food_id:', foodData.id);
-      logFoodUsage(foodData.id, 'planner');
+      // AI planner foods are user_created — do not affect catalog popularity
+      console.log('[AIMealPlanner] Skipping logFoodUsage for AI planner food (user_created):', food.name);
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
       const xpSourceId = insertedItem.id;
@@ -872,9 +871,8 @@ export default function AIMealPlannerScreen() {
         }
         insertedItemIds.push(itemData.id);
 
-        // ── Log food usage (fire-and-forget) ───────────────────────────────
-        console.log('[AIMealPlanner] Logging food usage for bulk planner food, food_id:', foodData.id);
-        logFoodUsage(foodData.id, 'planner');
+        // AI planner foods are user_created — do not affect catalog popularity
+        console.log('[AIMealPlanner] Skipping logFoodUsage for bulk AI planner food (user_created):', food.name);
       }
 
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);

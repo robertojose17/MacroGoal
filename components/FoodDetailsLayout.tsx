@@ -840,6 +840,34 @@ export default function FoodDetailsLayout({
             router.back();
           }, 500);
         } else {
+          // ── Resolve food_items.id from the global catalog (when offData present) ──
+          let foodItemId: string | null = null;
+          if (offData) {
+            const barcode = product.code && product.code.trim().length > 0 ? product.code.trim() : null;
+            if (barcode) {
+              console.log('[FoodDetails] handleSave: looking up food_items by barcode=', barcode);
+              const { data: fi } = await supabase
+                .from('food_items')
+                .select('id')
+                .eq('barcode', barcode)
+                .maybeSingle();
+              foodItemId = fi?.id ?? null;
+              console.log('[FoodDetails] handleSave: food_items barcode lookup result:', foodItemId);
+            }
+            if (!foodItemId) {
+              const pName = product.product_name || product.generic_name || null;
+              const pBrand = product.brands || null;
+              if (pName) {
+                console.log('[FoodDetails] handleSave: looking up food_items by name=', pName, 'brand=', pBrand);
+                const query = supabase.from('food_items').select('id').ilike('name', pName);
+                if (pBrand) query.ilike('brand', pBrand);
+                const { data: fi } = await query.maybeSingle();
+                foodItemId = fi?.id ?? null;
+                console.log('[FoodDetails] handleSave: food_items name lookup result:', foodItemId);
+              }
+            }
+          }
+
           // Step 1: Find or create the food record
           console.log('[FoodDetails] handleSave: searching for existing food, name=', foodName, 'brand=', foodBrand);
           const { data: existingFood, error: searchError } = await supabase
@@ -921,12 +949,13 @@ export default function FoodDetailsLayout({
           }
 
           // Step 3: Insert the meal item linking food → meal
-          console.log('[FoodDetails] handleSave: inserting meal_item, meal_id=', mealId, 'food_id=', foodId);
+          console.log('[FoodDetails] handleSave: inserting meal_item, meal_id=', mealId, 'food_id=', foodId, 'food_item_id=', foodItemId);
           const { error: mealItemError } = await supabase
             .from('meal_items')
             .insert([{
               meal_id: mealId,
               food_id: foodId,
+              ...(foodItemId ? { food_item_id: foodItemId } : {}),
               quantity: parseFloat(numberOfServings) || 1,
               calories: safeMacros.calories,
               protein: safeMacros.protein,
@@ -946,9 +975,13 @@ export default function FoodDetailsLayout({
           console.log('[FoodDetails] handleSave: meal_item inserted successfully');
           setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Food added to meal', timestamp: Date.now() }]);
 
-          // ── Log food usage (fire-and-forget) ─────────────────────────────
-          console.log('[FoodDetails] Logging food usage, food_id:', foodId, 'source:', source);
-          logFoodUsage(foodId, source);
+          // ── Log food usage (fire-and-forget) — only when food came from catalog ──
+          if (offData && foodItemId) {
+            console.log('[FoodDetails] Logging food usage, food_item_id:', foodItemId, 'source:', source);
+            logFoodUsage(foodItemId, source);
+          } else {
+            console.log('[FoodDetails] Skipping logFoodUsage — no catalog food_item_id (user-created food)');
+          }
 
           // ── XP: award meal_logged (fire-and-forget) ──────────────────────
           // We don't have the new meal_item id here (no .select()), so use mealId+foodId as source

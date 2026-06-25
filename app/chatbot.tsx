@@ -23,7 +23,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useChatbot, ChatMessage } from '@/hooks/useChatbot';
 import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
-import { logFoodUsage } from '@/utils/logFoodUsage';
+
 
 // Generate a unique ID for each message
 let messageIdCounter = 0;
@@ -898,10 +898,8 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
             }
 
             console.log('[Chatbot] ✅ Meal item created for ingredient:', ingredient.name);
-
-            // ── Log food usage (fire-and-forget) ─────────────────────────
-            console.log('[Chatbot] Logging food usage for ingredient, food_id:', foodData.id);
-            logFoodUsage(foodData.id, 'chatbot');
+            // AI-estimated foods are user_created — do not affect catalog popularity
+            console.log('[Chatbot] Skipping logFoodUsage for AI-estimated ingredient:', ingredient.name);
 
             successCount++;
           } catch (error) {
