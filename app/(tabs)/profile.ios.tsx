@@ -1377,6 +1377,36 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── Analytics ───────────────────────────────────────────────────── */}
+        <View style={[styles.actionsCard, { backgroundColor: isDark ? colors.cardDark : colors.card, marginTop: 0 }]}>
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => {
+              console.log('[Profile iOS] Onboarding Analytics button pressed');
+              router.push('/onboarding-analytics');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionRowLeft}>
+              <IconSymbol
+                ios_icon_name="chart.bar.fill"
+                android_material_icon_name="bar-chart"
+                size={18}
+                color={colors.primary}
+              />
+              <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                Onboarding Analytics
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={16}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
         {/* Log Out */}
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: colors.error }]}
