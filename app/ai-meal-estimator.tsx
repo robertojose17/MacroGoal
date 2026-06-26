@@ -11,7 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -19,6 +19,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
+import { toLocalDateString } from '@/utils/dateUtils';
 
 /**
  * AI Meal Estimator Screen
@@ -31,14 +32,42 @@ import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
  * Users can only input meal descriptions via text.
  */
 
+const MEAL_LABEL_MAP: Record<string, string> = {
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  snack: 'Snacks',
+};
+
+function getSmartMealType(): string {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 10) return 'breakfast';
+  if (hour >= 10 && hour < 15) return 'lunch';
+  if (hour >= 15 && hour < 18) return 'snack';
+  if (hour >= 18 && hour < 22) return 'dinner';
+  return 'snack';
+}
+
 export default function AIMealEstimatorScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isPremium, loading: premiumLoading } = usePremium();
 
+  const params = useLocalSearchParams<{
+    meal?: string;
+    date?: string;
+    context?: string;
+    returnTo?: string;
+  }>();
+
+  const currentMeal = params.meal || getSmartMealType();
+  const currentDate = params.date || toLocalDateString(new Date());
+  const mealLabel = MEAL_LABEL_MAP[currentMeal] ?? 'Meal';
+
   const [mealDescription, setMealDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLogging, setIsLogging] = useState(false);
   const [result, setResult] = useState<any>(null);
 
   const { isRecording, isTranscribing, startRecording, stopRecordingAndTranscribe } = useVoiceRecorder({
@@ -119,6 +148,95 @@ export default function AIMealEstimatorScreen() {
     );
   }
   // --- End premium gate ---
+
+  const handleLogMeal = async () => {
+    console.log('[AIMealEstimator] handleLogMeal pressed — meal:', currentMeal, 'date:', currentDate);
+    setIsLogging(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in');
+        return;
+      }
+
+      // 1. Insert into foods table
+      console.log('[AIMealEstimator] Inserting food record for:', mealDescription.trim());
+      const { data: food, error: foodError } = await supabase
+        .from('foods')
+        .insert({
+          name: mealDescription.trim(),
+          brand: 'AI Estimate',
+          serving_amount: 1,
+          serving_unit: 'serving',
+          calories: result.calories,
+          protein: result.protein,
+          carbs: result.carbs,
+          fats: result.fats,
+          fiber: 0,
+          user_created: true,
+        })
+        .select()
+        .single();
+      if (foodError) throw foodError;
+      console.log('[AIMealEstimator] Food inserted, id:', food.id);
+
+      // 2. Find or create meal
+      console.log('[AIMealEstimator] Looking up meal record for date:', currentDate, 'type:', currentMeal);
+      const { data: existingMeal } = await supabase
+        .from('meals')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', currentDate)
+        .eq('meal_type', currentMeal)
+        .maybeSingle();
+
+      let mealId = existingMeal?.id;
+      if (!mealId) {
+        console.log('[AIMealEstimator] No existing meal found — creating new meal record');
+        const { data: newMeal, error: mealError } = await supabase
+          .from('meals')
+          .insert({ user_id: user.id, date: currentDate, meal_type: currentMeal })
+          .select()
+          .single();
+        if (mealError) throw mealError;
+        mealId = newMeal.id;
+        console.log('[AIMealEstimator] New meal created, id:', mealId);
+      } else {
+        console.log('[AIMealEstimator] Existing meal found, id:', mealId);
+      }
+
+      // 3. Insert meal item
+      console.log('[AIMealEstimator] Inserting meal_item for meal_id:', mealId, 'food_id:', food.id);
+      const { error: itemError } = await supabase
+        .from('meal_items')
+        .insert({
+          meal_id: mealId,
+          food_id: food.id,
+          quantity: 1,
+          calories: result.calories,
+          protein: result.protein,
+          carbs: result.carbs,
+          fats: result.fats,
+          fiber: 0,
+          serving_description: '1 serving',
+          grams: 1,
+          logged_at: new Date().toISOString(),
+        });
+      if (itemError) throw itemError;
+      console.log('[AIMealEstimator] Meal item inserted successfully');
+
+      Alert.alert(
+        'Added!',
+        `"${mealDescription.trim()}" has been added to your ${mealLabel}.`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (err) {
+      Alert.alert('Error', 'Failed to log meal. Please try again.');
+      console.error('[AIMealEstimator] handleLogMeal error:', err);
+    } finally {
+      setIsLogging(false);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!mealDescription.trim()) {
@@ -243,43 +361,59 @@ export default function AIMealEstimatorScreen() {
         </TouchableOpacity>
 
         {result && (
-          <View style={[styles.resultCard, { backgroundColor: colors.backgroundAlt }]}>
-            <Text style={[styles.resultTitle, { color: colors.text }]}>
-              Estimated Nutrition
-            </Text>
-            <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: colors.grey }]}>
-                Calories
+          <>
+            <View style={[styles.resultCard, { backgroundColor: colors.backgroundAlt }]}>
+              <Text style={[styles.resultTitle, { color: colors.text }]}>
+                Estimated Nutrition
               </Text>
-              <Text style={[styles.macroValue, { color: colors.text }]}>
-                {result.calories} kcal
-              </Text>
+              <View style={styles.macroRow}>
+                <Text style={[styles.macroLabel, { color: colors.grey }]}>
+                  Calories
+                </Text>
+                <Text style={[styles.macroValue, { color: colors.text }]}>
+                  {result.calories} kcal
+                </Text>
+              </View>
+              <View style={styles.macroRow}>
+                <Text style={[styles.macroLabel, { color: colors.grey }]}>
+                  Protein
+                </Text>
+                <Text style={[styles.macroValue, { color: colors.text }]}>
+                  {result.protein}g
+                </Text>
+              </View>
+              <View style={styles.macroRow}>
+                <Text style={[styles.macroLabel, { color: colors.grey }]}>
+                  Carbs
+                </Text>
+                <Text style={[styles.macroValue, { color: colors.text }]}>
+                  {result.carbs}g
+                </Text>
+              </View>
+              <View style={styles.macroRow}>
+                <Text style={[styles.macroLabel, { color: colors.grey }]}>
+                  Fats
+                </Text>
+                <Text style={[styles.macroValue, { color: colors.text }]}>
+                  {result.fats}g
+                </Text>
+              </View>
             </View>
-            <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: colors.grey }]}>
-                Protein
-              </Text>
-              <Text style={[styles.macroValue, { color: colors.text }]}>
-                {result.protein}g
-              </Text>
-            </View>
-            <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: colors.grey }]}>
-                Carbs
-              </Text>
-              <Text style={[styles.macroValue, { color: colors.text }]}>
-                {result.carbs}g
-              </Text>
-            </View>
-            <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: colors.grey }]}>
-                Fats
-              </Text>
-              <Text style={[styles.macroValue, { color: colors.text }]}>
-                {result.fats}g
-              </Text>
-            </View>
-          </View>
+
+            <TouchableOpacity
+              style={[styles.logButton, isLogging && styles.analyzeButtonDisabled]}
+              onPress={handleLogMeal}
+              disabled={isLogging}
+            >
+              {isLogging ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.analyzeButtonText}>
+                  Add to {mealLabel}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -378,6 +512,14 @@ const styles = StyleSheet.create({
   resultCard: {
     borderRadius: borderRadius.md,
     padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  logButton: {
+    backgroundColor: '#10B981',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   resultTitle: {
     fontSize: typography.lg,
