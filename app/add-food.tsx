@@ -697,9 +697,15 @@ export default function AddFoodScreen() {
   }, [router, mealType, date, context, returnTo, mode, planId]);
 
   const handleAIMealEstimator = useCallback(() => {
-    console.log('[AddFood] Navigating to AI Meal Estimator');
+    console.log('[AddFood] AI Meal Estimator button pressed');
+    if (!isPremium) {
+      console.log('[AddFood] User is not premium, redirecting to subscription');
+      router.push('/subscription');
+      return;
+    }
+    console.log('[AddFood] Navigating to chatbot for AI Meal Estimator');
     router.push({
-      pathname: '/ai-meal-estimator',
+      pathname: '/chatbot',
       params: {
         meal: mealType,
         date: date,
@@ -709,7 +715,7 @@ export default function AddFoodScreen() {
         planId: planId || '',
       },
     });
-  }, [router, mealType, date, context, returnTo, mode, planId]);
+  }, [router, mealType, date, context, returnTo, isPremium, mode, planId]);
 
   const handleCreateMeal = useCallback(() => {
     console.log('[AddFood] Navigating to create meal');
