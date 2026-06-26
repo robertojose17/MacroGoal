@@ -58,6 +58,57 @@ export interface OpenFoodFactsProduct {
     'sugars_100g'?: number;
     'sugars'?: number;
     'sugars_serving'?: number;
+
+    // Fat sub-types
+    'saturated-fat_100g'?: number;
+    'trans-fat_100g'?: number;
+    'polyunsaturated-fat_100g'?: number;
+    'monounsaturated-fat_100g'?: number;
+
+    // Cholesterol & sodium
+    'cholesterol_100g'?: number;
+    'added-sugars_100g'?: number;
+    'sodium_100g'?: number;
+    'salt_100g'?: number;
+
+    // Fat-soluble vitamins
+    'vitamin-a_100g'?: number;
+    'vitamin-d_100g'?: number;
+    'vitamin-e_100g'?: number;
+    'vitamin-k_100g'?: number;
+
+    // Water-soluble vitamins
+    'vitamin-c_100g'?: number;
+    'vitamin-b1_100g'?: number;
+    'vitamin-b2_100g'?: number;
+    'vitamin-b3_100g'?: number;
+    'vitamin-pp_100g'?: number;
+    'vitamin-b5_100g'?: number;
+    'vitamin-b6_100g'?: number;
+    'vitamin-b9_100g'?: number;
+    'vitamin-b12_100g'?: number;
+    'biotin_100g'?: number;
+    'choline_100g'?: number;
+    'thiamin_100g'?: number;
+    'riboflavin_100g'?: number;
+    'niacin_100g'?: number;
+    'folates_100g'?: number;
+    'pantothenic-acid_100g'?: number;
+
+    // Minerals
+    'calcium_100g'?: number;
+    'iron_100g'?: number;
+    'potassium_100g'?: number;
+    'phosphorus_100g'?: number;
+    'magnesium_100g'?: number;
+    'zinc_100g'?: number;
+    'selenium_100g'?: number;
+    'copper_100g'?: number;
+    'manganese_100g'?: number;
+    'chromium_100g'?: number;
+    'molybdenum_100g'?: number;
+    'iodine_100g'?: number;
+    'chloride_100g'?: number;
   };
 }
 
