@@ -82,6 +82,7 @@ export default function CompleteOnboardingScreen() {
 
   const [step, setStep] = useState(0);
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const trackedStepRef = useRef<number>(-1);
 
   // Body data
   const [sex, setSex] = useState<Sex>('male');
@@ -180,6 +181,8 @@ export default function CompleteOnboardingScreen() {
   // ─── Step viewed tracking ──────────────────────────────────────────────────
 
   useEffect(() => {
+    if (trackedStepRef.current === step) return; // already tracked this step
+    trackedStepRef.current = step;
     console.log(`[Onboarding] Step ${step} viewed`);
     trackOnboardingEvent('onboarding_step_viewed', step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
