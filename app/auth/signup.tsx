@@ -36,8 +36,11 @@ export default function SignUpScreen() {
 
   const scrollViewRef = useRef<ScrollView>(null);
   const confirmPasswordRef = useRef<View>(null);
+  const screenTrackedRef = useRef(false);
 
   useEffect(() => {
+    if (screenTrackedRef.current) return;
+    screenTrackedRef.current = true;
     console.log('[SignUp] Screen viewed');
     trackOnboardingEvent('auth_signup_screen_viewed');
   }, []);

@@ -61,6 +61,7 @@ export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
   const hasNavigatedRef = React.useRef(false);
+  const appOpenedTrackedRef = React.useRef(false);
 
   // ─── Issue 1 fix: hide splash immediately on mount, no waiting ───────────
   useEffect(() => {
@@ -141,7 +142,10 @@ export default function RootLayout() {
         );
         setSession(resolvedSession);
         setIsReady(true);
-        trackOnboardingEvent('app_opened');
+        if (!appOpenedTrackedRef.current) {
+          appOpenedTrackedRef.current = true;
+          trackOnboardingEvent('app_opened');
+        }
         runPostInitSideEffects(resolvedSession);
       });
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -29,8 +29,11 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const screenTrackedRef = useRef(false);
 
   useEffect(() => {
+    if (screenTrackedRef.current) return;
+    screenTrackedRef.current = true;
     console.log('[Login] Screen viewed');
     trackOnboardingEvent('auth_login_screen_viewed');
   }, []);
