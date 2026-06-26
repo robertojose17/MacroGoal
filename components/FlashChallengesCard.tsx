@@ -12,15 +12,21 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useFlashChallenges } from '@/hooks/useFlashChallenges';
-import { tryAwardFlashChallenge } from '@/utils/xpAwarder';
 import type { FlashChallengeWithProgress } from '@/hooks/useFlashChallenges';
 import type { MetricType } from '@/utils/flashChallengesApi';
 import { supabase } from '@/lib/supabase/client';
+import {
+  getStepsForDate,
+  getActiveCaloriesForDate,
+  getExerciseMinutesForDate,
+  getDistanceMilesForDate,
+  getFlightsClimbedForDate,
+} from '@/utils/healthKit';
 
 const GOLD = '#FFB547';
-const MEDIUM_COLOR = '#3B82F6';
-const HARD_COLOR = '#F97316';
 const COMPLETE_GREEN = '#22C55E';
+const ACCEPT_BLUE = '#3B82F6';
+const EXPIRED_GRAY = '#9CA3AF';
 
 interface Props {
   isDark: boolean;
@@ -38,6 +44,56 @@ function metricIcon(metric: MetricType): keyof typeof Ionicons.glyphMap {
     case 'running_pace': return 'speedometer-outline';
     case 'referral': return 'people-outline';
     default: return 'flash-outline';
+  }
+}
+
+// Duration label from duration_hours
+function durationLabel(hours: number): string {
+  if (hours <= 2) return '2h sprint';
+  if (hours <= 4) return '4h challenge';
+  return 'All day';
+}
+
+// Format a progress value nicely
+function formatValue(value: number, unit: string): string {
+  if (unit === 'steps' || unit === 'floors') return Math.round(value).toLocaleString();
+  if (unit === 'cal') return Math.round(value).toLocaleString();
+  if (unit === 'min') return Math.round(value).toString();
+  if (unit === 'mi') return value.toFixed(1);
+  return String(Math.round(value * 10) / 10);
+}
+
+// Read current HealthKit value for a metric (returns 0 on Android or error)
+async function readCurrentMetric(metric: MetricType): Promise<number> {
+  if (Platform.OS === 'android') return 0;
+  const date = new Date();
+  try {
+    switch (metric) {
+      case 'steps': {
+        const r = await getStepsForDate(date);
+        return r.steps ?? 0;
+      }
+      case 'active_calories': {
+        const r = await getActiveCaloriesForDate(date);
+        return r.value ?? 0;
+      }
+      case 'exercise_minutes': {
+        const r = await getExerciseMinutesForDate(date);
+        return r.value ?? 0;
+      }
+      case 'distance': {
+        const r = await getDistanceMilesForDate(date);
+        return r.value ?? 0;
+      }
+      case 'floors': {
+        const r = await getFlightsClimbedForDate(date);
+        return r.value ?? 0;
+      }
+      default:
+        return 0;
+    }
+  } catch {
+    return 0;
   }
 }
 
@@ -87,14 +143,14 @@ interface ChallengeRowProps {
   challenge: FlashChallengeWithProgress;
   isDark: boolean;
   onXpAwarded: () => void;
-  awardedRef: React.MutableRefObject<Set<string>>;
+  onAccept: (id: string, baseline: number) => Promise<void>;
 }
 
-function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeRowProps) {
+function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRowProps) {
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const isComplete = challenge.completed || challenge.progressPct >= 100;
   const isReferral = challenge.metric_type === 'referral';
+  const [accepting, setAccepting] = useState(false);
 
   // Referral-specific: count referrals this week
   const [weekReferrals, setWeekReferrals] = useState(0);
@@ -118,16 +174,6 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
     fetchWeekReferrals();
   }, [isReferral]);
 
-  // Award XP once when progress hits 100%
-  useEffect(() => {
-    if (challenge.progressPct >= 100 && !challenge.completed && !awardedRef.current.has(challenge.id)) {
-      awardedRef.current.add(challenge.id);
-      console.log('[FlashChallengesCard] challenge complete, awarding XP for', challenge.id);
-      tryAwardFlashChallenge(challenge.id, challenge.xp_reward);
-      onXpAwarded();
-    }
-  }, [challenge.progressPct, challenge.completed, challenge.id, challenge.xp_reward, onXpAwarded, awardedRef]);
-
   const handleShareCode = async () => {
     console.log('[FlashChallengesCard] Share Code pressed for referral challenge');
     try {
@@ -147,57 +193,177 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, awardedRef }: ChallengeR
     }
   };
 
-  const referralProgressPct = isReferral ? Math.min((weekReferrals / 3) * 100, 100) : challenge.progressPct;
-  const referralComplete = isReferral ? weekReferrals >= 3 : isComplete;
-  const progressText = referralComplete ? 'Completed!' : isReferral ? `${weekReferrals} / 3` : `${challenge.progressPct}%`;
-  const xpLabel = `${challenge.xp_reward} XP`;
+  const handleAccept = async () => {
+    console.log('[FlashChallengesCard] Accept Challenge pressed for', challenge.id, 'metric:', challenge.metric_type);
+    setAccepting(true);
+    try {
+      const baseline = await readCurrentMetric(challenge.metric_type);
+      console.log('[FlashChallengesCard] baseline value read:', baseline, 'for metric:', challenge.metric_type);
+      await onAccept(challenge.id, baseline);
+      onXpAwarded(); // trigger parent refresh
+    } catch (e) {
+      console.warn('[FlashChallengesCard] accept failed:', e);
+    } finally {
+      setAccepting(false);
+    }
+  };
 
+  const status = challenge.challenge_status;
+  const xpLabel = `${challenge.xp_reward} XP`;
+  const durationPill = durationLabel(challenge.duration_hours ?? 24);
+
+  // ── COMPLETED ──────────────────────────────────────────────────────────────
+  if (status === 'completed' || challenge.completed) {
+    return (
+      <View style={[styles.challengeRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
+        <View style={[styles.iconCircle, { backgroundColor: COMPLETE_GREEN + '22' }]}>
+          <Ionicons name="checkmark-circle" size={22} color={COMPLETE_GREEN} />
+        </View>
+        <View style={styles.challengeCenter}>
+          <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
+            {challenge.title}
+          </Text>
+          <Text style={[styles.completedText, { color: COMPLETE_GREEN }]}>
+            Completed!
+          </Text>
+          <ProgressBar pct={100} completed isDark={isDark} />
+        </View>
+        <View style={styles.badgeColumn}>
+          <View style={[styles.xpBadge, { backgroundColor: COMPLETE_GREEN + '22' }]}>
+            <Text style={[styles.xpBadgeText, { color: COMPLETE_GREEN }]}>{xpLabel}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ── EXPIRED ────────────────────────────────────────────────────────────────
+  if (status === 'expired' || challenge.timeRemaining === 'Expired') {
+    return (
+      <View style={[styles.challengeRow, { borderTopColor: isDark ? colors.borderDark : colors.border, opacity: 0.5 }]}>
+        <View style={[styles.iconCircle, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
+          <Ionicons name={metricIcon(challenge.metric_type)} size={20} color={EXPIRED_GRAY} />
+        </View>
+        <View style={styles.challengeCenter}>
+          <Text style={[styles.challengeTitle, { color: mutedColor }]} numberOfLines={1}>
+            {challenge.title}
+          </Text>
+          <Text style={[styles.expiredLabel, { color: mutedColor }]}>
+            Time's up
+          </Text>
+        </View>
+        <View style={styles.badgeColumn}>
+          <View style={[styles.xpBadge, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
+            <Text style={[styles.xpBadgeText, { color: mutedColor }]}>{xpLabel}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ── ACCEPTED ───────────────────────────────────────────────────────────────
+  if (status === 'accepted') {
+    const progressDisplay = formatValue(challenge.progress, challenge.target_unit);
+    const targetDisplay = formatValue(challenge.target_value, challenge.target_unit);
+    const unitLabel = challenge.target_unit;
+
+    // Referral override
+    const referralComplete = isReferral && weekReferrals >= 3;
+    const displayPct = isReferral ? Math.min((weekReferrals / 3) * 100, 100) : challenge.progressPct;
+    const progressText = isReferral
+      ? `${weekReferrals} / 3 friends`
+      : `${progressDisplay} / ${targetDisplay} ${unitLabel}`;
+
+    return (
+      <View style={[styles.challengeRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
+        <View style={[styles.iconCircle, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
+          <Ionicons
+            name={metricIcon(challenge.metric_type)}
+            size={20}
+            color={referralComplete ? COMPLETE_GREEN : GOLD}
+          />
+        </View>
+        <View style={styles.challengeCenter}>
+          <View style={styles.challengeTitleRow}>
+            <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
+              {challenge.title}
+            </Text>
+          </View>
+          <View style={styles.timerProgressRow}>
+            <Text style={[styles.progressValueText, { color: mutedColor }]}>
+              {progressText}
+            </Text>
+            <View style={[styles.timerPill, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
+              <Ionicons name="time-outline" size={10} color={mutedColor} />
+              <Text style={[styles.timerText, { color: mutedColor }]}>
+                {challenge.timeRemaining}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.progressRow}>
+            <ProgressBar pct={displayPct} completed={referralComplete} isDark={isDark} />
+            <Text style={[styles.progressLabel, { color: referralComplete ? COMPLETE_GREEN : mutedColor }]}>
+              {Math.round(displayPct)}%
+            </Text>
+          </View>
+          {isReferral && !referralComplete && (
+            <TouchableOpacity
+              style={[styles.shareCodeButton, { backgroundColor: '#14B8A6' + '22' }]}
+              onPress={handleShareCode}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="share-outline" size={13} color="#14B8A6" />
+              <Text style={[styles.shareCodeText, { color: '#14B8A6' }]}>Share Code</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.badgeColumn}>
+          <View style={styles.xpBadge}>
+            <Text style={styles.xpBadgeText}>{xpLabel}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ── AVAILABLE (default) ────────────────────────────────────────────────────
   return (
     <View style={[styles.challengeRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-      {/* Icon */}
       <View style={[styles.iconCircle, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
-        <Ionicons
-          name={metricIcon(challenge.metric_type)}
-          size={20}
-          color={referralComplete ? COMPLETE_GREEN : GOLD}
-        />
+        <Ionicons name={metricIcon(challenge.metric_type)} size={20} color={GOLD} />
       </View>
-
-      {/* Center: title + description + progress */}
       <View style={styles.challengeCenter}>
         <View style={styles.challengeTitleRow}>
           <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
             {challenge.title}
           </Text>
-
+          <View style={[styles.durationPill, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
+            <Text style={[styles.durationText, { color: mutedColor }]}>{durationPill}</Text>
+          </View>
         </View>
-        <Text style={[styles.challengeDesc, { color: mutedColor }]} numberOfLines={1}>
-          {isReferral ? `${weekReferrals} / 3 friends referred today` : challenge.description}
+        <Text style={[styles.challengeDesc, { color: mutedColor }]} numberOfLines={2}>
+          {challenge.description}
         </Text>
-        <View style={styles.progressRow}>
-          <ProgressBar pct={isReferral ? referralProgressPct : challenge.progressPct} completed={referralComplete} isDark={isDark} />
-          <Text style={[styles.progressLabel, { color: referralComplete ? COMPLETE_GREEN : mutedColor }]}>
-            {progressText}
-          </Text>
-        </View>
-        {isReferral && !referralComplete && (
-          <TouchableOpacity
-            style={[styles.shareCodeButton, { backgroundColor: '#14B8A6' + '22' }]}
-            onPress={handleShareCode}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="share-outline" size={13} color="#14B8A6" />
-            <Text style={[styles.shareCodeText, { color: '#14B8A6' }]}>Share Code</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.acceptButton, accepting && styles.acceptButtonDisabled]}
+          onPress={handleAccept}
+          activeOpacity={0.8}
+          disabled={accepting}
+        >
+          {accepting ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Ionicons name="flash" size={13} color="#FFFFFF" />
+              <Text style={styles.acceptButtonText}>Accept Challenge</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
-
-      {/* Right: XP badge + difficulty pill */}
       <View style={styles.badgeColumn}>
         <View style={styles.xpBadge}>
           <Text style={styles.xpBadgeText}>{xpLabel}</Text>
         </View>
-
       </View>
     </View>
   );
@@ -235,16 +401,27 @@ function SkeletonRow({ isDark }: { isDark: boolean }) {
 // ─── Main card ────────────────────────────────────────────────────────────────
 
 export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
-  const { challenges, loading, timeRemaining } = useFlashChallenges();
-  // Track which challenge IDs have already had XP awarded this session
-  const awardedRef = useRef<Set<string>>(new Set());
+  const { challenges, loading, reload, acceptChallenge } = useFlashChallenges();
 
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
-  const isExpired = timeRemaining === 'Expired';
+  // Dynamic subtitle
+  const allCompleted = challenges.length > 0 && challenges.every(c => c.challenge_status === 'completed' || c.completed);
+  const anyAccepted = challenges.some(c => c.challenge_status === 'accepted');
+  const subtitleText = allCompleted
+    ? 'All done for today! 🎉'
+    : anyAccepted
+      ? 'Keep going! Complete before time runs out'
+      : 'Accept a challenge to start the clock';
+
+  const handleAccept = async (id: string, baseline: number) => {
+    console.log('[FlashChallengesCard] handleAccept called', { id, baseline });
+    await acceptChallenge(id, baseline);
+    onXpAwarded();
+  };
 
   return (
     <View
@@ -264,19 +441,11 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
             Flash Challenges
           </Text>
         </View>
-        {!loading && !isExpired && timeRemaining.length > 0 && (
-          <View style={[styles.timerPill, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
-            <Ionicons name="time-outline" size={12} color={mutedColor} />
-            <Text style={[styles.timerText, { color: mutedColor }]}>
-              {timeRemaining}
-            </Text>
-          </View>
-        )}
       </View>
 
       {/* Subtitle */}
       <Text style={[styles.subtitle, { color: mutedColor }]}>
-        Complete both for up to 1,250 bonus XP
+        {loading ? 'Complete both for up to 1,250 bonus XP' : subtitleText}
       </Text>
 
       {/* Content */}
@@ -285,17 +454,10 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
           <SkeletonRow isDark={isDark} />
           <SkeletonRow isDark={isDark} />
         </View>
-      ) : isExpired ? (
-        <View style={styles.expiredContainer}>
-          <Ionicons name="moon-outline" size={24} color={mutedColor} />
-          <Text style={[styles.expiredText, { color: mutedColor }]}>
-            Come back tomorrow for new challenges
-          </Text>
-        </View>
       ) : challenges.length === 0 ? (
-        <View style={styles.expiredContainer}>
+        <View style={styles.emptyContainer}>
           <ActivityIndicator size="small" color={GOLD} />
-          <Text style={[styles.expiredText, { color: mutedColor }]}>
+          <Text style={[styles.emptyText, { color: mutedColor }]}>
             Syncing your activity data...
           </Text>
         </View>
@@ -306,7 +468,7 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
             challenge={c}
             isDark={isDark}
             onXpAwarded={onXpAwarded}
-            awardedRef={awardedRef}
+            onAccept={handleAccept}
           />
         ))
       )}
@@ -330,7 +492,6 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -348,18 +509,6 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     fontWeight: '700',
     marginLeft: spacing.xs,
-  },
-  timerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: borderRadius.full,
-  },
-  timerText: {
-    fontSize: 11,
-    fontWeight: '500',
   },
   subtitle: {
     ...typography.small,
@@ -390,6 +539,7 @@ const styles = StyleSheet.create({
   challengeTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
   },
   challengeTitle: {
     ...typography.caption,
@@ -399,6 +549,62 @@ const styles = StyleSheet.create({
   challengeDesc: {
     ...typography.small,
     marginTop: 2,
+  },
+  // Duration pill (available state)
+  durationPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    flexShrink: 0,
+  },
+  durationText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  // Accept button
+  acceptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: spacing.sm,
+    paddingVertical: 7,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: ACCEPT_BLUE,
+  },
+  acceptButtonDisabled: {
+    opacity: 0.6,
+  },
+  acceptButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  // Accepted state: timer + progress row
+  timerProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  progressValueText: {
+    fontSize: 11,
+    fontWeight: '500',
+    flex: 1,
+  },
+  timerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    flexShrink: 0,
+  },
+  timerText: {
+    fontSize: 10,
+    fontWeight: '500',
   },
   progressRow: {
     flexDirection: 'row',
@@ -422,6 +628,20 @@ const styles = StyleSheet.create({
     minWidth: 36,
     textAlign: 'right',
   },
+  // Completed state
+  completedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  // Expired state
+  expiredLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  // Badge column
   badgeColumn: {
     alignItems: 'flex-end',
     gap: spacing.xs,
@@ -438,6 +658,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#3B82F6',
   },
+  // Share code button (referral)
   shareCodeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -452,8 +673,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  // Expired / empty
-  expiredContainer: {
+  // Empty / loading
+  emptyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -461,7 +682,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.lg,
   },
-  expiredText: {
+  emptyText: {
     ...typography.caption,
     textAlign: 'center',
     flex: 1,
