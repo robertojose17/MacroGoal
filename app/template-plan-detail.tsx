@@ -149,7 +149,11 @@ export default function TemplatePlanDetailScreen() {
     const proteinToUse = protein ?? selectedProtein;
     console.log('[TemplatePlanDetail] Loading template plan:', templateId, 'protein:', proteinToUse);
     try {
-      const data = await getTemplatePlanDetail(templateId, proteinToUse);
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) throw new Error('Not authenticated');
+      const data = await getTemplatePlanDetail(templateId, userId, proteinToUse);
+      if (!data) throw new Error('No data returned');
       console.log('[TemplatePlanDetail] Plan loaded:', data.name, 'selected_protein:', data.selected_protein);
       setPlan(data);
       if (data.selected_protein) {

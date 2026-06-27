@@ -62,9 +62,6 @@ export interface TemplatePlanDetail {
   };
 }
 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA";
-const SUPABASE_URL = "https://esgptfiofoaeguslgvcq.supabase.co";
-
 export async function listTemplatePlans(): Promise<TemplatePlan[]> {
   console.log('[templatePlansApi] Fetching published template plans');
   const { data, error } = await supabase
@@ -80,30 +77,29 @@ export async function listTemplatePlans(): Promise<TemplatePlan[]> {
   return data || [];
 }
 
-export async function getTemplatePlanDetail(templateId: string, preferredProtein?: string): Promise<TemplatePlanDetail> {
-  console.log('[templatePlansApi] Fetching template plan detail:', templateId, 'protein:', preferredProtein ?? 'Chicken');
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+export async function getTemplatePlanDetail(
+  templateId: string,
+  userId: string,
+  preferredProtein?: string
+): Promise<TemplatePlanDetail | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/get-template-plan`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-    body: JSON.stringify({
-      template_id: templateId,
-      user_id: user.id,
-      preferred_protein: preferredProtein || 'Chicken',
-    }),
-  });
-  if (!response.ok) {
-    const err = await response.text();
-    console.error('[templatePlansApi] get-template-plan error:', response.status, err.slice(0, 200));
-    throw new Error(err);
+    const { data, error } = await supabase.functions.invoke('get-template-plan', {
+      body: { template_id: templateId, user_id: userId, preferred_protein: preferredProtein },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (error) {
+      console.error('[templatePlansApi] get-template-plan error:', error);
+      return null;
+    }
+
+    console.log('[templatePlansApi] Template plan detail loaded:', data?.template?.name, 'protein:', preferredProtein);
+    return data as TemplatePlanDetail;
+  } catch (e) {
+    console.error('[templatePlansApi] getTemplatePlanDetail exception:', e);
+    return null;
   }
-  const data = await response.json();
-  console.log('[templatePlansApi] Template plan detail loaded:', data.name, 'protein:', data.selected_protein);
-  return data;
 }
