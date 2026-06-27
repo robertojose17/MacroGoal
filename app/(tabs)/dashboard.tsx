@@ -152,6 +152,10 @@ export default function DashboardScreen() {
   // ─── Steps (for TodaysChallengesCard optimistic display) ────────────────────
   const { steps: localSteps } = useSteps();
   const [pendingMilestone, setPendingMilestone] = useState<number | null>(null);
+  const celebratingMilestoneRef = useRef<number | null>(null);
+
+  // ─── LevelUp guard: only show once per level via AsyncStorage ───────────────
+  const [shownLevelUp, setShownLevelUp] = useState(false);
 
   // Sync XP tags to OneSignal for segmentation
   useOneSignalTags({ status: xp.status });
@@ -176,7 +180,21 @@ export default function DashboardScreen() {
 
 
 
+  // LevelUp AsyncStorage guard — only show once per level
+  useEffect(() => {
+    const pendingLevel = xp.status?.pending_level_up_to;
+    if (!xp.status?.pending_level_up || !pendingLevel) return;
+    const key = `@macro_goal/level_up_seen_${pendingLevel}`;
+    AsyncStorage.getItem(key).then((seen) => {
+      if (!seen) {
+        console.log('[Dashboard] LevelUpModal — new level not yet seen:', pendingLevel);
+        setShownLevelUp(true);
+      }
+    });
+  }, [xp.status?.pending_level_up, xp.status?.pending_level_up_to]);
+
   // Streak milestone watcher
+  const STREAK_MILESTONES = [7, 30, 90, 365];
   useEffect(() => {
     const streak = xp.status?.current_streak;
     if (streak == null) return;
@@ -184,9 +202,11 @@ export default function DashboardScreen() {
       resetMilestones();
       return;
     }
+    if (!STREAK_MILESTONES.includes(streak)) return;
     getPendingMilestone(streak).then((m) => {
-      if (m && pendingMilestone !== m) {
+      if (m && pendingMilestone !== m && celebratingMilestoneRef.current !== m) {
         console.log('[Dashboard] streak milestone reached:', m);
+        celebratingMilestoneRef.current = m;
         setPendingMilestone(m);
       }
     });
@@ -669,10 +689,15 @@ export default function DashboardScreen() {
 
       {/* ── Level Up Modal ── */}
       <LevelUpModal
-        visible={xp.status?.pending_level_up ?? false}
+        visible={shownLevelUp}
         level={xp.status?.pending_level_up_to ?? 0}
         onDismiss={() => {
-          console.log('[Dashboard] LevelUpModal dismissed — refreshing XP');
+          const pendingLevel = xp.status?.pending_level_up_to;
+          console.log('[Dashboard] LevelUpModal dismissed — marking level seen:', pendingLevel);
+          if (pendingLevel) {
+            AsyncStorage.setItem(`@macro_goal/level_up_seen_${pendingLevel}`, 'true');
+          }
+          setShownLevelUp(false);
           xp.refresh();
         }}
       />
@@ -697,7 +722,10 @@ export default function DashboardScreen() {
         streakDays={pendingMilestone ?? 0}
         onDismiss={() => {
           console.log('[Dashboard] StreakBadgeModal dismissed — milestone:', pendingMilestone);
-          if (pendingMilestone) markMilestoneCelebrated(pendingMilestone);
+          if (pendingMilestone) {
+            markMilestoneCelebrated(pendingMilestone);
+            celebratingMilestoneRef.current = null;
+          }
           setPendingMilestone(null);
         }}
       />
