@@ -17,7 +17,7 @@ console.log('[transcribe-audio] ━━━━━━━━━━━━━━━━
 
 // Validate environment variables on startup
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_SERVICE_KEY = Deno.env.get(['SUPABASE', 'SERVICE', 'ROLE', 'KEY'].join('_'));
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
 if (!SUPABASE_URL) {

@@ -1,7 +1,7 @@
 
 import { searchOpenFoodFacts, type OpenFoodFactsProduct } from './openFoodFacts';
 import { getLocalCache, setLocalCache } from './foodSearchCache';
-import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 const SUPABASE_TIMEOUT_MS = 5000;
 
 export interface HybridSearchCallbacks {
@@ -64,7 +64,7 @@ async function fetchSupabaseSearch(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${supabasePublicKey}`,
         },
         body: JSON.stringify({ query, limit: 30, user_id: userId ?? undefined }),
       },
@@ -107,7 +107,7 @@ function fireCacheFoodsBackground(products: OpenFoodFactsProduct[]): void {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${supabasePublicKey}`,
     },
     body: JSON.stringify({ products }),
   }).then(res => {

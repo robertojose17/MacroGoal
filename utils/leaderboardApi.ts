@@ -1,5 +1,5 @@
 
-import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 
 export type LeaderboardPeriod = 'today' | 'week' | 'month' | 'last30' | 'custom';
 
@@ -43,7 +43,7 @@ export async function fetchLeaderboard(
 
     const authHeader = session?.access_token
       ? `Bearer ${session.access_token}`
-      : `Bearer ${SUPABASE_ANON_KEY}`;
+      : `Bearer ${supabasePublicKey}`;
 
     const url = `${SUPABASE_PROJECT_URL}/functions/v1/leaderboard-stats`;
     console.log('[LeaderboardApi] Fetching:', url);

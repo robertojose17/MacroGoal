@@ -1,5 +1,5 @@
 
-import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 
 export type FoodLogSource = 'search' | 'barcode' | 'ai' | 'planner' | 'chatbot';
 
@@ -16,7 +16,7 @@ export function logFoodUsage(foodItemId: string | undefined | null, source: Food
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${supabasePublicKey}`,
       },
       body: JSON.stringify({ food_item_id: foodItemId, user_id: userId, source }),
     }).then(res => {

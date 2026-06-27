@@ -1,4 +1,4 @@
-import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 
 export interface Tracker {
