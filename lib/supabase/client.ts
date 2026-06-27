@@ -4,8 +4,8 @@ import type { Database } from './types';
 import { createClient } from '@supabase/supabase-js';
 
 // CRITICAL: Use safe defaults for environment variables
-const SUPABASE_URL = "https://esgptfiofoaeguslgvcq.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA";
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://esgptfiofoaeguslgvcq.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA";
 
 // Validate environment variables
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
@@ -25,6 +25,7 @@ console.log('[Supabase] Project ID:', SUPABASE_URL.split('//')[1]?.split('.')[0]
 // import { supabase } from "@/lib/supabase/client";
 
 export const SUPABASE_PROJECT_URL = SUPABASE_URL;
+export const SUPABASE_ANON_KEY = SUPABASE_PUBLISHABLE_KEY;
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {

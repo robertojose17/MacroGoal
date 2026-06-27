@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 
-const OPENROUTER_API_KEY = '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';
+const OPENROUTER_API_KEY = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY ?? '';
 
 interface UseVoiceRecorderOptions {
   onTranscription: (text: string) => void;

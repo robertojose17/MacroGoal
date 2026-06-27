@@ -18,6 +18,7 @@
       "buildNumber": "352",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Macro Goal uses your camera to scan barcodes on food packaging so you can quickly add accurate nutrition information.",
         "NSSpeechRecognitionUsageDescription": "Macro Goal uses speech recognition to transcribe your voice when you describe meals to the AI meal estimator.",
         "NSPhotoLibraryUsageDescription": "Macro Goal needs access to your photo library so you can attach progress photos to your weight check-ins and track your transformation over time.",
         "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
@@ -35,7 +36,9 @@
       "package": "com.robertojose17.macrogoal",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.ACTIVITY_RECOGNITION"
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES"
       ]
     },
     "web": {
