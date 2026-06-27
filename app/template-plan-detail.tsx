@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { getTemplatePlanDetail, type TemplatePlanDetail, type TemplateItem, type ProteinOption } from '@/utils/templatePlansApi';
+import { getTemplatePlanDetail, type TemplatePlanDetail, type TemplateMealItem, type TemplateItem, type ProteinOption } from '@/utils/templatePlansApi';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 
@@ -31,12 +31,12 @@ const MEAL_DEFS: { key: MealKey; label: string; emoji: string }[] = [
 
 // Fallback protein options shown while loading or if edge fn doesn't return them
 const DEFAULT_PROTEIN_OPTIONS: ProteinOption[] = [
-  { protein_name: 'Chicken', emoji: '🍗', sort_order: 1 },
-  { protein_name: 'Salmon', emoji: '🐟', sort_order: 2 },
-  { protein_name: 'Turkey', emoji: '🦃', sort_order: 3 },
-  { protein_name: 'Beef', emoji: '🥩', sort_order: 4 },
-  { protein_name: 'Tuna', emoji: '🐠', sort_order: 5 },
-  { protein_name: 'Shrimp', emoji: '🦐', sort_order: 6 },
+  { id: 'chicken', protein_name: 'Chicken', emoji: '🍗' },
+  { id: 'salmon', protein_name: 'Salmon', emoji: '🐟' },
+  { id: 'turkey', protein_name: 'Turkey', emoji: '🦃' },
+  { id: 'beef', protein_name: 'Beef', emoji: '🥩' },
+  { id: 'tuna', protein_name: 'Tuna', emoji: '🐠' },
+  { id: 'shrimp', protein_name: 'Shrimp', emoji: '🦐' },
 ];
 
 async function createMealPlanFromTemplate(
@@ -86,11 +86,11 @@ async function createMealPlanFromTemplate(
   for (const mealDef of MEAL_DEFS) {
     const items: TemplateItem[] = meals[mealDef.key] ?? [];
     for (const item of items) {
-      const grams = Math.round(Number(item.scaled_grams) || 0);
-      const calories = Math.round(Number(item.scaled_calories) || 0);
-      const protein = Math.round(Number(item.scaled_protein) || 0);
-      const carbs = Math.round(Number(item.scaled_carbs) || 0);
-      const fats = Math.round(Number(item.scaled_fats) || 0);
+      const grams = Math.round(Number(item.grams) || 0);
+      const calories = Math.round(Number(item.calories) || 0);
+      const protein = Math.round(Number(item.protein_g) || 0);
+      const carbs = Math.round(Number(item.carbs_g) || 0);
+      const fats = Math.round(Number(item.fats_g) || 0);
 
       insertItems.push({
         plan_id: newPlan.id,
@@ -152,12 +152,12 @@ export default function TemplatePlanDetailScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) throw new Error('Not authenticated');
-      const data = await getTemplatePlanDetail(templateId, userId, proteinToUse);
-      if (!data) throw new Error('No data returned');
-      console.log('[TemplatePlanDetail] Plan loaded:', data.name, 'selected_protein:', data.selected_protein);
-      setPlan(data);
-      if (data.selected_protein) {
-        setSelectedProtein(data.selected_protein);
+      const result = await getTemplatePlanDetail(templateId, userId, proteinToUse);
+      if (!result) throw new Error('No data returned');
+      console.log('[TemplatePlanDetail] Plan loaded:', result?.name, 'selected_protein:', result?.selected_protein);
+      setPlan(result);
+      if (result.selected_protein) {
+        setSelectedProtein(result.selected_protein);
       }
       setError(null);
     } catch (err: unknown) {
@@ -372,10 +372,10 @@ export default function TemplatePlanDetailScreen() {
           const items: TemplateItem[] = dayMeals?.[mealDef.key] ?? [];
           const isLast = mealIdx === MEAL_DEFS.length - 1;
 
-          const mealCalories = Math.round(items.reduce((s, i) => s + (Number(i.scaled_calories) || 0), 0));
-          const mealProtein = Math.round(items.reduce((s, i) => s + (Number(i.scaled_protein) || 0), 0));
-          const mealCarbs = Math.round(items.reduce((s, i) => s + (Number(i.scaled_carbs) || 0), 0));
-          const mealFats = Math.round(items.reduce((s, i) => s + (Number(i.scaled_fats) || 0), 0));
+          const mealCalories = Math.round(items.reduce((s, i) => s + (Number(i.calories) || 0), 0));
+          const mealProtein = Math.round(items.reduce((s, i) => s + (Number(i.protein_g) || 0), 0));
+          const mealCarbs = Math.round(items.reduce((s, i) => s + (Number(i.carbs_g) || 0), 0));
+          const mealFats = Math.round(items.reduce((s, i) => s + (Number(i.fats_g) || 0), 0));
 
           return (
             <View
@@ -424,16 +424,16 @@ export default function TemplatePlanDetailScreen() {
               ) : (
                 items.map((item, idx) => {
                   const isLastItem = idx === items.length - 1;
-                  const itemCalories = Math.round(Number(item.scaled_calories) || 0);
-                  const itemProtein = Math.round(Number(item.scaled_protein) || 0);
-                  const itemCarbs = Math.round(Number(item.scaled_carbs) || 0);
-                  const itemFats = Math.round(Number(item.scaled_fats) || 0);
-                  const itemGrams = Math.round(Number(item.scaled_grams) || 0);
+                  const itemCalories = Math.round(Number(item.calories) || 0);
+                  const itemProtein = Math.round(Number(item.protein_g) || 0);
+                  const itemCarbs = Math.round(Number(item.carbs_g) || 0);
+                  const itemFats = Math.round(Number(item.fats_g) || 0);
+                  const itemGrams = Math.round(Number(item.grams) || 0);
                   const gramsText = itemGrams > 0 ? itemGrams + 'g' : '';
                   const proteinText = itemProtein + 'g';
                   const carbsText = itemCarbs + 'g';
                   const fatsText = itemFats + 'g';
-                  const isProteinItem = item.is_protein === true;
+                  const isProteinItem = item.protein_role != null;
 
                   return (
                     <View

@@ -13,30 +13,24 @@ export interface TemplatePlan {
 }
 
 export interface ProteinOption {
+  id: string;
   protein_name: string;
   emoji: string;
-  sort_order: number;
 }
 
-export interface TemplateItem {
+export interface TemplateMealItem {
+  id: string;
   food_name: string;
-  scaled_calories: number;
-  scaled_protein: number;
-  scaled_carbs: number;
-  scaled_fats: number;
-  scaled_grams: number;
-  is_protein?: boolean;
+  grams: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fats_g: number;
+  protein_role: string | null;
 }
 
-export interface TemplateDay {
-  day_number: number;
-  meals: {
-    breakfast: TemplateItem[];
-    lunch: TemplateItem[];
-    dinner: TemplateItem[];
-    snack: TemplateItem[];
-  };
-}
+// Legacy alias kept for createMealPlanFromTemplate compatibility
+export type TemplateItem = TemplateMealItem;
 
 export interface TemplatePlanDetail {
   id: string;
@@ -44,20 +38,20 @@ export interface TemplatePlanDetail {
   description: string;
   emoji: string;
   goal_type: string;
-  is_template: true;
   selected_protein: string;
-  protein_options: ProteinOption[];
+  protein_options: { id: string; protein_name: string; emoji: string }[];
   user_calories_goal: number;
   user_protein_goal: number;
   user_carbs_goal: number;
   user_fats_goal: number;
   day: {
+    id: string;
     day_number: number;
     meals: {
-      breakfast: TemplateItem[];
-      lunch: TemplateItem[];
-      dinner: TemplateItem[];
-      snack: TemplateItem[];
+      breakfast: TemplateMealItem[];
+      lunch: TemplateMealItem[];
+      dinner: TemplateMealItem[];
+      snack: TemplateMealItem[];
     };
   };
 }
@@ -96,7 +90,8 @@ export async function getTemplatePlanDetail(
       return null;
     }
 
-    console.log('[templatePlansApi] Template plan detail loaded:', data?.template?.name, 'protein:', preferredProtein);
+    console.log('[templatePlansApi] raw response:', JSON.stringify(data).slice(0, 200));
+    console.log('[templatePlansApi] Template plan detail loaded:', data?.name, 'protein:', data?.selected_protein);
     return data as TemplatePlanDetail;
   } catch (e) {
     console.error('[templatePlansApi] getTemplatePlanDetail exception:', e);
