@@ -288,14 +288,6 @@ export default function TemplatePlanDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Goal badge row */}
-        <View style={styles.goalBadgeRow}>
-          <View style={styles.goalBadge}>
-            <Text style={styles.goalBadgeText}>{goalLabel}</Text>
-          </View>
-          <Text style={[styles.templateLabel, { color: GOLD }]}>{'✦ Template Plan'}</Text>
-        </View>
-
         {/* Protein selector */}
         <View style={styles.proteinSection}>
           <View style={styles.proteinLabelRow}>
@@ -550,22 +542,6 @@ const styles = StyleSheet.create({
 
   // Scroll
   scrollContent: { padding: spacing.md, paddingBottom: 24 },
-
-  // Goal badge row
-  goalBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  goalBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-  },
-  goalBadgeText: { fontSize: 12, fontWeight: '700', color: '#D97706' },
-  templateLabel: { fontSize: 12, fontWeight: '600' },
 
   // Protein selector
   proteinSection: { marginBottom: spacing.lg },
