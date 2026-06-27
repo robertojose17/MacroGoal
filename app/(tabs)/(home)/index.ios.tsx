@@ -26,6 +26,7 @@ import {
 import { listTemplatePlans, type TemplatePlan } from '@/utils/templatePlansApi';
 import { formatServing } from '@/utils/servingFormat';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { usePremium } from '@/hooks/usePremium';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { isPremium } = usePremium();
 
   // Navigation readiness guard — prevents 'Cannot read property route of null'
   // on the first render cycle before the navigation context is initialized.
@@ -1210,8 +1212,12 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={{ backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 8, borderWidth: 1.5, borderColor: '#14B8A6' }}
           onPress={() => {
-            console.log('[Home iOS] Generate plan with AI pressed');
-            router.push('/ai-meal-planner');
+            console.log('[Home iOS] Generate plan with AI pressed, isPremium:', isPremium);
+            if (!isPremium) {
+              router.push('/subscription');
+            } else {
+              router.push('/ai-meal-planner');
+            }
           }}
           activeOpacity={0.8}
         >

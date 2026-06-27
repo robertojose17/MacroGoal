@@ -17,6 +17,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { getTemplatePlanDetail, type TemplatePlanDetail, type TemplateMealItem, type TemplateItem, type ProteinOption } from '@/utils/templatePlansApi';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { usePremium } from '@/hooks/usePremium';
 
 const GOLD = '#F59E0B';
 
@@ -129,6 +130,7 @@ export default function TemplatePlanDetailScreen() {
   const { templateId } = useLocalSearchParams<{ templateId: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { isPremium, loading: premiumLoading } = usePremium();
 
   const [plan, setPlan] = useState<TemplatePlanDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,6 +174,15 @@ export default function TemplatePlanDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!premiumLoading && !isPremium) {
+        console.log('[TemplatePlanDetail] Non-premium user, redirecting to subscription');
+        router.replace('/subscription');
+      }
+    }, [isPremium, premiumLoading])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
       console.log('[TemplatePlanDetail] Screen focused');
       setLoading(true);
       loadPlan('Chicken');
@@ -211,6 +222,16 @@ export default function TemplatePlanDetailScreen() {
       setSaving(false);
     }
   };
+
+  if (premiumLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (
