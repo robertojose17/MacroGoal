@@ -23,6 +23,7 @@ import {
   createMealPlan,
   type MealPlan,
 } from '@/utils/mealPlansApi';
+import { listTemplatePlans, type TemplatePlan } from '@/utils/templatePlansApi';
 import { formatServing } from '@/utils/servingFormat';
 import { toLocalDateString } from '@/utils/dateUtils';
 
@@ -129,6 +130,7 @@ export default function HomeScreen() {
   type DayKey = typeof DAYS[number];
 
   const [plans, setPlans] = useState<MealPlan[]>([]);
+  const [templatePlans, setTemplatePlans] = useState<TemplatePlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -370,22 +372,36 @@ export default function HomeScreen() {
 
   // ── Load plans ──
   const loadPlans = useCallback(async () => {
-    console.log('[Home iOS] Loading meal plans');
+    console.log('[Home iOS] Loading meal plans and template plans');
     setPlansLoading(true);
     setPlansError(null);
     try {
-      const data = await listMealPlans();
-      console.log('[Home iOS] Meal plans loaded:', data.plans?.length || 0);
-      setPlans(data.plans || []);
+      const [plansData, templatesData] = await Promise.all([
+        listMealPlans().catch((err: any) => {
+          const msg: string = err?.message || '';
+          if (msg.includes('does not exist') || msg.includes('relation')) {
+            console.log('[Home iOS] meal_plans table not yet created — showing empty state');
+            return { plans: [] };
+          }
+          throw err;
+        }),
+        listTemplatePlans().catch((err: any) => {
+          const msg: string = err?.message || '';
+          if (msg.includes('does not exist') || msg.includes('relation')) {
+            console.log('[Home iOS] template_meal_plans table not yet created — showing empty state');
+            return [];
+          }
+          console.warn('[Home iOS] Error loading template plans:', err);
+          return [];
+        }),
+      ]);
+      console.log('[Home iOS] Meal plans loaded:', plansData.plans?.length || 0);
+      console.log('[Home iOS] Template plans loaded:', Array.isArray(templatesData) ? templatesData.length : 0);
+      setPlans(plansData.plans || []);
+      setTemplatePlans(Array.isArray(templatesData) ? templatesData : []);
     } catch (err: any) {
-      const msg: string = err?.message || '';
-      if (msg.includes('does not exist') || msg.includes('relation')) {
-        console.log('[Home iOS] meal_plans table not yet created — showing empty state');
-        setPlans([]);
-      } else {
-        console.error('[Home iOS] Error loading meal plans:', err);
-        setPlansError('Failed to load meal plans.');
-      }
+      console.error('[Home iOS] Error loading meal plans:', err);
+      setPlansError('Failed to load meal plans.');
     } finally {
       setPlansLoading(false);
     }
@@ -1156,6 +1172,49 @@ export default function HomeScreen() {
           })
         )}
 
+        {/* ── Available Plans (templates) ── */}
+        {templatePlans.length > 0 && (
+          <View>
+            <View style={styles.templateSectionHeader}>
+              <Text style={styles.templateSectionTitle}>{'✦ AVAILABLE PLANS'}</Text>
+            </View>
+            {templatePlans.map((tplan) => {
+              const goalLabel = tplan.goal_type === 'cut' ? 'Cut' : tplan.goal_type === 'bulk' ? 'Bulk' : 'Maintain';
+              return (
+                <TouchableOpacity
+                  key={tplan.id}
+                  style={[styles.templateCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+                  onPress={() => {
+                    console.log('[Home iOS] Template plan pressed:', tplan.id, tplan.name);
+                    router.push({ pathname: '/template-plan-detail', params: { templateId: tplan.id } });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.templateCardContent}>
+                    <View style={styles.templateEmojiCircle}>
+                      <Text style={styles.templateEmoji}>{tplan.emoji}</Text>
+                    </View>
+                    <View style={styles.templateCardLeft}>
+                      <Text style={[styles.templateName, { color: isDark ? colors.textDark : colors.text }]}>
+                        {tplan.name}
+                      </Text>
+                      <View style={styles.templateBadgeRow}>
+                        <View style={styles.templateGoalBadge}>
+                          <Text style={styles.templateGoalBadgeText}>{goalLabel}</Text>
+                        </View>
+                        <Text style={[styles.templateSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                          {'· 7 days'}
+                        </Text>
+                      </View>
+                    </View>
+                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         {/* Generate with AI button */}
         <TouchableOpacity
           style={{ backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 8, borderWidth: 1.5, borderColor: '#14B8A6' }}
@@ -1589,6 +1648,75 @@ const styles = StyleSheet.create({
   foodCaloriesValue: { ...typography.bodyBold, fontSize: 18 },
   foodCaloriesLabel: { ...typography.caption },
   bottomSpacer: { height: 40 },
+  templateSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  templateSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: '#D4AF37',
+    textTransform: 'uppercase',
+  },
+  templateCard: {
+    borderRadius: 12,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#D4AF37',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  templateCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  templateEmojiCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(212,175,55,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  templateEmoji: {
+    fontSize: 20,
+  },
+  templateCardLeft: {
+    flex: 1,
+  },
+  templateName: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  templateBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  templateGoalBadge: {
+    backgroundColor: 'rgba(212,175,55,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  templateGoalBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#D4AF37',
+  },
+  templateSubtitle: {
+    fontSize: 12,
+  },
 });
 
 const referralStyles = StyleSheet.create({
