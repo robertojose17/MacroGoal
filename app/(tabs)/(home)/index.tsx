@@ -1345,7 +1345,6 @@ export default function HomeScreen() {
               <Text style={styles.templateSectionTitle}>{'✦ AVAILABLE PLANS'}</Text>
             </View>
             {templatePlans.map((tplan) => {
-              const goalLabel = tplan.goal_type === 'cut' ? 'Cut' : tplan.goal_type === 'bulk' ? 'Bulk' : 'Maintain';
               return (
                 <TouchableOpacity
                   key={tplan.id}
@@ -1364,14 +1363,6 @@ export default function HomeScreen() {
                       <Text style={[styles.templateName, { color: isDark ? colors.textDark : colors.text }]}>
                         {tplan.name}
                       </Text>
-                      <View style={styles.templateBadgeRow}>
-                        <View style={styles.templateGoalBadge}>
-                          <Text style={styles.templateGoalBadgeText}>{goalLabel}</Text>
-                        </View>
-                        <Text style={[styles.templateSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                          {'· 7 days'}
-                        </Text>
-                      </View>
                     </View>
                     <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
                   </View>
@@ -2006,8 +1997,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
