@@ -1336,76 +1336,70 @@ function Step9({
   onNext: () => void;
 }) {
   return (
-    <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
-      <LinearGradient
-        colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.95)', '#000000']}
-        locations={[0, 0.35, 0.55, 0.75, 1]}
-        style={styles.fullScreen}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-          <ScrollView
-            contentContainerStyle={styles.stepScroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <SafeAreaView edges={['top']} style={styles.safeTop} />
+    <View style={[styles.fullScreen, { backgroundColor: '#000000' }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+        <ScrollView
+          contentContainerStyle={styles.stepScroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <SafeAreaView edges={['top']} style={styles.safeTop} />
 
-            {saving ? (
-              <View style={styles.s9LoadingBlock}>
-                <ActivityIndicator size="large" color={PRIMARY} />
-                <Text style={styles.s9LoadingText}>Building your plan…</Text>
-              </View>
-            ) : saveError ? (
-              <View style={styles.s9ErrorBlock}>
-                <Text style={styles.s9ErrorText}>{saveError}</Text>
-                <TouchableOpacity style={styles.primaryBtn} onPress={onRetry}>
-                  <Text style={styles.primaryBtnText}>Try Again</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.stepTitle}>Your plan is ready 🎯</Text>
-                <Text style={styles.stepSubtitle}>{goalProjectionText}</Text>
+          {saving ? (
+            <View style={styles.s9LoadingBlock}>
+              <ActivityIndicator size="large" color={PRIMARY} />
+              <Text style={styles.s9LoadingText}>Building your plan…</Text>
+            </View>
+          ) : saveError ? (
+            <View style={styles.s9ErrorBlock}>
+              <Text style={styles.s9ErrorText}>{saveError}</Text>
+              <TouchableOpacity style={styles.primaryBtn} onPress={onRetry}>
+                <Text style={styles.primaryBtnText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.stepTitle}>Your plan is ready 🎯</Text>
+              <Text style={styles.stepSubtitle}>{goalProjectionText}</Text>
 
-                <View style={styles.s9Grid}>
-                  <View style={styles.s9StatCard}>
-                    <Text style={styles.s9StatEmoji}>🔥</Text>
-                    <Text style={styles.s9StatValue}>{calories.toLocaleString()}</Text>
-                    <Text style={styles.s9StatUnit}>kcal</Text>
-                    <Text style={styles.s9StatLabel}>Daily Calories</Text>
-                  </View>
-                  <View style={styles.s9StatCard}>
-                    <Text style={styles.s9StatEmoji}>🥩</Text>
-                    <Text style={styles.s9StatValue}>{protein}g</Text>
-                    <Text style={styles.s9StatUnit}> </Text>
-                    <Text style={styles.s9StatLabel}>Protein</Text>
-                  </View>
-                  <View style={styles.s9StatCard}>
-                    <Text style={styles.s9StatEmoji}>🍚</Text>
-                    <Text style={styles.s9StatValue}>{carbs}g</Text>
-                    <Text style={styles.s9StatUnit}> </Text>
-                    <Text style={styles.s9StatLabel}>Carbs</Text>
-                  </View>
-                  <View style={styles.s9StatCard}>
-                    <Text style={styles.s9StatEmoji}>🥑</Text>
-                    <Text style={styles.s9StatValue}>{fats}g</Text>
-                    <Text style={styles.s9StatUnit}> </Text>
-                    <Text style={styles.s9StatLabel}>Fat</Text>
-                  </View>
+              <View style={styles.s9Grid}>
+                <View style={styles.s9StatCard}>
+                  <Text style={styles.s9StatEmoji}>🔥</Text>
+                  <Text style={styles.s9StatValue}>{calories.toLocaleString()}</Text>
+                  <Text style={styles.s9StatUnit}>kcal</Text>
+                  <Text style={styles.s9StatLabel}>Daily Calories</Text>
                 </View>
+                <View style={styles.s9StatCard}>
+                  <Text style={styles.s9StatEmoji}>🥩</Text>
+                  <Text style={styles.s9StatValue}>{protein}g</Text>
+                  <Text style={styles.s9StatUnit}> </Text>
+                  <Text style={styles.s9StatLabel}>Protein</Text>
+                </View>
+                <View style={styles.s9StatCard}>
+                  <Text style={styles.s9StatEmoji}>🍚</Text>
+                  <Text style={styles.s9StatValue}>{carbs}g</Text>
+                  <Text style={styles.s9StatUnit}> </Text>
+                  <Text style={styles.s9StatLabel}>Carbs</Text>
+                </View>
+                <View style={styles.s9StatCard}>
+                  <Text style={styles.s9StatEmoji}>🥑</Text>
+                  <Text style={styles.s9StatValue}>{fats}g</Text>
+                  <Text style={styles.s9StatUnit}> </Text>
+                  <Text style={styles.s9StatLabel}>Fat</Text>
+                </View>
+              </View>
 
-                <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={onNext}
-                >
-                  <Text style={styles.primaryBtnText}>Show Me My Roadmap →</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </LinearGradient>
-    </ImageBackground>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={onNext}
+              >
+                <Text style={styles.primaryBtnText}>Show Me My Roadmap →</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
