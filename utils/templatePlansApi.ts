@@ -12,6 +12,12 @@ export interface TemplatePlan {
   created_at: string;
 }
 
+export interface ProteinOption {
+  protein_name: string;
+  emoji: string;
+  sort_order: number;
+}
+
 export interface TemplateItem {
   food_name: string;
   scaled_calories: number;
@@ -19,6 +25,7 @@ export interface TemplateItem {
   scaled_carbs: number;
   scaled_fats: number;
   scaled_grams: number;
+  is_protein?: boolean;
 }
 
 export interface TemplateDay {
@@ -38,11 +45,21 @@ export interface TemplatePlanDetail {
   emoji: string;
   goal_type: string;
   is_template: true;
+  selected_protein: string;
+  protein_options: ProteinOption[];
   user_calories_goal: number;
   user_protein_goal: number;
   user_carbs_goal: number;
   user_fats_goal: number;
-  days: TemplateDay[];
+  day: {
+    day_number: number;
+    meals: {
+      breakfast: TemplateItem[];
+      lunch: TemplateItem[];
+      dinner: TemplateItem[];
+      snack: TemplateItem[];
+    };
+  };
 }
 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0ZmlvZm9hZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDI4NjcsImV4cCI6MjA3OTExODg2N30.iC4P3lp4fJHLsYNWBwHwFwGP-WZuJONETOYd2q1lQWA";
@@ -63,8 +80,8 @@ export async function listTemplatePlans(): Promise<TemplatePlan[]> {
   return data || [];
 }
 
-export async function getTemplatePlanDetail(templateId: string): Promise<TemplatePlanDetail> {
-  console.log('[templatePlansApi] Fetching template plan detail:', templateId);
+export async function getTemplatePlanDetail(templateId: string, preferredProtein?: string): Promise<TemplatePlanDetail> {
+  console.log('[templatePlansApi] Fetching template plan detail:', templateId, 'protein:', preferredProtein ?? 'Chicken');
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
@@ -75,7 +92,11 @@ export async function getTemplatePlanDetail(templateId: string): Promise<Templat
       'apikey': SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({ template_id: templateId, user_id: user.id }),
+    body: JSON.stringify({
+      template_id: templateId,
+      user_id: user.id,
+      preferred_protein: preferredProtein || 'Chicken',
+    }),
   });
   if (!response.ok) {
     const err = await response.text();
@@ -83,6 +104,6 @@ export async function getTemplatePlanDetail(templateId: string): Promise<Templat
     throw new Error(err);
   }
   const data = await response.json();
-  console.log('[templatePlansApi] Template plan detail loaded:', data.name, 'days:', data.days?.length ?? 0);
+  console.log('[templatePlansApi] Template plan detail loaded:', data.name, 'protein:', data.selected_protein);
   return data;
 }
