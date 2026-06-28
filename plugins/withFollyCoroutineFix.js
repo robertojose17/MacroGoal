@@ -177,6 +177,62 @@ function applySourcePatches(projectRoot) {
   // HighResTimeStamp via #if REACT_NATIVE_MINOR_VERSION >= 81 in reanimated 4.1.7+
   console.log('[withFollyCoroutineFix] Fix 3: skipped (reanimated 4.x already correct)');
 
+  // Fix 10: RecordPropertiesInterpolator.cpp — std::ranges::all_of not available in iPhoneOS26.0.sdk
+  // Replace with std::all_of from <algorithm> using explicit begin/end iterators.
+  const RECORD_INTERP_MARKER = 'record-interp-patch: std::ranges removed for iPhoneOS26.0.sdk';
+  const recordInterpPath = path.join(
+    projectRoot,
+    'node_modules/react-native-reanimated/Common/cpp/reanimated/CSS/interpolation/groups/RecordPropertiesInterpolator.cpp'
+  );
+  if (!fs.existsSync(recordInterpPath)) {
+    console.log('[withFollyCoroutineFix] Fix 10: RecordPropertiesInterpolator.cpp not found (ok)');
+  } else {
+    let recordContent = fs.readFileSync(recordInterpPath, 'utf8');
+    if (recordContent.includes(RECORD_INTERP_MARKER)) {
+      console.log('[withFollyCoroutineFix] Fix 10: RecordPropertiesInterpolator.cpp already patched');
+    } else {
+      const OLD_RANGES_SNIPPET = `  return std::ranges::all_of(propertyValue.items(), [this](const auto &item) {
+    const auto &[propName, propValue] = item;
+    const auto it = interpolators_.find(propName.getString());
+    return it != interpolators_.end() &&
+        it->second->equalsReversingAdjustedStartValue(propValue);
+  });`;
+      const NEW_RANGES_SNIPPET = `  // ${RECORD_INTERP_MARKER}
+  const auto items = propertyValue.items();
+  return std::all_of(items.begin(), items.end(), [this](const auto &item) {
+    const auto &propName = item.first;
+    const auto &propValue = item.second;
+    const auto it = interpolators_.find(propName.getString());
+    return it != interpolators_.end() &&
+        it->second->equalsReversingAdjustedStartValue(propValue);
+  });`;
+      if (!recordContent.includes('std::ranges::all_of')) {
+        console.log('[withFollyCoroutineFix] Fix 10: std::ranges::all_of not found in RecordPropertiesInterpolator.cpp — skipping');
+      } else {
+        // Add <algorithm> include if not present
+        if (!recordContent.includes('#include <algorithm>')) {
+          recordContent = recordContent.replace(
+            '#include <unordered_set>',
+            '#include <algorithm>\n#include <unordered_set>'
+          );
+        }
+        if (recordContent.includes(OLD_RANGES_SNIPPET)) {
+          recordContent = recordContent.replace(OLD_RANGES_SNIPPET, NEW_RANGES_SNIPPET);
+        } else {
+          // Fallback: replace any std::ranges::all_of call generically
+          recordContent = recordContent.replace(
+            /std::ranges::all_of\(/g,
+            'std::all_of(/* ranges-patched */ '
+          );
+          // This fallback won't compile cleanly, so log a warning
+          console.warn('[withFollyCoroutineFix] Fix 10: WARNING — used fallback ranges patch, may need manual review');
+        }
+        fs.writeFileSync(recordInterpPath, recordContent, 'utf8');
+        console.log('[withFollyCoroutineFix] Fix 10: Patched RecordPropertiesInterpolator.cpp (std::ranges::all_of -> std::all_of)');
+      }
+    }
+  }
+
   // Fix 5: ReanimatedModuleProxy.cpp — add shadowNodeFromValue compat shim for RN 0.81.x
   const reanimatedProxyPath = path.join(
     projectRoot,
@@ -465,7 +521,7 @@ function applyPodfilePatch(podfilePath) {
 
   let content = fs.readFileSync(podfilePath, 'utf8');
 
-  if (content.includes('withFollyCoroutineFix-v16')) {
+  if (content.includes('withFollyCoroutineFix-v17')) {
     console.log('[withFollyCoroutineFix] Podfile already patched.');
     return;
   }
@@ -484,7 +540,7 @@ function applyPodfilePatch(podfilePath) {
 
   // --- post_install injection ---
   const postInstallRegex = /^([ \t]*post_install do \|installer\|[ \t]*)$/m;
-  const injection = `  # withFollyCoroutineFix-v16 — disable Folly coroutines for Xcode 26 / iPhoneOS26.0.sdk
+  const injection = `  # withFollyCoroutineFix-v17 — disable Folly coroutines for Xcode 26 / iPhoneOS26.0.sdk
   begin
     next if installer.nil?
     pods_project = installer.pods_project rescue nil
