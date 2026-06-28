@@ -290,6 +290,25 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
               />
             </>
           ) : null}
+          {!userEntry && top5.length > 0 ? (
+            <>
+              <View style={[styles.ellipsisRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
+                <Text style={[styles.ellipsisText, { color: subColor }]}>· · ·</Text>
+              </View>
+              <View style={[styles.leaderRow, { backgroundColor: isDark ? colors.primary + '22' : colors.primary + '14' }]}>
+                <Text style={[styles.rankText, { color: subColor, fontSize: 14 }]}>—</Text>
+                <View style={styles.leaderNameCol}>
+                  <Text style={[styles.leaderName, { color: isDark ? colors.textDark : colors.text }]}>
+                    You
+                    <Text style={{ color: colors.primary, fontWeight: '700' }}> · You</Text>
+                  </Text>
+                </View>
+                <Text style={[styles.leaderValue, { color: subColor, fontSize: 12, fontWeight: '500' }]}>
+                  No data yet
+                </Text>
+              </View>
+            </>
+          ) : null}
         </View>
       )}
 
