@@ -56,6 +56,7 @@ export async function loadOrGenerateFlashChallenges(): Promise<FlashChallenge[]>
     const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/generate-flash-challenges`, {
       method: 'POST',
       headers,
+      body: JSON.stringify({ local_date: toLocalDateString() }),
     });
     if (!res.ok) {
       const errText = await res.text();
