@@ -169,7 +169,7 @@ struct SmallMacroLabel: View {
     }
 }
 
-// MARK: - Medium Widget (calorie ring + 4 macro bar rows)
+// MARK: - Medium Widget (calorie ring + 3 macro bar rows)
 struct MediumWidgetView: View {
     let data: MacroData
     let accentColor = Color(red: 0, green: 0.898, blue: 1.0)
@@ -218,9 +218,8 @@ struct MediumWidgetView: View {
                     }
                 }
 
-                // Right: 4 macro bar rows
-                VStack(alignment: .leading, spacing: 7) {
-                    MacroBarRow(label: "Calories", value: Double(data.calories), goal: Double(data.calorieGoal), color: accentColor, unit: "")
+                // Right: 3 macro bar rows
+                VStack(alignment: .leading, spacing: 8) {
                     MacroBarRow(label: "Protein", value: data.protein, goal: data.proteinGoal, color: Color(hex: "EF4444"), unit: "g")
                     MacroBarRow(label: "Carbs", value: data.carbs, goal: data.carbsGoal, color: Color(hex: "3B82F6"), unit: "g")
                     MacroBarRow(label: "Fat", value: data.fat, goal: data.fatGoal, color: Color(hex: "F59E0B"), unit: "g")
