@@ -57,10 +57,20 @@ struct MacroProvider: TimelineProvider {
 
     private func loadEntry() -> MacroEntry {
         let defaults = UserDefaults(suiteName: appGroupID)
+
+        // Try reading as String first (written by @bacons/apple-targets setString)
+        if let jsonString = defaults?.string(forKey: dataKey),
+           let data = jsonString.data(using: .utf8),
+           let macroData = try? JSONDecoder().decode(MacroData.self, from: data) {
+            return MacroEntry(date: Date(), data: macroData)
+        }
+
+        // Fallback: try reading as Data (legacy)
         if let data = defaults?.data(forKey: dataKey),
            let macroData = try? JSONDecoder().decode(MacroData.self, from: data) {
             return MacroEntry(date: Date(), data: macroData)
         }
+
         return MacroEntry(date: Date(), data: MacroData(
             calories: 0, calorieGoal: 2000,
             protein: 0, proteinGoal: 150,
