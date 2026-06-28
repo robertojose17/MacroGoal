@@ -3,7 +3,7 @@ module.exports = {
   type: "widget",
   name: "MacroWidget",
   displayName: "Macro Goal",
-  deploymentTarget: "16.0",
+  deploymentTarget: "16.2",
   bundleIdentifier: ".macrowidget",
   frameworks: ["SwiftUI", "WidgetKit"],
   entitlements: {

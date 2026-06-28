@@ -254,8 +254,12 @@ struct MacroWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: MacroProvider()) { entry in
-            MacroWidgetEntryView(entry: entry)
-                .containerBackground(.clear, for: .widget)
+            if #available(iOS 17.0, *) {
+                MacroWidgetEntryView(entry: entry)
+                    .containerBackground(.clear, for: .widget)
+            } else {
+                MacroWidgetEntryView(entry: entry)
+            }
         }
         .configurationDisplayName("Macro Goal")
         .description("Track your daily calories and macros at a glance.")

@@ -511,6 +511,71 @@ end
   // Fix 4: DISABLED for reanimated 4.x — ReanimatedMountHook.cpp already handles
   // HighResTimeStamp via #if REACT_NATIVE_MINOR_VERSION >= 81 in reanimated 4.1.7+
   console.log('[withFollyCoroutineFix] Fix 4: skipped (reanimated 4.x already correct)');
+
+  // Fix 11: UIManagerUpdateShadowTree.cpp — remove unused #include <ranges>
+  // The file only uses rbegin()/rend() which are C++17; the <ranges> include is unused
+  // and breaks compilation against iPhoneOS26.0.sdk.
+  const UI_MANAGER_MARKER = 'uimanager-ranges-patch: removed unused #include <ranges>';
+  const uiManagerPath = path.join(
+    projectRoot,
+    'node_modules/react-native/ReactCommon/react/renderer/uimanager/UIManagerUpdateShadowTree.cpp'
+  );
+  if (!fs.existsSync(uiManagerPath)) {
+    console.log('[withFollyCoroutineFix] Fix 11: UIManagerUpdateShadowTree.cpp not found (ok)');
+  } else {
+    let uiManagerContent = fs.readFileSync(uiManagerPath, 'utf8');
+    if (uiManagerContent.includes(UI_MANAGER_MARKER)) {
+      console.log('[withFollyCoroutineFix] Fix 11: UIManagerUpdateShadowTree.cpp already patched');
+    } else if (!uiManagerContent.includes('#include <ranges>')) {
+      console.log('[withFollyCoroutineFix] Fix 11: #include <ranges> not found in UIManagerUpdateShadowTree.cpp — skipping');
+    } else {
+      uiManagerContent = uiManagerContent.replace(
+        '#include <ranges>',
+        '// ' + UI_MANAGER_MARKER
+      );
+      fs.writeFileSync(uiManagerPath, uiManagerContent, 'utf8');
+      console.log('[withFollyCoroutineFix] Fix 11: Patched UIManagerUpdateShadowTree.cpp (removed #include <ranges>)');
+    }
+  }
+
+  // Fix 12: RCTViewComponentView.mm — replace std::ranges::reverse_view with rbegin/rend
+  // std::ranges::reverse_view is C++20 ranges and not available in iPhoneOS26.0.sdk.
+  const RCT_VIEW_MARKER = 'rctview-ranges-patch: std::ranges::reverse_view replaced for iPhoneOS26.0.sdk';
+  const rctViewPath = path.join(
+    projectRoot,
+    'node_modules/react-native/React/Fabric/Mounting/ComponentViews/View/RCTViewComponentView.mm'
+  );
+  if (!fs.existsSync(rctViewPath)) {
+    console.log('[withFollyCoroutineFix] Fix 12: RCTViewComponentView.mm not found (ok)');
+  } else {
+    let rctViewContent = fs.readFileSync(rctViewPath, 'utf8');
+    if (rctViewContent.includes(RCT_VIEW_MARKER)) {
+      console.log('[withFollyCoroutineFix] Fix 12: RCTViewComponentView.mm already patched');
+    } else if (!rctViewContent.includes('std::ranges::reverse_view')) {
+      console.log('[withFollyCoroutineFix] Fix 12: std::ranges::reverse_view not found in RCTViewComponentView.mm — skipping');
+    } else {
+      const OLD_RCT_SNIPPET = `    for (const auto &backgroundImage : std::ranges::reverse_view(_props->backgroundImage)) {`;
+      const NEW_RCT_SNIPPET = `    // ${RCT_VIEW_MARKER}
+    const auto &_bgImages = _props->backgroundImage;
+    for (auto _bgIt = _bgImages.rbegin(); _bgIt != _bgImages.rend(); ++_bgIt) {
+      const auto &backgroundImage = *_bgIt;`;
+      if (rctViewContent.includes(OLD_RCT_SNIPPET)) {
+        rctViewContent = rctViewContent.replace(OLD_RCT_SNIPPET, NEW_RCT_SNIPPET);
+        fs.writeFileSync(rctViewPath, rctViewContent, 'utf8');
+        console.log('[withFollyCoroutineFix] Fix 12: Patched RCTViewComponentView.mm (std::ranges::reverse_view -> rbegin/rend)');
+      } else {
+        // Fallback: generic regex replacement
+        rctViewContent = rctViewContent.replace(
+          /for \(const auto &(\w+) : std::ranges::reverse_view\(([^)]+)\)\)/g,
+          (match, varName, container) => {
+            return `// ${RCT_VIEW_MARKER}\n    const auto &_rangeContainer_${varName} = ${container};\n    for (auto _rangeIt_${varName} = _rangeContainer_${varName}.rbegin(); _rangeIt_${varName} != _rangeContainer_${varName}.rend(); ++_rangeIt_${varName})\n    { const auto &${varName} = *_rangeIt_${varName};`;
+          }
+        );
+        fs.writeFileSync(rctViewPath, rctViewContent, 'utf8');
+        console.log('[withFollyCoroutineFix] Fix 12: Patched RCTViewComponentView.mm (fallback regex replacement)');
+      }
+    }
+  }
 }
 
 function applyPodfilePatch(podfilePath) {
