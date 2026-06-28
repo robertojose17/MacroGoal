@@ -76,6 +76,7 @@ export async function loadOrGenerateFlashChallenges(): Promise<FlashChallenge[]>
     .select('*')
     .eq('user_id', user.id)
     .eq('date', today)
+    .neq('challenge_status', 'expired')
     .order('created_at', { ascending: true });
 
   if (error) {
