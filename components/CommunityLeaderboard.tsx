@@ -5,7 +5,6 @@ import {
   Text,
   StyleSheet,
   Animated,
-  Pressable,
   Modal,
   TouchableOpacity,
   Platform,
@@ -17,7 +16,7 @@ import { fetchLeaderboard, type LeaderboardEntry, type LeaderboardResponse, type
 import { Trophy } from 'lucide-react-native';
 import { toLocalDateString } from '@/utils/dateUtils';
 
-type Tab = 'steps' | 'gym';
+type Tab = 'steps';
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
@@ -129,11 +128,8 @@ interface CommunityLeaderboardProps {
 }
 
 export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboardProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('steps');
   const [stepsData, setStepsData] = useState<LeaderboardResponse | null>(null);
-  const [gymData, setGymData] = useState<LeaderboardResponse | null>(null);
   const [loadingSteps, setLoadingSteps] = useState(true);
-  const [loadingGym, setLoadingGym] = useState(true);
 
   // Period selector state
   const [period, setPeriod] = useState<LeaderboardPeriod>('week');
@@ -158,48 +154,30 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
   const sheetBg = isDark ? '#1E2035' : '#FFFFFF';
   const sheetBorder = isDark ? colors.borderDark : colors.border;
 
-  const loadTab = useCallback(async (tab: Tab, p: LeaderboardPeriod, cs: Date | null, ce: Date | null) => {
-    console.log('[CommunityLeaderboard] Loading tab:', tab, 'period:', p);
+  const loadTab = useCallback(async (p: LeaderboardPeriod, cs: Date | null, ce: Date | null) => {
+    console.log('[CommunityLeaderboard] Loading steps leaderboard, period:', p);
     const startStr = cs ? toLocalDateString(cs) : undefined;
     const endStr = ce ? toLocalDateString(ce) : undefined;
 
-    if (tab === 'steps') {
-      setLoadingSteps(true);
-      try {
-        const data = await fetchLeaderboard('steps', p, startStr, endStr);
-        setStepsData(data);
-      } catch (err) {
-        console.warn('[CommunityLeaderboard] loadTab steps error:', err);
-      } finally {
-        setLoadingSteps(false);
-      }
-    } else {
-      setLoadingGym(true);
-      try {
-        const data = await fetchLeaderboard('gym', p, startStr, endStr);
-        setGymData(data);
-      } catch (err) {
-        console.warn('[CommunityLeaderboard] loadTab gym error:', err);
-      } finally {
-        setLoadingGym(false);
-      }
+    setLoadingSteps(true);
+    try {
+      const data = await fetchLeaderboard('steps', p, startStr, endStr);
+      setStepsData(data);
+    } catch (err) {
+      console.warn('[CommunityLeaderboard] loadTab steps error:', err);
+    } finally {
+      setLoadingSteps(false);
     }
   }, []);
 
   const loadAll = useCallback(() => {
-    loadTab('steps', period, customStart, customEnd);
-    loadTab('gym', period, customStart, customEnd);
+    loadTab(period, customStart, customEnd);
   }, [loadTab, period, customStart, customEnd]);
 
   useEffect(() => {
     loadAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, period, customStart, customEnd]);
-
-  const handleTabPress = (tab: Tab) => {
-    console.log('[CommunityLeaderboard] Tab pressed:', tab);
-    setActiveTab(tab);
-  };
 
   const handlePeriodButtonPress = () => {
     console.log('[CommunityLeaderboard] Period selector opened');
@@ -241,9 +219,9 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
     setShowCustomSheet(false);
   };
 
-  const activeData = activeTab === 'steps' ? stepsData : gymData;
-  const isLoading = activeTab === 'steps' ? loadingSteps : loadingGym;
-  const unit = activeTab === 'steps' ? 'steps' : 'days';
+  const activeData = stepsData;
+  const isLoading = loadingSteps;
+  const unit = 'steps';
 
   const top5 = activeData?.leaderboard.slice(0, 5) ?? [];
   const userEntry = activeData?.leaderboard.find((e) => e.isYou);
@@ -268,33 +246,6 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
           <Text style={[styles.periodButtonText, { color: colors.primary }]}>{periodLabel}</Text>
           <Ionicons name="chevron-down" size={12} color={colors.primary} />
         </TouchableOpacity>
-      </View>
-
-      {/* Tab pills */}
-      <View style={[styles.tabRow, { backgroundColor: isDark ? '#1A1C2E' : '#EAECF2' }]}>
-        {(['steps', 'gym'] as Tab[]).map((tab) => {
-          const isActive = activeTab === tab;
-          const label = tab === 'steps' ? 'Steps' : 'Gym';
-          return (
-            <Pressable
-              key={tab}
-              onPress={() => handleTabPress(tab)}
-              style={[
-                styles.tabPill,
-                isActive && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: isActive ? '#fff' : subColor },
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
       </View>
 
       {/* Content */}
