@@ -223,13 +223,13 @@ export default function DashboardScreen() {
     if (!todaySummary || !goal) return;
     const widgetData: WidgetMacroData = {
       calories: Math.round(todaySummary.total_calories ?? 0),
-      calorieGoal: goal.calories ?? 2000,
+      calorieGoal: goal.daily_calories ?? 2000,
       protein: Math.round(todaySummary.total_protein ?? 0),
-      proteinGoal: goal.protein ?? 150,
+      proteinGoal: goal.protein_g ?? 150,
       carbs: Math.round(todaySummary.total_carbs ?? 0),
-      carbsGoal: goal.carbs ?? 220,
+      carbsGoal: goal.carbs_g ?? 220,
       fat: Math.round(todaySummary.total_fats ?? 0),
-      fatGoal: goal.fat ?? 65,
+      fatGoal: goal.fats_g ?? 65,
       streak: xp.status?.current_streak ?? 0,
       date: todaySummary.date ?? '',
     };
