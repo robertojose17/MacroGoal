@@ -119,6 +119,21 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
     await fetchAndSync(userId);
   }, [fetchAndSync]);
 
+  // On mount: try to restore session directly from AsyncStorage (no timeout)
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    supabase.auth.getSession().then(({ data }) => {
+      const userId = data.session?.user?.id ?? null;
+      console.log("[WidgetContext] getSession on mount, userId:", userId ?? "none");
+      if (userId) {
+        currentUserIdRef.current = userId;
+        fetchAndSync(userId);
+      }
+    }).catch((e) => {
+      console.warn("[WidgetContext] getSession error:", e);
+    });
+  }, [fetchAndSync]);
+
   // Listen for auth state — sync widget whenever a user session is available
   useEffect(() => {
     if (Platform.OS !== "ios") return;
