@@ -1,6 +1,19 @@
 import WidgetKit
 import SwiftUI
 
+// MARK: - Color hex helper
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r = Double((int >> 16) & 0xFF) / 255
+        let g = Double((int >> 8) & 0xFF) / 255
+        let b = Double(int & 0xFF) / 255
+        self.init(red: r, green: g, blue: b)
+    }
+}
+
 // MARK: - Shared data model (mirrors what the app writes to App Group UserDefaults)
 struct MacroData: Codable {
     var calories: Int
@@ -156,7 +169,7 @@ struct SmallMacroLabel: View {
     }
 }
 
-// MARK: - Medium Widget (calories + 3 macros)
+// MARK: - Medium Widget (calorie ring + 4 macro bar rows)
 struct MediumWidgetView: View {
     let data: MacroData
     let accentColor = Color(red: 0, green: 0.898, blue: 1.0)
@@ -169,9 +182,10 @@ struct MediumWidgetView: View {
     var body: some View {
         ZStack {
             Color(red: 0.102, green: 0.102, blue: 0.102)
-            HStack(spacing: 16) {
-                // Left: calorie ring
-                VStack(spacing: 4) {
+            HStack(alignment: .center, spacing: 16) {
+
+                // Left: calorie ring + streak
+                VStack(spacing: 6) {
                     ZStack {
                         Circle()
                             .stroke(Color.white.opacity(0.1), lineWidth: 7)
@@ -190,26 +204,26 @@ struct MediumWidgetView: View {
                                 .foregroundColor(.white.opacity(0.6))
                             Text("/ \(data.calorieGoal)")
                                 .font(.system(size: 8))
-                                .foregroundColor(.white.opacity(0.45))
+                                .foregroundColor(.white.opacity(0.4))
                         }
                     }
                     if data.streak > 0 {
                         HStack(spacing: 2) {
                             Text("🔥")
                                 .font(.system(size: 10))
-                            Text("\(data.streak)d streak")
+                            Text("\(data.streak)d")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(accentColor)
                         }
                     }
                 }
 
-                // Right: calories + macro bars
-                VStack(alignment: .leading, spacing: 6) {
+                // Right: 4 macro bar rows
+                VStack(alignment: .leading, spacing: 7) {
                     MacroBarRow(label: "Calories", value: Double(data.calories), goal: Double(data.calorieGoal), color: accentColor, unit: "")
-                    MacroBarRow(label: "Protein", value: data.protein, goal: data.proteinGoal, color: Color(red: 0.4, green: 0.8, blue: 0.4))
-                    MacroBarRow(label: "Carbs", value: data.carbs, goal: data.carbsGoal, color: Color(red: 1.0, green: 0.8, blue: 0.2))
-                    MacroBarRow(label: "Fat", value: data.fat, goal: data.fatGoal, color: Color(red: 1.0, green: 0.5, blue: 0.2))
+                    MacroBarRow(label: "Protein", value: data.protein, goal: data.proteinGoal, color: Color(hex: "EF4444"), unit: "g")
+                    MacroBarRow(label: "Carbs", value: data.carbs, goal: data.carbsGoal, color: Color(hex: "3B82F6"), unit: "g")
+                    MacroBarRow(label: "Fat", value: data.fat, goal: data.fatGoal, color: Color(hex: "F59E0B"), unit: "g")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -218,12 +232,13 @@ struct MediumWidgetView: View {
     }
 }
 
+// MARK: - Macro Bar Row (matches food tab pill-bar style)
 struct MacroBarRow: View {
     let label: String
     let value: Double
     let goal: Double
     let color: Color
-    var unit: String = "g"
+    let unit: String
 
     var progress: Double {
         guard goal > 0 else { return 0 }
@@ -232,31 +247,35 @@ struct MacroBarRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                Spacer()
+            // Label
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.55))
+            // Bar + value
+            HStack(spacing: 6) {
+                // Pill progress bar — height 6, fully rounded (Capsule)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.12))
+                            .frame(height: 6)
+                        Capsule()
+                            .fill(color)
+                            .frame(width: geo.size.width * progress, height: 6)
+                    }
+                }
+                .frame(height: 6)
+                // consumed / goal
                 HStack(spacing: 2) {
                     Text("\(Int(value))")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                     Text("/ \(Int(goal))\(unit)")
                         .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.white.opacity(0.45))
                 }
+                .frame(minWidth: 72, alignment: .trailing)
             }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 5)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(color)
-                        .frame(width: geo.size.width * progress, height: 5)
-                }
-            }
-            .frame(height: 5)
         }
     }
 }
