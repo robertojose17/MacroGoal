@@ -48,7 +48,6 @@ import ChallengeCompleteModal from '@/components/xp/SevenDayChallenge/ChallengeC
 import { getChallenge } from '@/utils/sevenDayChallengeApi';
 import FlashChallengesCard from '@/components/FlashChallengesCard';
 import { useWidget } from '@/contexts/WidgetContext';
-import type { WidgetMacroData } from '@/contexts/WidgetContext';
 
 const CHALLENGE_SHOWN_KEY = 'seven_day_challenge_shown';
 
@@ -152,7 +151,7 @@ export default function DashboardScreen() {
   const missionsScrollRef = useRef<ScrollView>(null);
 
   // ─── Widget sync ─────────────────────────────────────────────────────────────
-  const { updateWidgetData, refreshWidget } = useWidget();
+  const { syncWidget } = useWidget();
 
   // ─── Steps (for TodaysChallengesCard optimistic display) ────────────────────
   const { steps: localSteps } = useSteps();
@@ -217,27 +216,6 @@ export default function DashboardScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [xp.status?.current_streak]);
-
-  // Sync data to iOS widget whenever today's summary or goal changes
-  useEffect(() => {
-    if (!todaySummary || !goal) return;
-    const widgetData: WidgetMacroData = {
-      calories: Math.round(todaySummary.total_calories ?? 0),
-      calorieGoal: goal.daily_calories ?? 2000,
-      protein: Math.round(todaySummary.total_protein ?? 0),
-      proteinGoal: goal.protein_g ?? 150,
-      carbs: Math.round(todaySummary.total_carbs ?? 0),
-      carbsGoal: goal.carbs_g ?? 220,
-      fat: Math.round(todaySummary.total_fats ?? 0),
-      fatGoal: goal.fats_g ?? 65,
-      streak: xp.status?.current_streak ?? 0,
-      date: todaySummary.date ?? '',
-    };
-    console.log('[Dashboard] Syncing data to iOS widget:', widgetData);
-    updateWidgetData(widgetData);
-    refreshWidget();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todaySummary, goal, xp.status?.current_streak]);
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
     try {
@@ -340,6 +318,7 @@ export default function DashboardScreen() {
       }
 
       await loadTodaySummary(authUser.id, today);
+      syncWidget(); // non-blocking fire-and-forget — context fetches its own data
 
     } catch (error) {
       console.error('[Dashboard] Error loading data:', error);
@@ -347,6 +326,7 @@ export default function DashboardScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadTodaySummary]);
 
   useFocusEffect(

@@ -27,7 +27,7 @@ import { listTemplatePlans, type TemplatePlan } from '@/utils/templatePlansApi';
 import { formatServing } from '@/utils/servingFormat';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { usePremium } from '@/hooks/usePremium';
-import { useWidget, WidgetMacroData } from '@/contexts/WidgetContext';
+import { useWidget } from '@/contexts/WidgetContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isPremium } = usePremium();
-  const { updateWidgetData, refreshWidget } = useWidget();
+  const { syncWidget } = useWidget();
 
   // Navigation readiness guard — prevents 'Cannot read property route of null'
   // on the first render cycle before the navigation context is initialized.
@@ -359,23 +359,8 @@ export default function HomeScreen() {
         setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
 
         // Sync to iOS widget after meals are loaded
-        if (goalData) {
-          console.log('[Home iOS] Syncing widget data after meal load');
-          const widgetData: WidgetMacroData = {
-            calories: Math.round(totalCals),
-            calorieGoal: goalData.daily_calories ?? 2000,
-            protein: Math.round(totalP),
-            proteinGoal: goalData.protein_g ?? 150,
-            carbs: Math.round(totalC),
-            carbsGoal: goalData.carbs_g ?? 220,
-            fat: Math.round(totalF),
-            fatGoal: goalData.fats_g ?? 65,
-            streak: 0,
-            date: dateString,
-          };
-          updateWidgetData(widgetData);
-          refreshWidget();
-        }
+        console.log('[Home iOS] Triggering widget sync after meal load');
+        syncWidget();
 
         // Flatten all items into a single chronological list
         const flat: (FoodItem & { meal_type: string })[] = [];
@@ -391,6 +376,7 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
   // ── Load plans ──
