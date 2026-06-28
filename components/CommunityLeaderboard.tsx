@@ -15,6 +15,7 @@ import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { fetchLeaderboard, type LeaderboardEntry, type LeaderboardResponse, type LeaderboardPeriod } from '@/utils/leaderboardApi';
 import { Trophy } from 'lucide-react-native';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { useUserProfile } from '@/hooks/useUserProfile';
 
 type Tab = 'steps';
 
@@ -128,6 +129,7 @@ interface CommunityLeaderboardProps {
 }
 
 export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboardProps) {
+  const { profile } = useUserProfile();
   const [stepsData, setStepsData] = useState<LeaderboardResponse | null>(null);
   const [loadingSteps, setLoadingSteps] = useState(true);
 
@@ -299,12 +301,12 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
                 <Text style={[styles.rankText, { color: subColor, fontSize: 14 }]}>—</Text>
                 <View style={styles.leaderNameCol}>
                   <Text style={[styles.leaderName, { color: isDark ? colors.textDark : colors.text }]}>
-                    You
+                    {profile?.username ?? 'You'}
                     <Text style={{ color: colors.primary, fontWeight: '700' }}> · You</Text>
                   </Text>
                 </View>
                 <Text style={[styles.leaderValue, { color: subColor, fontSize: 12, fontWeight: '500' }]}>
-                  No data yet
+                  No data
                 </Text>
               </View>
             </>
