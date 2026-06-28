@@ -18,7 +18,9 @@
       "buildNumber": "353",
       "appleTeamId": "RQ6JHH38HA",
       "entitlements": {
-        "com.apple.security.application-groups": ["group.com.robertojose17.macrogoal"]
+        "com.apple.security.application-groups": [
+          "group.com.robertojose17.macrogoal"
+        ]
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
