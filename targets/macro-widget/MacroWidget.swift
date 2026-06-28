@@ -141,11 +141,12 @@ struct SmallWidgetView: View {
                     }
                 }
                 // Macro row
-                HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     SmallMacroLabel(letter: "P", value: Int(data.protein), goal: Int(data.proteinGoal), color: Color(red: 0.4, green: 0.8, blue: 0.4))
                     SmallMacroLabel(letter: "C", value: Int(data.carbs), goal: Int(data.carbsGoal), color: Color(red: 1.0, green: 0.8, blue: 0.2))
                     SmallMacroLabel(letter: "F", value: Int(data.fat), goal: Int(data.fatGoal), color: Color(red: 1.0, green: 0.5, blue: 0.2))
                 }
+                .frame(maxWidth: .infinity)
                 if data.streak > 0 {
                     HStack(spacing: 3) {
                         Text("🔥")
@@ -168,14 +169,18 @@ struct SmallMacroLabel: View {
     let color: Color
 
     var body: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 2) {
             Text(letter)
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundColor(color)
             Text("\(value)/\(goal)g")
-                .font(.system(size: 8, weight: .bold))
+                .font(.system(size: 7, weight: .bold))
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
