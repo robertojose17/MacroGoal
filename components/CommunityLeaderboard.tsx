@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -15,7 +14,6 @@ import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { fetchLeaderboard, type LeaderboardEntry, type LeaderboardResponse, type LeaderboardPeriod } from '@/utils/leaderboardApi';
 import { Trophy } from 'lucide-react-native';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { useUserProfile } from '@/hooks/useUserProfile';
 
 type Tab = 'steps';
 
@@ -129,7 +127,6 @@ interface CommunityLeaderboardProps {
 }
 
 export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboardProps) {
-  const { profile } = useUserProfile();
   const [stepsData, setStepsData] = useState<LeaderboardResponse | null>(null);
   const [loadingSteps, setLoadingSteps] = useState(true);
 
@@ -290,25 +287,6 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
                 isDark={isDark}
                 isLast
               />
-            </>
-          ) : null}
-          {!userEntry && top5.length > 0 ? (
-            <>
-              <View style={[styles.ellipsisRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-                <Text style={[styles.ellipsisText, { color: subColor }]}>· · ·</Text>
-              </View>
-              <View style={[styles.leaderRow, { backgroundColor: isDark ? colors.primary + '22' : colors.primary + '14' }]}>
-                <Text style={[styles.rankText, { color: subColor, fontSize: 14 }]}>—</Text>
-                <View style={styles.leaderNameCol}>
-                  <Text style={[styles.leaderName, { color: isDark ? colors.textDark : colors.text }]}>
-                    {profile?.username ?? 'You'}
-                    <Text style={{ color: colors.primary, fontWeight: '700' }}> · You</Text>
-                  </Text>
-                </View>
-                <Text style={[styles.leaderValue, { color: subColor, fontSize: 12, fontWeight: '500' }]}>
-                  No data
-                </Text>
-              </View>
             </>
           ) : null}
         </View>
@@ -624,7 +602,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  // Sheet styles
   sheetOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -668,7 +645,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  // Custom range
   dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
