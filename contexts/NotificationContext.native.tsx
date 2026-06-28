@@ -87,7 +87,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       return;
     }
 
-    interactionTaskRef.current = InteractionManager.runAfterInteractions(() => {
+    interactionTaskRef.current = InteractionManager.runAfterInteractions(async () => {
       try {
         // Set verbose logging in dev
         if (__DEV__) {
@@ -99,8 +99,17 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         console.log("[OneSignal] Initialized with App ID:", ONESIGNAL_APP_ID.substring(0, 8) + "...");
 
         // Check current permission status
-        const permissionStatus = OneSignal.Notifications.hasPermission();
+        const permissionStatus = await OneSignal.Notifications.getPermissionAsync();
         setHasPermission(permissionStatus);
+
+        // Auto-request permission on first launch
+        const alreadyPrompted = await AsyncStorage.getItem('onesignal_permission_prompted');
+        if (!alreadyPrompted && !permissionStatus) {
+          await AsyncStorage.setItem('onesignal_permission_prompted', '1');
+          const granted = await OneSignal.Notifications.requestPermission(true);
+          setHasPermission(granted);
+          setPermissionDenied(!granted);
+        }
 
         // Foreground notification handler — always display
         const foregroundHandler = (event: NotificationWillDisplayEvent) => {
