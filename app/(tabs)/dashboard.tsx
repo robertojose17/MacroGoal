@@ -47,6 +47,8 @@ import ChallengeDashboardCard from '@/components/xp/SevenDayChallenge/ChallengeD
 import ChallengeCompleteModal from '@/components/xp/SevenDayChallenge/ChallengeCompleteModal';
 import { getChallenge } from '@/utils/sevenDayChallengeApi';
 import FlashChallengesCard from '@/components/FlashChallengesCard';
+import { useWidget } from '@/contexts/WidgetContext';
+import type { WidgetMacroData } from '@/contexts/WidgetContext';
 
 const CHALLENGE_SHOWN_KEY = 'seven_day_challenge_shown';
 
@@ -149,6 +151,9 @@ export default function DashboardScreen() {
   const xp = useXpStatus();
   const missionsScrollRef = useRef<ScrollView>(null);
 
+  // ─── Widget sync ─────────────────────────────────────────────────────────────
+  const { updateWidgetData, refreshWidget } = useWidget();
+
   // ─── Steps (for TodaysChallengesCard optimistic display) ────────────────────
   const { steps: localSteps } = useSteps();
   const [pendingMilestone, setPendingMilestone] = useState<number | null>(null);
@@ -212,6 +217,27 @@ export default function DashboardScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [xp.status?.current_streak]);
+
+  // Sync data to iOS widget whenever today's summary or goal changes
+  useEffect(() => {
+    if (!todaySummary || !goal) return;
+    const widgetData: WidgetMacroData = {
+      calories: Math.round(todaySummary.total_calories ?? 0),
+      calorieGoal: goal.calories ?? 2000,
+      protein: Math.round(todaySummary.total_protein ?? 0),
+      proteinGoal: goal.protein ?? 150,
+      carbs: Math.round(todaySummary.total_carbs ?? 0),
+      carbsGoal: goal.carbs ?? 220,
+      fat: Math.round(todaySummary.total_fats ?? 0),
+      fatGoal: goal.fat ?? 65,
+      streak: xp.status?.current_streak ?? 0,
+      date: todaySummary.date ?? '',
+    };
+    console.log('[Dashboard] Syncing data to iOS widget:', widgetData);
+    updateWidgetData(widgetData);
+    refreshWidget();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todaySummary, goal, xp.status?.current_streak]);
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
     try {

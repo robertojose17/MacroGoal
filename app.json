@@ -16,6 +16,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.robertojose17.macrogoal",
       "buildNumber": "352",
+      "appleTeamId": "RQ6JHH38HA",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.robertojose17.macrogoal"]
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Macro Goal uses your camera to scan barcodes on food packaging so you can quickly add accurate nutrition information.",
@@ -48,6 +52,7 @@
       "bundler": "metro"
     },
     "plugins": [
+      "@bacons/apple-targets",
       "expo-font",
       "expo-router",
       "expo-web-browser",

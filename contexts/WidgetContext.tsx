@@ -2,9 +2,14 @@ import * as React from "react";
 import { createContext, useCallback, useContext } from "react";
 import { Platform } from "react-native";
 
-// Safely require @bacons/apple-targets — the build/ directory may be absent
-// in some install states, so we guard with try/catch to prevent a crash.
-let ExtensionStorage: { reloadWidget: () => void } | null = null;
+const APP_GROUP = "group.com.robertojose17.macrogoal";
+const WIDGET_DATA_KEY = "macro_widget_data";
+
+// Safely require @bacons/apple-targets
+let ExtensionStorage: {
+  reloadWidget: () => void;
+  setItem: (key: string, value: string, appGroup: string) => void;
+} | null = null;
 try {
   if (Platform.OS === "ios") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -12,38 +17,53 @@ try {
     ExtensionStorage = AppleTargets?.ExtensionStorage ?? null;
   }
 } catch {
-  // Package not built or not available — widget refresh will be a no-op
+  // Package not built or not available
+}
+
+export interface WidgetMacroData {
+  calories: number;
+  calorieGoal: number;
+  protein: number;
+  proteinGoal: number;
+  carbs: number;
+  carbsGoal: number;
+  fat: number;
+  fatGoal: number;
+  streak: number;
+  date: string;
 }
 
 type WidgetContextType = {
   refreshWidget: () => void;
+  updateWidgetData: (data: WidgetMacroData) => void;
 };
 
 const WidgetContext = createContext<WidgetContextType | null>(null);
 
 export function WidgetProvider({ children }: { children: React.ReactNode }) {
-  React.useEffect(() => {
-    if (Platform.OS === "ios" && ExtensionStorage) {
-      try {
-        ExtensionStorage.reloadWidget();
-      } catch (error) {
-        console.log("[WidgetContext] Error reloading widget:", error);
-      }
+  const updateWidgetData = useCallback((data: WidgetMacroData) => {
+    if (Platform.OS !== "ios" || !ExtensionStorage) return;
+    try {
+      console.log("[WidgetContext] Writing widget data:", data);
+      const json = JSON.stringify(data);
+      ExtensionStorage.setItem(WIDGET_DATA_KEY, json, APP_GROUP);
+    } catch (error) {
+      console.log("[WidgetContext] Error writing widget data:", error);
     }
   }, []);
 
   const refreshWidget = useCallback(() => {
-    if (Platform.OS === "ios" && ExtensionStorage) {
-      try {
-        ExtensionStorage.reloadWidget();
-      } catch (error) {
-        console.log("[WidgetContext] Error refreshing widget:", error);
-      }
+    if (Platform.OS !== "ios" || !ExtensionStorage) return;
+    try {
+      console.log("[WidgetContext] Reloading widget timeline");
+      ExtensionStorage.reloadWidget();
+    } catch (error) {
+      console.log("[WidgetContext] Error refreshing widget:", error);
     }
   }, []);
 
   return (
-    <WidgetContext.Provider value={{ refreshWidget }}>
+    <WidgetContext.Provider value={{ refreshWidget, updateWidgetData }}>
       {children}
     </WidgetContext.Provider>
   );
