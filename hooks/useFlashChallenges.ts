@@ -122,7 +122,14 @@ export function useFlashChallenges() {
       await requestAllHealthPermissions().catch(() => {});
       const raw = await loadOrGenerateFlashChallenges();
       if (!mountedRef.current) return;
-      const withProgress = await attachProgress(raw);
+      // Hard cap: max 2 challenges, prefer active over expired
+      const sorted = [...raw].sort((a, b) => {
+        const order: Record<string, number> = { completed: 0, accepted: 1, available: 2, expired: 3 };
+        return (order[a.challenge_status] ?? 2) - (order[b.challenge_status] ?? 2);
+      });
+      const capped = sorted.slice(0, 2);
+      console.log('[useFlashChallenges] capped to', capped.length, 'of', raw.length, 'challenges');
+      const withProgress = await attachProgress(capped);
       if (!mountedRef.current) return;
       setChallenges(withProgress);
       console.log('[useFlashChallenges] loaded', withProgress.length, 'challenges');
@@ -190,7 +197,14 @@ export function useFlashChallenges() {
     try {
       const raw = await loadOrGenerateFlashChallenges();
       if (!mountedRef.current) return;
-      const withProgress = await attachProgress(raw);
+      // Hard cap: max 2 challenges, prefer active over expired
+      const sorted = [...raw].sort((a, b) => {
+        const order: Record<string, number> = { completed: 0, accepted: 1, available: 2, expired: 3 };
+        return (order[a.challenge_status] ?? 2) - (order[b.challenge_status] ?? 2);
+      });
+      const capped = sorted.slice(0, 2);
+      console.log('[useFlashChallenges] refreshProgress capped to', capped.length, 'of', raw.length, 'challenges');
+      const withProgress = await attachProgress(capped);
       if (!mountedRef.current) return;
       setChallenges(withProgress);
       await checkAndComplete(withProgress);
