@@ -112,13 +112,16 @@ struct SmallWidgetView: View {
                         Text("kcal")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
+                        Text("/ \(data.calorieGoal)")
+                            .font(.system(size: 8))
+                            .foregroundColor(.white.opacity(0.45))
                     }
                 }
                 // Macro row
                 HStack(spacing: 8) {
-                    SmallMacroLabel(letter: "P", value: Int(data.protein), color: Color(red: 0.4, green: 0.8, blue: 0.4))
-                    SmallMacroLabel(letter: "C", value: Int(data.carbs), color: Color(red: 1.0, green: 0.8, blue: 0.2))
-                    SmallMacroLabel(letter: "F", value: Int(data.fat), color: Color(red: 1.0, green: 0.5, blue: 0.2))
+                    SmallMacroLabel(letter: "P", value: Int(data.protein), goal: Int(data.proteinGoal), color: Color(red: 0.4, green: 0.8, blue: 0.4))
+                    SmallMacroLabel(letter: "C", value: Int(data.carbs), goal: Int(data.carbsGoal), color: Color(red: 1.0, green: 0.8, blue: 0.2))
+                    SmallMacroLabel(letter: "F", value: Int(data.fat), goal: Int(data.fatGoal), color: Color(red: 1.0, green: 0.5, blue: 0.2))
                 }
                 if data.streak > 0 {
                     HStack(spacing: 3) {
@@ -138,6 +141,7 @@ struct SmallWidgetView: View {
 struct SmallMacroLabel: View {
     let letter: String
     let value: Int
+    let goal: Int
     let color: Color
 
     var body: some View {
@@ -145,8 +149,8 @@ struct SmallMacroLabel: View {
             Text(letter)
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundColor(color)
-            Text("\(value)g")
-                .font(.system(size: 9, weight: .bold, design: .rounded))
+            Text("\(value)/\(goal)g")
+                .font(.system(size: 8, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -184,6 +188,9 @@ struct MediumWidgetView: View {
                             Text("kcal")
                                 .font(.system(size: 9, weight: .medium))
                                 .foregroundColor(.white.opacity(0.6))
+                            Text("/ \(data.calorieGoal)")
+                                .font(.system(size: 8))
+                                .foregroundColor(.white.opacity(0.45))
                         }
                     }
                     if data.streak > 0 {
@@ -197,8 +204,9 @@ struct MediumWidgetView: View {
                     }
                 }
 
-                // Right: macro bars
-                VStack(alignment: .leading, spacing: 8) {
+                // Right: calories + macro bars
+                VStack(alignment: .leading, spacing: 6) {
+                    MacroBarRow(label: "Calories", value: Double(data.calories), goal: Double(data.calorieGoal), color: accentColor, unit: "")
                     MacroBarRow(label: "Protein", value: data.protein, goal: data.proteinGoal, color: Color(red: 0.4, green: 0.8, blue: 0.4))
                     MacroBarRow(label: "Carbs", value: data.carbs, goal: data.carbsGoal, color: Color(red: 1.0, green: 0.8, blue: 0.2))
                     MacroBarRow(label: "Fat", value: data.fat, goal: data.fatGoal, color: Color(red: 1.0, green: 0.5, blue: 0.2))
@@ -215,6 +223,7 @@ struct MacroBarRow: View {
     let value: Double
     let goal: Double
     let color: Color
+    var unit: String = "g"
 
     var progress: Double {
         guard goal > 0 else { return 0 }
@@ -228,9 +237,14 @@ struct MacroBarRow: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
                 Spacer()
-                Text("\(Int(value))g")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
+                HStack(spacing: 2) {
+                    Text("\(Int(value))")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("/ \(Int(goal))\(unit)")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.45))
+                }
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
