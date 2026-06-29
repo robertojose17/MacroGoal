@@ -181,7 +181,7 @@ struct SmallMacroLabel: View {
     }
 }
 
-// MARK: - Medium Widget (calorie ring + 3 macro bar rows)
+// MARK: - Medium Widget (calorie ring + 3 macro bar rows + action buttons)
 struct MediumWidgetView: View {
     let data: MacroData
     let accentColor = Color(red: 0, green: 0.898, blue: 1.0)
@@ -192,7 +192,7 @@ struct MediumWidgetView: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: 12) {
 
             // Left: calorie ring + streak
             VStack(spacing: 6) {
@@ -228,13 +228,32 @@ struct MediumWidgetView: View {
                 }
             }
 
-            // Right: 3 macro bar rows
+            // Middle: 3 macro bar rows
             VStack(alignment: .leading, spacing: 8) {
                 MacroBarRow(label: "Protein", value: data.protein, goal: data.proteinGoal, color: Color(hex: "EF4444"), unit: "g")
                 MacroBarRow(label: "Carbs", value: data.carbs, goal: data.carbsGoal, color: Color(hex: "3B82F6"), unit: "g")
                 MacroBarRow(label: "Fat", value: data.fat, goal: data.fatGoal, color: Color(hex: "F59E0B"), unit: "g")
             }
             .frame(maxWidth: .infinity)
+
+            // Right: 3 action buttons stacked vertically
+            VStack(spacing: 8) {
+                WidgetActionButton(
+                    icon: "magnifyingglass",
+                    label: "Search",
+                    url: "macrogoal://food-search"
+                )
+                WidgetActionButton(
+                    icon: "barcode.viewfinder",
+                    label: "Scan",
+                    url: "macrogoal://barcode-scanner"
+                )
+                WidgetActionButton(
+                    icon: "plus.circle.fill",
+                    label: "Quick Add",
+                    url: "macrogoal://quick-add"
+                )
+            }
         }
         .padding(14)
     }
@@ -284,6 +303,29 @@ struct MacroBarRow: View {
                 }
                 .frame(minWidth: 72, alignment: .trailing)
             }
+        }
+    }
+}
+
+// MARK: - Widget Action Button
+struct WidgetActionButton: View {
+    let icon: String
+    let label: String
+    let url: String
+
+    var body: some View {
+        Link(destination: URL(string: url)!) {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(red: 0, green: 0.898, blue: 1.0))
+                Text(label)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .frame(width: 52, height: 36)
+            .background(Color.white.opacity(0.08))
+            .cornerRadius(8)
         }
     }
 }

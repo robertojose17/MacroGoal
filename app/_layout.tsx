@@ -354,6 +354,23 @@ export default function RootLayout() {
       console.log("[DeepLink] Processing URL:", url);
       const { hostname, path, queryParams } = Linking.parse(url);
       console.log("[DeepLink] Parsed:", { hostname, path, queryParams });
+
+      // Widget quick-action deep links
+      // macrogoal://food-search  → hostname="food-search"
+      // macrogoal://barcode-scanner → hostname="barcode-scanner"
+      // macrogoal://quick-add → hostname="quick-add"
+      const action = hostname || path?.replace(/^\//, "");
+
+      if (action === "food-search") {
+        console.log("[DeepLink] Navigating to /food-search");
+        router.push("/food-search");
+      } else if (action === "barcode-scanner") {
+        console.log("[DeepLink] Navigating to /barcode-scanner");
+        router.push("/barcode-scanner");
+      } else if (action === "quick-add") {
+        console.log("[DeepLink] Navigating to /add-food-simple");
+        router.push("/add-food-simple");
+      }
     } catch (error) {
       console.error("[DeepLink] Error handling deep link:", error);
     }
