@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase/client';
 
 const SESSION_KEY = 'onboarding_session_id';
+const PAYWALL_ACTION_KEY = 'onboarding_paywall_action_recorded';
 
 function generateSessionId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -21,7 +22,10 @@ async function getOrCreateSessionId(): Promise<string> {
 }
 
 export async function clearOnboardingSession(): Promise<void> {
-  try { await AsyncStorage.removeItem(SESSION_KEY); } catch {}
+  try {
+    await AsyncStorage.removeItem(SESSION_KEY);
+    await AsyncStorage.removeItem(PAYWALL_ACTION_KEY);
+  } catch {}
 }
 
 /**
@@ -76,24 +80,61 @@ export function trackOnboardingEvent(
           { onConflict: 'session_id' }
         );
       }
-
-      if (event === 'onboarding_paywall_start_trial') {
-        await supabase.from('onboarding_funnel').upsert(
-          { session_id, user_id, paywall_shown: true, trial_started: true, updated_at: new Date().toISOString() },
-          { onConflict: 'session_id' }
-        );
-      }
-
-      if (event === 'onboarding_paywall_skip') {
-        await supabase.from('onboarding_funnel').upsert(
-          { session_id, user_id, paywall_shown: true, trial_skipped: true, updated_at: new Date().toISOString() },
-          { onConflict: 'session_id' }
-        );
-      }
     } catch (e) {
       console.warn('[Analytics] trackOnboardingEvent failed silently:', e);
     }
   })();
+}
+
+/**
+ * Records the first paywall button the user pressed (trial or skip).
+ * Subsequent calls for the same session are silently ignored.
+ * Uses AsyncStorage as a fast local guard before hitting Supabase.
+ */
+export async function trackPaywallActionOnce(action: 'trial' | 'skip'): Promise<void> {
+  try {
+    // If already recorded for this session, do nothing
+    const already = await AsyncStorage.getItem(PAYWALL_ACTION_KEY);
+    if (already) {
+      console.log('[Analytics] trackPaywallActionOnce: already recorded as', already, '— ignoring', action);
+      return;
+    }
+
+    // Mark locally FIRST (prevents race conditions if user taps fast)
+    await AsyncStorage.setItem(PAYWALL_ACTION_KEY, action);
+
+    const session_id = await getOrCreateSessionId();
+    const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+    const user_id = user?.id ?? null;
+
+    console.log('[Analytics] trackPaywallActionOnce: recording first action:', action, { session_id, user_id });
+
+    // Insert event
+    await supabase.from('onboarding_events').insert({
+      session_id,
+      user_id,
+      event: action === 'trial' ? 'onboarding_paywall_start_trial' : 'onboarding_paywall_skip',
+      step: 10,
+      properties: { first_action: true },
+    });
+
+    // Upsert funnel row with first_paywall_action
+    await supabase.from('onboarding_funnel').upsert(
+      {
+        session_id,
+        user_id,
+        paywall_shown: true,
+        first_paywall_action: action,
+        // Keep legacy columns in sync for backwards compatibility
+        trial_started: action === 'trial' ? true : undefined,
+        trial_skipped: action === 'skip' ? true : undefined,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'session_id' }
+    );
+  } catch (e) {
+    console.warn('[Analytics] trackPaywallActionOnce failed silently:', e);
+  }
 }
 
 const FIRST_MEAL_KEY = 'first_meal_tracked';

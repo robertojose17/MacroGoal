@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
-import { trackOnboardingEvent } from '@/utils/onboardingAnalytics';
+import { trackOnboardingEvent, trackPaywallActionOnce } from '@/utils/onboardingAnalytics';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
@@ -395,13 +395,13 @@ export default function CompleteOnboardingScreen() {
 
   const handleStartTrial = async () => {
     console.log('[Onboarding] Start Free Trial pressed — requesting notification permission then navigating to subscription');
-    trackOnboardingEvent('onboarding_paywall_start_trial');
+    await trackPaywallActionOnce('trial');
     await showNotifPromptThen(() => router.push('/subscription?autoStart=true'));
   };
 
   const handleSkipTrial = async () => {
     console.log('[Onboarding] Skip trial pressed — requesting notification permission then navigating home');
-    trackOnboardingEvent('onboarding_paywall_skip');
+    await trackPaywallActionOnce('skip');
     await showNotifPromptThen(() => router.replace('/(tabs)/(home)/'));
   };
 
