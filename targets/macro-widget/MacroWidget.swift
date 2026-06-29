@@ -115,50 +115,47 @@ struct SmallWidgetView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color(red: 0.102, green: 0.102, blue: 0.102)
-            VStack(spacing: 6) {
-                // Circular progress
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 6)
-                        .frame(width: 64, height: 64)
-                    Circle()
-                        .trim(from: 0, to: calorieProgress)
-                        .stroke(accentColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                        .frame(width: 64, height: 64)
-                        .rotationEffect(.degrees(-90))
-                    VStack(spacing: 0) {
-                        Text("\(data.calories)")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                        Text("kcal")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                        Text("/ \(data.calorieGoal)")
-                            .font(.system(size: 8))
-                            .foregroundColor(.white.opacity(0.45))
-                    }
-                }
-                // Macro row
-                HStack(spacing: 4) {
-                    SmallMacroLabel(letter: "P", value: Int(data.protein), goal: Int(data.proteinGoal), color: Color(red: 0.4, green: 0.8, blue: 0.4))
-                    SmallMacroLabel(letter: "C", value: Int(data.carbs), goal: Int(data.carbsGoal), color: Color(red: 1.0, green: 0.8, blue: 0.2))
-                    SmallMacroLabel(letter: "F", value: Int(data.fat), goal: Int(data.fatGoal), color: Color(red: 1.0, green: 0.5, blue: 0.2))
-                }
-                .frame(maxWidth: .infinity)
-                if data.streak > 0 {
-                    HStack(spacing: 3) {
-                        Text("🔥")
-                            .font(.system(size: 11))
-                        Text("\(data.streak)d")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(accentColor)
-                    }
+        VStack(spacing: 6) {
+            // Circular progress
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.1), lineWidth: 6)
+                    .frame(width: 64, height: 64)
+                Circle()
+                    .trim(from: 0, to: calorieProgress)
+                    .stroke(accentColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .frame(width: 64, height: 64)
+                    .rotationEffect(.degrees(-90))
+                VStack(spacing: 0) {
+                    Text("\(data.calories)")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text("kcal")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                    Text("/ \(data.calorieGoal)")
+                        .font(.system(size: 8))
+                        .foregroundColor(.white.opacity(0.45))
                 }
             }
-            .padding(12)
+            // Macro row
+            HStack(spacing: 4) {
+                SmallMacroLabel(letter: "P", value: Int(data.protein), goal: Int(data.proteinGoal), color: Color(red: 0.4, green: 0.8, blue: 0.4))
+                SmallMacroLabel(letter: "C", value: Int(data.carbs), goal: Int(data.carbsGoal), color: Color(red: 1.0, green: 0.8, blue: 0.2))
+                SmallMacroLabel(letter: "F", value: Int(data.fat), goal: Int(data.fatGoal), color: Color(red: 1.0, green: 0.5, blue: 0.2))
+            }
+            .frame(maxWidth: .infinity)
+            if data.streak > 0 {
+                HStack(spacing: 3) {
+                    Text("🔥")
+                        .font(.system(size: 11))
+                    Text("\(data.streak)d")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(accentColor)
+                }
+            }
         }
+        .padding(12)
     }
 }
 
@@ -195,54 +192,51 @@ struct MediumWidgetView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color(red: 0.102, green: 0.102, blue: 0.102)
-            HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: 16) {
 
-                // Left: calorie ring + streak
-                VStack(spacing: 6) {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 7)
-                            .frame(width: 72, height: 72)
-                        Circle()
-                            .trim(from: 0, to: calorieProgress)
-                            .stroke(accentColor, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                            .frame(width: 72, height: 72)
-                            .rotationEffect(.degrees(-90))
-                        VStack(spacing: 0) {
-                            Text("\(data.calories)")
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                            Text("kcal")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.white.opacity(0.6))
-                            Text("/ \(data.calorieGoal)")
-                                .font(.system(size: 8))
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                    }
-                    if data.streak > 0 {
-                        HStack(spacing: 2) {
-                            Text("🔥")
-                                .font(.system(size: 10))
-                            Text("\(data.streak)d")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(accentColor)
-                        }
+            // Left: calorie ring + streak
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.1), lineWidth: 7)
+                        .frame(width: 72, height: 72)
+                    Circle()
+                        .trim(from: 0, to: calorieProgress)
+                        .stroke(accentColor, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                        .frame(width: 72, height: 72)
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 0) {
+                        Text("\(data.calories)")
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("kcal")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text("/ \(data.calorieGoal)")
+                            .font(.system(size: 8))
+                            .foregroundColor(.white.opacity(0.4))
                     }
                 }
-
-                // Right: 3 macro bar rows
-                VStack(alignment: .leading, spacing: 8) {
-                    MacroBarRow(label: "Protein", value: data.protein, goal: data.proteinGoal, color: Color(hex: "EF4444"), unit: "g")
-                    MacroBarRow(label: "Carbs", value: data.carbs, goal: data.carbsGoal, color: Color(hex: "3B82F6"), unit: "g")
-                    MacroBarRow(label: "Fat", value: data.fat, goal: data.fatGoal, color: Color(hex: "F59E0B"), unit: "g")
+                if data.streak > 0 {
+                    HStack(spacing: 2) {
+                        Text("🔥")
+                            .font(.system(size: 10))
+                        Text("\(data.streak)d")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(accentColor)
+                    }
                 }
-                .frame(maxWidth: .infinity)
             }
-            .padding(14)
+
+            // Right: 3 macro bar rows
+            VStack(alignment: .leading, spacing: 8) {
+                MacroBarRow(label: "Protein", value: data.protein, goal: data.proteinGoal, color: Color(hex: "EF4444"), unit: "g")
+                MacroBarRow(label: "Carbs", value: data.carbs, goal: data.carbsGoal, color: Color(hex: "3B82F6"), unit: "g")
+                MacroBarRow(label: "Fat", value: data.fat, goal: data.fatGoal, color: Color(hex: "F59E0B"), unit: "g")
+            }
+            .frame(maxWidth: .infinity)
         }
+        .padding(14)
     }
 }
 
@@ -303,9 +297,10 @@ struct MacroWidget: Widget {
         StaticConfiguration(kind: kind, provider: MacroProvider()) { entry in
             if #available(iOS 17.0, *) {
                 MacroWidgetEntryView(entry: entry)
-                    .containerBackground(.clear, for: .widget)
+                    .containerBackground(Color(red: 0.102, green: 0.102, blue: 0.102), for: .widget)
             } else {
                 MacroWidgetEntryView(entry: entry)
+                    .padding(0)
             }
         }
         .configurationDisplayName("Macro Goal")
