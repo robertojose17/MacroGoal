@@ -983,7 +983,8 @@ export default function CheckInsScreen() {
           }
 
           if (weightCheckInId) {
-            tryAwardWeightCheckin(weightCheckInId, weightInKg);
+            await tryAwardWeightCheckin(weightCheckInId, weightInKg);
+            emitXpRefresh();
           }
         }
 

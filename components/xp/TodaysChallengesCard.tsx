@@ -408,12 +408,12 @@ function DetailSheet({
       const weightInKg = parsed / 2.20462;
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
+        // Find any existing check_in for today (same as check-ins.tsx — no weight filter)
         const { data: existingCheckIn } = await supabase
           .from('check_ins')
           .select('id')
           .eq('user_id', authUser.id)
           .eq('date', today)
-          .not('weight', 'is', null)
           .maybeSingle();
 
         let weightCheckInId: string | null = null;
@@ -436,21 +436,21 @@ function DetailSheet({
 
         if (weightCheckInId) {
           console.log('[TodaysChallengesCard] awarding weight check-in XP — check_in_id:', weightCheckInId);
-          tryAwardWeightCheckin(weightCheckInId, weightInKg);
+          await tryAwardWeightCheckin(weightCheckInId, weightInKg);
+          emitXpRefresh(); // ensure dashboard XP bar updates
         }
       }
 
       setWeightSaved(true);
       setWeightInput('');
-      onWeightLogged?.();
-
+      onWeightLogged?.(); // triggers xp.refresh() in dashboard — now fires AFTER XP is in DB
       onClose();
       setTimeout(() => {
         console.log('[TodaysChallengesCard] prompting for progress photo after weight log');
-        promptForProgressPhoto(parsed, toLocalDateString(new Date())).catch((e) =>
+        promptForProgressPhoto(parsed, today).catch((e) =>
           console.warn('[TodaysChallengesCard] Progress photo prompt failed:', e)
         );
-      }, 400);
+      }, 600);
     } catch (err) {
       console.error('[TodaysChallengesCard] Weight log failed:', err);
       Alert.alert('Error', 'Failed to save weight. Please try again.');
