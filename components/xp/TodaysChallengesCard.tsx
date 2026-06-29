@@ -12,21 +12,29 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { borderRadius, colors, spacing } from '@/styles/commonStyles';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { awardXp } from '@/utils/xpApi';
 import { emitXpRefresh } from '@/utils/xpEvents';
+import { logEntry, listTrackers } from '@/utils/trackersApi';
+import { tryAwardWeightCheckin } from '@/utils/xpAwarder';
+import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
+import { supabase } from '@/lib/supabase/client';
 import type { ChallengeCard, ChallengeTier, XpStatus } from '@/types/xp';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -349,6 +357,7 @@ function DetailSheet({
   visible,
   onClose,
   onLogWeight,
+  onWeightLogged,
   xpConfig,
 }: {
   card: ChallengeCard | null;
@@ -356,8 +365,100 @@ function DetailSheet({
   visible: boolean;
   onClose: () => void;
   onLogWeight: () => void;
+  onWeightLogged?: () => void;
   xpConfig?: Record<string, number>;
 }) {
+  const [weightInput, setWeightInput] = useState('');
+  const [weightSaving, setWeightSaving] = useState(false);
+  const [weightSaved, setWeightSaved] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setWeightInput('');
+      setWeightSaved(false);
+    }
+  }, [visible]);
+
+  const handleWeightLog = async () => {
+    console.log('[TodaysChallengesCard] Log weight button pressed — input:', weightInput);
+    const parsed = parseFloat(weightInput);
+    if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
+      Alert.alert('Invalid weight', 'Please enter a weight between 0 and 1000 lbs.');
+      return;
+    }
+    if (weightSaving) return;
+    setWeightSaving(true);
+    try {
+      const today = toLocalDateString(new Date());
+
+      console.log('[TodaysChallengesCard] fetching trackers for weight log');
+      const trackers = await listTrackers();
+      const weightTracker = trackers.find(
+        (t: any) => t.is_default && t.name.toLowerCase() === 'weight'
+      );
+      if (!weightTracker) {
+        Alert.alert('Error', 'Weight tracker not found.');
+        return;
+      }
+
+      console.log('[TodaysChallengesCard] logging weight entry — tracker:', weightTracker.id, 'value:', parsed);
+      await logEntry(weightTracker.id, today, parsed);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+      const weightInKg = parsed / 2.20462;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: existingCheckIn } = await supabase
+          .from('check_ins')
+          .select('id')
+          .eq('user_id', authUser.id)
+          .eq('date', today)
+          .not('weight', 'is', null)
+          .maybeSingle();
+
+        let weightCheckInId: string | null = null;
+        if (existingCheckIn) {
+          console.log('[TodaysChallengesCard] updating existing check_in weight — id:', existingCheckIn.id);
+          await supabase
+            .from('check_ins')
+            .update({ weight: weightInKg, updated_at: new Date().toISOString() })
+            .eq('id', existingCheckIn.id);
+          weightCheckInId = existingCheckIn.id;
+        } else {
+          console.log('[TodaysChallengesCard] inserting new check_in with weight');
+          const { data: newCheckIn } = await supabase
+            .from('check_ins')
+            .insert({ user_id: authUser.id, date: today, weight: weightInKg })
+            .select('id')
+            .single();
+          weightCheckInId = newCheckIn?.id ?? null;
+        }
+
+        if (weightCheckInId) {
+          console.log('[TodaysChallengesCard] awarding weight check-in XP — check_in_id:', weightCheckInId);
+          tryAwardWeightCheckin(weightCheckInId, weightInKg);
+        }
+      }
+
+      setWeightSaved(true);
+      setWeightInput('');
+      onWeightLogged?.();
+
+      onClose();
+      setTimeout(() => {
+        console.log('[TodaysChallengesCard] prompting for progress photo after weight log');
+        promptForProgressPhoto(parsed, toLocalDateString(new Date())).catch((e) =>
+          console.warn('[TodaysChallengesCard] Progress photo prompt failed:', e)
+        );
+      }, 400);
+    } catch (err) {
+      console.error('[TodaysChallengesCard] Weight log failed:', err);
+      Alert.alert('Error', 'Failed to save weight. Please try again.');
+    } finally {
+      setWeightSaving(false);
+    }
+  };
+
   if (!card) return null;
 
   const iconName = (card.icon || FALLBACK_ICONS[card.challenge_type]) as IoniconsName;
@@ -477,20 +578,46 @@ function DetailSheet({
             </>
           )}
 
-          {/* Weight check-in CTA */}
+          {/* Weight check-in inline input */}
           {isWeightCheckin && !isComplete && (
-            <TouchableOpacity
-              style={[styles.ctaButton, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                console.log('[TodaysChallengesCard] Log Weight Now pressed — navigating to check-in-form');
-                onClose();
-                onLogWeight();
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="scale-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.ctaButtonText}>Log Weight Now</Text>
-            </TouchableOpacity>
+            <View style={styles.weightInlineRow}>
+              <TextInput
+                style={[
+                  styles.weightInlineInput,
+                  {
+                    backgroundColor: isDark ? '#1A1C2E' : '#FFFFFF',
+                    color: isDark ? colors.textDark : colors.primaryText,
+                    borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
+                  },
+                ]}
+                value={weightInput}
+                onChangeText={(text) => {
+                  console.log('[TodaysChallengesCard] weight input changed:', text);
+                  setWeightInput(text);
+                }}
+                keyboardType="decimal-pad"
+                placeholder="Enter weight (lbs)"
+                placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                returnKeyType="done"
+                onSubmitEditing={handleWeightLog}
+                editable={!weightSaving}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.weightInlineButton,
+                  { backgroundColor: colors.primary, opacity: weightSaving ? 0.6 : 1 },
+                ]}
+                onPress={handleWeightLog}
+                activeOpacity={0.8}
+                disabled={weightSaving}
+              >
+                {weightSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.weightInlineButtonText}>Log</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Weight XP hint when not done */}
@@ -652,6 +779,10 @@ export default function TodaysChallengesCard({
         visible={sheetVisible}
         onClose={closeSheet}
         onLogWeight={handleLogWeight}
+        onWeightLogged={() => {
+          console.log('[TodaysChallengesCard] weight logged from sheet — refreshing');
+          onRefresh?.();
+        }}
         xpConfig={status?.xp_config}
       />
     </View>
@@ -847,20 +978,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // ── Weight CTA ──
-  ctaButton: {
+  // ── Weight inline input ──
+  weightInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: borderRadius.md,
-    paddingVertical: 13,
-    marginTop: spacing.md,
-    marginHorizontal: spacing.sm,
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
   },
-  ctaButtonText: {
+  weightInlineInput: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  weightInlineButton: {
+    height: 44,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
+  },
+  weightInlineButtonText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   weightHintRow: {
     flexDirection: 'row',
