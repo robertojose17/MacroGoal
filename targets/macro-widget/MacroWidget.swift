@@ -127,13 +127,13 @@ struct SmallWidgetView: View {
                     .frame(width: 64, height: 64)
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
-                    Text("\(data.calories)")
+                    Text("\(max(0, data.calorieGoal - data.calories))")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
-                    Text("kcal")
+                    Text("left")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(.white.opacity(0.6))
-                    Text("/ \(data.calorieGoal)")
+                    Text("of \(data.calorieGoal)")
                         .font(.system(size: 8))
                         .foregroundColor(.white.opacity(0.45))
                 }
@@ -206,13 +206,13 @@ struct MediumWidgetView: View {
                         .frame(width: 72, height: 72)
                         .rotationEffect(.degrees(-90))
                     VStack(spacing: 0) {
-                        Text("\(data.calories)")
+                        Text("\(max(0, data.calorieGoal - data.calories))")
                             .font(.system(size: 17, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
-                        Text("kcal")
+                        Text("left")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
-                        Text("/ \(data.calorieGoal)")
+                        Text("of \(data.calorieGoal)")
                             .font(.system(size: 8))
                             .foregroundColor(.white.opacity(0.4))
                     }
