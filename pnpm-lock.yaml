@@ -1212,8 +1212,8 @@ packages:
   '@expo/plist@0.8.0':
     resolution: {integrity: sha512-24JlUJI4PwHN4PLydlzFEzCdiqybfaV5t04QBkOg8em3AjvHKbMgBGlKreiuOoc0rNa3DZ21ZqL+xLGMBLQNKQ==}
 
-  '@expo/prebuild-config@57.0.2':
-    resolution: {integrity: sha512-KnJgfn7tVez4UNXU6ACXw0NVMAND+JPtQ/mSIETaFY7IzzvZUuTUpMavo2Fnzl5y9LDEgXsMSrFWHOOkq2Kv4A==}
+  '@expo/prebuild-config@57.0.3':
+    resolution: {integrity: sha512-jMMLZW+2OG/1FY3qCHzI1uMOnt2tIjIW3A6+FXz4rHtyZmD6SJvtuGEP/AZiegqAvOPX+PBWgFXuCzXvyIj6kg==}
 
   '@expo/require-utils@55.0.5':
     resolution: {integrity: sha512-U4K/CQ2VpXuwfNGsN+daKmYOt15hCP8v/pXaYH6eut7kdYZo6SfJ1yr67BIcJ+1Gzzs+QzTxswAZChKpXmceyw==}
@@ -3396,8 +3396,8 @@ packages:
     resolution: {integrity: sha512-WOaud6UKg16ciCOj8raKcMOoKFMHLXKI29U29yhgu1lf+Y7VxJyCktUcYo6AM+ccZ7zLD1uWZdMtgnpf+95OXA==}
     hasBin: true
 
-  expo-modules-autolinking@57.0.2:
-    resolution: {integrity: sha512-2ucWXS2YcAX/PfyK57P0jXHC8JVLKMXyoADfzcFL6fUVcUyM0FyIYdyorfV44ny8hP20VbPSbJfCAPw0m0mUHQ==}
+  expo-modules-autolinking@57.0.3:
+    resolution: {integrity: sha512-qPMu2o/xXJFFZY0+gYDspPti6jTRynnqe4Spl1c/XM7e37p2/Bw+Ed8WX7AA5+bMg7H1gIke8P2IzvQiU3UqaA==}
     hasBin: true
 
   expo-modules-core@3.0.30:
@@ -7498,7 +7498,7 @@ snapshots:
       '@expo/osascript': 2.6.0
       '@expo/package-manager': 1.12.1
       '@expo/plist': 0.4.9
-      '@expo/prebuild-config': 57.0.2(typescript@5.9.3)
+      '@expo/prebuild-config': 57.0.3(typescript@5.9.3)
       '@expo/schema-utils': 0.1.8
       '@expo/spawn-async': 1.8.0
       '@expo/ws-tunnel': 1.0.6
@@ -7872,7 +7872,7 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
-  '@expo/prebuild-config@57.0.2(typescript@5.9.3)':
+  '@expo/prebuild-config@57.0.3(typescript@5.9.3)':
     dependencies:
       '@expo/config': 57.0.1(typescript@5.9.3)
       '@expo/config-plugins': 57.0.1(typescript@5.9.3)
@@ -7881,7 +7881,7 @@ snapshots:
       '@expo/json-file': 11.0.0
       '@react-native/normalize-colors': 0.86.0
       debug: 4.4.3
-      expo-modules-autolinking: 57.0.2(typescript@5.9.3)
+      expo-modules-autolinking: 57.0.3(typescript@5.9.3)
       resolve-from: 5.0.0
       semver: 7.8.5
     transitivePeerDependencies:
@@ -10413,7 +10413,7 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
 
-  expo-modules-autolinking@57.0.2(typescript@5.9.3):
+  expo-modules-autolinking@57.0.3(typescript@5.9.3):
     dependencies:
       '@expo/require-utils': 57.0.0(typescript@5.9.3)
       '@expo/spawn-async': 1.8.0
@@ -10493,7 +10493,7 @@ snapshots:
 
   expo-splash-screen@31.0.13(expo@54.0.35)(typescript@5.9.3):
     dependencies:
-      '@expo/prebuild-config': 57.0.2(typescript@5.9.3)
+      '@expo/prebuild-config': 57.0.3(typescript@5.9.3)
       expo: 54.0.35(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@5.1.11)(react-native-webview@13.17.0(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
