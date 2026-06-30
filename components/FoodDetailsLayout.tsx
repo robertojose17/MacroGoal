@@ -396,7 +396,19 @@ export default function FoodDetailsLayout({
 
       // ── Source of truth: the grams saved in DB ──────────────────────────
       // mealItem.grams is what the user actually ate. Reconstruct state from it.
-      const totalGrams = mealItem.grams || 100;
+      // Single source of truth for totalGrams (in priority order):
+      // 1. mealItem.grams — what was actually saved (most entries)
+      // 2. Invert the calorie formula — works for legacy entries where grams is null
+      // 3. quantity × food.serving_amount — last resort
+      let totalGrams: number;
+      if (mealItem.grams != null && mealItem.grams > 0) {
+        totalGrams = mealItem.grams;
+      } else if (mealItem.calories > 0 && food.calories > 0) {
+        // foods.calories is per-100g; invert: totalGrams = (item_calories / per100_calories) * 100
+        totalGrams = (mealItem.calories / food.calories) * 100;
+      } else {
+        totalGrams = (mealItem.quantity || 1) * (food.serving_amount || 100);
+      }
       const rawQuantity = mealItem.quantity || 1;
       setServingUnit('serving');
 
