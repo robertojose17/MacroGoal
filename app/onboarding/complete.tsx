@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
-import { trackOnboardingEvent, trackPaywallActionOnce } from '@/utils/onboardingAnalytics';
+import { trackOnboardingEvent, trackPaywallActionOnce, getOrCreateSessionId } from '@/utils/onboardingAnalytics';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
@@ -83,6 +83,14 @@ export default function CompleteOnboardingScreen() {
   const [step, setStep] = useState(0);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const trackedStepRef = useRef<number>(-1);
+  const sessionIdRef = React.useRef<string | null>(null);
+
+  useEffect(() => {
+    getOrCreateSessionId().then(id => {
+      sessionIdRef.current = id;
+      console.log('[Onboarding] Session ID captured at mount:', id);
+    });
+  }, []);
 
   // Body data
   const [sex, setSex] = useState<Sex>('male');
@@ -394,14 +402,14 @@ export default function CompleteOnboardingScreen() {
   // ─── Purchase / finish ─────────────────────────────────────────────────────
 
   const handleStartTrial = async () => {
-    console.log('[Onboarding] Start Free Trial pressed — requesting notification permission then navigating to subscription');
-    await trackPaywallActionOnce('trial');
+    console.log('[Onboarding] Start Free Trial pressed');
+    await trackPaywallActionOnce('trial', sessionIdRef.current ?? undefined);
     await showNotifPromptThen(() => router.push('/subscription?autoStart=true'));
   };
 
   const handleSkipTrial = async () => {
-    console.log('[Onboarding] Skip trial pressed — requesting notification permission then navigating home');
-    await trackPaywallActionOnce('skip');
+    console.log('[Onboarding] Skip trial pressed');
+    await trackPaywallActionOnce('skip', sessionIdRef.current ?? undefined);
     await showNotifPromptThen(() => router.replace('/(tabs)/(home)/'));
   };
 

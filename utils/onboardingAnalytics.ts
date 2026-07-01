@@ -8,7 +8,7 @@ function generateSessionId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-async function getOrCreateSessionId(): Promise<string> {
+export async function getOrCreateSessionId(): Promise<string> {
   try {
     let id = await AsyncStorage.getItem(SESSION_KEY);
     if (!id) {
@@ -63,15 +63,25 @@ export function trackOnboardingEvent(
       if (event === 'onboarding_step_viewed' && step !== undefined) {
         const { data: existing } = await supabase
           .from('onboarding_funnel')
-          .select('max_step_reached')
+          .select('max_step_reached, paywall_shown_at')
           .eq('session_id', session_id)
           .maybeSingle();
 
         const newMax = Math.max(existing?.max_step_reached ?? 0, step);
-        await supabase.from('onboarding_funnel').upsert(
-          { session_id, user_id, max_step_reached: newMax, updated_at: new Date().toISOString() },
-          { onConflict: 'session_id' }
-        );
+        const upsertData: Record<string, unknown> = {
+          session_id,
+          user_id,
+          max_step_reached: newMax,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Record paywall_shown_at once when step 10 is first seen
+        if (step === 10 && !existing?.paywall_shown_at) {
+          upsertData.paywall_shown_at = new Date().toISOString();
+          upsertData.paywall_shown = true;
+        }
+
+        await supabase.from('onboarding_funnel').upsert(upsertData, { onConflict: 'session_id' });
       }
 
       if (event === 'onboarding_completed') {
@@ -90,26 +100,32 @@ export function trackOnboardingEvent(
  * Records the first paywall button the user pressed (trial or skip).
  * Subsequent calls for the same session are silently ignored.
  * Uses AsyncStorage as a fast local guard before hitting Supabase.
+ * Accepts an optional sessionId so the caller can pass the ID captured at mount time,
+ * preventing a new ID from being generated if AsyncStorage was cleared mid-session.
  */
-export async function trackPaywallActionOnce(action: 'trial' | 'skip'): Promise<void> {
+export async function trackPaywallActionOnce(
+  action: 'trial' | 'skip',
+  sessionId?: string
+): Promise<void> {
   try {
-    // If already recorded for this session, do nothing
+    // AsyncStorage guard — fast local check
     const already = await AsyncStorage.getItem(PAYWALL_ACTION_KEY);
     if (already) {
       console.log('[Analytics] trackPaywallActionOnce: already recorded as', already, '— ignoring', action);
       return;
     }
 
-    // Mark locally FIRST (prevents race conditions if user taps fast)
+    // Mark locally FIRST (prevents race conditions)
     await AsyncStorage.setItem(PAYWALL_ACTION_KEY, action);
 
-    const session_id = await getOrCreateSessionId();
+    const session_id = sessionId ?? await getOrCreateSessionId();
     const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
     const user_id = user?.id ?? null;
+    const now = new Date().toISOString();
 
     console.log('[Analytics] trackPaywallActionOnce: recording first action:', action, { session_id, user_id });
 
-    // Insert event
+    // Insert event into onboarding_events
     await supabase.from('onboarding_events').insert({
       session_id,
       user_id,
@@ -118,17 +134,28 @@ export async function trackPaywallActionOnce(action: 'trial' | 'skip'): Promise<
       properties: { first_action: true },
     });
 
-    // Upsert funnel row with first_paywall_action
+    // Upsert funnel row — DB-level guard: only write first_paywall_action if not already set
+    // Uses a two-step approach: check then update, so we never overwrite an existing value
+    const { data: existing } = await supabase
+      .from('onboarding_funnel')
+      .select('first_paywall_action')
+      .eq('session_id', session_id)
+      .maybeSingle();
+
+    if (existing && existing.first_paywall_action) {
+      // Already recorded at DB level — do nothing
+      console.log('[Analytics] trackPaywallActionOnce: DB already has first_paywall_action, skipping upsert');
+      return;
+    }
+
     await supabase.from('onboarding_funnel').upsert(
       {
         session_id,
         user_id,
         paywall_shown: true,
         first_paywall_action: action,
-        // Keep legacy columns in sync for backwards compatibility
-        trial_started: action === 'trial' ? true : undefined,
-        trial_skipped: action === 'skip' ? true : undefined,
-        updated_at: new Date().toISOString(),
+        paywall_action_at: now,
+        updated_at: now,
       },
       { onConflict: 'session_id' }
     );
