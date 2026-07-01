@@ -413,16 +413,16 @@ export default function FoodDetailsLayout({
       setServingUnit('serving');
 
       const desc = (mealItem.serving_description || '').toLowerCase().trim();
-      const isContinuousUnit = /\d+(\.\d+)?\s*(g|oz|lb|ml)\b/.test(desc);
+      const isContinuousUnit = /\d+(\.\d+)?\s*(g|oz|lb|ml|tsp|tbsp|cup|fl\s*oz|teaspoon|tablespoon)\b/i.test(desc);
 
       if (isContinuousUnit) {
-        // Saved with a continuous unit (g/oz/lb) — servingAmount = gramsPerUnit of that unit,
+        // Saved with a continuous unit (g/oz/lb/ml/tsp/tbsp/cup/fl oz) — servingAmount = gramsPerUnit,
         // numberOfServings = how many of those units were consumed.
         if (/\bg\b/.test(desc)) {
           setServingAmount(1);
           setNumberOfServings(totalGrams.toString());
           setSelectedServingOptionKey('g');
-        } else if (/\boz\b/.test(desc)) {
+        } else if (/\boz\b/.test(desc) && !/fl\s*oz/i.test(desc)) {
           setServingAmount(28.35);
           setNumberOfServings((totalGrams / 28.35).toFixed(2));
           setSelectedServingOptionKey('oz');
@@ -430,8 +430,28 @@ export default function FoodDetailsLayout({
           setServingAmount(453.592);
           setNumberOfServings((totalGrams / 453.592).toFixed(2));
           setSelectedServingOptionKey('lb');
+        } else if (/\bml\b/.test(desc)) {
+          setServingAmount(1);
+          setNumberOfServings(totalGrams.toString());
+          setSelectedServingOptionKey('ml');
+        } else if (/\btbsp\b|\btablespoon/i.test(desc)) {
+          setServingAmount(15);
+          setNumberOfServings((totalGrams / 15).toFixed(2));
+          setSelectedServingOptionKey('tbsp');
+        } else if (/\btsp\b|\bteaspoon/i.test(desc)) {
+          setServingAmount(5);
+          setNumberOfServings((totalGrams / 5).toFixed(2));
+          setSelectedServingOptionKey('tsp');
+        } else if (/\bcup\b/i.test(desc)) {
+          setServingAmount(240);
+          setNumberOfServings((totalGrams / 240).toFixed(2));
+          setSelectedServingOptionKey('cup');
+        } else if (/fl\s*oz/i.test(desc)) {
+          setServingAmount(29.57);
+          setNumberOfServings((totalGrams / 29.57).toFixed(2));
+          setSelectedServingOptionKey('fl oz');
         } else {
-          // ml or unknown continuous — fall back to grams
+          // unknown continuous — fall back to grams
           setServingAmount(1);
           setNumberOfServings(totalGrams.toString());
           setSelectedServingOptionKey('g');
@@ -577,7 +597,7 @@ export default function FoodDetailsLayout({
     setServingAmount(option.gramsPerUnit);
     // Discrete units (default = "1 cookie", "1 slice", etc.) must be whole numbers.
     // Continuous units (g/oz/lb) can be fractional.
-    const isDiscrete = option.key === 'default';
+    const isDiscrete = option.key === 'default' || option.key === 'custom';
     if (isDiscrete) {
       const rounded = Math.max(1, Math.round(newNumberOfServings));
       setNumberOfServings(rounded.toString());
@@ -685,10 +705,15 @@ export default function FoodDetailsLayout({
         servingDescription = formatServing(totalUnits, customUnit);
         console.log('[FoodDetailsLayout] handleSave custom unit branch — customUnitLabel:', customUnitLabel, 'customUnit:', customUnit, 'totalUnits:', totalUnits, '→', servingDescription);
       } else {
-        // Continuous unit (g/oz/lb). numberOfServings is the count in the selected unit.
+        // Continuous unit (g/oz/lb/ml/tsp/tbsp/cup/fl oz). numberOfServings is the count in the selected unit.
         const unitSuffix =
-          selectedServingOptionKey === 'oz' ? 'oz' :
-          selectedServingOptionKey === 'lb' ? 'lb' :
+          selectedServingOptionKey === 'oz'    ? 'oz' :
+          selectedServingOptionKey === 'lb'    ? 'lb' :
+          selectedServingOptionKey === 'ml'    ? 'ml' :
+          selectedServingOptionKey === 'tsp'   ? 'tsp' :
+          selectedServingOptionKey === 'tbsp'  ? 'tbsp' :
+          selectedServingOptionKey === 'cup'   ? 'cup' :
+          selectedServingOptionKey === 'fl oz' ? 'fl oz' :
           'g';
         servingDescription = formatServing(servingsCountForDisplay, unitSuffix);
       }
@@ -1054,9 +1079,14 @@ export default function FoodDetailsLayout({
       ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
       : []),
     { key: 'default', label: defaultOptionLabel, gramsPerUnit: defaultGramsPerUnit },
-    { key: 'g', label: '1 g', gramsPerUnit: 1 },
-    { key: 'oz', label: '1 oz', gramsPerUnit: 28.35 },
-    { key: 'lb', label: '1 lb', gramsPerUnit: 453.592 },
+    { key: 'g',     label: '1 g',     gramsPerUnit: 1 },
+    { key: 'oz',    label: '1 oz',    gramsPerUnit: 28.35 },
+    { key: 'lb',    label: '1 lb',    gramsPerUnit: 453.592 },
+    { key: 'ml',    label: '1 ml',    gramsPerUnit: 1 },
+    { key: 'tsp',   label: '1 tsp',   gramsPerUnit: 5 },
+    { key: 'tbsp',  label: '1 tbsp',  gramsPerUnit: 15 },
+    { key: 'cup',   label: '1 cup',   gramsPerUnit: 240 },
+    { key: 'fl oz', label: '1 fl oz', gramsPerUnit: 29.57 },
   ];
 
   const currentOption = servingOptions.find((o) => o.key === selectedServingOptionKey) || servingOptions[0];
