@@ -305,9 +305,14 @@ export default function ProfileScreen() {
         const age = calculateAge(user.date_of_birth);
         setEditValue(age ? age.toString() : '');
         break;
-      case 'lossRate':
-        setEditValue((goal?.loss_rate_lbs_per_week || 1.0).toString());
+      case 'lossRate': {
+        const lbsVal = goal?.loss_rate_lbs_per_week || 1.0;
+        const displayVal = units === 'metric'
+          ? (Math.round(lbsVal * 0.453592 * 100) / 100).toString()
+          : lbsVal.toString();
+        setEditValue(displayVal);
         break;
+      }
     }
 
     setEditingField(field);
@@ -507,7 +512,10 @@ export default function ProfileScreen() {
 
         case 'lossRate':
           if (goal) {
-            const newLossRate = parseFloat(editValue) || 1.0;
+            const parsedVal = parseFloat(editValue) || (units === 'metric' ? 0.5 : 1.0);
+            const newLossRate = units === 'metric'
+              ? parsedVal / 0.453592  // convert kg/week back to lbs/week for storage
+              : parsedVal;
             const updatedGoal = { ...goal, loss_rate_lbs_per_week: newLossRate };
             const updatedUser = { ...user, ...updateData };
             await recalculateGoals(updatedUser, updatedGoal);
@@ -1499,7 +1507,7 @@ export default function ProfileScreen() {
                   editingField === 'height' ? (units === 'imperial' ? 'inches' : 'cm') :
                   editingField === 'weight' || editingField === 'goalWeight' ? (units === 'imperial' ? 'lbs' : 'kg') :
                   editingField === 'age' ? 'years' :
-                  editingField === 'lossRate' ? 'lbs per week' : ''
+                  editingField === 'lossRate' ? (units === 'metric' ? 'kg per week' : 'lbs per week') : ''
                 }
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 autoFocus
