@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { TouchableOpacity } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
+import { clearOnboardingSession } from '@/utils/onboardingAnalytics';
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
@@ -51,6 +52,7 @@ export default function DeleteAccountScreen() {
               console.log('[DeleteAccount] User data deleted, signing out');
 
               // Sign out the user
+              await clearOnboardingSession();
               await supabase.auth.signOut();
 
               Alert.alert(

@@ -7,6 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import { clearOnboardingSession } from '@/utils/onboardingAnalytics';
 import { usePremium } from '@/hooks/usePremium';
 import { cmToFeetInches, kgToLbs, getLossRateDisplayText, feetInchesToCm, lbsToKg, calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { toLocalDateString } from '@/utils/dateUtils';
@@ -224,6 +225,7 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             console.log('[Profile] Logging out user');
+            await clearOnboardingSession();
             await supabase.auth.signOut();
             router.replace('/auth/welcome');
           },

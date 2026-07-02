@@ -41,9 +41,17 @@ export function trackOnboardingEvent(
   // Run async in background — never await this
   (async () => {
     try {
-      const session_id = await getOrCreateSessionId();
+      let session_id = await getOrCreateSessionId();
       const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
       const user_id = user?.id ?? null;
+
+      // On signup, regenerate session_id so the new user never inherits
+      // a stale session from a previous user on the same device
+      if (event === 'auth_signup_completed' && user_id) {
+        session_id = generateSessionId();
+        await AsyncStorage.setItem(SESSION_KEY, session_id).catch(() => {});
+        console.log('[Analytics] auth_signup_completed — fresh session_id generated:', session_id);
+      }
 
       console.log('[Analytics] trackOnboardingEvent:', event, { step, session_id, user_id });
 
