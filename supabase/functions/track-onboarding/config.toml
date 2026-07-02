@@ -1,0 +1,2 @@
+[functions.track-onboarding]
+verify_jwt = false
