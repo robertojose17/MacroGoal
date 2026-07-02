@@ -5,20 +5,41 @@ const SESSION_KEY = 'onboarding_session_id';
 const PAYWALL_ACTION_KEY = 'onboarding_paywall_action_recorded';
 const FIRST_MEAL_KEY = 'first_meal_tracked';
 
-function generateSessionId(): string {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+const EDGE_FN_URL = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/track-onboarding';
+
+async function callEdgeFn(body: Record<string, unknown>): Promise<void> {
+  try {
+    console.log('[Analytics] callEdgeFn:', body.action, body);
+    const res = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.warn('[Analytics] edge fn error:', res.status, text);
+    }
+  } catch (e) {
+    console.warn('[Analytics] edge fn fetch failed:', e);
+  }
 }
 
+/**
+ * Get the cached session_id from AsyncStorage.
+ * Returns a temporary client-side ID if none is cached yet.
+ * The server-generated ID is stored on auth_signup_completed.
+ */
 export async function getOrCreateSessionId(): Promise<string> {
   try {
-    let id = await AsyncStorage.getItem(SESSION_KEY);
-    if (!id) {
-      id = generateSessionId();
-      await AsyncStorage.setItem(SESSION_KEY, id);
-    }
-    return id;
+    const cached = await AsyncStorage.getItem(SESSION_KEY);
+    if (cached) return cached;
+    // No session yet — generate a temporary client-side ID for pre-auth events
+    // This will be replaced by the server-generated ID on auth_signup_completed
+    const tempId = 'tmp_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    await AsyncStorage.setItem(SESSION_KEY, tempId);
+    return tempId;
   } catch {
-    return generateSessionId();
+    return 'tmp_' + Math.random().toString(36).slice(2);
   }
 }
 
@@ -30,7 +51,7 @@ export async function clearOnboardingSession(): Promise<void> {
 
 /**
  * Fire-and-forget event tracking.
- * Records screen views, button clicks, and step completions.
+ * Sends events to the Edge Function which writes to Supabase server-side.
  * Never throws, never blocks the UI.
  */
 export function trackOnboardingEvent(
@@ -38,66 +59,56 @@ export function trackOnboardingEvent(
   step?: number,
   properties?: Record<string, unknown>
 ): void {
-  // Run async in background — never await this
   (async () => {
     try {
-      let session_id = await getOrCreateSessionId();
       const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
       const user_id = user?.id ?? null;
 
-      // On signup, regenerate session_id so the new user never inherits
-      // a stale session from a previous user on the same device
+      // On signup_completed: request a server-generated session_id tied to this user
       if (event === 'auth_signup_completed' && user_id) {
-        session_id = generateSessionId();
-        await AsyncStorage.setItem(SESSION_KEY, session_id).catch(() => {});
-        console.log('[Analytics] auth_signup_completed — fresh session_id generated:', session_id);
+        console.log('[Analytics] auth_signup_completed — requesting server session_id for user:', user_id);
+        try {
+          const res = await fetch(EDGE_FN_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start_session', user_id }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.session_id) {
+              await AsyncStorage.setItem(SESSION_KEY, data.session_id);
+              console.log('[Analytics] server session_id stored:', data.session_id);
+              // Track the signup event with the new session_id
+              await callEdgeFn({
+                action: 'track_event',
+                session_id: data.session_id,
+                user_id,
+                event,
+                step: step ?? null,
+                properties: properties ?? null,
+              });
+              return;
+            }
+          } else {
+            const text = await res.text().catch(() => '');
+            console.warn('[Analytics] start_session error:', res.status, text);
+          }
+        } catch (e) {
+          console.warn('[Analytics] start_session failed:', e);
+        }
       }
 
+      const session_id = await getOrCreateSessionId();
       console.log('[Analytics] trackOnboardingEvent:', event, { step, session_id, user_id });
 
-      const { error } = await supabase.from('onboarding_events').insert({
+      await callEdgeFn({
+        action: 'track_event',
         session_id,
         user_id,
         event,
         step: step ?? null,
         properties: properties ?? null,
       });
-
-      if (error) {
-        console.warn('[Analytics] onboarding insert error:', error.message);
-      }
-
-      // Also upsert funnel row for step tracking
-      if (event === 'onboarding_step_viewed' && step !== undefined) {
-        const { data: existing } = await supabase
-          .from('onboarding_funnel')
-          .select('max_step_reached, paywall_shown_at')
-          .eq('session_id', session_id)
-          .maybeSingle();
-
-        const newMax = Math.max(existing?.max_step_reached ?? 0, step);
-        const upsertData: Record<string, unknown> = {
-          session_id,
-          user_id,
-          max_step_reached: newMax,
-          updated_at: new Date().toISOString(),
-        };
-
-        // Record paywall_shown_at once when step 10 is first seen
-        if (step === 10 && !existing?.paywall_shown_at) {
-          upsertData.paywall_shown_at = new Date().toISOString();
-          upsertData.paywall_shown = true;
-        }
-
-        await supabase.from('onboarding_funnel').upsert(upsertData, { onConflict: 'session_id' });
-      }
-
-      if (event === 'onboarding_completed') {
-        await supabase.from('onboarding_funnel').upsert(
-          { session_id, user_id, completed: true, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { onConflict: 'session_id' }
-        );
-      }
     } catch (e) {
       console.warn('[Analytics] trackOnboardingEvent failed silently:', e);
     }
@@ -106,67 +117,37 @@ export function trackOnboardingEvent(
 
 /**
  * Records the first paywall button the user pressed (trial or skip).
- * Subsequent calls for the same session are silently ignored.
- * Uses AsyncStorage as a fast local guard before hitting Supabase.
- * Accepts an optional sessionId so the caller can pass the ID captured at mount time,
- * preventing a new ID from being generated if AsyncStorage was cleared mid-session.
+ * AsyncStorage guard prevents double-recording on the client.
+ * Server has its own DB-level guard as a second layer.
+ * Accepts an optional sessionId so the caller can pass the ID captured at mount time.
  */
 export async function trackPaywallActionOnce(
   action: 'trial' | 'skip',
   sessionId?: string
 ): Promise<void> {
   try {
-    // AsyncStorage guard — fast local check
     const already = await AsyncStorage.getItem(PAYWALL_ACTION_KEY);
     if (already) {
       console.log('[Analytics] trackPaywallActionOnce: already recorded as', already, '— ignoring', action);
       return;
     }
-
-    // Mark locally FIRST (prevents race conditions)
     await AsyncStorage.setItem(PAYWALL_ACTION_KEY, action);
 
     const session_id = sessionId ?? await getOrCreateSessionId();
     const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
     const user_id = user?.id ?? null;
-    const now = new Date().toISOString();
 
     console.log('[Analytics] trackPaywallActionOnce: recording first action:', action, { session_id, user_id });
 
-    // Insert event into onboarding_events
-    await supabase.from('onboarding_events').insert({
+    const event = action === 'trial' ? 'onboarding_paywall_start_trial' : 'onboarding_paywall_skip';
+    await callEdgeFn({
+      action: 'track_event',
       session_id,
       user_id,
-      event: action === 'trial' ? 'onboarding_paywall_start_trial' : 'onboarding_paywall_skip',
+      event,
       step: 10,
       properties: { first_action: true },
     });
-
-    // Upsert funnel row — DB-level guard: only write first_paywall_action if not already set
-    // Uses a two-step approach: check then update, so we never overwrite an existing value
-    const { data: existing } = await supabase
-      .from('onboarding_funnel')
-      .select('first_paywall_action')
-      .eq('session_id', session_id)
-      .maybeSingle();
-
-    if (existing && existing.first_paywall_action) {
-      // Already recorded at DB level — do nothing
-      console.log('[Analytics] trackPaywallActionOnce: DB already has first_paywall_action, skipping upsert');
-      return;
-    }
-
-    await supabase.from('onboarding_funnel').upsert(
-      {
-        session_id,
-        user_id,
-        paywall_shown: true,
-        first_paywall_action: action,
-        paywall_action_at: now,
-        updated_at: now,
-      },
-      { onConflict: 'session_id' }
-    );
   } catch (e) {
     console.warn('[Analytics] trackPaywallActionOnce failed silently:', e);
   }
