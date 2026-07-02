@@ -45,7 +45,15 @@ export async function getOrCreateSessionId(): Promise<string> {
 
 export async function clearOnboardingSession(): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([SESSION_KEY, PAYWALL_ACTION_KEY, FIRST_MEAL_KEY]);
+    const allKeys = await AsyncStorage.getAllKeys();
+    const onboardingKeys = allKeys.filter(k => 
+      k === SESSION_KEY || 
+      k.startsWith(PAYWALL_ACTION_KEY) || 
+      k.startsWith(FIRST_MEAL_KEY)
+    );
+    if (onboardingKeys.length > 0) {
+      await AsyncStorage.multiRemove(onboardingKeys);
+    }
   } catch {}
 }
 
@@ -126,14 +134,17 @@ export async function trackPaywallActionOnce(
   sessionId?: string
 ): Promise<void> {
   try {
-    const already = await AsyncStorage.getItem(PAYWALL_ACTION_KEY);
+    const session_id = sessionId ?? await getOrCreateSessionId();
+    
+    // Guard is keyed to session_id — resets automatically for new sessions
+    const guardKey = `${PAYWALL_ACTION_KEY}_${session_id}`;
+    const already = await AsyncStorage.getItem(guardKey);
     if (already) {
-      console.log('[Analytics] trackPaywallActionOnce: already recorded as', already, '— ignoring', action);
+      console.log('[Analytics] trackPaywallActionOnce: already recorded for session', session_id, '— ignoring', action);
       return;
     }
-    await AsyncStorage.setItem(PAYWALL_ACTION_KEY, action);
+    await AsyncStorage.setItem(guardKey, action);
 
-    const session_id = sessionId ?? await getOrCreateSessionId();
     const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
     const user_id = user?.id ?? null;
 
@@ -155,9 +166,11 @@ export async function trackPaywallActionOnce(
 
 export async function trackFirstMealIfNeeded(): Promise<void> {
   try {
-    const already = await AsyncStorage.getItem(FIRST_MEAL_KEY);
+    const session_id = await getOrCreateSessionId();
+    const guardKey = `${FIRST_MEAL_KEY}_${session_id}`;
+    const already = await AsyncStorage.getItem(guardKey);
     if (already) return;
-    await AsyncStorage.setItem(FIRST_MEAL_KEY, 'true');
+    await AsyncStorage.setItem(guardKey, 'true');
     trackOnboardingEvent('first_meal_logged');
   } catch {}
 }
