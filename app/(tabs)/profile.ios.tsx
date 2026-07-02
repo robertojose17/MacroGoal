@@ -1123,7 +1123,7 @@ export default function ProfileScreen() {
                     {goal?.goal_type === 'lose' && (
                       <EditableSettingItem
                         label="Loss Rate"
-                        value={goal?.loss_rate_lbs_per_week ? getLossRateDisplayText(goal.loss_rate_lbs_per_week) : 'Tap to set'}
+                        value={goal?.loss_rate_lbs_per_week ? getLossRateDisplayText(goal.loss_rate_lbs_per_week, units) : 'Tap to set'}
                         onPress={() => openEditModal('lossRate')}
                         isDark={isDark}
                       />

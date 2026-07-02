@@ -518,6 +518,7 @@ export default function CompleteOnboardingScreen() {
             setGoalType={setGoalType}
             lossRateLbsPerWeek={lossRateLbsPerWeek}
             setLossRateLbsPerWeek={setLossRateLbsPerWeek}
+            units={units}
             onNext={goNext}
           />
         )}
@@ -1020,24 +1021,36 @@ const GOAL_CARDS = [
   { value: 'gain' as GoalType, emoji: '📈', title: 'Gain', subtitle: 'Build strength and size' },
 ];
 
-const SPEED_OPTIONS = [
-  { value: 0.5, label: '0.5 lb/week', sub: 'Slow & steady' },
-  { value: 1.0, label: '1.0 lb/week', sub: 'Moderate' },
-  { value: 1.5, label: '1.5 lb/week', sub: 'Fast' },
-  { value: 2.0, label: '2.0 lb/week', sub: 'Aggressive' },
-];
+function getSpeedOptions(units: 'metric' | 'imperial') {
+  if (units === 'metric') {
+    return [
+      { value: 0.5, label: '0.25 kg/week', sub: 'Slow & steady' },
+      { value: 1.0, label: '0.5 kg/week',  sub: 'Moderate' },
+      { value: 1.5, label: '0.75 kg/week', sub: 'Fast' },
+      { value: 2.0, label: '1.0 kg/week',  sub: 'Aggressive' },
+    ];
+  }
+  return [
+    { value: 0.5, label: '0.5 lb/week', sub: 'Slow & steady' },
+    { value: 1.0, label: '1.0 lb/week', sub: 'Moderate' },
+    { value: 1.5, label: '1.5 lb/week', sub: 'Fast' },
+    { value: 2.0, label: '2.0 lb/week', sub: 'Aggressive' },
+  ];
+}
 
 function Step5({
   goalType,
   setGoalType,
   lossRateLbsPerWeek,
   setLossRateLbsPerWeek,
+  units,
   onNext,
 }: {
   goalType: GoalType;
   setGoalType: (v: GoalType) => void;
   lossRateLbsPerWeek: number;
   setLossRateLbsPerWeek: (v: number) => void;
+  units: 'metric' | 'imperial';
   onNext: () => void;
 }) {
   return (
@@ -1076,7 +1089,7 @@ function Step5({
           <View style={styles.speedSection}>
             <Text style={styles.fieldLabel}>{'How fast?'}</Text>
             <View style={styles.speedGrid}>
-              {SPEED_OPTIONS.map((opt) => {
+              {getSpeedOptions(units).map((opt) => {
                 const selected = lossRateLbsPerWeek === opt.value;
                 return (
                   <TouchableOpacity

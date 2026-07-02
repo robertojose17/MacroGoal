@@ -296,7 +296,19 @@ export function cmToFeetInches(cm: number): { feet: number; inches: number } {
 /**
  * Get display text for weight loss rate
  */
-export function getLossRateDisplayText(lossRateLbsPerWeek: number): string {
+export function getLossRateDisplayText(lossRateLbsPerWeek: number, units: 'metric' | 'imperial' = 'imperial'): string {
+  if (units === 'metric') {
+    const kg = lossRateLbsPerWeek * 0.453592;
+    // Round to nearest 0.25
+    const rounded = Math.round(kg * 4) / 4;
+    const rateMap: { [key: number]: string } = {
+      0.25: '0.25 kg/week (slow and steady)',
+      0.5:  '0.5 kg/week (moderate)',
+      0.75: '0.75 kg/week (fast)',
+      1.0:  '1 kg/week (very aggressive)',
+    };
+    return rateMap[rounded] || `${rounded} kg/week`;
+  }
   const rateMap: { [key: number]: string } = {
     0.5: '0.5 lb/week (slow and steady)',
     1.0: '1 lb/week (moderate)',
