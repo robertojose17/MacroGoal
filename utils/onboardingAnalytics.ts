@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase/client';
 
 const SESSION_KEY = 'onboarding_session_id';
 const PAYWALL_ACTION_KEY = 'onboarding_paywall_action_recorded';
+const FIRST_MEAL_KEY = 'first_meal_tracked';
 
 function generateSessionId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -23,8 +24,7 @@ export async function getOrCreateSessionId(): Promise<string> {
 
 export async function clearOnboardingSession(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(SESSION_KEY);
-    await AsyncStorage.removeItem(PAYWALL_ACTION_KEY);
+    await AsyncStorage.multiRemove([SESSION_KEY, PAYWALL_ACTION_KEY, FIRST_MEAL_KEY]);
   } catch {}
 }
 
@@ -163,8 +163,6 @@ export async function trackPaywallActionOnce(
     console.warn('[Analytics] trackPaywallActionOnce failed silently:', e);
   }
 }
-
-const FIRST_MEAL_KEY = 'first_meal_tracked';
 
 export async function trackFirstMealIfNeeded(): Promise<void> {
   try {
