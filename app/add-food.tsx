@@ -1460,7 +1460,7 @@ export default function AddFoodScreen() {
   }, [favorites]);
 
   const renderFoodItem = useCallback((food: Food, index: number) => {
-    const servingText = food.last_serving_description || formatServing(food.serving_amount, food.serving_unit);
+    const servingText = formatServing(food.serving_amount, food.serving_unit);
     const macrosText = `P: ${Math.round(food.protein)}g • C: ${Math.round(food.carbs)}g • F: ${Math.round(food.fats)}g`;
     
     return (
