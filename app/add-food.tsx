@@ -801,36 +801,110 @@ export default function AddFoodScreen() {
     console.log('[AddFood] CRITICAL: Passing context to Food Details');
 
     try {
-      // Fetch the full food data from database to get per-100g values
-      const { data: foodData, error: foodError } = await supabase
-        .from('foods')
-        .select('*')
-        .eq('id', food.id)
-        .single();
+      let offProduct: Record<string, unknown>;
+      let foodItemIdParam: string | undefined;
 
-      if (foodError || !foodData) {
-        console.error('[AddFood] Error fetching food data:', foodError);
-        Alert.alert('Error', 'Failed to load food details');
-        return;
+      if (food.food_item_id) {
+        // ── Barcode / catalog food: query food_items table ──
+        console.log('[AddFood] food_item_id detected, querying food_items:', food.food_item_id);
+        const { data: fiData, error: fiError } = await supabase
+          .from('food_items')
+          .select('*')
+          .eq('id', food.food_item_id)
+          .maybeSingle();
+
+        if (fiError || !fiData) {
+          console.warn('[AddFood] food_items lookup failed, falling back to foods table:', fiError);
+          // fall through to foods-table branch below
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('foods')
+            .select('*')
+            .eq('id', food.id)
+            .maybeSingle();
+
+          if (fallbackError || !fallbackData) {
+            console.error('[AddFood] Fallback foods lookup also failed:', fallbackError);
+            Alert.alert('Error', 'Failed to load food details');
+            return;
+          }
+
+          offProduct = {
+            code: fallbackData.barcode || '',
+            product_name: fallbackData.name,
+            brands: fallbackData.brand || '',
+            serving_size: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
+            nutriments: {
+              'energy-kcal_100g': fallbackData.calories,
+              'proteins_100g': fallbackData.protein,
+              'carbohydrates_100g': fallbackData.carbs,
+              'fat_100g': fallbackData.fats,
+              'fiber_100g': fallbackData.fiber,
+              'sugars_100g': 0,
+            },
+          };
+        } else {
+          console.log('[AddFood] ✅ food_items data fetched successfully');
+          foodItemIdParam = food.food_item_id;
+
+          // Use pre-built nutriments if available, otherwise build from flat columns
+          const nutriments = fiData.nutriments && typeof fiData.nutriments === 'object'
+            ? fiData.nutriments
+            : {
+                'energy-kcal_100g': fiData.calories ?? fiData.energy_kcal ?? 0,
+                'proteins_100g': fiData.protein ?? fiData.proteins ?? 0,
+                'carbohydrates_100g': fiData.carbs ?? fiData.carbohydrates ?? 0,
+                'fat_100g': fiData.fats ?? fiData.fat ?? 0,
+                'fiber_100g': fiData.fiber ?? 0,
+                'sugars_100g': fiData.sugars ?? 0,
+              };
+
+          const servingSize =
+            fiData.serving_quantity
+              ? String(fiData.serving_quantity)
+              : fiData.serving_size
+                ? String(fiData.serving_size)
+                : food.last_serving_description || formatServing(food.serving_amount, food.serving_unit) || '100g';
+
+          offProduct = {
+            code: fiData.barcode || fiData.code || '',
+            product_name: fiData.name,
+            brands: fiData.brand || fiData.brands || '',
+            serving_size: servingSize,
+            nutriments,
+          };
+        }
+      } else {
+        // ── User-created food: query foods table ──
+        console.log('[AddFood] No food_item_id, querying foods table:', food.id);
+        const { data: foodData, error: foodError } = await supabase
+          .from('foods')
+          .select('*')
+          .eq('id', food.id)
+          .maybeSingle();
+
+        if (foodError || !foodData) {
+          console.error('[AddFood] Error fetching food data:', foodError);
+          Alert.alert('Error', 'Failed to load food details');
+          return;
+        }
+
+        console.log('[AddFood] ✅ Food data fetched successfully');
+
+        offProduct = {
+          code: foodData.barcode || '',
+          product_name: foodData.name,
+          brands: foodData.brand || '',
+          serving_size: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
+          nutriments: {
+            'energy-kcal_100g': foodData.calories,
+            'proteins_100g': foodData.protein,
+            'carbohydrates_100g': foodData.carbs,
+            'fat_100g': foodData.fats,
+            'fiber_100g': foodData.fiber,
+            'sugars_100g': 0,
+          },
+        };
       }
-
-      console.log('[AddFood] ✅ Food data fetched successfully');
-
-      // Convert to OpenFoodFacts format for the food-details screen
-      const offProduct = {
-        code: foodData.barcode || '',
-        product_name: foodData.name,
-        brands: foodData.brand || '',
-        serving_size: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
-        nutriments: {
-          'energy-kcal_100g': foodData.calories,
-          'proteins_100g': foodData.protein,
-          'carbohydrates_100g': foodData.carbs,
-          'fat_100g': foodData.fats,
-          'fiber_100g': foodData.fiber,
-          'sugars_100g': 0,
-        },
-      };
 
       console.log('[AddFood] Mode:', mode);
       console.log('[AddFood] Plan ID:', planId);
@@ -844,6 +918,7 @@ export default function AddFoodScreen() {
           returnTo: returnTo || '',
           mode: mode || '',
           planId: planId || '',
+          ...(foodItemIdParam ? { food_item_id: foodItemIdParam } : {}),
         },
       });
 
@@ -869,17 +944,61 @@ export default function AddFoodScreen() {
     }
 
     try {
-      // Fetch the full food data from database to get per-100g values
-      const { data: foodData, error: foodError } = await supabase
-        .from('foods')
-        .select('*')
-        .eq('id', food.id)
-        .single();
+      // Fetch the full food data — prefer food_items for barcode foods
+      let calories100g = 0, protein100g = 0, carbs100g = 0, fats100g = 0, fiber100g = 0;
 
-      if (foodError || !foodData) {
-        console.error('[AddFood] Error fetching food data:', foodError);
-        Alert.alert('Error', 'Failed to load food details');
-        return;
+      if (food.food_item_id) {
+        console.log('[AddFood] Quick add: querying food_items:', food.food_item_id);
+        const { data: fiData, error: fiError } = await supabase
+          .from('food_items')
+          .select('*')
+          .eq('id', food.food_item_id)
+          .maybeSingle();
+
+        if (fiError || !fiData) {
+          console.warn('[AddFood] Quick add: food_items lookup failed, falling back to foods:', fiError);
+          // fall through to foods lookup below
+          const { data: fbData, error: fbError } = await supabase
+            .from('foods')
+            .select('*')
+            .eq('id', food.id)
+            .maybeSingle();
+          if (fbError || !fbData) {
+            console.error('[AddFood] Quick add: fallback foods lookup failed:', fbError);
+            Alert.alert('Error', 'Failed to load food details');
+            return;
+          }
+          calories100g = fbData.calories ?? 0;
+          protein100g = fbData.protein ?? 0;
+          carbs100g = fbData.carbs ?? 0;
+          fats100g = fbData.fats ?? 0;
+          fiber100g = fbData.fiber ?? 0;
+        } else {
+          const n = fiData.nutriments && typeof fiData.nutriments === 'object' ? fiData.nutriments as Record<string, number> : null;
+          calories100g = n ? (n['energy-kcal_100g'] ?? 0) : (fiData.calories ?? fiData.energy_kcal ?? 0);
+          protein100g  = n ? (n['proteins_100g'] ?? 0)    : (fiData.protein ?? fiData.proteins ?? 0);
+          carbs100g    = n ? (n['carbohydrates_100g'] ?? 0): (fiData.carbs ?? fiData.carbohydrates ?? 0);
+          fats100g     = n ? (n['fat_100g'] ?? 0)         : (fiData.fats ?? fiData.fat ?? 0);
+          fiber100g    = n ? (n['fiber_100g'] ?? 0)       : (fiData.fiber ?? 0);
+        }
+      } else {
+        console.log('[AddFood] Quick add: querying foods table:', food.id);
+        const { data: foodData, error: foodError } = await supabase
+          .from('foods')
+          .select('*')
+          .eq('id', food.id)
+          .maybeSingle();
+
+        if (foodError || !foodData) {
+          console.error('[AddFood] Error fetching food data:', foodError);
+          Alert.alert('Error', 'Failed to load food details');
+          return;
+        }
+        calories100g = foodData.calories ?? 0;
+        protein100g  = foodData.protein ?? 0;
+        carbs100g    = foodData.carbs ?? 0;
+        fats100g     = foodData.fats ?? 0;
+        fiber100g    = foodData.fiber ?? 0;
       }
 
       // Use the food's serving_amount as the default (this is the grams from last time)
@@ -887,11 +1006,11 @@ export default function AddFoodScreen() {
       const multiplier = gramsToAdd / 100;
 
       // Calculate nutrition for the default serving
-      const calories = foodData.calories * multiplier;
-      const protein = foodData.protein * multiplier;
-      const carbs = foodData.carbs * multiplier;
-      const fats = foodData.fats * multiplier;
-      const fiber = foodData.fiber * multiplier;
+      const calories = calories100g * multiplier;
+      const protein = protein100g * multiplier;
+      const carbs = carbs100g * multiplier;
+      const fats = fats100g * multiplier;
+      const fiber = fiber100g * multiplier;
 
       // Add to draft
       await addToDraft({
