@@ -790,95 +790,64 @@ export default function AddFoodScreen() {
   }, [router, mealType, date, context, returnTo, mode, planId]);
 
   /**
-   * Open food details for a recent food
-   * CRITICAL: Pass context through to Food Details
+   * Open food details for a recent food.
+   * Mirrors the barcode scanner data flow: navigate to /food-details with offData
+   * as a JSON-stringified OpenFoodFactsProduct.
    */
   const handleOpenRecentFoodDetails = useCallback(async (food: Food) => {
     console.log('[AddFood] ========== OPENING RECENT FOOD DETAILS ==========');
-    console.log('[AddFood] Food:', food.name);
-    console.log('[AddFood] Food ID:', food.id);
-    console.log('[AddFood] Context:', context);
-    console.log('[AddFood] CRITICAL: Passing context to Food Details');
+    console.log('[AddFood] Food:', food.name, '| food_item_id:', food.food_item_id, '| food.id:', food.id);
+    console.log('[AddFood] Context:', context, '| Mode:', mode, '| Plan ID:', planId);
 
     try {
-      let offProduct: Record<string, unknown>;
-      let foodItemIdParam: string | undefined;
+      let offProduct: OpenFoodFactsProduct;
 
       if (food.food_item_id) {
-        // ── Barcode / catalog food: query food_items table ──
+        // ── Catalog / barcode food: query food_items table ──
         console.log('[AddFood] food_item_id detected, querying food_items:', food.food_item_id);
         const { data: fiData, error: fiError } = await supabase
           .from('food_items')
-          .select('*')
+          .select('off_data, name, brand, serving_size, serving_unit, serving_quantity, nutriments, calories, protein, carbs, fat, fiber, barcode')
           .eq('id', food.food_item_id)
           .maybeSingle();
 
         if (fiError || !fiData) {
-          console.warn('[AddFood] food_items lookup failed, falling back to foods table:', fiError);
-          // fall through to foods-table branch below
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('foods')
-            .select('*')
-            .eq('id', food.id)
-            .maybeSingle();
+          console.warn('[AddFood] food_items lookup failed:', fiError);
+          Alert.alert('Error', 'Failed to load food details');
+          return;
+        }
 
-          if (fallbackError || !fallbackData) {
-            console.error('[AddFood] Fallback foods lookup also failed:', fallbackError);
-            Alert.alert('Error', 'Failed to load food details');
-            return;
-          }
+        console.log('[AddFood] ✅ food_items data fetched | off_data present:', !!fiData.off_data);
 
-          offProduct = {
-            code: fallbackData.barcode || '',
-            product_name: fallbackData.name,
-            brands: fallbackData.brand || '',
-            serving_size: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
-            nutriments: {
-              'energy-kcal_100g': fallbackData.calories,
-              'proteins_100g': fallbackData.protein,
-              'carbohydrates_100g': fallbackData.carbs,
-              'fat_100g': fallbackData.fats,
-              'fiber_100g': fallbackData.fiber,
-              'sugars_100g': 0,
-            },
-          };
+        if (fiData.off_data && typeof fiData.off_data === 'object') {
+          // Use the original OFF product JSON directly — same as barcode scanner
+          offProduct = fiData.off_data as OpenFoodFactsProduct;
+          console.log('[AddFood] Using off_data directly from food_items');
         } else {
-          console.log('[AddFood] ✅ food_items data fetched successfully');
-          foodItemIdParam = food.food_item_id;
-
-          // Use pre-built nutriments if available, otherwise build from flat columns
-          const nutriments = fiData.nutriments && typeof fiData.nutriments === 'object'
-            ? fiData.nutriments
-            : {
-                'energy-kcal_100g': fiData.calories ?? fiData.energy_kcal ?? 0,
-                'proteins_100g': fiData.protein ?? fiData.proteins ?? 0,
-                'carbohydrates_100g': fiData.carbs ?? fiData.carbohydrates ?? 0,
-                'fat_100g': fiData.fats ?? fiData.fat ?? 0,
-                'fiber_100g': fiData.fiber ?? 0,
-                'sugars_100g': fiData.sugars ?? 0,
-              };
-
-          const servingSize =
-            fiData.serving_quantity
-              ? String(fiData.serving_quantity)
-              : fiData.serving_size
-                ? String(fiData.serving_size)
-                : food.last_serving_description || formatServing(food.serving_amount, food.serving_unit) || '100g';
-
+          // Build from flat columns
+          console.log('[AddFood] Building offProduct from flat food_items columns');
           offProduct = {
-            code: fiData.barcode || fiData.code || '',
+            code: fiData.barcode || '',
             product_name: fiData.name,
-            brands: fiData.brand || fiData.brands || '',
-            serving_size: servingSize,
-            nutriments,
-          };
+            brands: fiData.brand || '',
+            serving_size: fiData.serving_quantity
+              ? String(fiData.serving_quantity)
+              : String(fiData.serving_size || 100),
+            nutriments: fiData.nutriments || {
+              'energy-kcal_100g': fiData.calories,
+              'proteins_100g': fiData.protein,
+              'carbohydrates_100g': fiData.carbs,
+              'fat_100g': fiData.fat,
+              'fiber_100g': fiData.fiber,
+            },
+          } as OpenFoodFactsProduct;
         }
       } else {
         // ── User-created food: query foods table ──
         console.log('[AddFood] No food_item_id, querying foods table:', food.id);
         const { data: foodData, error: foodError } = await supabase
           .from('foods')
-          .select('*')
+          .select('id, name, brand, barcode, calories, protein, carbs, fats, fiber')
           .eq('id', food.id)
           .maybeSingle();
 
@@ -888,26 +857,24 @@ export default function AddFoodScreen() {
           return;
         }
 
-        console.log('[AddFood] ✅ Food data fetched successfully');
+        console.log('[AddFood] ✅ foods table data fetched');
 
         offProduct = {
           code: foodData.barcode || '',
           product_name: foodData.name,
           brands: foodData.brand || '',
-          serving_size: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
+          serving_size: String(100),
           nutriments: {
             'energy-kcal_100g': foodData.calories,
             'proteins_100g': foodData.protein,
             'carbohydrates_100g': foodData.carbs,
             'fat_100g': foodData.fats,
             'fiber_100g': foodData.fiber,
-            'sugars_100g': 0,
           },
-        };
+        } as OpenFoodFactsProduct;
       }
 
-      console.log('[AddFood] Mode:', mode);
-      console.log('[AddFood] Plan ID:', planId);
+      console.log('[AddFood] Navigating to /food-details with offData, food_item_id:', food.food_item_id || '');
       router.push({
         pathname: '/food-details',
         params: {
@@ -918,7 +885,8 @@ export default function AddFoodScreen() {
           returnTo: returnTo || '',
           mode: mode || '',
           planId: planId || '',
-          ...(foodItemIdParam ? { food_item_id: foodItemIdParam } : {}),
+          food_item_id: food.food_item_id || '',
+          source: 'recent',
         },
       });
 
