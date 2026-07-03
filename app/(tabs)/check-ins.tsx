@@ -382,7 +382,7 @@ function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean
         const [profileRes, entriesRes] = await Promise.all([
           supabase
             .from('users')
-            .select('current_weight, units')
+            .select('journey_start_weight, units')
             .eq('id', user.id)
             .single(),
           supabase
@@ -396,7 +396,7 @@ function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean
 
         if (cancelled) return;
 
-        let profileWeight = profileRes.data?.current_weight ?? null; // kg
+        let profileWeight = profileRes.data?.journey_start_weight ?? null; // kg
         const userUnits: 'metric' | 'imperial' = profileRes.data?.units === 'metric' ? 'metric' : 'imperial';
         const latestValueLbs = entriesRes.data?.value ?? null; // tracker stores lbs
 
