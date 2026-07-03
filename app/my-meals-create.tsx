@@ -109,19 +109,41 @@ export default function MyMealsCreateScreen() {
 
   const handleEditDraftItem = useCallback((item: DraftItem) => {
     console.log('[MyMealsCreate] Edit draft item tapped:', item.tempId, item.food_name);
+    // Build a mock OpenFoodFactsProduct from the draft item data
+    // This is the same pattern FoodDetailsLayout uses internally for edit mode
+    const mockProduct = {
+      product_name: item.food_name,
+      brands: item.food_brand || '',
+      nutriments: {
+        // DraftItem stores per-serving values, but FoodDetailsLayout expects per-100g
+        // serving_amount is the grams per serving, so we back-calculate per-100g
+        'energy-kcal_100g': item.serving_amount > 0 ? (item.calories / item.serving_amount) * 100 : item.calories,
+        'proteins_100g': item.serving_amount > 0 ? (item.protein / item.serving_amount) * 100 : item.protein,
+        'carbohydrates_100g': item.serving_amount > 0 ? (item.carbs / item.serving_amount) * 100 : item.carbs,
+        'fat_100g': item.serving_amount > 0 ? (item.fats / item.serving_amount) * 100 : item.fats,
+        'fiber_100g': item.serving_amount > 0 ? (item.fiber / item.serving_amount) * 100 : item.fiber,
+        // Also include per-serving values so FoodDetailsLayout can use them directly
+        'energy-kcal_serving': item.calories,
+        'proteins_serving': item.protein,
+        'carbohydrates_serving': item.carbs,
+        'fat_serving': item.fats,
+        'fiber_serving': item.fiber,
+      },
+      serving_size: item.serving_description || `${item.serving_amount} ${item.serving_unit}`,
+      serving_quantity: String(item.serving_amount),
+    };
+
     router.push({
       pathname: '/food-details',
       params: {
+        offData: JSON.stringify(mockProduct),
         foodId: item.food_id,
         food_item_id: item.food_item_id || '',
-        foodName: item.food_name,
         context: 'my_meals_builder',
         meal: mealType,
         date: date,
-        currentServingAmount: String(item.serving_amount),
-        currentServingUnit: item.serving_unit,
-        currentServingsCount: String(item.servings_count),
         editTempId: item.tempId,
+        source: 'recent',
       },
     });
   }, [router, mealType, date]);
