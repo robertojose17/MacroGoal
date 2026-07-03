@@ -6,10 +6,12 @@ const DRAFT_KEY = '@my_meals_draft';
 export interface DraftItem {
   tempId: string;
   food_id: string;
+  food_item_id?: string;
   food_name: string;
   food_brand?: string;
   serving_amount: number;
   serving_unit: string;
+  serving_description?: string;
   servings_count: number;
   calories: number;
   protein: number;

@@ -107,6 +107,25 @@ export default function MyMealsCreateScreen() {
     await saveDraft(updatedItems);
   };
 
+  const handleEditDraftItem = useCallback((item: DraftItem) => {
+    console.log('[MyMealsCreate] Edit draft item tapped:', item.tempId, item.food_name);
+    router.push({
+      pathname: '/food-details',
+      params: {
+        foodId: item.food_id,
+        food_item_id: item.food_item_id || '',
+        foodName: item.food_name,
+        context: 'my_meals_builder',
+        meal: mealType,
+        date: date,
+        currentServingAmount: String(item.serving_amount),
+        currentServingUnit: item.serving_unit,
+        currentServingsCount: String(item.servings_count),
+        editTempId: item.tempId,
+      },
+    });
+  }, [router, mealType, date]);
+
   const handleSave = async () => {
     console.log('[MyMealsCreate] ========== SAVE_MY_MEAL PRESSED ==========');
     
@@ -363,27 +382,49 @@ export default function MyMealsCreateScreen() {
   const totals = calculateTotals();
 
   const renderDraftItem = (item: DraftItem, index: number) => {
+    const servingText = item.serving_description
+      || (item.servings_count !== 1
+          ? `${item.servings_count} × ${item.serving_amount} ${item.serving_unit}`
+          : `${item.serving_amount} ${item.serving_unit}`);
+
     return (
       <React.Fragment key={item.tempId}>
         <SwipeToDeleteRow onDelete={() => handleRemoveItem(item.tempId)}>
-          <View style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <View style={styles.itemInfo}>
-              <Text style={[styles.itemName, { color: isDark ? colors.textDark : colors.text }]}>
-                {item.food_name}
-              </Text>
-              {item.food_brand && (
-                <Text style={[styles.itemBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {item.food_brand}
+          {(isSwiping: boolean) => (
+            <TouchableOpacity
+              style={[styles.foodItem, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+              onPress={() => {
+                if (!isSwiping) {
+                  console.log('[MyMealsCreate] Draft item tapped for edit:', item.food_name);
+                  handleEditDraftItem(item);
+                }
+              }}
+              activeOpacity={0.7}
+              disabled={isSwiping}
+            >
+              <View style={styles.foodInfo}>
+                <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+                  {item.food_name}
                 </Text>
-              )}
-              <Text style={[styles.itemServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {Math.round(item.servings_count)} × {Math.round(item.serving_amount)} {item.serving_unit} • {Math.round(item.calories)} cal
-              </Text>
-              <Text style={[styles.itemMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                P: {Math.round(item.protein)}g • C: {Math.round(item.carbs)}g • F: {Math.round(item.fats)}g
-              </Text>
-            </View>
-          </View>
+                {item.food_brand ? (
+                  <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    {item.food_brand}
+                  </Text>
+                ) : null}
+                <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  {servingText}
+                </Text>
+              </View>
+              <View style={styles.foodCalories}>
+                <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>
+                  {Math.round(item.calories)}
+                </Text>
+                <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  kcal
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </SwipeToDeleteRow>
       </React.Fragment>
     );
@@ -628,35 +669,39 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: 'center',
   },
-  itemCard: {
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.08)',
-    elevation: 1,
-    overflow: 'hidden',
-    padding: spacing.md,
+  foodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    minHeight: 64,
   },
-  itemInfo: {
+  foodInfo: {
     flex: 1,
+    marginRight: spacing.sm,
   },
-  itemName: {
-    ...typography.bodyBold,
-    fontSize: 16,
-    marginBottom: 2,
+  foodName: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 1,
   },
-  itemBrand: {
-    ...typography.caption,
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  itemServing: {
-    ...typography.caption,
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  itemMacros: {
-    ...typography.caption,
+  foodBrand: {
     fontSize: 12,
+    marginBottom: 1,
+  },
+  foodDetails: {
+    fontSize: 12,
+  },
+  foodCalories: {
+    alignItems: 'flex-end',
+    minWidth: 48,
+  },
+  foodCaloriesValue: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  foodCaloriesLabel: {
+    fontSize: 11,
   },
   totalsCard: {
     borderRadius: borderRadius.md,
