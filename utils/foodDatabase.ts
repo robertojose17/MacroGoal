@@ -240,24 +240,23 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       
       seenFoodIds.add(item.food_id);
 
-      // Create Food object with the serving info from the last time it was logged
-      // Round grams to integer to prevent decimal values propagating into the UI
-      const rawGrams = item.grams || item.foods.serving_amount;
+      // Create Food object using CATALOG defaults (not the user's last logged values)
+      // This ensures serving size editor starts from the correct base macros
       const food: Food = {
         id: item.foods.id,
         name: item.foods.name,
         brand: item.foods.brand || undefined,
         barcode: item.foods.barcode || undefined,
-        serving_amount: Math.round(rawGrams),
-        serving_unit: 'g',
-        calories: item.calories,
-        protein: item.protein,
-        carbs: item.carbs,
-        fats: item.fats,
-        fiber: item.fiber,
+        serving_amount: item.foods.serving_amount,
+        serving_unit: item.foods.serving_unit,
+        calories: item.foods.calories,
+        protein: item.foods.protein,
+        carbs: item.foods.carbs,
+        fats: item.foods.fats,
+        fiber: item.foods.fiber ?? 0,
         user_created: item.foods.user_created || false,
         is_favorite: false,
-        // Store the last used serving description for display
+        // Store the last used serving description for display only
         last_serving_description: item.serving_description || undefined,
         // Carry through the catalog ID so logFoodUsage gets the right table's ID
         food_item_id: (item as any).food_item_id ?? undefined,
