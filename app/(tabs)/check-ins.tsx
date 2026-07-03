@@ -391,14 +391,31 @@ function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean
             .eq('tracker_id', trackerId)
             .order('date', { ascending: false })
             .limit(1)
-            .single(),
+            .maybeSingle(),
         ]);
 
         if (cancelled) return;
 
-        const profileWeight = profileRes.data?.current_weight; // kg
+        let profileWeight = profileRes.data?.current_weight ?? null; // kg
         const userUnits: 'metric' | 'imperial' = profileRes.data?.units === 'metric' ? 'metric' : 'imperial';
-        const latestValueLbs = entriesRes.data?.value; // tracker stores lbs
+        const latestValueLbs = entriesRes.data?.value ?? null; // tracker stores lbs
+
+        // If profile weight is missing, fall back to the oldest tracker entry as the baseline
+        if (profileWeight == null) {
+          console.log('[WeightTrend] No profile weight — fetching oldest entry as fallback baseline');
+          const { data: oldestEntry } = await supabase
+            .from('tracker_entries')
+            .select('value')
+            .eq('tracker_id', trackerId)
+            .order('date', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (oldestEntry?.value != null) {
+            // Oldest entry is in lbs; convert to kg to match profileWeight unit
+            profileWeight = Number(oldestEntry.value) / 2.20462;
+            console.log('[WeightTrend] Fallback baseline from oldest entry (lbs):', oldestEntry.value, '-> kg:', profileWeight);
+          }
+        }
 
         console.log('[WeightTrend] profile_weight_kg:', profileWeight, 'latest_entry_lbs:', latestValueLbs, 'units:', userUnits);
 
