@@ -375,14 +375,14 @@ function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean
     let cancelled = false;
     (async () => {
       try {
-        console.log('[WeightTrend] Fetching profile weight and latest entry for tracker:', trackerId);
+        console.log('[WeightTrend] Fetching current_weight and latest tracker entry for tracker:', trackerId);
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const [profileRes, entriesRes] = await Promise.all([
+        const [profileRes, entryRes] = await Promise.all([
           supabase
             .from('users')
-            .select('journey_start_weight, preferred_units')
+            .select('current_weight, preferred_units')
             .eq('id', user.id)
             .single(),
           supabase
@@ -396,37 +396,18 @@ function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean
 
         if (cancelled) return;
 
-        let profileWeight = profileRes.data?.journey_start_weight ?? null; // kg
+        const currentWeightKg = profileRes.data?.current_weight ?? null;
         const userUnits: 'metric' | 'imperial' = profileRes.data?.preferred_units === 'metric' ? 'metric' : 'imperial';
-        const latestValueLbs = entriesRes.data?.value ?? null; // tracker stores lbs
+        const latestValueLbs = entryRes.data?.value ?? null;
 
-        // If profile weight is missing, fall back to the oldest tracker entry as the baseline
-        if (profileWeight == null) {
-          console.log('[WeightTrend] No profile weight — fetching oldest entry as fallback baseline');
-          const { data: oldestEntry } = await supabase
-            .from('tracker_entries')
-            .select('value')
-            .eq('tracker_id', trackerId)
-            .order('date', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          if (oldestEntry?.value != null) {
-            // Oldest entry is in lbs; convert to kg to match profileWeight unit
-            profileWeight = Number(oldestEntry.value) / 2.20462;
-            console.log('[WeightTrend] Fallback baseline from oldest entry (lbs):', oldestEntry.value, '-> kg:', profileWeight);
-          }
-        }
+        console.log('[WeightTrend] current_weight_kg:', currentWeightKg, 'latest_entry_lbs:', latestValueLbs, 'units:', userUnits);
 
-        console.log('[WeightTrend] profile_weight_kg:', profileWeight, 'latest_entry_lbs:', latestValueLbs, 'units:', userUnits);
+        if (currentWeightKg == null || latestValueLbs == null) return;
 
-        if (profileWeight == null || latestValueLbs == null) return;
-
-        // Convert profile weight from kg to lbs to match tracker storage unit
-        const profileWeightLbs = Number(profileWeight) * 2.20462;
+        const profileWeightLbs = Number(currentWeightKg) * 2.20462;
         const deltaLbs = Number(latestValueLbs) - profileWeightLbs;
 
         if (userUnits === 'metric') {
-          // Convert delta back to kg for display
           setDelta(deltaLbs / 2.20462);
         } else {
           setDelta(deltaLbs);
