@@ -368,27 +368,55 @@ function StepsActionArea({
 // ─── WeightTrend ──────────────────────────────────────────────────────────────
 function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean }) {
   const [delta, setDelta] = useState<number | null>(null);
+  const [units, setUnits] = useState<'metric' | 'imperial'>('imperial');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const entries = await listEntries(trackerId, 14);
+        console.log('[WeightTrend] Fetching profile weight and latest entry for tracker:', trackerId);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const [profileRes, entriesRes] = await Promise.all([
+          supabase
+            .from('users')
+            .select('current_weight, units')
+            .eq('id', user.id)
+            .single(),
+          supabase
+            .from('tracker_entries')
+            .select('value')
+            .eq('tracker_id', trackerId)
+            .order('date', { ascending: false })
+            .limit(1)
+            .single(),
+        ]);
+
         if (cancelled) return;
-        const today = toLocalDateString(new Date());
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const sevenDaysAgoStr = toLocalDateString(sevenDaysAgo);
 
-        const recent = entries.find((e) => e.date === today || e.date <= today);
-        const older = entries.find((e) => e.date <= sevenDaysAgoStr);
+        const profileWeight = profileRes.data?.current_weight; // kg
+        const userUnits: 'metric' | 'imperial' = profileRes.data?.units === 'metric' ? 'metric' : 'imperial';
+        const latestValueLbs = entriesRes.data?.value; // tracker stores lbs
 
-        if (recent && older && recent.id !== older.id) {
-          setDelta(Number(recent.value) - Number(older.value));
+        console.log('[WeightTrend] profile_weight_kg:', profileWeight, 'latest_entry_lbs:', latestValueLbs, 'units:', userUnits);
+
+        if (profileWeight == null || latestValueLbs == null) return;
+
+        // Convert profile weight from kg to lbs to match tracker storage unit
+        const profileWeightLbs = Number(profileWeight) * 2.20462;
+        const deltaLbs = Number(latestValueLbs) - profileWeightLbs;
+
+        if (userUnits === 'metric') {
+          // Convert delta back to kg for display
+          setDelta(deltaLbs / 2.20462);
+        } else {
+          setDelta(deltaLbs);
         }
-      } catch {
-        // non-fatal
+        setUnits(userUnits);
+      } catch (err) {
+        console.warn('[WeightTrend] non-fatal error:', err);
       } finally {
         if (!cancelled) setLoaded(true);
       }
@@ -402,13 +430,14 @@ function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean
   const isDown = delta < 0;
   const isUp = delta > 0;
   const absDelta = Math.abs(delta).toFixed(1);
+  const unitLabel = units === 'metric' ? 'kg' : 'lb';
   const trendColor = isDown ? colors.success : isUp ? colors.warning : (isDark ? colors.textSecondaryDark : colors.textSecondary);
   const TrendIcon = isDown ? TrendingDown : isUp ? TrendingUp : Minus;
   const label = isDown
-    ? `↓ ${absDelta} lb this week`
+    ? `↓ ${absDelta} ${unitLabel} total`
     : isUp
-    ? `↑ ${absDelta} lb this week`
-    : 'No change this week';
+    ? `↑ ${absDelta} ${unitLabel} total`
+    : 'No change';
 
   return (
     <View style={styles.trendRow}>
