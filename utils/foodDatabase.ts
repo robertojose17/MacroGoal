@@ -208,6 +208,19 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           fiber,
           user_created
         ),
+        food_items (
+          id,
+          name,
+          brand,
+          serving_size,
+          serving_unit,
+          serving_description,
+          calories,
+          protein,
+          carbs,
+          fat,
+          nutriments
+        ),
         meals!inner (
           user_id
         )
@@ -233,34 +246,101 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
     const uniqueFoods: Food[] = [];
 
     for (const item of mealItems) {
-      if (!item.foods || !item.food_id) continue;
-      
-      // Skip if we've already seen this food
-      if (seenFoodIds.has(item.food_id)) continue;
-      
-      seenFoodIds.add(item.food_id);
+      const fi = (item as any).food_items;
+      const hasBarcode = fi != null;
 
-      // Create Food object using CATALOG defaults (not the user's last logged values)
-      // This ensures serving size editor starts from the correct base macros
-      const food: Food = {
-        id: item.foods.id,
-        name: item.foods.name,
-        brand: item.foods.brand || undefined,
-        barcode: item.foods.barcode || undefined,
-        serving_amount: item.foods.serving_amount,
-        serving_unit: item.foods.serving_unit,
-        calories: item.foods.calories,
-        protein: item.foods.protein,
-        carbs: item.foods.carbs,
-        fats: item.foods.fats,
-        fiber: item.foods.fiber ?? 0,
-        user_created: item.foods.user_created || false,
+      // Need either a foods row or a food_items row to build a Food object
+      if (!hasBarcode && (!item.foods || !item.food_id)) continue;
+
+      // Deduplicate key: prefer food_item_id for barcode foods, food_id otherwise
+      const dedupeKey = hasBarcode
+        ? `fi:${(item as any).food_item_id}`
+        : `f:${item.food_id}`;
+      if (seenFoodIds.has(dedupeKey)) continue;
+      seenFoodIds.add(dedupeKey);
+
+      // Build base Food object from the foods catalog row (may be null for barcode-only items)
+      let food: Food = {
+        id: item.foods?.id ?? fi?.id ?? '',
+        name: item.foods?.name ?? fi?.name ?? '',
+        brand: item.foods?.brand ?? fi?.brand ?? undefined,
+        barcode: item.foods?.barcode ?? undefined,
+        serving_amount: item.foods?.serving_amount ?? 100,
+        serving_unit: item.foods?.serving_unit ?? 'g',
+        calories: item.foods?.calories ?? 0,
+        protein: item.foods?.protein ?? 0,
+        carbs: item.foods?.carbs ?? 0,
+        fats: item.foods?.fats ?? 0,
+        fiber: item.foods?.fiber ?? 0,
+        user_created: item.foods?.user_created || false,
         is_favorite: false,
         // Store the last used serving description for display only
         last_serving_description: item.serving_description || undefined,
         // Carry through the catalog ID so logFoodUsage gets the right table's ID
         food_item_id: (item as any).food_item_id ?? undefined,
       };
+
+      if (hasBarcode) {
+        // food_items (barcode scan): use per-serving values from nutriments when available
+        const nutriments = fi.nutriments || {};
+        const servingGrams = Number(fi.serving_size) || 100;
+
+        const calPerServing =
+          nutriments['energy-kcal_serving'] != null
+            ? nutriments['energy-kcal_serving']
+            : nutriments['energy-kcal_100g'] != null
+            ? (nutriments['energy-kcal_100g'] * servingGrams) / 100
+            : fi.calories ?? 0;
+
+        const proteinPerServing =
+          nutriments['proteins_serving'] != null
+            ? nutriments['proteins_serving']
+            : nutriments['proteins_100g'] != null
+            ? (nutriments['proteins_100g'] * servingGrams) / 100
+            : fi.protein ?? 0;
+
+        const carbsPerServing =
+          nutriments['carbohydrates_serving'] != null
+            ? nutriments['carbohydrates_serving']
+            : nutriments['carbohydrates_100g'] != null
+            ? (nutriments['carbohydrates_100g'] * servingGrams) / 100
+            : fi.carbs ?? 0;
+
+        const fatPerServing =
+          nutriments['fat_serving'] != null
+            ? nutriments['fat_serving']
+            : nutriments['fat_100g'] != null
+            ? (nutriments['fat_100g'] * servingGrams) / 100
+            : fi.fat ?? 0;
+
+        const fiberPerServing =
+          nutriments['fiber_serving'] != null
+            ? nutriments['fiber_serving']
+            : nutriments['fiber_100g'] != null
+            ? (nutriments['fiber_100g'] * servingGrams) / 100
+            : 0;
+
+        console.log(
+          `[FoodDB] Barcode food "${fi.name}": serving=${servingGrams}g, ` +
+          `cal=${Math.round(calPerServing)}, protein=${Math.round(proteinPerServing * 10) / 10}, ` +
+          `carbs=${Math.round(carbsPerServing * 10) / 10}, fat=${Math.round(fatPerServing * 10) / 10}`
+        );
+
+        food = {
+          ...food,
+          id: fi.id,
+          name: fi.name,
+          brand: fi.brand ?? undefined,
+          serving_amount: servingGrams,
+          serving_unit: fi.serving_description || fi.serving_unit || 'g',
+          calories: Math.round(calPerServing),
+          protein: Math.round(proteinPerServing * 10) / 10,
+          carbs: Math.round(carbsPerServing * 10) / 10,
+          fats: Math.round(fatPerServing * 10) / 10,
+          fiber: Math.round(fiberPerServing * 10) / 10,
+        };
+      }
+      // else: foods table (per-100g catalog / user-created) — already correct as-is
 
       uniqueFoods.push(food);
 
