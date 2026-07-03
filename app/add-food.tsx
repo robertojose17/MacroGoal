@@ -1547,12 +1547,20 @@ export default function AddFoodScreen() {
   }, [favorites]);
 
   const renderFoodItem = useCallback((food: Food, index: number) => {
-    const servingText = formatServing(food.serving_amount, food.serving_unit);
-    const macrosText = `P: ${Math.round(food.protein)}g • C: ${Math.round(food.carbs)}g • F: ${Math.round(food.fats)}g`;
-    
+    const calories = Math.round(food.calories);
+    const protein = Math.round(food.protein);
+    const carbs = Math.round(food.carbs);
+    const fat = Math.round(food.fats);
+
+    // Build serving text: use serving_amount + serving_unit from food_items (the master table)
+    // serving_unit may be something like "31 g" (serving_quantity) or just "g"
+    const servingText = food.serving_unit && food.serving_unit !== 'g'
+      ? `${food.serving_amount} ${food.serving_unit}`
+      : `${food.serving_amount}g`;
+
     return (
       <React.Fragment key={food.id ?? `recent-food-${index}`}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.foodCard,
             { backgroundColor: isDark ? colors.cardDark : colors.card }
@@ -1561,51 +1569,53 @@ export default function AddFoodScreen() {
           activeOpacity={0.7}
         >
           <View style={styles.foodInfo}>
-            <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+            <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
               {food.name}
             </Text>
-            <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {food.brand ? `${food.brand} • ` : ''}{servingText} • {Math.round(food.calories)} cal
+            {food.brand ? (
+              <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
+                {food.brand}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+              <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                {servingText}
+              </Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {protein}g</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {carbs}g</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {fat}g</Text>
+            </View>
+          </View>
+
+          <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
+              {calories}
             </Text>
-            <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {macrosText}
+            <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+              kcal
             </Text>
           </View>
-          
-          {/* Show quick-add button based on context */}
-          {context === 'my_meals_builder' ? (
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={(e) => {
-                e.stopPropagation();
+
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              console.log('[AddFood] Recent food + button pressed:', food.name, 'context:', context);
+              if (context === 'my_meals_builder') {
                 handleQuickAddRecentFood(food);
-              }}
-              activeOpacity={0.7}
-            >
-              <IconSymbol
-                ios_icon_name="plus"
-                android_material_icon_name="add"
-                size={20}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={(e) => {
-                e.stopPropagation();
+              } else {
                 handleAddRecentFood(food);
-              }}
-              activeOpacity={0.7}
-            >
-              <IconSymbol
-                ios_icon_name="plus"
-                android_material_icon_name="add"
-                size={20}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-          )}
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="plus"
+              android_material_icon_name="add"
+              size={20}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
         </TouchableOpacity>
       </React.Fragment>
     );
