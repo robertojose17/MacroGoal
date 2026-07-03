@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Food, Meal, MealItem, DailySummary, MealType } from '@/types';
 import { mockFoods } from '@/data/mockData';
 import { supabase } from '@/lib/supabase/client';
+import { extractServingSize } from '@/utils/openFoodFacts';
 
 const FOODS_STORAGE_KEY = '@elite_macro_foods';
 const MEALS_STORAGE_KEY = '@elite_macro_meals';
@@ -219,7 +220,8 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           protein,
           carbs,
           fat,
-          nutriments
+          nutriments,
+          off_data
         ),
         meals!inner (
           user_id
@@ -326,13 +328,21 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           `carbs=${Math.round(carbsPerServing * 10) / 10}, fat=${Math.round(fatPerServing * 10) / 10}`
         );
 
+        // Use off_data (original OFacts JSON) to get the real serving label via extractServingSize
+        // Fall back to serving_size string, then serving_quantity
+        const offProduct = fi.off_data || {
+          serving_size: fi.serving_size ? String(fi.serving_size) : undefined,
+          serving_quantity: fi.serving_quantity ? String(fi.serving_quantity) : undefined,
+        };
+        const servingInfo = extractServingSize(offProduct);
+
         food = {
           ...food,
           id: fi.id,
           name: fi.name,
           brand: fi.brand ?? undefined,
-          serving_amount: servingGrams,
-          serving_unit: fi.serving_quantity || fi.serving_unit || 'g',
+          serving_amount: servingInfo.grams,
+          serving_unit: servingInfo.displayText,
           calories: Math.round(calPerServing),
           protein: Math.round(proteinPerServing * 10) / 10,
           carbs: Math.round(carbsPerServing * 10) / 10,

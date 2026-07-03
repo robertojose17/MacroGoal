@@ -1552,11 +1552,8 @@ export default function AddFoodScreen() {
     const carbs = Math.round(food.carbs);
     const fat = Math.round(food.fats);
 
-    // Build serving text: use serving_amount + serving_unit from food_items (the master table)
-    // serving_unit may be something like "31 g" (serving_quantity) or just "g"
-    const servingText = food.serving_unit && food.serving_unit !== 'g'
-      ? `${food.serving_amount} ${food.serving_unit}`
-      : `${food.serving_amount}g`;
+    // serving_unit now contains the full display text from extractServingSize e.g. "1 piece (28 g)"
+    const servingText = food.serving_unit || `${food.serving_amount}g`;
 
     return (
       <React.Fragment key={food.id ?? `recent-food-${index}`}>
