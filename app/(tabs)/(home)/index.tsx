@@ -1218,7 +1218,7 @@ export default function HomeScreen() {
         {/* ── Week Average ── */}
         <View style={[styles.weekAvgRow, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Per day
+            Week Average
           </Text>
           {avgLoading ? (
             <ActivityIndicator size="small" color={colors.primary} />

@@ -1077,7 +1077,7 @@ export default function HomeScreen() {
 
           {/* Week Average */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingVertical: 4 }}>
-            <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, marginRight: 2 }}>Per day</Text>
+            <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, marginRight: 2 }}>Week Average</Text>
             {avgMacros == null ? (
               <Text style={{ fontSize: 13, color: textSecondary }}>No plans assigned</Text>
             ) : (
