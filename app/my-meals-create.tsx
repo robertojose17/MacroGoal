@@ -499,6 +499,46 @@ export default function MyMealsCreateScreen() {
           />
         </View>
 
+        <View style={[styles.totalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <Text style={[styles.totalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Total Nutrition
+          </Text>
+          <View style={styles.totalsRow}>
+            <View style={styles.totalItem}>
+              <Text style={[styles.totalValue, { color: colors.calories }]}>
+                {Math.round(totals.calories)}
+              </Text>
+              <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Calories
+              </Text>
+            </View>
+            <View style={styles.totalItem}>
+              <Text style={[styles.totalValue, { color: colors.protein }]}>
+                {Math.round(totals.protein)}g
+              </Text>
+              <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Protein
+              </Text>
+            </View>
+            <View style={styles.totalItem}>
+              <Text style={[styles.totalValue, { color: colors.carbs }]}>
+                {Math.round(totals.carbs)}g
+              </Text>
+              <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Carbs
+              </Text>
+            </View>
+            <View style={styles.totalItem}>
+              <Text style={[styles.totalValue, { color: colors.fats }]}>
+                {Math.round(totals.fats)}g
+              </Text>
+              <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Fat
+              </Text>
+            </View>
+          </View>
+        </View>
+
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
             Foods ({draftItems.length})
@@ -536,46 +576,6 @@ export default function MyMealsCreateScreen() {
         ) : (
           <React.Fragment>
             {draftItems.map((item, index) => renderDraftItem(item, index))}
-
-            <View style={[styles.totalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-              <Text style={[styles.totalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                Total Nutrition
-              </Text>
-              <View style={styles.totalsRow}>
-                <View style={styles.totalItem}>
-                  <Text style={[styles.totalValue, { color: colors.calories }]}>
-                    {Math.round(totals.calories)}
-                  </Text>
-                  <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Calories
-                  </Text>
-                </View>
-                <View style={styles.totalItem}>
-                  <Text style={[styles.totalValue, { color: colors.protein }]}>
-                    {Math.round(totals.protein)}g
-                  </Text>
-                  <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Protein
-                  </Text>
-                </View>
-                <View style={styles.totalItem}>
-                  <Text style={[styles.totalValue, { color: colors.carbs }]}>
-                    {Math.round(totals.carbs)}g
-                  </Text>
-                  <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Carbs
-                  </Text>
-                </View>
-                <View style={styles.totalItem}>
-                  <Text style={[styles.totalValue, { color: colors.fats }]}>
-                    {Math.round(totals.fats)}g
-                  </Text>
-                  <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Fat
-                  </Text>
-                </View>
-              </View>
-            </View>
           </React.Fragment>
         )}
 
