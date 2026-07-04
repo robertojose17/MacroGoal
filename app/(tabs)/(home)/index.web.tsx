@@ -47,11 +47,18 @@ const formatDateForStorage = (date: Date): string => {
 };
 
 const getServingDisplayText = (item: FoodItem): string => {
+  // 1. Best: use the saved serving description (e.g. "2 eggs", "1 slice")
   if (item.serving_description) return item.serving_description;
-  if (item.grams) return formatServing(item.grams, 'g');
+  // 2. Use grams if available (e.g. "63 g")
+  if (item.grams && item.grams > 0) return formatServing(item.grams, 'g');
+  // 3. Fallback: quantity × serving_amount, but only if serving_unit is meaningful (not 'serving')
   const quantity = item.quantity || 1;
   const servingAmount = item.foods?.serving_amount || 100;
   const servingUnit = item.foods?.serving_unit || 'g';
+  if (servingUnit === 'serving' || servingUnit === 'servings') {
+    // serving_unit is generic — just show grams
+    return formatServing(quantity * servingAmount, 'g');
+  }
   return formatServing(quantity * servingAmount, servingUnit);
 };
 
