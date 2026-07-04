@@ -1215,25 +1215,44 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* ── Week Average ── */}
-        <View style={[styles.weekAvgRow, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Wk Avg
-          </Text>
-          {avgLoading ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : avgMacros && avgMacros.assignedDays > 0 ? (
-            <View style={styles.weekAvgPills}>
-              <WeekAvgPill value={avgMacros.calories} unit="kcal" color={colors.calories} isDark={isDark} />
-              <WeekAvgPill value={avgMacros.protein} unit="P" color={colors.protein} isDark={isDark} />
-              <WeekAvgPill value={avgMacros.carbs} unit="C" color={colors.carbs} isDark={isDark} />
-              <WeekAvgPill value={avgMacros.fats} unit="F" color={colors.fats} isDark={isDark} />
-            </View>
-          ) : (
-            <Text style={[styles.weekAvgEmpty, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              No plans assigned
+        {/* ── Goals vs Plan comparison ── */}
+        <View style={[styles.weekAvgCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          {/* Goal row */}
+          <View style={styles.weekAvgRow}>
+            <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Goal
             </Text>
-          )}
+            <View style={styles.weekAvgPills}>
+              <WeekAvgPill value={goal?.daily_calories || 2000} unit="kcal" color={colors.calories} isDark={isDark} />
+              <WeekAvgPill value={goal?.protein_g || 150} unit="P" color={colors.protein} isDark={isDark} />
+              <WeekAvgPill value={goal?.carbs_g || 200} unit="C" color={colors.carbs} isDark={isDark} />
+              <WeekAvgPill value={goal?.fats_g || 65} unit="F" color={colors.fats} isDark={isDark} />
+            </View>
+          </View>
+
+          {/* Thin divider */}
+          <View style={[styles.weekAvgDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+
+          {/* Wk Avg row */}
+          <View style={styles.weekAvgRow}>
+            <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Wk Avg
+            </Text>
+            {avgLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : avgMacros && avgMacros.assignedDays > 0 ? (
+              <View style={styles.weekAvgPills}>
+                <WeekAvgPill value={avgMacros.calories} unit="kcal" color={colors.calories} isDark={isDark} />
+                <WeekAvgPill value={avgMacros.protein} unit="P" color={colors.protein} isDark={isDark} />
+                <WeekAvgPill value={avgMacros.carbs} unit="C" color={colors.carbs} isDark={isDark} />
+                <WeekAvgPill value={avgMacros.fats} unit="F" color={colors.fats} isDark={isDark} />
+              </View>
+            ) : (
+              <Text style={[styles.weekAvgEmpty, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                No plans assigned
+              </Text>
+            )}
+          </View>
         </View>
 
         {/* ── View Grocery List button ── */}
@@ -1980,20 +1999,28 @@ const styles = StyleSheet.create({
   avgEmptyText: { ...typography.caption, textAlign: 'center', paddingVertical: spacing.sm },
 
   // Week average pill row
+  weekAvgCard: {
+    borderRadius: 14,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
   weekAvgRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginBottom: 12,
     gap: 6,
+  },
+  weekAvgDivider: {
+    height: 1,
+    marginHorizontal: 14,
   },
   weekAvgLabel: {
     fontSize: 13,
     fontWeight: '500',
-    marginRight: 4,
     flexShrink: 0,
+    marginRight: 4,
+    width: 46,
   },
   weekAvgPills: {
     flexDirection: 'row',

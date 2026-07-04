@@ -1075,39 +1075,50 @@ export default function HomeScreen() {
             })}
           </View>
 
-          {/* Week Average */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'nowrap', paddingVertical: 4 }}>
-            <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, marginRight: 2, flexShrink: 0 }}>Wk Avg</Text>
-            {avgMacros == null ? (
-              <Text style={{ fontSize: 13, color: textSecondary }}>No plans assigned</Text>
-            ) : (
-              <>
-                <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>
-                    {avgMacros.calories}
-                    <Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text>
-                  </Text>
-                </View>
-                <View style={{ backgroundColor: '#3B82F622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>
-                    {avgMacros.protein}
-                    <Text style={{ fontSize: 11, fontWeight: '600' }}> P</Text>
-                  </Text>
-                </View>
-                <View style={{ backgroundColor: '#F59E0B22', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>
-                    {avgMacros.carbs}
-                    <Text style={{ fontSize: 11, fontWeight: '600' }}> C</Text>
-                  </Text>
-                </View>
-                <View style={{ backgroundColor: '#EF444422', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>
-                    {avgMacros.fats}
-                    <Text style={{ fontSize: 11, fontWeight: '600' }}> F</Text>
-                  </Text>
-                </View>
-              </>
-            )}
+          {/* Goals vs Plan comparison */}
+          <View style={{ borderRadius: 12, overflow: 'hidden', marginTop: 4 }}>
+            {/* Goal row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 46, flexShrink: 0 }}>Goal</Text>
+              <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{goal?.daily_calories || 2000}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
+              </View>
+              <View style={{ backgroundColor: '#3B82F622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{goal?.protein_g || 150}<Text style={{ fontSize: 11, fontWeight: '600' }}> P</Text></Text>
+              </View>
+              <View style={{ backgroundColor: '#F59E0B22', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{goal?.carbs_g || 200}<Text style={{ fontSize: 11, fontWeight: '600' }}> C</Text></Text>
+              </View>
+              <View style={{ backgroundColor: '#EF444422', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{goal?.fats_g || 65}<Text style={{ fontSize: 11, fontWeight: '600' }}> F</Text></Text>
+              </View>
+            </View>
+
+            {/* Thin divider */}
+            <View style={{ height: 1, backgroundColor: isDark ? '#2C2C2E' : '#E5E7EB' }} />
+
+            {/* Wk Avg row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 46, flexShrink: 0 }}>Wk Avg</Text>
+              {avgMacros == null ? (
+                <Text style={{ fontSize: 13, color: textSecondary }}>No plans assigned</Text>
+              ) : (
+                <>
+                  <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{avgMacros.calories}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
+                  </View>
+                  <View style={{ backgroundColor: '#3B82F622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{avgMacros.protein}<Text style={{ fontSize: 11, fontWeight: '600' }}> P</Text></Text>
+                  </View>
+                  <View style={{ backgroundColor: '#F59E0B22', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{avgMacros.carbs}<Text style={{ fontSize: 11, fontWeight: '600' }}> C</Text></Text>
+                  </View>
+                  <View style={{ backgroundColor: '#EF444422', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{avgMacros.fats}<Text style={{ fontSize: 11, fontWeight: '600' }}> F</Text></Text>
+                  </View>
+                </>
+              )}
+            </View>
           </View>
 
           {/* Grocery list button */}
