@@ -17,6 +17,7 @@ import { addMealPlanItem } from '@/utils/mealPlansApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
 import { usePremium } from '@/hooks/usePremium';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
@@ -143,7 +144,9 @@ export default function AddFoodScreen() {
   
   const [activeTab, setActiveTab] = useState<TabType>('all');
   
+  const HIDDEN_RECENT_FOODS_KEY = 'hidden_recent_food_ids';
   const [recentFoods, setRecentFoods] = useState<Food[]>([]);
+  const [hiddenRecentIds, setHiddenRecentIds] = useState<Set<string>>(new Set());
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -277,6 +280,9 @@ export default function AddFoodScreen() {
       setLoading(true);
       const recent = await getRecentFoods();
       setRecentFoods(recent);
+
+      const stored = await AsyncStorage.getItem(HIDDEN_RECENT_FOODS_KEY);
+      if (stored) setHiddenRecentIds(new Set(JSON.parse(stored)));
 
       // Load favorites
       await loadFavorites();
@@ -1008,6 +1014,17 @@ export default function AddFoodScreen() {
    * Shows success banner immediately after add
    * CRITICAL: Only works in meal_log context, not in my_meals_builder
    */
+  const handleHideRecentFood = useCallback(async (food: Food) => {
+    const key = food.food_item_id || food.id;
+    console.log('[AddFood] Hiding recent food:', food.name, 'key:', key);
+    setHiddenRecentIds(prev => {
+      const next = new Set(prev);
+      next.add(key);
+      AsyncStorage.setItem(HIDDEN_RECENT_FOODS_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   const handleAddRecentFood = useCallback(async (food: Food) => {
     console.log('[AddFood] ========== ADD RECENT FOOD ==========');
     console.log('[AddFood] Food:', food.name);
@@ -1596,7 +1613,10 @@ export default function AddFoodScreen() {
     const servingText = food.serving_unit || `${food.serving_amount}g`;
 
     return (
-      <React.Fragment key={food.id ?? `recent-food-${index}`}>
+      <SwipeToDeleteRow
+        key={food.id ?? `recent-food-${index}`}
+        onDelete={() => handleHideRecentFood(food)}
+      >
         <TouchableOpacity
           style={[
             styles.foodCard,
@@ -1654,9 +1674,9 @@ export default function AddFoodScreen() {
             />
           </TouchableOpacity>
         </TouchableOpacity>
-      </React.Fragment>
+      </SwipeToDeleteRow>
     );
-  }, [isDark, context, handleOpenRecentFoodDetails, handleQuickAddRecentFood, handleAddRecentFood]);
+  }, [isDark, context, handleOpenRecentFoodDetails, handleQuickAddRecentFood, handleAddRecentFood, handleHideRecentFood]);
 
   const renderSearchResultItem = useCallback((item: SearchResultItem, index: number) => {
     const displayName = item.product.product_name || 'Unknown Product';
@@ -2107,8 +2127,10 @@ export default function AddFoodScreen() {
         <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
           Recent Foods
         </Text>
-        {recentFoods.length > 0 ? (
-          recentFoods.map((food, index) => renderFoodItem(food, index))
+        {recentFoods.filter(food => !hiddenRecentIds.has(food.food_item_id || food.id)).length > 0 ? (
+          recentFoods
+            .filter(food => !hiddenRecentIds.has(food.food_item_id || food.id))
+            .map((food, index) => renderFoodItem(food, index))
         ) : (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -2118,7 +2140,7 @@ export default function AddFoodScreen() {
         )}
       </React.Fragment>
     );
-  }, [searchQuery, isSearching, searchError, searchResults, recentFoods, isDark, handleRetrySearch, renderSearchResultItem, renderFoodItem]);
+  }, [searchQuery, isSearching, searchError, searchResults, recentFoods, hiddenRecentIds, isDark, handleRetrySearch, renderSearchResultItem, renderFoodItem]);
 
   return (
     <SafeAreaView 
