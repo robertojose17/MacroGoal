@@ -15,6 +15,7 @@ interface FoodEntry {
   id: string;
   meal_id: string;
   food_id: string;
+  food_item_id: string | null;
   quantity: number;
   calories: number;
   protein: number;
@@ -174,6 +175,7 @@ export default function CopyFromPreviousScreen() {
             id,
             meal_id,
             food_id,
+            food_item_id,
             quantity,
             calories,
             protein,
@@ -362,7 +364,8 @@ export default function CopyFromPreviousScreen() {
         // Insert all meal items for this meal type
         const itemsToInsert = entries.map(entry => ({
           meal_id: mealId,
-          food_id: entry.food_id,
+          food_id: entry.food_id || null,
+          ...(entry.food_item_id ? { food_item_id: entry.food_item_id } : {}),
           quantity: Number(entry.quantity) || 1,
           calories: Number(entry.calories) || 0,
           protein: Number(entry.protein) || 0,
