@@ -1075,36 +1075,40 @@ export default function HomeScreen() {
             })}
           </View>
 
-          {/* Macro averages */}
-          {avgMacros == null ? (
-            <Text style={{ fontSize: 13, color: textSecondary, textAlign: 'center', paddingVertical: 4 }}>
-              Tap a day to assign a plan
-            </Text>
-          ) : (
-            <View style={{ gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 }}>Daily Avg</Text>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: textPrimary }}>{avgMacros.calories} kcal</Text>
-              </View>
-              <View style={{ height: 5, backgroundColor: isDark ? '#2C2C2E' : '#F0F0F0', borderRadius: 3, overflow: 'hidden' }}>
-                <View style={{ height: '100%', width: `${Math.min((avgMacros.calories / (goal?.daily_calories || 2000)) * 100, 100)}%`, backgroundColor: '#14B8A6', borderRadius: 3 }} />
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                <View style={{ flex: 1, backgroundColor: surfaceBg, borderRadius: 8, padding: 8, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#3B82F6' }}>{avgMacros.protein}g</Text>
-                  <Text style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>Protein</Text>
+          {/* Week Average */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingVertical: 4 }}>
+            <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, marginRight: 2 }}>Per day</Text>
+            {avgMacros == null ? (
+              <Text style={{ fontSize: 13, color: textSecondary }}>No plans assigned</Text>
+            ) : (
+              <>
+                <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#14B8A6' }}>
+                    {avgMacros.calories}
+                    <Text style={{ fontSize: 12, fontWeight: '600' }}> kcal</Text>
+                  </Text>
                 </View>
-                <View style={{ flex: 1, backgroundColor: surfaceBg, borderRadius: 8, padding: 8, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#F59E0B' }}>{avgMacros.carbs}g</Text>
-                  <Text style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>Carbs</Text>
+                <View style={{ backgroundColor: '#3B82F622', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#3B82F6' }}>
+                    {avgMacros.protein}
+                    <Text style={{ fontSize: 12, fontWeight: '600' }}> P</Text>
+                  </Text>
                 </View>
-                <View style={{ flex: 1, backgroundColor: surfaceBg, borderRadius: 8, padding: 8, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#EF4444' }}>{avgMacros.fats}g</Text>
-                  <Text style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>Fats</Text>
+                <View style={{ backgroundColor: '#F59E0B22', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#F59E0B' }}>
+                    {avgMacros.carbs}
+                    <Text style={{ fontSize: 12, fontWeight: '600' }}> C</Text>
+                  </Text>
                 </View>
-              </View>
-            </View>
-          )}
+                <View style={{ backgroundColor: '#EF444422', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#EF4444' }}>
+                    {avgMacros.fats}
+                    <Text style={{ fontSize: 12, fontWeight: '600' }}> F</Text>
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
 
           {/* Grocery list button */}
           {assignedPlanIds.length > 0 && (

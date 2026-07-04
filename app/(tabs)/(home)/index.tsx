@@ -1215,29 +1215,23 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* ── Avg Macros Card ── */}
-        <View style={[styles.avgCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <View style={styles.avgCardHeader}>
-            <Text style={[styles.avgCardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Avg Daily Macros
-            </Text>
-            <Text style={[styles.avgCardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {assignedDaysCount > 0 ? `${assignedDaysCount} day${assignedDaysCount !== 1 ? 's' : ''} assigned in range` : 'No plans assigned in this range'}
-            </Text>
-          </View>
-
+        {/* ── Week Average ── */}
+        <View style={[styles.weekAvgRow, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Per day
+          </Text>
           {avgLoading ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: spacing.sm }} />
+            <ActivityIndicator size="small" color={colors.primary} />
           ) : avgMacros && avgMacros.assignedDays > 0 ? (
-            <View style={styles.avgMacroRow}>
-              <AvgMacroCell label="Calories" value={avgMacros.calories} unit="kcal" color={colors.calories} isDark={isDark} />
-              <AvgMacroCell label="Protein" value={avgMacros.protein} unit="g" color={colors.protein} isDark={isDark} />
-              <AvgMacroCell label="Carbs" value={avgMacros.carbs} unit="g" color={colors.carbs} isDark={isDark} />
-              <AvgMacroCell label="Fats" value={avgMacros.fats} unit="g" color={colors.fats} isDark={isDark} />
+            <View style={styles.weekAvgPills}>
+              <WeekAvgPill value={avgMacros.calories} unit="kcal" color={colors.calories} isDark={isDark} />
+              <WeekAvgPill value={avgMacros.protein} unit="P" color={colors.protein} isDark={isDark} />
+              <WeekAvgPill value={avgMacros.carbs} unit="C" color={colors.carbs} isDark={isDark} />
+              <WeekAvgPill value={avgMacros.fats} unit="F" color={colors.fats} isDark={isDark} />
             </View>
           ) : (
-            <Text style={[styles.avgEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Assign plans to days in this range to see averages.
+            <Text style={[styles.weekAvgEmpty, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              No plans assigned
             </Text>
           )}
         </View>
@@ -1726,6 +1720,18 @@ function AvgMacroCell({ label, value, unit, color, isDark }: { label: string; va
   );
 }
 
+function WeekAvgPill({ value, unit, color, isDark: _isDark }: { value: number; unit: string; color: string; isDark: boolean }) {
+  const pillBg = color + '22';
+  return (
+    <View style={[styles.weekAvgPill, { backgroundColor: pillBg }]}>
+      <Text style={[styles.weekAvgPillText, { color }]}>
+        {value}
+        <Text style={styles.weekAvgPillUnit}> {unit}</Text>
+      </Text>
+    </View>
+  );
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -1956,7 +1962,7 @@ const styles = StyleSheet.create({
   pickerModalTitle: { fontSize: 16, fontWeight: '600' },
   pickerDoneText: { fontSize: 16, fontWeight: '700' },
 
-  // Avg macros card
+  // Avg macros card (kept for reference)
   avgCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.md,
@@ -1972,6 +1978,44 @@ const styles = StyleSheet.create({
   avgMacroUnit: { fontSize: 11, fontWeight: '500' },
   avgMacroLabel: { fontSize: 11, fontWeight: '500' },
   avgEmptyText: { ...typography.caption, textAlign: 'center', paddingVertical: spacing.sm },
+
+  // Week average pill row
+  weekAvgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  weekAvgLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  weekAvgPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  weekAvgPill: {
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  weekAvgPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  weekAvgPillUnit: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  weekAvgEmpty: {
+    fontSize: 13,
+  },
 
   // Grocery button
   groceryBtn: {
