@@ -1054,20 +1054,100 @@ export default function AddFoodScreen() {
     }
 
     try {
-      // Get the food from database to get per-100g values
-      const { data: foodData, error: foodError } = await supabase
-        .from('foods')
-        .select('*')
-        .eq('id', food.id)
-        .single();
+      // food.food_item_id is set when this food came from a barcode scan (food_items table)
+      // food.id may be a food_items id in that case, not a foods id
+      let foodId: string;
+      let per100Calories: number;
+      let per100Protein: number;
+      let per100Carbs: number;
+      let per100Fats: number;
+      let per100Fiber: number;
 
-      if (foodError || !foodData) {
-        console.error('[AddFood] Error fetching food data:', foodError);
-        Alert.alert('Error', 'Failed to load food details');
-        return;
+      if (food.food_item_id) {
+        console.log('[AddFood] Recent food is barcode food, fetching from food_items:', food.food_item_id);
+        // Barcode food — get per-100g values from food_items.nutriments
+        const { data: fiData, error: fiError } = await supabase
+          .from('food_items')
+          .select('nutriments, name, brand, serving_size, serving_unit, serving_quantity')
+          .eq('id', food.food_item_id)
+          .maybeSingle();
+
+        if (fiError || !fiData) {
+          console.error('[AddFood] Error fetching food_items data:', fiError);
+          Alert.alert('Error', 'Failed to load food details');
+          return;
+        }
+
+        const nutriments = fiData.nutriments || {};
+        per100Calories = nutriments['energy-kcal_100g'] ?? 0;
+        per100Protein  = nutriments['proteins_100g'] ?? 0;
+        per100Carbs    = nutriments['carbohydrates_100g'] ?? 0;
+        per100Fats     = nutriments['fat_100g'] ?? 0;
+        per100Fiber    = nutriments['fiber_100g'] ?? 0;
+
+        // Find or create a foods row for this barcode food so meal_items.food_id is valid
+        const foodName = food.name || fiData.name || 'Unknown';
+        const foodBrand = food.brand || fiData.brand || '';
+        const { data: existingFood } = await supabase
+          .from('foods')
+          .select('id')
+          .eq('name', foodName)
+          .eq('brand', foodBrand)
+          .maybeSingle();
+
+        if (existingFood) {
+          console.log('[AddFood] Found existing foods row for barcode food:', existingFood.id);
+          foodId = existingFood.id;
+        } else {
+          console.log('[AddFood] Creating new foods row for barcode food:', foodName);
+          const { data: newFood, error: insertErr } = await supabase
+            .from('foods')
+            .insert({
+              name: foodName,
+              brand: foodBrand,
+              serving_amount: 100,
+              serving_unit: 'g',
+              calories: per100Calories,
+              protein: per100Protein,
+              carbs: per100Carbs,
+              fats: per100Fats,
+              fiber: per100Fiber,
+              user_created: false,
+            })
+            .select('id')
+            .single();
+          if (insertErr || !newFood) {
+            console.error('[AddFood] Error creating foods row:', insertErr);
+            Alert.alert('Error', 'Failed to save food');
+            return;
+          }
+          foodId = newFood.id;
+          console.log('[AddFood] Created new foods row:', foodId);
+        }
+      } else {
+        // Regular food from foods table
+        console.log('[AddFood] Recent food is regular food, fetching from foods:', food.id);
+        const { data: foodData, error: foodError } = await supabase
+          .from('foods')
+          .select('*')
+          .eq('id', food.id)
+          .maybeSingle();
+
+        if (foodError || !foodData) {
+          console.error('[AddFood] Error fetching food data:', foodError);
+          Alert.alert('Error', 'Failed to load food details');
+          return;
+        }
+
+        foodId = foodData.id;
+        per100Calories = foodData.calories;
+        per100Protein  = foodData.protein;
+        per100Carbs    = foodData.carbs;
+        per100Fats     = foodData.fats;
+        per100Fiber    = foodData.fiber ?? 0;
       }
 
-      // Use the food's serving_amount as the default (this is the grams from last time)
+      // Use the food's serving_amount as the default grams
       const gramsToAdd = food.serving_amount;
       const servingDescription = food.last_serving_description || formatServing(food.serving_amount, food.serving_unit);
 
@@ -1078,13 +1158,11 @@ export default function AddFoodScreen() {
       }
 
       const multiplier = gramsToAdd / 100;
-
-      // Calculate nutrition for the default serving
-      const calories = foodData.calories * multiplier;
-      const protein = foodData.protein * multiplier;
-      const carbs = foodData.carbs * multiplier;
-      const fats = foodData.fats * multiplier;
-      const fiber = foodData.fiber * multiplier;
+      const calories = per100Calories * multiplier;
+      const protein  = per100Protein  * multiplier;
+      const carbs    = per100Carbs    * multiplier;
+      const fats     = per100Fats     * multiplier;
+      const fiber    = per100Fiber    * multiplier;
 
       // NORMAL DIARY MODE: Log to diary
       // Find or create meal for the date and meal type
@@ -1129,7 +1207,8 @@ export default function AddFoodScreen() {
         .from('meal_items')
         .insert({
           meal_id: mealId,
-          food_id: food.id,
+          food_id: foodId,
+          food_item_id: food.food_item_id || null,
           quantity: multiplier,
           calories: safeNum(calories),
           protein: safeNum(protein),
