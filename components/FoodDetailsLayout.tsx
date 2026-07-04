@@ -737,6 +737,74 @@ export default function FoodDetailsLayout({
     };
   };
 
+  /**
+   * Upsert an OFacts product into food_items and return its id.
+   * Uses select-then-insert/update to avoid relying on a unique constraint.
+   * Returns null if the product has no usable name.
+   */
+  const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
+    const barcode = prod.code?.trim() || null;
+    const pName = (prod.product_name || prod.generic_name || '').trim();
+    const pBrand = (prod.brands || '').trim() || null;
+    if (!pName) return null;
+
+    const nutrition = extractNutrition(prod);
+    const servingInfo = extractServingSize(prod);
+
+    const payload = {
+      name: pName,
+      brand: pBrand,
+      barcode: barcode,
+      serving_size: servingInfo.grams,
+      serving_unit: 'g',
+      serving_quantity: null as null,
+      calories: safeNum(nutrition.calories),
+      protein: safeNum(nutrition.protein),
+      carbs: safeNum(nutrition.carbs),
+      fat: safeNum(nutrition.fat),
+      fiber: safeNum(nutrition.fiber),
+      nutriments: prod.nutriments || null,
+      off_data: prod,
+    };
+
+    // 1. Try to find by barcode first (most reliable dedup key)
+    if (barcode) {
+      const { data: existing } = await supabase
+        .from('food_items')
+        .select('id')
+        .eq('barcode', barcode)
+        .maybeSingle();
+      if (existing) {
+        console.log('[FoodDetails] upsertFoodItem: found by barcode, id=', existing.id);
+        await supabase.from('food_items').update(payload).eq('id', existing.id);
+        return existing.id;
+      }
+    }
+
+    // 2. Try to find by name + brand
+    const nameQuery = supabase.from('food_items').select('id').ilike('name', pName);
+    if (pBrand) nameQuery.ilike('brand', pBrand);
+    const { data: existingByName } = await nameQuery.maybeSingle();
+    if (existingByName) {
+      console.log('[FoodDetails] upsertFoodItem: found by name+brand, id=', existingByName.id);
+      await supabase.from('food_items').update(payload).eq('id', existingByName.id);
+      return existingByName.id;
+    }
+
+    // 3. Insert new row
+    const { data: inserted, error: insertErr } = await supabase
+      .from('food_items')
+      .insert(payload)
+      .select('id')
+      .single();
+    if (insertErr || !inserted) {
+      console.error('[FoodDetails] upsertFoodItem: insert error:', insertErr);
+      return null;
+    }
+    console.log('[FoodDetails] upsertFoodItem: inserted new food_item, id=', inserted.id);
+    return inserted.id;
+  };
+
   const handleSave = async () => {
     console.log('[FoodDetails] Add to Meal button pressed, mode=', mode, 'context=', context, 'mealType=', mealType, 'date=', date, 'planId=', planId);
     if (!product) {
@@ -958,10 +1026,18 @@ export default function FoodDetailsLayout({
             draftFoodId = newFoodForDraft.id;
           }
 
+          // Step 1b: Upsert to food_items when offData is present so food_item_id is always set
+          let draftFoodItemId: string | null = null;
+          if (offData) {
+            draftFoodItemId = await upsertFoodItem(product);
+            console.log('[FoodDetails] handleSave (my_meals_builder): food_item_id resolved =', draftFoodItemId);
+          }
+
           // Step 2: Add to draft with the correct DraftItem shape
           const servingsCount = parseFloat(numberOfServings) || 1;
           await addToDraft({
             food_id: draftFoodId,
+            ...(draftFoodItemId ? { food_item_id: draftFoodItemId } : {}),
             food_name: foodName,
             food_brand: foodBrand || undefined,
             serving_amount: servingAmount || 100,
@@ -974,39 +1050,18 @@ export default function FoodDetailsLayout({
             fiber: safeMacros.fiber,
           });
 
-          console.log('[FoodDetails] handleSave (my_meals_builder): item added to draft, food_id=', draftFoodId);
+          console.log('[FoodDetails] handleSave (my_meals_builder): item added to draft, food_id=', draftFoodId, 'food_item_id=', draftFoodItemId);
           setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Added to meal', timestamp: Date.now() }]);
 
           setTimeout(() => {
             router.back();
           }, 500);
         } else {
-          // ── Resolve food_items.id from the global catalog (when offData present) ──
+          // ── Upsert to food_items (global catalog) when offData present — always populate food_item_id ──
           let foodItemId: string | null = null;
           if (offData) {
-            const barcode = product.code && product.code.trim().length > 0 ? product.code.trim() : null;
-            if (barcode) {
-              console.log('[FoodDetails] handleSave: looking up food_items by barcode=', barcode);
-              const { data: fi } = await supabase
-                .from('food_items')
-                .select('id')
-                .eq('barcode', barcode)
-                .maybeSingle();
-              foodItemId = fi?.id ?? null;
-              console.log('[FoodDetails] handleSave: food_items barcode lookup result:', foodItemId);
-            }
-            if (!foodItemId) {
-              const pName = product.product_name || product.generic_name || null;
-              const pBrand = product.brands || null;
-              if (pName) {
-                console.log('[FoodDetails] handleSave: looking up food_items by name=', pName, 'brand=', pBrand);
-                const query = supabase.from('food_items').select('id').ilike('name', pName);
-                if (pBrand) query.ilike('brand', pBrand);
-                const { data: fi } = await query.maybeSingle();
-                foodItemId = fi?.id ?? null;
-                console.log('[FoodDetails] handleSave: food_items name lookup result:', foodItemId);
-              }
-            }
+            foodItemId = await upsertFoodItem(product);
+            console.log('[FoodDetails] handleSave: food_item_id resolved =', foodItemId);
           }
 
           // Step 1: Find or create the food record
