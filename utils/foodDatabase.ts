@@ -289,22 +289,50 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       }
 
       // Build base Food object from the foods catalog row (may be null for barcode-only items)
+      // The foods table stores per-100g values (serving_amount=100, serving_unit='g'),
+      // so we use the actual logged serving_description and grams from the meal_item instead.
+      const loggedGrams = item.grams ?? item.foods?.serving_amount ?? 100;
+      const loggedServingDesc = item.serving_description || null;
+
+      // Use the logged serving_description as the display unit (e.g. "1 slice", "2 pieces", "28 g").
+      // Fall back to a plain gram string if no description was stored.
+      let displayServingUnit: string;
+      if (loggedServingDesc && loggedServingDesc.trim().length > 0) {
+        displayServingUnit = loggedServingDesc;
+      } else {
+        displayServingUnit = `${Math.round(loggedGrams)}g`;
+      }
+
+      // Scale macros from per-100g catalog values to the actual logged grams.
+      const multiplier = loggedGrams / 100;
+      const scaledCalories = Math.round((item.foods?.calories ?? 0) * multiplier);
+      const scaledProtein = Math.round((item.foods?.protein ?? 0) * multiplier * 10) / 10;
+      const scaledCarbs = Math.round((item.foods?.carbs ?? 0) * multiplier * 10) / 10;
+      const scaledFats = Math.round((item.foods?.fats ?? 0) * multiplier * 10) / 10;
+      const scaledFiber = Math.round((item.foods?.fiber ?? 0) * multiplier * 10) / 10;
+
+      console.log(
+        `[FoodDB] foods-table item "${item.foods?.name ?? 'unknown'}": ` +
+        `grams=${loggedGrams}, serving="${displayServingUnit}", ` +
+        `cal=${scaledCalories}, protein=${scaledProtein}, carbs=${scaledCarbs}, fat=${scaledFats}`
+      );
+
       let food: Food = {
         id: item.foods?.id ?? fi?.id ?? '',
         name: item.foods?.name ?? fi?.name ?? '',
         brand: item.foods?.brand ?? fi?.brand ?? undefined,
         barcode: item.foods?.barcode ?? undefined,
-        serving_amount: item.foods?.serving_amount ?? 100,
-        serving_unit: item.foods?.serving_unit ?? 'g',
-        calories: item.foods?.calories ?? 0,
-        protein: item.foods?.protein ?? 0,
-        carbs: item.foods?.carbs ?? 0,
-        fats: item.foods?.fats ?? 0,
-        fiber: item.foods?.fiber ?? 0,
+        serving_amount: loggedGrams,
+        serving_unit: displayServingUnit,
+        calories: scaledCalories,
+        protein: scaledProtein,
+        carbs: scaledCarbs,
+        fats: scaledFats,
+        fiber: scaledFiber,
         user_created: item.foods?.user_created || false,
         is_favorite: false,
         // Store the last used serving description for display only
-        last_serving_description: item.serving_description || undefined,
+        last_serving_description: loggedServingDesc || undefined,
         // Carry through the catalog ID so logFoodUsage gets the right table's ID
         food_item_id: (item as any).food_item_id ?? undefined,
       };
@@ -377,7 +405,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           fiber: Math.round(fiberPerServing * 10) / 10,
         };
       }
-      // else: foods table (per-100g catalog / user-created) — already correct as-is
+      // else: foods table (per-100g catalog / user-created) — macros already scaled above
 
       uniqueFoods.push(food);
 
