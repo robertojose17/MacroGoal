@@ -1219,7 +1219,7 @@ export default function HomeScreen() {
         <View style={[styles.weekAvgCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           {/* Goal row */}
           <View style={styles.weekAvgRow}>
-            <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            <Text numberOfLines={1} style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Goal
             </Text>
             <View style={styles.weekAvgPills}>
@@ -1235,7 +1235,7 @@ export default function HomeScreen() {
 
           {/* Wk Avg row */}
           <View style={styles.weekAvgRow}>
-            <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            <Text numberOfLines={1} style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Wk Avg
             </Text>
             {avgLoading ? (
@@ -2010,6 +2010,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 6,
+    flexWrap: 'nowrap',
   },
   weekAvgDivider: {
     height: 1,
@@ -2020,7 +2021,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flexShrink: 0,
     marginRight: 4,
-    width: 46,
+    width: 56,
   },
   weekAvgPills: {
     flexDirection: 'row',

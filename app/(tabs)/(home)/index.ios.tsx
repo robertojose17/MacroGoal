@@ -1078,8 +1078,8 @@ export default function HomeScreen() {
           {/* Goals vs Plan comparison */}
           <View style={{ borderRadius: 12, overflow: 'hidden', marginTop: 4 }}>
             {/* Goal row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 46, flexShrink: 0 }}>Goal</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, flexWrap: 'nowrap' }}>
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>Goal</Text>
               <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{goal?.daily_calories || 2000}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
               </View>
@@ -1098,8 +1098,8 @@ export default function HomeScreen() {
             <View style={{ height: 1, backgroundColor: isDark ? '#2C2C2E' : '#E5E7EB' }} />
 
             {/* Wk Avg row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 46, flexShrink: 0 }}>Wk Avg</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, flexWrap: 'nowrap' }}>
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>Wk Avg</Text>
               {avgMacros == null ? (
                 <Text style={{ fontSize: 13, color: textSecondary }}>No plans assigned</Text>
               ) : (
