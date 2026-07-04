@@ -209,7 +209,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           fiber,
           user_created
         ),
-        food_items (
+        food_items!food_item_id (
           id,
           name,
           brand,
@@ -250,16 +250,43 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
     for (const item of mealItems) {
       const fi = (item as any).food_items;
       const hasBarcode = fi != null;
+      const hasFoodItemId = !!(item as any).food_item_id;
+      const hasFoodsRow = !!(item.foods && item.food_id);
 
-      // Need either a foods row or a food_items row to build a Food object
-      if (!hasBarcode && (!item.foods || !item.food_id)) continue;
+      // Skip only if we have absolutely nothing to build a Food object from
+      if (!hasBarcode && !hasFoodsRow && !hasFoodItemId) continue;
 
       // Deduplicate key: prefer food_item_id for barcode foods, food_id otherwise
-      const dedupeKey = hasBarcode
+      const dedupeKey = hasFoodItemId
         ? `fi:${(item as any).food_item_id}`
         : `f:${item.food_id}`;
       if (seenFoodIds.has(dedupeKey)) continue;
       seenFoodIds.add(dedupeKey);
+
+      // If we have food_item_id but the join returned null, fall back to logged macro values
+      if (hasFoodItemId && !hasBarcode && !hasFoodsRow) {
+        console.log(`[FoodDB] food_item_id join fallback for item ${(item as any).food_item_id}, using logged values`);
+        const fallbackFood: Food = {
+          id: (item as any).food_item_id,
+          name: 'Scanned Food',
+          brand: undefined,
+          barcode: undefined,
+          serving_amount: item.grams ?? 100,
+          serving_unit: item.serving_description || 'g',
+          calories: item.calories ?? 0,
+          protein: item.protein ?? 0,
+          carbs: item.carbs ?? 0,
+          fats: item.fats ?? 0,
+          fiber: item.fiber ?? 0,
+          user_created: false,
+          is_favorite: false,
+          last_serving_description: item.serving_description || undefined,
+          food_item_id: (item as any).food_item_id,
+        };
+        uniqueFoods.push(fallbackFood);
+        if (uniqueFoods.length >= limit) break;
+        continue;
+      }
 
       // Build base Food object from the foods catalog row (may be null for barcode-only items)
       let food: Food = {

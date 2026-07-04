@@ -1127,7 +1127,12 @@ export default function AddFoodScreen() {
 
       // Use the food's serving_amount as the default grams
       const gramsToAdd = food.serving_amount;
-      const servingDescription = food.last_serving_description || formatServing(food.serving_amount, food.serving_unit);
+      // serving_unit for barcode foods is already the display text (e.g. "2 pieces (28 g)")
+      // so use it directly rather than passing through formatServing which would double-format it
+      const servingDescription = food.last_serving_description
+        || (food.serving_unit && food.serving_unit !== 'g' && food.serving_unit !== 'ml'
+            ? food.serving_unit
+            : formatServing(food.serving_amount, food.serving_unit));
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
