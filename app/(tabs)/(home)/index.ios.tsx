@@ -1147,6 +1147,40 @@ export default function HomeScreen() {
           )}
         </View>
 
+        {/* ── Available Plans (templates) ── */}
+        {templatePlans.length > 0 && (
+          <View>
+            <View style={styles.templateSectionHeader}>
+              <Text style={styles.templateSectionTitle}>{'✦ AVAILABLE PLANS'}</Text>
+            </View>
+            {templatePlans.map((tplan) => {
+              return (
+                <TouchableOpacity
+                  key={tplan.id}
+                  style={[styles.templateCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+                  onPress={() => {
+                    console.log('[Home iOS] Template plan pressed:', tplan.id, tplan.name);
+                    router.push({ pathname: '/template-plan-detail', params: { templateId: tplan.id } });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.templateCardContent}>
+                    <View style={styles.templateEmojiCircle}>
+                      <Text style={styles.templateEmoji}>{tplan.emoji}</Text>
+                    </View>
+                    <View style={styles.templateCardLeft}>
+                      <Text style={[styles.templateName, { color: isDark ? colors.textDark : colors.text }]}>
+                        {tplan.name}
+                      </Text>
+                    </View>
+                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         {/* My Plans section */}
         <Text style={{ fontSize: 13, fontWeight: '700', color: textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 }}>My Plans</Text>
         {plans.length === 0 ? (
@@ -1201,40 +1235,6 @@ export default function HomeScreen() {
               </SwipeToDeleteRow>
             );
           })
-        )}
-
-        {/* ── Available Plans (templates) ── */}
-        {templatePlans.length > 0 && (
-          <View>
-            <View style={styles.templateSectionHeader}>
-              <Text style={styles.templateSectionTitle}>{'✦ AVAILABLE PLANS'}</Text>
-            </View>
-            {templatePlans.map((tplan) => {
-              return (
-                <TouchableOpacity
-                  key={tplan.id}
-                  style={[styles.templateCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-                  onPress={() => {
-                    console.log('[Home iOS] Template plan pressed:', tplan.id, tplan.name);
-                    router.push({ pathname: '/template-plan-detail', params: { templateId: tplan.id } });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.templateCardContent}>
-                    <View style={styles.templateEmojiCircle}>
-                      <Text style={styles.templateEmoji}>{tplan.emoji}</Text>
-                    </View>
-                    <View style={styles.templateCardLeft}>
-                      <Text style={[styles.templateName, { color: isDark ? colors.textDark : colors.text }]}>
-                        {tplan.name}
-                      </Text>
-                    </View>
-                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
         )}
 
         {/* Generate with AI button */}
