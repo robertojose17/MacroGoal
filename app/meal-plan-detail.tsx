@@ -19,6 +19,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { getMealPlan, deleteMealPlanItem, updateMealPlanItem, updateMealPlan, type MealPlanDetail, type MealPlanItem } from '@/utils/mealPlansApi';
+import { supabase } from '@/lib/supabase/client';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -162,6 +163,8 @@ export default function MealPlanDetailScreen() {
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [itemEditStates, setItemEditStates] = useState<Record<string, ItemEditState>>({});
 
+  const [goal, setGoal] = useState<{ daily_calories: number; protein_g: number; carbs_g: number; fats_g: number } | null>(null);
+
   // Recipe modal state
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
   const [recipeModalMeal, setRecipeModalMeal] = useState<string | null>(null);
@@ -186,6 +189,17 @@ export default function MealPlanDetailScreen() {
       setPlanName(data.name);
       setItemEditStates(buildInitialStates(data.items));
       setError(null);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: goalData } = await supabase
+          .from('goals')
+          .select('daily_calories, protein_g, carbs_g, fats_g')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+        console.log('[MealPlanDetail] Goal loaded:', goalData);
+        setGoal(goalData ?? { daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65 });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[MealPlanDetail] Error loading plan:', msg);
@@ -466,13 +480,35 @@ export default function MealPlanDetailScreen() {
       >
         {/* Macros Summary Card */}
         <View style={[styles.macroCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-          <View style={styles.macroCardHeader}>
-            <Text style={[styles.macroCardTitle, { color: textColor }]}>Plan Summary</Text>
+          {/* Goal row */}
+          <View style={styles.macroRow}>
+            <Text style={[styles.macroRowLabel, { color: secondaryColor }]}>Goal</Text>
+            <View style={styles.macroPills}>
+              <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.calories }]}>{goal?.daily_calories ?? 2000}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.calories }]}>kcal</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.protein + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.protein }]}>{goal?.protein_g ?? 150}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.protein }]}>P</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.carbs + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.carbs }]}>{goal?.carbs_g ?? 200}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.carbs }]}>C</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.fats + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.fats }]}>{goal?.fats_g ?? 65}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.fats }]}>F</Text>
+              </View>
+            </View>
           </View>
 
-          {/* Per day row */}
+          {/* Thin divider */}
+          <View style={{ height: 1, backgroundColor: isDark ? colors.borderDark : colors.border, marginHorizontal: 0 }} />
+
+          {/* Plan Avg row */}
           <View style={styles.macroRow}>
-            <Text style={[styles.macroRowLabel, { color: secondaryColor }]}>Per day</Text>
+            <Text style={[styles.macroRowLabel, { color: secondaryColor }]}>Plan Avg</Text>
             <View style={styles.macroPills}>
               <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
                 <Text style={[styles.macroPillValue, { color: colors.calories }]}>{dayCaloriesDisplay}</Text>
@@ -492,7 +528,6 @@ export default function MealPlanDetailScreen() {
               </View>
             </View>
           </View>
-
         </View>
 
         {/* Meal Sections */}
@@ -879,10 +914,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
+    paddingVertical: 10,
   },
-  macroRowLabel: { ...typography.caption, minWidth: 60 },
-  macroPills: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  macroRowLabel: { ...typography.caption, width: 70, flexShrink: 0 },
+  macroPills: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'nowrap', flexShrink: 1, justifyContent: 'flex-end' },
   macroPill: {
     flexDirection: 'row',
     alignItems: 'baseline',
