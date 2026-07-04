@@ -1056,7 +1056,7 @@ export default function AddFoodScreen() {
     try {
       // food.food_item_id is set when this food came from a barcode scan (food_items table)
       // food.id may be a food_items id in that case, not a foods id
-      let foodId: string;
+      let foodId: string | null = null;
       let per100Calories: number;
       let per100Protein: number;
       let per100Carbs: number;
@@ -1065,10 +1065,10 @@ export default function AddFoodScreen() {
 
       if (food.food_item_id) {
         console.log('[AddFood] Recent food is barcode food, fetching from food_items:', food.food_item_id);
-        // Barcode food — get per-100g values from food_items.nutriments
+        // Barcode food — get per-100g values directly from food_items.nutriments
         const { data: fiData, error: fiError } = await supabase
           .from('food_items')
-          .select('nutriments, name, brand, serving_size, serving_unit, serving_quantity')
+          .select('nutriments, name, brand')
           .eq('id', food.food_item_id)
           .maybeSingle();
 
@@ -1084,46 +1084,7 @@ export default function AddFoodScreen() {
         per100Carbs    = nutriments['carbohydrates_100g'] ?? 0;
         per100Fats     = nutriments['fat_100g'] ?? 0;
         per100Fiber    = nutriments['fiber_100g'] ?? 0;
-
-        // Find or create a foods row for this barcode food so meal_items.food_id is valid
-        const foodName = food.name || fiData.name || 'Unknown';
-        const foodBrand = food.brand || fiData.brand || '';
-        const { data: existingFood } = await supabase
-          .from('foods')
-          .select('id')
-          .eq('name', foodName)
-          .eq('brand', foodBrand)
-          .maybeSingle();
-
-        if (existingFood) {
-          console.log('[AddFood] Found existing foods row for barcode food:', existingFood.id);
-          foodId = existingFood.id;
-        } else {
-          console.log('[AddFood] Creating new foods row for barcode food:', foodName);
-          const { data: newFood, error: insertErr } = await supabase
-            .from('foods')
-            .insert({
-              name: foodName,
-              brand: foodBrand,
-              serving_amount: 100,
-              serving_unit: 'g',
-              calories: per100Calories,
-              protein: per100Protein,
-              carbs: per100Carbs,
-              fats: per100Fats,
-              fiber: per100Fiber,
-              user_created: false,
-            })
-            .select('id')
-            .single();
-          if (insertErr || !newFood) {
-            console.error('[AddFood] Error creating foods row:', insertErr);
-            Alert.alert('Error', 'Failed to save food');
-            return;
-          }
-          foodId = newFood.id;
-          console.log('[AddFood] Created new foods row:', foodId);
-        }
+        foodId = null; // food_id is now nullable — barcode foods don't need a foods row
       } else {
         // Regular food from foods table
         console.log('[AddFood] Recent food is regular food, fetching from foods:', food.id);
@@ -1207,8 +1168,8 @@ export default function AddFoodScreen() {
         .from('meal_items')
         .insert({
           meal_id: mealId,
-          food_id: foodId,
-          food_item_id: food.food_item_id || null,
+          ...(foodId ? { food_id: foodId } : {}),
+          ...(food.food_item_id ? { food_item_id: food.food_item_id } : {}),
           quantity: multiplier,
           calories: safeNum(calories),
           protein: safeNum(protein),
