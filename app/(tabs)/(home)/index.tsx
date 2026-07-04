@@ -1218,7 +1218,7 @@ export default function HomeScreen() {
         {/* ── Week Average ── */}
         <View style={[styles.weekAvgRow, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Week Average
+            Wk Avg
           </Text>
           {avgLoading ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -1984,33 +1984,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginBottom: 12,
-    gap: 8,
+    gap: 6,
   },
   weekAvgLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     marginRight: 4,
+    flexShrink: 0,
   },
   weekAvgPills: {
     flexDirection: 'row',
     gap: 6,
-    flexWrap: 'wrap',
-    flex: 1,
+    flexShrink: 1,
   },
   weekAvgPill: {
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   weekAvgPillText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   weekAvgPillUnit: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   weekAvgEmpty: {
