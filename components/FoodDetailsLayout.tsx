@@ -332,6 +332,65 @@ export default function FoodDetailsLayout({
     }
   }, [offData]);
 
+  // Helper: build a minimal OpenFoodFactsProduct from a food_items row
+  const buildMockProductFromFoodItem = (
+    foodItem: { name?: string; brand?: string; serving_size?: string; serving_quantity?: number; serving_unit?: string; nutriments?: Record<string, number> | null },
+    food: { name: string; brand?: string; calories: number; protein: number; carbs: number; fats: number; fiber?: number; serving_amount: number; serving_unit: string }
+  ): OpenFoodFactsProduct => {
+    const servingSize = foodItem.serving_size
+      ?? (foodItem.serving_quantity != null && foodItem.serving_unit
+        ? `${foodItem.serving_quantity} ${foodItem.serving_unit}`
+        : `${food.serving_amount} ${food.serving_unit}`);
+    const servingQty = foodItem.serving_quantity ?? food.serving_amount;
+    const n = (foodItem.nutriments ?? {}) as Record<string, number>;
+    return {
+      product_name: foodItem.name ?? food.name,
+      brands: foodItem.brand ?? food.brand ?? '',
+      nutriments: {
+        'energy-kcal_100g': n['energy-kcal_100g'] ?? n['energy-kcal'] ?? food.calories,
+        proteins_100g: n['proteins_100g'] ?? n['proteins'] ?? food.protein,
+        carbohydrates_100g: n['carbohydrates_100g'] ?? n['carbohydrates'] ?? food.carbs,
+        fat_100g: n['fat_100g'] ?? n['fat'] ?? food.fats,
+        fiber_100g: n['fiber_100g'] ?? n['fiber'] ?? food.fiber ?? 0,
+      },
+      serving_size: servingSize,
+      serving_quantity: servingQty,
+    };
+  };
+
+  // Helper: build a minimal OpenFoodFactsProduct from a foods row (legacy path)
+  const buildMockProductFromFoods = (
+    food: { name: string; brand?: string; calories: number; protein: number; carbs: number; fats: number; fiber?: number; serving_amount: number; serving_unit: string }
+  ): OpenFoodFactsProduct => ({
+    product_name: food.name,
+    brands: food.brand ?? '',
+    nutriments: {
+      'energy-kcal_100g': food.calories,
+      proteins_100g: food.protein,
+      carbohydrates_100g: food.carbs,
+      fat_100g: food.fats,
+      fiber_100g: food.fiber ?? 0,
+    },
+    serving_size: `${food.serving_amount} ${food.serving_unit}`,
+    serving_quantity: food.serving_amount,
+  });
+
+  // Helper: extract per-100g values from a nutriments JSONB object and call setter
+  const extractPer100FromNutriments = (
+    nutriments: Record<string, number> | null | undefined,
+    setter: (cals: number, protein: number, carbs: number, fats: number, fiber: number) => void
+  ) => {
+    if (!nutriments) return;
+    const n = nutriments as Record<string, number>;
+    setter(
+      safeNum(n['energy-kcal_100g'] ?? n['energy-kcal'] ?? 0),
+      safeNum(n['proteins_100g'] ?? n['proteins'] ?? 0),
+      safeNum(n['carbohydrates_100g'] ?? n['carbohydrates'] ?? 0),
+      safeNum(n['fat_100g'] ?? n['fat'] ?? 0),
+      safeNum(n['fiber_100g'] ?? n['fiber'] ?? 0),
+    );
+  };
+
   const loadEditItem = useCallback(async () => {
     if (!itemId) {
       console.log('No itemId provided for edit mode');
@@ -351,7 +410,8 @@ export default function FoodDetailsLayout({
         .from('meal_items')
         .select(`
           *,
-          foods (*)
+          foods (*),
+          food_item_id
         `)
         .eq('id', itemId)
         .single();
@@ -370,28 +430,72 @@ export default function FoodDetailsLayout({
         return;
       }
 
-      const mockProduct: OpenFoodFactsProduct = {
-        product_name: food.name,
-        brands: food.brand || '',
-        nutriments: {
-          'energy-kcal_100g': food.calories,
-          proteins_100g: food.protein,
-          carbohydrates_100g: food.carbs,
-          fat_100g: food.fats,
-          fiber_100g: food.fiber || 0,
-        },
-        serving_size: `${food.serving_amount} ${food.serving_unit}`,
-        serving_quantity: food.serving_amount,
-      };
+      // Try to fetch richer serving/nutriment data from food_items when available
+      let mockProduct: OpenFoodFactsProduct;
+      let per100Cals = safeNum(food.calories);
+      let per100Protein = safeNum(food.protein);
+      let per100Carbs = safeNum(food.carbs);
+      let per100Fats = safeNum(food.fats);
+      let per100Fiber = safeNum(food.fiber || 0);
+
+      if (mealItem.food_item_id) {
+        console.log('[FoodDetails] loadEditItem: fetching food_items for id=', mealItem.food_item_id);
+        const { data: foodItem } = await supabase
+          .from('food_items')
+          .select('off_data, nutriments, serving_size, serving_quantity, serving_unit, name, brand')
+          .eq('id', mealItem.food_item_id)
+          .single();
+
+        if (foodItem) {
+          if (foodItem.off_data) {
+            // Full OpenFoodFacts product blob — use it directly
+            try {
+              mockProduct = JSON.parse(foodItem.off_data) as OpenFoodFactsProduct;
+              const nutrition = extractNutrition(mockProduct);
+              per100Cals = safeNum(nutrition.calories);
+              per100Protein = safeNum(nutrition.protein);
+              per100Carbs = safeNum(nutrition.carbs);
+              per100Fats = safeNum(nutrition.fat);
+              per100Fiber = safeNum(nutrition.fiber);
+              console.log('[FoodDetails] loadEditItem: built mockProduct from off_data');
+            } catch (parseErr) {
+              console.warn('[FoodDetails] loadEditItem: failed to parse off_data, falling back', parseErr);
+              mockProduct = buildMockProductFromFoodItem(foodItem, food);
+              extractPer100FromNutriments(foodItem.nutriments, (c, p, ca, f, fi) => {
+                per100Cals = c; per100Protein = p; per100Carbs = ca; per100Fats = f; per100Fiber = fi;
+              });
+            }
+          } else {
+            // No off_data — build from nutriments + serving fields
+            mockProduct = buildMockProductFromFoodItem(foodItem, food);
+            if (foodItem.nutriments) {
+              const n = foodItem.nutriments as Record<string, number>;
+              per100Cals = safeNum(n['energy-kcal_100g'] ?? n['energy-kcal'] ?? food.calories);
+              per100Protein = safeNum(n['proteins_100g'] ?? n['proteins'] ?? food.protein);
+              per100Carbs = safeNum(n['carbohydrates_100g'] ?? n['carbohydrates'] ?? food.carbs);
+              per100Fats = safeNum(n['fat_100g'] ?? n['fat'] ?? food.fats);
+              per100Fiber = safeNum(n['fiber_100g'] ?? n['fiber'] ?? food.fiber ?? 0);
+              console.log('[FoodDetails] loadEditItem: built per100 from food_items.nutriments');
+            }
+          }
+        } else {
+          // food_item_id present but row not found — fall back to foods table
+          console.warn('[FoodDetails] loadEditItem: food_items row not found, falling back to foods table');
+          mockProduct = buildMockProductFromFoods(food);
+        }
+      } else {
+        // No food_item_id — use foods table (legacy path)
+        mockProduct = buildMockProductFromFoods(food);
+      }
 
       setProduct(mockProduct);
 
       setPer100Macros({
-        calories: safeNum(food.calories),
-        protein: safeNum(food.protein),
-        carbs: safeNum(food.carbs),
-        fats: safeNum(food.fats),
-        fiber: safeNum(food.fiber || 0),
+        calories: per100Cals,
+        protein: per100Protein,
+        carbs: per100Carbs,
+        fats: per100Fats,
+        fiber: per100Fiber,
       });
 
       // ── Source of truth: the grams saved in DB ──────────────────────────
