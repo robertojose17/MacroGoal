@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, TABLE_SAVED_MEALS, TABLE_SAVED_MEAL_ITEMS } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
+import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 
 interface SavedMealItem {
   id: string;
@@ -267,6 +268,51 @@ export default function MyMealsDetailsScreen() {
     });
   };
 
+  const handleDeleteItem = useCallback(async (itemId: string) => {
+    console.log('[MyMealsDetails] Deleting item:', itemId);
+    const { error } = await supabase.from(TABLE_SAVED_MEAL_ITEMS).delete().eq('id', itemId);
+    if (error) {
+      console.error('[MyMealsDetails] Error deleting item:', error);
+      Alert.alert('Error', 'Failed to delete item');
+      return;
+    }
+    console.log('[MyMealsDetails] Item deleted successfully:', itemId);
+    setSavedMeal(prev => prev ? {
+      ...prev,
+      saved_meal_items: prev.saved_meal_items.filter(i => i.id !== itemId),
+    } : null);
+    showSuccessBanner('Item removed');
+  }, [showSuccessBanner]);
+
+  const handleItemPress = useCallback((item: SavedMealItem) => {
+    console.log('[MyMealsDetails] Tapped food item:', item.foods?.name, 'id:', item.id);
+    const offData = {
+      product_name: item.foods.name,
+      brands: item.foods.brand || '',
+      nutriments: {
+        'energy-kcal_100g': item.foods.calories,
+        protein_100g: item.foods.protein,
+        carbohydrates_100g: item.foods.carbs,
+        fat_100g: item.foods.fats,
+        fiber_100g: item.foods.fiber,
+      },
+      serving_quantity: item.serving_amount,
+      serving_quantity_unit: item.serving_unit,
+      food_id: item.food_id,
+    };
+    router.push({
+      pathname: '/food-details',
+      params: {
+        offData: JSON.stringify(offData),
+        meal: mealType,
+        date: date,
+        food_item_id: item.food_item_id || '',
+        returnTo: 'my-meals-details',
+        mealId: mealId,
+      },
+    });
+  }, [router, mealType, date, mealId]);
+
   const handleAddToMeal = async () => {
     if (!savedMeal) return;
 
@@ -411,7 +457,7 @@ export default function MyMealsDetailsScreen() {
       edges={['top']}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => { console.log('[MyMealsDetails] Back button pressed'); router.back(); }} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -422,14 +468,7 @@ export default function MyMealsDetailsScreen() {
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
           Meal Details
         </Text>
-        <TouchableOpacity onPress={handleEditMeal} style={styles.editButton}>
-          <IconSymbol
-            ios_icon_name="pencil"
-            android_material_icon_name="edit"
-            size={24}
-            color={isDark ? colors.textDark : colors.text}
-          />
-        </TouchableOpacity>
+        <View style={styles.editButton} />
       </View>
 
       <ScrollView
@@ -486,38 +525,69 @@ export default function MyMealsDetailsScreen() {
           Foods
         </Text>
 
-        {validItems.map((item, index) => {
+        {validItems.map((item) => {
           const multiplier = (item.serving_amount / 100) * item.servings_count * (parseFloat(servingsMultiplier) || 1);
           const itemCalories = item.foods.calories * multiplier;
           const itemProtein = item.foods.protein * multiplier;
           const itemCarbs = item.foods.carbs * multiplier;
           const itemFats = item.foods.fats * multiplier;
+          const itemCaloriesRounded = Math.round(itemCalories);
+          const itemProteinRounded = Math.round(itemProtein);
+          const itemCarbsRounded = Math.round(itemCarbs);
+          const itemFatsRounded = Math.round(itemFats);
+          const servingAmountRounded = Math.round(item.serving_amount);
+          const foodName = item.foods.name;
+          const foodBrand = item.foods.brand;
+          const isUserCreated = item.foods.user_created;
 
           return (
-            <View
-              key={item.id}
-              style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-            >
-              <View style={styles.itemInfo}>
-                <Text style={[styles.itemName, { color: isDark ? colors.textDark : colors.text }]}>
-                  {item.foods.name}
-                  {item.foods.user_created && (
-                    <Text style={[styles.customBadge, { color: colors.primary }]}> (My Food)</Text>
-                  )}
-                </Text>
-                {item.foods.brand && (
-                  <Text style={[styles.itemBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {item.foods.brand}
-                  </Text>
-                )}
-                <Text style={[styles.itemServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {item.servings_count} × {Math.round(item.serving_amount)} {item.serving_unit} • {Math.round(itemCalories)} cal
-                </Text>
-                <Text style={[styles.itemMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  P: {Math.round(itemProtein)}g • C: {Math.round(itemCarbs)}g • F: {Math.round(itemFats)}g
-                </Text>
-              </View>
-            </View>
+            <SwipeToDeleteRow key={item.id} onDelete={() => handleDeleteItem(item.id)}>
+              {(isSwiping) => (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => { if (!isSwiping) handleItemPress(item); }}
+                  disabled={isSwiping}
+                  style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+                >
+                  <View style={styles.itemInfo}>
+                    <View style={styles.itemNameRow}>
+                      <Text style={[styles.itemName, { color: isDark ? colors.textDark : colors.text }]}>
+                        {foodName}
+                      </Text>
+                      {isUserCreated && (
+                        <Text style={[styles.customBadge, { color: colors.primary }]}>
+                          {' (My Food)'}
+                        </Text>
+                      )}
+                    </View>
+                    {foodBrand ? (
+                      <Text style={[styles.itemBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                        {foodBrand}
+                      </Text>
+                    ) : null}
+                    <Text style={[styles.itemServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      {item.servings_count}
+                      {' × '}
+                      {servingAmountRounded}
+                      {' '}
+                      {item.serving_unit}
+                      {' • '}
+                      {itemCaloriesRounded}
+                      {' cal'}
+                    </Text>
+                    <Text style={[styles.itemMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      {'P: '}
+                      {itemProteinRounded}
+                      {'g • C: '}
+                      {itemCarbsRounded}
+                      {'g • F: '}
+                      {itemFatsRounded}
+                      {'g'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </SwipeToDeleteRow>
           );
         })}
 
@@ -567,7 +637,7 @@ export default function MyMealsDetailsScreen() {
       <View style={[styles.footer, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
         <TouchableOpacity
           style={[styles.addButton, { backgroundColor: colors.primary, opacity: adding ? 0.7 : 1 }]}
-          onPress={handleAddToMeal}
+          onPress={() => { console.log('[MyMealsDetails] Add to meal button pressed, meal:', mealType, 'date:', date); handleAddToMeal(); }}
           disabled={adding || validItems.length === 0}
           activeOpacity={0.7}
         >
@@ -708,10 +778,15 @@ const styles = StyleSheet.create({
   itemInfo: {
     flex: 1,
   },
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 2,
+  },
   itemName: {
     ...typography.bodyBold,
     fontSize: 16,
-    marginBottom: 2,
   },
   customBadge: {
     ...typography.caption,
