@@ -381,6 +381,7 @@ export default function CompleteOnboardingScreen() {
   const requestOneSignalPermission = async () => {
     if (Platform.OS === 'web') return;
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const OneSignal = require('react-native-onesignal').OneSignal;
       console.log('[Onboarding] Requesting OneSignal notification permission');
       await OneSignal.Notifications.requestPermission(true);

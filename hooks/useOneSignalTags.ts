@@ -26,6 +26,7 @@ export function useOneSignalTags({ status, isPremium = false }: TagSyncParams) {
 
     let OneSignal: any = null;
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       OneSignal = require("react-native-onesignal").OneSignal;
     } catch {
       return;
@@ -43,5 +44,5 @@ export function useOneSignalTags({ status, isPremium = false }: TagSyncParams) {
     } catch (e) {
       console.warn("[OneSignalTags] Failed to sync tags (non-fatal):", e);
     }
-  }, [status?.current_streak, status?.current_level, isPremium]);
+  }, [status, isPremium]);
 }

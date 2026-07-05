@@ -73,7 +73,7 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, fadeAnim, slideAnim]);
 
   const handleAction = (actionId: string, route: string) => {
     console.log('[QuickAddSheet] Action pressed:', actionId, 'route:', route);

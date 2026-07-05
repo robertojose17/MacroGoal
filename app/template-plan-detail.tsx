@@ -178,7 +178,7 @@ export default function TemplatePlanDetailScreen() {
         console.log('[TemplatePlanDetail] Non-premium user, redirecting to subscription');
         router.replace('/subscription');
       }
-    }, [isPremium, premiumLoading])
+    }, [isPremium, premiumLoading, router])
   );
 
   useFocusEffect(

@@ -599,7 +599,7 @@ export default function FoodDetailsLayout({
     } finally {
       setLoading(false);
     }
-  }, [itemId, router]);
+  }, [itemId, router, selectedServingOptionKey]);
 
   useEffect(() => {
     if (mode === 'view') {

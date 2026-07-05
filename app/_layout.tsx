@@ -34,6 +34,7 @@ import mobileAds from "@/utils/mobileAds";
 let OneSignal: any = null;
 if (Platform.OS !== "web") {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     OneSignal = require("react-native-onesignal").OneSignal;
   } catch (e) {
     console.warn("[OneSignal] Failed to load react-native-onesignal:", e);
