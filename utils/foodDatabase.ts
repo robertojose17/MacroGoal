@@ -229,7 +229,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       `)
       .eq('meals.user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(100); // Get more than we need to allow for deduplication
+      .limit(300); // Get more than we need to allow for deduplication
 
     if (error) {
       console.error('[FoodDB] Error fetching recent foods:', error);
@@ -243,7 +243,9 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
 
     console.log(`[FoodDB] Found ${mealItems.length} meal items`);
 
-    // Deduplicate by food_id, keeping the most recent entry for each food
+    // Deduplicate: prefer food_item_id, but also track food_id so the same
+    // physical food doesn't get two slots when logged via different paths.
+    const seenFoodItemIds = new Set<string>();
     const seenFoodIds = new Set<string>();
     const uniqueFoods: Food[] = [];
 
@@ -256,12 +258,17 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       // Skip only if we have absolutely nothing to build a Food object from
       if (!hasBarcode && !hasFoodsRow && !hasFoodItemId) continue;
 
-      // Deduplicate key: prefer food_item_id for barcode foods, food_id otherwise
-      const dedupeKey = hasFoodItemId
-        ? `fi:${(item as any).food_item_id}`
-        : `f:${item.food_id}`;
-      if (seenFoodIds.has(dedupeKey)) continue;
-      seenFoodIds.add(dedupeKey);
+      const fid: string | undefined = (item as any).food_item_id || undefined;
+      const foid: string | undefined = item.food_id || undefined;
+
+      // If this food_item_id was already seen, skip
+      if (fid && seenFoodItemIds.has(fid)) continue;
+      // If this food_id was already seen (by any key), skip
+      if (foid && seenFoodIds.has(foid)) continue;
+
+      // Mark both as seen
+      if (fid) seenFoodItemIds.add(fid);
+      if (foid) seenFoodIds.add(foid);
 
       // If we have food_item_id but the join returned null, fall back to logged macro values
       if (hasFoodItemId && !hasBarcode && !hasFoodsRow) {
