@@ -23,7 +23,6 @@ import { Platform, InteractionManager } from "react-native";
 import { OneSignal, LogLevel, NotificationWillDisplayEvent } from "react-native-onesignal";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase/client";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Read App ID from app.json (expo.extra)
 const extra = Constants.expoConfig?.extra || {};
@@ -102,13 +101,17 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         const permissionStatus = await OneSignal.Notifications.getPermissionAsync();
         setHasPermission(permissionStatus);
 
-        // Auto-request permission on first launch
-        const alreadyPrompted = await AsyncStorage.getItem('onesignal_permission_prompted');
-        if (!alreadyPrompted && !permissionStatus) {
-          await AsyncStorage.setItem('onesignal_permission_prompted', '1');
+        // Auto-request permission if not yet granted
+        // Always request if permission is false — don't gate on AsyncStorage flag
+        // (the OS itself will only show the system dialog once; subsequent calls are no-ops)
+        if (!permissionStatus) {
+          console.log("[OneSignal] Permission not granted — requesting...");
           const granted = await OneSignal.Notifications.requestPermission(true);
+          console.log("[OneSignal] Permission result:", granted);
           setHasPermission(granted);
           setPermissionDenied(!granted);
+        } else {
+          console.log("[OneSignal] Permission already granted");
         }
 
         // Foreground notification handler — always display
