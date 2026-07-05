@@ -318,7 +318,11 @@ export default function FoodDetailsLayout({
       });
 
       const servingInfo = extractServingSize(parsedProduct);
-      setServingAmount(servingInfo.grams);
+      // For discrete units like "1 egg", "2 slices", extract the leading number as the initial amount.
+      // For continuous units like "50 g", fall back to grams.
+      const leadingNumberMatch = servingInfo.description.match(/^(\d+\.?\d*)\s+/);
+      const initialAmount = leadingNumberMatch ? parseFloat(leadingNumberMatch[1]) : servingInfo.grams;
+      setServingAmount(initialAmount);
       setServingUnit('serving');
       setNumberOfServings('1');
       setSelectedServingOptionKey('default');
