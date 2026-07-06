@@ -775,42 +775,6 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           return;
         }
 
-        // Get or create meal for the date
-        console.log('[Chatbot] Looking for existing meal...');
-        const { data: existingMeal } = await supabase
-          .from('meals')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('date', date)
-          .eq('meal_type', mealType)
-          .maybeSingle();
-
-        let mealId = existingMeal?.id;
-
-        if (!mealId) {
-          console.log('[Chatbot] No existing meal found, creating new meal...');
-          const { data: newMeal, error: mealError } = await supabase
-            .from('meals')
-            .insert({
-              user_id: user.id,
-              date: date,
-              meal_type: mealType,
-            })
-            .select()
-            .single();
-
-          if (mealError) {
-            console.error('[Chatbot] Error creating meal:', mealError);
-            Alert.alert('Error', `Failed to create meal: ${mealError.message}`);
-            return;
-          }
-
-          mealId = newMeal.id;
-          console.log('[Chatbot] New meal created:', mealId);
-        } else {
-          console.log('[Chatbot] Using existing meal:', mealId);
-        }
-
         // Log each included ingredient as a separate food item
         let successCount = 0;
         let failedIngredients: string[] = [];
@@ -834,7 +798,6 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               servingGrams = ingredient.quantity;
             } else {
               // For other units (serving, cup, etc.), store as-is
-              // This is the nutrition for 1 serving
               per100gCalories = ingredient.calories;
               per100gProtein = ingredient.protein;
               per100gCarbs = ingredient.carbs;
@@ -871,33 +834,32 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
 
             console.log('[Chatbot] Food created for ingredient:', foodData.id);
 
-            // Create meal item with the actual serving size
-            const mealItemPayload = {
-              meal_id: mealId,
-              food_id: foodData.id,
-              quantity: 1, // Always 1 serving
-              calories: ingredient.calories,
-              protein: ingredient.protein,
-              carbs: ingredient.carbs,
-              fats: ingredient.fats,
-              fiber: ingredient.fiber,
-              serving_description: `${ingredient.quantity} ${ingredient.unit}`,
-              grams: servingGrams,
-            };
+            // Log via RPC (atomic upsert meal + insert meal_item)
+            console.log('[Chatbot] Calling log_food RPC for ingredient:', ingredient.name, 'date:', date, 'mealType:', mealType);
+            const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+              p_user_id: user.id,
+              p_date: date,
+              p_meal_type: mealType,
+              p_food_id: foodData.id,
+              p_food_item_id: null,
+              p_quantity: 1,
+              p_calories: ingredient.calories,
+              p_protein: ingredient.protein,
+              p_carbs: ingredient.carbs,
+              p_fats: ingredient.fats,
+              p_fiber: ingredient.fiber,
+              p_serving_description: `${ingredient.quantity} ${ingredient.unit}`,
+              p_grams: servingGrams,
+              p_logged_at: new Date().toISOString(),
+            });
 
-            const { data: mealItemData, error: mealItemError } = await supabase
-              .from('meal_items')
-              .insert(mealItemPayload)
-              .select()
-              .single();
-
-            if (mealItemError) {
-              console.error('[Chatbot] Error creating meal item for ingredient:', ingredient.name, mealItemError);
+            if (rpcError) {
+              console.error('[Chatbot] Error calling log_food RPC for ingredient:', ingredient.name, rpcError);
               failedIngredients.push(ingredient.name);
               continue;
             }
 
-            console.log('[Chatbot] ✅ Meal item created for ingredient:', ingredient.name);
+            console.log('[Chatbot] ✅ log_food RPC success for ingredient:', ingredient.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
             // AI-estimated foods are user_created — do not affect catalog popularity
             console.log('[Chatbot] Skipping logFoodUsage for AI-estimated ingredient:', ingredient.name);
 

@@ -717,59 +717,34 @@ export default function AIMealPlannerScreen() {
       if (foodError) throw new Error(`Failed to create food: ${foodError.message}`);
       console.log('[AIMealPlanner] food created in foods table, id:', foodData.id);
 
-      // Step 2: Find or create meals row for user/date/meal_type
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', todayStr)
-        .eq('meal_type', mealType)
-        .maybeSingle();
-
-      let mealId = existingMeal?.id;
-      if (!mealId) {
-        console.log('[AIMealPlanner] creating new meal row for', mealType, 'on', todayStr);
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({ user_id: user.id, date: todayStr, meal_type: mealType })
-          .select('id')
-          .single();
-        if (mealError) throw new Error(`Failed to create meal: ${mealError.message}`);
-        mealId = newMeal.id;
-        console.log('[AIMealPlanner] new meal created, id:', mealId);
-      } else {
-        console.log('[AIMealPlanner] using existing meal, id:', mealId);
-      }
-
-      // Step 3: Insert into meal_items
-      console.log('[AIMealPlanner] inserting meal_item for', food.name, 'meal_id:', mealId);
-      const { data: insertedItem, error: itemError } = await supabase
-        .from('meal_items')
-        .insert({
-          meal_id: mealId,
-          food_id: foodData.id,
-          quantity: food.serving_size > 0 ? food.serving_size : 1,
-          calories: Math.round(Number(food.calories) || 0),
-          protein: Math.round(Number(food.protein) || 0),
-          carbs: Math.round(Number(food.carbs) || 0),
-          fats: Math.round(Number(food.fats) || 0),
-          fiber: Math.round(Number(food.fiber) || 0),
-          serving_description: food.serving_description || '1 serving',
-          grams: servingGrams,
-          logged_at: new Date().toISOString(),
-        })
-        .select('id')
-        .single();
-      if (itemError) throw new Error(`Failed to create meal item: ${itemError.message}`);
+      // Step 2: Log via RPC (atomic upsert meal + insert meal_item)
+      console.log('[AIMealPlanner] calling log_food RPC for', food.name, 'mealType:', mealType, 'date:', todayStr);
+      const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+        p_user_id: user.id,
+        p_date: todayStr,
+        p_meal_type: mealType,
+        p_food_id: foodData.id,
+        p_food_item_id: null,
+        p_quantity: food.serving_size > 0 ? food.serving_size : 1,
+        p_calories: Math.round(Number(food.calories) || 0),
+        p_protein: Math.round(Number(food.protein) || 0),
+        p_carbs: Math.round(Number(food.carbs) || 0),
+        p_fats: Math.round(Number(food.fats) || 0),
+        p_fiber: Math.round(Number(food.fiber) || 0),
+        p_serving_description: food.serving_description || '1 serving',
+        p_grams: servingGrams,
+        p_logged_at: new Date().toISOString(),
+      });
+      if (rpcError) throw new Error(`Failed to log food: ${rpcError.message}`);
 
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-      console.log('[AIMealPlanner] food added to meal_items successfully:', food.name, 'item_id:', insertedItem.id);
+      console.log('[AIMealPlanner] log_food RPC success:', food.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
 
       // AI planner foods are user_created — do not affect catalog popularity
       console.log('[AIMealPlanner] Skipping logFoodUsage for AI planner food (user_created):', food.name);
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
-      const xpSourceId = insertedItem.id;
+      const xpSourceId = rpcData?.meal_item_id ?? rpcData?.meal_id;
       console.log('[AIMealPlanner] awarding meal XP, source_id:', xpSourceId);
       tryAwardMealLogged(xpSourceId, mealType);
       evaluateDailyGoals(todayStr);
@@ -794,31 +769,7 @@ export default function AIMealPlannerScreen() {
 
       const todayStr = getTodayStr();
 
-      // Step 1: Find or create meals row for user/date/meal_type
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', todayStr)
-        .eq('meal_type', mealType)
-        .maybeSingle();
-
-      let mealId = existingMeal?.id;
-      if (!mealId) {
-        console.log('[AIMealPlanner] creating new meal row for bulk add:', mealType, 'on', todayStr);
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({ user_id: user.id, date: todayStr, meal_type: mealType })
-          .select('id')
-          .single();
-        if (mealError) throw new Error(`Failed to create meal: ${mealError.message}`);
-        mealId = newMeal.id;
-        console.log('[AIMealPlanner] new meal created for bulk add, id:', mealId);
-      } else {
-        console.log('[AIMealPlanner] using existing meal for bulk add, id:', mealId);
-      }
-
-      // Step 2: For each food, insert into foods then meal_items
+      // For each food, insert into foods then log via RPC
       const insertedItemIds: string[] = [];
       for (const food of foods) {
         const servingGrams = food.serving_unit === 'g' && food.serving_size > 0 ? food.serving_size : 100;
@@ -847,29 +798,29 @@ export default function AIMealPlannerScreen() {
           continue;
         }
 
-        console.log('[AIMealPlanner] bulk: inserting meal_item for', food.name, 'food_id:', foodData.id);
-        const { data: itemData, error: itemError } = await supabase
-          .from('meal_items')
-          .insert({
-            meal_id: mealId,
-            food_id: foodData.id,
-            quantity: food.serving_size > 0 ? food.serving_size : 1,
-            calories: Math.round(Number(food.calories) || 0),
-            protein: Math.round(Number(food.protein) || 0),
-            carbs: Math.round(Number(food.carbs) || 0),
-            fats: Math.round(Number(food.fats) || 0),
-            fiber: Math.round(Number(food.fiber) || 0),
-            serving_description: food.serving_description || '1 serving',
-            grams: servingGrams,
-            logged_at: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
-        if (itemError) {
-          console.error('[AIMealPlanner] bulk: failed to create meal_item:', food.name, itemError.message);
+        console.log('[AIMealPlanner] bulk: calling log_food RPC for', food.name, 'food_id:', foodData.id);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+          p_user_id: user.id,
+          p_date: todayStr,
+          p_meal_type: mealType,
+          p_food_id: foodData.id,
+          p_food_item_id: null,
+          p_quantity: food.serving_size > 0 ? food.serving_size : 1,
+          p_calories: Math.round(Number(food.calories) || 0),
+          p_protein: Math.round(Number(food.protein) || 0),
+          p_carbs: Math.round(Number(food.carbs) || 0),
+          p_fats: Math.round(Number(food.fats) || 0),
+          p_fiber: Math.round(Number(food.fiber) || 0),
+          p_serving_description: food.serving_description || '1 serving',
+          p_grams: servingGrams,
+          p_logged_at: new Date().toISOString(),
+        });
+        if (rpcError) {
+          console.error('[AIMealPlanner] bulk: log_food RPC failed for', food.name, rpcError.message);
           continue;
         }
-        insertedItemIds.push(itemData.id);
+        if (rpcData?.meal_item_id) insertedItemIds.push(rpcData.meal_item_id);
+        console.log('[AIMealPlanner] bulk: log_food RPC success for', food.name, 'meal_item_id:', rpcData?.meal_item_id);
 
         // AI planner foods are user_created — do not affect catalog popularity
         console.log('[AIMealPlanner] Skipping logFoodUsage for bulk AI planner food (user_created):', food.name);

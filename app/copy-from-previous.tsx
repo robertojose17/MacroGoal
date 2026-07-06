@@ -323,69 +323,41 @@ export default function CopyFromPreviousScreen() {
         });
       });
 
-      // For each meal type, find or create the meal, then insert items
+      // For each meal type, log each entry via RPC
       for (const mealType of Object.keys(entriesByMealType) as MealType[]) {
         const entries = entriesByMealType[mealType];
         if (entries.length === 0) continue;
 
         console.log('[CopyFromPrevious] Processing', entries.length, 'entries for', mealType);
 
-        // Find or create meal for target date and meal type
-        const { data: existingMeal } = await supabase
-          .from('meals')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('date', targetDate)
-          .eq('meal_type', mealType)
-          .maybeSingle();
+        for (const entry of entries) {
+          console.log('[CopyFromPrevious] Calling log_food RPC for entry:', entry.foods?.name, 'mealType:', mealType);
+          const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+            p_user_id: user.id,
+            p_date: targetDate,
+            p_meal_type: mealType,
+            p_food_id: entry.food_id || null,
+            p_food_item_id: entry.food_item_id ?? null,
+            p_quantity: Number(entry.quantity) || 1,
+            p_calories: Number(entry.calories) || 0,
+            p_protein: Number(entry.protein) || 0,
+            p_carbs: Number(entry.carbs) || 0,
+            p_fats: Number(entry.fats) || 0,
+            p_fiber: Number(entry.fiber) || 0,
+            p_serving_description: entry.serving_description ?? null,
+            p_grams: entry.grams ?? null,
+            p_logged_at: new Date().toISOString(),
+          });
 
-        let mealId = existingMeal?.id;
-
-        if (!mealId) {
-          console.log('[CopyFromPrevious] Creating new meal for', mealType, 'on', targetDate);
-          const { data: newMeal, error: mealError } = await supabase
-            .from('meals')
-            .insert({
-              user_id: user.id,
-              date: targetDate,
-              meal_type: mealType,
-            })
-            .select()
-            .single();
-
-          if (mealError) {
-            console.error('[CopyFromPrevious] Error creating meal:', mealError);
-            throw mealError;
+          if (rpcError) {
+            console.error('[CopyFromPrevious] log_food RPC error for entry:', entry.foods?.name, rpcError);
+            throw rpcError;
           }
 
-          mealId = newMeal.id;
+          console.log('[CopyFromPrevious] log_food RPC success for', entry.foods?.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
         }
 
-        // Insert all meal items for this meal type
-        const itemsToInsert = entries.map(entry => ({
-          meal_id: mealId,
-          food_id: entry.food_id || null,
-          ...(entry.food_item_id ? { food_item_id: entry.food_item_id } : {}),
-          quantity: Number(entry.quantity) || 1,
-          calories: Number(entry.calories) || 0,
-          protein: Number(entry.protein) || 0,
-          carbs: Number(entry.carbs) || 0,
-          fats: Number(entry.fats) || 0,
-          fiber: Number(entry.fiber) || 0,
-          serving_description: entry.serving_description,
-          grams: entry.grams,
-        }));
-
-        const { error: insertError } = await supabase
-          .from('meal_items')
-          .insert(itemsToInsert);
-
-        if (insertError) {
-          console.error('[CopyFromPrevious] Error inserting meal items:', insertError);
-          throw insertError;
-        }
-
-        console.log('[CopyFromPrevious] Inserted', itemsToInsert.length, 'items for', mealType);
+        console.log('[CopyFromPrevious] Logged', entries.length, 'items for', mealType);
       }
 
       console.log('[CopyFromPrevious] Copy completed successfully!');

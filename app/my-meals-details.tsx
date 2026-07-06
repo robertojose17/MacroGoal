@@ -336,69 +336,38 @@ export default function MyMealsDetailsScreen() {
         return;
       }
 
-      // Find or create meal for the date and meal type
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', date)
-        .eq('meal_type', mealType)
-        .maybeSingle();
+      // Add all items from saved meal via RPC (one call per item)
+      const validItems = savedMeal.saved_meal_items.filter(item => item.foods);
+      console.log('[MyMealsDetails] Logging', validItems.length, 'items via log_food RPC');
 
-      let mealIdForLog = existingMeal?.id;
+      for (const item of validItems) {
+        const itemMultiplier = (item.serving_amount / 100) * item.servings_count * multiplier;
+        console.log('[MyMealsDetails] Calling log_food RPC for item:', item.foods.name);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+          p_user_id: user.id,
+          p_date: date,
+          p_meal_type: mealType,
+          p_food_id: item.food_id,
+          p_food_item_id: null,
+          p_quantity: item.servings_count * multiplier,
+          p_calories: (Number(item.foods.calories) || 0) * itemMultiplier,
+          p_protein: (Number(item.foods.protein) || 0) * itemMultiplier,
+          p_carbs: (Number(item.foods.carbs) || 0) * itemMultiplier,
+          p_fats: (Number(item.foods.fats) || 0) * itemMultiplier,
+          p_fiber: (Number(item.foods.fiber) || 0) * itemMultiplier,
+          p_serving_description: `${Math.round(item.servings_count * multiplier)} × ${Math.round(item.serving_amount)} ${item.serving_unit}`,
+          p_grams: Math.round(item.serving_amount * item.servings_count * multiplier),
+          p_logged_at: new Date().toISOString(),
+        });
 
-      if (!mealIdForLog) {
-        console.log('[MyMealsDetails] Creating new meal for', mealType, 'on', date);
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({
-            user_id: user.id,
-            date: date,
-            meal_type: mealType,
-          })
-          .select()
-          .single();
-
-        if (mealError) {
-          console.error('[MyMealsDetails] Error creating meal:', mealError);
-          Alert.alert('Error', 'Failed to create meal');
+        if (rpcError) {
+          console.error('[MyMealsDetails] log_food RPC error for item:', item.foods.name, rpcError);
+          Alert.alert('Error', 'Failed to add foods to meal');
           setAdding(false);
           return;
         }
 
-        mealIdForLog = newMeal.id;
-      }
-
-      // Add all items from saved meal to the meal
-      const itemsToInsert = savedMeal.saved_meal_items
-        .filter(item => item.foods) // Skip items with missing food data
-        .map(item => {
-          const itemMultiplier = (item.serving_amount / 100) * item.servings_count * multiplier;
-          return {
-            meal_id: mealIdForLog,
-            food_id: item.food_id,
-            quantity: item.servings_count * multiplier,
-            calories: (Number(item.foods.calories) || 0) * itemMultiplier,
-            protein: (Number(item.foods.protein) || 0) * itemMultiplier,
-            carbs: (Number(item.foods.carbs) || 0) * itemMultiplier,
-            fats: (Number(item.foods.fats) || 0) * itemMultiplier,
-            fiber: (Number(item.foods.fiber) || 0) * itemMultiplier,
-            serving_description: `${Math.round(item.servings_count * multiplier)} × ${Math.round(item.serving_amount)} ${item.serving_unit}`,
-            grams: Math.round(item.serving_amount * item.servings_count * multiplier),
-          };
-        });
-
-      console.log('[MyMealsDetails] Inserting', itemsToInsert.length, 'items into meal_items');
-
-      const { error: itemsError } = await supabase
-        .from('meal_items')
-        .insert(itemsToInsert);
-
-      if (itemsError) {
-        console.error('[MyMealsDetails] Error adding meal items:', itemsError);
-        Alert.alert('Error', 'Failed to add foods to meal');
-        setAdding(false);
-        return;
+        console.log('[MyMealsDetails] log_food RPC success for', item.foods.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
       }
 
       console.log('[MyMealsDetails] ✅ Saved meal added successfully!');

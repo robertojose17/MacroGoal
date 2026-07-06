@@ -143,75 +143,34 @@ export default function AddFoodSimpleScreen() {
         return;
       }
 
-      // NORMAL DIARY MODE: Log to diary
-      // Create or get meal for the date
-      console.log('[AddFoodSimple] Looking for existing meal...');
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', date)
-        .eq('meal_type', mealType)
-        .maybeSingle();
+      // NORMAL DIARY MODE: Log to diary via RPC
+      console.log('[AddFoodSimple] Calling log_food RPC for food:', foodData.name, 'mealType:', mealType, 'date:', date);
+      const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+        p_user_id: user.id,
+        p_date: date,
+        p_meal_type: mealType,
+        p_food_id: foodData.id,
+        p_food_item_id: null,
+        p_quantity: 1,
+        p_calories: finalCalories,
+        p_protein: finalProtein,
+        p_carbs: finalCarbs,
+        p_fats: finalFats,
+        p_fiber: finalFiber,
+        p_serving_description: '1 serving',
+        p_grams: null,
+        p_logged_at: new Date().toISOString(),
+      });
 
-      let mealId = existingMeal?.id;
-
-      if (!mealId) {
-        console.log('[AddFoodSimple] No existing meal found, creating new meal...');
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({
-            user_id: user.id,
-            date: date,
-            meal_type: mealType,
-          })
-          .select()
-          .single();
-
-        if (mealError) {
-          console.error('[AddFoodSimple] Error creating meal:', mealError);
-          Alert.alert('Error', `Failed to create meal: ${mealError.message}`);
-          setSaving(false);
-          return;
-        }
-
-        mealId = newMeal.id;
-        console.log('[AddFoodSimple] New meal created:', mealId);
-      } else {
-        console.log('[AddFoodSimple] Using existing meal:', mealId);
-      }
-
-      // Add meal item
-      const mealItemPayload = {
-        meal_id: mealId,
-        food_id: foodData.id,
-        quantity: 1,
-        calories: finalCalories,
-        protein: finalProtein,
-        carbs: finalCarbs,
-        fats: finalFats,
-        fiber: finalFiber,
-        serving_description: '1 serving',
-        grams: null,
-        logged_at: new Date().toISOString(),
-      };
-
-      console.log('[AddFoodSimple] Creating meal item with payload:', mealItemPayload);
-
-      const { data: mealItemData, error: mealItemError } = await supabase
-        .from('meal_items')
-        .insert(mealItemPayload)
-        .select()
-        .single();
-
-      if (mealItemError) {
-        console.error('[AddFoodSimple] Error creating meal item:', mealItemError);
-        Alert.alert('Error', `Failed to add food to meal: ${mealItemError.message}`);
+      if (rpcError) {
+        console.error('[AddFoodSimple] log_food RPC error:', rpcError);
+        Alert.alert('Error', `Failed to add food to meal: ${rpcError.message}`);
         setSaving(false);
         return;
       }
 
-      console.log('[AddFoodSimple] ✅ Meal item created successfully:', mealItemData);
+      const mealId = rpcData?.meal_id;
+      console.log('[AddFoodSimple] ✅ log_food RPC success, meal_id:', mealId, 'meal_item_id:', rpcData?.meal_item_id);
       console.log('[AddFoodSimple] Quick Add complete! Dismissing modal back to diary...');
 
       // ── Log food usage (fire-and-forget) ─────────────────────────────────
@@ -219,7 +178,7 @@ export default function AddFoodSimpleScreen() {
       logFoodUsage(foodData.id, 'search');
 
       // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
-      const xpSourceId = mealItemData?.id ?? `${mealId}_${foodData.id}_${date}`;
+      const xpSourceId = rpcData?.meal_item_id ?? `${mealId}_${foodData.id}_${date}`;
       console.log('[AddFoodSimple] awarding meal XP, source_id:', xpSourceId);
       tryAwardMealLogged(xpSourceId, mealType, date);
       evaluateDailyGoals(date);

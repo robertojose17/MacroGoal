@@ -180,50 +180,26 @@ export default function AIMealEstimatorScreen() {
       if (foodError) throw foodError;
       console.log('[AIMealEstimator] Food inserted, id:', food.id);
 
-      // 2. Find or create meal
-      console.log('[AIMealEstimator] Looking up meal record for date:', currentDate, 'type:', currentMeal);
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', currentDate)
-        .eq('meal_type', currentMeal)
-        .maybeSingle();
-
-      let mealId = existingMeal?.id;
-      if (!mealId) {
-        console.log('[AIMealEstimator] No existing meal found — creating new meal record');
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({ user_id: user.id, date: currentDate, meal_type: currentMeal })
-          .select()
-          .single();
-        if (mealError) throw mealError;
-        mealId = newMeal.id;
-        console.log('[AIMealEstimator] New meal created, id:', mealId);
-      } else {
-        console.log('[AIMealEstimator] Existing meal found, id:', mealId);
-      }
-
-      // 3. Insert meal item
-      console.log('[AIMealEstimator] Inserting meal_item for meal_id:', mealId, 'food_id:', food.id);
-      const { error: itemError } = await supabase
-        .from('meal_items')
-        .insert({
-          meal_id: mealId,
-          food_id: food.id,
-          quantity: 1,
-          calories: result.calories,
-          protein: result.protein,
-          carbs: result.carbs,
-          fats: result.fats,
-          fiber: 0,
-          serving_description: '1 serving',
-          grams: 1,
-          logged_at: new Date().toISOString(),
-        });
-      if (itemError) throw itemError;
-      console.log('[AIMealEstimator] Meal item inserted successfully');
+      // 2. Log via RPC (atomic upsert meal + insert meal_item)
+      console.log('[AIMealEstimator] Calling log_food RPC for date:', currentDate, 'type:', currentMeal, 'food_id:', food.id);
+      const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+        p_user_id: user.id,
+        p_date: currentDate,
+        p_meal_type: currentMeal,
+        p_food_id: food.id,
+        p_food_item_id: null,
+        p_quantity: 1,
+        p_calories: result.calories,
+        p_protein: result.protein,
+        p_carbs: result.carbs,
+        p_fats: result.fats,
+        p_fiber: 0,
+        p_serving_description: '1 serving',
+        p_grams: 1,
+        p_logged_at: new Date().toISOString(),
+      });
+      if (rpcError) throw rpcError;
+      console.log('[AIMealEstimator] log_food RPC success, meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
 
       Alert.alert(
         'Added!',

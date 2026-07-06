@@ -1168,69 +1168,33 @@ export default function AddFoodScreen() {
       const fats     = per100Fats     * multiplier;
       const fiber    = per100Fiber    * multiplier;
 
-      // NORMAL DIARY MODE: Log to diary
-      // Find or create meal for the date and meal type
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', date)
-        .eq('meal_type', mealType)
-        .maybeSingle();
+      // NORMAL DIARY MODE: Log to diary via RPC
+      console.log('[AddFood] Calling log_food RPC for recent food:', food.name, 'serving:', servingDescription);
+      const { data: rpcDataRecent, error: rpcErrorRecent } = await supabase.rpc('log_food', {
+        p_user_id: user.id,
+        p_date: date,
+        p_meal_type: mealType,
+        p_food_id: foodId ?? null,
+        p_food_item_id: food.food_item_id ?? null,
+        p_quantity: multiplier,
+        p_calories: safeNum(calories),
+        p_protein: safeNum(protein),
+        p_carbs: safeNum(carbs),
+        p_fats: safeNum(fats),
+        p_fiber: safeNum(fiber),
+        p_serving_description: servingDescription,
+        p_grams: gramsToAdd,
+        p_logged_at: new Date().toISOString(),
+      });
 
-      let mealId = existingMeal?.id;
-
-      if (!mealId) {
-        console.log('[AddFood] Creating new meal for', mealType, 'on', date);
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({
-            user_id: user.id,
-            date: date,
-            meal_type: mealType,
-          })
-          .select()
-          .single();
-
-        if (mealError) {
-          console.error('[AddFood] Error creating meal:', mealError);
-          Alert.alert('Error', 'Failed to create meal');
-          return;
-        }
-
-        mealId = newMeal.id;
-        console.log('[AddFood] Created new meal:', mealId);
-      } else {
-        console.log('[AddFood] Using existing meal:', mealId);
-      }
-
-      console.log('[AddFood] Inserting NEW meal item with serving:', servingDescription);
-
-      // ALWAYS INSERT a new meal item (never update existing ones)
-      const { error: mealItemError } = await supabase
-        .from('meal_items')
-        .insert({
-          meal_id: mealId,
-          ...(foodId ? { food_id: foodId } : {}),
-          ...(food.food_item_id ? { food_item_id: food.food_item_id } : {}),
-          quantity: multiplier,
-          calories: safeNum(calories),
-          protein: safeNum(protein),
-          carbs: safeNum(carbs),
-          fats: safeNum(fats),
-          fiber: safeNum(fiber),
-          serving_description: servingDescription,
-          grams: gramsToAdd,
-          logged_at: new Date().toISOString(),
-        });
-
-      if (mealItemError) {
-        console.error('[AddFood] Error creating meal item:', mealItemError);
+      if (rpcErrorRecent) {
+        console.error('[AddFood] log_food RPC error for recent food:', rpcErrorRecent);
         Alert.alert('Error', 'Failed to add food to meal');
         return;
       }
 
-      console.log('[AddFood] ✅ Recent food added successfully!');
+      const mealId = rpcDataRecent?.meal_id;
+      console.log('[AddFood] ✅ Recent food added successfully! meal_id:', mealId, 'meal_item_id:', rpcDataRecent?.meal_item_id);
       console.log('[AddFood] Triggering success banner');
 
       // ── Log food usage (fire-and-forget) — use catalog food_item_id, not foods.id ──
@@ -1501,62 +1465,33 @@ export default function AddFoodScreen() {
         foodId = newFood.id;
       }
 
-      // NORMAL DIARY MODE: Log to diary
-      // Find or create meal
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', date)
-        .eq('meal_type', mealType)
-        .maybeSingle();
+      // NORMAL DIARY MODE: Log to diary via RPC
+      console.log('[AddFood] Calling log_food RPC for favorite:', favorite.food_name);
+      const { data: rpcDataFav, error: rpcErrorFav } = await supabase.rpc('log_food', {
+        p_user_id: user.id,
+        p_date: date,
+        p_meal_type: mealType,
+        p_food_id: foodId,
+        p_food_item_id: null,
+        p_quantity: multiplier,
+        p_calories: safeNum(calories),
+        p_protein: safeNum(protein),
+        p_carbs: safeNum(carbs),
+        p_fats: safeNum(fat),
+        p_fiber: safeNum(fiber),
+        p_serving_description: favorite.serving_size || formatServing(favorite.default_grams, 'g'),
+        p_grams: favorite.default_grams,
+        p_logged_at: new Date().toISOString(),
+      });
 
-      let mealId = existingMeal?.id;
-
-      if (!mealId) {
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({
-            user_id: user.id,
-            date: date,
-            meal_type: mealType,
-          })
-          .select()
-          .single();
-
-        if (mealError) {
-          console.error('[AddFood] Error creating meal:', mealError);
-          Alert.alert('Error', 'Failed to create meal');
-          return;
-        }
-
-        mealId = newMeal.id;
-      }
-
-      // Add meal item
-      const { error: mealItemError } = await supabase
-        .from('meal_items')
-        .insert({
-          meal_id: mealId,
-          food_id: foodId,
-          quantity: multiplier,
-          calories: safeNum(calories),
-          protein: safeNum(protein),
-          carbs: safeNum(carbs),
-          fats: safeNum(fat),
-          fiber: safeNum(fiber),
-          serving_description: favorite.serving_size || formatServing(favorite.default_grams, 'g'),
-          grams: favorite.default_grams,
-          logged_at: new Date().toISOString(),
-        });
-
-      if (mealItemError) {
-        console.error('[AddFood] Error adding meal item:', mealItemError);
+      if (rpcErrorFav) {
+        console.error('[AddFood] log_food RPC error for favorite:', rpcErrorFav);
         Alert.alert('Error', 'Failed to add food to meal');
         return;
       }
 
-      console.log('[AddFood] ✅ Favorite added to meal successfully');
+      const mealId = rpcDataFav?.meal_id;
+      console.log('[AddFood] ✅ Favorite added to meal successfully, meal_id:', mealId, 'meal_item_id:', rpcDataFav?.meal_item_id);
       console.log('[AddFood] Triggering success banner');
 
       // ── Log food usage (fire-and-forget) — resolve catalog food_item_id first ──
@@ -1911,77 +1846,40 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] Loaded', mealItems.length, 'items from saved meal');
 
-      // Find or create meal for the date and meal type
-      const { data: existingMeal } = await supabase
-        .from('meals')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', date)
-        .eq('meal_type', mealType)
-        .maybeSingle();
+      // Add each food item from the saved meal via RPC
+      console.log('[AddFood] Logging', mealItems.length, 'saved meal items via log_food RPC');
 
-      let targetMealId = existingMeal?.id;
+      for (const item of mealItems as any[]) {
+        const food = item.foods;
+        const multiplier = (item.serving_amount / 100) * item.servings_count;
 
-      if (!targetMealId) {
-        console.log('[AddFood] Creating new meal for', mealType, 'on', date);
-        const { data: newMeal, error: mealError } = await supabase
-          .from('meals')
-          .insert({
-            user_id: user.id,
-            date: date,
-            meal_type: mealType,
-          })
-          .select()
-          .single();
+        console.log('[AddFood] Calling log_food RPC for saved meal item:', food.name);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+          p_user_id: user.id,
+          p_date: date,
+          p_meal_type: mealType,
+          p_food_id: item.food_id,
+          p_food_item_id: null,
+          p_quantity: multiplier,
+          p_calories: food.calories * multiplier,
+          p_protein: food.protein * multiplier,
+          p_carbs: food.carbs * multiplier,
+          p_fats: food.fats * multiplier,
+          p_fiber: food.fiber * multiplier,
+          p_serving_description: `${item.serving_amount} ${item.serving_unit}`,
+          p_grams: item.serving_amount,
+          p_logged_at: new Date().toISOString(),
+        });
 
-        if (mealError) {
-          console.error('[AddFood] Error creating meal:', mealError);
-          Alert.alert('Error', 'Failed to create meal');
+        if (rpcError) {
+          console.error('[AddFood] log_food RPC error for saved meal item:', food.name, rpcError);
+          Alert.alert('Error', 'Failed to add meal items');
           return;
         }
 
-        targetMealId = newMeal.id;
-        console.log('[AddFood] Created new meal:', targetMealId);
-      } else {
-        console.log('[AddFood] Using existing meal:', targetMealId);
-      }
+        console.log('[AddFood] log_food RPC success for', food.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
 
-      // Add each food item from the saved meal
-      const itemsToInsert = mealItems.map((item: any) => {
-        const food = item.foods;
-        const multiplier = (item.serving_amount / 100) * item.servings_count;
-        
-        return {
-          meal_id: targetMealId,
-          food_id: item.food_id,
-          quantity: multiplier,
-          calories: food.calories * multiplier,
-          protein: food.protein * multiplier,
-          carbs: food.carbs * multiplier,
-          fats: food.fats * multiplier,
-          fiber: food.fiber * multiplier,
-          serving_description: `${item.serving_amount} ${item.serving_unit}`,
-          grams: item.serving_amount,
-          logged_at: new Date().toISOString(),
-        };
-      });
-
-      console.log('[AddFood] Inserting', itemsToInsert.length, 'meal items');
-
-      const { error: insertError } = await supabase
-        .from('meal_items')
-        .insert(itemsToInsert);
-
-      if (insertError) {
-        console.error('[AddFood] Error inserting meal items:', insertError);
-        Alert.alert('Error', 'Failed to add meal items');
-        return;
-      }
-
-      console.log('[AddFood] ✅ Saved meal added successfully!');
-
-      // ── Log food usage for each item (fire-and-forget) — resolve catalog IDs ──
-      for (const item of itemsToInsert as any[]) {
+        // ── Log food usage (fire-and-forget) — resolve catalog ID ──
         const { data: miRow } = await supabase
           .from('meal_items')
           .select('food_item_id')
@@ -1997,6 +1895,8 @@ export default function AddFoodScreen() {
           console.log('[AddFood] Skipping logFoodUsage for saved meal item — no catalog food_item_id for food_id:', item.food_id);
         }
       }
+
+      console.log('[AddFood] ✅ Saved meal added successfully!');
 
       // Notify challenge hook that a meal was logged
       emitMealLogged();
