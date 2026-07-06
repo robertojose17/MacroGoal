@@ -323,6 +323,10 @@ export default function HomeScreen() {
               fiber,
               serving_size,
               macros_per
+            ),
+            foods!meal_items_food_id_fkey (
+              name,
+              brand
             )
           )
         `)
@@ -346,18 +350,20 @@ export default function HomeScreen() {
           mealsData.forEach((meal: any) => {
             if (meal.meal_items) {
               meal.meal_items.forEach((item: any) => {
+                const hasStoredMacros = item.calories != null && item.calories > 0;
                 const fi = item.food_items;
                 const grams = item.grams ?? 0;
-                const rawMacros = fi ? calcMacros(fi, grams) : null;
-                const macros = rawMacros
-                  ? { calories: rawMacros.calories, protein: rawMacros.protein, carbs: rawMacros.carbs, fats: rawMacros.fat, fiber: rawMacros.fiber }
-                  : { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 };
-                console.log('[Home iOS] calcMacros for item', item.id, ':', macros);
+                const macros = hasStoredMacros
+                  ? { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 }
+                  : fi
+                    ? (() => { const r = calcMacros(fi, grams); return { calories: r.calories, protein: r.protein, carbs: r.carbs, fats: r.fat, fiber: r.fiber }; })()
+                    : { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+                console.log('[Home iOS] macros for item', item.id, '(stored:', hasStoredMacros, '):', macros);
                 const enriched = {
                   ...item,
                   ...macros,
-                  name: item.food_name ?? item.food_items?.name ?? (item as any).foods?.name ?? 'Unknown Food',
-                  brand: item.food_brand ?? item.food_items?.brand ?? undefined,
+                  name: item.food_name ?? item.food_items?.name ?? item.foods?.name ?? 'Unknown Food',
+                  brand: item.food_brand ?? item.food_items?.brand ?? item.foods?.brand ?? undefined,
                   meal_type: meal.meal_type,
                   logged_at: item.logged_at ?? null,
                 };
