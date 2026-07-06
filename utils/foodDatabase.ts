@@ -213,17 +213,19 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           id,
           name,
           brand,
+          barcode,
           serving_size,
           serving_unit,
-          serving_quantity,
           serving_description,
           serving_count,
           calories,
           protein,
           carbs,
           fat,
+          fiber,
           nutriments,
-          off_data
+          off_data,
+          source
         ),
         meals!inner (
           user_id
@@ -297,141 +299,89 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         continue;
       }
 
-      // Build base Food object from the foods catalog row (may be null for barcode-only items)
-      // The foods table stores per-100g values (serving_amount=100, serving_unit='g'),
-      // so we use the actual logged serving_description and grams from the meal_item instead.
-      const loggedGrams = item.grams ?? item.foods?.serving_amount ?? 100;
-      const loggedServingDesc = item.serving_description || null;
+      // ── Phase 3: food_items as single source of truth ──────────────────────
+      const loggedGrams = item.grams ?? 100;
+      const servingSize = Number(fi?.serving_size) || 0;
 
-      // Use the logged serving_description as the display unit (e.g. "1 slice", "2 pieces", "28 g").
-      // Fall back to a plain gram string if no description was stored.
-      let displayServingUnit: string;
-      if (loggedServingDesc && loggedServingDesc.trim().length > 0) {
-        displayServingUnit = loggedServingDesc;
+      let calories: number, protein: number, carbs: number, fats: number, fiber: number;
+
+      if (fi && servingSize > 0) {
+        // SOURCE OF TRUTH: calculate from food_items using logged grams
+        const multiplier = loggedGrams / servingSize;
+        calories = Math.round((fi.calories ?? 0) * multiplier);
+        protein  = Math.round((fi.protein  ?? 0) * multiplier * 10) / 10;
+        carbs    = Math.round((fi.carbs    ?? 0) * multiplier * 10) / 10;
+        fats     = Math.round((fi.fat      ?? 0) * multiplier * 10) / 10; // fat not fats
+        fiber    = Math.round((fi.fiber    ?? 0) * multiplier * 10) / 10;
+        console.log(
+          `[FoodDB] ✅ food_items path "${fi.name ?? 'unknown'}": ` +
+          `grams=${loggedGrams}, serving_size=${servingSize}, multiplier=${multiplier.toFixed(3)}, ` +
+          `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}, fiber=${fiber}`
+        );
       } else {
-        displayServingUnit = `${Math.round(loggedGrams)}g`;
+        // FALLBACK: use stored values from meal_items (legacy rows without food_item_id)
+        calories = item.calories ?? 0;
+        protein  = item.protein  ?? 0;
+        carbs    = item.carbs    ?? 0;
+        fats     = item.fats     ?? 0;
+        fiber    = (item as any).fiber ?? 0;
+        console.log(
+          `[FoodDB] ⚠️ fallback path (meal_items) for item id=${item.id}: ` +
+          `fi=${fi ? 'present but serving_size=0' : 'null'}, ` +
+          `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
+        );
       }
 
-      // Scale macros from per-100g catalog values to the actual logged grams.
-      const multiplier = loggedGrams / 100;
-      const scaledCalories = Math.round((item.foods?.calories ?? 0) * multiplier);
-      const scaledProtein = Math.round((item.foods?.protein ?? 0) * multiplier * 10) / 10;
-      const scaledCarbs = Math.round((item.foods?.carbs ?? 0) * multiplier * 10) / 10;
-      const scaledFats = Math.round((item.foods?.fats ?? 0) * multiplier * 10) / 10;
-      const scaledFiber = Math.round((item.foods?.fiber ?? 0) * multiplier * 10) / 10;
+      // ── Serving display ────────────────────────────────────────────────────
+      let displayServingUnit: string;
+      let servingGramsForDisplay: number = loggedGrams;
 
-      console.log(
-        `[FoodDB] foods-table item "${item.foods?.name ?? 'unknown'}": ` +
-        `grams=${loggedGrams}, serving="${displayServingUnit}", ` +
-        `cal=${scaledCalories}, protein=${scaledProtein}, carbs=${scaledCarbs}, fat=${scaledFats}`
-      );
+      if (fi?.serving_description) {
+        // New path: serving_description is the human-readable label (e.g. "cookie")
+        const servingCount = Number(fi.serving_count) || 1;
+        const gramsPerUnit = servingSize > 0 ? servingSize / servingCount : loggedGrams;
+        servingGramsForDisplay = gramsPerUnit;
+        const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
+        displayServingUnit = `${countLabel}${fi.serving_description} (${servingSize > 0 ? servingSize : Math.round(loggedGrams)} g)`;
+        console.log(`[FoodDB] serving_description="${fi.serving_description}" count=${servingCount} gramsPerUnit=${gramsPerUnit} for "${fi.name}"`);
+      } else if (fi?.off_data) {
+        // Legacy barcode path: parse off_data with regex
+        const offProduct = fi.off_data || {
+          serving_size: fi.serving_size ? String(fi.serving_size) : undefined,
+        };
+        const servingInfo = extractServingSize(offProduct);
+        servingGramsForDisplay = servingInfo.grams;
+        displayServingUnit = servingInfo.displayText;
+      } else {
+        const loggedServingDesc = item.serving_description || null;
+        if (loggedServingDesc && loggedServingDesc.trim().length > 0) {
+          displayServingUnit = loggedServingDesc;
+        } else {
+          displayServingUnit = `${Math.round(loggedGrams)}g`;
+        }
+      }
 
-      let food: Food = {
-        id: item.foods?.id ?? fi?.id ?? '',
-        name: item.foods?.name ?? fi?.name ?? '',
-        brand: item.foods?.brand ?? fi?.brand ?? undefined,
-        barcode: item.foods?.barcode ?? undefined,
-        serving_amount: loggedGrams,
+      // ── Name & brand: fi first, then foods fallback ────────────────────────
+      const foodName  = fi?.name  ?? item.foods?.name  ?? 'Unknown Food';
+      const foodBrand = fi?.brand ?? item.foods?.brand ?? undefined;
+
+      const food: Food = {
+        id: fi?.id ?? item.foods?.id ?? '',
+        name: foodName,
+        brand: foodBrand,
+        barcode: fi?.barcode ?? item.foods?.barcode ?? undefined,
+        serving_amount: servingGramsForDisplay,
         serving_unit: displayServingUnit,
-        calories: scaledCalories,
-        protein: scaledProtein,
-        carbs: scaledCarbs,
-        fats: scaledFats,
-        fiber: scaledFiber,
+        calories,
+        protein,
+        carbs,
+        fats,
+        fiber,
         user_created: item.foods?.user_created || false,
         is_favorite: false,
-        // Store the last used serving description for display only
-        last_serving_description: loggedServingDesc || undefined,
-        // Carry through the catalog ID so logFoodUsage gets the right table's ID
+        last_serving_description: item.serving_description || undefined,
         food_item_id: (item as any).food_item_id ?? undefined,
       };
-
-      if (hasBarcode) {
-        // food_items (barcode scan): use per-serving values from nutriments when available
-        const nutriments = fi.nutriments || {};
-        const servingGrams = Number(fi.serving_size) || 100;
-
-        const calPerServing =
-          nutriments['energy-kcal_serving'] != null
-            ? nutriments['energy-kcal_serving']
-            : nutriments['energy-kcal_100g'] != null
-            ? (nutriments['energy-kcal_100g'] * servingGrams) / 100
-            : fi.calories ?? 0;
-
-        const proteinPerServing =
-          nutriments['proteins_serving'] != null
-            ? nutriments['proteins_serving']
-            : nutriments['proteins_100g'] != null
-            ? (nutriments['proteins_100g'] * servingGrams) / 100
-            : fi.protein ?? 0;
-
-        const carbsPerServing =
-          nutriments['carbohydrates_serving'] != null
-            ? nutriments['carbohydrates_serving']
-            : nutriments['carbohydrates_100g'] != null
-            ? (nutriments['carbohydrates_100g'] * servingGrams) / 100
-            : fi.carbs ?? 0;
-
-        const fatPerServing =
-          nutriments['fat_serving'] != null
-            ? nutriments['fat_serving']
-            : nutriments['fat_100g'] != null
-            ? (nutriments['fat_100g'] * servingGrams) / 100
-            : fi.fat ?? 0;
-
-        const fiberPerServing =
-          nutriments['fiber_serving'] != null
-            ? nutriments['fiber_serving']
-            : nutriments['fiber_100g'] != null
-            ? (nutriments['fiber_100g'] * servingGrams) / 100
-            : 0;
-
-        console.log(
-          `[FoodDB] Barcode food "${fi.name}": serving=${servingGrams}g, ` +
-          `cal=${Math.round(calPerServing)}, protein=${Math.round(proteinPerServing * 10) / 10}, ` +
-          `carbs=${Math.round(carbsPerServing * 10) / 10}, fat=${Math.round(fatPerServing * 10) / 10}`
-        );
-
-        // Use serving_description column directly when available (no regex needed).
-        // Fall back to extractServingSize from off_data for older rows without it.
-        let servingGramsForDisplay: number;
-        let servingDisplayText: string;
-
-        if (fi.serving_description) {
-          // New path: serving_description is the human-readable label (e.g. "cookie")
-          // serving_count tells us how many units make up serving_size grams.
-          const servingCount = Number(fi.serving_count) || 1;
-          const gramsPerUnit = servingGrams / servingCount;
-          servingGramsForDisplay = gramsPerUnit;
-          const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-          servingDisplayText = `${countLabel}${fi.serving_description} (${servingGrams} g)`;
-          console.log(`[FoodDB] Using serving_description="${fi.serving_description}" serving_count=${servingCount} gramsPerUnit=${gramsPerUnit} for "${fi.name}"`);
-        } else {
-          // Legacy path: parse off_data with regex
-          const offProduct = fi.off_data || {
-            serving_size: fi.serving_size ? String(fi.serving_size) : undefined,
-            serving_quantity: fi.serving_quantity ? String(fi.serving_quantity) : undefined,
-          };
-          const servingInfo = extractServingSize(offProduct);
-          servingGramsForDisplay = servingInfo.grams;
-          servingDisplayText = servingInfo.displayText;
-        }
-
-        food = {
-          ...food,
-          id: fi.id,
-          name: fi.name,
-          brand: fi.brand ?? undefined,
-          serving_amount: servingGramsForDisplay,
-          serving_unit: servingDisplayText,
-          calories: Math.round(calPerServing),
-          protein: Math.round(proteinPerServing * 10) / 10,
-          carbs: Math.round(carbsPerServing * 10) / 10,
-          fats: Math.round(fatPerServing * 10) / 10,
-          fiber: Math.round(fiberPerServing * 10) / 10,
-        };
-      }
-      // else: foods table (per-100g catalog / user-created) — macros already scaled above
 
       uniqueFoods.push(food);
 
