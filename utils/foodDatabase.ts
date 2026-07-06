@@ -225,7 +225,8 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           fiber,
           nutriments,
           off_data,
-          source
+          source,
+          macros_per
         ),
         meals!inner (
           user_id
@@ -306,17 +307,20 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       let calories: number, protein: number, carbs: number, fats: number, fiber: number;
 
       if (fi && servingSize > 0) {
-        // SOURCE OF TRUTH: calculate from food_items using logged grams
-        const multiplier = loggedGrams / servingSize;
+        // macros_per='100g' → fi.calories is per-100g, divide by 100
+        // macros_per='serving' (or unset) → fi.calories is per-serving_size, divide by serving_size
+        const divisor = (fi.macros_per === '100g') ? 100 : servingSize;
+        const multiplier = loggedGrams / divisor;
         calories = Math.round((fi.calories ?? 0) * multiplier);
         protein  = Math.round((fi.protein  ?? 0) * multiplier * 10) / 10;
         carbs    = Math.round((fi.carbs    ?? 0) * multiplier * 10) / 10;
-        fats     = Math.round((fi.fat      ?? 0) * multiplier * 10) / 10; // fat not fats
+        fats     = Math.round((fi.fat      ?? 0) * multiplier * 10) / 10;
         fiber    = Math.round((fi.fiber    ?? 0) * multiplier * 10) / 10;
         console.log(
           `[FoodDB] ✅ food_items path "${fi.name ?? 'unknown'}": ` +
-          `grams=${loggedGrams}, serving_size=${servingSize}, multiplier=${multiplier.toFixed(3)}, ` +
-          `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}, fiber=${fiber}`
+          `macros_per=${fi.macros_per ?? 'serving'}, grams=${loggedGrams}, ` +
+          `divisor=${divisor}, multiplier=${multiplier.toFixed(3)}, ` +
+          `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
         );
       } else {
         // FALLBACK: use stored values from meal_items (legacy rows without food_item_id)
