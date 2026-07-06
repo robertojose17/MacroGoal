@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, TABLE_SAVED_MEALS, TABLE_SAVED_MEAL_ITEMS } from '@/lib/supabase/client';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
+import { calcMacros } from '@/utils/macros';
 import { loadDraft, clearDraft } from '@/utils/myMealsDraft';
 
 interface SavedMealItem {
@@ -35,17 +36,17 @@ interface SavedMealItem {
 
 function calcItemMacros(item: SavedMealItem, multiplier: number) {
   const fi = item.food_items;
-  if (!fi || !fi.serving_size || fi.serving_size === 0) {
+  const grams = item.serving_amount * item.servings_count * multiplier;
+  if (!fi) {
     return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
   }
-  const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
-  const ratio = (item.serving_amount * item.servings_count * multiplier) / divisor;
+  const result = calcMacros(fi, grams);
   return {
-    calories: fi.calories * ratio,
-    protein: fi.protein * ratio,
-    carbs: fi.carbs * ratio,
-    fats: fi.fat * ratio,
-    fiber: (fi.fiber ?? 0) * ratio,
+    calories: result.calories,
+    protein: result.protein,
+    carbs: result.carbs,
+    fats: result.fat,
+    fiber: result.fiber,
   };
 }
 

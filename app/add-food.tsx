@@ -24,6 +24,7 @@ import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 import { formatServing } from '@/utils/servingFormat';
 import { hybridSearch } from '@/utils/foodSearchHybrid';
 import { logFoodUsage } from '@/utils/logFoodUsage';
+import { calcMacros } from '@/utils/macros';
 
 // Source tag for progressive UI
 type ResultSource = 'local' | 'supabase' | 'off';
@@ -1234,18 +1235,34 @@ export default function AddFoodScreen() {
     console.log('[AddFood] CRITICAL: Passing context to Food Details');
 
     try {
+      // Build per-100g nutriments for the OFF product using calcMacros when food_items JOIN is available
+      const favFoodItem = (favorite as any).food_items;
+      const grams = favorite.default_grams;
+      let cal100: number, prot100: number, carb100: number, fat100: number, fib100: number;
+      if (favFoodItem && favFoodItem.serving_size > 0) {
+        const m = calcMacros(favFoodItem, 100);
+        cal100 = m.calories; prot100 = m.protein; carb100 = m.carbs; fat100 = m.fat; fib100 = m.fiber;
+      } else {
+        cal100 = favorite.per100_calories;
+        prot100 = favorite.per100_protein;
+        carb100 = favorite.per100_carbs;
+        fat100 = favorite.per100_fat;
+        fib100 = favorite.per100_fiber;
+      }
+      console.log('[AddFood] handleOpenFavoriteDetails: grams=', grams, 'cal100=', cal100);
+
       // Convert favorite to OpenFoodFacts format for the food-details screen
       const offProduct = {
         code: favorite.food_code || '',
         product_name: favorite.food_name,
         brands: favorite.brand || '',
-        serving_size: favorite.serving_size || `${Math.round(favorite.default_grams)}g`,
+        serving_size: favorite.serving_size || `${Math.round(grams)}g`,
         nutriments: {
-          'energy-kcal_100g': favorite.per100_calories,
-          'proteins_100g': favorite.per100_protein,
-          'carbohydrates_100g': favorite.per100_carbs,
-          'fat_100g': favorite.per100_fat,
-          'fiber_100g': favorite.per100_fiber,
+          'energy-kcal_100g': cal100,
+          'proteins_100g': prot100,
+          'carbohydrates_100g': carb100,
+          'fat_100g': fat100,
+          'fiber_100g': fib100,
           'sugars_100g': 0,
         },
       };
@@ -1260,6 +1277,7 @@ export default function AddFoodScreen() {
           date: date,
           context: context || '',
           returnTo: returnTo || '',
+          food_item_id: (favorite as any).food_item_id || '',
         },
       });
     } catch (error) {
@@ -1283,13 +1301,22 @@ export default function AddFoodScreen() {
     }
 
     try {
-      // Calculate nutrition for default serving
-      const multiplier = favorite.default_grams / 100;
-      const calories = favorite.per100_calories * multiplier;
-      const protein = favorite.per100_protein * multiplier;
-      const carbs = favorite.per100_carbs * multiplier;
-      const fat = favorite.per100_fat * multiplier;
-      const fiber = favorite.per100_fiber * multiplier;
+      // Calculate nutrition for default serving using calcMacros when food_items JOIN is available
+      const favFoodItem = (favorite as any).food_items;
+      const grams = favorite.default_grams;
+      let calories: number, protein: number, carbs: number, fat: number, fiber: number;
+      if (favFoodItem && favFoodItem.serving_size > 0) {
+        const m = calcMacros(favFoodItem, grams);
+        calories = m.calories; protein = m.protein; carbs = m.carbs; fat = m.fat; fiber = m.fiber;
+      } else {
+        const multiplier = grams / 100;
+        calories = favorite.per100_calories * multiplier;
+        protein = favorite.per100_protein * multiplier;
+        carbs = favorite.per100_carbs * multiplier;
+        fat = favorite.per100_fat * multiplier;
+        fiber = favorite.per100_fiber * multiplier;
+      }
+      console.log('[AddFood] handleQuickAddFavorite: grams=', grams, 'calories=', calories);
 
       // Check if food exists in database
       let foodId: string | null = null;
@@ -1374,21 +1401,34 @@ export default function AddFoodScreen() {
     // MEAL PLAN MODE: add directly to plan
     if (mode === 'meal-plan' && planId) {
       try {
-        const multiplier = favorite.default_grams / 100;
-        console.log('[AddFood] Adding favorite to meal plan:', planId, favorite.food_name);
+        const favFoodItemPlan = (favorite as any).food_items;
+        const gramsPlan = favorite.default_grams;
+        let calPlan: number, protPlan: number, carbPlan: number, fatPlan: number, fibPlan: number;
+        if (favFoodItemPlan && favFoodItemPlan.serving_size > 0) {
+          const m = calcMacros(favFoodItemPlan, gramsPlan);
+          calPlan = m.calories; protPlan = m.protein; carbPlan = m.carbs; fatPlan = m.fat; fibPlan = m.fiber;
+        } else {
+          const multiplier = gramsPlan / 100;
+          calPlan = favorite.per100_calories * multiplier;
+          protPlan = favorite.per100_protein * multiplier;
+          carbPlan = favorite.per100_carbs * multiplier;
+          fatPlan = favorite.per100_fat * multiplier;
+          fibPlan = favorite.per100_fiber * multiplier;
+        }
+        console.log('[AddFood] Adding favorite to meal plan:', planId, favorite.food_name, 'grams=', gramsPlan);
         await addMealPlanItem(planId, {
           date,
           meal_type: mealType,
           food_name: favorite.food_name,
           brand: favorite.brand || undefined,
-          quantity: multiplier,
-          grams: favorite.default_grams,
-          serving_description: favorite.serving_size || formatServing(favorite.default_grams, 'g'),
-          calories: safeNum(favorite.per100_calories * multiplier),
-          protein: safeNum(favorite.per100_protein * multiplier),
-          carbs: safeNum(favorite.per100_carbs * multiplier),
-          fats: safeNum(favorite.per100_fat * multiplier),
-          fiber: safeNum(favorite.per100_fiber * multiplier),
+          quantity: gramsPlan / 100,
+          grams: gramsPlan,
+          serving_description: favorite.serving_size || formatServing(gramsPlan, 'g'),
+          calories: safeNum(calPlan),
+          protein: safeNum(protPlan),
+          carbs: safeNum(carbPlan),
+          fats: safeNum(fatPlan),
+          fiber: safeNum(fibPlan),
         });
         showSuccessBanner('Added to plan');
       } catch (err) {
@@ -1412,13 +1452,22 @@ export default function AddFoodScreen() {
         return;
       }
 
-      // Calculate nutrition for default serving
-      const multiplier = favorite.default_grams / 100;
-      const calories = favorite.per100_calories * multiplier;
-      const protein = favorite.per100_protein * multiplier;
-      const carbs = favorite.per100_carbs * multiplier;
-      const fat = favorite.per100_fat * multiplier;
-      const fiber = favorite.per100_fiber * multiplier;
+      // Calculate nutrition for default serving using calcMacros when food_items JOIN is available
+      const favFoodItemDiary = (favorite as any).food_items;
+      const gramsDiary = favorite.default_grams;
+      let calories: number, protein: number, carbs: number, fat: number, fiber: number;
+      if (favFoodItemDiary && favFoodItemDiary.serving_size > 0) {
+        const m = calcMacros(favFoodItemDiary, gramsDiary);
+        calories = m.calories; protein = m.protein; carbs = m.carbs; fat = m.fat; fiber = m.fiber;
+      } else {
+        const multiplier = gramsDiary / 100;
+        calories = favorite.per100_calories * multiplier;
+        protein = favorite.per100_protein * multiplier;
+        carbs = favorite.per100_carbs * multiplier;
+        fat = favorite.per100_fat * multiplier;
+        fiber = favorite.per100_fiber * multiplier;
+      }
+      console.log('[AddFood] handleAddFavorite diary: grams=', gramsDiary, 'calories=', calories);
 
       // Check if food exists in database
       let foodId: string | null = null;
@@ -1471,15 +1520,15 @@ export default function AddFoodScreen() {
         p_date: date,
         p_meal_type: mealType,
         p_food_id: foodId,
-        p_food_item_id: null,
-        p_quantity: multiplier,
+        p_food_item_id: (favorite as any).food_item_id ?? null,
+        p_quantity: gramsDiary / 100,
         p_calories: safeNum(calories),
         p_protein: safeNum(protein),
         p_carbs: safeNum(carbs),
         p_fats: safeNum(fat),
         p_fiber: safeNum(fiber),
-        p_serving_description: favorite.serving_size || formatServing(favorite.default_grams, 'g'),
-        p_grams: favorite.default_grams,
+        p_serving_description: favorite.serving_size || formatServing(gramsDiary, 'g'),
+        p_grams: gramsDiary,
         p_logged_at: new Date().toISOString(),
       });
 

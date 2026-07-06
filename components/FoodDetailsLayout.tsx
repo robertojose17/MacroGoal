@@ -1,5 +1,6 @@
 
 import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractNutritionPerServing } from '@/utils/openFoodFacts';
+import { calcMacros } from '@/utils/macros';
 import { formatServing } from '@/utils/servingFormat';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase/client';
@@ -288,6 +289,8 @@ export default function FoodDetailsLayout({
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
+  // Reference for serving_size and macros_per so calculateMacros can use calcMacros correctly
+  const [foodItemRef, setFoodItemRef] = useState<{ serving_size: number; macros_per: string | null } | null>(null);
 
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
@@ -316,6 +319,7 @@ export default function FoodDetailsLayout({
         fats: safeNum(nutrition.fat),
         fiber: safeNum(nutrition.fiber),
       });
+      setFoodItemRef({ serving_size: 100, macros_per: '100g' });
 
       const servingInfo = extractServingSize(parsedProduct);
       // For discrete units like "1 egg", "2 slices", extract the leading number as the initial amount.
@@ -477,7 +481,7 @@ export default function FoodDetailsLayout({
         console.log('[FoodDetails] loadEditItem: fetching food_items for id=', mealItem.food_item_id);
         const { data: foodItem } = await supabase
           .from('food_items')
-          .select('off_data, nutriments, serving_size, serving_quantity, serving_unit, serving_description, serving_count, name, brand')
+          .select('off_data, nutriments, serving_size, serving_quantity, serving_unit, serving_description, serving_count, name, brand, macros_per')
           .eq('id', mealItem.food_item_id)
           .single();
 
@@ -543,6 +547,17 @@ export default function FoodDetailsLayout({
         fats: per100Fats,
         fiber: per100Fiber,
       });
+
+      // Set foodItemRef so calculateMacros can use calcMacros with correct serving_size/macros_per
+      if (mealItem.food_item_id && (foodItem as any)?.serving_size) {
+        setFoodItemRef({
+          serving_size: safeNum((foodItem as any).serving_size, 100),
+          macros_per: (foodItem as any).macros_per ?? null,
+        });
+      } else {
+        // Legacy foods table path — macros are always per-100g
+        setFoodItemRef({ serving_size: 100, macros_per: '100g' });
+      }
 
       // ── Source of truth: the grams saved in DB ──────────────────────────
       // mealItem.grams is what the user actually ate. Reconstruct state from it.
@@ -769,17 +784,26 @@ export default function FoodDetailsLayout({
   };
 
   const calculateMacros = () => {
-    if (!per100Macros) {
+    if (!per100Macros || !foodItemRef) {
       return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
     }
     const totalGrams = getTotalGrams();
-    const multiplier = totalGrams / 100;
+    const fi = {
+      calories: per100Macros.calories,
+      protein: per100Macros.protein,
+      carbs: per100Macros.carbs,
+      fat: per100Macros.fats,
+      fiber: per100Macros.fiber,
+      serving_size: foodItemRef.serving_size,
+      macros_per: foodItemRef.macros_per,
+    };
+    const result = calcMacros(fi, totalGrams);
     return {
-      calories: Math.round(per100Macros.calories * multiplier),
-      protein: Math.round(per100Macros.protein * multiplier),
-      carbs: Math.round(per100Macros.carbs * multiplier),
-      fats: Math.round(per100Macros.fats * multiplier),
-      fiber: Math.round(per100Macros.fiber * multiplier),
+      calories: Math.round(result.calories),
+      protein: Math.round(result.protein),
+      carbs: Math.round(result.carbs),
+      fats: Math.round(result.fat),
+      fiber: Math.round(result.fiber),
     };
   };
 
