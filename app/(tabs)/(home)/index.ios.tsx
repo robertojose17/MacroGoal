@@ -28,6 +28,7 @@ import { formatServing } from '@/utils/servingFormat';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { usePremium } from '@/hooks/usePremium';
 import { useWidget } from '@/contexts/WidgetContext';
+import { calcMacros } from '@/utils/macros';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -89,30 +90,6 @@ const getServingDisplayText = (item: FoodItem): string => {
   const quantity = item.quantity || 1;
   return formatServing(quantity * 100, 'g');
 };
-
-function calcMacros(item: any) {
-  const fi = item.food_items;
-  const grams = item.grams ?? 100;
-  if (fi && fi.serving_size > 0) {
-    const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
-    const m = grams / divisor;
-    return {
-      calories: Math.round((fi.calories ?? 0) * m),
-      protein:  Math.round((fi.protein  ?? 0) * m * 10) / 10,
-      carbs:    Math.round((fi.carbs    ?? 0) * m * 10) / 10,
-      fats:     Math.round((fi.fat      ?? 0) * m * 10) / 10,
-      fiber:    Math.round((fi.fiber    ?? 0) * m * 10) / 10,
-    };
-  }
-  // fallback to saved columns
-  return {
-    calories: item.calories ?? 0,
-    protein:  item.protein  ?? 0,
-    carbs:    item.carbs    ?? 0,
-    fats:     item.fats     ?? 0,
-    fiber:    item.fiber    ?? 0,
-  };
-}
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -369,7 +346,13 @@ export default function HomeScreen() {
           mealsData.forEach((meal: any) => {
             if (meal.meal_items) {
               meal.meal_items.forEach((item: any) => {
-                const macros = calcMacros(item);
+                const fi = item.food_items;
+                const grams = item.grams ?? 0;
+                const rawMacros = fi ? calcMacros(fi, grams) : null;
+                const macros = rawMacros
+                  ? { calories: rawMacros.calories, protein: rawMacros.protein, carbs: rawMacros.carbs, fats: rawMacros.fat, fiber: rawMacros.fiber }
+                  : { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 };
+                console.log('[Home iOS] calcMacros for item', item.id, ':', macros);
                 const enriched = {
                   ...item,
                   ...macros,

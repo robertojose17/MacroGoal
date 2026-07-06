@@ -11,6 +11,7 @@ import { Food, Meal, MealItem, DailySummary, MealType } from '@/types';
 import { mockFoods } from '@/data/mockData';
 import { supabase } from '@/lib/supabase/client';
 import { extractServingSize } from '@/utils/openFoodFacts';
+import { calcMacros } from '@/utils/macros';
 
 const FOODS_STORAGE_KEY = '@elite_macro_foods';
 const MEALS_STORAGE_KEY = '@elite_macro_meals';
@@ -309,19 +310,15 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       let calories: number, protein: number, carbs: number, fats: number, fiber: number;
 
       if (fi && servingSize > 0) {
-        // macros_per='100g' → fi.calories is per-100g, divide by 100
-        // macros_per='serving' (or unset) → fi.calories is per-serving_size, divide by serving_size
-        const divisor = (fi.macros_per === '100g') ? 100 : servingSize;
-        const multiplier = loggedGrams / divisor;
-        calories = Math.round((fi.calories ?? 0) * multiplier);
-        protein  = Math.round((fi.protein  ?? 0) * multiplier * 10) / 10;
-        carbs    = Math.round((fi.carbs    ?? 0) * multiplier * 10) / 10;
-        fats     = Math.round((fi.fat      ?? 0) * multiplier * 10) / 10;
-        fiber    = Math.round((fi.fiber    ?? 0) * multiplier * 10) / 10;
+        const result = calcMacros(fi, loggedGrams);
+        calories = result.calories;
+        protein  = result.protein;
+        carbs    = result.carbs;
+        fats     = result.fat;
+        fiber    = result.fiber;
         console.log(
           `[FoodDB] ✅ food_items path "${fi.name ?? 'unknown'}": ` +
           `macros_per=${fi.macros_per ?? 'serving'}, grams=${loggedGrams}, ` +
-          `divisor=${divisor}, multiplier=${multiplier.toFixed(3)}, ` +
           `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
         );
       } else {
