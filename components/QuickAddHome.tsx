@@ -7,6 +7,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
+import { calcMacros } from '@/utils/macros';
 
 interface MyFood {
   id: string;
@@ -20,6 +21,8 @@ interface MyFood {
   fats: number;
   fiber: number;
   created_at: string;
+  serving_size?: number | null;
+  macros_per?: string | null;
 }
 
 interface QuickAddHomeProps {
@@ -188,14 +191,24 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
       const gramsToAdd = food.serving_amount;
       const servingDescription = `${Math.round(food.serving_amount)} ${food.serving_unit}`;
 
-      const multiplier = gramsToAdd / 100;
-
-      // Calculate nutrition for the default serving
-      const calories = food.calories * multiplier;
-      const protein = food.protein * multiplier;
-      const carbs = food.carbs * multiplier;
-      const fats = food.fats * multiplier;
-      const fiber = food.fiber * multiplier;
+      // calcMacros respects macros_per and serving_size
+      const macros = calcMacros(
+        {
+          calories: food.calories,
+          protein: food.protein,
+          carbs: food.carbs,
+          fat: food.fats,
+          fiber: food.fiber,
+          serving_size: food.serving_size ?? food.serving_amount,
+          macros_per: food.macros_per,
+        },
+        gramsToAdd,
+      );
+      const calories = macros.calories;
+      const protein = macros.protein;
+      const carbs = macros.carbs;
+      const fats = macros.fat;
+      const fiber = macros.fiber;
 
       // Find or create meal for the date and meal type
       const { data: existingMeal } = await supabase
@@ -240,7 +253,10 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
         .insert({
           meal_id: mealId,
           food_id: food.id,
-          quantity: multiplier,
+          food_item_id: food.id,
+          food_name: food.name,
+          food_brand: food.brand ?? null,
+          quantity: gramsToAdd / 100,
           calories: calories,
           protein: protein,
           carbs: carbs,

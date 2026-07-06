@@ -9,7 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { getRecentFoods } from '@/utils/foodDatabase';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
-import { OpenFoodFactsProduct, extractServingSize, extractNutrition } from '@/utils/openFoodFacts';
+import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing } from '@/utils/openFoodFacts';
 import { supabase } from '@/lib/supabase/client';
 import { Food } from '@/types';
 import { addToDraft } from '@/utils/myMealsDraft';
@@ -43,15 +43,14 @@ interface SearchResultItem {
 
 function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
   const servingInfo = extractServingSize(product);
-  const nutrition = extractNutrition(product);
-  const multiplier = servingInfo.grams / 100;
+  const nutrition = extractNutritionPerServing(product, servingInfo.grams);
   return {
     product,
-    displayCalories: nutrition.calories * multiplier,
-    displayProtein: nutrition.protein * multiplier,
-    displayCarbs: nutrition.carbs * multiplier,
-    displayFats: nutrition.fat * multiplier,
-    displayFiber: nutrition.fiber * multiplier,
+    displayCalories: nutrition.calories,
+    displayProtein: nutrition.protein,
+    displayCarbs: nutrition.carbs,
+    displayFats: nutrition.fat,
+    displayFiber: nutrition.fiber,
     servingText: servingInfo.displayText,
     hasNutrition: nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0,
     source,
@@ -566,23 +565,22 @@ export default function AddFoodScreen() {
     if (mode !== 'meal-plan' || !planId) return;
     const product = item.product;
     try {
-      const nutrition = extractNutrition(product);
       const serving = extractServingSize(product);
-      const multiplier = serving.grams / 100;
+      const nutrition = extractNutritionPerServing(product, serving.grams);
       console.log('[AddFood] Adding search result to meal plan:', planId, product.product_name);
       await addMealPlanItem(planId, {
         date,
         meal_type: mealType,
         food_name: product.product_name || product.generic_name || 'Unknown',
         brand: product.brands || undefined,
-        quantity: multiplier,
+        quantity: serving.grams / 100,
         grams: serving.grams,
         serving_description: serving.displayText,
-        calories: safeNum(nutrition.calories * multiplier),
-        protein: safeNum(nutrition.protein * multiplier),
-        carbs: safeNum(nutrition.carbs * multiplier),
-        fats: safeNum(nutrition.fat * multiplier),
-        fiber: safeNum(nutrition.fiber * multiplier),
+        calories: safeNum(nutrition.calories),
+        protein: safeNum(nutrition.protein),
+        carbs: safeNum(nutrition.carbs),
+        fats: safeNum(nutrition.fat),
+        fiber: safeNum(nutrition.fiber),
       });
       showSuccessBanner('Added to plan');
     } catch (err) {
@@ -608,15 +606,14 @@ export default function AddFoodScreen() {
 
     try {
       const servingInfo = extractServingSize(product);
-      const nutrition = extractNutrition(product);
+      const nutrition = extractNutritionPerServing(product, servingInfo.grams);
 
-      // Calculate nutrition for default serving
-      const multiplier = servingInfo.grams / 100;
-      const calories = nutrition.calories * multiplier;
-      const protein = nutrition.protein * multiplier;
-      const carbs = nutrition.carbs * multiplier;
-      const fat = nutrition.fat * multiplier;
-      const fiber = nutrition.fiber * multiplier;
+      // Nutrition already calculated for the default serving
+      const calories = nutrition.calories;
+      const protein = nutrition.protein;
+      const carbs = nutrition.carbs;
+      const fat = nutrition.fat;
+      const fiber = nutrition.fiber;
 
       // Ensure food exists in database
       let foodId: string | null = null;
