@@ -102,7 +102,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                   return;
                 }
                 console.log('[ShareableProgressCard] Capturing...');
-                viewShotRef.current.capture().then((uri: string) => {
+                viewShotRef.current.capture({ format: 'png', quality: 1, result: 'tmpfile', pixelRatio: 3 }).then((uri: string) => {
                   console.log('[ShareableProgressCard] Capture complete:', uri);
                   resolve(uri);
                 }).catch(reject);
@@ -120,7 +120,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     return (
       <CaptureWrapper
         ref={viewShotRef}
-        options={{ format: 'png', quality: 1, result: 'tmpfile' }}
+        options={{ format: 'png', quality: 1, result: 'tmpfile', pixelRatio: 3 }}
         style={styles.captureWrapper}
       >
         <View style={styles.card}>
