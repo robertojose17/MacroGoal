@@ -1092,43 +1092,47 @@ export default function AddFoodScreen() {
     }
 
     try {
-      // food.food_item_id is set when this food came from a barcode scan (food_items table)
-      // food.id may be a food_items id in that case, not a foods id
       let foodId: string | null = null;
-      let per100Calories: number;
-      let per100Protein: number;
-      let per100Carbs: number;
-      let per100Fats: number;
-      let per100Fiber: number;
+      let calories: number, protein: number, carbs: number, fats: number, fiber: number;
+      let foodName = food.name;
+      let foodBrand = food.brand ?? null;
 
       if (food.food_item_id) {
+        // Barcode/food_items path — use food_items as source of truth
         console.log('[AddFood] Recent food is barcode food, fetching from food_items:', food.food_item_id);
-        // Barcode food — get per-100g values directly from food_items.nutriments
-        const { data: fiData, error: fiError } = await supabase
+        const { data: fi, error: fiError } = await supabase
           .from('food_items')
-          .select('nutriments, name, brand')
+          .select('id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per')
           .eq('id', food.food_item_id)
           .maybeSingle();
 
-        if (fiError || !fiData) {
+        if (fiError || !fi) {
           console.error('[AddFood] Error fetching food_items data:', fiError);
           Alert.alert('Error', 'Failed to load food details');
           return;
         }
 
-        const nutriments = fiData.nutriments || {};
-        per100Calories = nutriments['energy-kcal_100g'] ?? 0;
-        per100Protein  = nutriments['proteins_100g'] ?? 0;
-        per100Carbs    = nutriments['carbohydrates_100g'] ?? 0;
-        per100Fats     = nutriments['fat_100g'] ?? 0;
-        per100Fiber    = nutriments['fiber_100g'] ?? 0;
-        foodId = null; // food_id is now nullable — barcode foods don't need a foods row
+        foodName  = fi.name ?? food.name;
+        foodBrand = fi.brand ?? food.brand ?? null;
+        foodId    = null;
+
+        const servingSize = Number(fi.serving_size) || 100;
+        const divisor     = fi.macros_per === '100g' ? 100 : servingSize;
+        const multiplier  = food.serving_amount / divisor;
+
+        calories = Math.round((fi.calories ?? 0) * multiplier);
+        protein  = Math.round((fi.protein  ?? 0) * multiplier * 10) / 10;
+        carbs    = Math.round((fi.carbs    ?? 0) * multiplier * 10) / 10;
+        fats     = Math.round((fi.fat      ?? 0) * multiplier * 10) / 10;
+        fiber    = Math.round((fi.fiber    ?? 0) * multiplier * 10) / 10;
+
+        console.log(`[AddFood] food_items path: serving_size=${servingSize}, macros_per=${fi.macros_per}, divisor=${divisor}, serving_amount=${food.serving_amount}, multiplier=${multiplier.toFixed(3)}, cal=${calories}`);
       } else {
         // Regular food from foods table
         console.log('[AddFood] Recent food is regular food, fetching from foods:', food.id);
         const { data: foodData, error: foodError } = await supabase
           .from('foods')
-          .select('*')
+          .select('id, name, brand, calories, protein, carbs, fats, fiber, serving_amount')
           .eq('id', food.id)
           .maybeSingle();
 
@@ -1138,45 +1142,38 @@ export default function AddFoodScreen() {
           return;
         }
 
-        foodId = foodData.id;
-        per100Calories = foodData.calories;
-        per100Protein  = foodData.protein;
-        per100Carbs    = foodData.carbs;
-        per100Fats     = foodData.fats;
-        per100Fiber    = foodData.fiber ?? 0;
+        foodId    = foodData.id;
+        foodName  = foodData.name ?? food.name;
+        foodBrand = foodData.brand ?? food.brand ?? null;
+
+        // foods table stores per-100g values
+        const multiplier = food.serving_amount / 100;
+        calories = Math.round((foodData.calories ?? 0) * multiplier);
+        protein  = Math.round((foodData.protein  ?? 0) * multiplier * 10) / 10;
+        carbs    = Math.round((foodData.carbs    ?? 0) * multiplier * 10) / 10;
+        fats     = Math.round((foodData.fats     ?? 0) * multiplier * 10) / 10;
+        fiber    = Math.round((foodData.fiber    ?? 0) * multiplier * 10) / 10;
       }
 
-      // Use the food's serving_amount as the default grams
       const gramsToAdd = food.serving_amount;
-      // serving_unit for barcode foods is already the display text (e.g. "2 pieces (28 g)")
-      // so use it directly rather than passing through formatServing which would double-format it
       const servingDescription = food.last_serving_description
         || (food.serving_unit && food.serving_unit !== 'g' && food.serving_unit !== 'ml'
             ? food.serving_unit
             : formatServing(food.serving_amount, food.serving_unit));
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in to add food');
-        return;
-      }
+      if (!user) { Alert.alert('Error', 'You must be logged in to add food'); return; }
 
-      const multiplier = gramsToAdd / 100;
-      const calories = per100Calories * multiplier;
-      const protein  = per100Protein  * multiplier;
-      const carbs    = per100Carbs    * multiplier;
-      const fats     = per100Fats     * multiplier;
-      const fiber    = per100Fiber    * multiplier;
-
-      // NORMAL DIARY MODE: Log to diary via RPC
-      console.log('[AddFood] Calling log_food RPC for recent food:', food.name, 'serving:', servingDescription);
+      console.log('[AddFood] log_food RPC recent food:', foodName, 'cal=', calories, 'serving=', servingDescription);
       const { data: rpcDataRecent, error: rpcErrorRecent } = await supabase.rpc('log_food', {
         p_user_id: user.id,
         p_date: date,
         p_meal_type: mealType,
-        p_food_id: foodId ?? null,
+        p_food_id: foodId,
         p_food_item_id: food.food_item_id ?? null,
-        p_quantity: multiplier,
+        p_food_name: foodName,
+        p_food_brand: foodBrand,
+        p_quantity: gramsToAdd / 100,
         p_calories: safeNum(calories),
         p_protein: safeNum(protein),
         p_carbs: safeNum(carbs),
