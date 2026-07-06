@@ -813,7 +813,7 @@ export default function AddFoodScreen() {
         console.log('[AddFood] food_item_id detected, querying food_items:', food.food_item_id);
         const { data: fiData, error: fiError } = await supabase
           .from('food_items')
-          .select('off_data, name, brand, serving_size, serving_unit, serving_quantity, nutriments, calories, protein, carbs, fat, fiber, barcode')
+          .select('off_data, name, brand, serving_size, serving_unit, serving_quantity, serving_description, nutriments, calories, protein, carbs, fat, fiber, barcode')
           .eq('id', food.food_item_id)
           .maybeSingle();
 
@@ -826,19 +826,36 @@ export default function AddFoodScreen() {
         console.log('[AddFood] ✅ food_items data fetched | off_data present:', !!fiData.off_data);
 
         if (fiData.off_data && typeof fiData.off_data === 'object') {
-          // Use the original OFF product JSON directly — same as barcode scanner
+          // Use the original OFF product JSON directly — same as barcode scanner.
+          // Override serving_size with serving_description when available so the
+          // food-details screen shows the correct unit label (e.g. "1 egg (50 g)").
           offProduct = fiData.off_data as OpenFoodFactsProduct;
-          console.log('[AddFood] Using off_data directly from food_items');
+          if (fiData.serving_description) {
+            const gramsVal = fiData.serving_size ?? fiData.serving_quantity ?? 100;
+            offProduct = {
+              ...offProduct,
+              serving_size: `1 ${fiData.serving_description} (${gramsVal} g)`,
+            };
+            console.log('[AddFood] Overrode serving_size with serving_description →', offProduct.serving_size);
+          } else {
+            console.log('[AddFood] Using off_data directly from food_items');
+          }
         } else {
-          // Build from flat columns
+          // Build from flat columns — use serving_description when available
           console.log('[AddFood] Building offProduct from flat food_items columns');
+          const servingDesc = fiData.serving_description;
+          const gramsVal = fiData.serving_size ?? fiData.serving_quantity ?? 100;
+          const servingSizeStr = servingDesc
+            ? `1 ${servingDesc} (${gramsVal} g)`
+            : fiData.serving_quantity
+              ? String(fiData.serving_quantity)
+              : String(fiData.serving_size || 100);
+          console.log('[AddFood] serving_description=', servingDesc, '→ serving_size=', servingSizeStr);
           offProduct = {
             code: fiData.barcode || '',
             product_name: fiData.name,
             brands: fiData.brand || '',
-            serving_size: fiData.serving_quantity
-              ? String(fiData.serving_quantity)
-              : String(fiData.serving_size || 100),
+            serving_size: servingSizeStr,
             nutriments: fiData.nutriments || {
               'energy-kcal_100g': fiData.calories,
               'proteins_100g': fiData.protein,

@@ -216,6 +216,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           serving_size,
           serving_unit,
           serving_quantity,
+          serving_description,
           calories,
           protein,
           carbs,
@@ -390,21 +391,34 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           `carbs=${Math.round(carbsPerServing * 10) / 10}, fat=${Math.round(fatPerServing * 10) / 10}`
         );
 
-        // Use off_data (original OFacts JSON) to get the real serving label via extractServingSize
-        // Fall back to serving_size string, then serving_quantity
-        const offProduct = fi.off_data || {
-          serving_size: fi.serving_size ? String(fi.serving_size) : undefined,
-          serving_quantity: fi.serving_quantity ? String(fi.serving_quantity) : undefined,
-        };
-        const servingInfo = extractServingSize(offProduct);
+        // Use serving_description column directly when available (no regex needed).
+        // Fall back to extractServingSize from off_data for older rows without it.
+        let servingGramsForDisplay: number;
+        let servingDisplayText: string;
+
+        if (fi.serving_description) {
+          // New path: serving_description is the human-readable label (e.g. "egg")
+          servingGramsForDisplay = servingGrams;
+          servingDisplayText = `1 ${fi.serving_description} (${servingGrams} g)`;
+          console.log(`[FoodDB] Using serving_description="${fi.serving_description}" for "${fi.name}"`);
+        } else {
+          // Legacy path: parse off_data with regex
+          const offProduct = fi.off_data || {
+            serving_size: fi.serving_size ? String(fi.serving_size) : undefined,
+            serving_quantity: fi.serving_quantity ? String(fi.serving_quantity) : undefined,
+          };
+          const servingInfo = extractServingSize(offProduct);
+          servingGramsForDisplay = servingInfo.grams;
+          servingDisplayText = servingInfo.displayText;
+        }
 
         food = {
           ...food,
           id: fi.id,
           name: fi.name,
           brand: fi.brand ?? undefined,
-          serving_amount: servingInfo.grams,
-          serving_unit: servingInfo.displayText,
+          serving_amount: servingGramsForDisplay,
+          serving_unit: servingDisplayText,
           calories: Math.round(calPerServing),
           protein: Math.round(proteinPerServing * 10) / 10,
           carbs: Math.round(carbsPerServing * 10) / 10,

@@ -338,13 +338,23 @@ export default function FoodDetailsLayout({
 
   // Helper: build a minimal OpenFoodFactsProduct from a food_items row
   const buildMockProductFromFoodItem = (
-    foodItem: { name?: string; brand?: string; serving_size?: string; serving_quantity?: number; serving_unit?: string; nutriments?: Record<string, number> | null },
+    foodItem: { name?: string; brand?: string; serving_size?: string | number; serving_quantity?: number; serving_unit?: string; serving_description?: string | null; nutriments?: Record<string, number> | null },
     food: { name: string; brand?: string; calories: number; protein: number; carbs: number; fats: number; fiber?: number; serving_amount: number; serving_unit: string }
   ): OpenFoodFactsProduct => {
-    const servingSize = foodItem.serving_size
-      ?? (foodItem.serving_quantity != null && foodItem.serving_unit
-        ? `${foodItem.serving_quantity} ${foodItem.serving_unit}`
-        : `${food.serving_amount} ${food.serving_unit}`);
+    // If serving_description is set, build a rich serving_size string like "1 egg (50 g)"
+    // so extractServingSize can parse it correctly downstream.
+    let servingSize: string;
+    if (foodItem.serving_description) {
+      const gramsVal = foodItem.serving_size ?? foodItem.serving_quantity ?? food.serving_amount;
+      servingSize = `1 ${foodItem.serving_description} (${gramsVal} g)`;
+      console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize);
+    } else {
+      servingSize = foodItem.serving_size != null
+        ? String(foodItem.serving_size)
+        : (foodItem.serving_quantity != null && foodItem.serving_unit
+          ? `${foodItem.serving_quantity} ${foodItem.serving_unit}`
+          : `${food.serving_amount} ${food.serving_unit}`);
+    }
     const servingQty = foodItem.serving_quantity ?? food.serving_amount;
     const n = (foodItem.nutriments ?? {}) as Record<string, number>;
     return {
@@ -446,15 +456,24 @@ export default function FoodDetailsLayout({
         console.log('[FoodDetails] loadEditItem: fetching food_items for id=', mealItem.food_item_id);
         const { data: foodItem } = await supabase
           .from('food_items')
-          .select('off_data, nutriments, serving_size, serving_quantity, serving_unit, name, brand')
+          .select('off_data, nutriments, serving_size, serving_quantity, serving_unit, serving_description, name, brand')
           .eq('id', mealItem.food_item_id)
           .single();
 
         if (foodItem) {
           if (foodItem.off_data) {
-            // Full OpenFoodFacts product blob — use it directly
+            // Full OpenFoodFacts product blob — use it directly, but override serving_size
+            // with serving_description when available so extractServingSize gets a clean string.
             try {
               mockProduct = JSON.parse(foodItem.off_data) as OpenFoodFactsProduct;
+              if ((foodItem as any).serving_description) {
+                const gramsVal = (foodItem as any).serving_size ?? mockProduct.serving_quantity ?? 100;
+                mockProduct = {
+                  ...mockProduct,
+                  serving_size: `1 ${(foodItem as any).serving_description} (${gramsVal} g)`,
+                };
+                console.log('[FoodDetails] loadEditItem: overrode serving_size with serving_description →', mockProduct.serving_size);
+              }
               const nutrition = extractNutrition(mockProduct);
               per100Cals = safeNum(nutrition.calories);
               per100Protein = safeNum(nutrition.protein);
@@ -470,7 +489,7 @@ export default function FoodDetailsLayout({
               });
             }
           } else {
-            // No off_data — build from nutriments + serving fields
+            // No off_data — build from nutriments + serving fields (serving_description handled inside)
             mockProduct = buildMockProductFromFoodItem(foodItem, food);
             if (foodItem.nutriments) {
               const n = foodItem.nutriments as Record<string, number>;
@@ -746,6 +765,26 @@ export default function FoodDetailsLayout({
    * Uses select-then-insert/update to avoid relying on a unique constraint.
    * Returns null if the product has no usable name.
    */
+  /**
+   * Extract a human-readable serving description from an OFF serving_size string.
+   * e.g. "1 egg (50 g)" → "egg", "50 g" → null, "1 cookie (28 g)" → "cookie"
+   */
+  const extractServingDescription = (servingSizeStr: string | undefined): string | null => {
+    if (!servingSizeStr) return null;
+    const s = servingSizeStr.trim();
+    // Pure gram/ml: "50 g", "100ml" → null
+    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
+    // Has parenthetical: "1 egg (50 g)" → remove "(50 g)" → "1 egg" → remove leading number → "egg"
+    if (s.includes('(')) {
+      const withoutParens = s.replace(/\s*\(.*\)\s*$/, '').trim();
+      const withoutLeadingNumber = withoutParens.replace(/^\d+(\.\d+)?\s+/, '').trim();
+      const result = withoutLeadingNumber || null;
+      console.log('[FoodDetails] extractServingDescription:', s, '→', result);
+      return result;
+    }
+    return null;
+  };
+
   const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
     const barcode = prod.code?.trim() || null;
     const pName = (prod.product_name || prod.generic_name || '').trim();
@@ -754,6 +793,9 @@ export default function FoodDetailsLayout({
 
     const nutrition = extractNutrition(prod);
     const servingInfo = extractServingSize(prod);
+    const servingDesc = extractServingDescription(prod.serving_size);
+
+    console.log('[FoodDetails] upsertFoodItem: serving_description=', servingDesc, 'for', pName);
 
     const payload = {
       name: pName,
@@ -762,6 +804,7 @@ export default function FoodDetailsLayout({
       serving_size: servingInfo.grams,
       serving_unit: 'g',
       serving_quantity: null as null,
+      serving_description: servingDesc,
       calories: safeNum(nutrition.calories),
       protein: safeNum(nutrition.protein),
       carbs: safeNum(nutrition.carbs),

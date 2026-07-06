@@ -65,25 +65,59 @@ export default function BarcodeScannerScreen() {
   );
 
   /**
+   * Extract a human-readable serving description from an OFF serving_size string.
+   * e.g. "1 egg (50 g)" → "egg", "50 g" → null, "1 cookie (28 g)" → "cookie"
+   */
+  const extractServingDescription = (servingSizeStr: string | undefined): string | null => {
+    if (!servingSizeStr) return null;
+    const s = servingSizeStr.trim();
+    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
+    if (s.includes('(')) {
+      const withoutParens = s.replace(/\s*\(.*\)\s*$/, '').trim();
+      const withoutLeadingNumber = withoutParens.replace(/^\d+(\.\d+)?\s+/, '').trim();
+      const result = withoutLeadingNumber || null;
+      console.log('[BarcodeScanner] extractServingDescription:', s, '→', result);
+      return result;
+    }
+    return null;
+  };
+
+  /**
    * Build a synthetic OFF-shaped object from a cached food_items row
    * so food-details screen keeps working unchanged.
+   * Uses serving_description column when available for a clean serving_size string.
    */
-  const buildSyntheticOffData = (item: any) => ({
-    code: item.barcode,
-    product_name: item.name,
-    brands: item.brand,
-    serving_size: item.serving_size ? `${item.serving_size} ${item.serving_unit || 'g'}` : undefined,
-    serving_quantity: item.serving_size,
-    nutriments: {
-      'energy-kcal_100g': item.calories,
-      'proteins_100g': item.protein,
-      'carbohydrates_100g': item.carbs,
-      'fat_100g': item.fat,
-      'fiber_100g': item.fiber,
-      'sugars_100g': item.sugar,
-    },
-    image_url: item.image_url,
-  });
+  const buildSyntheticOffData = (item: any) => {
+    // Prefer serving_description column; fall back to parsing serving_size string
+    const servingDesc: string | null =
+      item.serving_description ||
+      extractServingDescription(item.serving_size ? `${item.serving_size} ${item.serving_unit || 'g'}` : undefined);
+
+    const servingSizeStr = servingDesc && item.serving_size
+      ? `1 ${servingDesc} (${item.serving_size} g)`
+      : item.serving_size
+        ? `${item.serving_size} ${item.serving_unit || 'g'}`
+        : undefined;
+
+    console.log('[BarcodeScanner] buildSyntheticOffData: serving_description=', servingDesc, 'serving_size=', servingSizeStr);
+
+    return {
+      code: item.barcode,
+      product_name: item.name,
+      brands: item.brand,
+      serving_size: servingSizeStr,
+      serving_quantity: item.serving_size,
+      nutriments: {
+        'energy-kcal_100g': item.calories,
+        'proteins_100g': item.protein,
+        'carbohydrates_100g': item.carbs,
+        'fat_100g': item.fat,
+        'fiber_100g': item.fiber,
+        'sugars_100g': item.sugar,
+      },
+      image_url: item.image_url,
+    };
+  };
 
   /**
    * Perform lookup via Supabase edge function (lookup-barcode) and navigate.
