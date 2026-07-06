@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, TABLE_SAVED_MEALS, TABLE_SAVED_MEAL_ITEMS } from '@/lib/supabase/client';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { calcMacros } from '@/utils/macros';
 
 interface SavedMeal {
   id: string;
@@ -69,14 +70,12 @@ export default function MyMealsScreen() {
           updated_at,
           saved_meal_items (
             id,
+            food_item_id,
             serving_amount,
             serving_unit,
             servings_count,
-            foods (
-              calories,
-              protein,
-              carbs,
-              fats
+            food_items!saved_meal_items_food_item_id_fkey (
+              calories, protein, carbs, fat, fiber, serving_size, macros_per
             )
           )
         `)
@@ -128,12 +127,13 @@ export default function MyMealsScreen() {
         let totalFats = 0;
 
         items.forEach((item: any) => {
-          if (item.foods) {
-            const multiplier = (item.serving_amount / 100) * item.servings_count;
-            totalCalories += item.foods.calories * multiplier;
-            totalProtein += item.foods.protein * multiplier;
-            totalCarbs += item.foods.carbs * multiplier;
-            totalFats += item.foods.fats * multiplier;
+          const fi = item.food_items;
+          if (fi) {
+            const macros = calcMacros(fi, item.serving_amount * item.servings_count);
+            totalCalories += macros.calories;
+            totalProtein += macros.protein;
+            totalCarbs += macros.carbs;
+            totalFats += macros.fat;
           }
         });
 
@@ -218,19 +218,15 @@ export default function MyMealsScreen() {
         .from('saved_meal_items')
         .select(`
           id,
+          food_item_id,
+          food_id,
+          food_name,
+          food_brand,
           serving_amount,
           serving_unit,
           servings_count,
-          food_id,
-          foods (
-            id,
-            name,
-            brand,
-            calories,
-            protein,
-            carbs,
-            fats,
-            fiber
+          food_items!saved_meal_items_food_item_id_fkey (
+            id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per
           )
         `)
         .eq('saved_meal_id', meal.id);
@@ -280,20 +276,26 @@ export default function MyMealsScreen() {
 
       // Add each food item from the saved meal
       const itemsToInsert = mealItems.map((item: any) => {
-        const food = item.foods;
-        const multiplier = (item.serving_amount / 100) * item.servings_count;
-        
+        const fi = item.food_items;
+        const foodName = fi?.name ?? item.food_name ?? 'Unknown Food';
+        const foodBrand = fi?.brand ?? item.food_brand ?? null;
+        const grams = item.serving_amount * item.servings_count;
+        const macros = fi ? calcMacros(fi, grams) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+
         return {
           meal_id: targetMealId,
-          food_id: item.food_id,
-          quantity: multiplier,
-          calories: food.calories * multiplier,
-          protein: food.protein * multiplier,
-          carbs: food.carbs * multiplier,
-          fats: food.fats * multiplier,
-          fiber: food.fiber * multiplier,
+          food_id: item.food_id ?? null,
+          food_item_id: item.food_item_id ?? null,
+          food_name: foodName,
+          food_brand: foodBrand,
+          quantity: 1,
+          calories: macros.calories,
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fats: macros.fat,
+          fiber: macros.fiber,
           serving_description: `${Math.round(item.serving_amount)} ${item.serving_unit}`,
-          grams: Math.round(item.serving_amount),
+          grams: Math.round(grams),
         };
       });
 
