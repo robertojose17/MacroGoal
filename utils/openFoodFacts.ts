@@ -789,6 +789,51 @@ export async function searchOpenFoodFacts(query: string): Promise<OpenFoodFactsS
 }
 
 /**
+ * Extract nutrition per STANDARD SERVING (what the nutrition facts label shows).
+ * Priority: _serving fields → calculate from _100g × (serving_size / 100)
+ * This is the correct value to store in food_items.calories etc.
+ */
+export function extractNutritionPerServing(
+  product: OpenFoodFactsProduct,
+  servingSizeGrams: number  // total grams of the standard serving (e.g. 31 for 1 scoop)
+): { calories: number; protein: number; carbs: number; fat: number; fiber: number; sugars: number } {
+  const nutriments = product.nutriments || {};
+  const multiplier = servingSizeGrams > 0 ? servingSizeGrams / 100 : 1;
+
+  // Helper: use _serving if available, else calculate from _100g × multiplier
+  function perServing(servingKey: string, per100Key: string, altKey?: string): number {
+    if (nutriments[servingKey as keyof typeof nutriments] != null) return Math.round(Number(nutriments[servingKey as keyof typeof nutriments]) * 10) / 10;
+    if (nutriments[per100Key as keyof typeof nutriments] != null) return Math.round(Number(nutriments[per100Key as keyof typeof nutriments]) * multiplier * 10) / 10;
+    if (altKey && nutriments[altKey as keyof typeof nutriments] != null) return Math.round(Number(nutriments[altKey as keyof typeof nutriments]) * multiplier * 10) / 10;
+    return 0;
+  }
+
+  let calories = 0;
+  if (nutriments['energy-kcal_serving'] != null) {
+    calories = Math.round(Number(nutriments['energy-kcal_serving']));
+  } else if (nutriments['energy-kcal_100g'] != null) {
+    calories = Math.round(Number(nutriments['energy-kcal_100g']) * multiplier);
+  } else if (nutriments['energy-kcal'] != null) {
+    calories = Math.round(Number(nutriments['energy-kcal']) * multiplier);
+  } else if (nutriments['energy_100g'] != null) {
+    calories = Math.round((Number(nutriments['energy_100g']) / 4.184) * multiplier);
+  }
+  if (isNaN(calories) || calories < 0) calories = 0;
+
+  const protein = perServing('proteins_serving', 'proteins_100g', 'proteins');
+  const carbs   = perServing('carbohydrates_serving', 'carbohydrates_100g', 'carbohydrates');
+  const fat     = perServing('fat_serving', 'fat_100g', 'fat');
+  const fiber   = perServing('fiber_serving', 'fiber_100g', 'fiber');
+  const sugars  = perServing('sugars_serving', 'sugars_100g', 'sugars');
+
+  console.log('[OpenFoodFacts] extractNutritionPerServing:', {
+    servingSizeGrams, multiplier, calories, protein, carbs, fat, fiber
+  });
+
+  return { calories, protein, carbs, fat, fiber, sugars };
+}
+
+/**
  * Map OpenFoodFacts product to internal Food format
  */
 export function mapOpenFoodFactsToFood(product: OpenFoodFactsProduct): any {

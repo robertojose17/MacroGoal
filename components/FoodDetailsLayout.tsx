@@ -1,5 +1,5 @@
 
-import { OpenFoodFactsProduct, extractServingSize, extractNutrition } from '@/utils/openFoodFacts';
+import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractNutritionPerServing } from '@/utils/openFoodFacts';
 import { formatServing } from '@/utils/servingFormat';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase/client';
@@ -812,18 +812,20 @@ export default function FoodDetailsLayout({
     const pBrand = (prod.brands || '').trim() || null;
     if (!pName) return null;
 
-    const nutrition = extractNutrition(prod);
     const servingInfo = extractServingSize(prod);
     const servingDesc = extractServingDescription(prod.serving_size);
     const servingCountVal = extractServingCount(prod.serving_size);
+    const totalServingGrams = servingInfo.grams * (servingCountVal ?? 1);
+    // Use per-serving nutrition (what the nutrition facts label shows)
+    const nutrition = extractNutritionPerServing(prod, totalServingGrams);
 
-    console.log('[FoodDetails] upsertFoodItem: serving_description=', servingDesc, 'serving_count=', servingCountVal, 'for', pName);
+    console.log('[FoodDetails] upsertFoodItem: serving_description=', servingDesc, 'serving_count=', servingCountVal, 'totalServingGrams=', totalServingGrams, 'for', pName);
 
     const payload = {
       name: pName,
       brand: pBrand,
       barcode: barcode,
-      serving_size: servingInfo.grams * (servingCountVal ?? 1),
+      serving_size: totalServingGrams,
       serving_unit: 'g',
       serving_quantity: null as null,
       serving_description: servingDesc,
