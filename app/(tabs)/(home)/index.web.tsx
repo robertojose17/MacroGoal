@@ -22,6 +22,7 @@ interface FoodItem {
   fiber: number;
   serving_description: string | null;
   grams: number | null;
+  food_item_id?: string | null;
   foods: {
     id: string;
     name: string;
@@ -30,6 +31,7 @@ interface FoodItem {
     serving_unit: string;
     user_created: boolean;
   } | null;
+  food_items?: { id: string; name: string; brand: string | null } | null;
 }
 
 interface MealData {
@@ -133,6 +135,8 @@ export default function HomeScreen() {
           date,
           meal_items (
             id,
+            food_id,
+            food_item_id,
             quantity,
             calories,
             protein,
@@ -148,6 +152,11 @@ export default function HomeScreen() {
               serving_amount,
               serving_unit,
               user_created
+            ),
+            food_items!food_item_id (
+              id,
+              name,
+              brand
             )
           )
         `)
@@ -532,11 +541,11 @@ export default function HomeScreen() {
                       >
                         <View style={styles.foodInfo}>
                           <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-                            {item.foods?.name || 'Unknown Food'}
+                            {(item as any).food_items?.name ?? item.foods?.name ?? 'Unknown Food'}
                           </Text>
-                          {item.foods?.brand && (
+                          {((item as any).food_items?.brand ?? item.foods?.brand) && (
                             <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                              {item.foods.brand}
+                              {(item as any).food_items?.brand ?? item.foods?.brand}
                             </Text>
                           )}
                           <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>

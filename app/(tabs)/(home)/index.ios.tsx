@@ -49,6 +49,7 @@ interface FoodItem {
   grams: number | null;
   logged_at?: string | null;
   meal_type?: string;
+  food_item_id?: string | null;
   foods: {
     id: string;
     name: string;
@@ -57,6 +58,7 @@ interface FoodItem {
     serving_unit: string;
     user_created: boolean;
   } | null;
+  food_items?: { id: string; name: string; brand: string | null } | null;
 }
 
 interface MealData {
@@ -295,6 +297,8 @@ export default function HomeScreen() {
           date,
           meal_items (
             id,
+            food_id,
+            food_item_id,
             quantity,
             calories,
             protein,
@@ -311,6 +315,11 @@ export default function HomeScreen() {
               serving_amount,
               serving_unit,
               user_created
+            ),
+            food_items!food_item_id (
+              id,
+              name,
+              brand
             )
           )
         `)
@@ -891,8 +900,8 @@ export default function HomeScreen() {
                       const carbsRounded = Math.round(item.carbs);
                       const fatsRounded = Math.round(item.fats);
                       const calsRounded = Math.round(item.calories);
-                      const foodName = item.foods?.name || 'Unknown Food';
-                      const foodBrand = item.foods?.brand;
+                      const foodName = (item as any).food_items?.name ?? item.foods?.name ?? 'Unknown Food';
+                      const foodBrand = (item as any).food_items?.brand ?? item.foods?.brand ?? undefined;
                       return (
                         <View key={item.id}>
                           <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
