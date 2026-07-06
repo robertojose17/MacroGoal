@@ -331,7 +331,7 @@ export default function HomeScreen() {
             serving_description,
             grams,
             logged_at,
-            food_items!food_item_id (
+            food_items!meal_items_food_item_id_fkey (
               id,
               name,
               brand,

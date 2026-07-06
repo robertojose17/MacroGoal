@@ -209,7 +209,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           fiber,
           user_created
         ),
-        food_items!food_item_id (
+        food_items!meal_items_food_item_id_fkey (
           id,
           name,
           brand,
