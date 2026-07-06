@@ -341,7 +341,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       if (fi.serving_description) {
         const servingCount = Number(fi.serving_count) || 1;
         const gramsPerUnit = servingSize > 0 ? servingSize / servingCount : 100;
-        servingGramsForDisplay = gramsPerUnit;
+        servingGramsForDisplay = servingSize > 0 ? servingSize : 100;
         const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
         displayServingUnit = `${countLabel}${fi.serving_description} (${servingSize > 0 ? servingSize : 100} g)`;
         console.log(`[FoodDB] serving_description="${fi.serving_description}" count=${servingCount} gramsPerUnit=${gramsPerUnit} for "${fi.name}"`);
