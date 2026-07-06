@@ -24,7 +24,7 @@ export function calcMacros(fi: FoodItemForCalc, grams: number): MacroResult {
   if (!fi || !fi.serving_size || fi.serving_size === 0 || grams === 0) {
     return { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
   }
-  const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
+  const divisor = (fi.macros_per === 'serving') ? fi.serving_size : 100;
   const ratio = grams / divisor;
   return {
     calories: fi.calories * ratio,

@@ -356,7 +356,7 @@ export default function HomeScreen() {
                 const enriched = {
                   ...item,
                   ...macros,
-                  name: item.food_name ?? item.food_items?.name ?? 'Unknown Food',
+                  name: item.food_name ?? item.food_items?.name ?? (item as any).foods?.name ?? 'Unknown Food',
                   brand: item.food_brand ?? item.food_items?.brand ?? undefined,
                   meal_type: meal.meal_type,
                   logged_at: item.logged_at ?? null,
@@ -742,7 +742,7 @@ export default function HomeScreen() {
   }
 
   const renderFoodItem = ({ item }: { item: FoodItem }) => {
-    const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food';
+    const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? (item as any).foods?.name ?? 'Unknown Food';
     const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
     return (
       <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
@@ -922,7 +922,7 @@ export default function HomeScreen() {
                       const carbsRounded = Math.round(item.carbs);
                       const fatsRounded = Math.round(item.fats);
                       const calsRounded = Math.round(item.calories);
-                      const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food';
+                      const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? (item as any).foods?.name ?? 'Unknown Food';
                       const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
                       return (
                         <View key={item.id}>
