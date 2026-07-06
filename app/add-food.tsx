@@ -1691,11 +1691,10 @@ export default function AddFoodScreen() {
     const protein = Math.round(isFinite(item.displayProtein) ? item.displayProtein : 0);
     const carbs = Math.round(isFinite(item.displayCarbs) ? item.displayCarbs : 0);
     const fat = Math.round(isFinite(item.displayFats) ? item.displayFats : 0);
-    const macrosText = `P: ${protein}g • C: ${carbs}g • F: ${fat}g`;
-    
+
     return (
       <React.Fragment key={item.product.code ?? `search-result-${index}`}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.foodCard,
             { backgroundColor: isDark ? colors.cardDark : colors.card }
@@ -1704,23 +1703,40 @@ export default function AddFoodScreen() {
           activeOpacity={0.7}
         >
           <View style={styles.foodInfo}>
-            <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+            <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
               {displayName}
             </Text>
-            <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {displayBrand ? `${displayBrand} • ` : ''}{item.servingText} • {calories} cal
+            {displayBrand ? (
+              <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
+                {displayBrand}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+              <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                {item.servingText}
+              </Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {protein}g</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {carbs}g</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {fat}g</Text>
+            </View>
+          </View>
+
+          <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
+              {calories}
             </Text>
-            <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {macrosText}
+            <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+              kcal
             </Text>
           </View>
-          
+
           {/* Show quick-add button in my_meals_builder or meal-plan mode */}
           {context === 'my_meals_builder' ? (
             <TouchableOpacity
               style={styles.addButton}
               onPress={(e) => {
                 e.stopPropagation();
+                console.log('[AddFood] Search result + button pressed:', displayName, 'context: my_meals_builder');
                 handleQuickAddSearchResult(item);
               }}
               activeOpacity={0.7}
@@ -1737,6 +1753,7 @@ export default function AddFoodScreen() {
               style={styles.addButton}
               onPress={(e) => {
                 e.stopPropagation();
+                console.log('[AddFood] Search result + button pressed:', displayName, 'mode: meal-plan');
                 handleQuickAddSearchResultToMealPlan(item);
               }}
               activeOpacity={0.7}
@@ -1771,14 +1788,13 @@ export default function AddFoodScreen() {
     const fat = Math.round(favorite.per100_fat * multiplier);
 
     const servingText = favorite.serving_size || `${Math.round(favorite.default_grams)}g`;
-    const macrosText = `P: ${protein}g • C: ${carbs}g • F: ${fat}g`;
 
     return (
       <React.Fragment key={favorite.id ?? `favorite-${index}`}>
         <SwipeToDeleteRow
           onDelete={() => handleRemoveFavorite(favorite.id)}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.foodCard,
               { backgroundColor: isDark ? colors.cardDark : colors.card }
@@ -1787,23 +1803,40 @@ export default function AddFoodScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.foodInfo}>
-              <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+              <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
                 {favorite.food_name}
               </Text>
-              <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {favorite.brand ? `${favorite.brand} • ` : ''}{servingText} • {calories} cal
+              {favorite.brand ? (
+                <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
+                  {favorite.brand}
+                </Text>
+              ) : null}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                  {servingText}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {protein}g</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {carbs}g</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {fat}g</Text>
+              </View>
+            </View>
+
+            <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
+                {calories}
               </Text>
-              <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {macrosText}
+              <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                kcal
               </Text>
             </View>
-            
+
             {/* Show quick-add button based on context */}
             {context === 'my_meals_builder' ? (
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={(e) => {
                   e.stopPropagation();
+                  console.log('[AddFood] Favorite + button pressed:', favorite.food_name, 'context: my_meals_builder');
                   handleQuickAddFavorite(favorite);
                 }}
                 activeOpacity={0.7}
@@ -1820,6 +1853,7 @@ export default function AddFoodScreen() {
                 style={styles.addButton}
                 onPress={(e) => {
                   e.stopPropagation();
+                  console.log('[AddFood] Favorite + button pressed:', favorite.food_name, 'context:', context);
                   handleAddFavorite(favorite);
                 }}
                 activeOpacity={0.7}
@@ -1966,6 +2000,13 @@ export default function AddFoodScreen() {
   }, [context, date, mealType, showSuccessBanner]);
 
   const renderSavedMealItem = useCallback((meal: SavedMeal, index: number) => {
+    const mealCalories = Math.round(meal.total_calories || 0);
+    const mealProtein = Math.round(meal.total_protein || 0);
+    const mealCarbs = Math.round(meal.total_carbs || 0);
+    const mealFats = Math.round(meal.total_fats || 0);
+    const itemCount = meal.item_count || 0;
+    const itemLabel = itemCount === 1 ? 'item' : 'items';
+
     return (
       <React.Fragment key={meal.id}>
         <SwipeToDeleteRow onDelete={() => handleDeleteMeal(meal.id)}>
@@ -1981,17 +2022,28 @@ export default function AddFoodScreen() {
               disabled={isSwiping}
             >
               <View style={styles.foodInfo}>
-                <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+                <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
                   {meal.name}
                 </Text>
-                <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {meal.item_count || 0} {meal.item_count === 1 ? 'item' : 'items'} • {Math.round(meal.total_calories || 0)} cal
+                <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
+                  {itemCount} {itemLabel}
                 </Text>
-                <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  P: {Math.round(meal.total_protein || 0)}g • C: {Math.round(meal.total_carbs || 0)}g • F: {Math.round(meal.total_fats || 0)}g
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {mealProtein}g</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {mealCarbs}g</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {mealFats}g</Text>
+                </View>
+              </View>
+
+              <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
+                  {mealCalories}
+                </Text>
+                <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                  kcal
                 </Text>
               </View>
-              
+
               {/* Show quick-add button only in meal_log context */}
               {context !== 'my_meals_builder' && (
                 <TouchableOpacity
@@ -1999,6 +2051,7 @@ export default function AddFoodScreen() {
                   onPress={(e) => {
                     e.stopPropagation();
                     if (!isSwiping) {
+                      console.log('[AddFood] Saved meal + button pressed:', meal.name, 'context:', context);
                       handleQuickAddSavedMeal(meal);
                     }
                   }}
@@ -2013,7 +2066,7 @@ export default function AddFoodScreen() {
                   />
                 </TouchableOpacity>
               )}
-              
+
               {/* Show chevron in my_meals_builder context */}
               {context === 'my_meals_builder' && (
                 <IconSymbol

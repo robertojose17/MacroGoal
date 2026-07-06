@@ -16,6 +16,8 @@ interface FoodEntry {
   meal_id: string;
   food_id: string;
   food_item_id: string | null;
+  food_name: string | null;
+  food_brand: string | null;
   quantity: number;
   calories: number;
   protein: number;
@@ -33,7 +35,11 @@ interface FoodEntry {
     carbs: number;
     fats: number;
     fiber: number;
-  };
+  } | null;
+  food_items: {
+    name: string;
+    brand: string | null;
+  } | null;
 }
 
 interface MealData {
@@ -176,6 +182,8 @@ export default function CopyFromPreviousScreen() {
             meal_id,
             food_id,
             food_item_id,
+            food_name,
+            food_brand,
             quantity,
             calories,
             protein,
@@ -193,6 +201,10 @@ export default function CopyFromPreviousScreen() {
               carbs,
               fats,
               fiber
+            ),
+            food_items!meal_items_food_item_id_fkey (
+              name,
+              brand
             )
           )
         `)
@@ -597,6 +609,12 @@ export default function CopyFromPreviousScreen() {
                       {meal.entries.map((entry, entryIndex) => {
                         const isSelected = selectedEntries.has(entry.id);
                         const servingText = entry.serving_description || `${Math.round(entry.grams || 0)} g`;
+                        const entryName = entry.food_items?.name ?? entry.foods?.name ?? entry.food_name ?? 'Unknown';
+                        const entryBrand = entry.food_items?.brand ?? entry.foods?.brand ?? entry.food_brand ?? null;
+                        const entryCalories = Math.round(entry.calories);
+                        const entryProtein = Math.round(entry.protein || 0);
+                        const entryCarbs = Math.round(entry.carbs || 0);
+                        const entryFats = Math.round(entry.fats || 0);
 
                         return (
                           <TouchableOpacity
@@ -605,7 +623,10 @@ export default function CopyFromPreviousScreen() {
                               styles.foodItem,
                               entryIndex < meal.entries.length - 1 && styles.foodItemBorder
                             ]}
-                            onPress={() => handleEntryToggle(entry.id)}
+                            onPress={() => {
+                              console.log('[CopyFromPrevious] Entry toggled:', entryName, 'selected:', !isSelected);
+                              handleEntryToggle(entry.id);
+                            }}
                             activeOpacity={0.7}
                           >
                             <View style={[
@@ -624,16 +645,24 @@ export default function CopyFromPreviousScreen() {
                               )}
                             </View>
                             <View style={styles.foodInfo}>
-                              <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-                                {entry.foods.name}
+                              <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
+                                {entryName}
                               </Text>
-                              {entry.foods.brand && (
-                                <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                                  {entry.foods.brand}
+                              {entryBrand ? (
+                                <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
+                                  {entryBrand}
                                 </Text>
-                              )}
-                              <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                                {servingText} • {Math.round(entry.calories)} kcal
+                              ) : null}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                                <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                                  {servingText}
+                                </Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {entryProtein}g</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {entryCarbs}g</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {entryFats}g</Text>
+                              </View>
+                              <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: 1 }}>
+                                {entryCalories} kcal
                               </Text>
                             </View>
                           </TouchableOpacity>
