@@ -427,6 +427,8 @@ export default function FoodDetailsLayout({
         .from('meal_items')
         .select(`
           *,
+          food_name,
+          food_brand,
           foods (*),
           food_item_id
         `)
@@ -440,7 +442,23 @@ export default function FoodDetailsLayout({
         return;
       }
 
-      const food = mealItem.foods;
+      // Use food_name/food_brand columns as fallback when foods JOIN is null
+      const food = mealItem.foods ?? (
+        (mealItem as any).food_name
+          ? {
+              name: (mealItem as any).food_name,
+              brand: (mealItem as any).food_brand ?? undefined,
+              calories: mealItem.calories ?? 0,
+              protein: mealItem.protein ?? 0,
+              carbs: mealItem.carbs ?? 0,
+              fats: mealItem.fats ?? 0,
+              fiber: mealItem.fiber ?? 0,
+              serving_amount: mealItem.grams ?? 100,
+              serving_unit: mealItem.serving_description ?? 'g',
+              user_created: false,
+            }
+          : null
+      );
       if (!food) {
         Alert.alert('Error', 'Food data not found');
         router.back();

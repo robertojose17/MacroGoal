@@ -23,6 +23,8 @@ interface FoodItem {
   serving_description: string | null;
   grams: number | null;
   food_item_id?: string | null;
+  food_name?: string | null;
+  food_brand?: string | null;
   name?: string;
   brand?: string;
   food_items?: {
@@ -168,6 +170,8 @@ export default function HomeScreen() {
             fiber,
             serving_description,
             grams,
+            food_name,
+            food_brand,
             food_items!meal_items_food_item_id_fkey (
               id,
               name,
@@ -212,8 +216,8 @@ export default function HomeScreen() {
                 const enriched = {
                   ...item,
                   ...macros,
-                  name: item.food_items?.name ?? 'Unknown Food',
-                  brand: item.food_items?.brand ?? undefined,
+                  name: item.food_name ?? item.food_items?.name ?? 'Unknown Food',
+                  brand: item.food_brand ?? item.food_items?.brand ?? undefined,
                 };
                 mealsByType[meal.meal_type as MealType].push(enriched);
                 totalCals += macros.calories;
@@ -570,11 +574,11 @@ export default function HomeScreen() {
                       >
                         <View style={styles.foodInfo}>
                           <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-                            {item.name ?? item.food_items?.name ?? 'Unknown Food'}
+                            {item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food'}
                           </Text>
-                          {(item.brand ?? item.food_items?.brand) && (
+                          {(item.brand ?? item.food_brand ?? item.food_items?.brand) && (
                             <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                              {item.brand ?? item.food_items?.brand}
+                              {item.brand ?? item.food_brand ?? item.food_items?.brand}
                             </Text>
                           )}
                           <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>

@@ -50,6 +50,8 @@ interface FoodItem {
   logged_at?: string | null;
   meal_type?: string;
   food_item_id?: string | null;
+  food_name?: string | null;
+  food_brand?: string | null;
   name?: string;
   brand?: string;
   food_items?: {
@@ -331,6 +333,8 @@ export default function HomeScreen() {
             serving_description,
             grams,
             logged_at,
+            food_name,
+            food_brand,
             food_items!meal_items_food_item_id_fkey (
               id,
               name,
@@ -369,8 +373,8 @@ export default function HomeScreen() {
                 const enriched = {
                   ...item,
                   ...macros,
-                  name: item.food_items?.name ?? 'Unknown Food',
-                  brand: item.food_items?.brand ?? undefined,
+                  name: item.food_name ?? item.food_items?.name ?? 'Unknown Food',
+                  brand: item.food_brand ?? item.food_items?.brand ?? undefined,
                   meal_type: meal.meal_type,
                   logged_at: item.logged_at ?? null,
                 };
@@ -755,8 +759,8 @@ export default function HomeScreen() {
   }
 
   const renderFoodItem = ({ item }: { item: FoodItem }) => {
-    const foodName = item.name ?? item.food_items?.name ?? 'Unknown Food';
-    const foodBrand = item.brand ?? item.food_items?.brand ?? undefined;
+    const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food';
+    const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
     return (
       <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
         {(isSwiping: boolean) => (
@@ -935,8 +939,8 @@ export default function HomeScreen() {
                       const carbsRounded = Math.round(item.carbs);
                       const fatsRounded = Math.round(item.fats);
                       const calsRounded = Math.round(item.calories);
-                      const foodName = item.name ?? item.food_items?.name ?? 'Unknown Food';
-                      const foodBrand = item.brand ?? item.food_items?.brand ?? undefined;
+                      const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food';
+                      const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
                       return (
                         <View key={item.id}>
                           <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>

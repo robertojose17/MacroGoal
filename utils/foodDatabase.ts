@@ -195,6 +195,8 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         fats,
         fiber,
         created_at,
+        food_name,
+        food_brand,
         foods (
           id,
           name,
@@ -365,9 +367,9 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         }
       }
 
-      // ── Name & brand: fi first, then foods fallback ────────────────────────
-      const foodName  = fi?.name  ?? item.foods?.name  ?? 'Unknown Food';
-      const foodBrand = fi?.brand ?? item.foods?.brand ?? undefined;
+      // ── Name & brand: fi first, then food_name column, then foods fallback ──
+      const foodName  = fi?.name  ?? (item as any).food_name  ?? item.foods?.name  ?? 'Unknown Food';
+      const foodBrand = fi?.brand ?? (item as any).food_brand ?? item.foods?.brand ?? undefined;
 
       const food: Food = {
         id: fi?.id ?? item.foods?.id ?? '',
