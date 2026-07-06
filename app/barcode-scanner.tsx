@@ -11,100 +11,45 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 /**
- * BARCODE SCANNER SCREEN
- * 
- * MyFitnessPal-style flow:
- * 1. Open camera
- * 2. Scan barcode ONCE
- * 3. Immediately close camera
- * 4. Navigate DIRECTLY to Food Details (dismissing ALL previous screens including Add Food Menu)
- * 
- * CRITICAL FIX: Use router.dismissTo() to dismiss ALL screens back to home, then push food-details
+ * Extract a human-readable serving description from an OFF serving_size string.
+ * e.g. "1 egg (50 g)" → "egg", "50 g" → null, "1 cookie (28 g)" → "cookie"
  */
-export default function BarcodeScannerScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+function extractServingDescription(servingSizeStr: string | undefined): string | null {
+  if (!servingSizeStr) return null;
+  const s = servingSizeStr.trim();
+  if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
+  if (s.includes('(')) {
+    const withoutParens = s.replace(/\s*\(.*\)\s*$/, '').trim();
+    const withoutLeadingNumber = withoutParens.replace(/^\d+(\.\d+)?\s+/, '').trim();
+    const result = withoutLeadingNumber || null;
+    console.log('[BarcodeScanner] extractServingDescription:', s, '→', result);
+    return result;
+  }
+  return null;
+}
 
-  const mode = (params.mode as string) || 'diary';
-  const context = (params.context as string) || undefined;
-  const mealType = (params.meal as string) || 'breakfast';
-  const date = (params.date as string) || toLocalDateString();
-  const returnTo = (params.returnTo as string) || undefined;
-  const myMealId = (params.mealId as string) || undefined;
-  const planId = (params.planId as string) || undefined;
+/**
+ * Extract the serving count (number of units) from an OFF serving_size string.
+ * e.g. "4 cookies (29 g)" → 4, "1 egg (50 g)" → null, "50 g" → null
+ * Returns null when serving_size is a plain gram/ml value (no discrete unit).
+ */
+function extractServingCount(servingSizeStr: string | undefined): number | null {
+  if (!servingSizeStr) return null;
+  const s = servingSizeStr.trim();
+  if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
+  const match = s.match(/^(\d+(\.\d+)?)\s+\D/);
+  if (!match) return null;
+  const count = parseFloat(match[1]);
+  console.log('[BarcodeScanner] extractServingCount:', s, '→', count);
+  return count > 1 ? count : null;
+}
 
-  const [permission, requestPermission] = useCameraPermissions();
-  
-  // One-scan lock using ref (doesn't cause re-renders)
-  const hasScannedRef = useRef(false);
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    console.log('[BarcodeScanner] ========== COMPONENT MOUNTED ==========');
-    console.log('[BarcodeScanner] Params:', { mode, context, mealType, date, returnTo, myMealId, planId });
-    isMountedRef.current = true;
-
-    return () => {
-      console.log('[BarcodeScanner] ========== COMPONENT UNMOUNTED ==========');
-      isMountedRef.current = false;
-    };
-  }, [mode, context, mealType, date, returnTo, myMealId, planId]);
-
-  // Reset state when screen gains focus
-  useFocusEffect(
-    useCallback(() => {
-      console.log('[BarcodeScanner] Screen focused → reset scan state');
-      hasScannedRef.current = false;
-
-      return () => {
-        console.log('[BarcodeScanner] Screen unfocused');
-      };
-    }, [])
-  );
-
-  /**
-   * Extract a human-readable serving description from an OFF serving_size string.
-   * e.g. "1 egg (50 g)" → "egg", "50 g" → null, "1 cookie (28 g)" → "cookie"
-   */
-  const extractServingDescription = (servingSizeStr: string | undefined): string | null => {
-    if (!servingSizeStr) return null;
-    const s = servingSizeStr.trim();
-    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
-    if (s.includes('(')) {
-      const withoutParens = s.replace(/\s*\(.*\)\s*$/, '').trim();
-      const withoutLeadingNumber = withoutParens.replace(/^\d+(\.\d+)?\s+/, '').trim();
-      const result = withoutLeadingNumber || null;
-      console.log('[BarcodeScanner] extractServingDescription:', s, '→', result);
-      return result;
-    }
-    return null;
-  };
-
-  /**
-   * Extract the serving count (number of units) from an OFF serving_size string.
-   * e.g. "4 cookies (29 g)" → 4, "1 egg (50 g)" → null, "50 g" → null
-   * Returns null when serving_size is a plain gram/ml value (no discrete unit).
-   */
-  const extractServingCount = (servingSizeStr: string | undefined): number | null => {
-    if (!servingSizeStr) return null;
-    const s = servingSizeStr.trim();
-    // Pure gram/ml value — no discrete unit
-    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
-    const match = s.match(/^(\d+(\.\d+)?)\s+\D/);
-    if (!match) return null;
-    const count = parseFloat(match[1]);
-    console.log('[BarcodeScanner] extractServingCount:', s, '→', count);
-    return count > 1 ? count : null;
-  };
-
-  /**
-   * Build a synthetic OFF-shaped object from a cached food_items row
-   * so food-details screen keeps working unchanged.
-   * Uses serving_description and serving_count columns when available.
-   */
-  const buildSyntheticOffData = (item: any) => {
+/**
+ * Build a synthetic OFF-shaped object from a cached food_items row
+ * so food-details screen keeps working unchanged.
+ * Uses serving_description and serving_count columns when available.
+ */
+function buildSyntheticOffData(item: any) {
     // Prefer serving_description column; fall back to parsing serving_size string
     const servingDesc: string | null =
       item.serving_description ||
@@ -142,7 +87,50 @@ export default function BarcodeScannerScreen() {
       },
       image_url: item.image_url,
     };
-  };
+}
+
+export default function BarcodeScannerScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const mode = (params.mode as string) || 'diary';
+  const context = (params.context as string) || undefined;
+  const mealType = (params.meal as string) || 'breakfast';
+  const date = (params.date as string) || toLocalDateString();
+  const returnTo = (params.returnTo as string) || undefined;
+  const myMealId = (params.mealId as string) || undefined;
+  const planId = (params.planId as string) || undefined;
+
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // One-scan lock using ref (doesn't cause re-renders)
+  const hasScannedRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    console.log('[BarcodeScanner] ========== COMPONENT MOUNTED ==========');
+    console.log('[BarcodeScanner] Params:', { mode, context, mealType, date, returnTo, myMealId, planId });
+    isMountedRef.current = true;
+
+    return () => {
+      console.log('[BarcodeScanner] ========== COMPONENT UNMOUNTED ==========');
+      isMountedRef.current = false;
+    };
+  }, [mode, context, mealType, date, returnTo, myMealId, planId]);
+
+  // Reset state when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[BarcodeScanner] Screen focused → reset scan state');
+      hasScannedRef.current = false;
+
+      return () => {
+        console.log('[BarcodeScanner] Screen unfocused');
+      };
+    }, [])
+  );
 
   /**
    * Perform lookup via Supabase edge function (lookup-barcode) and navigate.

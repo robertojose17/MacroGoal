@@ -50,7 +50,10 @@ module.exports = {
         'expo-secure-store',
         'expo-speech-recognition',
         '@stardazed/streams-text-encoding',
-        '@ungap/structured-clone'
+        '@ungap/structured-clone',
+        'react-leaflet',
+        'leaflet/dist/leaflet.css',
+        'leaflet'
       ]
     }],
     "prefer-const": "off",
