@@ -167,22 +167,25 @@ export async function getFoodById(id: string): Promise<Food | null> {
 
 /**
  * Get recent foods from user's actual diary entries
- * Returns last N unique foods the user logged, ordered by most recent
+ * Returns last N unique foods the user logged, ordered by most recent.
+ * Uses a two-step DB approach for elite deduplication:
+ *   Step 1 – lightweight meal_items scan to collect unique food_item_ids in recency order
+ *   Step 2 – single IN query on food_items for full canonical data + standard-portion macros
  * CRITICAL: Never throws, returns empty array on error
  */
 export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
   try {
-    console.log('[FoodDB] Fetching recent foods from user diary...');
-    
-    // Get current user
+    console.log('[FoodDB] Fetching recent foods (two-step elite dedup)...');
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       console.log('[FoodDB] No user logged in, returning empty array');
       return [];
     }
 
-    // Query user's meal items with food details, ordered by most recent
-    const { data: mealItems, error } = await supabase
+    // ── Step 1: lightweight scan – collect unique food_item_ids in recency order ──
+    const { data: mealItems, error: step1Error } = await supabase
       .from('meal_items')
       .select(`
         id,
@@ -212,143 +215,137 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           fiber,
           user_created
         ),
-        food_items!meal_items_food_item_id_fkey (
-          id,
-          name,
-          brand,
-          barcode,
-          serving_size,
-          serving_unit,
-          serving_description,
-          serving_count,
-          calories,
-          protein,
-          carbs,
-          fat,
-          fiber,
-          nutriments,
-          off_data,
-          source,
-          macros_per
-        ),
         meals!inner (
           user_id
         )
       `)
       .eq('meals.user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(300); // Get more than we need to allow for deduplication
+      .limit(200);
 
-    if (error) {
-      console.error('[FoodDB] Error fetching recent foods:', error);
+    if (step1Error) {
+      console.error('[FoodDB] Step 1 error:', step1Error);
       return [];
     }
 
     if (!mealItems || mealItems.length === 0) {
-      console.log('[FoodDB] No recent foods found');
+      console.log('[FoodDB] No recent meal items found');
       return [];
     }
 
-    console.log(`[FoodDB] Found ${mealItems.length} meal items`);
+    console.log(`[FoodDB] Step 1: scanned ${mealItems.length} meal items`);
 
-    // Deduplicate: prefer food_item_id, but also track food_id so the same
-    // physical food doesn't get two slots when logged via different paths.
+    // Collect unique food_item_ids in recency order (first appearance wins)
     const seenFoodItemIds = new Set<string>();
-    const seenFoodIds = new Set<string>();
-    const uniqueFoods: Food[] = [];
+    const orderedFoodItemIds: string[] = [];
+
+    // Also collect legacy items (no food_item_id) for fallback, deduped by food_id
+    const seenLegacyFoodIds = new Set<string>();
+    type LegacyItem = typeof mealItems[number];
+    const legacyItems: LegacyItem[] = [];
 
     for (const item of mealItems) {
-      const fi = (item as any).food_items;
-      const hasBarcode = fi != null;
-      const hasFoodItemId = !!(item as any).food_item_id;
-      const hasFoodsRow = !!(item.foods && item.food_id);
+      const fid: string | null = (item as any).food_item_id ?? null;
 
-      // Skip only if we have absolutely nothing to build a Food object from
-      if (!hasBarcode && !hasFoodsRow && !hasFoodItemId) continue;
+      if (fid) {
+        if (!seenFoodItemIds.has(fid)) {
+          seenFoodItemIds.add(fid);
+          orderedFoodItemIds.push(fid);
+        }
+      } else {
+        // Legacy item: no food_item_id — deduplicate by food_id or item id
+        const legacyKey: string = item.food_id ?? item.id;
+        if (!seenLegacyFoodIds.has(legacyKey)) {
+          seenLegacyFoodIds.add(legacyKey);
+          legacyItems.push(item);
+        }
+      }
 
-      const fid: string | undefined = (item as any).food_item_id || undefined;
-      const foid: string | undefined = item.food_id || undefined;
+      // Stop scanning once we have enough candidates
+      const totalFound = orderedFoodItemIds.length + legacyItems.length;
+      if (totalFound >= limit * 3) break; // over-fetch to allow trimming later
+    }
 
-      // If this food_item_id was already seen, skip
-      if (fid && seenFoodItemIds.has(fid)) continue;
-      // If this food_id was already seen (by any key), skip
-      if (foid && seenFoodIds.has(foid)) continue;
+    console.log(
+      `[FoodDB] Step 1 result: ${orderedFoodItemIds.length} unique food_item_ids, ` +
+      `${legacyItems.length} legacy items`
+    );
 
-      // Mark both as seen
-      if (fid) seenFoodItemIds.add(fid);
-      if (foid) seenFoodIds.add(foid);
+    // ── Step 2: fetch full food_items rows for all collected ids ─────────────
+    let foodItemMap = new Map<string, Record<string, any>>();
 
-      // If we have food_item_id but the join returned null, fall back to logged macro values
-      if (hasFoodItemId && !hasBarcode && !hasFoodsRow) {
-        console.log(`[FoodDB] food_item_id join fallback for item ${(item as any).food_item_id}, using logged values`);
-        const fallbackFood: Food = {
-          id: (item as any).food_item_id,
-          name: 'Scanned Food',
-          brand: undefined,
-          barcode: undefined,
-          serving_amount: item.grams ?? 100,
-          serving_unit: item.serving_description || 'g',
-          calories: item.calories ?? 0,
-          protein: item.protein ?? 0,
-          carbs: item.carbs ?? 0,
-          fats: item.fats ?? 0,
-          fiber: item.fiber ?? 0,
-          user_created: false,
-          is_favorite: false,
-          last_serving_description: item.serving_description || undefined,
-          food_item_id: (item as any).food_item_id,
-        };
-        uniqueFoods.push(fallbackFood);
-        if (uniqueFoods.length >= limit) break;
+    if (orderedFoodItemIds.length > 0) {
+      const { data: foodItemRows, error: step2Error } = await supabase
+        .from('food_items')
+        .select('id, name, brand, barcode, serving_size, serving_unit, serving_description, serving_count, calories, protein, carbs, fat, fiber, macros_per, off_data, nutriments, source')
+        .in('id', orderedFoodItemIds);
+
+      if (step2Error) {
+        console.error('[FoodDB] Step 2 error:', step2Error);
+        // Continue — we can still return legacy items
+      } else if (foodItemRows) {
+        console.log(`[FoodDB] Step 2: fetched ${foodItemRows.length} food_items rows`);
+        for (const row of foodItemRows) {
+          foodItemMap.set(row.id, row);
+        }
+      }
+    }
+
+    // ── Build Food[] from food_item_id path (standard portion) ───────────────
+    const results: Food[] = [];
+
+    for (const fid of orderedFoodItemIds) {
+      if (results.length >= limit) break;
+
+      const fi = foodItemMap.get(fid);
+      if (!fi) {
+        // food_items row missing — skip (orphaned reference)
+        console.log(`[FoodDB] food_item_id ${fid} not found in step-2 result, skipping`);
         continue;
       }
 
-      // ── Phase 3: food_items as single source of truth ──────────────────────
-      const loggedGrams = item.grams ?? 100;
-      const servingSize = Number(fi?.serving_size) || 0;
+      const servingSize = Number(fi.serving_size) || 0;
 
+      // Compute macros for exactly 1 standard serving
       let calories: number, protein: number, carbs: number, fats: number, fiber: number;
 
-      if (fi && servingSize > 0) {
-        const result = calcMacros(fi, loggedGrams);
+      if (servingSize > 0) {
+        const result = calcMacros(fi, servingSize);
         calories = result.calories;
         protein  = result.protein;
         carbs    = result.carbs;
         fats     = result.fat;
         fiber    = result.fiber;
         console.log(
-          `[FoodDB] ✅ food_items path "${fi.name ?? 'unknown'}": ` +
-          `macros_per=${fi.macros_per ?? 'serving'}, grams=${loggedGrams}, ` +
+          `[FoodDB] ✅ standard portion "${fi.name ?? 'unknown'}": ` +
+          `serving_size=${servingSize}g, macros_per=${fi.macros_per ?? 'serving'}, ` +
           `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
         );
       } else {
-        // FALLBACK: use stored values from meal_items (legacy rows without food_item_id)
-        calories = item.calories ?? 0;
-        protein  = item.protein  ?? 0;
-        carbs    = item.carbs    ?? 0;
-        fats     = item.fats     ?? 0;
-        fiber    = (item as any).fiber ?? 0;
+        // serving_size is 0 or missing — fall back to stored per-serving values
+        calories = Number(fi.calories) || 0;
+        protein  = Number(fi.protein)  || 0;
+        carbs    = Number(fi.carbs)    || 0;
+        fats     = Number(fi.fat)      || 0;
+        fiber    = Number(fi.fiber)    || 0;
         console.log(
-          `[FoodDB] ⚠️ fallback path (meal_items) for item id=${item.id}: ` +
-          `fi=${fi ? 'present but serving_size=0' : 'null'}, ` +
+          `[FoodDB] ⚠️ serving_size=0 for "${fi.name ?? 'unknown'}", using stored values: ` +
           `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
         );
       }
 
-      // ── Serving display ────────────────────────────────────────────────────
+      // ── Serving display string ──────────────────────────────────────────────
       let displayServingUnit: string;
-      let servingGramsForDisplay: number = loggedGrams;
+      let servingGramsForDisplay: number = servingSize || 100;
 
-      if (fi?.serving_description) {
-        // New path: serving_description is the human-readable label (e.g. "cookie")
+      if (fi.serving_description) {
         const servingCount = Number(fi.serving_count) || 1;
-        const gramsPerUnit = servingSize > 0 ? servingSize / servingCount : loggedGrams;
+        const gramsPerUnit = servingSize > 0 ? servingSize / servingCount : 100;
         servingGramsForDisplay = gramsPerUnit;
         const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-        displayServingUnit = `${countLabel}${fi.serving_description} (${servingSize > 0 ? servingSize : Math.round(loggedGrams)} g)`;
+        displayServingUnit = `${countLabel}${fi.serving_description} (${servingSize > 0 ? servingSize : 100} g)`;
         console.log(`[FoodDB] serving_description="${fi.serving_description}" count=${servingCount} gramsPerUnit=${gramsPerUnit} for "${fi.name}"`);
-      } else if (fi?.off_data) {
-        // Legacy barcode path: parse off_data with regex
+      } else if (fi.off_data) {
         const offProduct = fi.off_data || {
           serving_size: fi.serving_size ? String(fi.serving_size) : undefined,
         };
@@ -356,24 +353,63 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         servingGramsForDisplay = servingInfo.grams;
         displayServingUnit = servingInfo.displayText;
       } else {
-        const loggedServingDesc = item.serving_description || null;
-        if (loggedServingDesc && loggedServingDesc.trim().length > 0) {
-          displayServingUnit = loggedServingDesc;
-        } else {
-          displayServingUnit = `${Math.round(loggedGrams)}g`;
-        }
+        displayServingUnit = servingSize > 0 ? `${servingSize}g` : '100g';
       }
 
-      // ── Name & brand: fi first, then food_name column, then foods fallback ──
-      const foodName  = fi?.name  ?? (item as any).food_name  ?? item.foods?.name  ?? 'Unknown Food';
-      const foodBrand = fi?.brand ?? (item as any).food_brand ?? item.foods?.brand ?? undefined;
+      const food: Food = {
+        id: fi.id,
+        name: fi.name ?? 'Unknown Food',
+        brand: fi.brand ?? undefined,
+        barcode: fi.barcode ?? undefined,
+        serving_amount: servingGramsForDisplay,
+        serving_unit: displayServingUnit,
+        calories,
+        protein,
+        carbs,
+        fats,
+        fiber,
+        user_created: false,
+        is_favorite: false,
+        last_serving_description: undefined,
+        food_item_id: fi.id,
+      };
+
+      results.push(food);
+    }
+
+    // ── Legacy fallback: items without food_item_id ───────────────────────────
+    for (const item of legacyItems) {
+      if (results.length >= limit) break;
+
+      const hasFoodsRow = !!(item.foods && item.food_id);
+      if (!hasFoodsRow && !(item as any).food_name) continue;
+
+      const loggedGrams = item.grams ?? 100;
+      const calories = item.calories ?? 0;
+      const protein  = item.protein  ?? 0;
+      const carbs    = item.carbs    ?? 0;
+      const fats     = item.fats     ?? 0;
+      const fiber    = item.fiber    ?? 0;
+
+      const foodName  = (item as any).food_name  ?? item.foods?.name  ?? 'Unknown Food';
+      const foodBrand = (item as any).food_brand ?? item.foods?.brand ?? undefined;
+
+      const loggedServingDesc = item.serving_description || null;
+      const displayServingUnit = (loggedServingDesc && loggedServingDesc.trim().length > 0)
+        ? loggedServingDesc
+        : `${Math.round(loggedGrams)}g`;
+
+      console.log(
+        `[FoodDB] ⚠️ legacy fallback for "${foodName}": ` +
+        `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
+      );
 
       const food: Food = {
-        id: fi?.id ?? item.foods?.id ?? '',
+        id: item.foods?.id ?? item.food_id ?? item.id,
         name: foodName,
         brand: foodBrand,
-        barcode: fi?.barcode ?? item.foods?.barcode ?? undefined,
-        serving_amount: servingGramsForDisplay,
+        barcode: item.foods?.barcode ?? undefined,
+        serving_amount: loggedGrams,
         serving_unit: displayServingUnit,
         calories,
         protein,
@@ -383,17 +419,14 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         user_created: item.foods?.user_created || false,
         is_favorite: false,
         last_serving_description: item.serving_description || undefined,
-        food_item_id: (item as any).food_item_id ?? undefined,
+        food_item_id: undefined,
       };
 
-      uniqueFoods.push(food);
-
-      // Stop once we have enough unique foods
-      if (uniqueFoods.length >= limit) break;
+      results.push(food);
     }
 
-    console.log(`[FoodDB] Returning ${uniqueFoods.length} unique recent foods`);
-    return uniqueFoods;
+    console.log(`[FoodDB] Returning ${results.length} unique recent foods`);
+    return results;
   } catch (error) {
     console.error('[FoodDB] Error getting recent foods:', error);
     return [];
