@@ -190,56 +190,76 @@ export default function ShareProgressScreen() {
     userId: string,
     userData: any
   ): Promise<{ weightGoalProgress: number; weightLost: number }> => {
+    const KG_TO_LBS = 2.20462;
     try {
       console.log('[ShareProgress] === WEIGHT GOAL PROGRESS CALCULATION ===');
 
-      const { data: checkIns } = await supabase
-        .from('check_ins')
-        .select('weight, date')
-        .eq('user_id', userId)
-        .not('weight', 'is', null)
-        .order('date', { ascending: true });
+      // Fetch check-ins and weight tracker entries in parallel
+      const [{ data: checkIns }, { data: weightTracker }] = await Promise.all([
+        supabase
+          .from('check_ins')
+          .select('weight, date')
+          .eq('user_id', userId)
+          .not('weight', 'is', null)
+          .order('date', { ascending: true }),
+        supabase
+          .from('trackers')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('name', 'weight')
+          .maybeSingle(),
+      ]);
 
-      console.log('[ShareProgress] Check-ins found:', checkIns?.length || 0);
+      console.log('[ShareProgress] Check-ins found:', checkIns?.length ?? 0);
+      console.log('[ShareProgress] Weight tracker id:', weightTracker?.id ?? null);
 
-      if (!checkIns || checkIns.length === 0) {
+      // Fetch tracker entries if tracker exists
+      let lastTrackerEntryKg: number | null = null;
+      if (weightTracker?.id) {
+        const { data: trackerEntries } = await supabase
+          .from('tracker_entries')
+          .select('value')
+          .eq('tracker_id', weightTracker.id)
+          .order('date', { ascending: true });
+
+        console.log('[ShareProgress] Tracker entries found:', trackerEntries?.length ?? 0);
+
+        if (trackerEntries && trackerEntries.length > 0) {
+          const lastEntryLbs = trackerEntries[trackerEntries.length - 1].value as number;
+          lastTrackerEntryKg = lastEntryLbs / KG_TO_LBS;
+          console.log('[ShareProgress] Last tracker entry (lbs):', lastEntryLbs, '-> kg:', lastTrackerEntryKg);
+        }
+      }
+
+      // Resolve startKg and activeWeightKg
+      const startKg: number | null = checkIns && checkIns.length > 0 ? (checkIns[0].weight as number) : null;
+      const lastCheckInKg: number | null = checkIns && checkIns.length > 0 ? (checkIns[checkIns.length - 1].weight as number) : null;
+      const activeWeightKg: number | null = lastTrackerEntryKg ?? lastCheckInKg ?? null;
+
+      console.log('[ShareProgress] startKg:', startKg, 'activeWeightKg:', activeWeightKg);
+
+      // Resolve goal weight
+      const resolvedGoalKg = parseFloat(userData?.goal_weight);
+      if (!userData?.goal_weight || isNaN(resolvedGoalKg)) {
+        console.log('[ShareProgress] No valid goal_weight, returning 0');
         return { weightGoalProgress: 0, weightLost: 0 };
       }
 
-      const firstWeightKg = checkIns[0].weight;
-      const lastWeightKg = checkIns[checkIns.length - 1].weight;
-
-      const weightLostKg = firstWeightKg - lastWeightKg;
-      const weightLostLbs = weightLostKg * 2.20462;
-
-      let weightGoalProgress = 0;
-      const goalWeightRaw = userData?.goal_weight;
-
-      if (goalWeightRaw) {
-        const goalWeightKg = parseFloat(goalWeightRaw);
-        if (!isNaN(goalWeightKg) && goalWeightKg > 0) {
-          const totalWeightGoalKg = firstWeightKg - goalWeightKg;
-          const totalWeightGoalLbs = totalWeightGoalKg * 2.20462;
-          if (totalWeightGoalLbs > 0) {
-            weightGoalProgress = (weightLostLbs / totalWeightGoalLbs) * 100;
-          }
-        }
-      } else {
-        const assumedGoalLbs = (firstWeightKg * 2.20462) * 0.1;
-        if (assumedGoalLbs > 0) {
-          weightGoalProgress = (weightLostLbs / assumedGoalLbs) * 100;
-        }
+      if (startKg == null || activeWeightKg == null) {
+        console.log('[ShareProgress] Missing startKg or activeWeightKg, returning 0');
+        return { weightGoalProgress: 0, weightLost: 0 };
       }
 
-      if (isNaN(weightGoalProgress) || !isFinite(weightGoalProgress)) {
-        weightGoalProgress = 0;
-      } else {
-        weightGoalProgress = Math.max(0, Math.min(100, Math.round(weightGoalProgress)));
-      }
+      // Apply GoalWeightCard formula
+      const totalRange = Math.abs(startKg - resolvedGoalKg) || 1;
+      const progress = Math.min(1, Math.max(0, Math.abs(startKg - activeWeightKg) / totalRange));
+      const progressPct = Math.round(progress * 100);
 
-      const finalWeightLost = Math.max(0, Math.round(weightLostLbs * 10) / 10);
+      const weightLost = Math.max(0, Math.round((startKg - activeWeightKg) * KG_TO_LBS * 10) / 10);
 
-      return { weightGoalProgress, weightLost: finalWeightLost };
+      console.log('[ShareProgress] progressPct:', progressPct, 'weightLost (lbs):', weightLost);
+
+      return { weightGoalProgress: progressPct, weightLost };
     } catch (error) {
       console.error('[ShareProgress] Error calculating weight goal progress:', error);
       return { weightGoalProgress: 0, weightLost: 0 };
