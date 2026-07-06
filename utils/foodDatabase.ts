@@ -217,6 +217,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           serving_unit,
           serving_quantity,
           serving_description,
+          serving_count,
           calories,
           protein,
           carbs,
@@ -397,10 +398,14 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         let servingDisplayText: string;
 
         if (fi.serving_description) {
-          // New path: serving_description is the human-readable label (e.g. "egg")
-          servingGramsForDisplay = servingGrams;
-          servingDisplayText = `1 ${fi.serving_description} (${servingGrams} g)`;
-          console.log(`[FoodDB] Using serving_description="${fi.serving_description}" for "${fi.name}"`);
+          // New path: serving_description is the human-readable label (e.g. "cookie")
+          // serving_count tells us how many units make up serving_size grams.
+          const servingCount = Number(fi.serving_count) || 1;
+          const gramsPerUnit = servingGrams / servingCount;
+          servingGramsForDisplay = gramsPerUnit;
+          const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
+          servingDisplayText = `${countLabel}${fi.serving_description} (${servingGrams} g)`;
+          console.log(`[FoodDB] Using serving_description="${fi.serving_description}" serving_count=${servingCount} gramsPerUnit=${gramsPerUnit} for "${fi.name}"`);
         } else {
           // Legacy path: parse off_data with regex
           const offProduct = fi.off_data || {

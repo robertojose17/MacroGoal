@@ -338,16 +338,19 @@ export default function FoodDetailsLayout({
 
   // Helper: build a minimal OpenFoodFactsProduct from a food_items row
   const buildMockProductFromFoodItem = (
-    foodItem: { name?: string; brand?: string; serving_size?: string | number; serving_quantity?: number; serving_unit?: string; serving_description?: string | null; nutriments?: Record<string, number> | null },
+    foodItem: { name?: string; brand?: string; serving_size?: string | number; serving_quantity?: number; serving_unit?: string; serving_description?: string | null; serving_count?: number | null; nutriments?: Record<string, number> | null },
     food: { name: string; brand?: string; calories: number; protein: number; carbs: number; fats: number; fiber?: number; serving_amount: number; serving_unit: string }
   ): OpenFoodFactsProduct => {
-    // If serving_description is set, build a rich serving_size string like "1 egg (50 g)"
+    // If serving_description is set, build a rich serving_size string like "4 cookies (29 g)"
     // so extractServingSize can parse it correctly downstream.
+    // serving_count tells how many units make up serving_size grams (e.g. 4 cookies = 29g).
     let servingSize: string;
     if (foodItem.serving_description) {
       const gramsVal = foodItem.serving_size ?? foodItem.serving_quantity ?? food.serving_amount;
-      servingSize = `1 ${foodItem.serving_description} (${gramsVal} g)`;
-      console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize);
+      const servingCount = Number(foodItem.serving_count) || 1;
+      const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
+      servingSize = `${countLabel}${foodItem.serving_description} (${gramsVal} g)`;
+      console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', servingCount);
     } else {
       servingSize = foodItem.serving_size != null
         ? String(foodItem.serving_size)
@@ -456,7 +459,7 @@ export default function FoodDetailsLayout({
         console.log('[FoodDetails] loadEditItem: fetching food_items for id=', mealItem.food_item_id);
         const { data: foodItem } = await supabase
           .from('food_items')
-          .select('off_data, nutriments, serving_size, serving_quantity, serving_unit, serving_description, name, brand')
+          .select('off_data, nutriments, serving_size, serving_quantity, serving_unit, serving_description, serving_count, name, brand')
           .eq('id', mealItem.food_item_id)
           .single();
 
@@ -468,11 +471,13 @@ export default function FoodDetailsLayout({
               mockProduct = JSON.parse(foodItem.off_data) as OpenFoodFactsProduct;
               if ((foodItem as any).serving_description) {
                 const gramsVal = (foodItem as any).serving_size ?? mockProduct.serving_quantity ?? 100;
+                const servingCount = Number((foodItem as any).serving_count) || 1;
+                const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
                 mockProduct = {
                   ...mockProduct,
-                  serving_size: `1 ${(foodItem as any).serving_description} (${gramsVal} g)`,
+                  serving_size: `${countLabel}${(foodItem as any).serving_description} (${gramsVal} g)`,
                 };
-                console.log('[FoodDetails] loadEditItem: overrode serving_size with serving_description →', mockProduct.serving_size);
+                console.log('[FoodDetails] loadEditItem: overrode serving_size with serving_description →', mockProduct.serving_size, 'serving_count=', servingCount);
               }
               const nutrition = extractNutrition(mockProduct);
               per100Cals = safeNum(nutrition.calories);
@@ -767,14 +772,14 @@ export default function FoodDetailsLayout({
    */
   /**
    * Extract a human-readable serving description from an OFF serving_size string.
-   * e.g. "1 egg (50 g)" → "egg", "50 g" → null, "1 cookie (28 g)" → "cookie"
+   * e.g. "1 egg (50 g)" → "egg", "4 cookies (29 g)" → "cookies", "50 g" → null
    */
   const extractServingDescription = (servingSizeStr: string | undefined): string | null => {
     if (!servingSizeStr) return null;
     const s = servingSizeStr.trim();
     // Pure gram/ml: "50 g", "100ml" → null
     if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
-    // Has parenthetical: "1 egg (50 g)" → remove "(50 g)" → "1 egg" → remove leading number → "egg"
+    // Has parenthetical: "4 cookies (29 g)" → remove "(29 g)" → "4 cookies" → remove leading number → "cookies"
     if (s.includes('(')) {
       const withoutParens = s.replace(/\s*\(.*\)\s*$/, '').trim();
       const withoutLeadingNumber = withoutParens.replace(/^\d+(\.\d+)?\s+/, '').trim();
@@ -783,6 +788,22 @@ export default function FoodDetailsLayout({
       return result;
     }
     return null;
+  };
+
+  /**
+   * Extract the serving count (number of units) from an OFF serving_size string.
+   * e.g. "4 cookies (29 g)" → 4, "1 egg (50 g)" → null, "50 g" → null
+   * Returns null when serving_size is a plain gram/ml value or count is 1.
+   */
+  const extractServingCount = (servingSizeStr: string | undefined): number | null => {
+    if (!servingSizeStr) return null;
+    const s = servingSizeStr.trim();
+    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
+    const match = s.match(/^(\d+(\.\d+)?)\s+\D/);
+    if (!match) return null;
+    const count = parseFloat(match[1]);
+    console.log('[FoodDetails] extractServingCount:', s, '→', count);
+    return count > 1 ? count : null;
   };
 
   const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
@@ -794,17 +815,19 @@ export default function FoodDetailsLayout({
     const nutrition = extractNutrition(prod);
     const servingInfo = extractServingSize(prod);
     const servingDesc = extractServingDescription(prod.serving_size);
+    const servingCountVal = extractServingCount(prod.serving_size);
 
-    console.log('[FoodDetails] upsertFoodItem: serving_description=', servingDesc, 'for', pName);
+    console.log('[FoodDetails] upsertFoodItem: serving_description=', servingDesc, 'serving_count=', servingCountVal, 'for', pName);
 
     const payload = {
       name: pName,
       brand: pBrand,
       barcode: barcode,
-      serving_size: servingInfo.grams,
+      serving_size: servingInfo.grams * (servingCountVal ?? 1),
       serving_unit: 'g',
       serving_quantity: null as null,
       serving_description: servingDesc,
+      serving_count: servingCountVal,
       calories: safeNum(nutrition.calories),
       protein: safeNum(nutrition.protein),
       carbs: safeNum(nutrition.carbs),

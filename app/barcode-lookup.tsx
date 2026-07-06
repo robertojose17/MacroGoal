@@ -99,22 +99,46 @@ export default function BarcodeLookupScreen() {
   };
 
   /**
+   * Extract the serving count (number of units) from an OFF serving_size string.
+   * e.g. "4 cookies (29 g)" → 4, "1 egg (50 g)" → null, "50 g" → null
+   * Returns null when serving_size is a plain gram/ml value (no discrete unit).
+   */
+  const extractServingCount = (servingSizeStr: string | undefined): number | null => {
+    if (!servingSizeStr) return null;
+    const s = servingSizeStr.trim();
+    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
+    const match = s.match(/^(\d+(\.\d+)?)\s+\D/);
+    if (!match) return null;
+    const count = parseFloat(match[1]);
+    console.log('[BarcodeLookup] extractServingCount:', s, '→', count);
+    return count > 1 ? count : null;
+  };
+
+  /**
    * Build a synthetic OFF-shaped object from a cached food_items row
    * so food-details screen keeps working unchanged.
-   * Uses serving_description column when available for a clean serving_size string.
+   * Uses serving_description and serving_count columns when available.
    */
   const buildSyntheticOffData = (item: any) => {
     const servingDesc: string | null =
       item.serving_description ||
       extractServingDescription(item.serving_size ? `${item.serving_size} ${item.serving_unit || 'g'}` : undefined);
 
-    const servingSizeStr = servingDesc && item.serving_size
-      ? `1 ${servingDesc} (${item.serving_size} g)`
-      : item.serving_size
-        ? `${item.serving_size} ${item.serving_unit || 'g'}`
-        : undefined;
+    // serving_count: how many units make up serving_size grams (e.g. 4 cookies = 29g)
+    const servingCount: number | null =
+      item.serving_count != null
+        ? Number(item.serving_count) || null
+        : extractServingCount(item.serving_size ? `${item.serving_size} ${item.serving_unit || 'g'}` : undefined);
 
-    console.log('[BarcodeLookup] buildSyntheticOffData: serving_description=', servingDesc, 'serving_size=', servingSizeStr);
+    let servingSizeStr: string | undefined;
+    if (servingDesc && item.serving_size) {
+      const countLabel = servingCount && servingCount > 1 ? `${servingCount} ` : '1 ';
+      servingSizeStr = `${countLabel}${servingDesc} (${item.serving_size} g)`;
+    } else if (item.serving_size) {
+      servingSizeStr = `${item.serving_size} ${item.serving_unit || 'g'}`;
+    }
+
+    console.log('[BarcodeLookup] buildSyntheticOffData: serving_description=', servingDesc, 'serving_count=', servingCount, 'serving_size=', servingSizeStr);
 
     return {
       code: item.barcode,
