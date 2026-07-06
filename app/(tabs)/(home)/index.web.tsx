@@ -23,15 +23,20 @@ interface FoodItem {
   serving_description: string | null;
   grams: number | null;
   food_item_id?: string | null;
-  foods: {
+  name?: string;
+  brand?: string;
+  food_items?: {
     id: string;
     name: string;
     brand: string | null;
-    serving_amount: number;
-    serving_unit: string;
-    user_created: boolean;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+    serving_size: number;
+    macros_per: string | null;
   } | null;
-  food_items?: { id: string; name: string; brand: string | null } | null;
 }
 
 interface MealData {
@@ -53,16 +58,34 @@ const getServingDisplayText = (item: FoodItem): string => {
   if (item.serving_description) return item.serving_description;
   // 2. Use grams if available (e.g. "63 g")
   if (item.grams && item.grams > 0) return formatServing(item.grams, 'g');
-  // 3. Fallback: quantity × serving_amount, but only if serving_unit is meaningful (not 'serving')
+  // 3. Fallback: quantity
   const quantity = item.quantity || 1;
-  const servingAmount = item.foods?.serving_amount || 100;
-  const servingUnit = item.foods?.serving_unit || 'g';
-  if (servingUnit === 'serving' || servingUnit === 'servings') {
-    // serving_unit is generic — just show grams
-    return formatServing(quantity * servingAmount, 'g');
-  }
-  return formatServing(quantity * servingAmount, servingUnit);
+  return formatServing(quantity * 100, 'g');
 };
+
+function calcMacros(item: any) {
+  const fi = item.food_items;
+  const grams = item.grams ?? 100;
+  if (fi && fi.serving_size > 0) {
+    const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
+    const m = grams / divisor;
+    return {
+      calories: Math.round((fi.calories ?? 0) * m),
+      protein:  Math.round((fi.protein  ?? 0) * m * 10) / 10,
+      carbs:    Math.round((fi.carbs    ?? 0) * m * 10) / 10,
+      fats:     Math.round((fi.fat      ?? 0) * m * 10) / 10,
+      fiber:    Math.round((fi.fiber    ?? 0) * m * 10) / 10,
+    };
+  }
+  // fallback to saved columns
+  return {
+    calories: item.calories ?? 0,
+    protein:  item.protein  ?? 0,
+    carbs:    item.carbs    ?? 0,
+    fats:     item.fats     ?? 0,
+    fiber:    item.fiber    ?? 0,
+  };
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -145,18 +168,17 @@ export default function HomeScreen() {
             fiber,
             serving_description,
             grams,
-            foods (
-              id,
-              name,
-              brand,
-              serving_amount,
-              serving_unit,
-              user_created
-            ),
             food_items!food_item_id (
               id,
               name,
-              brand
+              brand,
+              calories,
+              protein,
+              carbs,
+              fat,
+              fiber,
+              serving_size,
+              macros_per
             )
           )
         `)
@@ -186,12 +208,19 @@ export default function HomeScreen() {
           mealsData.forEach((meal: any) => {
             if (meal.meal_items) {
               meal.meal_items.forEach((item: any) => {
-                mealsByType[meal.meal_type as MealType].push(item);
-                totalCals += item.calories || 0;
-                totalP += item.protein || 0;
-                totalC += item.carbs || 0;
-                totalF += item.fats || 0;
-                totalFib += item.fiber || 0;
+                const macros = calcMacros(item);
+                const enriched = {
+                  ...item,
+                  ...macros,
+                  name: item.food_items?.name ?? 'Unknown Food',
+                  brand: item.food_items?.brand ?? undefined,
+                };
+                mealsByType[meal.meal_type as MealType].push(enriched);
+                totalCals += macros.calories;
+                totalP    += macros.protein;
+                totalC    += macros.carbs;
+                totalF    += macros.fats;
+                totalFib  += macros.fiber;
               });
             }
           });
@@ -541,11 +570,11 @@ export default function HomeScreen() {
                       >
                         <View style={styles.foodInfo}>
                           <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-                            {(item as any).food_items?.name ?? item.foods?.name ?? 'Unknown Food'}
+                            {item.name ?? item.food_items?.name ?? 'Unknown Food'}
                           </Text>
-                          {((item as any).food_items?.brand ?? item.foods?.brand) && (
+                          {(item.brand ?? item.food_items?.brand) && (
                             <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                              {(item as any).food_items?.brand ?? item.foods?.brand}
+                              {item.brand ?? item.food_items?.brand}
                             </Text>
                           )}
                           <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
