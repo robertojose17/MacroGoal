@@ -199,46 +199,6 @@ export default function MyMealsCreateScreen() {
 
       console.log('[MyMealsCreate] ✅ User found:', user.id);
 
-      // STEP 2: Verify all foods exist in database
-      console.log('[MyMealsCreate] STEP 2: Verifying all foods exist in database...');
-      const foodIds = draftItems.map(item => item.food_id);
-      console.log('[MyMealsCreate] Food IDs to verify:', foodIds);
-      
-      const { data: existingFoods, error: foodsError } = await supabase
-        .from('foods')
-        .select('id, name, user_created, created_by')
-        .in('id', foodIds);
-      
-      if (foodsError) {
-        console.error('[MyMealsCreate] ❌ Error verifying foods:', foodsError);
-        Alert.alert('Error', 'Failed to verify foods in database');
-        setSaving(false);
-        return;
-      }
-      
-      console.log('[MyMealsCreate] ✅ Found', existingFoods?.length || 0, 'foods in database');
-      existingFoods?.forEach((food: any) => {
-        console.log('[MyMealsCreate] Food:', {
-          id: food.id,
-          name: food.name,
-          user_created: food.user_created,
-          created_by: food.created_by,
-        });
-      });
-      
-      // Check if any foods are missing
-      const existingFoodIds = new Set(existingFoods?.map((f: any) => f.id) || []);
-      const missingFoodIds = foodIds.filter(id => !existingFoodIds.has(id));
-      
-      if (missingFoodIds.length > 0) {
-        console.error('[MyMealsCreate] ❌ Missing foods:', missingFoodIds);
-        Alert.alert('Error', `Some foods are missing from the database. Please try adding them again.`);
-        setSaving(false);
-        return;
-      }
-      
-      console.log('[MyMealsCreate] ✅ All foods verified');
-
       // STEP 3: Create saved meal
       console.log('[MyMealsCreate] STEP 3: Creating saved meal...');
       console.log('[MyMealsCreate] Inserting into saved_meals table:');
@@ -300,7 +260,10 @@ export default function MyMealsCreateScreen() {
 
         return {
           saved_meal_id: savedMeal.id,
-          food_id: item.food_id,
+          food_id: item.food_id || null,
+          food_item_id: item.food_item_id || null,
+          food_name: item.food_name,
+          food_brand: item.food_brand || null,
           serving_amount: item.serving_amount,
           serving_unit: item.serving_unit,
           servings_count: item.servings_count,

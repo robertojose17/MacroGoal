@@ -12,21 +12,40 @@ import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 
 interface SavedMealItem {
   id: string;
-  food_id: string;
+  food_item_id: string | null;
+  food_id: string | null;
+  food_name: string | null;
+  food_brand: string | null;
   serving_amount: number;
   serving_unit: string;
   servings_count: number;
-  foods: {
+  food_items: {
     id: string;
     name: string;
-    brand?: string;
+    brand: string | null;
     calories: number;
     protein: number;
     carbs: number;
-    fats: number;
-    fiber: number;
-    user_created: boolean;
-    created_by?: string;
+    fat: number;
+    fiber: number | null;
+    serving_size: number;
+    macros_per: string | null;
+  } | null;
+}
+
+function calcItemMacros(item: SavedMealItem, multiplier: number) {
+  const fi = item.food_items;
+  if (!fi || !fi.serving_size || fi.serving_size === 0) {
+    return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+  }
+  const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
+  const ratio = (item.serving_amount * item.servings_count * multiplier) / divisor;
+  return {
+    calories: fi.calories * ratio,
+    protein: fi.protein * ratio,
+    carbs: fi.carbs * ratio,
+    fats: fi.fat * ratio,
+    fiber: (fi.fiber ?? 0) * ratio,
   };
 }
 
@@ -77,21 +96,24 @@ export default function MyMealsDetailsScreen() {
           updated_at,
           saved_meal_items (
             id,
+            food_item_id,
             food_id,
+            food_name,
+            food_brand,
             serving_amount,
             serving_unit,
             servings_count,
-            foods (
+            food_items!saved_meal_items_food_item_id_fkey (
               id,
               name,
               brand,
               calories,
               protein,
               carbs,
-              fats,
+              fat,
               fiber,
-              user_created,
-              created_by
+              serving_size,
+              macros_per
             )
           )
         `)
@@ -116,59 +138,19 @@ export default function MyMealsDetailsScreen() {
       data.saved_meal_items?.forEach((item: any, index: number) => {
         console.log(`[MyMealsDetails] Item ${index + 1}:`, {
           id: item.id,
+          food_item_id: item.food_item_id,
           food_id: item.food_id,
-          food_name: item.foods?.name || 'MISSING',
-          food_user_created: item.foods?.user_created,
-          food_created_by: item.foods?.created_by,
+          food_name: item.food_items?.name ?? item.food_name ?? 'MISSING',
           serving_amount: item.serving_amount,
           serving_unit: item.serving_unit,
           servings_count: item.servings_count,
         });
         
-        if (!item.foods) {
+        if (!item.food_items && !item.food_name) {
           console.error('[MyMealsDetails] ❌ MISSING FOOD DATA for item:', item.id);
-          console.error('[MyMealsDetails] food_id:', item.food_id);
+          console.error('[MyMealsDetails] food_item_id:', item.food_item_id);
         }
       });
-      
-      // Check for items with missing food data
-      const itemsWithMissingFood = data.saved_meal_items?.filter((item: any) => !item.foods) || [];
-      if (itemsWithMissingFood.length > 0) {
-        console.error('[MyMealsDetails] ❌ CRITICAL: Found', itemsWithMissingFood.length, 'items with missing food data');
-        itemsWithMissingFood.forEach((item: any) => {
-          console.error('[MyMealsDetails] Missing food for item:', {
-            item_id: item.id,
-            food_id: item.food_id,
-          });
-        });
-        
-        // Try to fetch the missing foods directly
-        console.log('[MyMealsDetails] Attempting to fetch missing foods directly...');
-        const missingFoodIds = itemsWithMissingFood.map((item: any) => item.food_id);
-        const { data: missingFoods, error: missingFoodsError } = await supabase
-          .from('foods')
-          .select('*')
-          .in('id', missingFoodIds);
-        
-        if (missingFoodsError) {
-          console.error('[MyMealsDetails] ❌ Error fetching missing foods:', missingFoodsError);
-        } else {
-          console.log('[MyMealsDetails] Missing foods query result:', missingFoods);
-          if (missingFoods && missingFoods.length > 0) {
-            console.log('[MyMealsDetails] ✅ Found', missingFoods.length, 'missing foods');
-            missingFoods.forEach((food: any) => {
-              console.log('[MyMealsDetails] Missing food:', {
-                id: food.id,
-                name: food.name,
-                user_created: food.user_created,
-                created_by: food.created_by,
-              });
-            });
-          } else {
-            console.error('[MyMealsDetails] ❌ Missing foods not found in database!');
-          }
-        }
-      }
 
       setSavedMeal(data as SavedMeal);
       setLoading(false);
@@ -202,17 +184,16 @@ export default function MyMealsDetailsScreen() {
     let totalFiber = 0;
 
     savedMeal.saved_meal_items.forEach(item => {
-      if (!item.foods) {
+      if (!item.food_items && !item.food_name) {
         console.warn('[MyMealsDetails] Skipping item with missing food data:', item.id);
         return;
       }
-      
-      const itemMultiplier = (item.serving_amount / 100) * item.servings_count * multiplier;
-      totalCalories += item.foods.calories * itemMultiplier;
-      totalProtein += item.foods.protein * itemMultiplier;
-      totalCarbs += item.foods.carbs * itemMultiplier;
-      totalFats += item.foods.fats * itemMultiplier;
-      totalFiber += item.foods.fiber * itemMultiplier;
+      const macros = calcItemMacros(item, multiplier);
+      totalCalories += macros.calories;
+      totalProtein += macros.protein;
+      totalCarbs += macros.carbs;
+      totalFats += macros.fats;
+      totalFiber += macros.fiber;
     });
 
     return {
@@ -285,17 +266,20 @@ export default function MyMealsDetailsScreen() {
   }, [showSuccessBanner]);
 
   const handleItemPress = useCallback((item: SavedMealItem) => {
-    console.log('[MyMealsDetails] Tapped food item:', item.foods?.name, 'id:', item.id);
+    const fi = item.food_items;
+    const itemName = fi?.name ?? item.food_name ?? 'Unknown Food';
+    const itemBrand = fi?.brand ?? item.food_brand ?? '';
+    console.log('[MyMealsDetails] Tapped food item:', itemName, 'id:', item.id);
     const offData = {
-      product_name: item.foods.name,
-      brands: item.foods.brand || '',
-      nutriments: {
-        'energy-kcal_100g': item.foods.calories,
-        protein_100g: item.foods.protein,
-        carbohydrates_100g: item.foods.carbs,
-        fat_100g: item.foods.fats,
-        fiber_100g: item.foods.fiber,
-      },
+      product_name: itemName,
+      brands: itemBrand,
+      nutriments: fi ? {
+        'energy-kcal_100g': fi.macros_per === '100g' ? fi.calories : (fi.serving_size > 0 ? (fi.calories / fi.serving_size) * 100 : fi.calories),
+        protein_100g: fi.macros_per === '100g' ? fi.protein : (fi.serving_size > 0 ? (fi.protein / fi.serving_size) * 100 : fi.protein),
+        carbohydrates_100g: fi.macros_per === '100g' ? fi.carbs : (fi.serving_size > 0 ? (fi.carbs / fi.serving_size) * 100 : fi.carbs),
+        fat_100g: fi.macros_per === '100g' ? fi.fat : (fi.serving_size > 0 ? (fi.fat / fi.serving_size) * 100 : fi.fat),
+        fiber_100g: fi.macros_per === '100g' ? (fi.fiber ?? 0) : (fi.serving_size > 0 ? ((fi.fiber ?? 0) / fi.serving_size) * 100 : (fi.fiber ?? 0)),
+      } : {},
       serving_quantity: item.serving_amount,
       serving_quantity_unit: item.serving_unit,
       food_id: item.food_id,
@@ -337,37 +321,38 @@ export default function MyMealsDetailsScreen() {
       }
 
       // Add all items from saved meal via RPC (one call per item)
-      const validItems = savedMeal.saved_meal_items.filter(item => item.foods);
+      const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.food_name);
       console.log('[MyMealsDetails] Logging', validItems.length, 'items via log_food RPC');
 
       for (const item of validItems) {
-        const itemMultiplier = (item.serving_amount / 100) * item.servings_count * multiplier;
-        console.log('[MyMealsDetails] Calling log_food RPC for item:', item.foods.name);
+        const macros = calcItemMacros(item, multiplier);
+        const itemName = item.food_items?.name ?? item.food_name ?? '';
+        console.log('[MyMealsDetails] Calling log_food RPC for item:', itemName);
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
           p_date: date,
           p_meal_type: mealType,
-          p_food_id: item.food_id,
-          p_food_item_id: null,
+          p_food_id: item.food_id ?? null,
+          p_food_item_id: item.food_item_id ?? null,
           p_quantity: item.servings_count * multiplier,
-          p_calories: (Number(item.foods.calories) || 0) * itemMultiplier,
-          p_protein: (Number(item.foods.protein) || 0) * itemMultiplier,
-          p_carbs: (Number(item.foods.carbs) || 0) * itemMultiplier,
-          p_fats: (Number(item.foods.fats) || 0) * itemMultiplier,
-          p_fiber: (Number(item.foods.fiber) || 0) * itemMultiplier,
+          p_calories: macros.calories,
+          p_protein: macros.protein,
+          p_carbs: macros.carbs,
+          p_fats: macros.fats,
+          p_fiber: macros.fiber,
           p_serving_description: `${Math.round(item.servings_count * multiplier)} × ${Math.round(item.serving_amount)} ${item.serving_unit}`,
           p_grams: Math.round(item.serving_amount * item.servings_count * multiplier),
           p_logged_at: new Date().toISOString(),
         });
 
         if (rpcError) {
-          console.error('[MyMealsDetails] log_food RPC error for item:', item.foods.name, rpcError);
+          console.error('[MyMealsDetails] log_food RPC error for item:', itemName, rpcError);
           Alert.alert('Error', 'Failed to add foods to meal');
           setAdding(false);
           return;
         }
 
-        console.log('[MyMealsDetails] log_food RPC success for', item.foods.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
+        console.log('[MyMealsDetails] log_food RPC success for', itemName, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
       }
 
       console.log('[MyMealsDetails] ✅ Saved meal added successfully!');
@@ -417,7 +402,7 @@ export default function MyMealsDetailsScreen() {
   };
 
   // Filter out items with missing food data for display
-  const validItems = savedMeal.saved_meal_items.filter(item => item.foods);
+  const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.food_name);
   const missingItemsCount = savedMeal.saved_meal_items.length - validItems.length;
 
   return (
@@ -495,19 +480,15 @@ export default function MyMealsDetailsScreen() {
         </Text>
 
         {validItems.map((item) => {
-          const multiplier = (item.serving_amount / 100) * item.servings_count * (parseFloat(servingsMultiplier) || 1);
-          const itemCalories = item.foods.calories * multiplier;
-          const itemProtein = item.foods.protein * multiplier;
-          const itemCarbs = item.foods.carbs * multiplier;
-          const itemFats = item.foods.fats * multiplier;
-          const itemCaloriesRounded = Math.round(itemCalories);
-          const itemProteinRounded = Math.round(itemProtein);
-          const itemCarbsRounded = Math.round(itemCarbs);
-          const itemFatsRounded = Math.round(itemFats);
+          const itemMacros = calcItemMacros(item, parseFloat(servingsMultiplier) || 1);
+          const itemCaloriesRounded = Math.round(itemMacros.calories);
+          const itemProteinRounded = Math.round(itemMacros.protein);
+          const itemCarbsRounded = Math.round(itemMacros.carbs);
+          const itemFatsRounded = Math.round(itemMacros.fats);
           const servingAmountRounded = Math.round(item.serving_amount);
-          const foodName = item.foods.name;
-          const foodBrand = item.foods.brand;
-          const isUserCreated = item.foods.user_created;
+          const foodName = item.food_items?.name ?? item.food_name ?? 'Unknown Food';
+          const foodBrand = item.food_items?.brand ?? item.food_brand;
+          const isUserCreated = false;
 
           return (
             <SwipeToDeleteRow key={item.id} onDelete={() => handleDeleteItem(item.id)}>

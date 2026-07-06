@@ -1010,6 +1010,7 @@ export default function AddFoodScreen() {
       // Add to draft
       await addToDraft({
         food_id: food.id,
+        food_item_id: food.food_item_id || undefined,
         food_name: food.name,
         food_brand: food.brand || undefined,
         serving_amount: gramsToAdd,
@@ -1337,6 +1338,7 @@ export default function AddFoodScreen() {
       // Add to draft
       await addToDraft({
         food_id: foodId,
+        food_item_id: (favorite as any).food_item_id || undefined,
         food_name: favorite.food_name,
         food_brand: favorite.brand || undefined,
         serving_amount: favorite.default_grams,
@@ -1818,19 +1820,24 @@ export default function AddFoodScreen() {
         .from('saved_meal_items')
         .select(`
           id,
+          food_item_id,
+          food_id,
+          food_name,
+          food_brand,
           serving_amount,
           serving_unit,
           servings_count,
-          food_id,
-          foods (
+          food_items!saved_meal_items_food_item_id_fkey (
             id,
             name,
             brand,
             calories,
             protein,
             carbs,
-            fats,
-            fiber
+            fat,
+            fiber,
+            serving_size,
+            macros_per
           )
         `)
         .eq('saved_meal_id', meal.id);
@@ -1847,49 +1854,52 @@ export default function AddFoodScreen() {
       console.log('[AddFood] Logging', mealItems.length, 'saved meal items via log_food RPC');
 
       for (const item of mealItems as any[]) {
-        const food = item.foods;
-        const multiplier = (item.serving_amount / 100) * item.servings_count;
+        const fi = item.food_items;
+        const itemName = fi?.name ?? item.food_name ?? 'Unknown';
+        let calories = 0, protein = 0, carbs = 0, fats = 0, fiber = 0;
+        if (fi && fi.serving_size && fi.serving_size > 0) {
+          const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
+          const ratio = (item.serving_amount * item.servings_count) / divisor;
+          calories = fi.calories * ratio;
+          protein = fi.protein * ratio;
+          carbs = fi.carbs * ratio;
+          fats = fi.fat * ratio;
+          fiber = (fi.fiber ?? 0) * ratio;
+        }
 
-        console.log('[AddFood] Calling log_food RPC for saved meal item:', food.name);
+        console.log('[AddFood] Calling log_food RPC for saved meal item:', itemName);
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
           p_date: date,
           p_meal_type: mealType,
-          p_food_id: item.food_id,
-          p_food_item_id: null,
-          p_quantity: multiplier,
-          p_calories: food.calories * multiplier,
-          p_protein: food.protein * multiplier,
-          p_carbs: food.carbs * multiplier,
-          p_fats: food.fats * multiplier,
-          p_fiber: food.fiber * multiplier,
+          p_food_id: item.food_id ?? null,
+          p_food_item_id: item.food_item_id ?? null,
+          p_quantity: item.servings_count,
+          p_calories: calories,
+          p_protein: protein,
+          p_carbs: carbs,
+          p_fats: fats,
+          p_fiber: fiber,
           p_serving_description: `${item.serving_amount} ${item.serving_unit}`,
           p_grams: item.serving_amount,
           p_logged_at: new Date().toISOString(),
         });
 
         if (rpcError) {
-          console.error('[AddFood] log_food RPC error for saved meal item:', food.name, rpcError);
+          console.error('[AddFood] log_food RPC error for saved meal item:', itemName, rpcError);
           Alert.alert('Error', 'Failed to add meal items');
           return;
         }
 
-        console.log('[AddFood] log_food RPC success for', food.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
+        console.log('[AddFood] log_food RPC success for', itemName, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
 
-        // ── Log food usage (fire-and-forget) — resolve catalog ID ──
-        const { data: miRow } = await supabase
-          .from('meal_items')
-          .select('food_item_id')
-          .eq('food_id', item.food_id)
-          .not('food_item_id', 'is', null)
-          .limit(1)
-          .maybeSingle();
-        const catalogId: string | null = miRow?.food_item_id ?? null;
+        // ── Log food usage (fire-and-forget) ──
+        const catalogId: string | null = item.food_item_id ?? null;
         if (catalogId) {
           console.log('[AddFood] Logging food usage for saved meal item, food_item_id:', catalogId);
           logFoodUsage(catalogId, 'search');
         } else {
-          console.log('[AddFood] Skipping logFoodUsage for saved meal item — no catalog food_item_id for food_id:', item.food_id);
+          console.log('[AddFood] Skipping logFoodUsage for saved meal item — no food_item_id for item:', item.id);
         }
       }
 

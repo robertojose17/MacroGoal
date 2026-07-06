@@ -11,6 +11,7 @@ export interface Favorite {
   user_id: string;
   food_source: 'library' | 'barcode' | 'quickadd' | 'custom';
   food_code?: string;
+  food_item_id?: string;
   food_name: string;
   brand?: string;
   per100_calories: number;
@@ -23,6 +24,18 @@ export interface Favorite {
   default_grams: number;
   created_at: string;
   updated_at?: string;
+  food_items?: {
+    id: string;
+    name: string;
+    brand: string | null;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number | null;
+    serving_size: number;
+    macros_per: string | null;
+  } | null;
 }
 
 /**
@@ -109,6 +122,7 @@ export async function addFavorite(favorite: Omit<Favorite, 'id' | 'created_at' |
           user_id: favorite.user_id,
           food_source: favorite.food_source,
           food_code: actualFoodCode,
+          food_item_id: favorite.food_item_id ?? null,
           food_name: favorite.food_name,
           brand: favorite.brand || null,
           per100_calories: favorite.per100_calories,
@@ -232,7 +246,7 @@ export async function getFavorites(userId: string): Promise<Favorite[]> {
 
     const { data, error } = await supabase
       .from('favorites')
-      .select('*')
+      .select('*, food_items!favorites_food_item_id_fkey(id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -259,6 +273,7 @@ export async function toggleFavorite(
   foodData: {
     food_name: string;
     brand?: string;
+    food_item_id?: string;
     per100_calories: number;
     per100_protein: number;
     per100_carbs: number;

@@ -12,19 +12,40 @@ import { loadDraft, clearDraft } from '@/utils/myMealsDraft';
 
 interface SavedMealItem {
   id: string;
-  food_id: string;
+  food_item_id: string | null;
+  food_id: string | null;
+  food_name: string | null;
+  food_brand: string | null;
   serving_amount: number;
   serving_unit: string;
   servings_count: number;
-  foods: {
+  food_items: {
     id: string;
     name: string;
-    brand?: string;
+    brand: string | null;
     calories: number;
     protein: number;
     carbs: number;
-    fats: number;
-    fiber: number;
+    fat: number;
+    fiber: number | null;
+    serving_size: number;
+    macros_per: string | null;
+  } | null;
+}
+
+function calcItemMacros(item: SavedMealItem, multiplier: number) {
+  const fi = item.food_items;
+  if (!fi || !fi.serving_size || fi.serving_size === 0) {
+    return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+  }
+  const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
+  const ratio = (item.serving_amount * item.servings_count * multiplier) / divisor;
+  return {
+    calories: fi.calories * ratio,
+    protein: fi.protein * ratio,
+    carbs: fi.carbs * ratio,
+    fats: fi.fat * ratio,
+    fiber: (fi.fiber ?? 0) * ratio,
   };
 }
 
@@ -64,19 +85,24 @@ export default function MyMealsEditScreen() {
           name,
           saved_meal_items (
             id,
+            food_item_id,
             food_id,
+            food_name,
+            food_brand,
             serving_amount,
             serving_unit,
             servings_count,
-            foods (
+            food_items!saved_meal_items_food_item_id_fkey (
               id,
               name,
               brand,
               calories,
               protein,
               carbs,
-              fats,
-              fiber
+              fat,
+              fiber,
+              serving_size,
+              macros_per
             )
           )
         `)
@@ -113,7 +139,10 @@ export default function MyMealsEditScreen() {
 
       const itemsToInsert = draftItems.map(item => ({
         saved_meal_id: mealId,
-        food_id: item.food_id,
+        food_id: item.food_id || null,
+        food_item_id: item.food_item_id || null,
+        food_name: item.food_name,
+        food_brand: item.food_brand || null,
         serving_amount: item.serving_amount,
         serving_unit: item.serving_unit,
         servings_count: item.servings_count,
@@ -251,12 +280,12 @@ export default function MyMealsEditScreen() {
     let totalFats = 0;
 
     savedMeal.saved_meal_items.forEach(item => {
-      if (!item.foods) return;
-      const multiplier = (item.serving_amount / 100) * item.servings_count;
-      totalCalories += item.foods.calories * multiplier;
-      totalProtein += item.foods.protein * multiplier;
-      totalCarbs += item.foods.carbs * multiplier;
-      totalFats += item.foods.fats * multiplier;
+      if (!item.food_items && !item.food_name) return;
+      const macros = calcItemMacros(item, 1);
+      totalCalories += macros.calories;
+      totalProtein += macros.protein;
+      totalCarbs += macros.carbs;
+      totalFats += macros.fats;
     });
 
     return {
@@ -284,7 +313,7 @@ export default function MyMealsEditScreen() {
   }
 
   const totals = calculateTotals();
-  const validItems = savedMeal.saved_meal_items.filter(item => item.foods);
+  const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.food_name);
 
   return (
     <SafeAreaView
@@ -352,12 +381,10 @@ export default function MyMealsEditScreen() {
           </TouchableOpacity>
         </View>
 
-        {validItems.map((item, index) => {
-          const multiplier = (item.serving_amount / 100) * item.servings_count;
-          const itemCalories = item.foods.calories * multiplier;
-          const itemProtein = item.foods.protein * multiplier;
-          const itemCarbs = item.foods.carbs * multiplier;
-          const itemFats = item.foods.fats * multiplier;
+        {validItems.map((item) => {
+          const itemMacros = calcItemMacros(item, 1);
+          const itemName = item.food_items?.name ?? item.food_name ?? 'Unknown Food';
+          const itemBrand = item.food_items?.brand ?? item.food_brand;
 
           return (
             <React.Fragment key={item.id}>
@@ -365,18 +392,31 @@ export default function MyMealsEditScreen() {
                 <View style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
                   <View style={styles.itemInfo}>
                     <Text style={[styles.itemName, { color: isDark ? colors.textDark : colors.text }]}>
-                      {item.foods.name}
+                      {itemName}
                     </Text>
-                    {item.foods.brand && (
+                    {itemBrand ? (
                       <Text style={[styles.itemBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                        {item.foods.brand}
+                        {itemBrand}
                       </Text>
-                    )}
+                    ) : null}
                     <Text style={[styles.itemServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      {Math.round(item.servings_count)} × {Math.round(item.serving_amount)} {item.serving_unit} • {Math.round(itemCalories)} cal
+                      {Math.round(item.servings_count)}
+                      {' × '}
+                      {Math.round(item.serving_amount)}
+                      {' '}
+                      {item.serving_unit}
+                      {' • '}
+                      {Math.round(itemMacros.calories)}
+                      {' cal'}
                     </Text>
                     <Text style={[styles.itemMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      P: {Math.round(itemProtein)}g • C: {Math.round(itemCarbs)}g • F: {Math.round(itemFats)}g
+                      {'P: '}
+                      {Math.round(itemMacros.protein)}
+                      {'g • C: '}
+                      {Math.round(itemMacros.carbs)}
+                      {'g • F: '}
+                      {Math.round(itemMacros.fats)}
+                      {'g'}
                     </Text>
                   </View>
                 </View>
