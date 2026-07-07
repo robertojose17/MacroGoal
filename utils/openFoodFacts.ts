@@ -28,6 +28,12 @@ export interface OpenFoodFactsProduct {
   serving_unit?: string;
   /** Set by the Supabase edge function to indicate the data source */
   _source?: string;
+  /** USDA FoodData Central ID, set when the product came from a USDA search */
+  _usda_fdc_id?: string;
+  /** OpenFoodFacts explicit product ID, set when the product came from OFacts with an id */
+  _off_id?: string;
+  /** Data quality score from the source database */
+  _data_quality_score?: number;
   /** Popularity score from the Supabase food database */
   popularity_score?: number;
   /** Number of times this food was logged in the last 30 days */

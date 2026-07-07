@@ -1152,6 +1152,18 @@ export default function FoodDetailsLayout({
     const pBrand = (prod.brands || '').trim() || null;
     if (!pName) return null;
 
+    // food_items is exclusively for externally verified foods.
+    // Only save if the product has a real external identifier.
+    const hasExternalSource =
+      !!(prod.code?.trim()) ||          // barcode from scan or OFacts
+      !!(prod._usda_fdc_id?.trim()) ||  // came from USDA search
+      !!(prod._off_id?.trim());         // came from OFacts with explicit id
+
+    if (!hasExternalSource) {
+      console.log('[FoodDetails] upsertFoodItem: skipped — no external source (user-created or AI-estimated food)');
+      return null;
+    }
+
     const servingInfo = extractServingSize(prod);
     const servingDesc = extractServingDescription(prod.serving_size);
     const servingCountVal = extractServingCount(prod.serving_size);
