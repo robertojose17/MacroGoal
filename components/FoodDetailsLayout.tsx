@@ -1259,13 +1259,15 @@ export default function FoodDetailsLayout({
           }
 
           // Step 3: Insert the meal item linking food → meal
-          console.log('[FoodDetails] handleSave: inserting meal_item, meal_id=', mealId, 'food_id=', foodId, 'food_item_id=', foodItemId);
+          console.log('[FoodDetails] handleSave: inserting meal_item, meal_id=', mealId, 'food_id=', foodId, 'food_item_id=', foodItemId, 'food_name=', foodName);
           const { error: mealItemError } = await supabase
             .from('meal_items')
             .insert([{
               meal_id: mealId,
               food_id: foodId,
               ...(foodItemId ? { food_item_id: foodItemId } : {}),
+              food_name: foodName,
+              food_brand: foodBrand || undefined,
               quantity: parseFloat(numberOfServings) || 1,
               calories: safeMacros.calories,
               protein: safeMacros.protein,

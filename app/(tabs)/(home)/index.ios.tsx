@@ -324,10 +324,6 @@ export default function HomeScreen() {
               serving_size,
               macros_per
             ),
-            foods!meal_items_food_id_fkey (
-              name,
-              brand
-            )
           )
         `)
         .eq('user_id', user.id)
@@ -362,8 +358,8 @@ export default function HomeScreen() {
                 const enriched = {
                   ...item,
                   ...macros,
-                  name: item.food_name ?? item.food_items?.name ?? item.foods?.name ?? 'Unknown Food',
-                  brand: item.food_brand ?? item.food_items?.brand ?? item.foods?.brand ?? undefined,
+                  name: item.food_name ?? item.food_items?.name ?? 'Unknown Food',
+                  brand: item.food_brand ?? item.food_items?.brand ?? undefined,
                   meal_type: meal.meal_type,
                   logged_at: item.logged_at ?? null,
                 };
@@ -748,7 +744,7 @@ export default function HomeScreen() {
   }
 
   const renderFoodItem = ({ item }: { item: FoodItem }) => {
-    const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? (item as any).foods?.name ?? 'Unknown Food';
+    const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food';
     const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
     return (
       <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>

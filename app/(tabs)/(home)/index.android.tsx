@@ -188,10 +188,6 @@ export default function HomeScreen() {
               serving_size,
               macros_per
             ),
-            foods!meal_items_food_id_fkey (
-              name,
-              brand
-            )
           )
         `)
         .eq('user_id', user.id)
@@ -224,8 +220,8 @@ export default function HomeScreen() {
                 const enriched = {
                   ...item,
                   ...macros,
-                  name: item.food_name ?? item.food_items?.name ?? item.foods?.name ?? 'Unknown Food',
-                  brand: item.food_brand ?? item.food_items?.brand ?? item.foods?.brand ?? undefined,
+                  name: item.food_name ?? item.food_items?.name ?? 'Unknown Food',
+                  brand: item.food_brand ?? item.food_items?.brand ?? undefined,
                 };
                 mealsByType[meal.meal_type as MealType].push(enriched);
                 totalCals += macros.calories;
@@ -434,8 +430,8 @@ export default function HomeScreen() {
   const rightArrowDisabled = isTodayOrFuture();
 
   const renderFoodItem = ({ item }: { item: FoodItem }) => {
-    const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? item.foods?.name ?? 'Unknown Food';
-    const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? item.foods?.brand ?? undefined;
+    const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food';
+    const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
     return (
       <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
         {(isSwiping: boolean) => (
