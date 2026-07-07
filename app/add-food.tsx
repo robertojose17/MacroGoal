@@ -9,7 +9,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { getRecentFoods } from '@/utils/foodDatabase';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
-import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing } from '@/utils/openFoodFacts';
+import { OpenFoodFactsProduct } from '@/utils/openFoodFacts';
+import { ResultSource, SearchResultItem, buildResultItem, mergeProducts } from '@/utils/foodSearchUtils';
 import { supabase } from '@/lib/supabase/client';
 import { Food } from '@/types';
 import { addToDraft } from '@/utils/myMealsDraft';
@@ -26,71 +27,7 @@ import { hybridSearch } from '@/utils/foodSearchHybrid';
 import { logFoodUsage } from '@/utils/logFoodUsage';
 import { calcMacros } from '@/utils/macros';
 
-// Source tag for progressive UI
-type ResultSource = 'local' | 'supabase' | 'off';
 
-interface SearchResultItem {
-  product: OpenFoodFactsProduct;
-  displayCalories: number;
-  displayProtein: number;
-  displayCarbs: number;
-  displayFats: number;
-  displayFiber: number;
-  servingText: string;
-  hasNutrition: boolean;
-  source: ResultSource;
-}
-
-function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
-  const servingInfo = extractServingSize(product);
-  const nutrition = extractNutritionPerServing(product, servingInfo.grams);
-  return {
-    product,
-    displayCalories: nutrition.calories,
-    displayProtein: nutrition.protein,
-    displayCarbs: nutrition.carbs,
-    displayFats: nutrition.fat,
-    displayFiber: nutrition.fiber,
-    servingText: servingInfo.displayText,
-    hasNutrition: nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0,
-    source,
-  };
-}
-
-function mergeProducts(
-  existing: Map<string, SearchResultItem>,
-  incoming: OpenFoodFactsProduct[],
-  source: ResultSource,
-  query: string,
-): SearchResultItem[] {
-  const sourcePriority: Record<ResultSource, number> = { supabase: 3, off: 2, local: 1 };
-  const incomingPriority = sourcePriority[source];
-  for (const product of incoming) {
-    const key = product.code || `${product.product_name || ''}-${product.brands || ''}`;
-    if (!key) continue;
-    const existing_ = existing.get(key);
-    if (!existing_ || sourcePriority[existing_.source] < incomingPriority) {
-      existing.set(key, buildResultItem(product, source));
-    }
-  }
-  const q = query.toLowerCase().trim();
-  const items = Array.from(existing.values());
-  items.sort((a, b) => {
-    const score = (item: SearchResultItem) => {
-      const name = (item.product.product_name || item.product.generic_name || '').toLowerCase().trim();
-      const words = name.split(/\s+/);
-      if (name === q) return 1000;
-      if (words[0] === q && words.length === 1) return 900;
-      if (words[0] === q && words.length === 2) return 800;
-      if (words[0] === q) return 700;
-      if (name.startsWith(q)) return 600;
-      if (name.includes(q)) return 400;
-      return 0;
-    };
-    return score(b) - score(a);
-  });
-  return items.filter(item => item.hasNutrition).slice(0, 80);
-}
 
 /** Safely coerce any value to a finite number, defaulting to 0 on NaN/null/undefined */
 function safeNum(value: unknown, fallback = 0): number {

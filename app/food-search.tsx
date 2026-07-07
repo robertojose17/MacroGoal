@@ -16,92 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { extractServingSize, extractNutrition, type OpenFoodFactsProduct } from '@/utils/openFoodFacts';
+import { type OpenFoodFactsProduct } from '@/utils/openFoodFacts';
+import { ResultSource, SearchResultItem, buildResultItem, mergeProducts } from '@/utils/foodSearchUtils';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { hybridSearch } from '@/utils/foodSearchHybrid';
 
-// Source tag for progressive UI
-type ResultSource = 'local' | 'supabase' | 'off';
 
-interface SearchResultItem {
-  product: OpenFoodFactsProduct;
-  displayCalories: number;
-  displayProtein: number;
-  displayCarbs: number;
-  displayFats: number;
-  displayFiber: number;
-  servingText: string;
-  hasNutrition: boolean;
-  source: ResultSource;
-}
-
-function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
-  const servingInfo = extractServingSize(product);
-  const nutrition = extractNutrition(product);
-  const multiplier = servingInfo.grams / 100;
-  const displayCalories = nutrition.calories * multiplier;
-  const displayProtein = nutrition.protein * multiplier;
-  const displayCarbs = nutrition.carbs * multiplier;
-  const displayFats = nutrition.fat * multiplier;
-  const displayFiber = nutrition.fiber * multiplier;
-  const hasNutrition =
-    nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0;
-  return {
-    product,
-    displayCalories,
-    displayProtein,
-    displayCarbs,
-    displayFats,
-    displayFiber,
-    servingText: servingInfo.displayText,
-    hasNutrition,
-    source,
-  };
-}
-
-/**
- * Merge incoming products into existing results map.
- * Deduplicates by product.code. Priority: supabase > off > local.
- * Returns a new ordered array (insertion order preserved, higher-priority sources win).
- */
-function mergeProducts(
-  existing: Map<string, SearchResultItem>,
-  incoming: OpenFoodFactsProduct[],
-  source: ResultSource,
-  query: string,
-): SearchResultItem[] {
-  const sourcePriority: Record<ResultSource, number> = { supabase: 3, off: 2, local: 1 };
-  const incomingPriority = sourcePriority[source];
-
-  for (const product of incoming) {
-    const key = product.code || `${product.product_name || ''}-${product.brands || ''}`;
-    if (!key) continue;
-    const existing_ = existing.get(key);
-    if (!existing_ || sourcePriority[existing_.source] < incomingPriority) {
-      existing.set(key, buildResultItem(product, source));
-    }
-  }
-
-  // Re-rank by name relevance
-  const q = query.toLowerCase().trim();
-  const items = Array.from(existing.values());
-  items.sort((a, b) => {
-    const score = (item: SearchResultItem) => {
-      const name = (item.product.product_name || item.product.generic_name || '').toLowerCase().trim();
-      const words = name.split(/\s+/);
-      if (name === q) return 1000;
-      if (words[0] === q && words.length === 1) return 900;
-      if (words[0] === q && words.length === 2) return 800;
-      if (words[0] === q) return 700;
-      if (name.startsWith(q)) return 600;
-      if (name.includes(q)) return 400;
-      return 0;
-    };
-    return score(b) - score(a);
-  });
-
-  return items.filter(item => item.hasNutrition).slice(0, 80);
-}
 
 // ─── Memoized row component ───────────────────────────────────────────────────
 

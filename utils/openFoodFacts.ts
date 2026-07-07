@@ -26,6 +26,12 @@ export interface OpenFoodFactsProduct {
   serving_size?: string;
   serving_quantity?: string;
   serving_unit?: string;
+  /** Set by the Supabase edge function to indicate the data source */
+  _source?: string;
+  /** Popularity score from the Supabase food database */
+  popularity_score?: number;
+  /** Number of times this food was logged in the last 30 days */
+  logs_last_30d?: number;
   nutriments?: {
     // Energy fields (multiple formats)
     'energy-kcal_100g'?: number;
