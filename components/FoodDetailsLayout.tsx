@@ -3,7 +3,7 @@ import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractNutr
 import { calcMacros } from '@/utils/macros';
 import { formatServing } from '@/utils/servingFormat';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { IconSymbol } from '@/components/IconSymbol';
 import { isFavorite, toggleFavorite } from '@/utils/favoritesDatabase';
@@ -113,6 +113,142 @@ function buildMineralRows(n: Record<string, number | undefined>, servingGrams: n
 function safeNum(value: unknown, fallback = 0): number {
   const n = Number(value);
   return isFinite(n) ? n : fallback;
+}
+
+// ─── USDA nutrient ID → food_items column mapping ────────────────────────────
+const USDA_NUTRIENT_MAP: Record<number, string> = {
+  1008: 'calories',
+  1003: 'protein',
+  1005: 'carbs',
+  1004: 'fat',
+  1079: 'fiber',
+  2000: 'sugar_g',
+  1258: 'saturated_fat_g',
+  1257: 'trans_fat_g',
+  1253: 'cholesterol_mg',
+  1093: 'sodium_mg',
+  1092: 'potassium_mg',
+  1087: 'calcium_mg',
+  1089: 'iron_mg',
+  1090: 'magnesium_mg',
+  1091: 'phosphorus_mg',
+  1095: 'zinc_mg',
+  1106: 'vitamin_a_mcg',
+  1162: 'vitamin_c_mg',
+  1114: 'vitamin_d_mcg',
+  1109: 'vitamin_e_mg',
+  1185: 'vitamin_k_mcg',
+  1165: 'vitamin_b1_mg',
+  1166: 'vitamin_b2_mg',
+  1167: 'vitamin_b3_mg',
+  1175: 'vitamin_b6_mg',
+  1178: 'vitamin_b12_mcg',
+  1177: 'folate_mcg',
+  1180: 'choline_mg',
+  1170: 'pantothenic_acid_mg',
+};
+
+const USDA_API_KEY = 'DN51vT8uB7dGinfwpljsxal93BOMtOJvgfEyP3Jx';
+
+/**
+ * Background enrichment: fetches full micronutrient data from USDA and updates
+ * the food_items row. Fire-and-forget — never throws, never blocks the UI.
+ */
+async function enrichWithUSDA(prod: OpenFoodFactsProduct, foodItemId: string): Promise<void> {
+  try {
+    // Check existing data_quality_score — skip if already enriched
+    const { data: existing } = await supabase
+      .from('food_items')
+      .select('data_quality_score')
+      .eq('id', foodItemId)
+      .maybeSingle();
+
+    const existingScore = (existing as any)?.data_quality_score ?? 0;
+    if (existingScore > 50) {
+      console.log('[FoodDetails] enrichWithUSDA: skipping, already enriched (score=', existingScore, ') for id=', foodItemId);
+      return;
+    }
+
+    if (prod.code) {
+      // ── Case A: has barcode — delegate to lookup-barcode edge function ──
+      console.log('[FoodDetails] enrichWithUSDA: Case A — barcode lookup for', prod.code);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ barcode: prod.code.trim() }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn('[FoodDetails] enrichWithUSDA: lookup-barcode returned', res.status, errText.slice(0, 200));
+      } else {
+        console.log('[FoodDetails] enrichWithUSDA: lookup-barcode succeeded for barcode=', prod.code);
+      }
+    } else {
+      // ── Case B: no barcode — search USDA FoodData Central directly ──
+      const foodName = (prod.product_name || prod.generic_name || '').trim();
+      if (!foodName) {
+        console.log('[FoodDetails] enrichWithUSDA: Case B — no food name, skipping');
+        return;
+      }
+      console.log('[FoodDetails] enrichWithUSDA: Case B — USDA search for', foodName);
+      const usdaUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(foodName)}&dataType=Foundation,SR%20Legacy&pageSize=3`;
+      const usdaRes = await fetch(usdaUrl);
+      if (!usdaRes.ok) {
+        const errText = await usdaRes.text();
+        console.warn('[FoodDetails] enrichWithUSDA: USDA search returned', usdaRes.status, errText.slice(0, 200));
+        return;
+      }
+      const usdaJson = await usdaRes.json();
+      const foods = usdaJson?.foods;
+      if (!Array.isArray(foods) || foods.length === 0) {
+        console.log('[FoodDetails] enrichWithUSDA: USDA returned no results for', foodName);
+        return;
+      }
+      const usdaFood = foods[0];
+      console.log('[FoodDetails] enrichWithUSDA: USDA matched', usdaFood.description, '(fdcId=', usdaFood.fdcId, ')');
+
+      // Map nutrientId → column value
+      const mappedNutrients: Record<string, number> = {};
+      const nutrients: { nutrientId: number; value: number }[] = usdaFood.foodNutrients ?? [];
+      for (const n of nutrients) {
+        const col = USDA_NUTRIENT_MAP[n.nutrientId];
+        if (col && n.value != null) {
+          mappedNutrients[col] = n.value;
+        }
+      }
+
+      // Compute a simple quality score: count how many mapped fields are present
+      const filledCount = Object.keys(mappedNutrients).length;
+      const computedScore = Math.min(100, Math.round((filledCount / Object.keys(USDA_NUTRIENT_MAP).length) * 100));
+
+      console.log('[FoodDetails] enrichWithUSDA: mapped', filledCount, 'nutrients, score=', computedScore);
+
+      const { error: updateErr } = await supabase
+        .from('food_items')
+        .update({
+          source: 'usda',
+          usda_fdc_id: String(usdaFood.fdcId),
+          macros_per: '100g',
+          ...mappedNutrients,
+          data_quality_score: computedScore,
+          last_verified_at: new Date().toISOString(),
+        })
+        .eq('id', foodItemId);
+
+      if (updateErr) {
+        console.warn('[FoodDetails] enrichWithUSDA: update error:', updateErr.message);
+      } else {
+        console.log('[FoodDetails] enrichWithUSDA: food_items row enriched successfully, id=', foodItemId);
+      }
+    }
+  } catch (err) {
+    console.warn('[FoodDetails] enrichWithUSDA: unexpected error (silenced):', err);
+  }
 }
 
 /**
@@ -1053,6 +1189,10 @@ export default function FoodDetailsLayout({
       if (existing) {
         console.log('[FoodDetails] upsertFoodItem: found by barcode, id=', existing.id);
         await supabase.from('food_items').update(payload).eq('id', existing.id);
+        // Non-blocking enrichment
+        enrichWithUSDA(prod, existing.id).catch(err =>
+          console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
+        );
         return existing.id;
       }
     }
@@ -1064,6 +1204,10 @@ export default function FoodDetailsLayout({
     if (existingByName) {
       console.log('[FoodDetails] upsertFoodItem: found by name+brand, id=', existingByName.id);
       await supabase.from('food_items').update(payload).eq('id', existingByName.id);
+      // Non-blocking enrichment
+      enrichWithUSDA(prod, existingByName.id).catch(err =>
+        console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
+      );
       return existingByName.id;
     }
 
@@ -1078,6 +1222,10 @@ export default function FoodDetailsLayout({
       return null;
     }
     console.log('[FoodDetails] upsertFoodItem: inserted new food_item, id=', inserted.id);
+    // Non-blocking enrichment
+    enrichWithUSDA(prod, inserted.id).catch(err =>
+      console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
+    );
     return inserted.id;
   };
 
