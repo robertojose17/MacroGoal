@@ -17,6 +17,98 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
+// ─── Micronutrient helpers ────────────────────────────────────────────────────
+
+/** Scale a per-100g nutriment value to the current serving grams */
+function scaleNutriment(per100g: number | undefined, servingGrams: number): number | null {
+  if (per100g == null || !isFinite(per100g)) return null;
+  return (per100g * servingGrams) / 100;
+}
+
+/** Format a scaled value with the given unit, rounding to 1 decimal */
+function fmtNutrient(value: number | null, unit: string): string | null {
+  if (value == null) return null;
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded}${unit}`;
+}
+
+type NutrientRow = { label: string; value: string };
+
+function buildExtendedMacroRows(n: Record<string, number | undefined>, servingGrams: number): NutrientRow[] {
+  const rows: NutrientRow[] = [];
+  const add = (label: string, key: string, unit: string, divisor = 1) => {
+    const raw = n[key];
+    const scaled = scaleNutriment(raw != null ? raw * divisor : undefined, servingGrams);
+    const formatted = fmtNutrient(scaled, unit);
+    if (formatted != null) rows.push({ label, value: formatted });
+  };
+  add('Saturated Fat', 'saturated-fat_100g', 'g');
+  add('Polyunsaturated Fat', 'polyunsaturated-fat_100g', 'g');
+  add('Monounsaturated Fat', 'monounsaturated-fat_100g', 'g');
+  add('Trans Fat', 'trans-fat_100g', 'g');
+  // cholesterol stored as kg in OFF (mg/1000), display in mg
+  add('Cholesterol', 'cholesterol_100g', 'mg', 1000);
+  add('Sugar', 'sugars_100g', 'g');
+  // sodium stored as kg in OFF (mg/1000), display in mg
+  add('Sodium', 'sodium_100g', 'mg', 1000);
+  return rows;
+}
+
+function buildVitaminRows(n: Record<string, number | undefined>, servingGrams: number): NutrientRow[] {
+  const rows: NutrientRow[] = [];
+  const addMcg = (label: string, key: string) => {
+    const raw = n[key];
+    // stored as kg (mcg/1e6), display in mcg
+    const scaled = scaleNutriment(raw != null ? raw * 1000000 : undefined, servingGrams);
+    const formatted = fmtNutrient(scaled, 'mcg');
+    if (formatted != null) rows.push({ label, value: formatted });
+  };
+  const addMg = (label: string, key: string) => {
+    const raw = n[key];
+    // stored as kg (mg/1000), display in mg
+    const scaled = scaleNutriment(raw != null ? raw * 1000 : undefined, servingGrams);
+    const formatted = fmtNutrient(scaled, 'mg');
+    if (formatted != null) rows.push({ label, value: formatted });
+  };
+  addMcg('Vitamin A', 'vitamin-a_100g');
+  addMg('Vitamin C', 'vitamin-c_100g');
+  addMcg('Vitamin D', 'vitamin-d_100g');
+  addMg('Vitamin E', 'vitamin-e_100g');
+  addMcg('Vitamin K', 'vitamin-k_100g');
+  addMg('Vitamin B1 (Thiamine)', 'vitamin-b1_100g');
+  addMg('Vitamin B2 (Riboflavin)', 'vitamin-b2_100g');
+  addMg('Vitamin B3 (Niacin)', 'vitamin-b3_100g');
+  addMg('Vitamin B6', 'vitamin-b6_100g');
+  addMcg('Vitamin B12', 'vitamin-b12_100g');
+  addMcg('Folate', 'folate_100g');
+  return rows;
+}
+
+function buildMineralRows(n: Record<string, number | undefined>, servingGrams: number): NutrientRow[] {
+  const rows: NutrientRow[] = [];
+  const addMg = (label: string, key: string) => {
+    const raw = n[key];
+    const scaled = scaleNutriment(raw != null ? raw * 1000 : undefined, servingGrams);
+    const formatted = fmtNutrient(scaled, 'mg');
+    if (formatted != null) rows.push({ label, value: formatted });
+  };
+  const addMcg = (label: string, key: string) => {
+    const raw = n[key];
+    const scaled = scaleNutriment(raw != null ? raw * 1000000 : undefined, servingGrams);
+    const formatted = fmtNutrient(scaled, 'mcg');
+    if (formatted != null) rows.push({ label, value: formatted });
+  };
+  addMg('Calcium', 'calcium_100g');
+  addMg('Iron', 'iron_100g');
+  addMg('Magnesium', 'magnesium_100g');
+  addMg('Phosphorus', 'phosphorus_100g');
+  addMg('Potassium', 'potassium_100g');
+  addMg('Zinc', 'zinc_100g');
+  addMg('Manganese', 'manganese_100g');
+  addMcg('Selenium', 'selenium_100g');
+  return rows;
+}
+
 /** Safely coerce any value to a finite number, defaulting to 0 on NaN/null/undefined */
 function safeNum(value: unknown, fallback = 0): number {
   const n = Number(value);
@@ -253,6 +345,75 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  microSection: {
+    marginBottom: spacing.lg,
+  },
+  microToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+  },
+  microToggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  microCard: {
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  microSubheading: {
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  microRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  microLabel: {
+    fontSize: 14,
+  },
+  microValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  ingredientsText: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: spacing.xs,
+  },
+  allergensText: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: spacing.xs,
+  },
 });
 
 export default function FoodDetailsLayout({
@@ -294,6 +455,7 @@ export default function FoodDetailsLayout({
 
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const [showMicroDetails, setShowMicroDetails] = useState(false);
 
   const backgroundColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -1480,7 +1642,166 @@ export default function FoodDetailsLayout({
           </View>
         </View>
 
-        <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.primary }]} onPress={handleSave}>
+        {/* ── Micronutrients section ── */}
+        {(() => {
+          const n = (product.nutriments ?? {}) as Record<string, number | undefined>;
+          const servingGrams = getTotalGrams();
+          const extMacroRows = buildExtendedMacroRows(n, servingGrams);
+          const vitaminRows = buildVitaminRows(n, servingGrams);
+          const mineralRows = buildMineralRows(n, servingGrams);
+          const hasAnyMicro = extMacroRows.length > 0 || vitaminRows.length > 0 || mineralRows.length > 0;
+          const ingredientsText = (product as any).ingredients_text as string | undefined;
+          const allergensTags = (product as any).allergens_tags as string[] | undefined;
+          const dataSource = (product as any)._source as string | undefined;
+          const qualityScore = (product as any)._data_quality_score as number | undefined;
+
+          if (!hasAnyMicro && !ingredientsText && !allergensTags) return null;
+
+          const sourceLabel =
+            dataSource === 'usda' ? 'USDA' :
+            dataSource === 'openfoodfacts' ? 'Open Food Facts' :
+            dataSource === 'ai' ? 'AI Estimated' :
+            dataSource === 'manual' ? 'Manual Entry' :
+            null;
+
+          const qualityBadgeColor =
+            qualityScore != null && qualityScore >= 80 ? '#22c55e' :
+            qualityScore != null && qualityScore >= 50 ? '#f59e0b' :
+            null;
+          const qualityBadgeLabel =
+            qualityScore != null && qualityScore >= 80 ? 'Verified' :
+            qualityScore != null && qualityScore >= 50 ? 'Partial data' :
+            null;
+
+          return (
+            <View style={styles.microSection}>
+              {/* Badges row */}
+              {(sourceLabel || qualityBadgeLabel) && (
+                <View style={styles.badgeRow}>
+                  {sourceLabel && (
+                    <View style={[styles.badge, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe' }]}>
+                      <Text style={[styles.badgeText, { color: isDark ? '#93c5fd' : '#1d4ed8' }]}>
+                        {sourceLabel}
+                      </Text>
+                    </View>
+                  )}
+                  {qualityBadgeLabel && qualityBadgeColor && (
+                    <View style={[styles.badge, { backgroundColor: qualityBadgeColor + '22' }]}>
+                      <Text style={[styles.badgeText, { color: qualityBadgeColor }]}>
+                        {qualityBadgeLabel}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Toggle button */}
+              {hasAnyMicro && (
+                <TouchableOpacity
+                  style={[styles.microToggle, { backgroundColor: cardBackground }]}
+                  onPress={() => {
+                    console.log('[FoodDetails] Show more nutrition toggled, now:', !showMicroDetails);
+                    setShowMicroDetails((v) => !v);
+                  }}
+                >
+                  <Text style={[styles.microToggleText, { color: textColor }]}>
+                    {showMicroDetails ? 'Hide detailed nutrition' : 'Show more nutrition'}
+                  </Text>
+                  <IconSymbol
+                    ios_icon_name={showMicroDetails ? 'chevron.up' : 'chevron.down'}
+                    android_material_icon_name={showMicroDetails ? 'expand-less' : 'expand-more'}
+                    size={18}
+                    color={textColor}
+                  />
+                </TouchableOpacity>
+              )}
+
+              {showMicroDetails && (
+                <View style={[styles.microCard, { backgroundColor: cardBackground }]}>
+                  {/* Extended macros */}
+                  {extMacroRows.length > 0 && (
+                    <>
+                      <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666' }]}>
+                        Extended Macros
+                      </Text>
+                      {extMacroRows.map((row, i) => (
+                        <View
+                          key={row.label}
+                          style={[styles.microRow, { borderBottomColor: borderColor, borderBottomWidth: i < extMacroRows.length - 1 ? StyleSheet.hairlineWidth : 0 }]}
+                        >
+                          <Text style={[styles.microLabel, { color: textColor }]}>{row.label}</Text>
+                          <Text style={[styles.microValue, { color: textColor }]}>{row.value}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Vitamins */}
+                  {vitaminRows.length > 0 && (
+                    <>
+                      <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666', marginTop: extMacroRows.length > 0 ? spacing.md : spacing.xs }]}>
+                        Vitamins
+                      </Text>
+                      {vitaminRows.map((row, i) => (
+                        <View
+                          key={row.label}
+                          style={[styles.microRow, { borderBottomColor: borderColor, borderBottomWidth: i < vitaminRows.length - 1 ? StyleSheet.hairlineWidth : 0 }]}
+                        >
+                          <Text style={[styles.microLabel, { color: textColor }]}>{row.label}</Text>
+                          <Text style={[styles.microValue, { color: textColor }]}>{row.value}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Minerals */}
+                  {mineralRows.length > 0 && (
+                    <>
+                      <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666', marginTop: (extMacroRows.length > 0 || vitaminRows.length > 0) ? spacing.md : spacing.xs }]}>
+                        Minerals
+                      </Text>
+                      {mineralRows.map((row, i) => (
+                        <View
+                          key={row.label}
+                          style={[styles.microRow, { borderBottomColor: borderColor, borderBottomWidth: i < mineralRows.length - 1 ? StyleSheet.hairlineWidth : 0 }]}
+                        >
+                          <Text style={[styles.microLabel, { color: textColor }]}>{row.label}</Text>
+                          <Text style={[styles.microValue, { color: textColor }]}>{row.value}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </View>
+              )}
+
+              {/* Ingredients */}
+              {ingredientsText && (
+                <View style={[styles.microCard, { backgroundColor: cardBackground }]}>
+                  <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666' }]}>Ingredients</Text>
+                  <Text style={[styles.ingredientsText, { color: isDark ? '#ccc' : '#444' }]}>{ingredientsText}</Text>
+                </View>
+              )}
+
+              {/* Allergens */}
+              {allergensTags && allergensTags.length > 0 && (
+                <View style={[styles.microCard, { backgroundColor: cardBackground }]}>
+                  <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666' }]}>Allergens</Text>
+                  <Text style={[styles.allergensText, { color: isDark ? '#fca5a5' : '#b91c1c' }]}>
+                    {allergensTags.join(', ')}
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
+        <TouchableOpacity
+          style={[styles.saveButton, { backgroundColor: colors.primary }]}
+          onPress={() => {
+            console.log('[FoodDetails] Add to Meal / Update button pressed, mode=', mode);
+            handleSave();
+          }}
+        >
           <Text style={styles.saveButtonText}>{mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Update' : 'Add to Meal'}</Text>
         </TouchableOpacity>
       </ScrollView>
