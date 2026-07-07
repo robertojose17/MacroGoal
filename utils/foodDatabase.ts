@@ -352,8 +352,17 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         const servingInfo = extractServingSize(offProduct);
         servingGramsForDisplay = servingInfo.grams;
         displayServingUnit = servingInfo.displayText;
+      } else if (fi.serving_unit && fi.serving_unit.toLowerCase() !== 'g' && fi.serving_unit.toLowerCase() !== 'ml') {
+        // serving_unit is a meaningful unit like "oz", "slice", "cup", "tbsp", "piece", etc.
+        const servingCount = Number(fi.serving_count) || 1;
+        const countLabel = servingCount !== 1 ? `${servingCount} ` : '1 ';
+        displayServingUnit = `${countLabel}${fi.serving_unit} (${servingSize > 0 ? servingSize : 100}g)`;
+        servingGramsForDisplay = servingSize > 0 ? servingSize : 100;
+        console.log(`[FoodDB] serving_unit="${fi.serving_unit}" count=${servingCount} for "${fi.name}"`);
       } else {
-        displayServingUnit = servingSize > 0 ? `${servingSize}g` : '100g';
+        // pure grams — show as "1 serving (Xg)" instead of raw "Xg"
+        displayServingUnit = servingSize > 0 ? `1 serving (${servingSize}g)` : '100g';
+        console.log(`[FoodDB] fallback serving display "${displayServingUnit}" for "${fi.name}"`);
       }
 
       const food: Food = {
