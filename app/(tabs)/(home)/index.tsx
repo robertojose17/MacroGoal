@@ -503,7 +503,7 @@ export default function HomeScreen() {
               fiber,
               serving_size,
               macros_per
-            ),
+            )
           )
         `)
         .eq('user_id', user.id)
