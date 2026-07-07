@@ -10,7 +10,7 @@ import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { getRecentFoods } from '@/utils/foodDatabase';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
 import { OpenFoodFactsProduct } from '@/utils/openFoodFacts';
-import { ResultSource, SearchResultItem, buildResultItem, mergeProducts } from '@/utils/foodSearchUtils';
+import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
 import { supabase } from '@/lib/supabase/client';
 import { Food } from '@/types';
 import { addToDraft } from '@/utils/myMealsDraft';
@@ -744,66 +744,16 @@ export default function AddFoodScreen() {
       let offProduct: OpenFoodFactsProduct;
 
       if (food.food_item_id) {
-        // ── Catalog / barcode food: query food_items table ──
-        console.log('[AddFood] food_item_id detected, querying food_items:', food.food_item_id);
-        const { data: fiData, error: fiError } = await supabase
-          .from('food_items')
-          .select('off_data, name, brand, serving_size, serving_unit, serving_quantity, serving_description, serving_count, nutriments, calories, protein, carbs, fat, fiber, barcode')
-          .eq('id', food.food_item_id)
-          .maybeSingle();
-
-        if (fiError || !fiData) {
-          console.warn('[AddFood] food_items lookup failed:', fiError);
+        // ── Catalog / barcode food: use shared helper for full micronutrient shape ──
+        console.log('[AddFood] food_item_id detected, building full offProduct via helper:', food.food_item_id);
+        const built = await buildOffProductFromFoodItemId(food.food_item_id);
+        if (!built) {
+          console.warn('[AddFood] buildOffProductFromFoodItemId returned null for id:', food.food_item_id);
           Alert.alert('Error', 'Failed to load food details');
           return;
         }
-
-        console.log('[AddFood] ✅ food_items data fetched | off_data present:', !!fiData.off_data);
-
-        if (fiData.off_data && typeof fiData.off_data === 'object') {
-          // Use the original OFF product JSON directly — same as barcode scanner.
-          // Override serving_size with serving_description+serving_count when available so the
-          // food-details screen shows the correct unit label (e.g. "4 cookies (29 g)").
-          offProduct = fiData.off_data as OpenFoodFactsProduct;
-          if (fiData.serving_description) {
-            const gramsVal = fiData.serving_size ?? fiData.serving_quantity ?? 100;
-            const servingCount = Number((fiData as any).serving_count) || 1;
-            const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-            offProduct = {
-              ...offProduct,
-              serving_size: `${countLabel}${fiData.serving_description} (${gramsVal} g)`,
-            };
-            console.log('[AddFood] Overrode serving_size with serving_description →', offProduct.serving_size, 'serving_count=', servingCount);
-          } else {
-            console.log('[AddFood] Using off_data directly from food_items');
-          }
-        } else {
-          // Build from flat columns — use serving_description and serving_count when available
-          console.log('[AddFood] Building offProduct from flat food_items columns');
-          const servingDesc = fiData.serving_description;
-          const gramsVal = fiData.serving_size ?? fiData.serving_quantity ?? 100;
-          const servingCount = Number((fiData as any).serving_count) || 1;
-          const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-          const servingSizeStr = servingDesc
-            ? `${countLabel}${servingDesc} (${gramsVal} g)`
-            : fiData.serving_quantity
-              ? String(fiData.serving_quantity)
-              : String(fiData.serving_size || 100);
-          console.log('[AddFood] serving_description=', servingDesc, 'serving_count=', servingCount, '→ serving_size=', servingSizeStr);
-          offProduct = {
-            code: fiData.barcode || '',
-            product_name: fiData.name,
-            brands: fiData.brand || '',
-            serving_size: servingSizeStr,
-            nutriments: fiData.nutriments || {
-              'energy-kcal_100g': fiData.calories,
-              'proteins_100g': fiData.protein,
-              'carbohydrates_100g': fiData.carbs,
-              'fat_100g': fiData.fat,
-              'fiber_100g': fiData.fiber,
-            },
-          } as OpenFoodFactsProduct;
-        }
+        offProduct = built;
+        console.log('[AddFood] ✅ offProduct built via helper | serving_size=', offProduct.serving_size);
       } else {
         // ── User-created food: query foods table ──
         console.log('[AddFood] No food_item_id, querying foods table:', food.id);
@@ -1169,37 +1119,51 @@ export default function AddFoodScreen() {
     console.log('[AddFood] CRITICAL: Passing context to Food Details');
 
     try {
-      // Build per-100g nutriments for the OFF product using calcMacros when food_items JOIN is available
-      const favFoodItem = (favorite as any).food_items;
-      const grams = favorite.default_grams;
-      let cal100: number, prot100: number, carb100: number, fat100: number, fib100: number;
-      if (favFoodItem && favFoodItem.serving_size > 0) {
-        const m = calcMacros(favFoodItem, 100);
-        cal100 = m.calories; prot100 = m.protein; carb100 = m.carbs; fat100 = m.fat; fib100 = m.fiber;
-      } else {
-        cal100 = favorite.per100_calories;
-        prot100 = favorite.per100_protein;
-        carb100 = favorite.per100_carbs;
-        fat100 = favorite.per100_fat;
-        fib100 = favorite.per100_fiber;
-      }
-      console.log('[AddFood] handleOpenFavoriteDetails: grams=', grams, 'cal100=', cal100);
+      const favFoodItemId = (favorite as any).food_item_id as string | undefined;
+      let offProduct: OpenFoodFactsProduct | null = null;
 
-      // Convert favorite to OpenFoodFacts format for the food-details screen
-      const offProduct = {
-        code: favorite.food_code || '',
-        product_name: favorite.food_name,
-        brands: favorite.brand || '',
-        serving_size: favorite.serving_size || `${Math.round(grams)}g`,
-        nutriments: {
-          'energy-kcal_100g': cal100,
-          'proteins_100g': prot100,
-          'carbohydrates_100g': carb100,
-          'fat_100g': fat100,
-          'fiber_100g': fib100,
-          'sugars_100g': 0,
-        },
-      };
+      if (favFoodItemId) {
+        // Use shared helper for full micronutrient shape
+        console.log('[AddFood] handleOpenFavoriteDetails: using buildOffProductFromFoodItemId for food_item_id=', favFoodItemId);
+        offProduct = await buildOffProductFromFoodItemId(favFoodItemId);
+        if (offProduct) {
+          console.log('[AddFood] ✅ offProduct built via helper | serving_size=', offProduct.serving_size);
+        } else {
+          console.warn('[AddFood] buildOffProductFromFoodItemId returned null, falling back to minimal build');
+        }
+      }
+
+      if (!offProduct) {
+        // Fallback: build minimal product from favorite columns
+        const favFoodItem = (favorite as any).food_items;
+        const grams = favorite.default_grams;
+        let cal100: number, prot100: number, carb100: number, fat100: number, fib100: number;
+        if (favFoodItem && favFoodItem.serving_size > 0) {
+          const m = calcMacros(favFoodItem, 100);
+          cal100 = m.calories; prot100 = m.protein; carb100 = m.carbs; fat100 = m.fat; fib100 = m.fiber;
+        } else {
+          cal100 = favorite.per100_calories;
+          prot100 = favorite.per100_protein;
+          carb100 = favorite.per100_carbs;
+          fat100 = favorite.per100_fat;
+          fib100 = favorite.per100_fiber;
+        }
+        console.log('[AddFood] handleOpenFavoriteDetails: fallback build, grams=', grams, 'cal100=', cal100);
+        offProduct = {
+          code: favorite.food_code || '',
+          product_name: favorite.food_name,
+          brands: favorite.brand || '',
+          serving_size: favorite.serving_size || `${Math.round(grams)}g`,
+          nutriments: {
+            'energy-kcal_100g': cal100,
+            'proteins_100g': prot100,
+            'carbohydrates_100g': carb100,
+            'fat_100g': fat100,
+            'fiber_100g': fib100,
+            'sugars_100g': 0,
+          },
+        };
+      }
 
       console.log('[AddFood] Navigating to food-details with favorite data');
 

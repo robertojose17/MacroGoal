@@ -10,6 +10,7 @@ import { supabase, TABLE_SAVED_MEALS, TABLE_SAVED_MEAL_ITEMS } from '@/lib/supab
 import { toLocalDateString } from '@/utils/dateUtils';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
+import { buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
 
 interface SavedMealItem {
   id: string;
@@ -266,25 +267,59 @@ export default function MyMealsDetailsScreen() {
     showSuccessBanner('Item removed');
   }, [showSuccessBanner]);
 
-  const handleItemPress = useCallback((item: SavedMealItem) => {
+  const handleItemPress = useCallback(async (item: SavedMealItem) => {
     const fi = item.food_items;
     const itemName = fi?.name ?? item.food_name ?? 'Unknown Food';
-    const itemBrand = fi?.brand ?? item.food_brand ?? '';
-    console.log('[MyMealsDetails] Tapped food item:', itemName, 'id:', item.id);
-    const offData = {
-      product_name: itemName,
-      brands: itemBrand,
-      nutriments: fi ? {
-        'energy-kcal_100g': fi.macros_per === '100g' ? fi.calories : (fi.serving_size > 0 ? (fi.calories / fi.serving_size) * 100 : fi.calories),
-        protein_100g: fi.macros_per === '100g' ? fi.protein : (fi.serving_size > 0 ? (fi.protein / fi.serving_size) * 100 : fi.protein),
-        carbohydrates_100g: fi.macros_per === '100g' ? fi.carbs : (fi.serving_size > 0 ? (fi.carbs / fi.serving_size) * 100 : fi.carbs),
-        fat_100g: fi.macros_per === '100g' ? fi.fat : (fi.serving_size > 0 ? (fi.fat / fi.serving_size) * 100 : fi.fat),
-        fiber_100g: fi.macros_per === '100g' ? (fi.fiber ?? 0) : (fi.serving_size > 0 ? ((fi.fiber ?? 0) / fi.serving_size) * 100 : (fi.fiber ?? 0)),
-      } : {},
-      serving_quantity: item.serving_amount,
-      serving_quantity_unit: item.serving_unit,
-      food_id: item.food_id,
-    };
+    console.log('[MyMealsDetails] Tapped food item:', itemName, 'id:', item.id, 'food_item_id:', item.food_item_id);
+
+    let offData: object;
+
+    if (item.food_item_id) {
+      // Use shared helper for full micronutrient shape
+      console.log('[MyMealsDetails] Building offProduct via helper for food_item_id=', item.food_item_id);
+      const built = await buildOffProductFromFoodItemId(item.food_item_id);
+      if (built) {
+        console.log('[MyMealsDetails] ✅ offProduct built via helper | serving_size=', built.serving_size);
+        offData = built;
+      } else {
+        console.warn('[MyMealsDetails] Helper returned null, falling back to minimal build');
+        // Fallback: build from joined food_items columns with correct nutriment keys
+        const itemBrand = fi?.brand ?? item.food_brand ?? '';
+        offData = {
+          product_name: itemName,
+          brands: itemBrand,
+          nutriments: fi ? {
+            'energy-kcal_100g': fi.macros_per === '100g' ? fi.calories : (fi.serving_size > 0 ? (fi.calories / fi.serving_size) * 100 : fi.calories),
+            'proteins_100g': fi.macros_per === '100g' ? fi.protein : (fi.serving_size > 0 ? (fi.protein / fi.serving_size) * 100 : fi.protein),
+            'carbohydrates_100g': fi.macros_per === '100g' ? fi.carbs : (fi.serving_size > 0 ? (fi.carbs / fi.serving_size) * 100 : fi.carbs),
+            'fat_100g': fi.macros_per === '100g' ? fi.fat : (fi.serving_size > 0 ? (fi.fat / fi.serving_size) * 100 : fi.fat),
+            'fiber_100g': fi.macros_per === '100g' ? (fi.fiber ?? 0) : (fi.serving_size > 0 ? ((fi.fiber ?? 0) / fi.serving_size) * 100 : (fi.fiber ?? 0)),
+          } : {},
+          serving_quantity: item.serving_amount,
+          serving_quantity_unit: item.serving_unit,
+          food_id: item.food_id,
+        };
+      }
+    } else {
+      // No food_item_id — build minimal product from joined columns
+      const itemBrand = fi?.brand ?? item.food_brand ?? '';
+      console.log('[MyMealsDetails] No food_item_id, building minimal offProduct for:', itemName);
+      offData = {
+        product_name: itemName,
+        brands: itemBrand,
+        nutriments: fi ? {
+          'energy-kcal_100g': fi.macros_per === '100g' ? fi.calories : (fi.serving_size > 0 ? (fi.calories / fi.serving_size) * 100 : fi.calories),
+          'proteins_100g': fi.macros_per === '100g' ? fi.protein : (fi.serving_size > 0 ? (fi.protein / fi.serving_size) * 100 : fi.protein),
+          'carbohydrates_100g': fi.macros_per === '100g' ? fi.carbs : (fi.serving_size > 0 ? (fi.carbs / fi.serving_size) * 100 : fi.carbs),
+          'fat_100g': fi.macros_per === '100g' ? fi.fat : (fi.serving_size > 0 ? (fi.fat / fi.serving_size) * 100 : fi.fat),
+          'fiber_100g': fi.macros_per === '100g' ? (fi.fiber ?? 0) : (fi.serving_size > 0 ? ((fi.fiber ?? 0) / fi.serving_size) * 100 : (fi.fiber ?? 0)),
+        } : {},
+        serving_quantity: item.serving_amount,
+        serving_quantity_unit: item.serving_unit,
+        food_id: item.food_id,
+      };
+    }
+
     router.push({
       pathname: '/food-details',
       params: {

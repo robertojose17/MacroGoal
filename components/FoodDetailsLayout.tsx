@@ -629,6 +629,25 @@ export default function FoodDetailsLayout({
       setNumberOfServings('1');
       setSelectedServingOptionKey('default');
 
+      // Extract serving_description and serving_count from the product's serving_size string.
+      // e.g. "3 cookies (34 g)" → customUnitLabel = "1 cookie", customUnitGramsPerUnit = 11.3
+      // This makes the individual unit appear as the default picker option.
+      const servingSizeStr = parsedProduct.serving_size || '';
+      const descMatch = servingSizeStr.match(/^(\d+\.?\d*)\s+([a-zA-Z][a-zA-Z\s]*?)\s*\((\d+\.?\d*)\s*g\)/i);
+      if (descMatch) {
+        const count = parseFloat(descMatch[1]);
+        const unitWord = descMatch[2].trim();
+        const totalGrams = parseFloat(descMatch[3]);
+        if (count > 0 && totalGrams > 0 && unitWord && unitWord.toLowerCase() !== 'serving') {
+          const gramsPerUnit = totalGrams / count;
+          const singular = singularizeUnit(unitWord);
+          console.log('[FoodDetails] loadViewData: detected custom unit from serving_size=', servingSizeStr, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit);
+          setCustomUnitLabel(`1 ${singular}`);
+          setCustomUnitGramsPerUnit(gramsPerUnit);
+          setSelectedServingOptionKey('custom');
+        }
+      }
+
       await checkFavoriteStatus(parsedProduct);
     } catch (error) {
       console.error('Error loading view data:', error);
