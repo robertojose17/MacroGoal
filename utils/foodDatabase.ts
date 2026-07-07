@@ -309,7 +309,30 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       // Compute macros for exactly 1 standard serving
       let calories: number, protein: number, carbs: number, fats: number, fiber: number;
 
-      if (servingSize > 0) {
+      // Find the most recent meal_items row that used this food_item_id
+      // to get the per-gram calorie rate the user actually logged
+      const recentMealItem = mealItems.find((m: any) => m.food_item_id === fid);
+
+      if (recentMealItem && recentMealItem.calories != null && recentMealItem.calories > 0 && recentMealItem.grams != null && recentMealItem.grams > 0) {
+        // Use the per-gram rate from the actual logged entry, scaled to 1 standard serving
+        const perGramRate    = recentMealItem.calories / recentMealItem.grams;
+        const perGramProtein = (recentMealItem.protein ?? 0) / recentMealItem.grams;
+        const perGramCarbs   = (recentMealItem.carbs ?? 0) / recentMealItem.grams;
+        const perGramFats    = (recentMealItem.fats ?? 0) / recentMealItem.grams;
+        const perGramFiber   = (recentMealItem.fiber ?? 0) / recentMealItem.grams;
+        const displayGrams   = servingSize > 0 ? servingSize : 100;
+        calories = perGramRate    * displayGrams;
+        protein  = perGramProtein * displayGrams;
+        carbs    = perGramCarbs   * displayGrams;
+        fats     = perGramFats    * displayGrams;
+        fiber    = perGramFiber   * displayGrams;
+        console.log(
+          `[FoodDB] ✅ meal_items rate "${fi.name ?? 'unknown'}": ` +
+          `logged=${recentMealItem.calories}kcal/${recentMealItem.grams}g, ` +
+          `displayGrams=${displayGrams}, cal=${calories.toFixed(1)}, protein=${protein.toFixed(1)}, ` +
+          `carbs=${carbs.toFixed(1)}, fat=${fats.toFixed(1)}`
+        );
+      } else if (servingSize > 0) {
         const result = calcMacros(fi, servingSize);
         calories = result.calories;
         protein  = result.protein;
@@ -317,7 +340,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         fats     = result.fat;
         fiber    = result.fiber;
         console.log(
-          `[FoodDB] ✅ standard portion "${fi.name ?? 'unknown'}": ` +
+          `[FoodDB] ✅ calcMacros fallback "${fi.name ?? 'unknown'}": ` +
           `serving_size=${servingSize}g, macros_per=${fi.macros_per ?? 'serving'}, ` +
           `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
         );
