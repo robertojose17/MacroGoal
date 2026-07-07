@@ -306,55 +306,23 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
 
       const servingSize = Number(fi.serving_size) || 0;
 
-      // Compute macros for exactly 1 standard serving
+      // Compute macros for exactly 1 standard serving using food_items data via calcMacros
       let calories: number, protein: number, carbs: number, fats: number, fiber: number;
 
-      // Find the most recent meal_items row that used this food_item_id
-      // to get the per-gram calorie rate the user actually logged
-      const recentMealItem = mealItems.find((m: any) => m.food_item_id === fid);
-
-      if (recentMealItem && recentMealItem.calories != null && recentMealItem.calories > 0 && recentMealItem.grams != null && recentMealItem.grams > 0) {
-        // Use the per-gram rate from the actual logged entry, scaled to 1 standard serving
-        const perGramRate    = recentMealItem.calories / recentMealItem.grams;
-        const perGramProtein = (recentMealItem.protein ?? 0) / recentMealItem.grams;
-        const perGramCarbs   = (recentMealItem.carbs ?? 0) / recentMealItem.grams;
-        const perGramFats    = (recentMealItem.fats ?? 0) / recentMealItem.grams;
-        const perGramFiber   = (recentMealItem.fiber ?? 0) / recentMealItem.grams;
-        const displayGrams   = servingSize > 0 ? servingSize : 100;
-        calories = perGramRate    * displayGrams;
-        protein  = perGramProtein * displayGrams;
-        carbs    = perGramCarbs   * displayGrams;
-        fats     = perGramFats    * displayGrams;
-        fiber    = perGramFiber   * displayGrams;
-        console.log(
-          `[FoodDB] ✅ meal_items rate "${fi.name ?? 'unknown'}": ` +
-          `logged=${recentMealItem.calories}kcal/${recentMealItem.grams}g, ` +
-          `displayGrams=${displayGrams}, cal=${calories.toFixed(1)}, protein=${protein.toFixed(1)}, ` +
-          `carbs=${carbs.toFixed(1)}, fat=${fats.toFixed(1)}`
-        );
-      } else if (servingSize > 0) {
+      if (servingSize > 0) {
         const result = calcMacros(fi, servingSize);
         calories = result.calories;
         protein  = result.protein;
         carbs    = result.carbs;
         fats     = result.fat;
         fiber    = result.fiber;
-        console.log(
-          `[FoodDB] ✅ calcMacros fallback "${fi.name ?? 'unknown'}": ` +
-          `serving_size=${servingSize}g, macros_per=${fi.macros_per ?? 'serving'}, ` +
-          `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
-        );
       } else {
-        // serving_size is 0 or missing — fall back to stored per-serving values
+        // serving_size missing — use stored values directly (already per-serving)
         calories = Number(fi.calories) || 0;
         protein  = Number(fi.protein)  || 0;
         carbs    = Number(fi.carbs)    || 0;
         fats     = Number(fi.fat)      || 0;
         fiber    = Number(fi.fiber)    || 0;
-        console.log(
-          `[FoodDB] ⚠️ serving_size=0 for "${fi.name ?? 'unknown'}", using stored values: ` +
-          `cal=${calories}, protein=${protein}, carbs=${carbs}, fat=${fats}`
-        );
       }
 
       // ── Serving display string ──────────────────────────────────────────────
@@ -363,29 +331,21 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
 
       if (fi.serving_description) {
         const servingCount = Number(fi.serving_count) || 1;
-        const gramsPerUnit = servingSize > 0 ? servingSize / servingCount : 100;
         servingGramsForDisplay = servingSize > 0 ? servingSize : 100;
-        const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-        displayServingUnit = `${countLabel}${fi.serving_description} (${servingSize > 0 ? servingSize : 100} g)`;
-        console.log(`[FoodDB] serving_description="${fi.serving_description}" count=${servingCount} gramsPerUnit=${gramsPerUnit} for "${fi.name}"`);
-      } else if (fi.off_data) {
-        const offProduct = fi.off_data || {
-          serving_size: fi.serving_size ? String(fi.serving_size) : undefined,
-        };
-        const servingInfo = extractServingSize(offProduct);
-        servingGramsForDisplay = servingInfo.grams;
-        displayServingUnit = servingInfo.displayText;
+        const countLabel = servingCount !== 1 ? `${servingCount} ` : '1 ';
+        displayServingUnit = `${countLabel}${fi.serving_description} (${servingGramsForDisplay}g)`;
       } else if (fi.serving_unit && fi.serving_unit.toLowerCase() !== 'g' && fi.serving_unit.toLowerCase() !== 'ml') {
-        // serving_unit is a meaningful unit like "oz", "slice", "cup", "tbsp", "piece", etc.
         const servingCount = Number(fi.serving_count) || 1;
         const countLabel = servingCount !== 1 ? `${servingCount} ` : '1 ';
-        displayServingUnit = `${countLabel}${fi.serving_unit} (${servingSize > 0 ? servingSize : 100}g)`;
         servingGramsForDisplay = servingSize > 0 ? servingSize : 100;
-        console.log(`[FoodDB] serving_unit="${fi.serving_unit}" count=${servingCount} for "${fi.name}"`);
+        displayServingUnit = `${countLabel}${fi.serving_unit} (${servingGramsForDisplay}g)`;
+      } else if (fi.off_data) {
+        const servingInfo = extractServingSize(fi.off_data);
+        servingGramsForDisplay = servingInfo.grams;
+        displayServingUnit = servingInfo.displayText;
       } else {
-        // pure grams — show as "1 serving (Xg)" instead of raw "Xg"
+        servingGramsForDisplay = servingSize > 0 ? servingSize : 100;
         displayServingUnit = servingSize > 0 ? `1 serving (${servingSize}g)` : '100g';
-        console.log(`[FoodDB] fallback serving display "${displayServingUnit}" for "${fi.name}"`);
       }
 
       const food: Food = {
