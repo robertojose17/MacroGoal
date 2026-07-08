@@ -924,13 +924,18 @@ export default function FoodDetailsLayout({
       });
 
       // Set foodItemRef so calculateMacros can use calcMacros with correct serving_size/macros_per
-      if (mealItem.food_item_id && (foodItem as any)?.serving_size) {
+      // IMPORTANT: when off_data is present (legacy path), per100Macros was extracted from OFacts nutriments
+      // which are ALWAYS per-100g — so foodItemRef must use macros_per='100g' regardless of what food_items.macros_per says.
+      // Only the modern path (no off_data) should use food_items.macros_per directly.
+      const hasOffData = !!(foodItem as any)?.off_data;
+      if (mealItem.food_item_id && (foodItem as any)?.serving_size && !hasOffData) {
+        // Modern path: macros came from individual columns, macros_per is reliable
         setFoodItemRef({
           serving_size: safeNum((foodItem as any).serving_size, 100),
           macros_per: (foodItem as any).macros_per ?? null,
         });
       } else {
-        // Legacy foods table path — macros are always per-100g
+        // Legacy path (off_data present) or no food_item_id: per100Macros are always per-100g
         setFoodItemRef({ serving_size: 100, macros_per: '100g' });
       }
 
