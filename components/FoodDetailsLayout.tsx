@@ -605,7 +605,9 @@ export default function FoodDetailsLayout({
     const defLabel =
       mode === 'edit' && editDefaultGramsPerUnit !== null
         ? `1 serving (${Number.isInteger(editDefaultGramsPerUnit) ? editDefaultGramsPerUnit : editDefaultGramsPerUnit.toFixed(1)}g)`
-        : (servingInfo.displayText || servingInfo.description || `1 serving (${servingInfo.grams}g)`);
+        : (servingInfo.description && !/^\d+(\.\d+)?\s*g$/i.test(servingInfo.description)
+            ? servingInfo.description
+            : `1 serving (${servingInfo.grams}g)`);
     return [
       ...(customUnitLabel
         ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
@@ -705,11 +707,23 @@ export default function FoodDetailsLayout({
     // serving_count tells how many units make up serving_size grams (e.g. 4 cookies = 29g).
     let servingSize: string;
     if (foodItem.serving_description) {
+      const isNumericDesc = /^\d+(\.\d+)?\s*[a-z]*$/i.test(foodItem.serving_description.trim());
+      if (isNumericDesc) {
+        // serving_description is just a number+unit like "63g" or "63 g" — treat as no description
+        const gramsVal = foodItem.serving_size != null
+          ? Number(foodItem.serving_size)
+          : (foodItem.serving_quantity != null
+            ? foodItem.serving_quantity
+            : food.serving_amount);
+        servingSize = `${gramsVal} g`;
+        console.log('[FoodDetails] buildMockProductFromFoodItem: numeric serving_description ignored, built servingSize=', servingSize);
+      } else {
       const gramsVal = foodItem.serving_size ?? foodItem.serving_quantity ?? food.serving_amount;
       const servingCount = Number(foodItem.serving_count) || 1;
       const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
       servingSize = `${countLabel}${foodItem.serving_description} (${gramsVal} g)`;
       console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', servingCount);
+      }
     } else {
       // No serving_description — build a plain "<grams> g" string so extractServingSize
       // parses it as a gram value (not a "1 serving (Xg)" string that confuses the
