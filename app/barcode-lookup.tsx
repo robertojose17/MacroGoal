@@ -253,15 +253,8 @@ export default function BarcodeLookupScreen() {
       console.log('[BarcodeLookup] Edge function result — found:', result.found, 'source:', result.source);
 
       if (result.found) {
-        let offData: any;
-
-        if (result.off_data) {
-          console.log('[BarcodeLookup] ✅ PRODUCT FOUND via', result.source, '— using off_data blob');
-          offData = result.off_data;
-        } else {
-          console.log('[BarcodeLookup] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item');
-          offData = buildSyntheticOffData(result.item);
-        }
+        console.log('[BarcodeLookup] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item');
+        const offData = buildSyntheticOffData(result.item);
 
         console.log('[BarcodeLookup] Product name:', offData.product_name || 'Unknown');
         console.log('[BarcodeLookup] NAVIGATING TO: food-details');
@@ -276,6 +269,7 @@ export default function BarcodeLookupScreen() {
             context: context,
             returnTo: returnTo,
             mealId: myMealId || '',
+            food_item_id: result.item?.id || '',
           },
         });
       } else {
