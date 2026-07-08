@@ -1067,7 +1067,7 @@ export default function FoodDetailsLayout({
     } finally {
       setLoading(false);
     }
-  }, [itemId, router, selectedServingOptionKey]);
+  }, [itemId, router]);
 
   useEffect(() => {
     if (mode === 'view') {
