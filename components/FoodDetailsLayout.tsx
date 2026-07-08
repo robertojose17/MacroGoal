@@ -809,13 +809,15 @@ export default function FoodDetailsLayout({
       let per100Fats = safeNum(food.fats);
       let per100Fiber = safeNum(food.fiber || 0);
 
+      let foodItem: any = null;
       if (mealItem.food_item_id) {
         console.log('[FoodDetails] loadEditItem: fetching food_items columns for id=', mealItem.food_item_id);
-        const { data: foodItem } = await supabase
+        const { data: fetchedFoodItem } = await supabase
           .from('food_items')
           .select('id, name, brand, barcode, calories, protein, carbs, fat, fiber, serving_size, serving_unit, serving_quantity, serving_description, serving_count, macros_per, nutriments, sugar_g, saturated_fat_g, polyunsaturated_fat_g, monounsaturated_fat_g, trans_fat_g, cholesterol_mg, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg, vitamin_b12_mcg, folate_mcg, choline_mg, pantothenic_acid_mg, selenium_mcg, source, usda_fdc_id, data_quality_score, ingredients_text, allergens, off_data')
           .eq('id', mealItem.food_item_id)
           .single();
+        foodItem = fetchedFoodItem;
 
         if (foodItem) {
           if (foodItem.off_data) {
