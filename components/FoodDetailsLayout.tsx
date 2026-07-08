@@ -14,7 +14,7 @@ import { emitMealLogged } from '@/utils/xpEvents';
 import { logFoodUsage, type FoodLogSource } from '@/utils/logFoodUsage';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 // ─── Micronutrient helpers ────────────────────────────────────────────────────
@@ -395,14 +395,24 @@ const styles = StyleSheet.create({
   unitOptionsContainer: {
     marginTop: spacing.sm,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
     overflow: 'hidden',
+    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   unitOption: {
-    padding: spacing.md,
-    borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    minHeight: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   unitOptionText: {
     fontSize: 16,
+    flex: 1,
   },
   numberOfServingsRow: {
     flexDirection: 'row',
@@ -583,6 +593,34 @@ export default function FoodDetailsLayout({
   // In edit mode, the 'default' option gramsPerUnit is derived from the saved DB grams,
   // NOT from extractServingSize — so they stay in sync.
   const [editDefaultGramsPerUnit, setEditDefaultGramsPerUnit] = useState<number | null>(null);
+
+  // Memoized serving options — must be declared before any early returns to satisfy Rules of Hooks.
+  // `product` may be null during loading; we guard with a fallback so the array is always valid.
+  const servingOptions = useMemo<ServingOption[]>(() => {
+    const servingInfo = product ? extractServingSize(product) : { grams: 100, displayText: '', description: '1 serving (100g)' };
+    const defGrams =
+      mode === 'edit' && editDefaultGramsPerUnit !== null
+        ? editDefaultGramsPerUnit
+        : servingInfo.grams;
+    const defLabel =
+      mode === 'edit' && editDefaultGramsPerUnit !== null
+        ? `1 serving (${Number.isInteger(editDefaultGramsPerUnit) ? editDefaultGramsPerUnit : editDefaultGramsPerUnit.toFixed(1)}g)`
+        : (servingInfo.displayText || servingInfo.description || `1 serving (${servingInfo.grams}g)`);
+    return [
+      ...(customUnitLabel
+        ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
+        : []),
+      { key: 'default', label: defLabel,   gramsPerUnit: defGrams },
+      { key: 'g',       label: '1 g',      gramsPerUnit: 1 },
+      { key: 'oz',      label: '1 oz',     gramsPerUnit: 28.35 },
+      { key: 'lb',      label: '1 lb',     gramsPerUnit: 453.592 },
+      { key: 'ml',      label: '1 ml',     gramsPerUnit: 1 },
+      { key: 'tsp',     label: '1 tsp',    gramsPerUnit: 5 },
+      { key: 'tbsp',    label: '1 tbsp',   gramsPerUnit: 15 },
+      { key: 'cup',     label: '1 cup',    gramsPerUnit: 240 },
+      { key: 'fl oz',   label: '1 fl oz',  gramsPerUnit: 29.57 },
+    ];
+  }, [product, customUnitLabel, customUnitGramsPerUnit, editDefaultGramsPerUnit, mode]);
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
@@ -1707,33 +1745,8 @@ export default function FoodDetailsLayout({
 
   const macros = calculateMacros();
 
-  const defaultServingInfo = extractServingSize(product);
-  // In edit mode, the 'default' option must use the gramsPerUnit derived from the saved DB grams
-  // (not from extractServingSize) so that servingAmount and gramsPerUnit stay in sync.
-  const defaultGramsPerUnit =
-    mode === 'edit' && editDefaultGramsPerUnit !== null
-      ? editDefaultGramsPerUnit
-      : defaultServingInfo.grams;
-  const defaultOptionLabel =
-    mode === 'edit' && editDefaultGramsPerUnit !== null
-      ? `1 serving (${Number.isInteger(editDefaultGramsPerUnit) ? editDefaultGramsPerUnit : editDefaultGramsPerUnit.toFixed(1)}g)`
-      : (defaultServingInfo.displayText || defaultServingInfo.description || `1 serving (${defaultServingInfo.grams}g)`);
-  const servingOptions: ServingOption[] = [
-    ...(customUnitLabel
-      ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
-      : []),
-    { key: 'default', label: defaultOptionLabel, gramsPerUnit: defaultGramsPerUnit },
-    { key: 'g',     label: '1 g',     gramsPerUnit: 1 },
-    { key: 'oz',    label: '1 oz',    gramsPerUnit: 28.35 },
-    { key: 'lb',    label: '1 lb',    gramsPerUnit: 453.592 },
-    { key: 'ml',    label: '1 ml',    gramsPerUnit: 1 },
-    { key: 'tsp',   label: '1 tsp',   gramsPerUnit: 5 },
-    { key: 'tbsp',  label: '1 tbsp',  gramsPerUnit: 15 },
-    { key: 'cup',   label: '1 cup',   gramsPerUnit: 240 },
-    { key: 'fl oz', label: '1 fl oz', gramsPerUnit: 29.57 },
-  ];
-
-  const currentOption = servingOptions.find((o) => o.key === selectedServingOptionKey) || servingOptions[0];
+  // Always derive the label from the memoized array so it stays in sync with selectedServingOptionKey.
+  const currentOption = servingOptions.find((o) => o.key === selectedServingOptionKey) ?? servingOptions[0];
   const currentUnitLabel = currentOption.label;
   const servingAmountDisplay = servingAmount % 1 === 0 ? servingAmount.toString() : servingAmount.toFixed(2);
 
@@ -1809,16 +1822,32 @@ export default function FoodDetailsLayout({
           </View>
 
           {showUnitOptions && (
-            <View style={[styles.unitOptionsContainer, { backgroundColor: cardBackground }]}>
-              {servingOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[styles.unitOption, { borderBottomColor: borderColor, backgroundColor: option.key === selectedServingOptionKey ? (isDark ? '#2a2a2a' : '#f0f0f0') : undefined }]}
-                  onPress={() => handleServingOptionChange(option)}
-                >
-                  <Text style={[styles.unitOptionText, { color: textColor }]}>{option.label}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={[styles.unitOptionsContainer, { backgroundColor: cardBackground, borderColor, shadowColor: isDark ? '#000' : '#333' }]}>
+              {servingOptions.map((option, index) => {
+                const isSelected = option.key === selectedServingOptionKey;
+                const isLast = index === servingOptions.length - 1;
+                const selectedBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.unitOption,
+                      { borderBottomColor: isLast ? 'transparent' : borderColor },
+                      isSelected && { backgroundColor: selectedBg },
+                    ]}
+                    onPress={() => {
+                      console.log('[FoodDetails] Serving option selected:', option.key, option.label);
+                      handleServingOptionChange(option);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.unitOptionText, { color: textColor, fontWeight: isSelected ? '600' : '400' }]}>{option.label}</Text>
+                    {isSelected && (
+                      <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
         </View>
