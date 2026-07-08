@@ -674,7 +674,9 @@ export default function FoodDetailsLayout({
       const descMatch = servingSizeStr.match(/^(\d+\.?\d*)\s+([a-zA-Z][a-zA-Z\s]*?)\s*\((\d+\.?\d*)\s*g\)/i);
       if (descMatch) {
         const count = parseFloat(descMatch[1]);
-        const unitWord = descMatch[2].trim();
+        const rawUnitWord = descMatch[2].trim();
+        // Safety: strip any leading number from unitWord (e.g. "4 cookies" → "cookies")
+        const unitWord = rawUnitWord.replace(/^\d+(\.\d+)?\s+/, '').trim();
         const totalGrams = parseFloat(descMatch[3]);
         if (count > 0 && totalGrams > 0 && unitWord && unitWord.toLowerCase() !== 'serving') {
           const gramsPerUnit = totalGrams / count;
@@ -1300,7 +1302,16 @@ export default function FoodDetailsLayout({
       fat: safeNum(nutrition.fat),
       fiber: safeNum(nutrition.fiber),
       nutriments: prod.nutriments || null,
-      off_data: prod,
+      off_data: (() => {
+        // Build canonical serving_size to avoid storing corrupted strings (e.g. "1 4 cookies (7.25 g)")
+        const canonicalServingSize = servingDesc && servingCountVal && servingCountVal > 1
+          ? `${servingCountVal} ${servingDesc} (${totalServingGrams} g)`
+          : servingDesc
+            ? `1 ${servingDesc} (${totalServingGrams} g)`
+            : `${totalServingGrams} g`;
+        console.log('[FoodDetails] upsertFoodItem: canonical serving_size=', canonicalServingSize);
+        return { ...prod, serving_size: canonicalServingSize };
+      })(),
     };
 
     // 1. Try to find by barcode first (most reliable dedup key)
