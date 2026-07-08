@@ -644,6 +644,8 @@ export default function FoodDetailsLayout({
           console.log('[FoodDetails] loadViewData: detected custom unit from serving_size=', servingSizeStr, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit);
           setCustomUnitLabel(`1 ${singular}`);
           setCustomUnitGramsPerUnit(gramsPerUnit);
+          setServingAmount(gramsPerUnit);   // gramsPerUnit, not the count
+          setNumberOfServings('1');          // start with 1 unit
           setSelectedServingOptionKey('custom');
         }
       }
