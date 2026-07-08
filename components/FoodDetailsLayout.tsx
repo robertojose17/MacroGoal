@@ -655,14 +655,12 @@ export default function FoodDetailsLayout({
         fats: safeNum(nutrition.fat),
         fiber: safeNum(nutrition.fiber),
       });
-      setFoodItemRef({ serving_size: 100, macros_per: '100g' });
-
       const servingInfo = extractServingSize(parsedProduct);
-      // For discrete units like "1 egg", "2 slices", extract the leading number as the initial amount.
-      // For continuous units like "50 g", fall back to grams.
-      const leadingNumberMatch = servingInfo.description.match(/^(\d+\.?\d*)\s+/);
-      const initialAmount = leadingNumberMatch ? parseFloat(leadingNumberMatch[1]) : servingInfo.grams;
-      setServingAmount(initialAmount);
+      // servingAmount for the 'default' key must equal gramsPerUnit of the default option,
+      // which is servingInfo.grams. The leading number (e.g. "1" from "1 serving") is the
+      // count of units — that is handled by numberOfServings, not servingAmount.
+      setServingAmount(servingInfo.grams);
+      setFoodItemRef({ serving_size: servingInfo.grams, macros_per: '100g' });
       setServingUnit('serving');
       setNumberOfServings('1');
       setSelectedServingOptionKey('default');
@@ -713,11 +711,16 @@ export default function FoodDetailsLayout({
       servingSize = `${countLabel}${foodItem.serving_description} (${gramsVal} g)`;
       console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', servingCount);
     } else {
-      servingSize = foodItem.serving_size != null
-        ? String(foodItem.serving_size)
-        : (foodItem.serving_quantity != null && foodItem.serving_unit
-          ? `${foodItem.serving_quantity} ${foodItem.serving_unit}`
-          : `${food.serving_amount} ${food.serving_unit}`);
+      // No serving_description — build a plain "<grams> g" string so extractServingSize
+      // parses it as a gram value (not a "1 serving (Xg)" string that confuses the
+      // leading-number extraction and produces a wrong servingAmount of 1).
+      const gramsVal = foodItem.serving_size != null
+        ? Number(foodItem.serving_size)
+        : (foodItem.serving_quantity != null
+          ? foodItem.serving_quantity
+          : food.serving_amount);
+      servingSize = `${gramsVal} g`;
+      console.log('[FoodDetails] buildMockProductFromFoodItem: no serving_description, built servingSize=', servingSize);
     }
     const servingQty = foodItem.serving_quantity ?? food.serving_amount;
     const n = (foodItem.nutriments ?? {}) as Record<string, number>;
