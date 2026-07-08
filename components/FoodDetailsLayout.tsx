@@ -683,7 +683,7 @@ export default function FoodDetailsLayout({
           setCustomUnitLabel(`1 ${singular}`);
           setCustomUnitGramsPerUnit(gramsPerUnit);
           setServingAmount(gramsPerUnit);   // gramsPerUnit, not the count
-          setNumberOfServings('1');          // start with 1 unit
+          setNumberOfServings(String(count)); // start with the original count (e.g. 4 for "4 cookies")
           setSelectedServingOptionKey('custom');
         }
       }
@@ -718,11 +718,12 @@ export default function FoodDetailsLayout({
         servingSize = `${gramsVal} g`;
         console.log('[FoodDetails] buildMockProductFromFoodItem: numeric serving_description ignored, built servingSize=', servingSize);
       } else {
-      const gramsVal = foodItem.serving_size ?? foodItem.serving_quantity ?? food.serving_amount;
       const servingCount = Number(foodItem.serving_count) || 1;
-      const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-      servingSize = `${countLabel}${foodItem.serving_description} (${gramsVal} g)`;
-      console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', servingCount);
+      // serving_size is stored as per-unit grams; total = per-unit × count
+      const perUnitGrams = Number(foodItem.serving_size ?? foodItem.serving_quantity ?? food.serving_amount);
+      const gramsVal = perUnitGrams * servingCount;
+      servingSize = `${servingCount} ${foodItem.serving_description} (${gramsVal} g)`;
+      console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', servingCount, 'perUnitGrams=', perUnitGrams);
       }
     } else {
       // No serving_description — build a plain "<grams> g" string so extractServingSize
@@ -881,7 +882,11 @@ export default function FoodDetailsLayout({
           console.log('[FoodDetails] loadEditItem: building mockProduct from columns, source=', foodItem.source);
           const n = foodItem;
           const servingSize = n.serving_description && n.serving_size
-            ? `1 ${n.serving_description} (${n.serving_size} g)`
+            ? (() => {
+                const sc = Number(n.serving_count) || 1;
+                const totalG = Number(n.serving_size) * sc;
+                return `${sc} ${n.serving_description} (${totalG} g)`;
+              })()
             : n.serving_size ? `${n.serving_size} g` : undefined;
           mockProduct = {
             code: n.barcode || undefined,
@@ -1279,7 +1284,7 @@ export default function FoodDetailsLayout({
       name: pName,
       brand: pBrand,
       barcode: barcode,
-      serving_size: totalServingGrams,
+      serving_size: totalServingGrams / (servingCountVal ?? 1),
       serving_unit: 'g',
       serving_quantity: null as null,
       serving_description: servingDesc,
