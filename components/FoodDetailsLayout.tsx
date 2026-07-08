@@ -778,7 +778,22 @@ export default function FoodDetailsLayout({
               serving_unit: mealItem.serving_description ?? 'g',
               user_created: false,
             }
-          : null
+          : mealItem.food_item_id
+            ? {
+                // food_item_id is present — real data will be loaded from food_items below
+                // Use stored macro values as placeholder; they'll be overridden by the food_items fetch
+                name: 'Loading...',
+                brand: undefined,
+                calories: mealItem.calories ?? 0,
+                protein: mealItem.protein ?? 0,
+                carbs: mealItem.carbs ?? 0,
+                fats: mealItem.fats ?? 0,
+                fiber: mealItem.fiber ?? 0,
+                serving_amount: mealItem.grams ?? 100,
+                serving_unit: mealItem.serving_description ?? 'g',
+                user_created: false,
+              }
+            : null
       );
       if (!food) {
         Alert.alert('Error', 'Food data not found');
