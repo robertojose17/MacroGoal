@@ -750,7 +750,7 @@ export default function FoodDetailsLayout({
           *,
           food_name,
           food_brand,
-          foods (*),
+          foods!left(*),
           food_item_id
         `)
         .eq('id', itemId)
