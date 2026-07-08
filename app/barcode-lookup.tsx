@@ -133,7 +133,12 @@ export default function BarcodeLookupScreen() {
     let servingSizeStr: string | undefined;
     if (servingDesc && item.serving_size) {
       const countLabel = servingCount && servingCount > 1 ? `${servingCount} ` : '1 ';
-      servingSizeStr = `${countLabel}${servingDesc} (${item.serving_size} g)`;
+      const totalGrams =
+        servingCount && servingCount > 1
+          ? Number(item.serving_size) * servingCount
+          : Number(item.serving_size);
+      console.log('[BarcodeLookup] buildSyntheticOffData: totalGrams=', totalGrams, 'serving_size per unit=', item.serving_size, 'servingCount=', servingCount);
+      servingSizeStr = `${countLabel}${servingDesc} (${totalGrams} g)`;
     } else if (item.serving_size) {
       servingSizeStr = `${item.serving_size} ${item.serving_unit || 'g'}`;
     }

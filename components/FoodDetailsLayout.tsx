@@ -1161,9 +1161,14 @@ export default function FoodDetailsLayout({
   };
 
   const handleServingOptionChange = (option: ServingOption) => {
-    console.log('[FoodDetails] Serving unit changed to:', option.label, 'gramsPerUnit=', option.gramsPerUnit);
-    const totalGrams = servingAmount * (parseFloat(numberOfServings) || 1);
+    // Use the currently selected option's gramsPerUnit (not stale servingAmount state)
+    // to accurately compute total grams before switching units.
+    const currentOption =
+      servingOptions.find((o) => o.key === selectedServingOptionKey) ?? servingOptions[0];
+    const currentGramsPerUnit = currentOption?.gramsPerUnit ?? servingAmount;
+    const totalGrams = currentGramsPerUnit * (parseFloat(numberOfServings) || 1);
     const newNumberOfServings = totalGrams / option.gramsPerUnit;
+    console.log('[FoodDetails] Serving unit changed to:', option.label, 'gramsPerUnit=', option.gramsPerUnit, 'currentGramsPerUnit=', currentGramsPerUnit, 'totalGrams=', totalGrams, 'newNumberOfServings=', newNumberOfServings);
     setServingAmount(option.gramsPerUnit);
     // Discrete units (default = "1 cookie", "1 slice", etc.) must be whole numbers.
     // Continuous units (g/oz/lb) can be fractional.
