@@ -586,52 +586,64 @@ export default function FoodDetailsLayout({
 
     if (product) {
       // ── Natural unit (cookie, egg, slice, etc.) ──────────────────────────
-      // Only add if we have confident data: serving_quantity (total grams) + a real unit word
       const totalGrams = product.serving_quantity
         ? parseFloat(String(product.serving_quantity))
         : null;
 
       const servingSizeStr = typeof product.serving_size === 'string' ? product.serving_size.trim() : '';
-      const { unitName, unitCount } = extractUnitFromString(servingSizeStr);
+      const { unitName: rawUnitName, unitCount } = extractUnitFromString(servingSizeStr);
 
-      if (totalGrams && totalGrams > 0 && unitName) {
-        const gramsPerUnit = unitCount > 1 ? totalGrams / unitCount : totalGrams;
-        const singular = singularizeUnit(unitName);
+      // Normalize unit name to lowercase for display
+      const unitName = rawUnitName ? rawUnitName.toLowerCase() : null;
 
-        // Add "N units" option (the standard serving as defined by the product)
-        if (unitCount > 1) {
-          options.push({
-            key: 'natural_serving',
-            label: `${unitCount} ${singular}s`,
-            gramsPerUnit: totalGrams,
-          });
-        }
-
-        // Add "1 unit" option (individual unit)
-        options.push({
-          key: 'natural_unit',
-          label: `1 ${singular}`,
-          gramsPerUnit: gramsPerUnit,
-        });
-      }
-
-      // ── Default serving (always present) ──────────────────────────────────
       const defGrams =
         mode === 'edit' && editDefaultGramsPerUnit !== null
           ? editDefaultGramsPerUnit
           : (totalGrams ?? 100);
 
-      const defLabel = unitName
-        ? `1 serving (${defGrams}g)`
-        : (servingSizeStr && !/^\d+(\.\d+)?\s*(g|ml)$/i.test(servingSizeStr) && !/^\d+\s+\d/.test(servingSizeStr) && /[a-zA-Z]/.test(servingSizeStr))
+      if (totalGrams && totalGrams > 0 && unitName) {
+        const singular = singularizeUnit(unitName);
+        // Capitalize first letter for display
+        const singularDisplay = singular.charAt(0).toUpperCase() + singular.slice(1);
+        const pluralDisplay = singularDisplay + 's';
+
+        if (unitCount > 1) {
+          // Case A: unitName exists AND unitCount > 1
+          // → "N unitNames (Xg)" — the full standard serving
+          options.push({
+            key: 'natural_serving',
+            label: `${unitCount} ${pluralDisplay} (${totalGrams}g)`,
+            gramsPerUnit: totalGrams,
+          });
+          // → "1 unitName (Yg)" — individual unit
+          const gramsPerUnit = totalGrams / unitCount;
+          options.push({
+            key: 'natural_unit',
+            label: `1 ${singularDisplay} (${Math.round(gramsPerUnit)}g)`,
+            gramsPerUnit: gramsPerUnit,
+          });
+          // SKIP default — would be a 3rd duplicate
+        } else {
+          // Case B: unitName exists AND unitCount === 1
+          // → "1 unitName (Xg)" as the only named option
+          options.push({
+            key: 'default',
+            label: `1 ${singularDisplay} (${defGrams}g)`,
+            gramsPerUnit: defGrams,
+          });
+        }
+      } else {
+        // Case C: no unitName — plain grams product
+        const defLabel = (servingSizeStr && !/^\d+(\.\d+)?\s*(g|ml)$/i.test(servingSizeStr) && !/^\d+\s+\d/.test(servingSizeStr) && /[a-zA-Z]/.test(servingSizeStr))
           ? servingSizeStr
           : `1 serving (${defGrams}g)`;
 
-      options.push({
-        key: 'default',
-        label: defLabel,
-        gramsPerUnit: defGrams,
-      });
+        options.push({
+          key: 'default',
+          label: defLabel,
+          gramsPerUnit: defGrams,
+        });
+      }
     } else {
       options.push({ key: 'default', label: '1 serving (100g)', gramsPerUnit: 100 });
     }
@@ -1844,6 +1856,18 @@ export default function FoodDetailsLayout({
         </View>
 
         <View style={styles.section}>
+          {product?.product_name ? (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: textColor, marginBottom: 2 }}>
+                {product.product_name}
+              </Text>
+              {product.brands ? (
+                <Text style={{ fontSize: 13, color: textColor, opacity: 0.6 }}>
+                  {product.brands}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           <Text style={[styles.sectionTitle, { color: textColor }]}>Serving Size</Text>
 
           <ServingPicker
