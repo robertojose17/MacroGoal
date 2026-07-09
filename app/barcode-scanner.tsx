@@ -94,8 +94,15 @@ export default function BarcodeScannerScreen() {
       if (result.found) {
         // Use off_data from the item if present (edge function stores it there),
         // otherwise build synthetically from columns.
-        const offData = result.item?.off_data ?? buildSyntheticOffData(result.item);
+        let offData = result.item?.off_data ?? buildSyntheticOffData(result.item);
+        // If off_data exists but has no product_name, patch it from the DB item columns
+        if (typeof offData === 'object' && offData !== null) {
+          if (!offData.product_name && !offData.generic_name) {
+            offData = { ...offData, product_name: result.item?.name || '' };
+          }
+        }
         console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, result.item?.off_data ? '— using stored off_data' : '— building synthetic off_data from item');
+        console.log('[BarcodeScanner] product_name resolved to:', offData?.product_name || offData?.generic_name || '(empty)');
 
         console.log('[BarcodeScanner] 🚀 Navigating to food-details');
         console.log('[BarcodeScanner] Context:', context);

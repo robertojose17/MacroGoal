@@ -686,6 +686,11 @@ export default function FoodDetailsLayout({
 
     try {
       const parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
+      // Ensure product_name is always populated — some OFacts entries have it in generic_name only
+      if (!parsedProduct.product_name && parsedProduct.generic_name) {
+        parsedProduct.product_name = parsedProduct.generic_name;
+      }
+      console.log('[FoodDetailsLayout] loadViewData — product_name:', parsedProduct.product_name, '| generic_name:', parsedProduct.generic_name);
       setProduct(parsedProduct);
 
       const nutrition = extractNutrition(parsedProduct);
@@ -1848,14 +1853,21 @@ export default function FoodDetailsLayout({
       </View>
 
       <ScrollView style={styles.scrollContent}>
-        <View style={styles.section}>
-          <Text style={[styles.foodName, { color: textColor }]}>
-            {product.product_name || product.generic_name || ''}
-          </Text>
-          {product.brands ? (
-            <Text style={[styles.brandName, { color: isDark ? '#aaa' : '#666' }]}>{product.brands}</Text>
-          ) : null}
-        </View>
+        {(() => {
+          const displayName = (product.product_name || product.generic_name || (product as any).name || '').trim();
+          const displayBrand = (product.brands || '').trim();
+          if (!displayName) return null;
+          return (
+            <View style={[styles.section, { paddingBottom: 4 }]}>
+              <Text style={[styles.foodName, { color: textColor }]} numberOfLines={3}>
+                {displayName}
+              </Text>
+              {displayBrand ? (
+                <Text style={[styles.brandName, { color: isDark ? '#aaa' : '#666' }]}>{displayBrand}</Text>
+              ) : null}
+            </View>
+          );
+        })()}
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: textColor }]}>Serving Size</Text>
