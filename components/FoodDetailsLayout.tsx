@@ -1839,7 +1839,7 @@ export default function FoodDetailsLayout({
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: textColor }]}>
-            {mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Edit Food' : 'Food Details'}
+            {mode === 'ingredient' ? 'Add Ingredient' : 'Food Details'}
           </Text>
         </View>
         <TouchableOpacity style={styles.favoriteButton} onPress={handleToggleFavorite}>
@@ -2074,7 +2074,7 @@ export default function FoodDetailsLayout({
             handleSave();
           }}
         >
-          <Text style={styles.saveButtonText}>{mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Update' : 'Add to Meal'}</Text>
+          <Text style={styles.saveButtonText}>{mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Save Changes' : 'Add to Meal'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
