@@ -605,9 +605,13 @@ export default function FoodDetailsLayout({
     const defLabel =
       mode === 'edit' && editDefaultGramsPerUnit !== null
         ? `1 serving (${Number.isInteger(editDefaultGramsPerUnit) ? editDefaultGramsPerUnit : editDefaultGramsPerUnit.toFixed(1)}g)`
-        : (servingInfo.description && !/^\d+(\.\d+)?\s*g$/i.test(servingInfo.description)
-            ? servingInfo.description
-            : `1 serving (${servingInfo.grams}g)`);
+        : (() => {
+            const desc = servingInfo.description || '';
+            // Use description as-is only if it looks like a real human label
+            // (contains a letter word that isn't just "g"/"ml", and doesn't start with a bare number followed by another number)
+            const hasRealWord = /[a-zA-Z]/.test(desc) && !/^\d+(\.\d+)?\s*(g|ml)$/i.test(desc) && !/^\d+\s+\d/.test(desc);
+            return hasRealWord ? desc : `1 serving (${servingInfo.grams}g)`;
+          })();
     return [
       ...(customUnitLabel
         ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
