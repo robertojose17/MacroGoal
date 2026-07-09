@@ -1,6 +1,7 @@
 
-import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractNutritionPerServing } from '@/utils/openFoodFacts';
+import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractNutritionPerServing, extractUnitFromString } from '@/utils/openFoodFacts';
 import { parseServingString, singularizeUnit } from '@/utils/servingParser';
+import ServingPicker from '@/components/ServingPicker';
 import { calcMacros } from '@/utils/macros';
 import { formatServing } from '@/utils/servingFormat';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -573,10 +574,7 @@ export default function FoodDetailsLayout({
   const [servingAmount, setServingAmount] = useState(1);
   const [servingUnit, setServingUnit] = useState<ServingUnit>('serving');
   const [numberOfServings, setNumberOfServings] = useState('1');
-  const [showUnitOptions, setShowUnitOptions] = useState(false);
   const [selectedServingOptionKey, setSelectedServingOptionKey] = useState('default');
-  const [customUnitLabel, setCustomUnitLabel] = useState<string | null>(null);
-  const [customUnitGramsPerUnit, setCustomUnitGramsPerUnit] = useState<number>(100);
   // In edit mode, the 'default' option gramsPerUnit is derived from the saved DB grams,
   // NOT from extractServingSize — so they stay in sync.
   const [editDefaultGramsPerUnit, setEditDefaultGramsPerUnit] = useState<number | null>(null);
@@ -584,36 +582,74 @@ export default function FoodDetailsLayout({
   // Memoized serving options — must be declared before any early returns to satisfy Rules of Hooks.
   // `product` may be null during loading; we guard with a fallback so the array is always valid.
   const servingOptions = useMemo<ServingOption[]>(() => {
-    const servingInfo = product ? extractServingSize(product) : { grams: 100, displayText: '', description: '1 serving (100g)' };
-    const defGrams =
-      mode === 'edit' && editDefaultGramsPerUnit !== null
-        ? editDefaultGramsPerUnit
-        : servingInfo.grams;
-    const defLabel =
-      mode === 'edit' && editDefaultGramsPerUnit !== null
-        ? `1 serving (${Number.isInteger(editDefaultGramsPerUnit) ? editDefaultGramsPerUnit : editDefaultGramsPerUnit.toFixed(1)}g)`
-        : (() => {
-            const desc = servingInfo.description || '';
-            // Use description as-is only if it looks like a real human label
-            // (contains a letter word that isn't just "g"/"ml", and doesn't start with a bare number followed by another number)
-            const hasRealWord = /[a-zA-Z]/.test(desc) && !/^\d+(\.\d+)?\s*(g|ml)$/i.test(desc) && !/^\d+\s+\d/.test(desc);
-            return hasRealWord ? desc : `1 serving (${servingInfo.grams}g)`;
-          })();
-    return [
-      ...(customUnitLabel
-        ? [{ key: 'custom', label: customUnitLabel, gramsPerUnit: customUnitGramsPerUnit }]
-        : []),
-      { key: 'default', label: defLabel,   gramsPerUnit: defGrams },
-      { key: 'g',       label: '1 g',      gramsPerUnit: 1 },
-      { key: 'oz',      label: '1 oz',     gramsPerUnit: 28.35 },
-      { key: 'lb',      label: '1 lb',     gramsPerUnit: 453.592 },
-      { key: 'ml',      label: '1 ml',     gramsPerUnit: 1 },
-      { key: 'tsp',     label: '1 tsp',    gramsPerUnit: 5 },
-      { key: 'tbsp',    label: '1 tbsp',   gramsPerUnit: 15 },
-      { key: 'cup',     label: '1 cup',    gramsPerUnit: 240 },
-      { key: 'fl oz',   label: '1 fl oz',  gramsPerUnit: 29.57 },
-    ];
-  }, [product, customUnitLabel, customUnitGramsPerUnit, editDefaultGramsPerUnit, mode]);
+    const options: ServingOption[] = [];
+
+    if (product) {
+      // ── Natural unit (cookie, egg, slice, etc.) ──────────────────────────
+      // Only add if we have confident data: serving_quantity (total grams) + a real unit word
+      const totalGrams = product.serving_quantity
+        ? parseFloat(String(product.serving_quantity))
+        : null;
+
+      const servingSizeStr = typeof product.serving_size === 'string' ? product.serving_size.trim() : '';
+      const { unitName, unitCount } = extractUnitFromString(servingSizeStr);
+
+      if (totalGrams && totalGrams > 0 && unitName) {
+        const gramsPerUnit = unitCount > 1 ? totalGrams / unitCount : totalGrams;
+        const singular = singularizeUnit(unitName);
+
+        // Add "N units" option (the standard serving as defined by the product)
+        if (unitCount > 1) {
+          options.push({
+            key: 'natural_serving',
+            label: `${unitCount} ${singular}s`,
+            gramsPerUnit: totalGrams,
+          });
+        }
+
+        // Add "1 unit" option (individual unit)
+        options.push({
+          key: 'natural_unit',
+          label: `1 ${singular}`,
+          gramsPerUnit: gramsPerUnit,
+        });
+      }
+
+      // ── Default serving (always present) ──────────────────────────────────
+      const defGrams =
+        mode === 'edit' && editDefaultGramsPerUnit !== null
+          ? editDefaultGramsPerUnit
+          : (totalGrams ?? 100);
+
+      const defLabel = unitName
+        ? `1 serving (${defGrams}g)`
+        : (servingSizeStr && !/^\d+(\.\d+)?\s*(g|ml)$/i.test(servingSizeStr) && !/^\d+\s+\d/.test(servingSizeStr) && /[a-zA-Z]/.test(servingSizeStr))
+          ? servingSizeStr
+          : `1 serving (${defGrams}g)`;
+
+      options.push({
+        key: 'default',
+        label: defLabel,
+        gramsPerUnit: defGrams,
+      });
+    } else {
+      options.push({ key: 'default', label: '1 serving (100g)', gramsPerUnit: 100 });
+    }
+
+    // ── Standard measurement units (always present) ──────────────────────
+    options.push(
+      { key: 'g',     label: '1 g',     gramsPerUnit: 1 },
+      { key: 'oz',    label: '1 oz',    gramsPerUnit: 28.35 },
+      { key: 'lb',    label: '1 lb',    gramsPerUnit: 453.592 },
+      { key: 'ml',    label: '1 ml',    gramsPerUnit: 1 },
+      { key: 'tsp',   label: '1 tsp',   gramsPerUnit: 5 },
+      { key: 'tbsp',  label: '1 tbsp',  gramsPerUnit: 15 },
+      { key: 'cup',   label: '1 cup',   gramsPerUnit: 240 },
+      { key: 'fl oz', label: '1 fl oz', gramsPerUnit: 29.57 },
+    );
+
+    return options;
+  }, [product, editDefaultGramsPerUnit, mode]);
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
@@ -649,44 +685,33 @@ export default function FoodDetailsLayout({
         fiber: safeNum(nutrition.fiber),
       });
       const servingInfo = extractServingSize(parsedProduct);
-      // servingAmount for the 'default' key must equal gramsPerUnit of the default option,
-      // which is servingInfo.grams. The leading number (e.g. "1" from "1 serving") is the
-      // count of units — that is handled by numberOfServings, not servingAmount.
-      setServingAmount(servingInfo.grams);
       setFoodItemRef({ serving_size: servingInfo.grams, macros_per: '100g' });
       setServingUnit('serving');
-      setNumberOfServings('1');
-      setSelectedServingOptionKey('default');
 
-      // Extract serving_description and serving_count from the product's serving_size string.
-      // e.g. "4 cookies (29 g)" → customUnitLabel = "1 cookie", customUnitGramsPerUnit = 7.25
-      // This makes the individual unit appear as the default picker option.
-      const { description: parsedDesc, count: parsedCount } = parseServingString(parsedProduct.serving_size);
       // Use serving_quantity as the authoritative gram value
       const totalGrams = parsedProduct.serving_quantity
         ? parseFloat(String(parsedProduct.serving_quantity))
         : servingInfo.grams;
 
-      if (parsedDesc && parsedCount && parsedCount > 1) {
-        const gramsPerUnit = totalGrams / parsedCount;
-        const singular = singularizeUnit(parsedDesc);
-        console.log('[FoodDetails] loadViewData: detected custom unit from serving_size=', parsedProduct.serving_size, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit, 'totalGrams=', totalGrams);
-        setCustomUnitLabel(`1 ${singular}`);
-        setCustomUnitGramsPerUnit(gramsPerUnit);
+      // Extract unit name and count from the serving_size string (display only)
+      const servingSizeStr = typeof parsedProduct.serving_size === 'string' ? parsedProduct.serving_size.trim() : '';
+      const { unitName, unitCount } = extractUnitFromString(servingSizeStr);
+
+      if (unitName && totalGrams > 0) {
+        // We have a real unit — select natural_unit, set quantity to unitCount
+        const gramsPerUnit = unitCount > 1 ? totalGrams / unitCount : totalGrams;
+        const singular = singularizeUnit(unitName);
+        console.log('[FoodDetails] loadViewData: natural unit detected from serving_size=', parsedProduct.serving_size, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit, 'unitCount=', unitCount, 'totalGrams=', totalGrams);
         setServingAmount(gramsPerUnit);
-        setNumberOfServings(String(parsedCount));
-        setSelectedServingOptionKey('custom');
-      } else if (parsedDesc) {
-        // Single unit (e.g. "1 slice (21 g)") — show as "1 slice"
-        const singular = singularizeUnit(parsedDesc);
-        console.log('[FoodDetails] loadViewData: single custom unit from serving_size=', parsedProduct.serving_size, '→ singular=', singular, 'totalGrams=', totalGrams);
-        setCustomUnitLabel(`1 ${singular}`);
-        setCustomUnitGramsPerUnit(totalGrams);
+        setNumberOfServings(unitCount > 1 ? String(unitCount) : '1');
+        setSelectedServingOptionKey('natural_unit');
+      } else {
+        // No natural unit — default serving
+        console.log('[FoodDetails] loadViewData: no natural unit, using default. totalGrams=', totalGrams);
         setServingAmount(totalGrams);
         setNumberOfServings('1');
-        setSelectedServingOptionKey('custom');
+        setSelectedServingOptionKey('default');
       }
-      // else: plain grams — no custom unit, servingAmount = totalGrams (already set above)
 
       await checkFavoriteStatus(parsedProduct);
     } catch (error) {
@@ -1018,7 +1043,6 @@ export default function FoodDetailsLayout({
           setNumberOfServings(totalGrams.toString());
           setSelectedServingOptionKey('g');
         }
-        setCustomUnitLabel(null);
         setEditDefaultGramsPerUnit(null);
         console.log('[FoodDetails] Edit load (continuous): desc=', desc, 'totalGrams=', totalGrams, 'key=', selectedServingOptionKey);
       } else {
@@ -1034,16 +1058,13 @@ export default function FoodDetailsLayout({
         const singularUnit = rawUnit ? singularizeUnit(rawUnit) : '';
 
         if (singularUnit && singularUnit !== 'serving' && singularUnit !== 'g') {
-          console.log('[FoodDetails] Edit load (custom unit): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
-          setCustomUnitLabel(`1 ${singularUnit}`);
-          setCustomUnitGramsPerUnit(gramsPerUnit);
-          setSelectedServingOptionKey('custom');
+          console.log('[FoodDetails] Edit load (natural unit): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
+          setSelectedServingOptionKey('natural_unit');
           setEditDefaultGramsPerUnit(null);
         } else {
           // Default serving — CRITICAL: store gramsPerUnit so the 'default' picker option
           // is built with this value, keeping servingAmount and gramsPerUnit in sync.
           console.log('[FoodDetails] Edit load (default serving): gramsPerUnit=', gramsPerUnit, 'totalGrams=', totalGrams, 'desc=', desc);
-          setCustomUnitLabel(null);
           setSelectedServingOptionKey('default');
           setEditDefaultGramsPerUnit(gramsPerUnit);
         }
@@ -1162,9 +1183,9 @@ export default function FoodDetailsLayout({
     const newNumberOfServings = totalGrams / option.gramsPerUnit;
     console.log('[FoodDetails] Serving unit changed to:', option.label, 'gramsPerUnit=', option.gramsPerUnit, 'currentGramsPerUnit=', currentGramsPerUnit, 'totalGrams=', totalGrams, 'newNumberOfServings=', newNumberOfServings);
     setServingAmount(option.gramsPerUnit);
-    // Discrete units (default = "1 cookie", "1 slice", etc.) must be whole numbers.
+    // Discrete units (default / natural_unit / natural_serving) must be whole numbers.
     // Continuous units (g/oz/lb) can be fractional.
-    const isDiscrete = option.key === 'default' || option.key === 'custom';
+    const isDiscrete = option.key === 'default' || option.key === 'natural_unit' || option.key === 'natural_serving';
     if (isDiscrete) {
       const rounded = Math.max(1, Math.round(newNumberOfServings));
       setNumberOfServings(rounded.toString());
@@ -1172,7 +1193,6 @@ export default function FoodDetailsLayout({
       setNumberOfServings(newNumberOfServings.toFixed(2));
     }
     setSelectedServingOptionKey(option.key);
-    setShowUnitOptions(false);
   };
 
   const handleNumberOfServingsChange = (newServings: string) => {
@@ -1416,19 +1436,18 @@ export default function FoodDetailsLayout({
         }
         const totalUnits = servingsCountForDisplay * baseAmount;
         servingDescription = formatServing(totalUnits, baseUnit);
-      } else if (selectedServingOptionKey === 'custom') {
-        // Custom unit (e.g. "1 slice", "1 cookie") — extract the unit word from customUnitLabel
-        // customUnitLabel is set during edit load (e.g. "1 slice") or by the user picker
-        const customMatch = (customUnitLabel || '').match(/^([\d.]+)\s+(.+)$/);
-        const customAmount = customMatch ? parseFloat(customMatch[1]) : 1;
-        let customUnit = customMatch ? customMatch[2].trim() : 'serving';
+      } else if (selectedServingOptionKey === 'natural_unit' || selectedServingOptionKey === 'natural_serving') {
+        // Natural unit (e.g. "1 cookie", "4 cookies") — extract unit word from the option label
+        const currentOpt = servingOptions.find((o) => o.key === selectedServingOptionKey);
+        const optLabel = currentOpt ? currentOpt.label : '1 serving';
+        const naturalMatch = optLabel.match(/^([\d.]+)\s+(.+)$/);
+        let naturalUnit = naturalMatch ? naturalMatch[2].trim() : 'serving';
         // Singularize if already plural so formatServing can re-pluralize correctly
-        if (customUnit.length > 2 && customUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(customUnit.toLowerCase())) {
-          customUnit = customUnit.slice(0, -1);
+        if (naturalUnit.length > 2 && naturalUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(naturalUnit.toLowerCase())) {
+          naturalUnit = naturalUnit.slice(0, -1);
         }
-        const totalUnits = servingsCountForDisplay * customAmount;
-        servingDescription = formatServing(totalUnits, customUnit);
-        console.log('[FoodDetailsLayout] handleSave custom unit branch — customUnitLabel:', customUnitLabel, 'customUnit:', customUnit, 'totalUnits:', totalUnits, '→', servingDescription);
+        servingDescription = formatServing(servingsCountForDisplay, naturalUnit);
+        console.log('[FoodDetailsLayout] handleSave natural unit branch — optLabel:', optLabel, 'naturalUnit:', naturalUnit, 'servingsCount:', servingsCountForDisplay, '→', servingDescription);
       } else {
         // Continuous unit (g/oz/lb/ml/tsp/tbsp/cup/fl oz). numberOfServings is the count in the selected unit.
         const unitSuffix =
@@ -1777,11 +1796,6 @@ export default function FoodDetailsLayout({
 
   const macros = calculateMacros();
 
-  // Always derive the label from the memoized array so it stays in sync with selectedServingOptionKey.
-  const currentOption = servingOptions.find((o) => o.key === selectedServingOptionKey) ?? servingOptions[0];
-  const currentUnitLabel = currentOption.label;
-  const servingAmountDisplay = servingAmount % 1 === 0 ? servingAmount.toString() : servingAmount.toFixed(2);
-
   const currentBanner = bannerQueue[0];
 
   return (
@@ -1831,57 +1845,20 @@ export default function FoodDetailsLayout({
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: textColor }]}>Serving Size</Text>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
-            <Text style={[styles.numberOfServingsLabel, { color: textColor }]}>Number of servings:</Text>
-            <TextInput
-              style={[styles.numberOfServingsInput, { color: textColor, borderColor, backgroundColor: cardBackground, marginRight: spacing.sm }]}
-              value={numberOfServings}
-              onChangeText={handleNumberOfServingsChange}
-              keyboardType="decimal-pad"
-              placeholder="1"
-              placeholderTextColor={isDark ? '#666' : '#999'}
-            />
-            <TouchableOpacity
-              style={[styles.unitButton, { borderColor, backgroundColor: cardBackground, flexDirection: 'row', justifyContent: 'space-between' }]}
-              onPress={() => {
-                console.log('[FoodDetails] Unit selector pressed, showUnitOptions=', !showUnitOptions);
-                setShowUnitOptions(!showUnitOptions);
-              }}
-            >
-              <Text style={[styles.unitButtonText, { color: textColor, flex: 1 }]} numberOfLines={1}>{currentUnitLabel}</Text>
-              <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="expand-more" size={16} color={textColor} />
-            </TouchableOpacity>
-          </View>
-
-          {showUnitOptions && (
-            <View style={[styles.unitOptionsContainer, { backgroundColor: cardBackground, borderColor, shadowColor: isDark ? '#000' : '#333' }]}>
-              {servingOptions.map((option, index) => {
-                const isSelected = option.key === selectedServingOptionKey;
-                const isLast = index === servingOptions.length - 1;
-                const selectedBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
-                return (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[
-                      styles.unitOption,
-                      { borderBottomColor: isLast ? 'transparent' : borderColor },
-                      isSelected && { backgroundColor: selectedBg },
-                    ]}
-                    onPress={() => {
-                      console.log('[FoodDetails] Serving option selected:', option.key, option.label);
-                      handleServingOptionChange(option);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.unitOptionText, { color: textColor, fontWeight: isSelected ? '600' : '400' }]}>{option.label}</Text>
-                    {isSelected && (
-                      <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+          <ServingPicker
+            options={servingOptions}
+            selectedKey={selectedServingOptionKey}
+            quantity={numberOfServings}
+            onOptionChange={(option) => {
+              console.log('[FoodDetails] ServingPicker option changed:', option.key, option.label);
+              handleServingOptionChange(option);
+            }}
+            onQuantityChange={(value) => {
+              console.log('[FoodDetails] ServingPicker quantity changed:', value);
+              handleNumberOfServingsChange(value);
+            }}
+            isDark={isDark}
+          />
         </View>
 
         <View style={styles.section}>

@@ -161,7 +161,7 @@ function mlToGrams(ml: number): number {
  *   "56 g"              → { unitName: null,     unitCount: 1 }
  *   "2 fl oz (60 ml)"   → { unitName: "fl oz",  unitCount: 2 }
  */
-function extractUnitFromString(s: string): { unitName: string | null; unitCount: number } {
+export function extractUnitFromString(s: string): { unitName: string | null; unitCount: number } {
   if (!s) return { unitName: null, unitCount: 1 };
   const trimmed = s.trim();
   // Pure grams/ml: "56 g", "100ml", "29g" → no unit name
