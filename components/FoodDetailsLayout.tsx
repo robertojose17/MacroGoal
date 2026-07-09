@@ -905,32 +905,36 @@ export default function FoodDetailsLayout({
             _data_quality_score: n.data_quality_score,
             ingredients_text: n.ingredients_text,
             allergens_tags: n.allergens,
-            nutriments: {
-              'energy-kcal_100g': n.macros_per === '100g' ? n.calories : (n.serving_size ? (n.calories / n.serving_size) * 100 : n.calories),
-              'proteins_100g': n.macros_per === '100g' ? n.protein : (n.serving_size ? (n.protein / n.serving_size) * 100 : n.protein),
-              'carbohydrates_100g': n.macros_per === '100g' ? n.carbs : (n.serving_size ? (n.carbs / n.serving_size) * 100 : n.carbs),
-              'fat_100g': n.macros_per === '100g' ? n.fat : (n.serving_size ? (n.fat / n.serving_size) * 100 : n.fat),
-              'fiber_100g': n.macros_per === '100g' ? n.fiber : (n.serving_size ? ((n.fiber ?? 0) / n.serving_size) * 100 : n.fiber),
-              'sugars_100g': n.sugar_g != null ? (n.macros_per === '100g' ? n.sugar_g : (n.serving_size ? (n.sugar_g / n.serving_size) * 100 : n.sugar_g)) : undefined,
-              'saturated-fat_100g': n.saturated_fat_g != null ? (n.macros_per === '100g' ? n.saturated_fat_g : (n.serving_size ? (n.saturated_fat_g / n.serving_size) * 100 : n.saturated_fat_g)) : undefined,
-              'sodium_100g': n.sodium_mg != null ? n.sodium_mg / 1000 : undefined,
-              'potassium_100g': n.potassium_mg != null ? n.potassium_mg / 1000 : undefined,
-              'calcium_100g': n.calcium_mg != null ? n.calcium_mg / 1000 : undefined,
-              'iron_100g': n.iron_mg != null ? n.iron_mg / 1000 : undefined,
-              'vitamin-c_100g': n.vitamin_c_mg != null ? n.vitamin_c_mg / 1000 : undefined,
-              'vitamin-a_100g': n.vitamin_a_mcg != null ? n.vitamin_a_mcg / 1000000 : undefined,
-              'vitamin-d_100g': n.vitamin_d_mcg != null ? n.vitamin_d_mcg / 1000000 : undefined,
-              'vitamin-e_100g': n.vitamin_e_mg != null ? n.vitamin_e_mg / 1000 : undefined,
-              'vitamin-k_100g': n.vitamin_k_mcg != null ? n.vitamin_k_mcg / 1000000 : undefined,
-              'vitamin-b6_100g': n.vitamin_b6_mg != null ? n.vitamin_b6_mg / 1000 : undefined,
-              'vitamin-b12_100g': n.vitamin_b12_mcg != null ? n.vitamin_b12_mcg / 1000000 : undefined,
-              'folate_100g': n.folate_mcg != null ? n.folate_mcg / 1000000 : undefined,
-              'magnesium_100g': n.magnesium_mg != null ? n.magnesium_mg / 1000 : undefined,
-              'phosphorus_100g': n.phosphorus_mg != null ? n.phosphorus_mg / 1000 : undefined,
-              'zinc_100g': n.zinc_mg != null ? n.zinc_mg / 1000 : undefined,
-              'selenium_100g': n.selenium_mcg != null ? n.selenium_mcg / 1000000 : undefined,
-              'cholesterol_100g': n.cholesterol_mg != null ? n.cholesterol_mg / 1000 : undefined,
-            },
+            nutriments: (() => {
+              const sc = Number(n.serving_count) || 1;
+              const totalGrams = Number(n.serving_size) * sc; // e.g. 7.25 * 4 = 29g
+              return {
+                'energy-kcal_100g': n.macros_per === '100g' ? n.calories : (totalGrams ? (n.calories / totalGrams) * 100 : n.calories),
+                'proteins_100g': n.macros_per === '100g' ? n.protein : (totalGrams ? (n.protein / totalGrams) * 100 : n.protein),
+                'carbohydrates_100g': n.macros_per === '100g' ? n.carbs : (totalGrams ? (n.carbs / totalGrams) * 100 : n.carbs),
+                'fat_100g': n.macros_per === '100g' ? n.fat : (totalGrams ? (n.fat / totalGrams) * 100 : n.fat),
+                'fiber_100g': n.macros_per === '100g' ? n.fiber : (totalGrams ? ((n.fiber ?? 0) / totalGrams) * 100 : n.fiber),
+                'sugars_100g': n.sugar_g != null ? (n.macros_per === '100g' ? n.sugar_g : (totalGrams ? (n.sugar_g / totalGrams) * 100 : n.sugar_g)) : undefined,
+                'saturated-fat_100g': n.saturated_fat_g != null ? (n.macros_per === '100g' ? n.saturated_fat_g : (totalGrams ? (n.saturated_fat_g / totalGrams) * 100 : n.saturated_fat_g)) : undefined,
+                'sodium_100g': n.sodium_mg != null ? n.sodium_mg / 1000 : undefined,
+                'potassium_100g': n.potassium_mg != null ? n.potassium_mg / 1000 : undefined,
+                'calcium_100g': n.calcium_mg != null ? n.calcium_mg / 1000 : undefined,
+                'iron_100g': n.iron_mg != null ? n.iron_mg / 1000 : undefined,
+                'vitamin-c_100g': n.vitamin_c_mg != null ? n.vitamin_c_mg / 1000 : undefined,
+                'vitamin-a_100g': n.vitamin_a_mcg != null ? n.vitamin_a_mcg / 1000000 : undefined,
+                'vitamin-d_100g': n.vitamin_d_mcg != null ? n.vitamin_d_mcg / 1000000 : undefined,
+                'vitamin-e_100g': n.vitamin_e_mg != null ? n.vitamin_e_mg / 1000 : undefined,
+                'vitamin-k_100g': n.vitamin_k_mcg != null ? n.vitamin_k_mcg / 1000000 : undefined,
+                'vitamin-b6_100g': n.vitamin_b6_mg != null ? n.vitamin_b6_mg / 1000 : undefined,
+                'vitamin-b12_100g': n.vitamin_b12_mcg != null ? n.vitamin_b12_mcg / 1000000 : undefined,
+                'folate_100g': n.folate_mcg != null ? n.folate_mcg / 1000000 : undefined,
+                'magnesium_100g': n.magnesium_mg != null ? n.magnesium_mg / 1000 : undefined,
+                'phosphorus_100g': n.phosphorus_mg != null ? n.phosphorus_mg / 1000 : undefined,
+                'zinc_100g': n.zinc_mg != null ? n.zinc_mg / 1000 : undefined,
+                'selenium_100g': n.selenium_mcg != null ? n.selenium_mcg / 1000000 : undefined,
+                'cholesterol_100g': n.cholesterol_mg != null ? n.cholesterol_mg / 1000 : undefined,
+              };
+            })(),
           };
           // Derive per-100g macros from the built nutriments
           const nm = mockProduct.nutriments as Record<string, number | undefined>;
@@ -1291,7 +1295,7 @@ export default function FoodDetailsLayout({
 
     console.log('[FoodDetails] upsertFoodItem: serving_description=', servingDesc, 'serving_count=', servingCountVal, 'totalServingGrams=', totalServingGrams, 'for', pName);
 
-    const payload = {
+    let payload = {
       name: pName,
       brand: pBrand,
       barcode: barcode,
@@ -1317,6 +1321,44 @@ export default function FoodDetailsLayout({
         return { ...prod, serving_size: canonicalServingSize };
       })(),
     };
+
+    // ── Pre-save validation: catch corrupted values before they reach the DB ──
+    const validationErrors: string[] = [];
+
+    // serving_description must not contain digits
+    if (payload.serving_description && /\d/.test(payload.serving_description)) {
+      validationErrors.push(`serving_description contains digits: "${payload.serving_description}"`);
+      // Strip leading number+space from description (e.g. "4 cookies" → "cookies")
+      payload.serving_description = payload.serving_description.replace(/^\d+(\.\d+)?\s+/, '').trim() || null;
+    }
+
+    // serving_size must be per-unit (reasonable range: 0.1g – 500g)
+    if (payload.serving_size <= 0 || payload.serving_size > 500) {
+      validationErrors.push(`serving_size out of range: ${payload.serving_size}`);
+      // Clamp to totalServingGrams as fallback
+      payload.serving_size = totalServingGrams;
+    }
+
+    // serving_count must be positive integer if set
+    if (payload.serving_count !== null && (payload.serving_count < 1 || !Number.isFinite(payload.serving_count))) {
+      validationErrors.push(`serving_count invalid: ${payload.serving_count}`);
+      payload.serving_count = null;
+    }
+
+    // macros must be non-negative finite numbers
+    const macroFields = ['calories', 'protein', 'carbs', 'fat'] as const;
+    for (const field of macroFields) {
+      const val = payload[field] as number;
+      if (val < 0 || !Number.isFinite(val)) {
+        validationErrors.push(`${field} invalid: ${val}`);
+        (payload as Record<string, unknown>)[field] = 0;
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      console.warn('[FoodDetails] upsertFoodItem: validation corrections applied:', validationErrors);
+    }
+    // ── End validation ──
 
     // 1. Try to find by barcode first (most reliable dedup key)
     if (barcode) {
