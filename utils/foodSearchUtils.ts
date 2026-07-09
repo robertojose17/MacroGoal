@@ -160,15 +160,15 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
   if (fi.off_data && typeof fi.off_data === 'object') {
     const base = fi.off_data as OpenFoodFactsProduct;
     const servingDesc = (fi as any).serving_description as string | null | undefined;
-    const perUnitGrams = Number((fi as any).serving_size) || Number((fi as any).serving_quantity) || 100;
+    const totalGrams = Number((fi as any).serving_size) || 100;  // serving_size IS total grams
     const servingCount = Number((fi as any).serving_count) || 1;
-    const totalGrams = perUnitGrams * servingCount;
     const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
     const enriched: OpenFoodFactsProduct = {
       ...base,
       serving_size: servingDesc
         ? `${countLabel}${servingDesc} (${totalGrams} g)`
         : base.serving_size,
+      serving_quantity: totalGrams,
       _source: (fi as any).source,
       _usda_fdc_id: (fi as any).usda_fdc_id,
       _data_quality_score: (fi as any).data_quality_score,
@@ -182,18 +182,17 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
   // Modern path — build from columns
   const n = fi as any;
   const servingDesc = n.serving_description as string | null | undefined;
-  const perUnitGrams = Number(n.serving_size) || 100;
+  const totalGrams = Number(n.serving_size) || 100;  // serving_size IS total grams
   const servingCount = Number(n.serving_count) || 1;
-  const totalGrams = perUnitGrams * servingCount;
   const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
   const servingSizeStr = servingDesc
     ? `${countLabel}${servingDesc} (${totalGrams} g)`
-    : `${perUnitGrams} g`;
+    : `${totalGrams} g`;
 
-  // Normalize to per-100g for nutriments
-  const to100 = (val: number | null | undefined, servingG: number): number | undefined => {
+  // Nutrients are already per 100g (macros_per is always '100g')
+  const to100 = (val: number | null | undefined): number | undefined => {
     if (val == null) return undefined;
-    return n.macros_per === '100g' ? val : (servingG > 0 ? (val / servingG) * 100 : val);
+    return val; // already per 100g (macros_per is always '100g')
   };
 
   const product: OpenFoodFactsProduct = {
@@ -208,16 +207,16 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
     ingredients_text: n.ingredients_text,
     allergens_tags: n.allergens,
     nutriments: {
-      'energy-kcal_100g': to100(n.calories, totalGrams),
-      'proteins_100g': to100(n.protein, totalGrams),
-      'carbohydrates_100g': to100(n.carbs, totalGrams),
-      'fat_100g': to100(n.fat, totalGrams),
-      'fiber_100g': to100(n.fiber, totalGrams),
-      'sugars_100g': to100(n.sugar_g, totalGrams),
-      'saturated-fat_100g': to100(n.saturated_fat_g, totalGrams),
-      'polyunsaturated-fat_100g': to100(n.polyunsaturated_fat_g, totalGrams),
-      'monounsaturated-fat_100g': to100(n.monounsaturated_fat_g, totalGrams),
-      'trans-fat_100g': to100(n.trans_fat_g, totalGrams),
+      'energy-kcal_100g': to100(n.calories),
+      'proteins_100g': to100(n.protein),
+      'carbohydrates_100g': to100(n.carbs),
+      'fat_100g': to100(n.fat),
+      'fiber_100g': to100(n.fiber),
+      'sugars_100g': to100(n.sugar_g),
+      'saturated-fat_100g': to100(n.saturated_fat_g),
+      'polyunsaturated-fat_100g': to100(n.polyunsaturated_fat_g),
+      'monounsaturated-fat_100g': to100(n.monounsaturated_fat_g),
+      'trans-fat_100g': to100(n.trans_fat_g),
       'cholesterol_100g': n.cholesterol_mg != null ? n.cholesterol_mg / 1000 : undefined,
       'sodium_100g': n.sodium_mg != null ? n.sodium_mg / 1000 : undefined,
       'potassium_100g': n.potassium_mg != null ? n.potassium_mg / 1000 : undefined,

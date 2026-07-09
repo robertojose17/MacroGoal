@@ -1,12 +1,13 @@
 
-import { searchOpenFoodFacts, type OpenFoodFactsProduct } from './openFoodFacts';
-import { getLocalCache, setLocalCache } from './foodSearchCache';
+import { type OpenFoodFactsProduct } from './openFoodFacts';
+import { getLocalCache } from './foodSearchCache';
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 const SUPABASE_TIMEOUT_MS = 5000;
 
 export interface HybridSearchCallbacks {
   onLocalCacheHit?: (products: OpenFoodFactsProduct[]) => void;
   onSupabaseHit?: (products: OpenFoodFactsProduct[]) => void;
+  /** Kept for backward compat — never called (edge function handles OFacts internally) */
   onOpenFoodFactsHit?: (products: OpenFoodFactsProduct[]) => void;
   onError?: (stage: 'supabase' | 'off', error: Error) => void;
   onComplete?: () => void;
@@ -100,23 +101,6 @@ async function fetchSupabaseSearch(
   }
 }
 
-function fireCacheFoodsBackground(products: OpenFoodFactsProduct[]): void {
-  const url = `${SUPABASE_PROJECT_URL}/functions/v1/cache-foods`;
-  console.log('[HybridSearch] Fire-and-forget cache-foods with', products.length, 'products');
-  fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${supabasePublicKey}`,
-    },
-    body: JSON.stringify({ products }),
-  }).then(res => {
-    console.log('[HybridSearch] cache-foods response status:', res.status);
-  }).catch(err => {
-    console.warn('[HybridSearch] cache-foods background error (ignored):', err);
-  });
-}
-
 export async function hybridSearch(
   query: string,
   callbacks: HybridSearchCallbacks,
@@ -139,77 +123,25 @@ export async function hybridSearch(
     callbacks.onLocalCacheHit?.(localProducts);
   }
 
-  // Stages 2 & 3 run in parallel
-  let supabaseDone = false;
-  let offDone = false;
-
-  const checkComplete = () => {
-    if (supabaseDone && offDone) {
-      console.log('[HybridSearch] All stages complete');
+  // Stage 2: Supabase edge function (handles OFacts internally as fallback)
+  try {
+    const products = await fetchSupabaseSearch(query, abortSignal);
+    if (isAborted()) {
+      console.log('[HybridSearch] Aborted after Supabase stage');
       callbacks.onComplete?.();
+      return;
     }
-  };
-
-  // Stage 2: Supabase edge function
-  const supabasePromise = (async () => {
-    try {
-      const products = await fetchSupabaseSearch(query, abortSignal);
-      if (isAborted()) {
-        console.log('[HybridSearch] Aborted after Supabase stage');
-        return;
-      }
-      if (products && products.length >= 1) {
-        console.log('[HybridSearch] Supabase HIT — emitting', products.length, 'products');
-        callbacks.onSupabaseHit?.(products);
-      }
-    } catch (err) {
-      console.warn('[HybridSearch] Supabase stage error:', err);
-      if (!isAborted()) {
-        callbacks.onError?.('supabase', err instanceof Error ? err : new Error(String(err)));
-      }
-    } finally {
-      supabaseDone = true;
-      checkComplete();
+    if (products && products.length >= 1) {
+      console.log('[HybridSearch] Supabase HIT — emitting', products.length, 'products');
+      callbacks.onSupabaseHit?.(products);
     }
-  })();
-
-  // Stage 3: OpenFoodFacts
-  const offPromise = (async () => {
-    try {
-      console.log('[HybridSearch] Starting OpenFoodFacts search...');
-      const result = await searchOpenFoodFacts(query);
-
-      if (isAborted()) {
-        console.log('[HybridSearch] Aborted after OFF stage');
-        return;
-      }
-
-      const products = result.products;
-      console.log('[HybridSearch] OFF returned', products.length, 'products, status:', result.status);
-
-      if (products.length > 0) {
-        callbacks.onOpenFoodFactsHit?.(products);
-
-        // Background: push to Supabase shared cache
-        fireCacheFoodsBackground(products);
-
-        // Persist to local AsyncStorage cache
-        setLocalCache(query, products).catch(err => {
-          console.warn('[HybridSearch] setLocalCache error (ignored):', err);
-        });
-      } else if (result.status !== 200 && result.status !== 0) {
-        callbacks.onError?.('off', new Error(`OFF status: ${result.status}`));
-      }
-    } catch (err) {
-      console.warn('[HybridSearch] OFF stage error:', err);
-      if (!isAborted()) {
-        callbacks.onError?.('off', err instanceof Error ? err : new Error(String(err)));
-      }
-    } finally {
-      offDone = true;
-      checkComplete();
+  } catch (err) {
+    console.warn('[HybridSearch] Supabase stage error:', err);
+    if (!isAborted()) {
+      callbacks.onError?.('supabase', err instanceof Error ? err : new Error(String(err)));
     }
-  })();
+  }
 
-  await Promise.allSettled([supabasePromise, offPromise]);
+  console.log('[HybridSearch] All stages complete');
+  callbacks.onComplete?.();
 }
