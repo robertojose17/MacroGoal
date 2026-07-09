@@ -92,15 +92,10 @@ export default function BarcodeScannerScreen() {
       console.log('[BarcodeScanner] Edge function result — found:', result.found, 'source:', result.source);
 
       if (result.found) {
-        let offData: any;
-
-        if (result.off_data) {
-          console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, '— using off_data blob');
-          offData = result.off_data;
-        } else {
-          console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item');
-          offData = buildSyntheticOffData(result.item);
-        }
+        // Use off_data from the item if present (edge function stores it there),
+        // otherwise build synthetically from columns.
+        const offData = result.item?.off_data ?? buildSyntheticOffData(result.item);
+        console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, result.item?.off_data ? '— using stored off_data' : '— building synthetic off_data from item');
 
         console.log('[BarcodeScanner] 🚀 Navigating to food-details');
         console.log('[BarcodeScanner] Context:', context);

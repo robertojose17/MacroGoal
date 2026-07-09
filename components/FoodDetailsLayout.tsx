@@ -1,5 +1,5 @@
 
-import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractNutritionPerServing, extractUnitFromString } from '@/utils/openFoodFacts';
+import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractUnitFromString } from '@/utils/openFoodFacts';
 import { parseServingString, singularizeUnit } from '@/utils/servingParser';
 import ServingPicker from '@/components/ServingPicker';
 import { calcMacros } from '@/utils/macros';
@@ -1258,8 +1258,8 @@ export default function FoodDetailsLayout({
     const totalServingGrams = prod.serving_quantity
       ? parseFloat(String(prod.serving_quantity))
       : servingInfo.grams * (servingCountVal ?? 1);
-    // Use per-serving nutrition (what the nutrition facts label shows)
-    const nutrition = extractNutritionPerServing(prod, totalServingGrams);
+    // Macros must be per 100g — food_items.macros_per is always "100g"
+    const nutrition = extractNutrition(prod);
 
     console.log('[FoodDetails] upsertFoodItem: serving_description=', servingDesc, 'serving_count=', servingCountVal, 'totalServingGrams=', totalServingGrams, 'for', pName);
 
@@ -1267,6 +1267,7 @@ export default function FoodDetailsLayout({
       name: pName,
       brand: pBrand,
       barcode: barcode,
+      macros_per: '100g',
       serving_size: totalServingGrams,  // TOTAL grams of one standard serving (not per-unit)
       serving_unit: 'g',
       serving_quantity: null as null,
