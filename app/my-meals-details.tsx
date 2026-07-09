@@ -44,20 +44,23 @@ function calcItemMacros(item: SavedMealItem, multiplier: number) {
   const fi = item.food_items;
   const grams = item.serving_amount * item.servings_count * multiplier;
 
-  if (fi && fi.serving_size > 0) {
-    // Use food_items join for accurate per-100g calculation
-    const result = calcMacros(fi, grams);
-    return {
-      calories: result.calories,
-      protein: result.protein,
-      carbs: result.carbs,
-      fats: result.fat,
-      fiber: result.fiber,
-    };
+  console.log('[calcItemMacros] item:', item.food_name, 'grams:', grams, 'multiplier:', multiplier, 'fi:', fi);
+
+  // Tier 1: food_items join available — use calcMacros (handles both macros_per modes)
+  if (fi) {
+    // Ensure serving_size is never 0 for the calculation
+    const safefi = fi.serving_size > 0 ? fi : { ...fi, serving_size: 100, macros_per: '100g' as string | null };
+    const result = calcMacros(safefi, grams);
+    console.log('[calcItemMacros] Tier 1 result:', result);
+    // If calcMacros returned non-zero, use it
+    if (result.calories > 0 || result.protein > 0 || result.carbs > 0 || result.fat > 0) {
+      return { calories: result.calories, protein: result.protein, carbs: result.carbs, fats: result.fat, fiber: result.fiber };
+    }
   }
 
-  // Fallback: use stored macro values scaled by multiplier
-  if (item.calories != null) {
+  // Tier 2: stored macro values on the saved_meal_item row (saved since the fix)
+  if (item.calories != null && item.calories > 0) {
+    console.log('[calcItemMacros] Tier 2 fallback — using stored macros');
     return {
       calories: (item.calories ?? 0) * multiplier,
       protein: (item.protein ?? 0) * multiplier,
@@ -67,6 +70,22 @@ function calcItemMacros(item: SavedMealItem, multiplier: number) {
     };
   }
 
+  // Tier 3: last resort — if fi exists but calcMacros returned 0 (e.g. fi.calories=0),
+  // try to compute from fi directly treating serving_amount as grams
+  if (fi && (fi.calories > 0 || fi.protein > 0 || fi.carbs > 0 || fi.fat > 0)) {
+    const divisor = fi.serving_size > 0 ? fi.serving_size : 100;
+    const ratio = grams / divisor;
+    console.log('[calcItemMacros] Tier 3 fallback — direct fi ratio:', ratio, 'divisor:', divisor);
+    return {
+      calories: fi.calories * ratio,
+      protein: fi.protein * ratio,
+      carbs: fi.carbs * ratio,
+      fats: fi.fat * ratio,
+      fiber: (fi.fiber ?? 0) * ratio,
+    };
+  }
+
+  console.log('[calcItemMacros] All tiers failed — returning zeros');
   return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
 }
 
