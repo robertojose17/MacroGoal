@@ -38,50 +38,59 @@ interface SavedMealItem {
     serving_size: number;
     macros_per: string | null;
   } | null;
+  foods: {
+    id: string;
+    name: string;
+    brand: string | null;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fats: number;
+    fiber: number | null;
+    serving_amount: number;
+    serving_unit: string;
+  } | null;
 }
 
 function calcItemMacros(item: SavedMealItem, multiplier: number) {
   const fi = item.food_items;
+  const fd = item.foods;
   const grams = item.serving_amount * item.servings_count * multiplier;
 
-  console.log('[calcItemMacros] item:', item.food_name, 'grams:', grams, 'multiplier:', multiplier, 'fi:', fi);
+  console.log('[calcItemMacros] item:', item.food_name, 'grams:', grams, 'multiplier:', multiplier, 'fi:', fi, 'fd:', fd);
 
-  // Tier 1: food_items join available — use calcMacros (handles both macros_per modes)
+  // Tier 1: food_items join (has serving_size and macros_per)
   if (fi) {
-    // Ensure serving_size is never 0 for the calculation
     const safefi = fi.serving_size > 0 ? fi : { ...fi, serving_size: 100, macros_per: '100g' as string | null };
     const result = calcMacros(safefi, grams);
     console.log('[calcItemMacros] Tier 1 result:', result);
-    // If calcMacros returned non-zero, use it
     if (result.calories > 0 || result.protein > 0 || result.carbs > 0 || result.fat > 0) {
       return { calories: result.calories, protein: result.protein, carbs: result.carbs, fats: result.fat, fiber: result.fiber };
     }
   }
 
-  // Tier 2: stored macro values on the saved_meal_item row (saved since the fix)
+  // Tier 2: foods table join (calories/protein/carbs/fats are per 100g)
+  if (fd && (fd.calories > 0 || fd.protein > 0 || fd.carbs > 0 || fd.fats > 0)) {
+    const ratio = grams / 100;
+    console.log('[calcItemMacros] Tier 2 fallback — using foods join, ratio:', ratio);
+    return {
+      calories: fd.calories * ratio,
+      protein: fd.protein * ratio,
+      carbs: fd.carbs * ratio,
+      fats: fd.fats * ratio,
+      fiber: (fd.fiber ?? 0) * ratio,
+    };
+  }
+
+  // Tier 3: stored macro columns on saved_meal_items (denormalized at save time)
   if (item.calories != null && item.calories > 0) {
-    console.log('[calcItemMacros] Tier 2 fallback — using stored macros');
+    console.log('[calcItemMacros] Tier 3 fallback — using stored macros');
     return {
       calories: (item.calories ?? 0) * multiplier,
       protein: (item.protein ?? 0) * multiplier,
       carbs: (item.carbs ?? 0) * multiplier,
       fats: (item.fat ?? 0) * multiplier,
       fiber: (item.fiber ?? 0) * multiplier,
-    };
-  }
-
-  // Tier 3: last resort — if fi exists but calcMacros returned 0 (e.g. fi.calories=0),
-  // try to compute from fi directly treating serving_amount as grams
-  if (fi && (fi.calories > 0 || fi.protein > 0 || fi.carbs > 0 || fi.fat > 0)) {
-    const divisor = fi.serving_size > 0 ? fi.serving_size : 100;
-    const ratio = grams / divisor;
-    console.log('[calcItemMacros] Tier 3 fallback — direct fi ratio:', ratio, 'divisor:', divisor);
-    return {
-      calories: fi.calories * ratio,
-      protein: fi.protein * ratio,
-      carbs: fi.carbs * ratio,
-      fats: fi.fat * ratio,
-      fiber: (fi.fiber ?? 0) * ratio,
     };
   }
 
@@ -159,6 +168,18 @@ export default function MyMealsDetailsScreen() {
               fiber,
               serving_size,
               macros_per
+            ),
+            foods!saved_meal_items_food_id_fkey (
+              id,
+              name,
+              brand,
+              calories,
+              protein,
+              carbs,
+              fats,
+              fiber,
+              serving_amount,
+              serving_unit
             )
           )
         `)
@@ -229,7 +250,7 @@ export default function MyMealsDetailsScreen() {
     let totalFiber = 0;
 
     savedMeal.saved_meal_items.forEach(item => {
-      if (!item.food_items && !item.food_name) {
+      if (!item.food_items && !item.foods && !item.food_name) {
         console.warn('[MyMealsDetails] Skipping item with missing food data:', item.id);
         return;
       }
@@ -345,18 +366,32 @@ export default function MyMealsDetailsScreen() {
       }
     } else {
       // No food_item_id — build minimal product from joined columns
-      const itemBrand = fi?.brand ?? item.food_brand ?? '';
-      console.log('[MyMealsDetails] No food_item_id, building minimal offProduct for:', itemName);
-      offData = {
-        product_name: itemName,
-        brands: itemBrand,
-        nutriments: fi ? {
+      const fd = item.foods;
+      const itemBrand = fi?.brand ?? fd?.brand ?? item.food_brand ?? '';
+      console.log('[MyMealsDetails] No food_item_id, building minimal offProduct for:', itemName, 'fi:', !!fi, 'fd:', !!fd);
+      let nutriments: Record<string, number> = {};
+      if (fi) {
+        nutriments = {
           'energy-kcal_100g': fi.macros_per === '100g' ? fi.calories : (fi.serving_size > 0 ? (fi.calories / fi.serving_size) * 100 : fi.calories),
           'proteins_100g': fi.macros_per === '100g' ? fi.protein : (fi.serving_size > 0 ? (fi.protein / fi.serving_size) * 100 : fi.protein),
           'carbohydrates_100g': fi.macros_per === '100g' ? fi.carbs : (fi.serving_size > 0 ? (fi.carbs / fi.serving_size) * 100 : fi.carbs),
           'fat_100g': fi.macros_per === '100g' ? fi.fat : (fi.serving_size > 0 ? (fi.fat / fi.serving_size) * 100 : fi.fat),
           'fiber_100g': fi.macros_per === '100g' ? (fi.fiber ?? 0) : (fi.serving_size > 0 ? ((fi.fiber ?? 0) / fi.serving_size) * 100 : (fi.fiber ?? 0)),
-        } : {},
+        };
+      } else if (fd) {
+        // foods table stores macros per 100g already
+        nutriments = {
+          'energy-kcal_100g': fd.calories,
+          'proteins_100g': fd.protein,
+          'carbohydrates_100g': fd.carbs,
+          'fat_100g': fd.fats,
+          'fiber_100g': fd.fiber ?? 0,
+        };
+      }
+      offData = {
+        product_name: itemName,
+        brands: itemBrand,
+        nutriments,
         serving_quantity: item.serving_amount,
         serving_quantity_unit: item.serving_unit,
         food_id: item.food_id,
@@ -400,12 +435,12 @@ export default function MyMealsDetailsScreen() {
       }
 
       // Add all items from saved meal via RPC (one call per item)
-      const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.food_name);
+      const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.foods || item.food_name);
       console.log('[MyMealsDetails] Logging', validItems.length, 'items via log_food RPC');
 
       for (const item of validItems) {
         const macros = calcItemMacros(item, multiplier);
-        const itemName = item.food_items?.name ?? item.food_name ?? '';
+        const itemName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? '';
         console.log('[MyMealsDetails] Calling log_food RPC for item:', itemName);
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
@@ -481,7 +516,7 @@ export default function MyMealsDetailsScreen() {
   };
 
   // Filter out items with missing food data for display
-  const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.food_name);
+  const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.foods || item.food_name);
   const missingItemsCount = savedMeal.saved_meal_items.length - validItems.length;
 
   return (
@@ -565,8 +600,8 @@ export default function MyMealsDetailsScreen() {
           const itemCarbsRounded = Math.round(itemMacros.carbs);
           const itemFatsRounded = Math.round(itemMacros.fats);
           const servingAmountRounded = Math.round(item.serving_amount);
-          const foodName = item.food_items?.name ?? item.food_name ?? 'Unknown Food';
-          const foodBrand = item.food_items?.brand ?? item.food_brand;
+          const foodName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? 'Unknown Food';
+          const foodBrand = item.food_items?.brand ?? item.foods?.brand ?? item.food_brand;
           const isUserCreated = false;
 
           return (
