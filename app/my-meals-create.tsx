@@ -267,6 +267,11 @@ export default function MyMealsCreateScreen() {
           serving_amount: item.serving_amount,
           serving_unit: item.serving_unit,
           servings_count: item.servings_count,
+          calories: item.calories,
+          protein: item.protein,
+          carbs: item.carbs,
+          fat: item.fats,
+          fiber: item.fiber,
         };
       });
 

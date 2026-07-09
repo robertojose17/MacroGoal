@@ -21,6 +21,11 @@ interface SavedMealItem {
   serving_amount: number;
   serving_unit: string;
   servings_count: number;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  fiber: number | null;
   food_items: {
     id: string;
     name: string;
@@ -38,17 +43,31 @@ interface SavedMealItem {
 function calcItemMacros(item: SavedMealItem, multiplier: number) {
   const fi = item.food_items;
   const grams = item.serving_amount * item.servings_count * multiplier;
-  if (!fi) {
-    return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+
+  if (fi && fi.serving_size > 0) {
+    // Use food_items join for accurate per-100g calculation
+    const result = calcMacros(fi, grams);
+    return {
+      calories: result.calories,
+      protein: result.protein,
+      carbs: result.carbs,
+      fats: result.fat,
+      fiber: result.fiber,
+    };
   }
-  const result = calcMacros(fi, grams);
-  return {
-    calories: result.calories,
-    protein: result.protein,
-    carbs: result.carbs,
-    fats: result.fat,
-    fiber: result.fiber,
-  };
+
+  // Fallback: use stored macro values scaled by multiplier
+  if (item.calories != null) {
+    return {
+      calories: (item.calories ?? 0) * multiplier,
+      protein: (item.protein ?? 0) * multiplier,
+      carbs: (item.carbs ?? 0) * multiplier,
+      fats: (item.fat ?? 0) * multiplier,
+      fiber: (item.fiber ?? 0) * multiplier,
+    };
+  }
+
+  return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
 }
 
 interface SavedMeal {
@@ -105,6 +124,11 @@ export default function MyMealsDetailsScreen() {
             serving_amount,
             serving_unit,
             servings_count,
+            calories,
+            protein,
+            carbs,
+            fat,
+            fiber,
             food_items!saved_meal_items_food_item_id_fkey (
               id,
               name,
