@@ -1849,25 +1849,15 @@ export default function FoodDetailsLayout({
 
       <ScrollView style={styles.scrollContent}>
         <View style={styles.section}>
-          <Text style={[styles.foodName, { color: textColor }]}>{product.product_name}</Text>
-          {product.brands && (
+          <Text style={[styles.foodName, { color: textColor }]}>
+            {product.product_name || product.generic_name || ''}
+          </Text>
+          {product.brands ? (
             <Text style={[styles.brandName, { color: isDark ? '#aaa' : '#666' }]}>{product.brands}</Text>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.section}>
-          {product?.product_name ? (
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: textColor, marginBottom: 2 }}>
-                {product.product_name}
-              </Text>
-              {product.brands ? (
-                <Text style={{ fontSize: 13, color: textColor, opacity: 0.6 }}>
-                  {product.brands}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
           <Text style={[styles.sectionTitle, { color: textColor }]}>Serving Size</Text>
 
           <ServingPicker
