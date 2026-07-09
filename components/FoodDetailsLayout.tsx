@@ -1,5 +1,6 @@
 
 import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractNutritionPerServing } from '@/utils/openFoodFacts';
+import { parseServingString, singularizeUnit } from '@/utils/servingParser';
 import { calcMacros } from '@/utils/macros';
 import { formatServing } from '@/utils/servingFormat';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -251,20 +252,6 @@ async function enrichWithUSDA(prod: OpenFoodFactsProduct, foodItemId: string): P
   }
 }
 
-/**
- * Naively singularize a food unit word.
- * e.g. "slices" → "slice", "cookies" → "cookie", "pieces" → "piece"
- * Leaves short words, "glass", "serving" etc. unchanged.
- */
-function singularizeUnit(word: string): string {
-  if (!word || word.length <= 3) return word;
-  if (word === 'serving' || word === 'servings') return 'serving';
-  // "slices" → "slice", "pieces" → "piece" (ends in 'es', not 'ss')
-  if (word.endsWith('es') && word.length > 4 && !word.endsWith('ss')) return word.slice(0, -1);
-  // "cookies" → "cookie" handled above via 'es'; "chips" → "chip"
-  if (word.endsWith('s') && word.length > 3 && !word.endsWith('ss')) return word.slice(0, -1);
-  return word;
-}
 
 type ServingUnit = 'g' | 'oz' | 'ml' | 'fl oz' | 'cup' | 'tbsp' | 'tsp' | 'piece' | 'serving';
 
@@ -672,27 +659,34 @@ export default function FoodDetailsLayout({
       setSelectedServingOptionKey('default');
 
       // Extract serving_description and serving_count from the product's serving_size string.
-      // e.g. "3 cookies (34 g)" → customUnitLabel = "1 cookie", customUnitGramsPerUnit = 11.3
+      // e.g. "4 cookies (29 g)" → customUnitLabel = "1 cookie", customUnitGramsPerUnit = 7.25
       // This makes the individual unit appear as the default picker option.
-      const servingSizeStr = parsedProduct.serving_size || '';
-      const descMatch = servingSizeStr.match(/^(\d+\.?\d*)\s+([a-zA-Z][a-zA-Z\s]*?)\s*\((\d+\.?\d*)\s*g\)/i);
-      if (descMatch) {
-        const count = parseFloat(descMatch[1]);
-        const rawUnitWord = descMatch[2].trim();
-        // Safety: strip any leading number from unitWord (e.g. "4 cookies" → "cookies")
-        const unitWord = rawUnitWord.replace(/^\d+(\.\d+)?\s+/, '').trim();
-        const totalGrams = parseFloat(descMatch[3]);
-        if (count > 0 && totalGrams > 0 && unitWord && unitWord.toLowerCase() !== 'serving') {
-          const gramsPerUnit = totalGrams / count;
-          const singular = singularizeUnit(unitWord);
-          console.log('[FoodDetails] loadViewData: detected custom unit from serving_size=', servingSizeStr, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit);
-          setCustomUnitLabel(`1 ${singular}`);
-          setCustomUnitGramsPerUnit(gramsPerUnit);
-          setServingAmount(gramsPerUnit);   // gramsPerUnit, not the count
-          setNumberOfServings(String(count)); // start with the original count (e.g. 4 for "4 cookies")
-          setSelectedServingOptionKey('custom');
-        }
+      const { description: parsedDesc, count: parsedCount } = parseServingString(parsedProduct.serving_size);
+      // Use serving_quantity as the authoritative gram value
+      const totalGrams = parsedProduct.serving_quantity
+        ? parseFloat(String(parsedProduct.serving_quantity))
+        : servingInfo.grams;
+
+      if (parsedDesc && parsedCount && parsedCount > 1) {
+        const gramsPerUnit = totalGrams / parsedCount;
+        const singular = singularizeUnit(parsedDesc);
+        console.log('[FoodDetails] loadViewData: detected custom unit from serving_size=', parsedProduct.serving_size, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit, 'totalGrams=', totalGrams);
+        setCustomUnitLabel(`1 ${singular}`);
+        setCustomUnitGramsPerUnit(gramsPerUnit);
+        setServingAmount(gramsPerUnit);
+        setNumberOfServings(String(parsedCount));
+        setSelectedServingOptionKey('custom');
+      } else if (parsedDesc) {
+        // Single unit (e.g. "1 slice (21 g)") — show as "1 slice"
+        const singular = singularizeUnit(parsedDesc);
+        console.log('[FoodDetails] loadViewData: single custom unit from serving_size=', parsedProduct.serving_size, '→ singular=', singular, 'totalGrams=', totalGrams);
+        setCustomUnitLabel(`1 ${singular}`);
+        setCustomUnitGramsPerUnit(totalGrams);
+        setServingAmount(totalGrams);
+        setNumberOfServings('1');
+        setSelectedServingOptionKey('custom');
       }
+      // else: plain grams — no custom unit, servingAmount = totalGrams (already set above)
 
       await checkFavoriteStatus(parsedProduct);
     } catch (error) {
@@ -708,42 +702,30 @@ export default function FoodDetailsLayout({
     foodItem: { name?: string; brand?: string; serving_size?: string | number; serving_quantity?: number; serving_unit?: string; serving_description?: string | null; serving_count?: number | null; nutriments?: Record<string, number> | null },
     food: { name: string; brand?: string; calories: number; protein: number; carbs: number; fats: number; fiber?: number; serving_amount: number; serving_unit: string }
   ): OpenFoodFactsProduct => {
-    // If serving_description is set, build a rich serving_size string like "4 cookies (29 g)"
-    // so extractServingSize can parse it correctly downstream.
-    // serving_count tells how many units make up serving_size grams (e.g. 4 cookies = 29g).
+    // serving_size is now TOTAL grams of one standard serving (new architecture).
+    // serving_count tells how many units make up that total (e.g. 4 cookies = 29g total).
     let servingSize: string;
+    const totalGrams = Number(foodItem.serving_size ?? foodItem.serving_quantity ?? food.serving_amount);
+    const sc = Number(foodItem.serving_count) || 1;
     if (foodItem.serving_description) {
       const isNumericDesc = /^\d+(\.\d+)?\s*[a-z]*$/i.test(foodItem.serving_description.trim());
       if (isNumericDesc) {
-        // serving_description is just a number+unit like "63g" or "63 g" — treat as no description
-        const gramsVal = foodItem.serving_size != null
-          ? Number(foodItem.serving_size)
-          : (foodItem.serving_quantity != null
-            ? foodItem.serving_quantity
-            : food.serving_amount);
-        servingSize = `${gramsVal} g`;
+        // serving_description is just a number+unit like "63g" — treat as no description
+        servingSize = `${totalGrams} g`;
         console.log('[FoodDetails] buildMockProductFromFoodItem: numeric serving_description ignored, built servingSize=', servingSize);
+      } else if (sc > 1) {
+        servingSize = `${sc} ${foodItem.serving_description} (${totalGrams} g)`;
+        console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', sc, 'totalGrams=', totalGrams);
       } else {
-      const servingCount = Number(foodItem.serving_count) || 1;
-      // serving_size is stored as per-unit grams; total = per-unit × count
-      const perUnitGrams = Number(foodItem.serving_size ?? foodItem.serving_quantity ?? food.serving_amount);
-      const gramsVal = perUnitGrams * servingCount;
-      servingSize = `${servingCount} ${foodItem.serving_description} (${gramsVal} g)`;
-      console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', servingCount, 'perUnitGrams=', perUnitGrams);
+        servingSize = `1 ${foodItem.serving_description} (${totalGrams} g)`;
+        console.log('[FoodDetails] buildMockProductFromFoodItem: single unit →', servingSize, 'totalGrams=', totalGrams);
       }
     } else {
-      // No serving_description — build a plain "<grams> g" string so extractServingSize
-      // parses it as a gram value (not a "1 serving (Xg)" string that confuses the
-      // leading-number extraction and produces a wrong servingAmount of 1).
-      const gramsVal = foodItem.serving_size != null
-        ? Number(foodItem.serving_size)
-        : (foodItem.serving_quantity != null
-          ? foodItem.serving_quantity
-          : food.serving_amount);
-      servingSize = `${gramsVal} g`;
+      // No serving_description — build a plain "<grams> g" string
+      servingSize = `${totalGrams} g`;
       console.log('[FoodDetails] buildMockProductFromFoodItem: no serving_description, built servingSize=', servingSize);
     }
-    const servingQty = foodItem.serving_quantity ?? food.serving_amount;
+    const servingQty = totalGrams;
     const n = (foodItem.nutriments ?? {}) as Record<string, number>;
     return {
       product_name: foodItem.name ?? food.name,
@@ -887,10 +869,11 @@ export default function FoodDetailsLayout({
           // Build mockProduct from individual columns
           console.log('[FoodDetails] loadEditItem: building mockProduct from columns, source=', foodItem.source);
           const n = foodItem;
+          // serving_size is now TOTAL grams of one standard serving (new architecture)
           const servingSize = n.serving_description && n.serving_size
             ? (() => {
                 const sc = Number(n.serving_count) || 1;
-                const totalG = Number(n.serving_size) * sc;
+                const totalG = Number(n.serving_size); // serving_size IS total grams
                 return `${sc} ${n.serving_description} (${totalG} g)`;
               })()
             : n.serving_size ? `${n.serving_size} g` : undefined;
@@ -899,15 +882,14 @@ export default function FoodDetailsLayout({
             product_name: n.name,
             brands: n.brand || undefined,
             serving_size: servingSize,
-            serving_quantity: n.serving_size,
+            serving_quantity: n.serving_size, // total grams
             _source: n.source,
             _usda_fdc_id: n.usda_fdc_id,
             _data_quality_score: n.data_quality_score,
             ingredients_text: n.ingredients_text,
             allergens_tags: n.allergens,
             nutriments: (() => {
-              const sc = Number(n.serving_count) || 1;
-              const totalGrams = Number(n.serving_size) * sc; // e.g. 7.25 * 4 = 29g
+              const totalGrams = Number(n.serving_size); // already total grams
               return {
                 'energy-kcal_100g': n.macros_per === '100g' ? n.calories : (totalGrams ? (n.calories / totalGrams) * 100 : n.calories),
                 'proteins_100g': n.macros_per === '100g' ? n.protein : (totalGrams ? (n.protein / totalGrams) * 100 : n.protein),
@@ -1232,42 +1214,6 @@ export default function FoodDetailsLayout({
    * Uses select-then-insert/update to avoid relying on a unique constraint.
    * Returns null if the product has no usable name.
    */
-  /**
-   * Extract a human-readable serving description from an OFF serving_size string.
-   * e.g. "1 egg (50 g)" → "egg", "4 cookies (29 g)" → "cookies", "50 g" → null
-   */
-  const extractServingDescription = (servingSizeStr: string | undefined): string | null => {
-    if (!servingSizeStr) return null;
-    const s = servingSizeStr.trim();
-    // Pure gram/ml: "50 g", "100ml" → null
-    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
-    // Has parenthetical: "4 cookies (29 g)" → remove "(29 g)" → "4 cookies" → remove leading number → "cookies"
-    if (s.includes('(')) {
-      const withoutParens = s.replace(/\s*\(.*\)\s*$/, '').trim();
-      const withoutLeadingNumber = withoutParens.replace(/^\d+(\.\d+)?\s+/, '').trim();
-      const result = withoutLeadingNumber || null;
-      console.log('[FoodDetails] extractServingDescription:', s, '→', result);
-      return result;
-    }
-    return null;
-  };
-
-  /**
-   * Extract the serving count (number of units) from an OFF serving_size string.
-   * e.g. "4 cookies (29 g)" → 4, "1 egg (50 g)" → null, "50 g" → null
-   * Returns null when serving_size is a plain gram/ml value or count is 1.
-   */
-  const extractServingCount = (servingSizeStr: string | undefined): number | null => {
-    if (!servingSizeStr) return null;
-    const s = servingSizeStr.trim();
-    if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(s)) return null;
-    const match = s.match(/^(\d+(\.\d+)?)\s+\D/);
-    if (!match) return null;
-    const count = parseFloat(match[1]);
-    console.log('[FoodDetails] extractServingCount:', s, '→', count);
-    return count > 1 ? count : null;
-  };
-
   const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
     const barcode = prod.code?.trim() || null;
     const pName = (prod.product_name || prod.generic_name || '').trim();
@@ -1287,9 +1233,11 @@ export default function FoodDetailsLayout({
     }
 
     const servingInfo = extractServingSize(prod);
-    const servingDesc = extractServingDescription(prod.serving_size);
-    const servingCountVal = extractServingCount(prod.serving_size);
-    const totalServingGrams = servingInfo.grams * (servingCountVal ?? 1);
+    const { description: servingDesc, count: servingCountVal } = parseServingString(prod.serving_size);
+    // serving_quantity is the authoritative gram value — use it directly if available
+    const totalServingGrams = prod.serving_quantity
+      ? parseFloat(String(prod.serving_quantity))
+      : servingInfo.grams * (servingCountVal ?? 1);
     // Use per-serving nutrition (what the nutrition facts label shows)
     const nutrition = extractNutritionPerServing(prod, totalServingGrams);
 
@@ -1299,7 +1247,7 @@ export default function FoodDetailsLayout({
       name: pName,
       brand: pBrand,
       barcode: barcode,
-      serving_size: totalServingGrams / (servingCountVal ?? 1),
+      serving_size: totalServingGrams,  // TOTAL grams of one standard serving (not per-unit)
       serving_unit: 'g',
       serving_quantity: null as null,
       serving_description: servingDesc,
@@ -1332,8 +1280,8 @@ export default function FoodDetailsLayout({
       payload.serving_description = payload.serving_description.replace(/^\d+(\.\d+)?\s+/, '').trim() || null;
     }
 
-    // serving_size must be per-unit (reasonable range: 0.1g – 500g)
-    if (payload.serving_size <= 0 || payload.serving_size > 500) {
+    // serving_size must be total grams (reasonable range: 0.1g – 2000g)
+    if (payload.serving_size <= 0 || payload.serving_size > 2000) {
       validationErrors.push(`serving_size out of range: ${payload.serving_size}`);
       // Clamp to totalServingGrams as fallback
       payload.serving_size = totalServingGrams;
