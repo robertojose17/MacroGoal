@@ -1,4 +1,6 @@
 
+import { singularizeUnit } from '@/utils/servingParser';
+
 /**
  * OpenFoodFacts API Integration
  * Public API for food database lookup
@@ -24,7 +26,7 @@ export interface OpenFoodFactsProduct {
   generic_name?: string;
   brands?: string;
   serving_size?: string;
-  serving_quantity?: string;
+  serving_quantity?: string | number;
   serving_unit?: string;
   /** Set by the Supabase edge function to indicate the data source */
   _source?: string;
@@ -149,20 +151,46 @@ function mlToGrams(ml: number): number {
 }
 
 /**
- * Extract serving size information from OpenFoodFacts product
- * Returns the serving description and gram equivalent PER SINGLE UNIT
- * NEVER throws errors or blocks - always returns a valid ServingSizeInfo
- * 
- * CRITICAL FIX: Now correctly handles serving sizes with quantities > 1
- * Example: "4 cookies (29g)" → returns grams = 7.25 (29g / 4 cookies = 7.25g per cookie)
- * Example: "2 slices 56g" → returns grams = 28 (56g / 2 slices = 28g per slice)
- * 
- * PRIORITY ORDER:
- * 1) Serving label with quantity AND grams → divide grams by quantity → use per-unit grams
- * 2) Serving label that already includes grams (quantity = 1) → use directly
- * 3) Serving label with oz/ml/tbsp/tsp/cup → convert to grams → use
- * 4) Household unit without grams → show unit, estimate grams as 100g but mark estimated
- * 5) No serving label at all → default to 100g
+ * Extract unit name and count from a serving_size string for DISPLAY ONLY.
+ * NEVER used to derive gram values — use serving_quantity for that.
+ *
+ * Examples:
+ *   "4 cookies (29 g)"  → { unitName: "cookie", unitCount: 4 }
+ *   "1 slice (21 g)"    → { unitName: "slice",  unitCount: 1 }
+ *   "1 serving (56 g)"  → { unitName: null,     unitCount: 1 }
+ *   "56 g"              → { unitName: null,     unitCount: 1 }
+ *   "2 fl oz (60 ml)"   → { unitName: "fl oz",  unitCount: 2 }
+ */
+function extractUnitFromString(s: string): { unitName: string | null; unitCount: number } {
+  if (!s) return { unitName: null, unitCount: 1 };
+  const trimmed = s.trim();
+  // Pure grams/ml: "56 g", "100ml", "29g" → no unit name
+  if (/^\d+(\.\d+)?\s*(g|ml)$/i.test(trimmed)) return { unitName: null, unitCount: 1 };
+  // Compound: "4 cookies (29 g)" or "1 slice (21 g)" or "2 fl oz (60 ml)"
+  const m = trimmed.match(/^(\d+\.?\d*)\s+([a-zA-Z][a-zA-Z\s]*?)\s*\(/i);
+  if (m) {
+    const count = parseFloat(m[1]);
+    const word = m[2].trim();
+    // Discard generic "serving"
+    if (word.toLowerCase() === 'serving') return { unitName: null, unitCount: 1 };
+    return { unitName: singularizeUnit(word), unitCount: count > 0 ? count : 1 };
+  }
+  return { unitName: null, unitCount: 1 };
+}
+
+/**
+ * Extract serving size information from OpenFoodFacts product.
+ * Returns the serving description and gram equivalent PER SINGLE UNIT.
+ * NEVER throws errors or blocks — always returns a valid ServingSizeInfo.
+ *
+ * ARCHITECTURE RULE:
+ *   serving_quantity = authoritative total grams of one standard serving (number, always clean)
+ *   serving_size string = ONLY used to extract unit name for display — NEVER for gram values
+ *
+ * LOGIC:
+ *   1. serving_quantity → totalGrams (fallback 100g if missing/invalid)
+ *   2. serving_size string → unitName + unitCount (display only)
+ *   3. Build return value from totalGrams + unit info
  */
 export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeInfo {
   console.log('[OpenFoodFacts] ========== EXTRACT SERVING SIZE ==========');
@@ -172,384 +200,73 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
     product_name: product.product_name,
   });
 
-  // Default to 100g if no serving info available
-  const defaultServing: ServingSizeInfo = {
-    description: '100 g',
-    grams: 100,
-    displayText: '100 g',
-    hasValidGrams: false,
-    isEstimated: false,
-  };
+  // ── Step 1: Parse serving_quantity as the ONLY source of gram values ──────
+  const rawQty = product.serving_quantity;
+  const parsedQty = rawQty !== undefined && rawQty !== null ? parseFloat(String(rawQty)) : NaN;
+  const hasValidGrams = !isNaN(parsedQty) && parsedQty > 0;
+  const totalGrams = hasValidGrams ? parsedQty : 100;
 
-  // If no serving_size at all, check serving_quantity before falling back to 100g
-  if (!product.serving_size || typeof product.serving_size !== 'string') {
-    if (product.serving_quantity) {
-      const grams = parseFloat(String(product.serving_quantity));
-      if (!isNaN(grams) && grams > 0) {
-        console.log('[OpenFoodFacts] No serving_size but serving_quantity found, using:', grams);
-        return {
-          description: `${parseFloat(grams.toFixed(2))} g`,
-          grams,
-          displayText: `${parseFloat(grams.toFixed(2))} g`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-    console.log('[OpenFoodFacts] No serving_size found, using default 100g');
-    return defaultServing;
-  }
+  console.log('[OpenFoodFacts] serving_quantity →', rawQty, '→ totalGrams:', totalGrams, '| hasValidGrams:', hasValidGrams);
 
-  const servingSize = product.serving_size.trim();
-  
-  // Empty string check — also try serving_quantity before falling back
-  if (servingSize.length === 0) {
-    if (product.serving_quantity) {
-      const grams = parseFloat(String(product.serving_quantity));
-      if (!isNaN(grams) && grams > 0) {
-        console.log('[OpenFoodFacts] Empty serving_size but serving_quantity found, using:', grams);
-        return {
-          description: `${parseFloat(grams.toFixed(2))} g`,
-          grams,
-          displayText: `${parseFloat(grams.toFixed(2))} g`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-    console.log('[OpenFoodFacts] Empty serving_size, using default 100g');
-    return defaultServing;
-  }
+  // ── Step 2: Parse serving_size STRING only for unit name + count ──────────
+  const servingSizeStr = typeof product.serving_size === 'string' ? product.serving_size.trim() : '';
+  const { unitName, unitCount } = extractUnitFromString(servingSizeStr);
 
-  console.log('[OpenFoodFacts] Parsing serving size:', servingSize);
+  console.log('[OpenFoodFacts] serving_size string →', JSON.stringify(servingSizeStr), '→ unitName:', unitName, '| unitCount:', unitCount);
 
+  // ── Step 3: Build return value ────────────────────────────────────────────
   try {
-    // ========== PRIORITY 1: QUANTITY + UNIT + GRAMS (e.g., "4 cookies (29g)", "2 slices 56g") ==========
-    
-    // Pattern: "X unit (Yg)" or "X unit Yg" where X > 1
-    // This handles cases like "4 cookies (29g)" or "2 slices 56g"
-    const quantityUnitGramsPattern = /^(\d+\.?\d*)\s+([a-zA-Z\s]+?)\s*[(-]?\s*(\d+\.?\d*)\s*g\)?$/i;
-    const quantityMatch = servingSize.match(quantityUnitGramsPattern);
-    
-    if (quantityMatch) {
-      const quantity = parseFloat(quantityMatch[1]);
-      const unit = quantityMatch[2].trim();
-      const totalGrams = parseFloat(quantityMatch[3]);
-      
-      if (!isNaN(quantity) && quantity > 0 && !isNaN(totalGrams) && totalGrams > 0 && unit.length > 0) {
-        // CRITICAL: Calculate grams PER SINGLE UNIT
-        const gramsPerUnit = totalGrams / quantity;
-        
-        console.log('[OpenFoodFacts] ✅ QUANTITY + UNIT + GRAMS pattern matched:');
-        console.log('[OpenFoodFacts]   - Quantity:', quantity);
-        console.log('[OpenFoodFacts]   - Unit:', unit);
-        console.log('[OpenFoodFacts]   - Total grams:', totalGrams);
-        console.log('[OpenFoodFacts]   - Grams per unit:', gramsPerUnit);
-        
-        // Return description as "1 unit" (singular form)
-        // Try to singularize the unit (remove trailing 's' if present)
-        let singularUnit = unit;
-        if (unit.endsWith('s') && unit.length > 1) {
-          singularUnit = unit.slice(0, -1);
-        }
-        
-        const roundedGramsPerUnit = parseFloat(gramsPerUnit.toFixed(2));
-        return {
-          description: `1 ${singularUnit}`,
-          grams: roundedGramsPerUnit,
-          displayText: `1 ${singularUnit} (${roundedGramsPerUnit} g)`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-    
-    // ========== PRIORITY 2: GRAMS ALREADY IN SERVING SIZE (quantity = 1) ==========
-    
-    // Pattern 1: "X unit (Yg)" or "X unit (Y g)"
-    const pattern1 = /^(.+?)\s*\((\d+\.?\d*)\s*g\)$/i;
-    const match1 = servingSize.match(pattern1);
-    if (match1) {
-      const description = match1[1].trim();
-      const grams = parseFloat(match1[2]);
-      
-      if (!isNaN(grams) && grams > 0) {
-        console.log('[OpenFoodFacts] Pattern 1 matched (grams in parentheses):', { description, grams });
-        return {
-          description,
-          grams,
-          displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-
-    // Pattern 2: Just grams "Yg" or "Y g"
-    const pattern2 = /^(\d+\.?\d*)\s*g$/i;
-    const match2 = servingSize.match(pattern2);
-    if (match2) {
-      const grams = parseFloat(match2[1]);
-      
-      if (!isNaN(grams) && grams > 0) {
-        console.log('[OpenFoodFacts] Pattern 2 matched (pure grams):', grams);
-        return {
-          description: `${parseFloat(grams.toFixed(2))} g`,
-          grams,
-          displayText: `${parseFloat(grams.toFixed(2))} g`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-
-    // Pattern 3: "X unit - Yg" or "X unit Yg" or "unit Yg"
-    const pattern3 = /^(.+?)\s*[-–—]?\s*(\d+\.?\d*)\s*g$/i;
-    const match3 = servingSize.match(pattern3);
-    if (match3) {
-      const description = match3[1].trim();
-      const grams = parseFloat(match3[2]);
-      
-      // Make sure description is not just a number (to avoid matching "45g" as description="45")
-      if (!isNaN(grams) && grams > 0 && description && !/^\d+\.?\d*$/.test(description)) {
-        console.log('[OpenFoodFacts] Pattern 3 matched (grams with optional dash):', { description, grams });
-        return {
-          description,
-          grams,
-          displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-
-    // Pattern 4: "portion_name Yg" (e.g., "tortilla 45g", "slice 28g", "egg 50g")
-    // This pattern specifically looks for a word followed by a number and 'g'
-    const pattern4 = /^([a-zA-Z\s]+?)\s+(\d+\.?\d*)\s*g$/i;
-    const match4 = servingSize.match(pattern4);
-    if (match4) {
-      const description = match4[1].trim();
-      const grams = parseFloat(match4[2]);
-      
-      if (!isNaN(grams) && grams > 0 && description && description.length > 0) {
-        console.log('[OpenFoodFacts] Pattern 4 matched (portion name + grams):', { description, grams });
-        return {
-          description,
-          grams,
-          displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-
-    // Pattern 5: Try to find any number followed by g anywhere in the string (fallback)
-    const pattern5 = /(\d+\.?\d*)\s*g/i;
-    const match5 = servingSize.match(pattern5);
-    if (match5) {
-      const grams = parseFloat(match5[1]);
-      
-      if (!isNaN(grams) && grams > 0) {
-        // Try to extract description before the grams
-        const description = servingSize.replace(pattern5, '').trim();
-        console.log('[OpenFoodFacts] Pattern 5 matched (grams anywhere - fallback):', { description, grams });
-        
-        if (description && description.length > 0) {
-          return {
-            description,
-            grams,
-            displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-            hasValidGrams: true,
-            isEstimated: false,
-          };
-        }
-        
-        return {
-          description: `${parseFloat(grams.toFixed(2))} g`,
-          grams,
-          displayText: `${parseFloat(grams.toFixed(2))} g`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-
-    // ========== PRIORITY 3: CONVERT OTHER UNITS TO GRAMS ==========
-    
-    // A) OUNCES (oz)
-    // Pattern: "X oz" or "X ounce" or "X ounces"
-    const ozPattern = /(\d+\.?\d*)\s*(oz|ounce|ounces)/i;
-    const ozMatch = servingSize.match(ozPattern);
-    if (ozMatch) {
-      const oz = parseFloat(ozMatch[1]);
-      if (!isNaN(oz) && oz > 0) {
-        const grams = oz * 28.3495;
-        console.log('[OpenFoodFacts] Ounces detected:', { oz, grams });
-        
-        // Extract full description
-        const description = servingSize.trim();
-        
-        return {
-          description,
-          grams: parseFloat(grams.toFixed(2)),
-          displayText: `${description} (≈ ${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: true,
-        };
-      }
-    }
-
-    // B) MILLILITERS (ml)
-    // Pattern: "X ml" or "X milliliter" or "X milliliters"
-    const mlPattern = /(\d+\.?\d*)\s*(ml|milliliter|milliliters|mL)/i;
-    const mlMatch = servingSize.match(mlPattern);
-    if (mlMatch) {
-      const ml = parseFloat(mlMatch[1]);
-      if (!isNaN(ml) && ml > 0) {
-        const grams = mlToGrams(ml);
-        console.log('[OpenFoodFacts] Milliliters detected:', { ml, grams });
-        
-        // Extract full description
-        const description = servingSize.trim();
-        
-        // NEW: Use 1:1 conversion, no "≈" symbol needed
-        return {
-          description,
-          grams: parseFloat(grams.toFixed(2)),
-          displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false, // Not estimated anymore since we're using intentional 1:1
-        };
-      }
-    }
-
-    // C) TABLESPOONS (tbsp)
-    // Pattern: "X tbsp" or "X tablespoon" or "X tablespoons"
-    const tbspPattern = /(\d+\.?\d*)\s*(tbsp|tablespoon|tablespoons|Tbsp|TBSP)/i;
-    const tbspMatch = servingSize.match(tbspPattern);
-    if (tbspMatch) {
-      const tbsp = parseFloat(tbspMatch[1]);
-      if (!isNaN(tbsp) && tbsp > 0) {
-        const ml = tbsp * 15; // 1 tbsp = 15 ml
-        const grams = mlToGrams(ml);
-        console.log('[OpenFoodFacts] Tablespoons detected:', { tbsp, ml, grams });
-        
-        // Extract full description
-        const description = servingSize.trim();
-        
-        // NEW: Use 1:1 conversion, no "≈" symbol needed
-        return {
-          description,
-          grams: parseFloat(grams.toFixed(2)),
-          displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false, // Not estimated anymore since we're using intentional 1:1
-        };
-      }
-    }
-
-    // D) TEASPOONS (tsp)
-    // Pattern: "X tsp" or "X teaspoon" or "X teaspoons"
-    const tspPattern = /(\d+\.?\d*)\s*(tsp|teaspoon|teaspoons|Tsp|TSP)/i;
-    const tspMatch = servingSize.match(tspPattern);
-    if (tspMatch) {
-      const tsp = parseFloat(tspMatch[1]);
-      if (!isNaN(tsp) && tsp > 0) {
-        const ml = tsp * 5; // 1 tsp = 5 ml
-        const grams = mlToGrams(ml);
-        console.log('[OpenFoodFacts] Teaspoons detected:', { tsp, ml, grams });
-        
-        // Extract full description
-        const description = servingSize.trim();
-        
-        // NEW: Use 1:1 conversion, no "≈" symbol needed
-        return {
-          description,
-          grams: parseFloat(grams.toFixed(2)),
-          displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false, // Not estimated anymore since we're using intentional 1:1
-        };
-      }
-    }
-
-    // E) CUPS
-    // Pattern: "X cup" or "X cups"
-    const cupPattern = /(\d+\.?\d*)\s*(cup|cups)/i;
-    const cupMatch = servingSize.match(cupPattern);
-    if (cupMatch) {
-      const cups = parseFloat(cupMatch[1]);
-      if (!isNaN(cups) && cups > 0) {
-        const ml = cups * 240; // 1 cup = 240 ml
-        const grams = mlToGrams(ml);
-        console.log('[OpenFoodFacts] Cups detected:', { cups, ml, grams });
-        
-        // Extract full description
-        const description = servingSize.trim();
-        
-        // NEW: Use 1:1 conversion, no "≈" symbol needed
-        return {
-          description,
-          grams: parseFloat(grams.toFixed(2)),
-          displayText: `${description} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false, // Not estimated anymore since we're using intentional 1:1
-        };
-      }
-    }
-
-    // ========== PRIORITY 4: HOUSEHOLD UNITS WITHOUT GRAMS ==========
-    
-    // Check if serving_quantity provides a gram value
-    if (product.serving_quantity) {
-      const quantityStr = String(product.serving_quantity).trim();
-      const grams = parseFloat(quantityStr);
-      
-      if (!isNaN(grams) && grams > 0) {
-        console.log('[OpenFoodFacts] Using serving_quantity:', grams);
-        return {
-          description: servingSize,
-          grams,
-          displayText: `${servingSize} (${parseFloat(grams.toFixed(2))} g)`,
-          hasValidGrams: true,
-          isEstimated: false,
-        };
-      }
-    }
-
-    // Household units pattern: "X slice", "X egg", "X piece", "X bar", "X tortilla", etc.
-    // EXPANDED: Added more common portion types
-    const householdPattern = /(\d+\.?\d*)\s*(slice|slices|egg|eggs|piece|pieces|bar|bars|serving|servings|item|items|unit|units|tortilla|tortillas|pancake|pancakes|waffle|waffles|cookie|cookies|cracker|crackers|biscuit|biscuits|roll|rolls|muffin|muffins|bagel|bagels|patty|patties|nugget|nuggets|wing|wings|drumstick|drumsticks|breast|breasts|thigh|thighs|fillet|fillets|steak|steaks|chop|chops|sausage|sausages|link|links|strip|strips|stick|sticks|ball|balls|cube|cubes|wedge|wedges|ring|rings|chip|chips|fry|fries)/i;
-    const householdMatch = servingSize.match(householdPattern);
-    if (householdMatch) {
-      console.log('[OpenFoodFacts] Household unit detected without grams:', servingSize);
-      
-      // Return the unit as-is with 100g estimate
+    if (unitName && unitCount > 1) {
+      // e.g. "4 cookies (29 g)" with serving_quantity=29 → grams per cookie = 7.25
+      const gramsPerUnit = parseFloat((totalGrams / unitCount).toFixed(2));
+      const description = `${unitCount} ${unitName}s`;
+      const displayText = `1 ${unitName} (${gramsPerUnit} g)`;
+      console.log('[OpenFoodFacts] ✅ Multi-unit result:', { description, gramsPerUnit, displayText });
       return {
-        description: servingSize,
-        grams: 100,
-        displayText: `${servingSize} (estimated as 100g)`,
-        hasValidGrams: false,
-        isEstimated: true,
+        description,
+        grams: gramsPerUnit,
+        displayText,
+        hasValidGrams,
+        isEstimated: false,
       };
     }
 
-    // ========== PRIORITY 5: FALLBACK ==========
-    
-    // Fallback: We have a serving description but no parseable grams or convertible units
-    // Return the description as-is with 100g default for calculations
-    console.log('[OpenFoodFacts] Could not parse grams or convert units, using description with 100g fallback');
+    if (unitName && unitCount === 1) {
+      // e.g. "1 slice (21 g)" with serving_quantity=21
+      const roundedGrams = parseFloat(totalGrams.toFixed(2));
+      const description = `1 ${unitName}`;
+      const displayText = `1 ${unitName} (${roundedGrams} g)`;
+      console.log('[OpenFoodFacts] ✅ Single-unit result:', { description, roundedGrams, displayText });
+      return {
+        description,
+        grams: roundedGrams,
+        displayText,
+        hasValidGrams,
+        isEstimated: false,
+      };
+    }
+
+    // No meaningful unit name — use plain grams
+    const roundedGrams = parseFloat(totalGrams.toFixed(2));
+    const description = `${roundedGrams} g`;
+    const displayText = `${roundedGrams} g`;
+    console.log('[OpenFoodFacts] ✅ Plain-grams result:', { description, roundedGrams, hasValidGrams });
     return {
-      description: servingSize,
-      grams: 100,
-      displayText: `${servingSize} (estimated as 100g)`,
-      hasValidGrams: false,
-      isEstimated: true,
+      description,
+      grams: roundedGrams,
+      displayText,
+      hasValidGrams,
+      isEstimated: false,
     };
   } catch (error) {
-    // If ANY error occurs during parsing, return default
-    console.error('[OpenFoodFacts] Error parsing serving size:', error);
-    return defaultServing;
+    console.error('[OpenFoodFacts] Error building serving size result:', error);
+    return {
+      description: '100 g',
+      grams: 100,
+      displayText: '100 g',
+      hasValidGrams: false,
+      isEstimated: false,
+    };
   }
 }
 
