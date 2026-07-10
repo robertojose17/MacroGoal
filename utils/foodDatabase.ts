@@ -200,7 +200,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         food_items:food_item_id (
           id, name, brand, barcode,
           serving_size, serving_unit, serving_description,
-          serving_count, calories, protein, carbs, fat, fiber,
+          serving_count, serving_quantity, calories, protein, carbs, fat, fiber,
           macros_per
         ),
         foods:food_id (
@@ -238,22 +238,45 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
 
-        // Default serving macros (reset to 1 standard serving)
-        const servingSize = Number(fi.serving_size) || 100;
-        const macroResult = calcMacros(fi, servingSize);
+        // serving_size IS total grams of one standard serving
+        // serving_quantity is an alias for the same value in some rows
+        const servingSize = Number(fi.serving_size) || Number(fi.serving_quantity) || 0;
 
-        // Default serving display string
+        let macroCalories: number, macroProtein: number, macroCarbs: number, macroFats: number, macroFiber: number;
+
+        if (servingSize > 0) {
+          const macroResult = calcMacros(fi, servingSize);
+          macroCalories = macroResult.calories;
+          macroProtein  = macroResult.protein;
+          macroCarbs    = macroResult.carbs;
+          macroFats     = macroResult.fat;
+          macroFiber    = macroResult.fiber;
+        } else {
+          // No serving size info — use stored values directly (they are per-serving)
+          macroCalories = Number(fi.calories) || 0;
+          macroProtein  = Number(fi.protein)  || 0;
+          macroCarbs    = Number(fi.carbs)    || 0;
+          macroFats     = Number(fi.fat)      || 0;
+          macroFiber    = Number(fi.fiber)    || 0;
+        }
+
+        const gramsLabel = servingSize > 0 ? `${servingSize}g` : '';
+
         let displayServingUnit: string;
         if (fi.serving_description) {
           const count = Number(fi.serving_count) || 1;
           const countLabel = count !== 1 ? `${count} ` : '1 ';
-          displayServingUnit = `${countLabel}${fi.serving_description} (${servingSize}g)`;
+          displayServingUnit = gramsLabel
+            ? `${countLabel}${fi.serving_description} (${gramsLabel})`
+            : `${countLabel}${fi.serving_description}`;
         } else if (fi.serving_unit && fi.serving_unit.toLowerCase() !== 'g' && fi.serving_unit.toLowerCase() !== 'ml') {
           const count = Number(fi.serving_count) || 1;
           const countLabel = count !== 1 ? `${count} ` : '1 ';
-          displayServingUnit = `${countLabel}${fi.serving_unit} (${servingSize}g)`;
+          displayServingUnit = gramsLabel
+            ? `${countLabel}${fi.serving_unit} (${gramsLabel})`
+            : `${countLabel}${fi.serving_unit}`;
         } else {
-          displayServingUnit = `1 serving (${servingSize}g)`;
+          displayServingUnit = gramsLabel ? `1 serving (${gramsLabel})` : '1 serving';
         }
 
         results.push({
@@ -261,13 +284,13 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           name: fi.name ?? 'Unknown Food',
           brand: fi.brand ?? undefined,
           barcode: fi.barcode ?? undefined,
-          serving_amount: servingSize,
+          serving_amount: servingSize > 0 ? servingSize : 1,
           serving_unit: displayServingUnit,
-          calories: macroResult.calories,
-          protein: macroResult.protein,
-          carbs: macroResult.carbs,
-          fats: macroResult.fat,
-          fiber: macroResult.fiber,
+          calories: macroCalories,
+          protein: macroProtein,
+          carbs: macroCarbs,
+          fats: macroFats,
+          fiber: macroFiber,
           user_created: false,
           is_favorite: false,
           food_item_id: fi.id,
