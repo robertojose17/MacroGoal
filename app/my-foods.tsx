@@ -98,19 +98,23 @@ export default function MyFoodsScreen() {
   const handleSelectFood = useCallback((food: MyFood) => {
     console.log('[MyFoods] Selected food:', food.name, 'id:', food.id);
 
-    // Foods DB stores per-100g values. Always pass serving_size as "100 g" so
-    // FoodDetailsLayout multiplies by 100/100 = 1 and displays the correct values.
+    // Foods DB stores macros per-serving. Scale to per-100g so FoodDetailsLayout
+    // (which reads nutriments['energy-kcal_100g'] and divides by 100) calculates correctly.
+    const servingAmount = food.serving_amount || 100;
+    const scale = servingAmount > 0 ? (100 / servingAmount) : 1;
+
     const offProduct = {
       code: '',
       product_name: food.name,
       brands: food.brand || '',
-      serving_size: '100 g',
+      serving_size: `${servingAmount} ${food.serving_unit || 'g'}`,
+      serving_quantity: servingAmount,
       nutriments: {
-        'energy-kcal_100g': food.calories,
-        'proteins_100g': food.protein,
-        'carbohydrates_100g': food.carbs,
-        'fat_100g': food.fats,
-        'fiber_100g': food.fiber,
+        'energy-kcal_100g': (food.calories || 0) * scale,
+        'proteins_100g': (food.protein || 0) * scale,
+        'carbohydrates_100g': (food.carbs || 0) * scale,
+        'fat_100g': (food.fats || 0) * scale,
+        'fiber_100g': (food.fiber || 0) * scale,
         'sugars_100g': 0,
       },
     };
