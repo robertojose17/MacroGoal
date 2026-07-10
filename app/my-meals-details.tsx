@@ -121,6 +121,7 @@ export default function MyMealsDetailsScreen() {
   const [loading, setLoading] = useState(false);
   const [servingsMultiplier, setServingsMultiplier] = useState('1');
   const [adding, setAdding] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [bannerQueue, setBannerQueue] = useState<string[]>([]);
   const [currentBanner, setCurrentBanner] = useState<string | null>(null);
@@ -536,7 +537,18 @@ export default function MyMealsDetailsScreen() {
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
           Meal Details
         </Text>
-        <View style={styles.editButton} />
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => {
+            const next = !isEditing;
+            console.log('[MyMealsDetails] Edit toggle pressed, isEditing:', next);
+            setIsEditing(next);
+          }}
+        >
+          <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>
+            {isEditing ? 'Done' : 'Edit'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -611,8 +623,20 @@ export default function MyMealsDetailsScreen() {
                   activeOpacity={0.7}
                   onPress={() => { if (!isSwiping) handleItemPress(item); }}
                   disabled={isSwiping}
-                  style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+                  style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card, flexDirection: 'row', alignItems: 'center' }]}
                 >
+                  {isEditing && (
+                    <TouchableOpacity
+                      style={styles.deleteCircleButton}
+                      onPress={() => {
+                        console.log('[MyMealsDetails] Delete button pressed for item:', item.id, foodName);
+                        handleDeleteItem(item.id);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.deleteCircleText}>{'−'}</Text>
+                    </TouchableOpacity>
+                  )}
                   <View style={styles.itemInfo}>
                     <View style={styles.itemNameRow}>
                       <Text style={[styles.itemName, { color: isDark ? colors.textDark : colors.text }]}>
@@ -654,6 +678,29 @@ export default function MyMealsDetailsScreen() {
             </SwipeToDeleteRow>
           );
         })}
+
+        {isEditing && (
+          <TouchableOpacity
+            style={[styles.itemCard, styles.addFoodRow, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+            onPress={() => {
+              console.log('[MyMealsDetails] Add Food button pressed, navigating to food-search with mealId:', mealId, 'meal:', mealType, 'date:', date);
+              router.push({
+                pathname: '/food-search',
+                params: {
+                  meal: mealType,
+                  date: date,
+                  returnTo: 'my-meals-details',
+                  mealId: mealId,
+                  savedMealEdit: 'true',
+                },
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.addFoodIcon, { color: colors.primary }]}>{'＋'}</Text>
+            <Text style={[styles.addFoodText, { color: colors.primary }]}>Add Food</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={[styles.totalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.totalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
@@ -838,6 +885,35 @@ const styles = StyleSheet.create({
     boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.08)',
     elevation: 1,
     padding: spacing.md,
+  },
+  deleteCircleButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+    flexShrink: 0,
+  },
+  deleteCircleText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  addFoodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  addFoodIcon: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  addFoodText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   itemInfo: {
     flex: 1,
