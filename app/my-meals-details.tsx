@@ -7,6 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, TABLE_SAVED_MEALS, TABLE_SAVED_MEAL_ITEMS } from '@/lib/supabase/client';
+import { loadDraft, clearDraft } from '@/utils/myMealsDraft';
 import { toLocalDateString } from '@/utils/dateUtils';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
@@ -236,8 +237,41 @@ export default function MyMealsDetailsScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('[MyMealsDetails] Screen focused');
-      loadSavedMeal();
-    }, [loadSavedMeal])
+      const flushDraftAndLoad = async () => {
+        const draft = await loadDraft();
+        console.log('[MyMealsDetails] Draft items found:', draft.length);
+        if (draft.length > 0 && mealId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            console.log('[MyMealsDetails] Flushing', draft.length, 'draft items into saved_meal_items for mealId:', mealId);
+            const itemsToInsert = draft.map(item => ({
+              saved_meal_id: mealId,
+              food_id: item.food_id || null,
+              food_item_id: item.food_item_id || null,
+              food_name: item.food_name,
+              food_brand: item.food_brand || null,
+              serving_amount: item.serving_amount,
+              serving_unit: item.serving_unit,
+              servings_count: item.servings_count,
+              calories: item.calories,
+              protein: item.protein,
+              carbs: item.carbs,
+              fat: item.fats,
+              fiber: item.fiber,
+            }));
+            const { error } = await supabase.from(TABLE_SAVED_MEAL_ITEMS).insert(itemsToInsert);
+            if (error) {
+              console.error('[MyMealsDetails] Error flushing draft items:', error);
+            } else {
+              console.log('[MyMealsDetails] Draft items flushed successfully');
+            }
+            await clearDraft();
+          }
+        }
+        loadSavedMeal();
+      };
+      flushDraftAndLoad();
+    }, [loadSavedMeal, mealId])
   );
 
   const calculateTotals = () => {
@@ -601,9 +635,39 @@ export default function MyMealsDetailsScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Foods
-        </Text>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            {'Foods ('}
+            {validItems.length}
+            {')'}
+          </Text>
+          {isEditing && (
+            <TouchableOpacity
+              style={[styles.addFoodButton, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                console.log('[MyMealsDetails] Add Food button pressed, navigating to /add-food with context: my_meals_builder, mealId:', mealId);
+                router.push({
+                  pathname: '/add-food',
+                  params: {
+                    context: 'my_meals_builder',
+                    meal: mealType,
+                    date: date,
+                    returnTo: '/my-meals-details',
+                  },
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="plus"
+                android_material_icon_name="add"
+                size={16}
+                color="#FFFFFF"
+              />
+              <Text style={styles.addFoodButtonText}>Add Food</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {validItems.map((item) => {
           const itemMacros = calcItemMacros(item, parseFloat(servingsMultiplier) || 1);
@@ -666,29 +730,6 @@ export default function MyMealsDetailsScreen() {
             </SwipeToDeleteRow>
           );
         })}
-
-        {isEditing && (
-          <TouchableOpacity
-            style={[styles.itemCard, styles.addFoodRow, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-            onPress={() => {
-              console.log('[MyMealsDetails] Add Food button pressed, navigating to food-search with mealId:', mealId, 'meal:', mealType, 'date:', date);
-              router.push({
-                pathname: '/food-search',
-                params: {
-                  meal: mealType,
-                  date: date,
-                  returnTo: 'my-meals-details',
-                  mealId: mealId,
-                  savedMealEdit: 'true',
-                },
-              });
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.addFoodIcon, { color: colors.primary }]}>{'＋'}</Text>
-            <Text style={[styles.addFoodText, { color: colors.primary }]}>Add Food</Text>
-          </TouchableOpacity>
-        )}
 
         <View style={[styles.totalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.totalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
@@ -862,10 +903,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
   sectionTitle: {
     ...typography.bodyBold,
     fontSize: 16,
-    marginBottom: spacing.sm,
+  },
+  addFoodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    gap: spacing.xs,
+  },
+  addFoodButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   itemCard: {
     borderRadius: borderRadius.md,
@@ -873,19 +932,6 @@ const styles = StyleSheet.create({
     boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.08)',
     elevation: 1,
     padding: spacing.md,
-  },
-  addFoodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  addFoodIcon: {
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  addFoodText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
   itemInfo: {
     flex: 1,
