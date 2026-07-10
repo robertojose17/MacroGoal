@@ -191,6 +191,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       .select(`
         id,
         food_item_id,
+        food_id,
         created_at,
         meals!inner (
           user_id
@@ -219,107 +220,177 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
     for (const item of mealItems) {
       if (orderedFoodItemIds.length >= limit) break;
       const fid: string | null = (item as any).food_item_id ?? null;
-      if (!fid) continue; // skip AI-generated / legacy entries
+      if (!fid) continue;
       if (!seenFoodItemIds.has(fid)) {
         seenFoodItemIds.add(fid);
         orderedFoodItemIds.push(fid);
       }
     }
 
-    console.log(`[FoodDB] getRecentFoods: step 1 found ${orderedFoodItemIds.length} unique food_item_ids`);
+    // Collect unique food_ids for items that have no food_item_id (user-created foods)
+    const seenFoodIds = new Set<string>();
+    const orderedFoodIds: string[] = [];
 
-    if (orderedFoodItemIds.length === 0) {
-      console.log('[FoodDB] getRecentFoods: no food_item_ids found, returning []');
+    for (const item of mealItems) {
+      if (orderedFoodItemIds.length + orderedFoodIds.length >= limit) break;
+      const fid: string | null = (item as any).food_item_id ?? null;
+      const foodId: string | null = (item as any).food_id ?? null;
+      if (fid) continue; // already handled above
+      if (!foodId) continue;
+      if (!seenFoodIds.has(foodId)) {
+        seenFoodIds.add(foodId);
+        orderedFoodIds.push(foodId);
+      }
+    }
+
+    console.log(`[FoodDB] getRecentFoods: step 1 found ${orderedFoodItemIds.length} unique food_item_ids, ${orderedFoodIds.length} unique food_ids`);
+
+    if (orderedFoodItemIds.length === 0 && orderedFoodIds.length === 0) {
+      console.log('[FoodDB] getRecentFoods: no food references found, returning []');
       return [];
     }
 
-    // ── Step 2: single IN query for all collected ids ─────────────────────────
+    // ── Step 2: single IN query for all collected food_item_ids ──────────────
     console.log('[FoodDB] getRecentFoods: step 2 — querying food_items IN', orderedFoodItemIds);
-    const { data: foodItemRows, error: step2Error } = await supabase
-      .from('food_items')
-      .select('id, name, brand, barcode, serving_size, serving_unit, serving_description, serving_count, calories, protein, carbs, fat, fiber, macros_per, off_data, source')
-      .in('id', orderedFoodItemIds);
-
-    if (step2Error) {
-      console.error('[FoodDB] getRecentFoods: step 2 error:', step2Error);
-      return [];
-    }
-
-    console.log(`[FoodDB] getRecentFoods: step 2 fetched ${foodItemRows?.length ?? 0} food_items rows`);
-
     const foodItemMap = new Map<string, Record<string, any>>();
-    for (const row of (foodItemRows ?? [])) {
-      foodItemMap.set(row.id, row);
+    if (orderedFoodItemIds.length > 0) {
+      const { data: foodItemRows, error: step2Error } = await supabase
+        .from('food_items')
+        .select('id, name, brand, barcode, serving_size, serving_unit, serving_description, serving_count, calories, protein, carbs, fat, fiber, macros_per, off_data, source')
+        .in('id', orderedFoodItemIds);
+
+      if (step2Error) {
+        console.error('[FoodDB] getRecentFoods: step 2 error:', step2Error);
+        return [];
+      }
+
+      console.log(`[FoodDB] getRecentFoods: step 2 fetched ${foodItemRows?.length ?? 0} food_items rows`);
+      for (const row of (foodItemRows ?? [])) {
+        foodItemMap.set(row.id, row);
+      }
     }
 
-    // ── Build Food[] in recency order ─────────────────────────────────────────
+    // ── Step 3: fetch foods table rows for food_id-only items ─────────────────
+    const foodsMap = new Map<string, Record<string, any>>();
+    if (orderedFoodIds.length > 0) {
+      console.log('[FoodDB] getRecentFoods: step 3 — querying foods IN', orderedFoodIds);
+      const { data: foodRows, error: step3Error } = await supabase
+        .from('foods')
+        .select('id, name, brand, serving_amount, serving_unit, calories, protein, carbs, fats, fiber')
+        .in('id', orderedFoodIds);
+
+      if (!step3Error && foodRows) {
+        console.log(`[FoodDB] getRecentFoods: step 3 fetched ${foodRows.length} foods rows`);
+        for (const row of foodRows) {
+          foodsMap.set(row.id, row);
+        }
+      } else if (step3Error) {
+        console.error('[FoodDB] getRecentFoods: step 3 error:', step3Error);
+      }
+    }
+
+    // ── Build Food[] in recency order (unified loop over mealItems) ───────────
     const results: Food[] = [];
+    const seenKeys = new Set<string>();
 
-    for (const fid of orderedFoodItemIds) {
+    for (const item of mealItems) {
       if (results.length >= limit) break;
+      const fid: string | null = (item as any).food_item_id ?? null;
+      const foodId: string | null = (item as any).food_id ?? null;
 
-      const fi = foodItemMap.get(fid);
-      if (!fi) {
-        console.log(`[FoodDB] getRecentFoods: food_item_id ${fid} not found in step 2, skipping (orphaned ref)`);
-        continue;
+      if (fid && !seenKeys.has(`fi:${fid}`)) {
+        seenKeys.add(`fi:${fid}`);
+        const fi = foodItemMap.get(fid);
+        if (!fi) {
+          console.log(`[FoodDB] getRecentFoods: food_item_id ${fid} not found in step 2, skipping (orphaned ref)`);
+          continue;
+        }
+
+        const servingSize = Number(fi.serving_size) || 100;
+
+        let calories: number, protein: number, carbs: number, fats: number, fiber: number;
+        if (servingSize > 0) {
+          const result = calcMacros(fi, servingSize);
+          calories = result.calories;
+          protein  = result.protein;
+          carbs    = result.carbs;
+          fats     = result.fat;
+          fiber    = result.fiber;
+        } else {
+          calories = Number(fi.calories) || 0;
+          protein  = Number(fi.protein)  || 0;
+          carbs    = Number(fi.carbs)    || 0;
+          fats     = Number(fi.fat)      || 0;
+          fiber    = Number(fi.fiber)    || 0;
+        }
+
+        let displayServingUnit: string;
+        const servingGramsForDisplay: number = servingSize > 0 ? servingSize : 100;
+
+        if (fi.serving_description) {
+          const servingCount = Number(fi.serving_count) || 1;
+          const countLabel = servingCount !== 1 ? `${servingCount} ` : '1 ';
+          displayServingUnit = `${countLabel}${fi.serving_description} (${servingGramsForDisplay}g)`;
+        } else if (fi.serving_unit && fi.serving_unit.toLowerCase() !== 'g' && fi.serving_unit.toLowerCase() !== 'ml') {
+          const servingCount = Number(fi.serving_count) || 1;
+          const countLabel = servingCount !== 1 ? `${servingCount} ` : '1 ';
+          displayServingUnit = `${countLabel}${fi.serving_unit} (${servingGramsForDisplay}g)`;
+        } else {
+          displayServingUnit = `1 serving (${servingGramsForDisplay}g)`;
+        }
+
+        const food: Food = {
+          id: fi.id,
+          name: fi.name ?? 'Unknown Food',
+          brand: fi.brand ?? undefined,
+          barcode: fi.barcode ?? undefined,
+          serving_amount: servingGramsForDisplay,
+          serving_unit: displayServingUnit,
+          calories,
+          protein,
+          carbs,
+          fats,
+          fiber,
+          user_created: false,
+          is_favorite: false,
+          last_serving_description: undefined,
+          food_item_id: fi.id,
+        };
+
+        console.log(`[FoodDB] getRecentFoods: built food_item "${food.name}" cal=${calories} p=${protein} c=${carbs} f=${fats}`);
+        results.push(food);
+
+      } else if (!fid && foodId && !seenKeys.has(`f:${foodId}`)) {
+        seenKeys.add(`f:${foodId}`);
+        const f = foodsMap.get(foodId);
+        if (!f) {
+          console.log(`[FoodDB] getRecentFoods: food_id ${foodId} not found in step 3, skipping`);
+          continue;
+        }
+
+        const servingAmount = Number(f.serving_amount) || 100;
+        const servingUnit = f.serving_unit || 'g';
+        const displayServingUnit = `1 serving (${servingAmount}${servingUnit})`;
+
+        const food: Food = {
+          id: foodId,
+          name: f.name ?? 'Unknown Food',
+          brand: f.brand ?? undefined,
+          serving_amount: servingAmount,
+          serving_unit: displayServingUnit,
+          calories: Number(f.calories) || 0,
+          protein: Number(f.protein) || 0,
+          carbs: Number(f.carbs) || 0,
+          fats: Number(f.fats) || 0,
+          fiber: Number(f.fiber) || 0,
+          user_created: true,
+          is_favorite: false,
+          food_item_id: undefined,
+        };
+
+        console.log(`[FoodDB] getRecentFoods: built foods-table "${food.name}" cal=${food.calories} p=${food.protein} c=${food.carbs} f=${food.fats}`);
+        results.push(food);
       }
-
-      const servingSize = Number(fi.serving_size) || 100;
-
-      // Compute macros for 1 standard serving
-      let calories: number, protein: number, carbs: number, fats: number, fiber: number;
-
-      if (servingSize > 0) {
-        const result = calcMacros(fi, servingSize);
-        calories = result.calories;
-        protein  = result.protein;
-        carbs    = result.carbs;
-        fats     = result.fat;
-        fiber    = result.fiber;
-      } else {
-        calories = Number(fi.calories) || 0;
-        protein  = Number(fi.protein)  || 0;
-        carbs    = Number(fi.carbs)    || 0;
-        fats     = Number(fi.fat)      || 0;
-        fiber    = Number(fi.fiber)    || 0;
-      }
-
-      // ── Serving display string ──────────────────────────────────────────────
-      let displayServingUnit: string;
-      const servingGramsForDisplay: number = servingSize > 0 ? servingSize : 100;
-
-      if (fi.serving_description) {
-        const servingCount = Number(fi.serving_count) || 1;
-        const countLabel = servingCount !== 1 ? `${servingCount} ` : '1 ';
-        displayServingUnit = `${countLabel}${fi.serving_description} (${servingGramsForDisplay}g)`;
-      } else if (fi.serving_unit && fi.serving_unit.toLowerCase() !== 'g' && fi.serving_unit.toLowerCase() !== 'ml') {
-        const servingCount = Number(fi.serving_count) || 1;
-        const countLabel = servingCount !== 1 ? `${servingCount} ` : '1 ';
-        displayServingUnit = `${countLabel}${fi.serving_unit} (${servingGramsForDisplay}g)`;
-      } else {
-        displayServingUnit = `1 serving (${servingGramsForDisplay}g)`;
-      }
-
-      const food: Food = {
-        id: fi.id,
-        name: fi.name ?? 'Unknown Food',
-        brand: fi.brand ?? undefined,
-        barcode: fi.barcode ?? undefined,
-        serving_amount: servingGramsForDisplay,
-        serving_unit: displayServingUnit,
-        calories,
-        protein,
-        carbs,
-        fats,
-        fiber,
-        user_created: false,
-        is_favorite: false,
-        last_serving_description: undefined,
-        food_item_id: fi.id,
-      };
-
-      console.log(`[FoodDB] getRecentFoods: built food "${food.name}" cal=${calories} p=${protein} c=${carbs} f=${fats}`);
-      results.push(food);
     }
 
     console.log(`[FoodDB] getRecentFoods: returning ${results.length} recent foods`);
