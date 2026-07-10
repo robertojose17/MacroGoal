@@ -253,7 +253,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
         .insert({
           meal_id: mealId,
           food_id: food.id,
-          food_item_id: food.id,
+          food_item_id: null,
           food_name: food.name,
           food_brand: food.brand ?? null,
           quantity: gramsToAdd / 100,
