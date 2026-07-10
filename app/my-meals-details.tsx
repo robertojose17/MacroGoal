@@ -625,18 +625,6 @@ export default function MyMealsDetailsScreen() {
                   disabled={isSwiping}
                   style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card, flexDirection: 'row', alignItems: 'center' }]}
                 >
-                  {isEditing && (
-                    <TouchableOpacity
-                      style={styles.deleteCircleButton}
-                      onPress={() => {
-                        console.log('[MyMealsDetails] Delete button pressed for item:', item.id, foodName);
-                        handleDeleteItem(item.id);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.deleteCircleText}>{'−'}</Text>
-                    </TouchableOpacity>
-                  )}
                   <View style={styles.itemInfo}>
                     <View style={styles.itemNameRow}>
                       <Text style={[styles.itemName, { color: isDark ? colors.textDark : colors.text }]}>
@@ -885,22 +873,6 @@ const styles = StyleSheet.create({
     boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.08)',
     elevation: 1,
     padding: spacing.md,
-  },
-  deleteCircleButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FF3B30',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-    flexShrink: 0,
-  },
-  deleteCircleText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 22,
   },
   addFoodRow: {
     flexDirection: 'row',
