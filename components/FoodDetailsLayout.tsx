@@ -1001,21 +1001,30 @@ export default function FoodDetailsLayout({
       }
 
       // ── Source of truth: the grams saved in DB ──────────────────────────
-      // mealItem.grams is what the user actually ate. Reconstruct state from it.
+      // saved_meal_items uses serving_amount + servings_count; meal_items uses grams + quantity.
       // Single source of truth for totalGrams (in priority order):
-      // 1. mealItem.grams — what was actually saved (most entries)
-      // 2. Invert the calorie formula — works for legacy entries where grams is null
-      // 3. quantity × food.serving_amount — last resort
+      // 1. saved_meal_items: serving_amount × servings_count
+      // 2. mealItem.grams — what was actually saved (meal_items)
+      // 3. Invert the calorie formula — works for legacy entries where grams is null
+      // 4. quantity × food.serving_amount — last resort
+      const isSavedMealTable = (itemTable ?? 'meal_items') === 'saved_meal_items';
       let totalGrams: number;
-      if (mealItem.grams != null && mealItem.grams > 0) {
+      let rawQuantity: number;
+      if (isSavedMealTable && (mealItem as any).serving_amount != null && (mealItem as any).servings_count != null) {
+        totalGrams = (mealItem as any).serving_amount * (mealItem as any).servings_count;
+        rawQuantity = (mealItem as any).servings_count;
+        console.log('[FoodDetails] loadEditItem (saved_meal_items): serving_amount=', (mealItem as any).serving_amount, 'servings_count=', (mealItem as any).servings_count, 'totalGrams=', totalGrams);
+      } else if (mealItem.grams != null && mealItem.grams > 0) {
         totalGrams = mealItem.grams;
+        rawQuantity = mealItem.quantity || 1;
       } else if (mealItem.calories > 0 && food.calories > 0) {
         // foods.calories is per-100g; invert: totalGrams = (item_calories / per100_calories) * 100
         totalGrams = (mealItem.calories / food.calories) * 100;
+        rawQuantity = mealItem.quantity || 1;
       } else {
         totalGrams = (mealItem.quantity || 1) * (food.serving_amount || 100);
+        rawQuantity = mealItem.quantity || 1;
       }
-      const rawQuantity = mealItem.quantity || 1;
       setServingUnit('serving');
 
       const desc = (mealItem.serving_description || '').toLowerCase().trim();
@@ -1524,18 +1533,32 @@ export default function FoodDetailsLayout({
 
       if (mode === 'edit' && itemId) {
         console.log('[FoodDetails] handleSave: updating', itemTable ?? 'meal_items', 'id=', itemId);
+        const isSavedMealTableUpdate = (itemTable ?? 'meal_items') === 'saved_meal_items';
+        const updatePayload = isSavedMealTableUpdate
+          ? {
+              servings_count: parseFloat(numberOfServings) || 1,
+              serving_amount: servingAmount,
+              calories: safeMacros.calories,
+              protein: safeMacros.protein,
+              carbs: safeMacros.carbs,
+              fats: safeMacros.fats,
+              fiber: safeMacros.fiber,
+              serving_unit: servingDescription,
+            }
+          : {
+              quantity: parseFloat(numberOfServings) || 1,
+              calories: safeMacros.calories,
+              protein: safeMacros.protein,
+              carbs: safeMacros.carbs,
+              fats: safeMacros.fats,
+              fiber: safeMacros.fiber,
+              serving_description: servingDescription,
+              grams: totalGrams,
+            };
+        console.log('[FoodDetails] handleSave: updatePayload=', JSON.stringify(updatePayload));
         const { error } = await supabase
           .from(itemTable ?? 'meal_items')
-          .update({
-            quantity: parseFloat(numberOfServings) || 1,
-            calories: safeMacros.calories,
-            protein: safeMacros.protein,
-            carbs: safeMacros.carbs,
-            fats: safeMacros.fats,
-            fiber: safeMacros.fiber,
-            serving_description: servingDescription,
-            grams: totalGrams,
-          })
+          .update(updatePayload)
           .eq('id', itemId);
 
         if (error) {
