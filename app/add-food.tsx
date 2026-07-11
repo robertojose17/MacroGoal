@@ -1805,6 +1805,7 @@ export default function AddFoodScreen() {
           .select(`
             id, food_item_id, food_id, food_name, food_brand,
             serving_amount, serving_unit, servings_count,
+            calories, protein, carbs, fat, fiber,
             food_items!saved_meal_items_food_item_id_fkey (
               id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per
             )
@@ -1820,7 +1821,16 @@ export default function AddFoodScreen() {
           const fi = item.food_items;
           const itemName = fi?.name ?? item.food_name ?? 'Unknown';
           let calories = 0, protein = 0, carbs = 0, fats = 0, fiber = 0;
-          if (fi && fi.serving_size && fi.serving_size > 0) {
+
+          // Use stored macros first (already correct per serving)
+          if (item.calories != null) {
+            calories = item.calories;
+            protein = item.protein ?? 0;
+            carbs = item.carbs ?? 0;
+            fats = item.fat ?? 0;
+            fiber = item.fiber ?? 0;
+          } else if (fi && fi.serving_size && fi.serving_size > 0) {
+            // Fallback: calculate from food_items join
             const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
             const ratio = (item.serving_amount * item.servings_count) / divisor;
             calories = fi.calories * ratio;
@@ -1829,7 +1839,7 @@ export default function AddFoodScreen() {
             fats = fi.fat * ratio;
             fiber = (fi.fiber ?? 0) * ratio;
           }
-          console.log('[AddFood] Adding saved meal item to plan:', itemName);
+          console.log('[AddFood] Adding saved meal item to plan:', itemName, { calories, protein, carbs, fats, fiber });
           await addMealPlanItem(planId, {
             date,
             meal_type: mealType,
