@@ -602,13 +602,12 @@ export default function MyMealsDetailsScreen() {
         {validItems.map((item) => {
           const itemMacros = calcItemMacros(item, parseFloat(servingsMultiplier) || 1);
           const itemCaloriesRounded = Math.round(itemMacros.calories);
-          const itemProteinRounded = Math.round(itemMacros.protein);
-          const itemCarbsRounded = Math.round(itemMacros.carbs);
-          const itemFatsRounded = Math.round(itemMacros.fats);
-          const servingAmountRounded = Math.round(item.serving_amount);
           const foodName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? 'Unknown Food';
           const foodBrand = item.food_items?.brand ?? item.foods?.brand ?? item.food_brand;
-          const isUserCreated = false;
+          const count = item.servings_count ?? 1;
+          const amount = Math.round(item.serving_amount ?? 100);
+          const unit = item.serving_unit ?? 'g';
+          const servingText = count === 1 ? `${amount} ${unit}` : `${count} × ${amount} ${unit}`;
 
           return (
             <SwipeToDeleteRow key={item.id} onDelete={() => handleDeleteItem(item.id)}>
@@ -617,42 +616,30 @@ export default function MyMealsDetailsScreen() {
                   activeOpacity={0.7}
                   onPress={() => { if (!isSwiping) handleItemPress(item); }}
                   disabled={isSwiping}
-                  style={[styles.itemCard, { backgroundColor: isDark ? colors.cardDark : colors.card, flexDirection: 'row', alignItems: 'center' }]}
+                  style={[
+                    styles.foodItem,
+                    { backgroundColor: isDark ? colors.cardDark : colors.card },
+                  ]}
                 >
-                  <View style={styles.itemInfo}>
-                    <View style={styles.itemNameRow}>
-                      <Text style={[styles.itemName, { color: isDark ? colors.textDark : colors.text }]}>
-                        {foodName}
-                      </Text>
-                      {isUserCreated && (
-                        <Text style={[styles.customBadge, { color: colors.primary }]}>
-                          {' (My Food)'}
-                        </Text>
-                      )}
-                    </View>
+                  <View style={styles.foodInfo}>
+                    <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+                      {foodName}
+                    </Text>
                     {foodBrand ? (
-                      <Text style={[styles.itemBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                         {foodBrand}
                       </Text>
                     ) : null}
-                    <Text style={[styles.itemServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      {item.servings_count}
-                      {' × '}
-                      {servingAmountRounded}
-                      {' '}
-                      {item.serving_unit}
-                      {' • '}
-                      {itemCaloriesRounded}
-                      {' cal'}
+                    <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      {servingText}
                     </Text>
-                    <Text style={[styles.itemMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      {'P: '}
-                      {itemProteinRounded}
-                      {'g • C: '}
-                      {itemCarbsRounded}
-                      {'g • F: '}
-                      {itemFatsRounded}
-                      {'g'}
+                  </View>
+                  <View style={styles.foodCalories}>
+                    <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>
+                      {itemCaloriesRounded}
+                    </Text>
+                    <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      kcal
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -895,6 +882,24 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontSize: 12,
   },
+  foodItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.08)',
+    elevation: 1,
+  },
+  foodInfo: { flex: 1 },
+  foodName: { ...typography.bodyBold, marginBottom: 2 },
+  foodBrand: { ...typography.caption, marginBottom: 2 },
+  foodDetails: { ...typography.caption },
+  foodCalories: { alignItems: 'flex-end' },
+  foodCaloriesValue: { ...typography.bodyBold, fontSize: 18 },
+  foodCaloriesLabel: { ...typography.caption },
   totalsCard: {
     borderRadius: borderRadius.md,
     padding: spacing.md,
