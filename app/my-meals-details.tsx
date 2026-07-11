@@ -602,6 +602,9 @@ export default function MyMealsDetailsScreen() {
         {validItems.map((item) => {
           const itemMacros = calcItemMacros(item, parseFloat(servingsMultiplier) || 1);
           const itemCaloriesRounded = Math.round(itemMacros.calories);
+          const itemProteinRounded = Math.round(itemMacros.protein);
+          const itemCarbsRounded = Math.round(itemMacros.carbs);
+          const itemFatsRounded = Math.round(itemMacros.fats);
           const foodName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? 'Unknown Food';
           const foodBrand = item.food_items?.brand ?? item.foods?.brand ?? item.food_brand;
           const count = item.servings_count ?? 1;
@@ -616,10 +619,7 @@ export default function MyMealsDetailsScreen() {
                   activeOpacity={0.7}
                   onPress={() => { if (!isSwiping) handleItemPress(item); }}
                   disabled={isSwiping}
-                  style={[
-                    styles.foodItem,
-                    { backgroundColor: isDark ? colors.cardDark : colors.card },
-                  ]}
+                  style={[styles.foodItem, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
                 >
                   <View style={styles.foodInfo}>
                     <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
@@ -630,9 +630,29 @@ export default function MyMealsDetailsScreen() {
                         {foodBrand}
                       </Text>
                     ) : null}
-                    <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      {servingText}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                        {servingText}
+                      </Text>
+                      <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                        {'  ·  '}
+                      </Text>
+                      <Text style={[styles.foodDetails, { color: colors.protein }]}>
+                        {itemProteinRounded}{'P'}
+                      </Text>
+                      <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                        {'  '}
+                      </Text>
+                      <Text style={[styles.foodDetails, { color: colors.carbs }]}>
+                        {itemCarbsRounded}{'C'}
+                      </Text>
+                      <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                        {'  '}
+                      </Text>
+                      <Text style={[styles.foodDetails, { color: colors.fats }]}>
+                        {itemFatsRounded}{'F'}
+                      </Text>
+                    </View>
                   </View>
                   <View style={styles.foodCalories}>
                     <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>
