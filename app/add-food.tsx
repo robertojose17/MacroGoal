@@ -1871,6 +1871,7 @@ export default function AddFoodScreen() {
       }
 
       // Fetch the saved meal items
+      console.log('[AddFood] Fetching saved meal items for diary, meal_id:', meal.id);
       const { data: mealItems, error: itemsError } = await supabase
         .from('saved_meal_items')
         .select(`
@@ -1882,6 +1883,11 @@ export default function AddFoodScreen() {
           serving_amount,
           serving_unit,
           servings_count,
+          calories,
+          protein,
+          carbs,
+          fat,
+          fiber,
           food_items!saved_meal_items_food_item_id_fkey (
             id,
             name,
@@ -1912,7 +1918,16 @@ export default function AddFoodScreen() {
         const fi = item.food_items;
         const itemName = fi?.name ?? item.food_name ?? 'Unknown';
         let calories = 0, protein = 0, carbs = 0, fats = 0, fiber = 0;
-        if (fi && fi.serving_size && fi.serving_size > 0) {
+
+        if (item.calories != null) {
+          // Use stored macros directly — already correct
+          calories = item.calories;
+          protein = item.protein ?? 0;
+          carbs = item.carbs ?? 0;
+          fats = item.fat ?? 0;
+          fiber = item.fiber ?? 0;
+        } else if (fi && fi.serving_size && fi.serving_size > 0) {
+          // Fallback: calculate from food_items join
           const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
           const ratio = (item.serving_amount * item.servings_count) / divisor;
           calories = fi.calories * ratio;
