@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, TABLE_SAVED_MEALS, TABLE_SAVED_MEAL_ITEMS } from '@/lib/supabase/client';
 import { loadDraft, clearDraft } from '@/utils/myMealsDraft';
+import { addMealPlanItem } from '@/utils/mealPlansApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
@@ -117,6 +118,8 @@ export default function MyMealsDetailsScreen() {
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
   const returnTo = (params.returnTo as string) || undefined;
+  const mode = (params.mode as string) || '';
+  const planId = (params.planId as string) || '';
 
   const [savedMeal, setSavedMeal] = useState<SavedMeal | null>(null);
   const [loading, setLoading] = useState(false);
@@ -396,6 +399,38 @@ export default function MyMealsDetailsScreen() {
       if (!user) {
         Alert.alert('Error', 'You must be logged in to add food');
         setAdding(false);
+        return;
+      }
+
+      // MEAL PLAN MODE: add all items directly to plan
+      if (mode === 'meal-plan' && planId) {
+        console.log('[MyMealsDetails] ========== ADDING SAVED MEAL TO PLAN ==========');
+        console.log('[MyMealsDetails] Plan ID:', planId, '| Meal type:', mealType, '| Date:', date);
+        const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.foods || item.food_name);
+        console.log('[MyMealsDetails] Adding', validItems.length, 'items to meal plan');
+        for (const item of validItems) {
+          const macros = calcItemMacros(item, multiplier);
+          const itemName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? '';
+          console.log('[MyMealsDetails] addMealPlanItem:', itemName);
+          await addMealPlanItem(planId, {
+            date,
+            meal_type: mealType,
+            food_name: itemName,
+            brand: item.food_items?.brand ?? item.foods?.brand ?? undefined,
+            quantity: item.servings_count * multiplier,
+            grams: Math.round(item.serving_amount * item.servings_count * multiplier),
+            serving_description: `${Math.round(item.servings_count * multiplier)} × ${Math.round(item.serving_amount)} ${item.serving_unit}`,
+            calories: macros.calories,
+            protein: macros.protein,
+            carbs: macros.carbs,
+            fats: macros.fats,
+            fiber: macros.fiber,
+          });
+        }
+        console.log('[MyMealsDetails] ✅ Saved meal added to plan successfully!');
+        showSuccessBanner('Added to plan');
+        setAdding(false);
+        setTimeout(() => { router.back(); }, 600);
         return;
       }
 

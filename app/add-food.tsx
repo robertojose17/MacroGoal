@@ -671,7 +671,7 @@ export default function AddFoodScreen() {
   }, [router, mealType, date, returnTo]);
 
   const handleSelectMeal = useCallback((meal: SavedMeal) => {
-    console.log('[AddFood] Selected meal:', meal.name);
+    console.log('[AddFood] Selected meal:', meal.name, '| mode:', mode, '| planId:', planId);
     router.push({
       pathname: '/my-meals-details',
       params: {
@@ -679,9 +679,11 @@ export default function AddFoodScreen() {
         meal: mealType,
         date: date,
         returnTo: returnTo,
+        mode: mode || '',
+        planId: planId || '',
       },
     });
-  }, [router, mealType, date, returnTo]);
+  }, [router, mealType, date, returnTo, mode, planId]);
 
   const handleDeleteMeal = useCallback(async (mealId: string) => {
     console.log('[AddFood] Deleting meal:', mealId);
