@@ -270,6 +270,7 @@ interface FoodDetailsLayoutProps {
   context?: string;
   returnTo?: string;
   itemId?: string;
+  itemTable?: 'meal_items' | 'saved_meal_items';
   planId?: string;
   source?: FoodLogSource;
   onSaveComplete?: () => void;
@@ -558,6 +559,7 @@ export default function FoodDetailsLayout({
   context,
   returnTo,
   itemId,
+  itemTable,
   planId,
   source = 'search',
   onSaveComplete,
@@ -833,7 +835,7 @@ export default function FoodDetailsLayout({
       }
 
       const { data: mealItem, error } = await supabase
-        .from('meal_items')
+        .from(itemTable ?? 'meal_items')
         .select(`
           *,
           food_name,
@@ -1521,9 +1523,9 @@ export default function FoodDetailsLayout({
       console.log('[FoodDetails] handleSave: safeMacros =', JSON.stringify(safeMacros));
 
       if (mode === 'edit' && itemId) {
-        console.log('[FoodDetails] handleSave: updating meal_item id=', itemId);
+        console.log('[FoodDetails] handleSave: updating', itemTable ?? 'meal_items', 'id=', itemId);
         const { error } = await supabase
-          .from('meal_items')
+          .from(itemTable ?? 'meal_items')
           .update({
             quantity: parseFloat(numberOfServings) || 1,
             calories: safeMacros.calories,

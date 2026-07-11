@@ -11,7 +11,7 @@ import { loadDraft, clearDraft } from '@/utils/myMealsDraft';
 import { toLocalDateString } from '@/utils/dateUtils';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
-import { buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
+
 
 interface SavedMealItem {
   id: string;
@@ -366,85 +366,15 @@ export default function MyMealsDetailsScreen() {
     showSuccessBanner('Item removed');
   }, [showSuccessBanner]);
 
-  const handleItemPress = useCallback(async (item: SavedMealItem) => {
-    const fi = item.food_items;
-    const itemName = fi?.name ?? item.food_name ?? 'Unknown Food';
-    console.log('[MyMealsDetails] Tapped food item:', itemName, 'id:', item.id, 'food_item_id:', item.food_item_id);
-
-    let offData: object;
-
-    if (item.food_item_id) {
-      // Use shared helper for full micronutrient shape
-      console.log('[MyMealsDetails] Building offProduct via helper for food_item_id=', item.food_item_id);
-      const built = await buildOffProductFromFoodItemId(item.food_item_id);
-      if (built) {
-        console.log('[MyMealsDetails] ✅ offProduct built via helper | serving_size=', built.serving_size);
-        offData = built;
-      } else {
-        console.warn('[MyMealsDetails] Helper returned null, falling back to minimal build');
-        // Fallback: build from joined food_items columns with correct nutriment keys
-        const itemBrand = fi?.brand ?? item.food_brand ?? '';
-        offData = {
-          product_name: itemName,
-          brands: itemBrand,
-          nutriments: fi ? {
-            'energy-kcal_100g': fi.macros_per === '100g' ? fi.calories : (fi.serving_size > 0 ? (fi.calories / fi.serving_size) * 100 : fi.calories),
-            'proteins_100g': fi.macros_per === '100g' ? fi.protein : (fi.serving_size > 0 ? (fi.protein / fi.serving_size) * 100 : fi.protein),
-            'carbohydrates_100g': fi.macros_per === '100g' ? fi.carbs : (fi.serving_size > 0 ? (fi.carbs / fi.serving_size) * 100 : fi.carbs),
-            'fat_100g': fi.macros_per === '100g' ? fi.fat : (fi.serving_size > 0 ? (fi.fat / fi.serving_size) * 100 : fi.fat),
-            'fiber_100g': fi.macros_per === '100g' ? (fi.fiber ?? 0) : (fi.serving_size > 0 ? ((fi.fiber ?? 0) / fi.serving_size) * 100 : (fi.fiber ?? 0)),
-          } : {},
-          serving_quantity: item.serving_amount,
-          serving_quantity_unit: item.serving_unit,
-          food_id: item.food_id,
-        };
-      }
-    } else {
-      // No food_item_id — build minimal product from joined columns
-      const fd = item.foods;
-      const itemBrand = fi?.brand ?? fd?.brand ?? item.food_brand ?? '';
-      console.log('[MyMealsDetails] No food_item_id, building minimal offProduct for:', itemName, 'fi:', !!fi, 'fd:', !!fd);
-      let nutriments: Record<string, number> = {};
-      if (fi) {
-        nutriments = {
-          'energy-kcal_100g': fi.macros_per === '100g' ? fi.calories : (fi.serving_size > 0 ? (fi.calories / fi.serving_size) * 100 : fi.calories),
-          'proteins_100g': fi.macros_per === '100g' ? fi.protein : (fi.serving_size > 0 ? (fi.protein / fi.serving_size) * 100 : fi.protein),
-          'carbohydrates_100g': fi.macros_per === '100g' ? fi.carbs : (fi.serving_size > 0 ? (fi.carbs / fi.serving_size) * 100 : fi.carbs),
-          'fat_100g': fi.macros_per === '100g' ? fi.fat : (fi.serving_size > 0 ? (fi.fat / fi.serving_size) * 100 : fi.fat),
-          'fiber_100g': fi.macros_per === '100g' ? (fi.fiber ?? 0) : (fi.serving_size > 0 ? ((fi.fiber ?? 0) / fi.serving_size) * 100 : (fi.fiber ?? 0)),
-        };
-      } else if (fd) {
-        // foods table stores macros per 100g already
-        nutriments = {
-          'energy-kcal_100g': fd.calories,
-          'proteins_100g': fd.protein,
-          'carbohydrates_100g': fd.carbs,
-          'fat_100g': fd.fats,
-          'fiber_100g': fd.fiber ?? 0,
-        };
-      }
-      offData = {
-        product_name: itemName,
-        brands: itemBrand,
-        nutriments,
-        serving_quantity: item.serving_amount,
-        serving_quantity_unit: item.serving_unit,
-        food_id: item.food_id,
-      };
-    }
-
+  const handleItemPress = useCallback((item: SavedMealItem) => {
+    console.log('[MyMealsDetails] Tapped food item:', item.food_name ?? item.food_items?.name ?? 'Unknown', 'id:', item.id);
     router.push({
-      pathname: '/food-details',
+      pathname: '/edit-saved-meal-item',
       params: {
-        offData: JSON.stringify(offData),
-        meal: mealType,
-        date: date,
-        food_item_id: item.food_item_id || '',
-        returnTo: 'my-meals-details',
-        mealId: mealId,
+        itemId: item.id,
       },
     });
-  }, [router, mealType, date, mealId]);
+  }, [router]);
 
   const handleAddToMeal = async () => {
     if (!savedMeal) return;
