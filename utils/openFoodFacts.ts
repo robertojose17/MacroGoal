@@ -193,26 +193,15 @@ export function extractUnitFromString(s: string): { unitName: string | null; uni
  *   3. Build return value from totalGrams + unit info
  */
 export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeInfo {
-  console.log('[OpenFoodFacts] ========== EXTRACT SERVING SIZE ==========');
-  console.log('[OpenFoodFacts] Input:', {
-    serving_size: product.serving_size,
-    serving_quantity: product.serving_quantity,
-    product_name: product.product_name,
-  });
-
   // ── Step 1: Parse serving_quantity as the ONLY source of gram values ──────
   const rawQty = product.serving_quantity;
   const parsedQty = rawQty !== undefined && rawQty !== null ? parseFloat(String(rawQty)) : NaN;
   const hasValidGrams = !isNaN(parsedQty) && parsedQty > 0;
   const totalGrams = hasValidGrams ? parsedQty : 100;
 
-  console.log('[OpenFoodFacts] serving_quantity →', rawQty, '→ totalGrams:', totalGrams, '| hasValidGrams:', hasValidGrams);
-
   // ── Step 2: Parse serving_size STRING only for unit name + count ──────────
   const servingSizeStr = typeof product.serving_size === 'string' ? product.serving_size.trim() : '';
   const { unitName, unitCount } = extractUnitFromString(servingSizeStr);
-
-  console.log('[OpenFoodFacts] serving_size string →', JSON.stringify(servingSizeStr), '→ unitName:', unitName, '| unitCount:', unitCount);
 
   // ── Step 3: Build return value ────────────────────────────────────────────
   try {
@@ -221,7 +210,6 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
       const gramsPerUnit = parseFloat((totalGrams / unitCount).toFixed(2));
       const description = `${unitCount} ${unitName}s`;
       const displayText = `1 ${unitName} (${gramsPerUnit} g)`;
-      console.log('[OpenFoodFacts] ✅ Multi-unit result:', { description, gramsPerUnit, displayText });
       return {
         description,
         grams: gramsPerUnit,
@@ -236,7 +224,6 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
       const roundedGrams = parseFloat(totalGrams.toFixed(2));
       const description = `1 ${unitName}`;
       const displayText = `1 ${unitName} (${roundedGrams} g)`;
-      console.log('[OpenFoodFacts] ✅ Single-unit result:', { description, roundedGrams, displayText });
       return {
         description,
         grams: roundedGrams,
@@ -250,7 +237,6 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
     const roundedGrams = parseFloat(totalGrams.toFixed(2));
     const description = `${roundedGrams} g`;
     const displayText = `${roundedGrams} g`;
-    console.log('[OpenFoodFacts] ✅ Plain-grams result:', { description, roundedGrams, hasValidGrams });
     return {
       description,
       grams: roundedGrams,

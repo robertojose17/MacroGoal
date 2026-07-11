@@ -830,7 +830,6 @@ export default function FoodDetailsLayout({
 
   const loadEditItem = useCallback(async () => {
     if (!itemId) {
-      console.log('No itemId provided for edit mode');
       setLoading(false);
       return;
     }
@@ -910,7 +909,6 @@ export default function FoodDetailsLayout({
 
       let foodItem: any = null;
       if (mealItem.food_item_id) {
-        console.log('[FoodDetails] loadEditItem: fetching food_items columns for id=', mealItem.food_item_id);
         const { data: fetchedFoodItem } = await supabase
           .from('food_items')
           .select('id, name, brand, barcode, calories, protein, carbs, fat, fiber, serving_size, serving_unit, serving_quantity, serving_description, serving_count, macros_per, nutriments, sugar_g, saturated_fat_g, polyunsaturated_fat_g, monounsaturated_fat_g, trans_fat_g, cholesterol_mg, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg, vitamin_b12_mcg, folate_mcg, choline_mg, pantothenic_acid_mg, selenium_mcg, source, usda_fdc_id, data_quality_score, ingredients_text, allergens')
@@ -920,7 +918,6 @@ export default function FoodDetailsLayout({
 
         if (foodItem) {
           // Build mockProduct from individual columns
-          console.log('[FoodDetails] loadEditItem: building mockProduct from columns, source=', foodItem.source);
           const n = foodItem;
           // serving_size is now TOTAL grams of one standard serving (new architecture)
           const servingSize = n.serving_description && n.serving_size
@@ -978,10 +975,8 @@ export default function FoodDetailsLayout({
           per100Carbs = safeNum(nm['carbohydrates_100g'] ?? food.carbs);
           per100Fats = safeNum(nm['fat_100g'] ?? food.fats);
           per100Fiber = safeNum(nm['fiber_100g'] ?? food.fiber ?? 0);
-          console.log('[FoodDetails] loadEditItem: per100 from columns — cals=', per100Cals, 'protein=', per100Protein, 'carbs=', per100Carbs, 'fat=', per100Fats);
         } else {
           // food_item_id present but row not found — fall back to foods table
-          console.warn('[FoodDetails] loadEditItem: food_items row not found, falling back to foods table');
           mockProduct = buildMockProductFromFoods(food, {
             serving_description: mealItem.serving_description ?? null,
             serving_count: mealItem.quantity ?? null,
@@ -1030,7 +1025,6 @@ export default function FoodDetailsLayout({
       if (isSavedMealTable && (mealItem as any).serving_amount != null && (mealItem as any).servings_count != null) {
         totalGrams = (mealItem as any).serving_amount * (mealItem as any).servings_count;
         rawQuantity = (mealItem as any).servings_count;
-        console.log('[FoodDetails] loadEditItem (saved_meal_items): serving_amount=', (mealItem as any).serving_amount, 'servings_count=', (mealItem as any).servings_count, 'totalGrams=', totalGrams);
       } else if (mealItem.grams != null && mealItem.grams > 0) {
         totalGrams = mealItem.grams;
         rawQuantity = mealItem.quantity || 1;
@@ -1045,7 +1039,7 @@ export default function FoodDetailsLayout({
       setServingUnit('serving');
 
       const desc = (mealItem.serving_description || '').toLowerCase().trim();
-      const isContinuousUnit = /\d+(\.\d+)?\s*(g|oz|lb|ml|tsp|tbsp|cup|fl\s*oz|teaspoon|tablespoon)\b/i.test(desc);
+      const isContinuousUnit = /^\d+(\.\d+)?\s*(g|oz|lb|ml|tsp|tbsp|cup|fl\s*oz|teaspoon|tablespoon)\b/i.test(desc);
 
       if (isContinuousUnit) {
         // Saved with a continuous unit (g/oz/lb/ml/tsp/tbsp/cup/fl oz) — servingAmount = gramsPerUnit,
@@ -1089,13 +1083,12 @@ export default function FoodDetailsLayout({
           setSelectedServingOptionKey('g');
         }
         setEditDefaultGramsPerUnit(null);
-        console.log('[FoodDetails] Edit load (continuous): desc=', desc, 'totalGrams=', totalGrams, 'key=', selectedServingOptionKey);
       } else {
         // Saved with a discrete unit (serving / cookie / slice / etc.)
         // gramsPerUnit = totalGrams / quantity — this is the canonical value.
         const gramsPerUnit = rawQuantity > 0 ? totalGrams / rawQuantity : totalGrams;
         setServingAmount(gramsPerUnit);
-        setNumberOfServings(Math.max(1, Math.round(rawQuantity)).toString());
+        setNumberOfServings(Math.max(1, rawQuantity).toString());
 
         // Try to extract the unit token from serving_description (e.g. "4 slices" → "slice")
         const unitMatch = desc.match(/^\d+(\.\d+)?\s+(.+)$/) || desc.match(/^(.+)$/);
@@ -1108,19 +1101,16 @@ export default function FoodDetailsLayout({
           const fiServingCount = foodItem?.serving_count ? Number(foodItem.serving_count) : 1;
           if (mealItem.food_item_id && fiServingCount > 1) {
             // Case A: servingOptions produces 'natural_serving' + 'natural_unit'
-            console.log('[FoodDetails] Edit load (natural_unit, Case A): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
             setSelectedServingOptionKey('natural_unit');
             setEditDefaultGramsPerUnit(null);
           } else {
             // Case B (food_items, unitCount===1) or foods-table path: servingOptions produces 'default'
-            console.log('[FoodDetails] Edit load (natural_unit, Case B/foods): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
             setSelectedServingOptionKey('default');
             setEditDefaultGramsPerUnit(gramsPerUnit);
           }
         } else {
           // Default serving — CRITICAL: store gramsPerUnit so the 'default' picker option
           // is built with this value, keeping servingAmount and gramsPerUnit in sync.
-          console.log('[FoodDetails] Edit load (default serving): gramsPerUnit=', gramsPerUnit, 'totalGrams=', totalGrams, 'desc=', desc);
           setSelectedServingOptionKey('default');
           setEditDefaultGramsPerUnit(gramsPerUnit);
         }
