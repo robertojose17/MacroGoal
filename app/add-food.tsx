@@ -1176,13 +1176,15 @@ export default function AddFoodScreen() {
           context: context || '',
           returnTo: returnTo || '',
           food_item_id: (favorite as any).food_item_id || '',
+          mode: mode || '',
+          planId: planId || '',
         },
       });
     } catch (error) {
       console.error('[AddFood] Error opening favorite details:', error);
       Alert.alert('Error', 'An unexpected error occurred');
     }
-  }, [router, mealType, date, context, returnTo]);
+  }, [router, mealType, date, context, returnTo, mode, planId]);
 
   /**
    * FAST ADD: Add favorite directly to My Meal draft
@@ -1789,6 +1791,66 @@ export default function AddFoodScreen() {
       return;
     }
 
+    // MEAL PLAN MODE: add all saved meal items directly to plan
+    if (mode === 'meal-plan' && planId) {
+      console.log('[AddFood] Meal plan mode — adding saved meal to plan:', planId);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { Alert.alert('Error', 'You must be logged in'); return; }
+
+        const { data: mealItems, error: itemsError } = await supabase
+          .from('saved_meal_items')
+          .select(`
+            id, food_item_id, food_id, food_name, food_brand,
+            serving_amount, serving_unit, servings_count,
+            food_items!saved_meal_items_food_item_id_fkey (
+              id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per
+            )
+          `)
+          .eq('saved_meal_id', meal.id);
+
+        if (itemsError || !mealItems || mealItems.length === 0) {
+          Alert.alert('Error', 'Failed to load meal items');
+          return;
+        }
+
+        for (const item of mealItems as any[]) {
+          const fi = item.food_items;
+          const itemName = fi?.name ?? item.food_name ?? 'Unknown';
+          let calories = 0, protein = 0, carbs = 0, fats = 0, fiber = 0;
+          if (fi && fi.serving_size && fi.serving_size > 0) {
+            const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
+            const ratio = (item.serving_amount * item.servings_count) / divisor;
+            calories = fi.calories * ratio;
+            protein = fi.protein * ratio;
+            carbs = fi.carbs * ratio;
+            fats = fi.fat * ratio;
+            fiber = (fi.fiber ?? 0) * ratio;
+          }
+          console.log('[AddFood] Adding saved meal item to plan:', itemName);
+          await addMealPlanItem(planId, {
+            date,
+            meal_type: mealType,
+            food_name: itemName,
+            brand: fi?.brand ?? item.food_brand ?? undefined,
+            quantity: item.servings_count,
+            grams: item.serving_amount * item.servings_count,
+            serving_description: `${item.serving_amount} ${item.serving_unit}`,
+            calories: safeNum(calories),
+            protein: safeNum(protein),
+            carbs: safeNum(carbs),
+            fats: safeNum(fats),
+            fiber: safeNum(fiber),
+          });
+        }
+        showSuccessBanner('Added to plan');
+      } catch (err) {
+        console.error('[AddFood] Error adding saved meal to plan:', err);
+        Alert.alert('Error', 'Failed to add meal to plan');
+      }
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -1898,7 +1960,7 @@ export default function AddFoodScreen() {
       console.error('[AddFood] Error quick adding saved meal:', error);
       Alert.alert('Error', 'An unexpected error occurred while adding meal');
     }
-  }, [context, date, mealType, showSuccessBanner]);
+  }, [context, date, mealType, showSuccessBanner, mode, planId]);
 
   const renderSavedMealItem = useCallback((meal: SavedMeal, index: number) => {
     const mealCalories = Math.round(meal.total_calories || 0);
