@@ -788,20 +788,29 @@ export default function FoodDetailsLayout({
 
   // Helper: build a minimal OpenFoodFactsProduct from a foods row (legacy path)
   const buildMockProductFromFoods = (
-    food: { name: string; brand?: string; calories: number; protein: number; carbs: number; fats: number; fiber?: number; serving_amount: number; serving_unit: string }
-  ): OpenFoodFactsProduct => ({
-    product_name: food.name,
-    brands: food.brand ?? '',
-    nutriments: {
-      'energy-kcal_100g': food.calories,
-      proteins_100g: food.protein,
-      carbohydrates_100g: food.carbs,
-      fat_100g: food.fats,
-      fiber_100g: food.fiber ?? 0,
-    },
-    serving_size: `${food.serving_amount} ${food.serving_unit}`,
-    serving_quantity: food.serving_amount,
-  });
+    food: { name: string; brand?: string | null; calories: number; protein: number; carbs: number; fats: number; fiber?: number | null; serving_amount: number; serving_unit: string },
+    opts?: { serving_description?: string | null; serving_count?: number | null; quantity?: number | null }
+  ): OpenFoodFactsProduct => {
+    const servingAmount = food.serving_amount || 100;
+    const sc = opts?.serving_count ?? opts?.quantity ?? 1;
+    const desc = opts?.serving_description ?? null;
+    const servingSize = desc
+      ? (sc > 1 ? `${sc} ${desc}s (${servingAmount}g)` : `1 ${desc} (${servingAmount}g)`)
+      : `${servingAmount} ${food.serving_unit}`;
+    return {
+      product_name: food.name,
+      brands: food.brand ?? '',
+      nutriments: {
+        'energy-kcal_100g': food.calories,
+        proteins_100g: food.protein,
+        carbohydrates_100g: food.carbs,
+        fat_100g: food.fats,
+        fiber_100g: food.fiber ?? 0,
+      },
+      serving_size: servingSize,
+      serving_quantity: servingAmount,
+    };
+  };
 
   // Helper: extract per-100g values from a nutriments JSONB object and call setter
   const extractPer100FromNutriments = (
@@ -973,11 +982,19 @@ export default function FoodDetailsLayout({
         } else {
           // food_item_id present but row not found — fall back to foods table
           console.warn('[FoodDetails] loadEditItem: food_items row not found, falling back to foods table');
-          mockProduct = buildMockProductFromFoods(food);
+          mockProduct = buildMockProductFromFoods(food, {
+            serving_description: mealItem.serving_description ?? null,
+            serving_count: mealItem.quantity ?? null,
+            quantity: mealItem.quantity ?? null,
+          });
         }
       } else {
         // No food_item_id — use foods table (legacy path)
-        mockProduct = buildMockProductFromFoods(food);
+        mockProduct = buildMockProductFromFoods(food, {
+          serving_description: mealItem.serving_description ?? null,
+          serving_count: mealItem.quantity ?? null,
+          quantity: mealItem.quantity ?? null,
+        });
       }
 
       setProduct(mockProduct);
@@ -1086,9 +1103,20 @@ export default function FoodDetailsLayout({
         const singularUnit = rawUnit ? singularizeUnit(rawUnit) : '';
 
         if (singularUnit && singularUnit !== 'serving' && singularUnit !== 'g') {
-          console.log('[FoodDetails] Edit load (natural unit): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
-          setSelectedServingOptionKey('natural_unit');
-          setEditDefaultGramsPerUnit(null);
+          // Natural unit detected — determine which key servingOptions will produce.
+          // food_items path: check serving_count to distinguish Case A (>1 → natural_unit) vs Case B (===1 → default)
+          const fiServingCount = foodItem?.serving_count ? Number(foodItem.serving_count) : 1;
+          if (mealItem.food_item_id && fiServingCount > 1) {
+            // Case A: servingOptions produces 'natural_serving' + 'natural_unit'
+            console.log('[FoodDetails] Edit load (natural_unit, Case A): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
+            setSelectedServingOptionKey('natural_unit');
+            setEditDefaultGramsPerUnit(null);
+          } else {
+            // Case B (food_items, unitCount===1) or foods-table path: servingOptions produces 'default'
+            console.log('[FoodDetails] Edit load (natural_unit, Case B/foods): unit=', singularUnit, 'gramsPerUnit=', gramsPerUnit, 'desc=', desc);
+            setSelectedServingOptionKey('default');
+            setEditDefaultGramsPerUnit(gramsPerUnit);
+          }
         } else {
           // Default serving — CRITICAL: store gramsPerUnit so the 'default' picker option
           // is built with this value, keeping servingAmount and gramsPerUnit in sync.
