@@ -40,27 +40,14 @@ export default function MyMealsScreen() {
   const loadSavedMeals = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('[MyMeals] ========== FETCH_SAVED_MEALS START ==========');
-      
+
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError) {
-        console.error('[MyMeals] ❌ Error getting user:', userError);
-        setLoading(false);
-        return;
-      }
-      
-      if (!user) {
-        console.log('[MyMeals] ❌ No user found - userId is null/undefined');
-        console.log('[MyMeals] FETCH_SAVED_MEALS userId=null returnedCount=0');
+
+      if (userError || !user) {
         setLoading(false);
         return;
       }
 
-      console.log('[MyMeals] ✅ User found:', user.id);
-      console.log('[MyMeals] Fetching saved meals for user:', user.id);
-
-      // Fetch saved meals with aggregated data
       const { data: meals, error } = await supabase
         .from(TABLE_SAVED_MEALS)
         .select(`
@@ -70,6 +57,7 @@ export default function MyMealsScreen() {
           updated_at,
           saved_meal_items (
             id,
+            food_id,
             serving_amount,
             serving_unit,
             servings_count,
@@ -77,49 +65,28 @@ export default function MyMealsScreen() {
             protein,
             carbs,
             fat,
-            fiber
+            fiber,
+            foods (
+              calories,
+              protein,
+              carbs,
+              fats,
+              fiber,
+              serving_amount
+            )
           )
         `)
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
 
       if (error) {
-        console.error('[MyMeals] ❌ ERROR FETCHING SAVED MEALS:', error);
-        console.error('[MyMeals] Error code:', error.code);
-        console.error('[MyMeals] Error message:', error.message);
-        console.error('[MyMeals] Error details:', error.details);
-        console.error('[MyMeals] Error hint:', error.hint);
-        
-        // Log the final result
-        console.log('[MyMeals] FETCH_SAVED_MEALS userId=' + user.id + ' returnedCount=0 (ERROR)');
-        
         Alert.alert('Error', 'Failed to load saved meals: ' + error.message);
         setLoading(false);
         return;
       }
 
-      const mealsCount = meals?.length || 0;
-      console.log('[MyMeals] ✅ Query successful');
-      console.log('[MyMeals] FETCH_SAVED_MEALS userId=' + user.id + ' returnedCount=' + mealsCount);
-      
-      if (mealsCount === 0) {
-        console.log('[MyMeals] ⚠️ No saved meals found for this user');
-        console.log('[MyMeals] This could mean:');
-        console.log('[MyMeals]   1. User has not created any meals yet');
-        console.log('[MyMeals]   2. Meals were created but not saved properly');
-        console.log('[MyMeals]   3. RLS policies are filtering out the meals');
-      } else {
-        console.log('[MyMeals] ✅ Found', mealsCount, 'saved meals');
-        meals?.forEach((meal: any, index: number) => {
-          console.log(`[MyMeals] Meal ${index + 1}:`, {
-            id: meal.id,
-            name: meal.name,
-            items_count: meal.saved_meal_items?.length || 0,
-          });
-        });
-      }
-
-      // Calculate totals for each meal
+      // Calculate totals for each meal, using stored macros when available
+      // and falling back to a calculation from the foods join when they are NULL.
       const mealsWithTotals: SavedMeal[] = (meals || []).map((meal: any) => {
         const items = meal.saved_meal_items || [];
         let totalCalories = 0;
@@ -128,10 +95,21 @@ export default function MyMealsScreen() {
         let totalFats = 0;
 
         items.forEach((item: any) => {
-          totalCalories += item.calories ?? 0;
-          totalProtein += item.protein ?? 0;
-          totalCarbs += item.carbs ?? 0;
-          totalFats += item.fat ?? 0;
+          if (item.calories != null) {
+            totalCalories += item.calories;
+            totalProtein += item.protein ?? 0;
+            totalCarbs += item.carbs ?? 0;
+            totalFats += item.fat ?? 0;
+          } else if (item.foods) {
+            const fd = item.foods;
+            const divisor = fd.serving_amount > 0 ? fd.serving_amount : 100;
+            const grams = item.servings_count ?? 0;
+            const ratio = grams / divisor;
+            totalCalories += (fd.calories ?? 0) * ratio;
+            totalProtein += (fd.protein ?? 0) * ratio;
+            totalCarbs += (fd.carbs ?? 0) * ratio;
+            totalFats += (fd.fats ?? 0) * ratio;
+          }
         });
 
         return {
@@ -148,15 +126,8 @@ export default function MyMealsScreen() {
       });
 
       setSavedMeals(mealsWithTotals);
-      console.log('[MyMeals] ========== FETCH_SAVED_MEALS COMPLETE ==========');
       setLoading(false);
     } catch (error) {
-      console.error('[MyMeals] ❌ UNEXPECTED ERROR in loadSavedMeals:', error);
-      if (error instanceof Error) {
-        console.error('[MyMeals] Error name:', error.name);
-        console.error('[MyMeals] Error message:', error.message);
-        console.error('[MyMeals] Error stack:', error.stack);
-      }
       Alert.alert('Error', 'An unexpected error occurred');
       setLoading(false);
     }
@@ -164,14 +135,12 @@ export default function MyMealsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[MyMeals] ========== SCREEN FOCUSED ==========');
-      console.log('[MyMeals] Triggering loadSavedMeals...');
       loadSavedMeals();
     }, [loadSavedMeals])
   );
 
   const handleCreateMeal = () => {
-    console.log('[MyMeals] Navigating to create meal');
+    console.log('[MyMeals] Create meal pressed');
     router.push({
       pathname: '/my-meals-create',
       params: {
@@ -183,7 +152,7 @@ export default function MyMealsScreen() {
   };
 
   const handleSelectMeal = (meal: SavedMeal) => {
-    console.log('[MyMeals] Selected meal:', meal.name);
+    console.log('[MyMeals] Meal selected:', meal.name);
     router.push({
       pathname: '/my-meals-details',
       params: {
@@ -200,8 +169,7 @@ export default function MyMealsScreen() {
    * Adds all foods from the saved meal with 1 serving each
    */
   const handleQuickAddMeal = useCallback(async (meal: SavedMeal) => {
-    console.log('[MyMeals] ========== QUICK ADD SAVED MEAL ==========');
-    console.log('[MyMeals] Meal:', meal.name);
+    console.log('[MyMeals] Quick add meal pressed:', meal.name);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -229,12 +197,9 @@ export default function MyMealsScreen() {
         .eq('saved_meal_id', meal.id);
 
       if (itemsError || !mealItems || mealItems.length === 0) {
-        console.error('[MyMeals] Error loading meal items:', itemsError);
         Alert.alert('Error', 'Failed to load meal items');
         return;
       }
-
-      console.log('[MyMeals] Loaded', mealItems.length, 'items from saved meal');
 
       // Find or create meal for the date and meal type
       const { data: existingMeal } = await supabase
@@ -248,7 +213,6 @@ export default function MyMealsScreen() {
       let targetMealId = existingMeal?.id;
 
       if (!targetMealId) {
-        console.log('[MyMeals] Creating new meal for', mealType, 'on', date);
         const { data: newMeal, error: mealError } = await supabase
           .from('meals')
           .insert({
@@ -260,15 +224,11 @@ export default function MyMealsScreen() {
           .single();
 
         if (mealError) {
-          console.error('[MyMeals] Error creating meal:', mealError);
           Alert.alert('Error', 'Failed to create meal');
           return;
         }
 
         targetMealId = newMeal.id;
-        console.log('[MyMeals] Created new meal:', targetMealId);
-      } else {
-        console.log('[MyMeals] Using existing meal:', targetMealId);
       }
 
       // Add each food item from the saved meal
@@ -296,37 +256,32 @@ export default function MyMealsScreen() {
         };
       });
 
-      console.log('[MyMeals] Inserting', itemsToInsert.length, 'meal items');
+      console.log('[MyMeals] Inserting meal items count:', itemsToInsert.length);
 
       const { error: insertError } = await supabase
         .from('meal_items')
         .insert(itemsToInsert);
 
       if (insertError) {
-        console.error('[MyMeals] Error inserting meal items:', insertError);
         Alert.alert('Error', 'Failed to add meal items');
         return;
       }
 
-      console.log('[MyMeals] ✅ Saved meal added successfully!');
       Alert.alert('Success', `Added "${meal.name}" to ${mealType}`);
-      
-      // Navigate back to home
+
       if (returnTo) {
         router.push(returnTo as any);
       } else {
         router.back();
       }
     } catch (error) {
-      console.error('[MyMeals] Error quick adding saved meal:', error);
       Alert.alert('Error', 'An unexpected error occurred while adding meal');
     }
   }, [date, mealType, returnTo, router]);
 
   const handleDeleteMeal = async (mealId: string) => {
-    console.log('[MyMeals] Deleting meal:', mealId);
+    console.log('[MyMeals] Delete meal pressed:', mealId);
 
-    // Optimistic update
     const previousMeals = [...savedMeals];
     setSavedMeals(savedMeals.filter(m => m.id !== mealId));
 
@@ -337,14 +292,10 @@ export default function MyMealsScreen() {
         .eq('id', mealId);
 
       if (error) {
-        console.error('[MyMeals] Error deleting meal:', error);
         setSavedMeals(previousMeals);
         Alert.alert('Error', 'Failed to delete meal');
-      } else {
-        console.log('[MyMeals] Meal deleted successfully');
       }
     } catch (error) {
-      console.error('[MyMeals] Error in handleDeleteMeal:', error);
       setSavedMeals(previousMeals);
       Alert.alert('Error', 'An unexpected error occurred');
     }
