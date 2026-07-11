@@ -71,10 +71,11 @@ function calcItemMacros(item: SavedMealItem, multiplier: number) {
     }
   }
 
-  // Tier 2: foods table join (calories/protein/carbs/fats are per 100g)
+  // Tier 2: foods table join (calories/protein/carbs/fats are per-serving)
   if (fd && (fd.calories > 0 || fd.protein > 0 || fd.carbs > 0 || fd.fats > 0)) {
-    const ratio = grams / 100;
-    console.log('[calcItemMacros] Tier 2 fallback — using foods join, ratio:', ratio);
+    const servingSize = fd.serving_amount > 0 ? fd.serving_amount : 100;
+    const ratio = grams / servingSize;
+    console.log('[calcItemMacros] Tier 2 fallback — using foods join, servingSize:', servingSize, 'grams:', grams, 'ratio:', ratio);
     return {
       calories: fd.calories * ratio,
       protein: fd.protein * ratio,
