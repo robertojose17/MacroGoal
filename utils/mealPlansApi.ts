@@ -33,6 +33,8 @@ export interface MealPlanItem {
   fiber?: number;
   dish_description?: string;
   recipe_url?: string;
+  food_item_id?: string | null;
+  food_id?: string | null;
 }
 
 export interface MealPlanDetail extends MealPlan {
@@ -73,6 +75,8 @@ export interface AddMealPlanItemBody {
   fiber?: number;
   dish_description?: string;
   recipe_url?: string;
+  food_item_id?: string | null;
+  food_id?: string | null;
 }
 
 export async function listMealPlans(): Promise<{ plans: MealPlan[] }> {
@@ -130,7 +134,15 @@ export async function getMealPlan(planId: string): Promise<MealPlanDetail> {
   }
   const { data: items, error: itemsError } = await supabase
     .from('meal_plan_items')
-    .select('*')
+    .select(`
+      *,
+      food_items!meal_plan_items_food_item_id_fkey (
+        id, calories, protein, carbs, fat, fiber, serving_size, macros_per
+      ),
+      foods!meal_plan_items_food_id_fkey (
+        id, calories, protein, carbs, fats, fiber, serving_amount
+      )
+    `)
     .eq('plan_id', planId)
     .order('date', { ascending: true })
     .order('created_at', { ascending: true });
@@ -138,7 +150,43 @@ export async function getMealPlan(planId: string): Promise<MealPlanDetail> {
     console.error('[MealPlansApi] getMealPlan items error:', itemsError.message);
     throw new Error(itemsError.message);
   }
-  return { ...plan, items: items || [] };
+
+  const fixedItems = (items || []).map((item: any) => {
+    const fi = item.food_items;
+    const fd = item.foods;
+    const grams = Number(item.grams) || 0;
+
+    // Only recalculate if stored calories look wrong (< 10) and we have food data and grams
+    if (Number(item.calories) < 10 && grams > 0) {
+      console.log('[MealPlansApi] Fixing wrong macros for item:', item.food_name, 'stored calories:', item.calories, 'grams:', grams);
+      if (fi && fi.serving_size > 0) {
+        const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
+        const ratio = grams / divisor;
+        return {
+          ...item,
+          calories: Math.round(fi.calories * ratio),
+          protein: Math.round(fi.protein * ratio * 10) / 10,
+          carbs: Math.round(fi.carbs * ratio * 10) / 10,
+          fats: Math.round(fi.fat * ratio * 10) / 10,
+          fiber: Math.round((fi.fiber ?? 0) * ratio * 10) / 10,
+        };
+      }
+      if (fd && fd.serving_amount > 0) {
+        const ratio = grams / fd.serving_amount;
+        return {
+          ...item,
+          calories: Math.round(fd.calories * ratio),
+          protein: Math.round(fd.protein * ratio * 10) / 10,
+          carbs: Math.round(fd.carbs * ratio * 10) / 10,
+          fats: Math.round((fd.fats ?? fd.fat ?? 0) * ratio * 10) / 10,
+          fiber: Math.round((fd.fiber ?? 0) * ratio * 10) / 10,
+        };
+      }
+    }
+    return item;
+  });
+
+  return { ...plan, items: fixedItems };
 }
 
 export async function deleteMealPlan(planId: string): Promise<void> {
@@ -176,6 +224,8 @@ export async function addMealPlanItem(planId: string, body: AddMealPlanItemBody)
       fiber: body.fiber || 0,
       dish_description: body.dish_description || null,
       recipe_url: body.recipe_url || null,
+      food_item_id: body.food_item_id || null,
+      food_id: body.food_id || null,
     })
     .select()
     .single();

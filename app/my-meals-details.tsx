@@ -426,6 +426,8 @@ export default function MyMealsDetailsScreen() {
             carbs: macros.carbs,
             fats: macros.fats,
             fiber: macros.fiber,
+            food_item_id: item.food_item_id || null,
+            food_id: item.food_id || null,
           });
         }
         console.log('[MyMealsDetails] ✅ Saved meal added to plan successfully!');
