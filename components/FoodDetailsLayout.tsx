@@ -789,9 +789,11 @@ export default function FoodDetailsLayout({
   // Helper: build a minimal OpenFoodFactsProduct from a foods row (legacy path)
   const buildMockProductFromFoods = (
     food: { name: string; brand?: string | null; calories: number; protein: number; carbs: number; fats: number; fiber?: number | null; serving_amount: number; serving_unit: string },
-    opts?: { serving_description?: string | null; serving_count?: number | null; quantity?: number | null }
+    opts?: { serving_description?: string | null; serving_count?: number | null; quantity?: number | null; gramsPerUnit?: number | null }
   ): OpenFoodFactsProduct => {
-    const servingAmount = food.serving_amount || 100;
+    // Use gramsPerUnit when provided (e.g. from copy-from-previous where foods table stores per-100g)
+    // so that servingOptions shows the correct "1 serving (Xg)" label instead of "1 serving (100g)".
+    const servingAmount = opts?.gramsPerUnit ?? food.serving_amount ?? 100;
     const sc = opts?.serving_count ?? opts?.quantity ?? 1;
     const desc = opts?.serving_description ?? null;
     const servingSize = desc
@@ -977,18 +979,30 @@ export default function FoodDetailsLayout({
           per100Fiber = safeNum(nm['fiber_100g'] ?? food.fiber ?? 0);
         } else {
           // food_item_id present but row not found — fall back to foods table
+          // Compute gramsPerUnit from the saved grams/quantity so the mock product
+          // reflects the actual serving size (not the per-100g foods table value).
+          const fbGrams = mealItem.grams ?? 0;
+          const fbQty = mealItem.quantity || 1;
+          const fbGramsPerUnit = fbGrams > 0 ? fbGrams / fbQty : null;
           mockProduct = buildMockProductFromFoods(food, {
             serving_description: mealItem.serving_description ?? null,
             serving_count: mealItem.quantity ?? null,
             quantity: mealItem.quantity ?? null,
+            gramsPerUnit: fbGramsPerUnit,
           });
         }
       } else {
         // No food_item_id — use foods table (legacy path)
+        // Compute gramsPerUnit from the saved grams/quantity so the mock product
+        // reflects the actual serving size (not the per-100g foods table value).
+        const legacyGrams = mealItem.grams ?? 0;
+        const legacyQty = mealItem.quantity || 1;
+        const legacyGramsPerUnit = legacyGrams > 0 ? legacyGrams / legacyQty : null;
         mockProduct = buildMockProductFromFoods(food, {
           serving_description: mealItem.serving_description ?? null,
           serving_count: mealItem.quantity ?? null,
           quantity: mealItem.quantity ?? null,
+          gramsPerUnit: legacyGramsPerUnit,
         });
       }
 
@@ -1426,9 +1440,8 @@ export default function FoodDetailsLayout({
   };
 
   const handleSave = async () => {
-    console.log('[FoodDetails] Add to Meal button pressed, mode=', mode, 'context=', context, 'mealType=', mealType, 'date=', date, 'planId=', planId);
+    console.log('[FoodDetails] Save button pressed');
     if (!product) {
-      console.log('[FoodDetails] handleSave: no product, aborting');
       return;
     }
 
@@ -1445,7 +1458,6 @@ export default function FoodDetailsLayout({
         carbs: Math.round(macros.carbs),
         fat: Math.round(macros.fats),
       };
-      console.log('[FoodDetails] ingredient mode — saving pendingIngredient:', ingredient);
       (global as any).__pendingIngredient = ingredient;
       router.back();
       return;
@@ -1473,16 +1485,37 @@ export default function FoodDetailsLayout({
 
       let servingDescription: string;
       if (selectedServingOptionKey === 'default') {
-        // Parse the leading number and unit from the base description (e.g. "1 slice" → 1, "slice")
-        const baseDescMatch = (baseServing.description || '').match(/^([\d.]+)\s*(.+)$/);
-        const baseAmount = baseDescMatch ? parseFloat(baseDescMatch[1]) : 1;
-        let baseUnit = baseDescMatch ? baseDescMatch[2].trim() : 'serving';
-        // Singularize if the base unit is already plural (rare upstream data), so formatServing can re-pluralize correctly
-        if (baseUnit.length > 2 && baseUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(baseUnit.toLowerCase())) {
-          baseUnit = baseUnit.slice(0, -1);
+        // Use the label from the 'default' servingOption to extract the unit name.
+        // This is more reliable than baseServing.description in edit mode because
+        // buildMockProductFromFoodItem may produce a plain-grams description (e.g. "50 g")
+        // when food_items.serving_description is null, causing the wrong unit to be saved.
+        const defaultOpt = servingOptions.find((o) => o.key === 'default');
+        const defaultLabel = defaultOpt ? defaultOpt.label : '';
+        // Strip trailing "(Xg)" or "(X g)" from the label, then extract the unit word.
+        // e.g. "1 Egg (50g)" → "1 Egg" → unit = "Egg"
+        //      "1 Slice (13g)" → "1 Slice" → unit = "Slice"
+        //      "1 serving (100g)" → "1 serving" → unit = "serving"
+        const labelWithoutGrams = defaultLabel.replace(/\s*\(\d+(\.\d+)?\s*g\)$/i, '').trim();
+        const labelUnitMatch = labelWithoutGrams.match(/^[\d.]+\s+(.+)$/);
+        let defaultUnit = labelUnitMatch ? labelUnitMatch[1].trim() : '';
+        // Singularize so formatServing can re-pluralize correctly
+        if (defaultUnit.length > 2 && defaultUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(defaultUnit.toLowerCase())) {
+          defaultUnit = defaultUnit.slice(0, -1);
         }
-        const totalUnits = servingsCountForDisplay * baseAmount;
-        servingDescription = formatServing(totalUnits, baseUnit);
+        // Fall back to baseServing.description logic when unit is "serving", empty, or looks like plain grams
+        const useFallback = !defaultUnit || defaultUnit.toLowerCase() === 'serving' || /^\d+\s*g$/i.test(defaultLabel);
+        if (useFallback) {
+          const baseDescMatch = (baseServing.description || '').match(/^([\d.]+)\s*(.+)$/);
+          const baseAmount = baseDescMatch ? parseFloat(baseDescMatch[1]) : 1;
+          let baseUnit = baseDescMatch ? baseDescMatch[2].trim() : 'serving';
+          if (baseUnit.length > 2 && baseUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(baseUnit.toLowerCase())) {
+            baseUnit = baseUnit.slice(0, -1);
+          }
+          const totalUnits = servingsCountForDisplay * baseAmount;
+          servingDescription = formatServing(totalUnits, baseUnit);
+        } else {
+          servingDescription = formatServing(servingsCountForDisplay, defaultUnit);
+        }
       } else if (selectedServingOptionKey === 'natural_unit' || selectedServingOptionKey === 'natural_serving') {
         // Natural unit (e.g. "1 cookie", "4 cookies") — extract unit word from the option label
         const currentOpt = servingOptions.find((o) => o.key === selectedServingOptionKey);
@@ -1494,7 +1527,6 @@ export default function FoodDetailsLayout({
           naturalUnit = naturalUnit.slice(0, -1);
         }
         servingDescription = formatServing(servingsCountForDisplay, naturalUnit);
-        console.log('[FoodDetailsLayout] handleSave natural unit branch — optLabel:', optLabel, 'naturalUnit:', naturalUnit, 'servingsCount:', servingsCountForDisplay, '→', servingDescription);
       } else {
         // Continuous unit (g/oz/lb/ml/tsp/tbsp/cup/fl oz). numberOfServings is the count in the selected unit.
         const unitSuffix =
@@ -1509,8 +1541,6 @@ export default function FoodDetailsLayout({
         servingDescription = formatServing(servingsCountForDisplay, unitSuffix);
       }
 
-      console.log('[FoodDetailsLayout] handleSave serving_description:', servingDescription, '| selectedServingOptionKey:', selectedServingOptionKey, '| numberOfServings:', numberOfServings);
-
       // Meal-plan mode: delegate to onMealPlanSave callback
       if (onMealPlanSave) {
         const foodName = (product.product_name || product.generic_name || 'Unknown Product').trim();
@@ -1522,7 +1552,6 @@ export default function FoodDetailsLayout({
           fats: safeNum(macros.fats),
           fiber: safeNum(macros.fiber),
         };
-        console.log('[FoodDetails] handleSave: delegating to onMealPlanSave, food=', foodName);
         await onMealPlanSave({
           food_name: foodName,
           brand: foodBrand,
@@ -1547,10 +1576,7 @@ export default function FoodDetailsLayout({
         fiber: safeNum(macros.fiber),
       };
 
-      console.log('[FoodDetails] handleSave: safeMacros =', JSON.stringify(safeMacros));
-
       if (mode === 'edit' && itemId) {
-        console.log('[FoodDetails] handleSave: updating', itemTable ?? 'meal_items', 'id=', itemId);
         const isSavedMealTableUpdate = (itemTable ?? 'meal_items') === 'saved_meal_items';
         const updatePayload = isSavedMealTableUpdate
           ? {
@@ -1573,7 +1599,6 @@ export default function FoodDetailsLayout({
               serving_description: servingDescription,
               grams: totalGrams,
             };
-        console.log('[FoodDetails] handleSave: updatePayload=', JSON.stringify(updatePayload));
         const { error } = await supabase
           .from(itemTable ?? 'meal_items')
           .update(updatePayload)
@@ -1618,13 +1643,8 @@ export default function FoodDetailsLayout({
           user_created: false,
         };
 
-        console.log('[FoodDetails] handleSave: foodData (per-100g) =', JSON.stringify(foodData));
-
         if (context === 'my_meals_builder' || context === 'my-meals') {
-          console.log('[FoodDetails] handleSave: my_meals_builder context — upserting food then adding to draft');
-
           // Step 1: Find or create the food record so we have a real food_id for the draft
-          console.log('[FoodDetails] handleSave (my_meals_builder): searching for existing food, name=', foodName, 'brand=', foodBrand);
           const { data: existingFoodForDraft, error: searchErrorForDraft } = await supabase
             .from('foods')
             .select('id')
@@ -1639,10 +1659,8 @@ export default function FoodDetailsLayout({
           let draftFoodId: string;
 
           if (existingFoodForDraft) {
-            console.log('[FoodDetails] handleSave (my_meals_builder): found existing food id=', existingFoodForDraft.id);
             draftFoodId = existingFoodForDraft.id;
           } else {
-            console.log('[FoodDetails] handleSave (my_meals_builder): inserting new food');
             const { data: newFoodForDraft, error: insertErrorForDraft } = await supabase
               .from('foods')
               .insert([{ ...foodData, created_by: user.id }])
@@ -1655,7 +1673,6 @@ export default function FoodDetailsLayout({
               return;
             }
 
-            console.log('[FoodDetails] handleSave (my_meals_builder): new food id=', newFoodForDraft.id);
             draftFoodId = newFoodForDraft.id;
           }
 
@@ -1663,7 +1680,6 @@ export default function FoodDetailsLayout({
           let draftFoodItemId: string | null = null;
           if (offData) {
             draftFoodItemId = await upsertFoodItem(product);
-            console.log('[FoodDetails] handleSave (my_meals_builder): food_item_id resolved =', draftFoodItemId);
           }
 
           // Step 2: Add to draft with the correct DraftItem shape
@@ -1683,7 +1699,6 @@ export default function FoodDetailsLayout({
             fiber: safeMacros.fiber,
           });
 
-          console.log('[FoodDetails] handleSave (my_meals_builder): item added to draft, food_id=', draftFoodId, 'food_item_id=', draftFoodItemId);
           setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Added to meal', timestamp: Date.now() }]);
 
           setTimeout(() => {
@@ -1694,11 +1709,9 @@ export default function FoodDetailsLayout({
           let foodItemId: string | null = null;
           if (offData) {
             foodItemId = await upsertFoodItem(product);
-            console.log('[FoodDetails] handleSave: food_item_id resolved =', foodItemId);
           }
 
           // Step 1: Find or create the food record
-          console.log('[FoodDetails] handleSave: searching for existing food, name=', foodName, 'brand=', foodBrand);
           const { data: existingFood, error: searchError } = await supabase
             .from('foods')
             .select('id')
@@ -1713,10 +1726,8 @@ export default function FoodDetailsLayout({
           let foodId: string;
 
           if (existingFood) {
-            console.log('[FoodDetails] handleSave: found existing food id=', existingFood.id);
             foodId = existingFood.id;
           } else {
-            console.log('[FoodDetails] handleSave: inserting new food');
             const { data: newFood, error: insertError } = await supabase
               .from('foods')
               .insert([{ ...foodData, created_by: user.id }])
@@ -1729,7 +1740,6 @@ export default function FoodDetailsLayout({
               return;
             }
 
-            console.log('[FoodDetails] handleSave: new food id=', newFood.id);
             foodId = newFood.id;
           }
 
@@ -1737,7 +1747,6 @@ export default function FoodDetailsLayout({
           const targetDate = date || toLocalDateString(new Date());
           const targetMealType = mealType || 'breakfast';
 
-          console.log('[FoodDetails] handleSave: looking up meal, date=', targetDate, 'type=', targetMealType, 'user=', user.id);
           const { data: existingMeal, error: mealSearchError } = await supabase
             .from('meals')
             .select('id')
@@ -1753,10 +1762,8 @@ export default function FoodDetailsLayout({
           let mealId: string;
 
           if (existingMeal) {
-            console.log('[FoodDetails] handleSave: found existing meal id=', existingMeal.id);
             mealId = existingMeal.id;
           } else {
-            console.log('[FoodDetails] handleSave: creating new meal');
             const { data: newMeal, error: mealInsertError } = await supabase
               .from('meals')
               .insert([{
@@ -1773,12 +1780,10 @@ export default function FoodDetailsLayout({
               return;
             }
 
-            console.log('[FoodDetails] handleSave: new meal id=', newMeal.id);
             mealId = newMeal.id;
           }
 
           // Step 3: Insert the meal item linking food → meal
-          console.log('[FoodDetails] handleSave: inserting meal_item, meal_id=', mealId, 'food_id=', foodId, 'food_item_id=', foodItemId, 'food_name=', foodName);
           const { error: mealItemError } = await supabase
             .from('meal_items')
             .insert([{
@@ -1803,21 +1808,16 @@ export default function FoodDetailsLayout({
             return;
           }
 
-          console.log('[FoodDetails] handleSave: meal_item inserted successfully');
           setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Food added to meal', timestamp: Date.now() }]);
 
           // ── Log food usage (fire-and-forget) — only when food came from catalog ──
           if (offData && foodItemId) {
-            console.log('[FoodDetails] Logging food usage, food_item_id:', foodItemId, 'source:', source);
             logFoodUsage(foodItemId, source);
-          } else {
-            console.log('[FoodDetails] Skipping logFoodUsage — no catalog food_item_id (user-created food)');
           }
 
           // ── XP: award meal_logged (fire-and-forget) ──────────────────────
           // We don't have the new meal_item id here (no .select()), so use mealId+foodId as source
           const xpSourceId = `${mealId}_${foodId}_${targetDate}`;
-          console.log('[FoodDetails] awarding meal XP, source_id:', xpSourceId);
           tryAwardMealLogged(xpSourceId, targetMealType, targetDate);
           evaluateDailyGoals(targetDate);
 
