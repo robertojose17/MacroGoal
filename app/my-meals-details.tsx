@@ -59,35 +59,8 @@ function calcItemMacros(item: SavedMealItem, multiplier: number) {
   const fd = item.foods;
   const grams = item.serving_amount * item.servings_count * multiplier;
 
-  console.log('[calcItemMacros] item:', item.food_name, 'grams:', grams, 'multiplier:', multiplier, 'fi:', fi, 'fd:', fd);
-
-  // Tier 1: food_items join (has serving_size and macros_per)
-  if (fi) {
-    const safefi = fi.serving_size > 0 ? fi : { ...fi, serving_size: 100, macros_per: '100g' as string | null };
-    const result = calcMacros(safefi, grams);
-    console.log('[calcItemMacros] Tier 1 result:', result);
-    if (result.calories > 0 || result.protein > 0 || result.carbs > 0 || result.fat > 0) {
-      return { calories: result.calories, protein: result.protein, carbs: result.carbs, fats: result.fat, fiber: result.fiber };
-    }
-  }
-
-  // Tier 2: foods table join (calories/protein/carbs/fats are per-serving)
-  if (fd && (fd.calories > 0 || fd.protein > 0 || fd.carbs > 0 || fd.fats > 0)) {
-    const servingSize = fd.serving_amount > 0 ? fd.serving_amount : 100;
-    const ratio = grams / servingSize;
-    console.log('[calcItemMacros] Tier 2 fallback — using foods join, servingSize:', servingSize, 'grams:', grams, 'ratio:', ratio);
-    return {
-      calories: fd.calories * ratio,
-      protein: fd.protein * ratio,
-      carbs: fd.carbs * ratio,
-      fats: fd.fats * ratio,
-      fiber: (fd.fiber ?? 0) * ratio,
-    };
-  }
-
-  // Tier 3: stored macro columns on saved_meal_items (denormalized at save time)
-  if (item.calories != null && item.calories > 0) {
-    console.log('[calcItemMacros] Tier 3 fallback — using stored macros');
+  // Tier 1: stored macro columns on saved_meal_items (denormalized at save time) — most reliable
+  if (item.calories != null) {
     return {
       calories: (item.calories ?? 0) * multiplier,
       protein: (item.protein ?? 0) * multiplier,
@@ -97,7 +70,28 @@ function calcItemMacros(item: SavedMealItem, multiplier: number) {
     };
   }
 
-  console.log('[calcItemMacros] All tiers failed — returning zeros');
+  // Tier 2: food_items join (has serving_size and macros_per)
+  if (fi) {
+    const safefi = fi.serving_size > 0 ? fi : { ...fi, serving_size: 100, macros_per: '100g' as string | null };
+    const result = calcMacros(safefi, grams);
+    if (result.calories > 0 || result.protein > 0 || result.carbs > 0 || result.fat > 0) {
+      return { calories: result.calories, protein: result.protein, carbs: result.carbs, fats: result.fat, fiber: result.fiber };
+    }
+  }
+
+  // Tier 3: foods table join (calories/protein/carbs/fats are per-serving)
+  if (fd && (fd.calories > 0 || fd.protein > 0 || fd.carbs > 0 || fd.fats > 0)) {
+    const servingSize = fd.serving_amount > 0 ? fd.serving_amount : 100;
+    const ratio = grams / servingSize;
+    return {
+      calories: fd.calories * ratio,
+      protein: fd.protein * ratio,
+      carbs: fd.carbs * ratio,
+      fats: fd.fats * ratio,
+      fiber: (fd.fiber ?? 0) * ratio,
+    };
+  }
+
   return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
 }
 
@@ -139,9 +133,6 @@ export default function MyMealsDetailsScreen() {
 
     try {
       setLoading(true);
-      console.log('[MyMealsDetails] ========== LOADING SAVED MEAL ==========');
-      console.log('[MyMealsDetails] Meal ID:', mealId);
-
       const { data, error } = await supabase
         .from(TABLE_SAVED_MEALS)
         .select(`
@@ -193,7 +184,7 @@ export default function MyMealsDetailsScreen() {
         .single();
 
       if (error) {
-        console.error('[MyMealsDetails] ❌ Error loading saved meal:', error);
+        console.error('Error loading saved meal:', error);
         console.error('[MyMealsDetails] Error code:', error.code);
         console.error('[MyMealsDetails] Error message:', error.message);
         console.error('[MyMealsDetails] Error details:', error.details);
@@ -389,10 +380,6 @@ export default function MyMealsDetailsScreen() {
       return;
     }
 
-    console.log('[MyMealsDetails] ========== ADDING SAVED MEAL TO DIARY ==========');
-    console.log('[MyMealsDetails] Meal:', mealType);
-    console.log('[MyMealsDetails] Date:', date);
-    console.log('[MyMealsDetails] Multiplier:', multiplier);
     setAdding(true);
 
     try {
@@ -405,14 +392,10 @@ export default function MyMealsDetailsScreen() {
 
       // MEAL PLAN MODE: add all items directly to plan
       if (mode === 'meal-plan' && planId) {
-        console.log('[MyMealsDetails] ========== ADDING SAVED MEAL TO PLAN ==========');
-        console.log('[MyMealsDetails] Plan ID:', planId, '| Meal type:', mealType, '| Date:', date);
         const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.foods || item.food_name);
-        console.log('[MyMealsDetails] Adding', validItems.length, 'items to meal plan');
         for (const item of validItems) {
           const macros = calcItemMacros(item, multiplier);
           const itemName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? '';
-          console.log('[MyMealsDetails] addMealPlanItem:', itemName);
           await addMealPlanItem(planId, {
             date,
             meal_type: mealType,
@@ -430,7 +413,6 @@ export default function MyMealsDetailsScreen() {
             food_id: item.food_id || null,
           });
         }
-        console.log('[MyMealsDetails] ✅ Saved meal added to plan successfully!');
         showSuccessBanner('Added to plan');
         setAdding(false);
         setTimeout(() => { router.back(); }, 600);
@@ -439,12 +421,10 @@ export default function MyMealsDetailsScreen() {
 
       // Add all items from saved meal via RPC (one call per item)
       const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.foods || item.food_name);
-      console.log('[MyMealsDetails] Logging', validItems.length, 'items via log_food RPC');
 
       for (const item of validItems) {
         const macros = calcItemMacros(item, multiplier);
         const itemName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? '';
-        console.log('[MyMealsDetails] Calling log_food RPC for item:', itemName);
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
           p_date: date,
@@ -463,16 +443,13 @@ export default function MyMealsDetailsScreen() {
         });
 
         if (rpcError) {
-          console.error('[MyMealsDetails] log_food RPC error for item:', itemName, rpcError);
+          console.error('log_food RPC error for item:', itemName, rpcError);
           Alert.alert('Error', 'Failed to add foods to meal');
           setAdding(false);
           return;
         }
 
-        console.log('[MyMealsDetails] log_food RPC success for', itemName, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
       }
-
-      console.log('[MyMealsDetails] ✅ Saved meal added successfully!');
 
       const mealLabels: Record<string, string> = {
         breakfast: 'Breakfast',
@@ -488,7 +465,7 @@ export default function MyMealsDetailsScreen() {
         router.back();
       }, 600);
     } catch (error) {
-      console.error('[MyMealsDetails] Error in handleAddToMeal:', error);
+      console.error('Error in handleAddToMeal:', error);
       Alert.alert('Error', 'An unexpected error occurred');
       setAdding(false);
     }
@@ -752,7 +729,7 @@ export default function MyMealsDetailsScreen() {
       <View style={[styles.footer, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
         <TouchableOpacity
           style={[styles.addButton, { backgroundColor: colors.primary, opacity: adding ? 0.7 : 1 }]}
-          onPress={() => { console.log('[MyMealsDetails] Add to meal button pressed, meal:', mealType, 'date:', date); handleAddToMeal(); }}
+          onPress={() => { console.log('Add to meal pressed'); handleAddToMeal(); }}
           disabled={adding || validItems.length === 0}
           activeOpacity={0.7}
         >
