@@ -20,6 +20,11 @@ interface SavedMealItem {
   serving_amount: number;
   serving_unit: string;
   servings_count: number;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  fiber: number | null;
   food_items: {
     id: string;
     name: string;
@@ -35,12 +40,25 @@ interface SavedMealItem {
 }
 
 function calcItemMacros(item: SavedMealItem, multiplier: number) {
+  // Tier 1: stored macro columns on saved_meal_items (denormalized at save time) — most reliable
+  if (item.calories != null) {
+    return {
+      calories: (item.calories ?? 0) * multiplier,
+      protein: (item.protein ?? 0) * multiplier,
+      carbs: (item.carbs ?? 0) * multiplier,
+      fats: (item.fat ?? 0) * multiplier,
+      fiber: (item.fiber ?? 0) * multiplier,
+    };
+  }
+
+  // Tier 2: food_items join fallback
   const fi = item.food_items;
   const grams = item.serving_amount * item.servings_count * multiplier;
   if (!fi) {
     return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
   }
-  const result = calcMacros(fi, grams);
+  const safefi = fi.serving_size > 0 ? fi : { ...fi, serving_size: 100, macros_per: '100g' as string | null };
+  const result = calcMacros(safefi, grams);
   return {
     calories: result.calories,
     protein: result.protein,
@@ -93,6 +111,11 @@ export default function MyMealsEditScreen() {
             serving_amount,
             serving_unit,
             servings_count,
+            calories,
+            protein,
+            carbs,
+            fat,
+            fiber,
             food_items!saved_meal_items_food_item_id_fkey (
               id,
               name,

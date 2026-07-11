@@ -70,13 +70,14 @@ export default function MyMealsScreen() {
           updated_at,
           saved_meal_items (
             id,
-            food_item_id,
             serving_amount,
             serving_unit,
             servings_count,
-            food_items!saved_meal_items_food_item_id_fkey (
-              calories, protein, carbs, fat, fiber, serving_size, macros_per
-            )
+            calories,
+            protein,
+            carbs,
+            fat,
+            fiber
           )
         `)
         .eq('user_id', user.id)
@@ -127,14 +128,10 @@ export default function MyMealsScreen() {
         let totalFats = 0;
 
         items.forEach((item: any) => {
-          const fi = item.food_items;
-          if (fi) {
-            const macros = calcMacros(fi, item.serving_amount * item.servings_count);
-            totalCalories += macros.calories;
-            totalProtein += macros.protein;
-            totalCarbs += macros.carbs;
-            totalFats += macros.fat;
-          }
+          totalCalories += item.calories ?? 0;
+          totalProtein += item.protein ?? 0;
+          totalCarbs += item.carbs ?? 0;
+          totalFats += item.fat ?? 0;
         });
 
         return {

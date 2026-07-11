@@ -154,12 +154,11 @@ export default function AddFoodScreen() {
             serving_amount,
             serving_unit,
             servings_count,
-            foods (
-              calories,
-              protein,
-              carbs,
-              fats
-            )
+            calories,
+            protein,
+            carbs,
+            fat,
+            fiber
           )
         `)
         .eq('user_id', user.id)
@@ -182,13 +181,10 @@ export default function AddFoodScreen() {
         let totalFats = 0;
 
         items.forEach((item: any) => {
-          if (item.foods) {
-            const multiplier = (item.serving_amount / 100) * item.servings_count;
-            totalCalories += item.foods.calories * multiplier;
-            totalProtein += item.foods.protein * multiplier;
-            totalCarbs += item.foods.carbs * multiplier;
-            totalFats += item.foods.fats * multiplier;
-          }
+          totalCalories += item.calories ?? 0;
+          totalProtein += item.protein ?? 0;
+          totalCarbs += item.carbs ?? 0;
+          totalFats += item.fat ?? 0;
         });
 
         return {
