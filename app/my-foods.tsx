@@ -34,6 +34,8 @@ export default function MyFoodsScreen() {
   const date = (params.date as string) || toLocalDateString();
   const context = params.context as string | undefined;
   const returnTo = params.returnTo as string | undefined;
+  const mode = (params.mode as string) || '';
+  const planId = (params.planId as string) || '';
 
   const [myFoods, setMyFoods] = useState<MyFood[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,7 @@ export default function MyFoodsScreen() {
 
   const handleCreateFood = useCallback(() => {
     console.log('[MyFoods] Navigating to create food');
+    console.log('[MyFoods] mode:', mode, 'planId:', planId);
     router.push({
       pathname: '/my-foods-create',
       params: {
@@ -91,17 +94,20 @@ export default function MyFoodsScreen() {
         date: date,
         context: context || '',
         returnTo: returnTo,
+        mode: mode || '',
+        planId: planId || '',
       },
     });
-  }, [router, mealType, date, context, returnTo]);
+  }, [router, mealType, date, context, returnTo, mode, planId]);
 
   const handleSelectFood = useCallback((food: MyFood) => {
     console.log('[MyFoods] Selected food:', food.name, 'id:', food.id);
+    console.log('[MyFoods] mode:', mode, 'planId:', planId);
 
     // Foods DB stores macros per-serving. Scale to per-100g so FoodDetailsLayout
     // (which reads nutriments['energy-kcal_100g'] and divides by 100) calculates correctly.
-    const servingAmount = food.serving_amount || 100;
-    const scale = servingAmount > 0 ? (100 / servingAmount) : 1;
+    const servingAmount = food.serving_amount > 0 ? food.serving_amount : 100;
+    const scale = 100 / servingAmount;
 
     const offProduct = {
       code: '',
@@ -127,9 +133,11 @@ export default function MyFoodsScreen() {
         date: date,
         context: context || '',
         returnTo: returnTo || '/(tabs)/(home)/',
+        mode: mode || '',
+        planId: planId || '',
       },
     });
-  }, [router, mealType, date, context, returnTo]);
+  }, [router, mealType, date, context, returnTo, mode, planId]);
 
   const handleEditFood = useCallback((food: MyFood) => {
     console.log('[MyFoods] Editing food:', food.name);
@@ -141,9 +149,11 @@ export default function MyFoodsScreen() {
         date: date,
         context: context || '',
         returnTo: returnTo,
+        mode: mode || '',
+        planId: planId || '',
       },
     });
-  }, [router, mealType, date, context, returnTo]);
+  }, [router, mealType, date, context, returnTo, mode, planId]);
 
   const handleDeleteFood = useCallback(async (foodId: string) => {
     console.log('[MyFoods] Deleting food:', foodId);

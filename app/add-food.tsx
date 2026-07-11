@@ -2375,7 +2375,8 @@ export default function AddFoodScreen() {
                 mealType={mealType}
                 date={date}
                 returnTo={returnTo}
-                mode={context === 'my_meals_builder' ? 'mymeal' : 'diary'}
+                mode={mode === 'meal-plan' ? 'meal-plan' : (context === 'my_meals_builder' ? 'mymeal' : 'diary')}
+                planId={planId || ''}
                 myMealId={params.myMealId as string | undefined}
                 context={context}
                 onQuickAdd={showSuccessBanner}

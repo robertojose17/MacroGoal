@@ -8,6 +8,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
+import { addMealPlanItem } from '@/utils/mealPlansApi';
 
 interface MyFood {
   id: string;
@@ -30,12 +31,13 @@ interface QuickAddHomeProps {
   date: string;
   returnTo?: string;
   mode?: string;
+  planId?: string;
   myMealId?: string;
   context?: string;
   onQuickAdd?: (message?: string) => void;
 }
 
-export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId, context, onQuickAdd }: QuickAddHomeProps) {
+export default function QuickAddHome({ mealType, date, returnTo, mode, planId, myMealId, context, onQuickAdd }: QuickAddHomeProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -130,21 +132,23 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
   const handleSelectFood = useCallback((food: MyFood) => {
     console.log('[QuickAddHome] Selected food:', food.name, 'id:', food.id);
     console.log('[QuickAddHome] Navigating to food-details for saved food');
+    console.log('[QuickAddHome] mode:', mode, 'planId:', planId);
 
-    // Foods DB stores per-100g values. Always pass serving_size as "100 g" so
-    // FoodDetailsLayout multiplies by 100/100 = 1 and displays the correct values.
-    // The user can then adjust the serving amount/quantity on the food-details screen.
+    // Scale per-serving macros to per-100g so FoodDetailsLayout calculates correctly.
+    const servingAmount = food.serving_amount > 0 ? food.serving_amount : 100;
+    const scale = 100 / servingAmount;
     const offProduct = {
       code: '',
       product_name: food.name,
       brands: food.brand || '',
-      serving_size: '100 g',
+      serving_size: `${servingAmount} ${food.serving_unit || 'g'}`,
+      serving_quantity: servingAmount,
       nutriments: {
-        'energy-kcal_100g': food.calories,
-        'proteins_100g': food.protein,
-        'carbohydrates_100g': food.carbs,
-        'fat_100g': food.fats,
-        'fiber_100g': food.fiber,
+        'energy-kcal_100g': (food.calories || 0) * scale,
+        'proteins_100g': (food.protein || 0) * scale,
+        'carbohydrates_100g': (food.carbs || 0) * scale,
+        'fat_100g': (food.fats || 0) * scale,
+        'fiber_100g': (food.fiber || 0) * scale,
         'sugars_100g': 0,
       },
     };
@@ -160,9 +164,10 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
         returnTo: returnTo || '/(tabs)/(home)/',
         mode: mode || 'diary',
         mealId: myMealId,
+        planId: planId || '',
       },
     });
-  }, [router, mealType, date, returnTo, mode, myMealId, context]);
+  }, [router, mealType, date, returnTo, mode, planId, myMealId, context]);
 
   /**
    * QUICK ADD: Add saved food directly to meal log
@@ -188,10 +193,10 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
       }
 
       // Use the food's serving_amount as the default
-      const gramsToAdd = food.serving_amount;
-      const servingDescription = `${Math.round(food.serving_amount)} ${food.serving_unit}`;
+      const gramsToAdd = food.serving_amount > 0 ? food.serving_amount : 100;
+      const servingDescription = `${Math.round(gramsToAdd)} ${food.serving_unit || 'g'}`;
 
-      // calcMacros respects macros_per and serving_size
+      // foods table stores macros per-serving; pass macros_per: 'serving' so calcMacros scales correctly
       const macros = calcMacros(
         {
           calories: food.calories,
@@ -199,11 +204,33 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
           carbs: food.carbs,
           fat: food.fats,
           fiber: food.fiber,
-          serving_size: food.serving_size ?? food.serving_amount,
-          macros_per: food.macros_per,
+          serving_size: gramsToAdd,
+          macros_per: 'serving',
         },
         gramsToAdd,
       );
+
+      // MEAL PLAN MODE
+      if (mode === 'meal-plan' && planId) {
+        console.log('[QuickAddHome] Quick-adding to meal plan:', planId);
+        await addMealPlanItem(planId, {
+          date,
+          meal_type: mealType,
+          food_name: food.name,
+          brand: food.brand || undefined,
+          quantity: 1,
+          grams: gramsToAdd,
+          serving_description: servingDescription,
+          calories: Math.round(macros.calories),
+          protein: Math.round(macros.protein),
+          carbs: Math.round(macros.carbs),
+          fats: Math.round(macros.fat),
+          fiber: Math.round(macros.fiber),
+        });
+        console.log('[QuickAddHome] ✅ Saved food added to meal plan successfully!');
+        if (onQuickAdd) onQuickAdd('Added to plan');
+        return;
+      }
       const calories = macros.calories;
       const protein = macros.protein;
       const carbs = macros.carbs;
@@ -284,7 +311,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, myMealId,
       console.error('[QuickAddHome] Error quick adding saved food:', error);
       Alert.alert('Error', 'An unexpected error occurred while adding food');
     }
-  }, [context, date, mealType, onQuickAdd]);
+  }, [context, date, mealType, mode, planId, onQuickAdd]);
 
   const handleDeleteFood = useCallback(async (foodId: string) => {
     console.log('[QuickAddHome] Deleting food:', foodId);
