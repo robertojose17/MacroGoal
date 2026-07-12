@@ -290,6 +290,15 @@ export default function TemplatePlanDetailScreen() {
 
   const dayMeals = plan.day?.meals;
 
+  // Calculate plan day totals across all meals
+  const allItems = dayMeals
+    ? [...(dayMeals.breakfast ?? []), ...(dayMeals.lunch ?? []), ...(dayMeals.dinner ?? []), ...(dayMeals.snack ?? [])]
+    : [];
+  const planAvgCalories = Math.round(allItems.reduce((s, i) => s + (Number(i.calories) || 0), 0));
+  const planAvgProtein = Math.round(allItems.reduce((s, i) => s + (Number(i.protein_g) || 0), 0));
+  const planAvgCarbs = Math.round(allItems.reduce((s, i) => s + (Number(i.carbs_g) || 0), 0));
+  const planAvgFats = Math.round(allItems.reduce((s, i) => s + (Number(i.fats_g) || 0), 0));
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top', 'bottom']}>
       {/* Header */}
@@ -353,30 +362,59 @@ export default function TemplatePlanDetailScreen() {
 
         {/* Summary card */}
         <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-          <View style={styles.summaryCardHeader}>
-            <Text style={[styles.summaryCardTitle, { color: textColor }]}>Adjusted to your goals</Text>
-            <View style={styles.summaryCardSubtitleRow}>
-              <Text style={[styles.summaryCardSubtitle, { color: secondaryColor }]}>{'Scaled to your '}</Text>
-              <Text style={[styles.summaryCardSubtitleBold, { color: colors.calories }]}>{caloriesGoal}</Text>
-              <Text style={[styles.summaryCardSubtitle, { color: secondaryColor }]}>{' kcal goal'}</Text>
+          <Text style={[styles.summaryCardTitle, { color: textColor }]}>Adjusted to your goals</Text>
+          <View style={styles.summaryCardSubtitleRow}>
+            <Text style={[styles.summaryCardSubtitle, { color: secondaryColor }]}>{'Scaled to your '}</Text>
+            <Text style={[styles.summaryCardSubtitleBold, { color: colors.calories }]}>{caloriesGoal}</Text>
+            <Text style={[styles.summaryCardSubtitle, { color: secondaryColor }]}>{' kcal goal'}</Text>
+          </View>
+
+          {/* Divider */}
+          <View style={[styles.summaryDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
+
+          {/* Goal row */}
+          <View style={styles.summaryTableRow}>
+            <Text style={[styles.summaryTableLabel, { color: secondaryColor }]}>Goal</Text>
+            <View style={styles.summaryTablePills}>
+              <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.calories }]}>{caloriesGoal}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.calories }]}>kcal</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.protein + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.protein }]}>{proteinGoal}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.protein }]}>P</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.carbs + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.carbs }]}>{carbsGoal}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.carbs }]}>C</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.fats + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.fats }]}>{fatsGoal}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.fats }]}>F</Text>
+              </View>
             </View>
           </View>
-          <View style={styles.macroPills}>
-            <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
-              <Text style={[styles.macroPillValue, { color: colors.calories }]}>{caloriesGoal}</Text>
-              <Text style={[styles.macroPillUnit, { color: colors.calories }]}>kcal</Text>
-            </View>
-            <View style={[styles.macroPill, { backgroundColor: colors.protein + '22' }]}>
-              <Text style={[styles.macroPillValue, { color: colors.protein }]}>{proteinGoal}</Text>
-              <Text style={[styles.macroPillUnit, { color: colors.protein }]}>P</Text>
-            </View>
-            <View style={[styles.macroPill, { backgroundColor: colors.carbs + '22' }]}>
-              <Text style={[styles.macroPillValue, { color: colors.carbs }]}>{carbsGoal}</Text>
-              <Text style={[styles.macroPillUnit, { color: colors.carbs }]}>C</Text>
-            </View>
-            <View style={[styles.macroPill, { backgroundColor: colors.fats + '22' }]}>
-              <Text style={[styles.macroPillValue, { color: colors.fats }]}>{fatsGoal}</Text>
-              <Text style={[styles.macroPillUnit, { color: colors.fats }]}>F</Text>
+
+          {/* Plan Avg row */}
+          <View style={[styles.summaryTableRow, styles.summaryTableRowLast]}>
+            <Text style={[styles.summaryTableLabel, { color: secondaryColor }]}>Plan Avg</Text>
+            <View style={styles.summaryTablePills}>
+              <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.calories }]}>{planAvgCalories}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.calories }]}>kcal</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.protein + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.protein }]}>{planAvgProtein}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.protein }]}>P</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.carbs + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.carbs }]}>{planAvgCarbs}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.carbs }]}>C</Text>
+              </View>
+              <View style={[styles.macroPill, { backgroundColor: colors.fats + '22' }]}>
+                <Text style={[styles.macroPillValue, { color: colors.fats }]}>{planAvgFats}</Text>
+                <Text style={[styles.macroPillUnit, { color: colors.fats }]}>F</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -595,11 +633,34 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     elevation: 2,
   },
-  summaryCardHeader: { marginBottom: spacing.md },
   summaryCardTitle: { ...typography.bodyBold, marginBottom: 4 },
   summaryCardSubtitleRow: { flexDirection: 'row', alignItems: 'baseline' },
   summaryCardSubtitle: { ...typography.caption },
   summaryCardSubtitleBold: { fontSize: 12, fontWeight: '700' },
+
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 12,
+  },
+  summaryTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryTableRowLast: {
+    marginBottom: 0,
+  },
+  summaryTableLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    width: 64,
+  },
+  summaryTablePills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'nowrap',
+  },
 
   // Macro pills
   macroPills: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
