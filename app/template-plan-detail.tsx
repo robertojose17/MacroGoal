@@ -107,6 +107,7 @@ async function createMealPlanFromTemplate(
         carbs,
         fats,
         fiber: 0,
+        food_item_id: item.food_item_id || null,
       });
     }
   }

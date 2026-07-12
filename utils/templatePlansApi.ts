@@ -27,6 +27,7 @@ export interface TemplateMealItem {
   carbs_g: number;
   fats_g: number;
   protein_role: string | null;
+  food_item_id?: string | null;
 }
 
 // Legacy alias kept for createMealPlanFromTemplate compatibility
