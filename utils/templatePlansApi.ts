@@ -50,7 +50,6 @@ export interface TemplatePlanDetail {
   user_protein_goal: number;
   user_carbs_goal: number;
   user_fats_goal: number;
-  available_days?: { id: string; day_number: number }[];
   day: {
     id: string;
     day_number: number;
@@ -82,21 +81,19 @@ export async function getTemplatePlanDetail(
   templateId: string,
   userId: string,
   preferredProtein?: string,
-  preferredProteins?: Record<string, string | string[]>,
-  dayNumber: number = 1
+  preferredProteins?: Record<string, string | string[]>
 ): Promise<TemplatePlanDetail | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    console.log('[templatePlansApi] Invoking get-template-plan:', templateId, 'day:', dayNumber);
+    console.log('[templatePlansApi] Invoking get-template-plan:', templateId);
     const { data, error } = await supabase.functions.invoke('get-template-plan', {
       body: {
         template_id: templateId,
         user_id: userId,
         preferred_protein: preferredProtein,
         preferred_proteins: preferredProteins,
-        day_number: dayNumber,
       },
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });

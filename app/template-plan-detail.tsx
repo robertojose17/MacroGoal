@@ -142,8 +142,6 @@ export default function TemplatePlanDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProteins, setSelectedProteins] = useState<Record<string, string[]>>(DEFAULT_PROTEINS);
   const [proteinLoadingMeal, setProteinLoadingMeal] = useState<string | null>(null);
-  const [selectedDay, setSelectedDay] = useState(1);
-  const [availableDays, setAvailableDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -152,23 +150,18 @@ export default function TemplatePlanDetailScreen() {
   const borderColor = isDark ? colors.borderDark : colors.border;
   const cardBorderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
 
-  const loadPlan = useCallback(async (proteins?: SelectedProteins, dayNumber?: number) => {
+  const loadPlan = useCallback(async (proteins?: SelectedProteins) => {
     if (!templateId) return;
     const proteinsToUse = proteins ?? selectedProteins;
-    const dayToLoad = dayNumber ?? selectedDay;
-    console.log('[TemplatePlanDetail] Loading template plan:', templateId, 'day:', dayToLoad, 'proteins:', proteinsToUse);
+    console.log('[TemplatePlanDetail] Loading template plan:', templateId, 'proteins:', proteinsToUse);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) throw new Error('Not authenticated');
-      const result = await getTemplatePlanDetail(templateId, userId, undefined, proteinsToUse, dayToLoad);
+      const result = await getTemplatePlanDetail(templateId, userId, undefined, proteinsToUse);
       if (!result) throw new Error('No data returned');
-      console.log('[TemplatePlanDetail] Plan loaded:', result?.name, 'day:', dayToLoad, 'selected_proteins:', result?.selected_proteins);
+      console.log('[TemplatePlanDetail] Plan loaded:', result?.name, 'selected_proteins:', result?.selected_proteins);
       setPlan(result);
-      if (result.available_days && result.available_days.length > 0) {
-        const days = result.available_days.map(d => d.day_number).sort((a, b) => a - b);
-        setAvailableDays(days);
-      }
       if (result.selected_proteins && Object.keys(result.selected_proteins).length > 0) {
         setSelectedProteins(result.selected_proteins as Record<string, string[]>);
       }
@@ -196,7 +189,7 @@ export default function TemplatePlanDetailScreen() {
     useCallback(() => {
       console.log('[TemplatePlanDetail] Screen focused');
       setLoading(true);
-      loadPlan({ breakfast: ['Eggs'], lunch: ['Chicken'], dinner: ['Salmon'], snack: ['Greek Yogurt'] }, 1);
+      loadPlan({ breakfast: ['Eggs'], lunch: ['Chicken'], dinner: ['Salmon'], snack: ['Greek Yogurt'] });
     }, [loadPlan])
   );
 
@@ -222,7 +215,7 @@ export default function TemplatePlanDetailScreen() {
     const newProteins = { ...selectedProteins, [mealKey]: updated };
     setSelectedProteins(newProteins);
     setProteinLoadingMeal(mealKey);
-    loadPlan(newProteins, selectedDay);
+    loadPlan(newProteins);
   };
 
   const handleAddToMyPlans = async () => {
@@ -291,7 +284,7 @@ export default function TemplatePlanDetailScreen() {
             onPress={() => {
               console.log('[TemplatePlanDetail] Retry button pressed');
               setLoading(true);
-              loadPlan(selectedProteins, selectedDay);
+              loadPlan(selectedProteins);
             }}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
@@ -389,47 +382,6 @@ export default function TemplatePlanDetailScreen() {
               </View>
             </View>
           </View>
-        </View>
-
-        {/* Day selector */}
-        <View style={styles.daySelectorContainer}>
-          <Text style={[styles.daySelectorLabel, { color: secondaryColor }]}>Day</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dayChipsContent}
-          >
-            {availableDays.map((dayNum) => {
-              const isSelected = selectedDay === dayNum;
-              const dayLabel = 'Day ' + dayNum;
-              return (
-                <TouchableOpacity
-                  key={dayNum}
-                  style={[
-                    styles.dayChip,
-                    isSelected
-                      ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                      : { backgroundColor: cardBg, borderColor: isDark ? colors.borderDark : colors.border },
-                  ]}
-                  onPress={() => {
-                    console.log('[TemplatePlanDetail] Day chip pressed:', dayNum);
-                    setSelectedDay(dayNum);
-                    setProteinLoadingMeal(null);
-                    loadPlan(selectedProteins, dayNum);
-                  }}
-                  activeOpacity={0.7}
-                  disabled={proteinLoadingMeal !== null}
-                >
-                  <Text style={[
-                    styles.dayChipText,
-                    { color: isSelected ? '#fff' : textColor },
-                  ]}>
-                    {dayLabel}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
         </View>
 
         {/* Meal sections */}
@@ -794,30 +746,4 @@ const styles = StyleSheet.create({
   addButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
   bottomSpacer: { height: 16 },
-
-  // Day selector
-  daySelectorContainer: {
-    marginBottom: spacing.md,
-  },
-  daySelectorLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  dayChipsContent: {
-    gap: 8,
-    paddingRight: 4,
-  },
-  dayChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  dayChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
 });
