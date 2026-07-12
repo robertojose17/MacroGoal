@@ -187,7 +187,7 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
   const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
   const servingSizeStr = servingDesc
     ? `${countLabel}${servingDesc} (${totalGrams} g)`
-    : `${totalGrams} g`;
+    : `1 serving (${totalGrams}g)`;
 
   // Nutrients are already per 100g (macros_per is always '100g')
   const to100 = (val: number | null | undefined): number | undefined => {

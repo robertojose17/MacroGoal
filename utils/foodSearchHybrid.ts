@@ -21,7 +21,6 @@ async function fetchWithAbortAndTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    console.log('[HybridSearch] Timeout reached for:', url);
     controller.abort();
   }, timeoutMs);
 
@@ -46,14 +45,12 @@ async function fetchSupabaseSearch(
   abortSignal?: AbortSignal,
 ): Promise<OpenFoodFactsProduct[] | null> {
   const url = `${SUPABASE_PROJECT_URL}/functions/v1/search-foods`;
-  console.log('[HybridSearch] Supabase search-foods URL:', url);
 
   // Get user_id best-effort for personalized scoring
   let userId: string | undefined;
   try {
     const { data } = await supabase.auth.getSession();
     userId = data?.session?.user?.id;
-    console.log('[HybridSearch] user_id for personalized search:', userId ?? 'anonymous');
   } catch {
     // Non-blocking — fall back to global scoring
   }
@@ -73,8 +70,6 @@ async function fetchSupabaseSearch(
       abortSignal,
     );
 
-    console.log('[HybridSearch] Supabase response status:', response.status);
-
     if (!response.ok) {
       const errText = await response.text();
       console.warn('[HybridSearch] Supabase search-foods error:', response.status, errText.slice(0, 200));
@@ -83,18 +78,14 @@ async function fetchSupabaseSearch(
 
     const data = await response.json();
     const products: OpenFoodFactsProduct[] = Array.isArray(data?.products) ? data.products : [];
-    console.log('[HybridSearch] Supabase returned', products.length, 'products');
 
     if (products.length < 1) {
-      console.log('[HybridSearch] Supabase returned <3 products — skipping callback');
       return null;
     }
 
     return products;
   } catch (err) {
-    if ((err as Error)?.name === 'AbortError') {
-      console.log('[HybridSearch] Supabase fetch aborted');
-    } else {
+    if ((err as Error)?.name !== 'AbortError') {
       console.warn('[HybridSearch] Supabase fetch error:', err);
     }
     return null;
@@ -106,20 +97,15 @@ export async function hybridSearch(
   callbacks: HybridSearchCallbacks,
   abortSignal?: AbortSignal,
 ): Promise<void> {
-  console.log('[HybridSearch] ========== HYBRID SEARCH START ==========');
-  console.log('[HybridSearch] Query:', query);
-
   const isAborted = () => abortSignal?.aborted === true;
 
   // Stage 1: Local AsyncStorage cache — synchronous-ish, fires immediately
   const localProducts = await getLocalCache(query);
   if (isAborted()) {
-    console.log('[HybridSearch] Aborted after local cache check');
     callbacks.onComplete?.();
     return;
   }
   if (localProducts && localProducts.length > 0) {
-    console.log('[HybridSearch] Local cache HIT —', localProducts.length, 'products');
     callbacks.onLocalCacheHit?.(localProducts);
   }
 
@@ -127,12 +113,10 @@ export async function hybridSearch(
   try {
     const products = await fetchSupabaseSearch(query, abortSignal);
     if (isAborted()) {
-      console.log('[HybridSearch] Aborted after Supabase stage');
       callbacks.onComplete?.();
       return;
     }
     if (products && products.length >= 1) {
-      console.log('[HybridSearch] Supabase HIT — emitting', products.length, 'products');
       callbacks.onSupabaseHit?.(products);
     }
   } catch (err) {
@@ -142,6 +126,5 @@ export async function hybridSearch(
     }
   }
 
-  console.log('[HybridSearch] All stages complete');
   callbacks.onComplete?.();
 }
