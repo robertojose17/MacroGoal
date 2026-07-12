@@ -37,10 +37,10 @@ const MEAL_DEFS: { key: MealKey; label: string; emoji: string }[] = [
 ];
 
 const DEFAULT_PROTEINS: SelectedProteins = {
-  breakfast: 'Eggs',
-  lunch: 'Chicken',
-  dinner: 'Salmon',
-  snack: 'Greek Yogurt',
+  breakfast: ['Eggs'],
+  lunch: ['Chicken'],
+  dinner: ['Salmon'],
+  snack: ['Greek Yogurt'],
 };
 
 async function createMealPlanFromTemplate(
@@ -140,7 +140,7 @@ export default function TemplatePlanDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProteins, setSelectedProteins] = useState<SelectedProteins>(DEFAULT_PROTEINS);
+  const [selectedProteins, setSelectedProteins] = useState<Record<string, string[]>>(DEFAULT_PROTEINS);
   const [proteinLoadingMeal, setProteinLoadingMeal] = useState<string | null>(null);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
@@ -163,7 +163,7 @@ export default function TemplatePlanDetailScreen() {
       console.log('[TemplatePlanDetail] Plan loaded:', result?.name, 'selected_proteins:', result?.selected_proteins);
       setPlan(result);
       if (result.selected_proteins && Object.keys(result.selected_proteins).length > 0) {
-        setSelectedProteins(result.selected_proteins);
+        setSelectedProteins(result.selected_proteins as Record<string, string[]>);
       }
       setError(null);
     } catch (err: unknown) {
@@ -189,7 +189,7 @@ export default function TemplatePlanDetailScreen() {
     useCallback(() => {
       console.log('[TemplatePlanDetail] Screen focused');
       setLoading(true);
-      loadPlan({ breakfast: 'Eggs', lunch: 'Chicken', dinner: 'Salmon', snack: 'Greek Yogurt' });
+      loadPlan({ breakfast: ['Eggs'], lunch: ['Chicken'], dinner: ['Salmon'], snack: ['Greek Yogurt'] });
     }, [loadPlan])
   );
 
@@ -199,9 +199,20 @@ export default function TemplatePlanDetailScreen() {
   };
 
   const handleProteinSelect = (mealKey: string, proteinName: string) => {
-    if (proteinName === selectedProteins[mealKey] || proteinLoadingMeal !== null) return;
+    if (proteinLoadingMeal !== null) return;
     console.log('[TemplatePlanDetail] Protein chip pressed — meal:', mealKey, 'protein:', proteinName);
-    const newProteins = { ...selectedProteins, [mealKey]: proteinName };
+    const current = selectedProteins[mealKey] ?? [];
+    let updated: string[];
+    if (current.includes(proteinName)) {
+      // deselect — but keep at least 1
+      if (current.length <= 1) return;
+      updated = current.filter(p => p !== proteinName);
+    } else {
+      // select — max 2, replace oldest if already at 2
+      updated = current.length >= 2 ? [current[1], proteinName] : [...current, proteinName];
+    }
+    console.log('[TemplatePlanDetail] Updated proteins for', mealKey, ':', updated);
+    const newProteins = { ...selectedProteins, [mealKey]: updated };
     setSelectedProteins(newProteins);
     setProteinLoadingMeal(mealKey);
     loadPlan(newProteins);
@@ -209,7 +220,7 @@ export default function TemplatePlanDetailScreen() {
 
   const handleAddToMyPlans = async () => {
     if (!plan) return;
-    const lunchProtein = selectedProteins.lunch ?? 'Chicken';
+    const lunchProtein = selectedProteins.lunch?.[0] ?? 'Chicken';
     console.log('[TemplatePlanDetail] Add to My Plans pressed, lunch protein:', lunchProtein);
     setSaving(true);
     try {
@@ -384,7 +395,6 @@ export default function TemplatePlanDetailScreen() {
           const mealFats = Math.round(items.reduce((s, i) => s + (Number(i.fats_g) || 0), 0));
 
           const mealProteinOptions = plan.protein_options_by_meal?.[mealDef.key] ?? [];
-          const currentProtein = selectedProteins[mealDef.key];
           const isMealLoading = proteinLoadingMeal === mealDef.key;
 
           return (
@@ -419,7 +429,7 @@ export default function TemplatePlanDetailScreen() {
                     contentContainerStyle={styles.mealProteinChipsContent}
                   >
                     {mealProteinOptions.map((option) => {
-                      const isSelected = option.protein_name === currentProtein;
+                      const isSelected = (selectedProteins[mealDef.key] ?? []).includes(option.protein_name);
                       return (
                         <TouchableOpacity
                           key={option.protein_name}

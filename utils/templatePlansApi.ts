@@ -19,7 +19,7 @@ export interface ProteinOption {
 }
 
 export type ProteinOptionsByMeal = Record<string, ProteinOption[]>;
-export type SelectedProteins = Record<string, string>;
+export type SelectedProteins = Record<string, string[]>;
 
 export interface TemplateMealItem {
   id: string;
@@ -81,7 +81,7 @@ export async function getTemplatePlanDetail(
   templateId: string,
   userId: string,
   preferredProtein?: string,
-  preferredProteins?: SelectedProteins
+  preferredProteins?: Record<string, string | string[]>
 ): Promise<TemplatePlanDetail | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
