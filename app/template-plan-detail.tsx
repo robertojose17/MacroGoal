@@ -14,7 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { getTemplatePlanDetail, type TemplatePlanDetail, type TemplateMealItem, type TemplateItem, type ProteinOption } from '@/utils/templatePlansApi';
+import {
+  getTemplatePlanDetail,
+  type TemplatePlanDetail,
+  type TemplateMealItem,
+  type TemplateItem,
+  type SelectedProteins,
+} from '@/utils/templatePlansApi';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { usePremium } from '@/hooks/usePremium';
@@ -30,15 +36,12 @@ const MEAL_DEFS: { key: MealKey; label: string; emoji: string }[] = [
   { key: 'snack', label: 'Snack', emoji: '🍎' },
 ];
 
-// Fallback protein options shown while loading or if edge fn doesn't return them
-const DEFAULT_PROTEIN_OPTIONS: ProteinOption[] = [
-  { id: 'chicken', protein_name: 'Chicken', emoji: '🍗' },
-  { id: 'salmon', protein_name: 'Salmon', emoji: '🐟' },
-  { id: 'turkey', protein_name: 'Turkey', emoji: '🦃' },
-  { id: 'beef', protein_name: 'Beef', emoji: '🥩' },
-  { id: 'tuna', protein_name: 'Tuna', emoji: '🐠' },
-  { id: 'shrimp', protein_name: 'Shrimp', emoji: '🦐' },
-];
+const DEFAULT_PROTEINS: SelectedProteins = {
+  breakfast: 'Eggs',
+  lunch: 'Chicken',
+  dinner: 'Salmon',
+  snack: 'Greek Yogurt',
+};
 
 async function createMealPlanFromTemplate(
   plan: TemplatePlanDetail,
@@ -54,7 +57,7 @@ async function createMealPlanFromTemplate(
   nextWeek.setDate(today.getDate() + 6);
   const startDate = toLocalDateString(today);
   const endDate = toLocalDateString(nextWeek);
-  const planName = plan.name + ' · ' + selectedProtein;
+  const planName = plan.name;
 
   console.log('[TemplatePlanDetail] Inserting meal_plan:', planName);
   const { data: newPlan, error: planError } = await supabase
@@ -135,10 +138,10 @@ export default function TemplatePlanDetailScreen() {
 
   const [plan, setPlan] = useState<TemplatePlanDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [proteinLoading, setProteinLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProtein, setSelectedProtein] = useState('Chicken');
+  const [selectedProteins, setSelectedProteins] = useState<SelectedProteins>(DEFAULT_PROTEINS);
+  const [proteinLoadingMeal, setProteinLoadingMeal] = useState<string | null>(null);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -147,20 +150,20 @@ export default function TemplatePlanDetailScreen() {
   const borderColor = isDark ? colors.borderDark : colors.border;
   const cardBorderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
 
-  const loadPlan = useCallback(async (protein?: string) => {
+  const loadPlan = useCallback(async (proteins?: SelectedProteins) => {
     if (!templateId) return;
-    const proteinToUse = protein ?? selectedProtein;
-    console.log('[TemplatePlanDetail] Loading template plan:', templateId, 'protein:', proteinToUse);
+    const proteinsToUse = proteins ?? selectedProteins;
+    console.log('[TemplatePlanDetail] Loading template plan:', templateId, 'proteins:', proteinsToUse);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) throw new Error('Not authenticated');
-      const result = await getTemplatePlanDetail(templateId, userId, proteinToUse);
+      const result = await getTemplatePlanDetail(templateId, userId, undefined, proteinsToUse);
       if (!result) throw new Error('No data returned');
-      console.log('[TemplatePlanDetail] Plan loaded:', result?.name, 'selected_protein:', result?.selected_protein);
+      console.log('[TemplatePlanDetail] Plan loaded:', result?.name, 'selected_proteins:', result?.selected_proteins);
       setPlan(result);
-      if (result.selected_protein) {
-        setSelectedProtein(result.selected_protein);
+      if (result.selected_proteins && Object.keys(result.selected_proteins).length > 0) {
+        setSelectedProteins(result.selected_proteins);
       }
       setError(null);
     } catch (err: unknown) {
@@ -169,7 +172,7 @@ export default function TemplatePlanDetailScreen() {
       setError('Failed to load plan. Please try again.');
     } finally {
       setLoading(false);
-      setProteinLoading(false);
+      setProteinLoadingMeal(null);
     }
   }, [templateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -186,7 +189,7 @@ export default function TemplatePlanDetailScreen() {
     useCallback(() => {
       console.log('[TemplatePlanDetail] Screen focused');
       setLoading(true);
-      loadPlan('Chicken');
+      loadPlan({ breakfast: 'Eggs', lunch: 'Chicken', dinner: 'Salmon', snack: 'Greek Yogurt' });
     }, [loadPlan])
   );
 
@@ -195,20 +198,22 @@ export default function TemplatePlanDetailScreen() {
     router.back();
   };
 
-  const handleProteinSelect = (proteinName: string) => {
-    if (proteinName === selectedProtein || proteinLoading) return;
-    console.log('[TemplatePlanDetail] Protein chip pressed:', proteinName);
-    setSelectedProtein(proteinName);
-    setProteinLoading(true);
-    loadPlan(proteinName);
+  const handleProteinSelect = (mealKey: string, proteinName: string) => {
+    if (proteinName === selectedProteins[mealKey] || proteinLoadingMeal !== null) return;
+    console.log('[TemplatePlanDetail] Protein chip pressed — meal:', mealKey, 'protein:', proteinName);
+    const newProteins = { ...selectedProteins, [mealKey]: proteinName };
+    setSelectedProteins(newProteins);
+    setProteinLoadingMeal(mealKey);
+    loadPlan(newProteins);
   };
 
   const handleAddToMyPlans = async () => {
     if (!plan) return;
-    console.log('[TemplatePlanDetail] Add to My Plans pressed, protein:', selectedProtein);
+    const lunchProtein = selectedProteins.lunch ?? 'Chicken';
+    console.log('[TemplatePlanDetail] Add to My Plans pressed, lunch protein:', lunchProtein);
     setSaving(true);
     try {
-      await createMealPlanFromTemplate(plan, selectedProtein);
+      await createMealPlanFromTemplate(plan, lunchProtein);
       console.log('[TemplatePlanDetail] Plan saved successfully');
       Alert.alert(
         'Added to My Plans!',
@@ -268,7 +273,7 @@ export default function TemplatePlanDetailScreen() {
             onPress={() => {
               console.log('[TemplatePlanDetail] Retry button pressed');
               setLoading(true);
-              loadPlan(selectedProtein);
+              loadPlan(selectedProteins);
             }}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
@@ -278,15 +283,10 @@ export default function TemplatePlanDetailScreen() {
     );
   }
 
-  const goalLabel = plan.goal_type === 'cut' ? 'Cut' : plan.goal_type === 'bulk' ? 'Bulk' : 'Maintain';
   const caloriesGoal = plan.user_calories_goal;
   const proteinGoal = plan.user_protein_goal;
   const carbsGoal = plan.user_carbs_goal;
   const fatsGoal = plan.user_fats_goal;
-
-  const proteinOptions: ProteinOption[] = (plan.protein_options && plan.protein_options.length > 0)
-    ? plan.protein_options
-    : DEFAULT_PROTEIN_OPTIONS;
 
   const dayMeals = plan.day?.meals;
 
@@ -319,47 +319,6 @@ export default function TemplatePlanDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Protein selector */}
-        <View style={styles.proteinSection}>
-          <View style={styles.proteinLabelRow}>
-            <Text style={[styles.proteinSectionLabel, { color: textColor }]}>Choose your protein:</Text>
-            {proteinLoading && (
-              <ActivityIndicator size="small" color={colors.primary} style={styles.proteinSpinner} />
-            )}
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.proteinChipsContent}
-          >
-            {proteinOptions.map((option) => {
-              const isSelected = option.protein_name === selectedProtein;
-              return (
-                <TouchableOpacity
-                  key={option.protein_name}
-                  style={[
-                    styles.proteinChip,
-                    isSelected
-                      ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                      : { backgroundColor: cardBg, borderColor: isDark ? colors.borderDark : colors.border },
-                  ]}
-                  onPress={() => handleProteinSelect(option.protein_name)}
-                  activeOpacity={0.7}
-                  disabled={proteinLoading}
-                >
-                  <Text style={styles.proteinChipEmoji}>{option.emoji}</Text>
-                  <Text style={[
-                    styles.proteinChipText,
-                    { color: isSelected ? '#fff' : textColor },
-                  ]}>
-                    {option.protein_name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
         {/* Summary card */}
         <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
           <Text style={[styles.summaryCardTitle, { color: textColor }]}>Adjusted to your goals</Text>
@@ -424,6 +383,10 @@ export default function TemplatePlanDetailScreen() {
           const mealCarbs = Math.round(items.reduce((s, i) => s + (Number(i.carbs_g) || 0), 0));
           const mealFats = Math.round(items.reduce((s, i) => s + (Number(i.fats_g) || 0), 0));
 
+          const mealProteinOptions = plan.protein_options_by_meal?.[mealDef.key] ?? [];
+          const currentProtein = selectedProteins[mealDef.key];
+          const isMealLoading = proteinLoadingMeal === mealDef.key;
+
           return (
             <View
               key={mealDef.key}
@@ -446,6 +409,45 @@ export default function TemplatePlanDetailScreen() {
                   </Text>
                 )}
               </View>
+
+              {/* Per-meal protein selector */}
+              {mealProteinOptions.length > 0 && (
+                <View style={styles.mealProteinRow}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.mealProteinChipsContent}
+                  >
+                    {mealProteinOptions.map((option) => {
+                      const isSelected = option.protein_name === currentProtein;
+                      return (
+                        <TouchableOpacity
+                          key={option.protein_name}
+                          style={[
+                            styles.mealProteinChip,
+                            isSelected
+                              ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                              : { backgroundColor: cardBg, borderColor: isDark ? colors.borderDark : colors.border },
+                          ]}
+                          onPress={() => handleProteinSelect(mealDef.key, option.protein_name)}
+                          activeOpacity={0.7}
+                          disabled={proteinLoadingMeal !== null}
+                        >
+                          <Text style={[
+                            styles.mealProteinChipText,
+                            { color: isSelected ? '#fff' : textColor },
+                          ]}>
+                            {option.protein_name}
+                          </Text>
+                          {isMealLoading && isSelected && (
+                            <ActivityIndicator size="small" color="#fff" style={{ marginLeft: 4 }} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
 
               {/* Meal macro summary */}
               {items.length > 0 && (
@@ -598,28 +600,6 @@ const styles = StyleSheet.create({
   // Scroll
   scrollContent: { padding: spacing.md, paddingBottom: 24 },
 
-  // Protein selector
-  proteinSection: { marginBottom: spacing.lg },
-  proteinLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  proteinSectionLabel: { ...typography.bodyBold, fontSize: 14 },
-  proteinSpinner: { marginLeft: spacing.sm },
-  proteinChipsContent: { gap: spacing.sm, paddingRight: spacing.md },
-  proteinChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-  },
-  proteinChipEmoji: { fontSize: 16 },
-  proteinChipText: { fontSize: 13, fontWeight: '600' },
-
   // Summary card
   summaryCard: {
     borderRadius: borderRadius.lg,
@@ -686,6 +666,30 @@ const styles = StyleSheet.create({
   mealEmoji: { fontSize: 18 },
   mealTitle: { ...typography.bodyBold },
   mealCaloriesLabel: { fontSize: 13, fontWeight: '600' },
+
+  // Per-meal protein chips
+  mealProteinRow: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  mealProteinChipsContent: {
+    gap: 6,
+    paddingRight: 16,
+  },
+  mealProteinChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  mealProteinChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
   mealMacroRow: {
     flexDirection: 'row',
     gap: spacing.xs,

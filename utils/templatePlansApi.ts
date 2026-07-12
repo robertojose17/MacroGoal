@@ -18,6 +18,9 @@ export interface ProteinOption {
   emoji: string;
 }
 
+export type ProteinOptionsByMeal = Record<string, ProteinOption[]>;
+export type SelectedProteins = Record<string, string>;
+
 export interface TemplateMealItem {
   id: string;
   food_name: string;
@@ -41,6 +44,8 @@ export interface TemplatePlanDetail {
   goal_type: string;
   selected_protein: string;
   protein_options: { id: string; protein_name: string; emoji: string }[];
+  protein_options_by_meal?: ProteinOptionsByMeal;
+  selected_proteins?: SelectedProteins;
   user_calories_goal: number;
   user_protein_goal: number;
   user_carbs_goal: number;
@@ -75,14 +80,20 @@ export async function listTemplatePlans(): Promise<TemplatePlan[]> {
 export async function getTemplatePlanDetail(
   templateId: string,
   userId: string,
-  preferredProtein?: string
+  preferredProtein?: string,
+  preferredProteins?: SelectedProteins
 ): Promise<TemplatePlanDetail | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
     const { data, error } = await supabase.functions.invoke('get-template-plan', {
-      body: { template_id: templateId, user_id: userId, preferred_protein: preferredProtein },
+      body: {
+        template_id: templateId,
+        user_id: userId,
+        preferred_protein: preferredProtein,
+        preferred_proteins: preferredProteins,
+      },
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
 
@@ -92,7 +103,7 @@ export async function getTemplatePlanDetail(
     }
 
     console.log('[templatePlansApi] raw response:', JSON.stringify(data).slice(0, 200));
-    console.log('[templatePlansApi] Template plan detail loaded:', data?.name, 'protein:', data?.selected_protein);
+    console.log('[templatePlansApi] Template plan detail loaded:', data?.name, 'selected_proteins:', data?.selected_proteins);
     return data as TemplatePlanDetail;
   } catch (e) {
     console.error('[templatePlansApi] getTemplatePlanDetail exception:', e);
