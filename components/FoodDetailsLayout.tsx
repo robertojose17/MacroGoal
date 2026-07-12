@@ -755,19 +755,17 @@ export default function FoodDetailsLayout({
       const isNumericDesc = /^\d+(\.\d+)?\s*[a-z]*$/i.test(foodItem.serving_description.trim());
       if (isNumericDesc) {
         // serving_description is just a number+unit like "63g" — treat as no description
-        servingSize = `${totalGrams} g`;
-        console.log('[FoodDetails] buildMockProductFromFoodItem: numeric serving_description ignored, built servingSize=', servingSize);
+        servingSize = `1 serving (${totalGrams}g)`;
       } else if (sc > 1) {
         servingSize = `${sc} ${foodItem.serving_description} (${totalGrams} g)`;
-        console.log('[FoodDetails] buildMockProductFromFoodItem: using serving_description →', servingSize, 'serving_count=', sc, 'totalGrams=', totalGrams);
       } else {
         servingSize = `1 ${foodItem.serving_description} (${totalGrams} g)`;
-        console.log('[FoodDetails] buildMockProductFromFoodItem: single unit →', servingSize, 'totalGrams=', totalGrams);
       }
     } else {
-      // No serving_description — build a plain "<grams> g" string
-      servingSize = `${totalGrams} g`;
-      console.log('[FoodDetails] buildMockProductFromFoodItem: no serving_description, built servingSize=', servingSize);
+      // No serving_description — use a "1 serving (Xg)" format so extractUnitFromString
+      // detects "serving" as the unit (Case B → key 'default') instead of treating it
+      // as a continuous weight unit.
+      servingSize = `1 serving (${totalGrams}g)`;
     }
     const servingQty = totalGrams;
     const n = (foodItem.nutriments ?? {}) as Record<string, number>;
@@ -1502,8 +1500,11 @@ export default function FoodDetailsLayout({
         if (defaultUnit.length > 2 && defaultUnit.endsWith('s') && !['oz', 'lbs', 'tbs'].includes(defaultUnit.toLowerCase())) {
           defaultUnit = defaultUnit.slice(0, -1);
         }
-        // Fall back to baseServing.description logic when unit is "serving", empty, or looks like plain grams
-        const useFallback = !defaultUnit || defaultUnit.toLowerCase() === 'serving' || /^\d+\s*g$/i.test(defaultLabel);
+        // Fall back to baseServing.description logic only when unit is empty or looks like a plain
+        // weight string (e.g. "50 g"). Do NOT fall back when unit is "serving" — after Fix 1,
+        // "serving" is a valid discrete unit that formatServing handles correctly.
+        const weightUnitPattern = /^(g|oz|ml|kg|lb|lbs)$/i;
+        const useFallback = !defaultUnit || weightUnitPattern.test(defaultUnit) || /^\d+\s*g$/i.test(defaultLabel);
         if (useFallback) {
           const baseDescMatch = (baseServing.description || '').match(/^([\d.]+)\s*(.+)$/);
           const baseAmount = baseDescMatch ? parseFloat(baseDescMatch[1]) : 1;
