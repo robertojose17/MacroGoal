@@ -363,11 +363,6 @@ export default function TemplatePlanDetailScreen() {
         {/* Summary card */}
         <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
           <Text style={[styles.summaryCardTitle, { color: textColor }]}>Adjusted to your goals</Text>
-          <View style={styles.summaryCardSubtitleRow}>
-            <Text style={[styles.summaryCardSubtitle, { color: secondaryColor }]}>{'Scaled to your '}</Text>
-            <Text style={[styles.summaryCardSubtitleBold, { color: colors.calories }]}>{caloriesGoal}</Text>
-            <Text style={[styles.summaryCardSubtitle, { color: secondaryColor }]}>{' kcal goal'}</Text>
-          </View>
 
           {/* Divider */}
           <View style={[styles.summaryDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
@@ -634,9 +629,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   summaryCardTitle: { ...typography.bodyBold, marginBottom: 4 },
-  summaryCardSubtitleRow: { flexDirection: 'row', alignItems: 'baseline' },
-  summaryCardSubtitle: { ...typography.caption },
-  summaryCardSubtitleBold: { fontSize: 12, fontWeight: '700' },
 
   summaryDivider: {
     height: StyleSheet.hairlineWidth,
