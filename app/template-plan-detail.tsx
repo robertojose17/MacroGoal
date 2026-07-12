@@ -508,9 +508,6 @@ export default function TemplatePlanDetailScreen() {
                           <Text style={[styles.foodItemName, { color: textColor }]} numberOfLines={2}>
                             {item.food_name}
                           </Text>
-                          {isProteinItem && (
-                            <Text style={styles.proteinBadge}>{'💪'}</Text>
-                          )}
                         </View>
                         <View style={styles.foodItemMetaRow}>
                           {gramsText !== '' && (
@@ -725,7 +722,7 @@ const styles = StyleSheet.create({
   foodItemInfo: { flex: 1 },
   foodItemNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
   foodItemName: { fontSize: 14, fontWeight: '600', lineHeight: 20, flexShrink: 1 },
-  proteinBadge: { fontSize: 13 },
+
   foodItemMetaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   foodItemMeta: { fontSize: 12, lineHeight: 16 },
   foodItemRight: { alignItems: 'flex-end', paddingTop: 2 },
