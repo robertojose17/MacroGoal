@@ -40,7 +40,7 @@ const DEFAULT_PROTEINS: SelectedProteins = {
   breakfast: ['Eggs'],
   lunch: ['Chicken'],
   dinner: ['Salmon'],
-  snack: ['Greek Yogurt'],
+  snack: ['Halo Top Ice Cream'],
 };
 
 async function createMealPlanFromTemplate(
@@ -189,7 +189,7 @@ export default function TemplatePlanDetailScreen() {
     useCallback(() => {
       console.log('[TemplatePlanDetail] Screen focused');
       setLoading(true);
-      loadPlan({ breakfast: ['Eggs'], lunch: ['Chicken'], dinner: ['Salmon'], snack: ['Greek Yogurt'] });
+      loadPlan({ breakfast: ['Eggs'], lunch: ['Chicken'], dinner: ['Salmon'], snack: ['Halo Top Ice Cream'] });
     }, [loadPlan])
   );
 
