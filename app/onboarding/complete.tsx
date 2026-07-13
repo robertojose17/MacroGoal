@@ -692,31 +692,11 @@ function Step1({
 // ─── STEP 2 — HOPE ───────────────────────────────────────────────────────────
 
 const HOPE_BULLETS = [
-  {
-    icon: '😍',
-    title: 'Strangers and friends will notice — and compliment you',
-    body: '',
-  },
-  {
-    icon: '👗',
-    title: "You'll wear what you want, not what hides you",
-    body: '',
-  },
-  {
-    icon: '⚡',
-    title: "You'll have more energy than you've had in years",
-    body: '',
-  },
-  {
-    icon: '🧒',
-    title: "You'll be the parent who runs around with their kids",
-    body: '',
-  },
-  {
-    icon: '❤️',
-    title: "You'll be healthier, longer, for everyone who loves you",
-    body: '',
-  },
+  { icon: '😍', title: 'People will notice the difference before you mention it', body: '' },
+  { icon: '👕', title: "You'll choose clothes because you love them—not because they hide you", body: '' },
+  { icon: '⚡', title: "You'll wake up with more energy, confidence, and momentum", body: '' },
+  { icon: '🧒', title: "You'll become the parent who plays, runs, and keeps up", body: '' },
+  { icon: '❤️', title: "And you'll build a healthier body that stays with the people who need you", body: '' },
 ];
 
 function Step2({
@@ -743,8 +723,8 @@ function Step2({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{'What your body transformation will really mean'}</Text>
-        <Text style={styles.stepSubtitle}>{"Here's what your plan includes:"}</Text>
+        <Text style={styles.stepTitle}>{"This isn't just about losing weight"}</Text>
+        <Text style={styles.stepSubtitle}>{"It's about what changes when you finally take control:"}</Text>
 
         <View style={styles.cardList}>
           {HOPE_BULLETS.map((bullet, idx) => {
