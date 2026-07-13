@@ -1030,13 +1030,12 @@ export default function AddFoodScreen() {
         foodName  = foodData.name ?? food.name;
         foodBrand = foodData.brand ?? food.brand ?? null;
 
-        // foods table stores per-100g values
-        const multiplier = food.serving_amount / 100;
-        calories = Math.round((foodData.calories ?? 0) * multiplier);
-        protein  = Math.round((foodData.protein  ?? 0) * multiplier * 10) / 10;
-        carbs    = Math.round((foodData.carbs    ?? 0) * multiplier * 10) / 10;
-        fats     = Math.round((foodData.fats     ?? 0) * multiplier * 10) / 10;
-        fiber    = Math.round((foodData.fiber    ?? 0) * multiplier * 10) / 10;
+        // foods table stores macros per-serving — use directly
+        calories = Math.round(foodData.calories ?? 0);
+        protein  = Math.round((foodData.protein  ?? 0) * 10) / 10;
+        carbs    = Math.round((foodData.carbs    ?? 0) * 10) / 10;
+        fats     = Math.round((foodData.fats     ?? 0) * 10) / 10;
+        fiber    = Math.round((foodData.fiber    ?? 0) * 10) / 10;
       }
 
       const gramsToAdd = food.serving_amount;
