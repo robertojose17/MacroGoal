@@ -301,10 +301,19 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
 
-        // foods table stores macros per-serving — use directly
-        const servingAmount = Number(f.serving_amount) || 100;
+        // foods table stores macros per-serving — use directly.
+        // Prefer the food's own serving_amount; fall back to grams logged in this meal_item.
+        const servingAmount = Number(f.serving_amount) || Number(item.grams) || 100;
         const servingUnit = (f.serving_unit || 'g').toLowerCase();
-        const displayServingUnit = `1 serving (${servingAmount}${servingUnit})`;
+
+        // Prefer the serving_description saved at log time (e.g. "1 serving", "31 g")
+        // over a generic reconstructed string.
+        let displayServingUnit: string;
+        if (item.serving_description && String(item.serving_description).trim()) {
+          displayServingUnit = String(item.serving_description).trim();
+        } else {
+          displayServingUnit = `1 serving (${servingAmount}${servingUnit})`;
+        }
 
         results.push({
           id: f.id,
