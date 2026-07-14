@@ -770,7 +770,7 @@ export default function SubscriptionScreen() {
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
   const HERO_HEIGHT = 420;
-  const heroImageWidth = screenWidth * 0.65;
+  const heroImageWidth = screenWidth * 0.58;
 
   const NEW_FEATURES = [
     {
@@ -816,7 +816,7 @@ export default function SubscriptionScreen() {
               colors={['#000', '#000', 'rgba(0,0,0,0.7)', 'transparent']}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
-              style={[styles.newHeroGradient, { width: screenWidth * 0.65 }]}
+              style={[styles.newHeroGradient, { width: screenWidth * 0.55 }]}
               pointerEvents="none"
             />
 
@@ -1453,7 +1453,7 @@ const styles = StyleSheet.create({
   },
   newHeroTextBlock: {
     position: 'absolute',
-    bottom: 28,
+    bottom: 52,
     left: 20,
     paddingRight: 16,
   },
