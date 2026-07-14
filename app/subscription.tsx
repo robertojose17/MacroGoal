@@ -11,6 +11,8 @@ import {
   Modal,
   ImageBackground,
   ScrollView,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -98,6 +100,7 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { width: screenWidth } = useWindowDimensions();
 
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
@@ -766,100 +769,109 @@ export default function SubscriptionScreen() {
 
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
-  const activeFeatureItem = ICON_GRID_ITEMS.find((f) => f.key === selectedFeature);
-  const featureDescriptionText = activeFeatureItem
-    ? activeFeatureItem.description
-    : 'Tap a feature to learn more';
+  const HERO_HEIGHT = 420;
+  const heroImageWidth = screenWidth * 0.65;
+
+  const NEW_FEATURES = [
+    {
+      ios: 'fork.knife',
+      android: 'restaurant' as const,
+      title: 'Smart Food Tracking',
+      desc: 'Log meals instantly with AI photo recognition or barcode scan.',
+    },
+    {
+      ios: 'chart.line.uptrend.xyaxis',
+      android: 'trending-up' as const,
+      title: 'Personalized Meal Plans',
+      desc: 'Get weekly plans tailored to your goals, body, and preferences.',
+    },
+    {
+      ios: 'trophy.fill',
+      android: 'emoji-events' as const,
+      title: 'Progress That Sticks',
+      desc: 'Track photos, measurements, and streaks to stay motivated.',
+    },
+  ];
 
   return (
     <>
-      <View style={styles.subRoot}>
+      <View style={styles.newRoot}>
+        <StatusBar style="light" />
+        <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
 
-        {/* ── HERO 40% ───────────────────────────── */}
-        <View style={styles.subHero}>
-          <ImageBackground
-            source={require('../assets/images/3762b428-5e21-48da-9bba-734aa0e46c87.jpeg')}
-            style={styles.subHeroImage}
-            resizeMode="cover"
-          >
-            {/* Title block — top-left, respects safe area */}
-            <SafeAreaView edges={['top']} style={styles.subHeroSafe}>
-              <View style={styles.subHeroTextWrap}>
-                <Text style={styles.heroTitleWhite}>Track Meals in Seconds</Text>
-                <Text style={styles.heroSubtitleWhite}>
-                  AI-powered nutrition tracking without the hassle.
-                </Text>
-              </View>
-            </SafeAreaView>
+          {/* ── 1. HERO ── */}
+          <View style={[styles.newHeroContainer, { height: HERO_HEIGHT }]}>
+            {/* Hero image — right side */}
+            <Image
+              source={require('@/assets/images/d6609695-3248-42d7-826b-091b224ca0a8.jpeg')}
+              style={[
+                styles.newHeroImage,
+                { width: heroImageWidth, height: HERO_HEIGHT },
+              ]}
+              resizeMode="cover"
+            />
 
-            {/* Bottom fade into black */}
+            {/* Left-to-right gradient */}
             <LinearGradient
-              colors={['transparent', '#000']}
-              style={styles.subHeroFade}
+              colors={['#000', '#000', 'rgba(0,0,0,0.7)', 'transparent']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={[styles.newHeroGradient, { width: screenWidth * 0.65 }]}
               pointerEvents="none"
             />
-          </ImageBackground>
-        </View>
 
-        {/* ── BLACK PANEL 60% ────────────────────── */}
-        <SafeAreaView edges={['bottom']} style={styles.subBlackPanel}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.subBlackPanelInner}
-          >
-            {/* 5-icon tappable grid */}
-            <View style={styles.iconGrid}>
-              {ICON_GRID_ITEMS.map((item) => {
-                const isSelected = selectedFeature === item.key;
-                return (
-                  <TouchableOpacity
-                    key={item.key}
-                    style={styles.iconGridItem}
-                    onPress={() => {
-                      console.log('[Subscription] Feature icon tapped:', item.key);
-                      setSelectedFeature(isSelected ? null : item.key);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <View
-                      style={[
-                        styles.iconGridCircle,
-                        isSelected
-                          ? styles.iconGridCircleSelected
-                          : styles.iconGridCircleDefault,
-                      ]}
-                    >
-                      <IconSymbol
-                        ios_icon_name={item.icon_ios}
-                        android_material_icon_name={item.icon_android}
-                        size={18}
-                        color={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
-                      />
-                    </View>
-                    <Text
-                      style={[
-                        styles.iconGridLabel,
-                        isSelected ? styles.iconGridLabelSelected : styles.iconGridLabelDefault,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {/* Close button */}
+            <SafeAreaView edges={['top']} style={styles.newHeroCloseArea} pointerEvents="box-none">
+              <TouchableOpacity
+                style={styles.newHeroCloseBtn}
+                onPress={() => {
+                  console.log('[Subscription] Close button pressed');
+                  router.back();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.newHeroCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </SafeAreaView>
 
-            {/* Feature description card */}
-            <View style={styles.featureDescCard}>
-              <Text style={styles.featureDescText}>
-                {featureDescriptionText}
+            {/* Bottom-left text block */}
+            <View style={styles.newHeroTextBlock} pointerEvents="none">
+              <Text style={styles.newHeroLine1}>Finally lose</Text>
+              <Text style={styles.newHeroLine2}>the weight.</Text>
+              <Text style={styles.newHeroSubtitle}>
+                {'Your personalized plan tells you exactly what to eat,\nkeeps you consistent, and gets you results.'}
               </Text>
             </View>
+          </View>
 
-            {/* Choose Your Plan */}
-            <Text style={styles.choosePlanTitleDark}>
-              Choose Your Plan
-            </Text>
+          {/* ── 2. FEATURE CARDS ── */}
+          <View style={styles.newFeatureCard}>
+            {NEW_FEATURES.map((item, index) => (
+              <View key={item.title}>
+                <View style={styles.newFeatureRow}>
+                  <View style={styles.newFeatureIconCircle}>
+                    <IconSymbol
+                      ios_icon_name={item.ios}
+                      android_material_icon_name={item.android}
+                      size={20}
+                      color="#5B9AA8"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.newFeatureTitle}>{item.title}</Text>
+                    <Text style={styles.newFeatureDesc}>{item.desc}</Text>
+                  </View>
+                </View>
+                {index < NEW_FEATURES.length - 1 && (
+                  <View style={styles.newFeatureSeparator} />
+                )}
+              </View>
+            ))}
+          </View>
+
+          {/* ── 3. PLANS ── */}
+          <View style={styles.newPlansSection}>
+            <Text style={styles.choosePlanTitleDark}>Choose Your Plan</Text>
 
             {/* Yearly card */}
             {resolvedYearlyPkg && (
@@ -874,28 +886,21 @@ export default function SubscriptionScreen() {
                 }}
                 activeOpacity={0.85}
               >
-                {/* SAVE badge */}
-                <View style={[styles.saveBadge, { backgroundColor: colors.primary }]}>
+                <View style={[styles.saveBadge, { backgroundColor: '#5B9AA8' }]}>
                   <Text style={styles.saveBadgeText}>✓ SAVE 58%</Text>
                 </View>
 
                 <View style={styles.planCardInner}>
-                  <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#fff' }]}>
-                    {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
+                  <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#5B9AA8' }]}>
+                    {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.darkPlanCardTitle}>
-                      7-Day Free Trial
-                    </Text>
-                    <Text style={styles.darkPlanCardPrice}>
-                      {yearlyPrice}/year
-                    </Text>
+                    <Text style={styles.darkPlanCardTitle}>7-Day Free Trial</Text>
+                    <Text style={styles.darkPlanCardPrice}>{yearlyPrice}/year</Text>
                     {yearlyMonthlyEquiv && (
-                      <Text style={styles.darkPlanCardSub}>
-                        Only {yearlyMonthlyEquiv}
-                      </Text>
+                      <Text style={styles.darkPlanCardSub}>Only {yearlyMonthlyEquiv}</Text>
                     )}
-                    <Text style={[styles.planCardTag, { color: colors.primary }]}>
+                    <Text style={[styles.planCardTag, { color: '#5B9AA8' }]}>
                       Most users choose this
                     </Text>
                   </View>
@@ -917,39 +922,36 @@ export default function SubscriptionScreen() {
                 activeOpacity={0.85}
               >
                 <View style={styles.planCardInner}>
-                  <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#fff' }]}>
-                    {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#fff' }]} />}
+                  <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#5B9AA8' }]}>
+                    {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.darkPlanCardPrice}>
-                      {monthlyPrice} monthly
-                    </Text>
+                    <Text style={styles.darkPlanCardPrice}>{monthlyPrice} monthly</Text>
                   </View>
                 </View>
               </TouchableOpacity>
             )}
 
-            {/* Cancel anytime */}
-            <Text style={styles.darkCancelText}>
-              Cancel anytime during trial
-            </Text>
+            <Text style={styles.darkCancelText}>Cancel anytime during trial</Text>
+          </View>
 
-            {/* CTA button */}
+          {/* ── 4. CTA BUTTON ── */}
+          <View style={styles.newCtaSection}>
             <TouchableOpacity
-              style={[styles.ctaButtonDark, purchasing && { opacity: 0.7 }]}
+              style={[styles.newCtaButton, purchasing && { opacity: 0.7 }]}
               onPress={handleSubscribe}
               disabled={purchasing || !selectedPkg}
             >
               {purchasing ? (
-                <ActivityIndicator size="small" color="#000" />
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.ctaButtonDarkText}>
-                  {ctaLabel}
-                </Text>
+                <Text style={styles.newCtaButtonText}>{ctaLabel}</Text>
               )}
             </TouchableOpacity>
+          </View>
 
-            {/* Restore Purchases */}
+          {/* ── 5. FOOTER ── */}
+          <View style={styles.newFooter}>
             <TouchableOpacity
               style={styles.restoreButton}
               onPress={() => {
@@ -958,20 +960,18 @@ export default function SubscriptionScreen() {
               }}
               disabled={loading}
             >
-              <Text style={styles.darkRestoreText}>
-                Restore Purchases
-              </Text>
+              <Text style={styles.darkRestoreText}>Restore Purchases</Text>
             </TouchableOpacity>
 
-            {/* Legal disclaimer */}
             <View style={styles.disclaimerContainer}>
               <Text style={styles.darkDisclaimerText}>
                 Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
                 You can manage your subscription in your App Store account settings.
               </Text>
             </View>
-          </ScrollView>
-        </SafeAreaView>
+          </View>
+
+        </ScrollView>
       </View>
 
       {/* Success Modal */}
@@ -1406,42 +1406,147 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
 
-  // ── Split-screen layout ────────────────────────────────────────────────────
-  subRoot: {
+  // ── New paywall layout ─────────────────────────────────────────────────────
+  newRoot: {
     flex: 1,
     backgroundColor: '#000',
   },
-  subHero: {
-    height: '30%',
-    width: '100%',
+
+  // Hero
+  newHeroContainer: {
+    backgroundColor: '#000',
+    overflow: 'hidden',
   },
-  subHeroImage: {
-    flex: 1,
-    width: '100%',
-  },
-  subHeroSafe: {
-    flex: 1,
-  },
-  subHeroTextWrap: {
-    paddingHorizontal: spacing.md,
-    paddingTop: 72,
-    maxWidth: '50%',
-  },
-  subHeroFade: {
+  newHeroImage: {
     position: 'absolute',
-    left: 0,
+    top: 0,
     right: 0,
+  },
+  newHeroGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     bottom: 0,
-    height: '35%',
   },
-  subBlackPanel: {
-    flex: 1,
-    backgroundColor: '#000',
+  newHeroCloseArea: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    left: 0,
+    alignItems: 'flex-end',
   },
-  subBlackPanelInner: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+  newHeroCloseBtn: {
+    marginTop: 8,
+    marginRight: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newHeroCloseBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  newHeroTextBlock: {
+    position: 'absolute',
+    bottom: 28,
+    left: 20,
+    paddingRight: 16,
+  },
+  newHeroLine1: {
+    fontSize: 38,
+    fontWeight: '800',
+    color: '#fff',
+    lineHeight: 42,
+  },
+  newHeroLine2: {
+    fontSize: 38,
+    fontWeight: '800',
+    color: '#5B9AA8',
+    lineHeight: 42,
+  },
+  newHeroSubtitle: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
+    maxWidth: 220,
+  },
+
+  // Feature card
+  newFeatureCard: {
+    backgroundColor: '#111',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 20,
+  },
+  newFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+  },
+  newFeatureIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(91,154,168,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(91,154,168,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newFeatureTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  newFeatureDesc: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  newFeatureSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+
+  // Plans section
+  newPlansSection: {
+    marginHorizontal: 16,
+    marginTop: 20,
+  },
+
+  // CTA
+  newCtaSection: {
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  newCtaButton: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    backgroundColor: '#5B9AA8',
+  },
+  newCtaButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // Footer
+  newFooter: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    paddingBottom: 32,
   },
 
   // ── Premium hero screen (isPremium branch) ─────────────────────────────────
