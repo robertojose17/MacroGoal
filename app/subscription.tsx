@@ -769,7 +769,7 @@ export default function SubscriptionScreen() {
 
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
-  const HERO_HEIGHT = 480;
+  const HERO_HEIGHT = 320;
 
   const NEW_FEATURES = [
     {
@@ -802,7 +802,7 @@ export default function SubscriptionScreen() {
           <View style={{ height: HERO_HEIGHT, backgroundColor: '#000', flexDirection: 'row' }}>
 
             {/* LEFT 60% — text block */}
-            <View style={{ width: '60%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 12, paddingTop: 100 }}>
+            <View style={{ width: '60%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 12, paddingTop: 60 }}>
               <Text style={styles.newHeroLine1}>Finally lose</Text>
               <Text style={styles.newHeroLine2}>the weight.</Text>
               <Text style={styles.newHeroSubtitle}>
