@@ -799,37 +799,10 @@ export default function SubscriptionScreen() {
         <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
 
           {/* ── 1. HERO ── */}
-          <View style={[styles.newHeroContainer, { height: HERO_HEIGHT }]}>
-            {/* Hero image — full width cover */}
-            <Image
-              source={require('@/assets/images/d6609695-3248-42d7-826b-091b224ca0a8.jpeg')}
-              style={[
-                styles.newHeroImage,
-                { width: screenWidth, height: HERO_HEIGHT },
-              ]}
-              resizeMode="cover"
-            />
+          <View style={{ height: HERO_HEIGHT, backgroundColor: '#000', flexDirection: 'row' }}>
 
-            {/* Left-to-right gradient */}
-            <LinearGradient
-              colors={['#000', '#000', 'rgba(0,0,0,0.7)', 'transparent']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={[styles.newHeroGradient, { width: screenWidth * 0.75 }]}
-              pointerEvents="none"
-            />
-
-            {/* Bottom-to-top fade gradient */}
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.6)', '#000']}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 180 }}
-              pointerEvents="none"
-            />
-
-            {/* Text block — top-left */}
-            <View style={styles.newHeroTextBlock} pointerEvents="none">
+            {/* LEFT 60% — text block */}
+            <View style={{ width: '60%', justifyContent: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 60 }}>
               <Text style={styles.newHeroLine1}>Finally lose</Text>
               <Text style={styles.newHeroLine2}>the weight.</Text>
               <Text style={styles.newHeroSubtitle}>
@@ -837,19 +810,24 @@ export default function SubscriptionScreen() {
               </Text>
             </View>
 
-            {/* Close button — above image, z-index on top */}
-            <SafeAreaView edges={['top']} style={styles.newHeroCloseArea} pointerEvents="box-none">
-              <TouchableOpacity
-                style={styles.newHeroCloseBtn}
-                onPress={() => {
-                  console.log('[Subscription] Close button pressed');
-                  router.back();
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.newHeroCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </SafeAreaView>
+            {/* RIGHT 40% — image, no rounding, fills full height */}
+            <Image
+              source={require('@/assets/images/d6609695-3248-42d7-826b-091b224ca0a8.jpeg')}
+              style={{ width: '40%', height: HERO_HEIGHT }}
+              resizeMode="cover"
+            />
+
+            {/* Close button — absolute overlay on top of entire hero */}
+            <TouchableOpacity
+              style={{ position: 'absolute', top: 52, right: 12, zIndex: 10, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => {
+                console.log('[Subscription] Close button pressed');
+                router.back();
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.newHeroCloseBtnText}>✕</Text>
+            </TouchableOpacity>
           </View>
 
           {/* ── 2. FEATURE CARDS ── */}
