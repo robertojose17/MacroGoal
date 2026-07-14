@@ -806,7 +806,7 @@ export default function SubscriptionScreen() {
               <Text style={styles.newHeroLine1}>Finally lose</Text>
               <Text style={styles.newHeroLine2}>the weight.</Text>
               <Text style={styles.newHeroSubtitle}>
-                {'Your personalized plan tells you exactly what to eat,\nkeeps you consistent, and gets you results.'}
+                {'Your personalized plan\ntells you exactly what to eat,\ntracks everything automatically,\nand keeps you consistent.'}
               </Text>
             </View>
 
@@ -1445,21 +1445,21 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   newHeroLine1: {
-    fontSize: 42,
+    fontSize: 32,
     fontWeight: '800',
     color: '#fff',
-    lineHeight: 46,
+    lineHeight: 36,
   },
   newHeroLine2: {
-    fontSize: 42,
+    fontSize: 32,
     fontWeight: '800',
     color: '#5B9AA8',
-    lineHeight: 46,
+    lineHeight: 36,
   },
   newHeroSubtitle: {
     color: 'rgba(255,255,255,0.65)',
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 17,
     marginTop: 12,
     maxWidth: 260,
   },
