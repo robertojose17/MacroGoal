@@ -769,27 +769,26 @@ export default function SubscriptionScreen() {
 
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
-  const HERO_HEIGHT = 420;
-  const heroImageWidth = screenWidth * 0.58;
+  const HERO_HEIGHT = 480;
 
   const NEW_FEATURES = [
     {
       ios: 'fork.knife',
       android: 'restaurant' as const,
-      title: 'Smart Food Tracking',
-      desc: 'Log meals instantly with AI photo recognition or barcode scan.',
+      title: 'Eat the foods you love',
+      desc: 'No boring diets. Just flexible eating that fits your life.',
     },
     {
       ios: 'chart.line.uptrend.xyaxis',
       android: 'trending-up' as const,
-      title: 'Personalized Meal Plans',
-      desc: 'Get weekly plans tailored to your goals, body, and preferences.',
+      title: 'Lose weight every week',
+      desc: 'A plan that adapts to you and delivers real results.',
     },
     {
       ios: 'trophy.fill',
       android: 'emoji-events' as const,
-      title: 'Progress That Sticks',
-      desc: 'Track photos, measurements, and streaks to stay motivated.',
+      title: 'Feel confident in your body again',
+      desc: 'Look better, feel better, and live better.',
     },
   ];
 
@@ -801,12 +800,12 @@ export default function SubscriptionScreen() {
 
           {/* ── 1. HERO ── */}
           <View style={[styles.newHeroContainer, { height: HERO_HEIGHT }]}>
-            {/* Hero image — right side */}
+            {/* Hero image — full width cover */}
             <Image
               source={require('@/assets/images/d6609695-3248-42d7-826b-091b224ca0a8.jpeg')}
               style={[
                 styles.newHeroImage,
-                { width: heroImageWidth, height: HERO_HEIGHT },
+                { width: screenWidth, height: HERO_HEIGHT },
               ]}
               resizeMode="cover"
             />
@@ -816,11 +815,29 @@ export default function SubscriptionScreen() {
               colors={['#000', '#000', 'rgba(0,0,0,0.7)', 'transparent']}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
-              style={[styles.newHeroGradient, { width: screenWidth * 0.55 }]}
+              style={[styles.newHeroGradient, { width: screenWidth * 0.75 }]}
               pointerEvents="none"
             />
 
-            {/* Close button */}
+            {/* Bottom-to-top fade gradient */}
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.6)', '#000']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 180 }}
+              pointerEvents="none"
+            />
+
+            {/* Text block — top-left */}
+            <View style={styles.newHeroTextBlock} pointerEvents="none">
+              <Text style={styles.newHeroLine1}>Finally lose</Text>
+              <Text style={styles.newHeroLine2}>the weight.</Text>
+              <Text style={styles.newHeroSubtitle}>
+                {'Your personalized plan tells you exactly what to eat,\nkeeps you consistent, and gets you results.'}
+              </Text>
+            </View>
+
+            {/* Close button — above image, z-index on top */}
             <SafeAreaView edges={['top']} style={styles.newHeroCloseArea} pointerEvents="box-none">
               <TouchableOpacity
                 style={styles.newHeroCloseBtn}
@@ -833,15 +850,6 @@ export default function SubscriptionScreen() {
                 <Text style={styles.newHeroCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </SafeAreaView>
-
-            {/* Bottom-left text block */}
-            <View style={styles.newHeroTextBlock} pointerEvents="none">
-              <Text style={styles.newHeroLine1}>Finally lose</Text>
-              <Text style={styles.newHeroLine2}>the weight.</Text>
-              <Text style={styles.newHeroSubtitle}>
-                {'Your personalized plan tells you exactly what to eat,\nkeeps you consistent, and gets you results.'}
-              </Text>
-            </View>
           </View>
 
           {/* ── 2. FEATURE CARDS ── */}
@@ -1434,6 +1442,7 @@ const styles = StyleSheet.create({
     right: 0,
     left: 0,
     alignItems: 'flex-end',
+    zIndex: 10,
   },
   newHeroCloseBtn: {
     marginTop: 8,
@@ -1453,28 +1462,28 @@ const styles = StyleSheet.create({
   },
   newHeroTextBlock: {
     position: 'absolute',
-    bottom: 52,
+    top: 80,
     left: 20,
     paddingRight: 16,
   },
   newHeroLine1: {
-    fontSize: 38,
+    fontSize: 42,
     fontWeight: '800',
     color: '#fff',
-    lineHeight: 42,
+    lineHeight: 46,
   },
   newHeroLine2: {
-    fontSize: 38,
+    fontSize: 42,
     fontWeight: '800',
     color: '#5B9AA8',
-    lineHeight: 42,
+    lineHeight: 46,
   },
   newHeroSubtitle: {
     color: 'rgba(255,255,255,0.65)',
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 8,
-    maxWidth: 220,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 12,
+    maxWidth: 260,
   },
 
   // Feature card
