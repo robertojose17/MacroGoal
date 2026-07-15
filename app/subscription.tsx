@@ -810,7 +810,7 @@ export default function SubscriptionScreen() {
 
             {/* RIGHT 40% — image, no rounding, fills full height */}
             <Image
-              source={require('@/assets/images/a61f1e62-f2ff-4c4a-b31b-5a9428001a4b.jpeg')}
+              source={require('@/assets/images/b58668e0-da07-4d39-82de-0e5d5f7d3ab9.jpeg')}
               style={{ width: '40%', aspectRatio: 0.65 }}
               resizeMode="cover"
             />
