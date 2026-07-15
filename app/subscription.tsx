@@ -113,6 +113,7 @@ export default function SubscriptionScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activePlan, setActivePlan] = useState<'monthly' | 'yearly'>('yearly');
   const [selectedFeature, setSelectedFeature] = useState<FeatureKey | null>(null);
+  const [showAllFeatures, setShowAllFeatures] = useState(false);
   const { autoStart } = useLocalSearchParams<{ autoStart?: string }>();
   const autoStartFiredRef = React.useRef(false);
 
@@ -769,6 +770,19 @@ export default function SubscriptionScreen() {
 
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
+  const ALL_FEATURES = [
+    'AI photo calorie estimator',
+    'Personalized meal plans (fat loss, muscle gain, maintenance)',
+    'Auto-generated grocery lists',
+    'Progress photos & body measurements',
+    'Barcode scanner for instant food logging',
+    'Custom macros & calorie goals',
+    'Unlimited food search & logging',
+    'AI chatbot nutrition coach',
+    'Streak tracking & consistency score',
+    'No ads, no invasive tracking',
+  ];
+
   const NEW_FEATURES = [
     {
       ios: 'fork.knife',
@@ -841,6 +855,31 @@ export default function SubscriptionScreen() {
               </View>
             ))}
           </View>
+
+          {/* ── See everything included dropdown ── */}
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, gap: 6 }}
+            onPress={() => setShowAllFeatures(prev => !prev)}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: '#5B9AA8', fontSize: 14, fontWeight: '500' }}>
+              See everything that's included
+            </Text>
+            <Text style={{ color: '#5B9AA8', fontSize: 12 }}>
+              {showAllFeatures ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
+
+          {showAllFeatures && (
+            <View style={{ backgroundColor: '#111', borderRadius: 12, marginHorizontal: 16, marginBottom: 8, padding: 16 }}>
+              {ALL_FEATURES.map((feature, index) => (
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: index < ALL_FEATURES.length - 1 ? 12 : 0 }}>
+                  <Text style={{ color: '#5B9AA8', fontSize: 15, fontWeight: '700', marginTop: 1 }}>✓</Text>
+                  <Text style={{ color: '#ccc', fontSize: 14, flex: 1, lineHeight: 20 }}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* ── 3. PLANS ── */}
           <View style={styles.newPlansSection}>
