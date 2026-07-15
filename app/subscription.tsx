@@ -844,8 +844,6 @@ export default function SubscriptionScreen() {
 
           {/* ── 3. PLANS ── */}
           <View style={styles.newPlansSection}>
-            <Text style={styles.choosePlanTitleDark}>Choose Your Plan</Text>
-
             {/* Yearly card */}
             {resolvedYearlyPkg && (
               <TouchableOpacity
