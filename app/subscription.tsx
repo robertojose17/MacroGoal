@@ -800,7 +800,7 @@ export default function SubscriptionScreen() {
           <View style={{ backgroundColor: '#000', flexDirection: 'row', paddingBottom: 0 }}>
 
             {/* LEFT 60% — text block */}
-            <View style={{ width: '60%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 12, paddingTop: 32 }}>
+            <View style={{ width: '55%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 8, paddingTop: 72, paddingBottom: 20 }}>
               <Text style={styles.newHeroLine1}>Finally lose</Text>
               <Text style={styles.newHeroLine2}>the weight.</Text>
               <Text style={styles.newHeroSubtitle}>
@@ -808,11 +808,11 @@ export default function SubscriptionScreen() {
               </Text>
             </View>
 
-            {/* RIGHT 40% — image, no rounding, fills full height */}
+            {/* RIGHT 45% — image, no rounding, fills full height */}
             <Image
               source={require('@/assets/images/b58668e0-da07-4d39-82de-0e5d5f7d3ab9.jpeg')}
-              style={{ width: '40%', aspectRatio: 0.65 }}
-              resizeMode="cover"
+              style={{ width: '45%', aspectRatio: 0.7 }}
+              resizeMode="contain"
             />
 
           </View>
