@@ -815,17 +815,6 @@ export default function SubscriptionScreen() {
               resizeMode="cover"
             />
 
-            {/* Close button — absolute overlay on top of entire hero */}
-            <TouchableOpacity
-              style={{ position: 'absolute', top: 52, right: 12, zIndex: 10, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => {
-                console.log('[Subscription] Close button pressed');
-                router.back();
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.newHeroCloseBtnText}>✕</Text>
-            </TouchableOpacity>
           </View>
 
           {/* ── 2. FEATURE CARDS ── */}
