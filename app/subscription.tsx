@@ -1465,9 +1465,12 @@ const styles = StyleSheet.create({
   // Feature card
   newFeatureCard: {
     backgroundColor: '#111',
-    borderRadius: 16,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 0,
     padding: 20,
   },
   newFeatureRow: {
