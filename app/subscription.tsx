@@ -797,10 +797,10 @@ export default function SubscriptionScreen() {
         <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
 
           {/* ── 1. HERO ── */}
-          <View style={{ backgroundColor: '#000', flexDirection: 'row', paddingBottom: 16 }}>
+          <View style={{ backgroundColor: '#000', flexDirection: 'row', paddingBottom: 0 }}>
 
             {/* LEFT 60% — text block */}
-            <View style={{ width: '60%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 12, paddingTop: 52 }}>
+            <View style={{ width: '60%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 12, paddingTop: 32 }}>
               <Text style={styles.newHeroLine1}>Finally lose</Text>
               <Text style={styles.newHeroLine2}>the weight.</Text>
               <Text style={styles.newHeroSubtitle}>
@@ -811,7 +811,7 @@ export default function SubscriptionScreen() {
             {/* RIGHT 40% — image, no rounding, fills full height */}
             <Image
               source={require('@/assets/images/d6609695-3248-42d7-826b-091b224ca0a8.jpeg')}
-              style={{ width: '40%', aspectRatio: 0.75 }}
+              style={{ width: '40%', aspectRatio: 0.65 }}
               resizeMode="cover"
             />
 
