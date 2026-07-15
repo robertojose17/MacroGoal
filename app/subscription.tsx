@@ -769,8 +769,6 @@ export default function SubscriptionScreen() {
 
   const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
 
-  const HERO_HEIGHT = 320;
-
   const NEW_FEATURES = [
     {
       ios: 'fork.knife',
@@ -799,10 +797,10 @@ export default function SubscriptionScreen() {
         <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
 
           {/* ── 1. HERO ── */}
-          <View style={{ height: HERO_HEIGHT, backgroundColor: '#000', flexDirection: 'row' }}>
+          <View style={{ backgroundColor: '#000', flexDirection: 'row', paddingBottom: 16 }}>
 
             {/* LEFT 60% — text block */}
-            <View style={{ width: '60%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 12, paddingTop: 60 }}>
+            <View style={{ width: '60%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 12, paddingTop: 52 }}>
               <Text style={styles.newHeroLine1}>Finally lose</Text>
               <Text style={styles.newHeroLine2}>the weight.</Text>
               <Text style={styles.newHeroSubtitle}>
@@ -813,7 +811,7 @@ export default function SubscriptionScreen() {
             {/* RIGHT 40% — image, no rounding, fills full height */}
             <Image
               source={require('@/assets/images/d6609695-3248-42d7-826b-091b224ca0a8.jpeg')}
-              style={{ width: '40%', height: HERO_HEIGHT }}
+              style={{ width: '40%', aspectRatio: 0.75 }}
               resizeMode="cover"
             />
 
