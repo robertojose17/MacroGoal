@@ -214,6 +214,7 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] Weight tracker id:', weightTracker?.id ?? null);
 
       // Fetch tracker entries if tracker exists
+      let lastTrackerEntryLbs: number | null = null;
       let lastTrackerEntryKg: number | null = null;
       if (weightTracker?.id) {
         const { data: trackerEntries } = await supabase
@@ -225,13 +226,13 @@ export default function ShareProgressScreen() {
         console.log('[ShareProgress] Tracker entries found:', trackerEntries?.length ?? 0);
 
         if (trackerEntries && trackerEntries.length > 0) {
-          const lastEntryLbs = trackerEntries[trackerEntries.length - 1].value as number;
-          lastTrackerEntryKg = lastEntryLbs / KG_TO_LBS;
-          console.log('[ShareProgress] Last tracker entry (lbs):', lastEntryLbs, '-> kg:', lastTrackerEntryKg);
+          lastTrackerEntryLbs = trackerEntries[trackerEntries.length - 1].value as number;
+          lastTrackerEntryKg = lastTrackerEntryLbs / KG_TO_LBS;
+          console.log('[ShareProgress] Last tracker entry (lbs):', lastTrackerEntryLbs, '-> kg:', lastTrackerEntryKg);
         }
       }
 
-      // Resolve startKg and activeWeightKg
+      // Resolve startKg and activeWeightKg (used for weightGoalProgress only)
       const startKg: number | null = checkIns && checkIns.length > 0 ? (checkIns[0].weight as number) : null;
       const lastCheckInKg: number | null = checkIns && checkIns.length > 0 ? (checkIns[checkIns.length - 1].weight as number) : null;
       const activeWeightKg: number | null = lastTrackerEntryKg ?? lastCheckInKg ?? null;
@@ -250,12 +251,24 @@ export default function ShareProgressScreen() {
         return { weightGoalProgress: 0, weightLost: 0 };
       }
 
-      // Apply GoalWeightCard formula
+      // Apply GoalWeightCard formula (unchanged)
       const totalRange = Math.abs(startKg - resolvedGoalKg) || 1;
       const progress = Math.min(1, Math.max(0, Math.abs(startKg - activeWeightKg) / totalRange));
       const progressPct = Math.round(progress * 100);
 
-      const weightLost = Math.max(0, Math.round((startKg - activeWeightKg) * KG_TO_LBS * 10) / 10);
+      // weightLost: match check-ins tab WeightTrend logic exactly
+      // users.current_weight (kg) is the profile starting weight; latest tracker entry is in lbs
+      const profileWeightKg = parseFloat(String(userData?.current_weight));
+      const profileWeightLbs = !isNaN(profileWeightKg) ? profileWeightKg * KG_TO_LBS : null;
+      const latestLbs = lastTrackerEntryLbs;
+      let weightLost = 0;
+      if (profileWeightLbs != null && latestLbs != null) {
+        const deltaLbs = latestLbs - profileWeightLbs;
+        weightLost = deltaLbs < 0 ? Math.round(Math.abs(deltaLbs) * 10) / 10 : 0;
+        console.log('[ShareProgress] profileWeightLbs:', profileWeightLbs, 'latestLbs:', latestLbs, 'deltaLbs:', deltaLbs);
+      } else {
+        console.log('[ShareProgress] weightLost fallback: profileWeightLbs=', profileWeightLbs, 'latestLbs=', latestLbs);
+      }
 
       console.log('[ShareProgress] progressPct:', progressPct, 'weightLost (lbs):', weightLost);
 
