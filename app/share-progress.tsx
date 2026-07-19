@@ -710,6 +710,7 @@ export default function ShareProgressScreen() {
               beforeWeight={cardData.beforeWeight}
               afterWeight={cardData.afterWeight}
               consistencyScore={cardData.consistencyScore}
+              weightLost={cardData.weightLost}
               username={username}
             />
           </View>
@@ -744,6 +745,7 @@ export default function ShareProgressScreen() {
                   beforeWeight={cardData.beforeWeight}
                   afterWeight={cardData.afterWeight}
                   consistencyScore={cardData.consistencyScore}
+                  weightLost={cardData.weightLost}
                   username={username}
                 />
               </View>

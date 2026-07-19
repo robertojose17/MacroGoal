@@ -35,6 +35,7 @@ export interface ShareableProgressCardProps {
   beforeWeight?: number | null;
   afterWeight?: number | null;
   consistencyScore?: number;
+  weightLost?: number;
   username?: string | null;
 }
 
@@ -46,7 +47,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
-    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, consistencyScore, username },
+    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, consistencyScore, weightLost, username },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -60,6 +61,20 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const afterLoadedRef = useRef(false);
 
     const consistencyScoreValue = Math.max(0, Math.min(100, Math.round(consistencyScore ?? 0)));
+    const weightLostValue = Math.max(0, weightLost ?? 0);
+
+    const consistencyLabel = consistencyScoreValue >= 80 ? 'Excellent 🔥' :
+      consistencyScoreValue >= 60 ? 'Good 💪' :
+      consistencyScoreValue >= 40 ? 'Building 📈' :
+      'Starting ✨';
+
+    const weightLostDisplay = weightLostValue > 0 ? weightLostValue.toFixed(1) : '—';
+    const showWeightUnit = weightLostValue > 0;
+
+    const weightLostLabel = weightLostValue >= 10 ? 'Amazing progress 🏆' :
+      weightLostValue >= 5 ? 'Great work 💪' :
+      weightLostValue > 0 ? 'Keep going 🔥' :
+      'Log your weight';
 
     const beforeDateDisplay = beforeDate || '';
     const afterDateDisplay = afterDate || 'Today';
@@ -212,22 +227,31 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
             </View>
           </View>
 
-          {/* ── CONSISTENCY SCORE ── */}
+          {/* ── STATS ROW ── */}
           <View style={styles.goalDivider} />
-          <View style={styles.goalBlock}>
-            <View style={styles.goalTopRow}>
-              <Text style={styles.goalEyebrow}>CONSISTENCY SCORE</Text>
-              <View style={styles.scoreRow}>
-                <Text style={styles.goalPercent}>{consistencyScoreValue}</Text>
-                <Text style={styles.scoreOutOf}>/100</Text>
+          <View style={styles.statsRow}>
+            {/* Left card — Consistency Score */}
+            <View style={styles.statCard}>
+              <Text style={styles.statEyebrow}>CONSISTENCY</Text>
+              <View style={styles.statValueRow}>
+                <Text style={styles.statValue}>{consistencyScoreValue}</Text>
+                <Text style={styles.statUnit}>/100</Text>
               </View>
+              <Text style={styles.statLabel}>{consistencyLabel}</Text>
             </View>
-            <Text style={styles.scoreLabel}>
-              {consistencyScoreValue >= 80 ? 'Excellent consistency 🔥' :
-               consistencyScoreValue >= 60 ? 'Good consistency 💪' :
-               consistencyScoreValue >= 40 ? 'Building momentum 📈' :
-               'Just getting started ✨'}
-            </Text>
+
+            {/* Vertical divider */}
+            <View style={styles.statDivider} />
+
+            {/* Right card — Weight Lost */}
+            <View style={styles.statCard}>
+              <Text style={styles.statEyebrow}>WEIGHT LOST</Text>
+              <View style={styles.statValueRow}>
+                <Text style={styles.statValue}>{weightLostDisplay}</Text>
+                {showWeightUnit && <Text style={styles.statUnit}> lbs</Text>}
+              </View>
+              <Text style={styles.statLabel}>{weightLostLabel}</Text>
+            </View>
           </View>
 
           {/* ── FOOTER ── */}
@@ -357,51 +381,59 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Goal progress ────────────────────────────────────────────────────────────
+  // ── Goal divider ─────────────────────────────────────────────────────────────
   goalDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  goalBlock: {
-    paddingTop: 12,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-  },
-  goalTopRow: {
+
+  // ── Stats row ────────────────────────────────────────────────────────────────
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 0,
   },
-  goalEyebrow: {
-    fontSize: 11,
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginVertical: 4,
+  },
+  statEyebrow: {
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 2,
     color: 'rgba(255,255,255,0.45)',
     textTransform: 'uppercase',
   },
-  goalPercent: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  scoreRow: {
+  statValueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 2,
+    gap: 1,
   },
-  scoreOutOf: {
+  statValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  statUnit: {
     fontSize: 13,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.45)',
     letterSpacing: -0.2,
   },
-  scoreLabel: {
-    fontSize: 13,
+  statLabel: {
+    fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.55)',
+    marginTop: 1,
   },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
