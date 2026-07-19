@@ -34,7 +34,7 @@ export interface ShareableProgressCardProps {
   afterDate?: string | null;
   beforeWeight?: number | null;
   afterWeight?: number | null;
-  weightGoalProgress?: number;
+  consistencyScore?: number;
   username?: string | null;
 }
 
@@ -46,7 +46,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
-    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, weightGoalProgress, username },
+    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, consistencyScore, username },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -59,9 +59,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const beforeLoadedRef = useRef(false);
     const afterLoadedRef = useRef(false);
 
-    const clampedProgress = Math.max(0, Math.min(100, Math.round(weightGoalProgress ?? 0)));
-    const progressPercent = `${clampedProgress}%`;
-    const progressBarWidth = `${clampedProgress}%` as `${number}%`;
+    const consistencyScoreValue = Math.max(0, Math.min(100, Math.round(consistencyScore ?? 0)));
 
     const beforeDateDisplay = beforeDate || '';
     const afterDateDisplay = afterDate || 'Today';
@@ -214,16 +212,22 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
             </View>
           </View>
 
-          {/* ── GOAL PROGRESS ── */}
+          {/* ── CONSISTENCY SCORE ── */}
           <View style={styles.goalDivider} />
           <View style={styles.goalBlock}>
             <View style={styles.goalTopRow}>
-              <Text style={styles.goalEyebrow}>GOAL PROGRESS</Text>
-              <Text style={styles.goalPercent}>{progressPercent}</Text>
+              <Text style={styles.goalEyebrow}>CONSISTENCY SCORE</Text>
+              <View style={styles.scoreRow}>
+                <Text style={styles.goalPercent}>{consistencyScoreValue}</Text>
+                <Text style={styles.scoreOutOf}>/100</Text>
+              </View>
             </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: progressBarWidth }]} />
-            </View>
+            <Text style={styles.scoreLabel}>
+              {consistencyScoreValue >= 80 ? 'Excellent consistency 🔥' :
+               consistencyScoreValue >= 60 ? 'Good consistency 💪' :
+               consistencyScoreValue >= 40 ? 'Building momentum 📈' :
+               'Just getting started ✨'}
+            </Text>
           </View>
 
           {/* ── FOOTER ── */}
@@ -382,16 +386,22 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: -0.3,
   },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
+  scoreRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: colors.primary,
+  scoreOutOf: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: -0.2,
+  },
+  scoreLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
   },
 
   // ── Footer ───────────────────────────────────────────────────────────────────

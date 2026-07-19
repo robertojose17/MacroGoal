@@ -709,7 +709,7 @@ export default function ShareProgressScreen() {
               afterDate={cardData.afterDateLabel}
               beforeWeight={cardData.beforeWeight}
               afterWeight={cardData.afterWeight}
-              weightGoalProgress={cardData.weightGoalProgress}
+              consistencyScore={cardData.consistencyScore}
               username={username}
             />
           </View>
@@ -743,7 +743,7 @@ export default function ShareProgressScreen() {
                   afterDate={cardData.afterDateLabel}
                   beforeWeight={cardData.beforeWeight}
                   afterWeight={cardData.afterWeight}
-                  weightGoalProgress={cardData.weightGoalProgress}
+                  consistencyScore={cardData.consistencyScore}
                   username={username}
                 />
               </View>
