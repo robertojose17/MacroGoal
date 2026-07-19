@@ -815,10 +815,10 @@ export default function SubscriptionScreen() {
 
             {/* LEFT 60% — text block */}
             <View style={{ width: '55%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 8, paddingTop: 72, paddingBottom: 20 }}>
-              <Text style={styles.newHeroLine1}>Finally lose</Text>
-              <Text style={styles.newHeroLine2}>the weight.</Text>
+              <Text style={styles.newHeroLine1}>Unlock your</Text>
+              <Text style={styles.newHeroLine2}>personalized{'\n'}meal plan.</Text>
               <Text style={styles.newHeroSubtitle}>
-                {'Your personalized plan\ntells you exactly what to eat,\ntracks everything automatically,\nand keeps you consistent.'}
+                {'Everything you need to lose weight has already been built for you. Unlock your meal plan, grocery list & more with your free trial.'}
               </Text>
             </View>
 
