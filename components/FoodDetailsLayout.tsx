@@ -707,10 +707,28 @@ export default function FoodDetailsLayout({
       setFoodItemRef({ serving_size: servingInfo.grams, macros_per: '100g' });
       setServingUnit('serving');
 
-      // Use serving_quantity as the authoritative gram value
-      const totalGrams = parsedProduct.serving_quantity
-        ? parseFloat(String(parsedProduct.serving_quantity))
-        : servingInfo.grams;
+      // Resolve totalGrams with priority chain:
+      // 1. serving_quantity (now backfilled in DB for 97% of items)
+      // 2. servingInfo.grams (from extractServingSize which parses the serving_size string)
+      // 3. Parse "(Xg)" pattern directly from serving_size string
+      // 4. 100g absolute last resort
+      const rawQty = parsedProduct.serving_quantity;
+      const parsedQty = rawQty != null ? parseFloat(String(rawQty)) : NaN;
+      let totalGrams: number;
+      console.log('[FoodDetails] loadViewData: resolving totalGrams — serving_quantity=', rawQty, 'servingInfo.grams=', servingInfo.grams, 'serving_size=', parsedProduct.serving_size);
+      if (isFinite(parsedQty) && parsedQty > 0) {
+        totalGrams = parsedQty;
+        console.log('[FoodDetails] loadViewData: totalGrams from serving_quantity =', totalGrams);
+      } else if (servingInfo.grams > 0 && servingInfo.grams !== 100) {
+        totalGrams = servingInfo.grams;
+        console.log('[FoodDetails] loadViewData: totalGrams from servingInfo.grams =', totalGrams);
+      } else {
+        // Try to parse "(Xg)" from serving_size string directly
+        const ssStr = typeof parsedProduct.serving_size === 'string' ? parsedProduct.serving_size : '';
+        const m = ssStr.match(/\((\d+\.?\d*)\s*g\)/i);
+        totalGrams = m ? parseFloat(m[1]) : (servingInfo.grams > 0 ? servingInfo.grams : 100);
+        console.log('[FoodDetails] loadViewData: totalGrams from fallback (ssStr=', ssStr, ', match=', m ? m[1] : null, ') =', totalGrams);
+      }
 
       // Extract unit name and count from the serving_size string (display only)
       const servingSizeStr = typeof parsedProduct.serving_size === 'string' ? parsedProduct.serving_size.trim() : '';
