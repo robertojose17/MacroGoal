@@ -63,18 +63,8 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const consistencyScoreValue = Math.max(0, Math.min(100, Math.round(consistencyScore ?? 0)));
     const weightLostValue = Math.max(0, weightLost ?? 0);
 
-    const consistencyLabel = consistencyScoreValue >= 80 ? 'Excellent 🔥' :
-      consistencyScoreValue >= 60 ? 'Good 💪' :
-      consistencyScoreValue >= 40 ? 'Building 📈' :
-      'Starting ✨';
-
     const weightLostDisplay = weightLostValue > 0 ? weightLostValue.toFixed(1) : '—';
     const showWeightUnit = weightLostValue > 0;
-
-    const weightLostLabel = weightLostValue >= 10 ? 'Amazing progress 🏆' :
-      weightLostValue >= 5 ? 'Great work 💪' :
-      weightLostValue > 0 ? 'Keep going 🔥' :
-      'Log your weight';
 
     const beforeDateDisplay = beforeDate || '';
     const afterDateDisplay = afterDate || 'Today';
@@ -237,7 +227,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 <Text style={styles.statValue}>{consistencyScoreValue}</Text>
                 <Text style={styles.statUnit}>/100</Text>
               </View>
-              <Text style={styles.statLabel}>{consistencyLabel}</Text>
             </View>
 
             {/* Vertical divider */}
@@ -250,7 +239,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 <Text style={styles.statValue}>{weightLostDisplay}</Text>
                 {showWeightUnit && <Text style={styles.statUnit}> lbs</Text>}
               </View>
-              <Text style={styles.statLabel}>{weightLostLabel}</Text>
             </View>
           </View>
 
@@ -428,12 +416,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.45)',
     letterSpacing: -0.2,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.55)',
-    marginTop: 1,
   },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
