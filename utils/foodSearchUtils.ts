@@ -160,31 +160,54 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
   if (fi.off_data && typeof fi.off_data === 'object') {
     const base = fi.off_data as OpenFoodFactsProduct;
     const servingDesc = (fi as any).serving_description as string | null | undefined;
-    const totalGrams = Number((fi as any).serving_size) || 100;  // serving_size IS total grams
     const servingCount = Number((fi as any).serving_count) || 1;
     const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-    // Only override serving_size if the original is missing/empty
+
+    // Resolve serving_quantity with strict priority — never blindly fall back to 100
+    const dbServingSize = Number((fi as any).serving_size);
+    const dbServingQty  = Number((fi as any).serving_quantity);
+    const baseServingQty = base.serving_quantity != null ? parseFloat(String(base.serving_quantity)) : NaN;
+    // Try to parse from base.serving_size string e.g. "3 slices (84 g)" → 84
+    let parsedFromStr = NaN;
+    if (base.serving_size && typeof base.serving_size === 'string') {
+      const m = base.serving_size.match(/\((\d+\.?\d*)\s*g\)/i);
+      if (m) parsedFromStr = parseFloat(m[1]);
+    }
+    const totalGrams =
+      (dbServingSize > 0 ? dbServingSize : null) ??
+      (dbServingQty  > 0 ? dbServingQty  : null) ??
+      (isFinite(baseServingQty) && baseServingQty > 0 ? baseServingQty : null) ??
+      (isFinite(parsedFromStr)  && parsedFromStr  > 0 ? parsedFromStr  : null) ??
+      100;
+
+    // Preserve original serving_size string — only reconstruct if missing/empty
     const originalServingSize = base.serving_size && String(base.serving_size).trim() ? base.serving_size : null;
+
     const enriched: OpenFoodFactsProduct = {
       ...base,
       serving_size: originalServingSize ?? (servingDesc
         ? `${countLabel}${servingDesc} (${totalGrams} g)`
         : `1 serving (${totalGrams}g)`),
-      serving_quantity: totalGrams > 0 ? totalGrams : base.serving_quantity,
+      serving_quantity: totalGrams,
       _source: (fi as any).source,
       _usda_fdc_id: (fi as any).usda_fdc_id,
       _data_quality_score: (fi as any).data_quality_score,
       ingredients_text: (fi as any).ingredients_text,
       allergens_tags: (fi as any).allergens,
     };
-    console.log('[buildOffProductFromFoodItemId] Using off_data path, serving_size=', enriched.serving_size);
+    console.log('[buildOffProductFromFoodItemId] off_data path | serving_size=', enriched.serving_size, '| serving_quantity=', enriched.serving_quantity);
     return enriched;
   }
 
   // Modern path — build from columns
   const n = fi as any;
   const servingDesc = n.serving_description as string | null | undefined;
-  const totalGrams = Number(n.serving_size) || 100;  // serving_size IS total grams
+  const dbServingSize2 = Number(n.serving_size);
+  const dbServingQty2  = Number(n.serving_quantity);
+  const totalGrams =
+    (dbServingSize2 > 0 ? dbServingSize2 : null) ??
+    (dbServingQty2  > 0 ? dbServingQty2  : null) ??
+    100;
   const servingCount = Number(n.serving_count) || 1;
   const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
   const servingSizeStr = servingDesc

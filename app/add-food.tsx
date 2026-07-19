@@ -777,7 +777,40 @@ export default function AddFoodScreen() {
       if (!offProduct && food.food_item_id) {
         console.log('[AddFood] PATH B: building off_data from food_item_id:', food.food_item_id);
         offProduct = await buildOffProductFromFoodItemId(food.food_item_id);
-        console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size);
+        console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size, '| serving_quantity=', offProduct?.serving_quantity);
+      }
+
+      // PATH B retry: if PATH B result has a barcode but serving_quantity looks like a fallback (100),
+      // re-try via the lookup-barcode edge function to get authoritative off_data
+      if (offProduct && offProduct.code && offProduct.serving_quantity === 100) {
+        console.log('[AddFood] PATH B result has suspicious serving_quantity=100, retrying via barcode:', offProduct.code);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          const retryResponse = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ barcode: offProduct.code }),
+          });
+          if (retryResponse.ok) {
+            const retryResult = await retryResponse.json();
+            if (retryResult.found && retryResult.item) {
+              const retryOff = retryResult.item?.off_data ?? buildSyntheticOffData(retryResult.item);
+              if (retryOff && parseFloat(String(retryOff.serving_quantity ?? 0)) > 0 && parseFloat(String(retryOff.serving_quantity ?? 0)) !== 100) {
+                offProduct = retryOff;
+                if (!offProduct.product_name && !offProduct.generic_name) {
+                  offProduct = { ...offProduct, product_name: retryResult.item?.name || food.name };
+                }
+                console.log('[AddFood] PATH B retry: ✅ got better off_data, serving_quantity=', offProduct.serving_quantity);
+              }
+            }
+          }
+        } catch (retryErr) {
+          console.warn('[AddFood] PATH B retry failed (non-fatal):', retryErr);
+        }
       }
 
       // PATH C: user-created food (no food_item_id, no barcode) → query foods table
