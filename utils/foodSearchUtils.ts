@@ -163,12 +163,14 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
     const totalGrams = Number((fi as any).serving_size) || 100;  // serving_size IS total grams
     const servingCount = Number((fi as any).serving_count) || 1;
     const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
+    // Only override serving_size if the original is missing/empty
+    const originalServingSize = base.serving_size && String(base.serving_size).trim() ? base.serving_size : null;
     const enriched: OpenFoodFactsProduct = {
       ...base,
-      serving_size: servingDesc
+      serving_size: originalServingSize ?? (servingDesc
         ? `${countLabel}${servingDesc} (${totalGrams} g)`
-        : base.serving_size,
-      serving_quantity: totalGrams,
+        : `1 serving (${totalGrams}g)`),
+      serving_quantity: totalGrams > 0 ? totalGrams : base.serving_quantity,
       _source: (fi as any).source,
       _usda_fdc_id: (fi as any).usda_fdc_id,
       _data_quality_score: (fi as any).data_quality_score,

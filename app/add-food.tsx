@@ -11,7 +11,8 @@ import { getRecentFoods } from '@/utils/foodDatabase';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
 import { OpenFoodFactsProduct } from '@/utils/openFoodFacts';
 import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
+import { buildSyntheticOffData } from '@/utils/servingParser';
 import { Food } from '@/types';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { addMealPlanItem } from '@/utils/mealPlansApi';
@@ -730,50 +731,77 @@ export default function AddFoodScreen() {
 
   /**
    * Open food details for a recent food.
-   * Mirrors the barcode scanner data flow: navigate to /food-details with offData
-   * as a JSON-stringified OpenFoodFactsProduct.
+   * PATH A: food has a barcode → use lookup-barcode edge function (same as barcode scanner)
+   *         guarantees identical off_data with correct serving_size/serving_quantity.
+   * PATH B: no barcode but has food_item_id → buildOffProductFromFoodItemId fallback.
+   * PATH C: user-created food (no food_item_id, no barcode) → query foods table.
    */
   const handleOpenRecentFoodDetails = useCallback(async (food: Food) => {
     console.log('[AddFood] ========== OPENING RECENT FOOD DETAILS ==========');
-    console.log('[AddFood] Food:', food.name, '| food_item_id:', food.food_item_id, '| food.id:', food.id);
-    console.log('[AddFood] Context:', context, '| Mode:', mode, '| Plan ID:', planId);
+    console.log('[AddFood] Food:', food.name, '| food_item_id:', food.food_item_id, '| barcode:', food.barcode);
 
     try {
-      let offProduct: OpenFoodFactsProduct;
+      let offProduct: OpenFoodFactsProduct | null = null;
 
-      if (food.food_item_id) {
-        // ── Catalog / barcode food: use shared helper for full micronutrient shape ──
-        console.log('[AddFood] food_item_id detected, building full offProduct via helper:', food.food_item_id);
-        const built = await buildOffProductFromFoodItemId(food.food_item_id);
-        if (!built) {
-          console.warn('[AddFood] buildOffProductFromFoodItemId returned null for id:', food.food_item_id);
-          Alert.alert('Error', 'Failed to load food details');
-          return;
+      // PATH A: food has a barcode → use the same lookup-barcode edge function as the scanner
+      if (food.barcode) {
+        console.log('[AddFood] PATH A: barcode lookup via edge function:', food.barcode);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ barcode: food.barcode }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.found && result.item) {
+            offProduct = result.item?.off_data ?? buildSyntheticOffData(result.item);
+            if (offProduct && !offProduct.product_name && !offProduct.generic_name) {
+              offProduct = { ...offProduct, product_name: result.item?.name || food.name };
+            }
+            console.log('[AddFood] PATH A: ✅ got off_data from edge function, serving_size=', offProduct?.serving_size);
+          } else {
+            console.log('[AddFood] PATH A: edge function returned not found, falling through');
+          }
+        } else {
+          console.warn('[AddFood] PATH A: edge function error', response.status, '— falling through');
         }
-        offProduct = built;
-        console.log('[AddFood] ✅ offProduct built via helper | serving_size=', offProduct.serving_size);
-      } else {
-        // ── User-created food: query foods table ──
-        console.log('[AddFood] No food_item_id, querying foods table:', food.id);
+      }
+
+      // PATH B: no barcode or edge function failed → use food_item_id lookup
+      if (!offProduct && food.food_item_id) {
+        console.log('[AddFood] PATH B: building off_data from food_item_id:', food.food_item_id);
+        offProduct = await buildOffProductFromFoodItemId(food.food_item_id);
+        console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size);
+      }
+
+      // PATH C: user-created food (no food_item_id, no barcode) → query foods table
+      if (!offProduct) {
+        console.log('[AddFood] PATH C: user-created food, querying foods table:', food.id);
         const { data: foodData, error: foodError } = await supabase
           .from('foods')
-          .select('id, name, brand, barcode, calories, protein, carbs, fats, fiber')
+          .select('id, name, brand, barcode, calories, protein, carbs, fats, fiber, serving_amount, serving_unit')
           .eq('id', food.id)
           .maybeSingle();
 
         if (foodError || !foodData) {
-          console.error('[AddFood] Error fetching food data:', foodError);
+          console.error('[AddFood] PATH C: Error fetching food data:', foodError);
           Alert.alert('Error', 'Failed to load food details');
           return;
         }
 
-        console.log('[AddFood] ✅ foods table data fetched');
-
+        console.log('[AddFood] PATH C: ✅ foods table data fetched');
         offProduct = {
           code: foodData.barcode || '',
           product_name: foodData.name,
           brands: foodData.brand || '',
-          serving_size: String(100),
+          serving_size: `${foodData.serving_amount ?? 100}g`,
+          serving_quantity: foodData.serving_amount ?? 100,
           nutriments: {
             'energy-kcal_100g': foodData.calories,
             'proteins_100g': foodData.protein,
@@ -784,7 +812,12 @@ export default function AddFoodScreen() {
         } as OpenFoodFactsProduct;
       }
 
-      console.log('[AddFood] Navigating to /food-details with offData, food_item_id:', food.food_item_id || '');
+      if (!offProduct) {
+        Alert.alert('Error', 'Failed to load food details');
+        return;
+      }
+
+      console.log('[AddFood] Navigating to /food-details | serving_size=', offProduct.serving_size, '| food_item_id:', food.food_item_id || '');
       router.push({
         pathname: '/food-details',
         params: {
