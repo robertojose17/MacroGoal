@@ -796,7 +796,7 @@ export default function AddFoodScreen() {
           mode: mode || '',
           planId: planId || '',
           food_item_id: food.food_item_id || '',
-          source: 'recent',
+          source: 'barcode',
         },
       });
 
