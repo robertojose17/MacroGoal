@@ -1469,16 +1469,16 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   newHeroLine1: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: '#fff',
-    lineHeight: 36,
+    lineHeight: 32,
   },
   newHeroLine2: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: '#5B9AA8',
-    lineHeight: 36,
+    lineHeight: 32,
   },
   newHeroSubtitle: {
     color: 'rgba(255,255,255,0.65)',
