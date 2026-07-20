@@ -754,6 +754,31 @@ export default function AddFoodScreen() {
           code: food.barcode || food.off_data.code || undefined,
         } as OpenFoodFactsProduct;
         console.log('[AddFood] PATH 0: ✅ offProduct built, serving_size=', offProduct.serving_size);
+
+        // If serving_size is just a plain gram value (no real serving description) and we have
+        // last-logged data, reconstruct the serving from how the user actually logged it.
+        if (
+          food.last_logged_grams && food.last_logged_quantity &&
+          offProduct &&
+          (!offProduct.serving_size || /^\d+(\.\d+)?\s*(g|ml)$/i.test(String(offProduct.serving_size)))
+        ) {
+          const gramsPerServing = Math.round(food.last_logged_grams / food.last_logged_quantity);
+          const count = food.last_logged_quantity;
+          if (count > 1) {
+            offProduct = {
+              ...offProduct,
+              serving_size: `${count} servings (${food.last_logged_grams} g)`,
+              serving_quantity: food.last_logged_grams,
+            };
+          } else {
+            offProduct = {
+              ...offProduct,
+              serving_size: `1 serving (${gramsPerServing} g)`,
+              serving_quantity: gramsPerServing,
+            };
+          }
+          console.log('[AddFood] PATH 0: overrode serving from last_logged data, serving_size=', offProduct.serving_size);
+        }
       }
 
       // PATH A: food has a barcode → use the same lookup-barcode edge function as the scanner
@@ -849,6 +874,31 @@ export default function AddFoodScreen() {
           // No off_data — build synthetic from columns
           offProduct = buildSyntheticOffData(fi as any);
           console.log('[AddFood] PATH B: ✅ synthetic from columns, serving_size=', offProduct?.serving_size);
+
+          // If serving_size is just a plain gram value (no real serving description) and we have
+          // last-logged data, reconstruct the serving from how the user actually logged it.
+          if (
+            food.last_logged_grams && food.last_logged_quantity &&
+            offProduct &&
+            (!offProduct.serving_size || /^\d+(\.\d+)?\s*(g|ml)$/i.test(String(offProduct.serving_size)))
+          ) {
+            const gramsPerServing = Math.round(food.last_logged_grams / food.last_logged_quantity);
+            const count = food.last_logged_quantity;
+            if (count > 1) {
+              offProduct = {
+                ...offProduct,
+                serving_size: `${count} servings (${food.last_logged_grams} g)`,
+                serving_quantity: food.last_logged_grams,
+              };
+            } else {
+              offProduct = {
+                ...offProduct,
+                serving_size: `1 serving (${gramsPerServing} g)`,
+                serving_quantity: gramsPerServing,
+              };
+            }
+            console.log('[AddFood] PATH B: overrode serving from last_logged data, serving_size=', offProduct.serving_size);
+          }
         }
         console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size, '| serving_quantity=', offProduct?.serving_quantity);
       }
