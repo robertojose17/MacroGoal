@@ -930,16 +930,17 @@ export default function FoodDetailsLayout({
         if (foodItem) {
           // Build mockProduct from individual columns
           const n = foodItem;
-          // Prefer off_data.serving_size (original OFacts string e.g. "1 slice (28g)")
-          // Fall back to reconstructing from columns only when off_data is absent
-          const servingSize = n.off_data?.serving_size
-            ? String(n.off_data.serving_size)
-            : n.serving_description && n.serving_size
-              ? (() => {
-                  const sc = Number(n.serving_count) || 1;
-                  const totalG = Number(n.serving_size);
-                  return `${sc} ${n.serving_description} (${totalG} g)`;
-                })()
+          // Prefer columns when serving_description is present (columns are source of truth)
+          // Fall back to off_data.serving_size only when columns lack a description
+          // Last resort: reconstruct from serving_size alone
+          const servingSize = (n.serving_description && n.serving_size)
+            ? (() => {
+                const sc = Number(n.serving_count) || 1;
+                const totalG = Number(n.serving_size);
+                return `${sc} ${n.serving_description} (${totalG} g)`;
+              })()
+            : n.off_data?.serving_size
+              ? String(n.off_data.serving_size)
               : n.serving_size ? `${n.serving_size} g` : undefined;
           mockProduct = {
             code: n.barcode || undefined,
