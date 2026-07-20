@@ -1419,10 +1419,11 @@ export default function FoodDetailsLayout({
       }
     }
 
-    // 2. Try to find by name + brand
-    const nameQuery = supabase.from('food_items').select('id').ilike('name', pName);
+    // 2. Try to find by name + brand (use limit(1) to handle duplicates gracefully)
+    const nameQuery = supabase.from('food_items').select('id').ilike('name', pName).limit(1);
     if (pBrand) nameQuery.ilike('brand', pBrand);
-    const { data: existingByName } = await nameQuery.maybeSingle();
+    const { data: existingByNameRows } = await nameQuery;
+    const existingByName = existingByNameRows?.[0] ?? null;
     if (existingByName) {
       console.log('[FoodDetails] upsertFoodItem: found by name+brand, id=', existingByName.id);
       await supabase.from('food_items').update(payload).eq('id', existingByName.id);
