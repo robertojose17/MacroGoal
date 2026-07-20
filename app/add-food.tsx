@@ -737,63 +737,31 @@ export default function AddFoodScreen() {
    * PATH C: user-created food (no food_item_id, no barcode) → query foods table.
    */
   const handleOpenRecentFoodDetails = useCallback(async (food: Food) => {
-    // v2 - last_logged serving fix
-    console.log('[AddFood] ========== OPENING RECENT FOOD DETAILS ==========');
-    console.log('[AddFood] Food:', food.name, '| food_item_id:', food.food_item_id, '| barcode:', food.barcode, '| off_data present:', !!food.off_data);
+    console.log('[AddFood] handleOpenRecentFoodDetails:', food.name, '| meal_item_id:', food.meal_item_id);
 
+    // If we have the meal_item_id, use the itemId path — same as Today's Food edit.
+    // FoodDetailsLayout loads directly from meal_items JOIN food_items — no reconstruction, always correct.
+    if (food.meal_item_id) {
+      router.push({
+        pathname: '/food-details',
+        params: {
+          itemId: food.meal_item_id,
+          meal: mealType,
+          date: date,
+          context: context || '',
+          returnTo: returnTo || '',
+          mode: mode || '',
+          planId: planId || '',
+        },
+      });
+      return;
+    }
+
+    // Fallback for foods without meal_item_id (legacy / user-created foods table)
     try {
       let offProduct: OpenFoodFactsProduct | null = null;
 
-      // PATH -1: meal_items.off_data — the original offData saved at log time.
-      // This is the most reliable source — same data that was used when the food was first logged.
-      if (food.meal_item_off_data && typeof food.meal_item_off_data === 'object') {
-        console.log('[AddFood] PATH -1: using meal_items.off_data directly');
-        offProduct = {
-          ...food.meal_item_off_data,
-          product_name: food.name || food.meal_item_off_data.product_name || '',
-          brands: food.brand || food.meal_item_off_data.brands || '',
-          code: food.barcode || food.meal_item_off_data.code || undefined,
-        } as OpenFoodFactsProduct;
-        console.log('[AddFood] PATH -1: ✅ serving_size=', offProduct.serving_size, '| serving_quantity=', offProduct.serving_quantity);
-      }
-
-      // PATH 0: off_data already on the Food object (populated by getRecentFoods) — use it directly.
-      // This is the fast path for the vast majority of recent foods (AI Estimated, catalog items).
-      if (food.off_data && typeof food.off_data === 'object') {
-        console.log('[AddFood] PATH 0: using off_data already on food object, serving_size=', food.off_data.serving_size);
-        offProduct = {
-          ...food.off_data,
-          product_name: food.name || food.off_data.product_name || '',
-          brands: food.brand || food.off_data.brands || '',
-          code: food.barcode || food.off_data.code || undefined,
-        } as OpenFoodFactsProduct;
-        console.log('[AddFood] PATH 0: ✅ offProduct built, serving_size=', offProduct.serving_size);
-
-        // Override serving using the description saved at log time — most accurate source of truth.
-        const savedDesc0 = food.last_serving_description?.trim();
-        const savedGrams0 = food.last_logged_grams;
-        if (offProduct && savedDesc0 && savedGrams0 && savedGrams0 > 0) {
-          const isPlainGrams0 = /^\d+(\.\d+)?\s*(g|ml)$/i.test(savedDesc0);
-          if (isPlainGrams0) {
-            offProduct = {
-              ...offProduct,
-              serving_size: `${savedGrams0} g`,
-              serving_quantity: savedGrams0,
-            };
-          } else {
-            offProduct = {
-              ...offProduct,
-              serving_size: `${savedDesc0} (${savedGrams0} g)`,
-              serving_quantity: savedGrams0,
-            };
-          }
-          console.log('[AddFood] PATH 0: overrode serving from last_serving_description=', savedDesc0, '→', offProduct.serving_size);
-        }
-      }
-
-      // PATH A: food has a barcode → use the same lookup-barcode edge function as the scanner
-      if (!offProduct && food.barcode) {
-        console.log('[AddFood] PATH A: barcode lookup via edge function:', food.barcode);
+      if (food.barcode) {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
@@ -804,164 +772,41 @@ export default function AddFoodScreen() {
           },
           body: JSON.stringify({ barcode: food.barcode }),
         });
-
         if (response.ok) {
           const result = await response.json();
-          if (result.found && result.item) {
-            if (result.item?.off_data) {
-              // Cache hit with off_data — use it directly
-              offProduct = result.item.off_data;
-              console.log('[AddFood] PATH A: ✅ cache hit with off_data, serving_size=', offProduct?.serving_size);
-            } else {
-              // Cache hit but off_data is null — fetch original serving_size string from OpenFoodFacts
-              console.log('[AddFood] PATH A: off_data is null, fetching serving_size from OpenFoodFacts for barcode:', food.barcode);
-              let ofServingSize: string | undefined;
-              let ofServingQuantity: number | undefined;
-              try {
-                const ofResponse = await fetch(
-                  `https://world.openfoodfacts.org/api/v0/product/${food.barcode}.json`,
-                  { headers: { 'User-Agent': 'MacroGoal/1.0' } }
-                );
-                if (ofResponse.ok) {
-                  const ofData = await ofResponse.json();
-                  if (ofData.status === 1 && ofData.product) {
-                    ofServingSize = ofData.product.serving_size || undefined;
-                    ofServingQuantity = ofData.product.serving_quantity
-                      ? Number(ofData.product.serving_quantity)
-                      : undefined;
-                    console.log('[AddFood] PATH A: OFacts serving_size=', ofServingSize, '| serving_quantity=', ofServingQuantity);
-                  }
-                }
-              } catch (ofErr) {
-                console.warn('[AddFood] PATH A: OpenFoodFacts fetch failed (non-fatal):', ofErr);
-              }
-              // Build synthetic off_data and override serving fields with OFacts originals if available
-              const synthetic = buildSyntheticOffData(result.item);
-              offProduct = {
-                ...synthetic,
-                ...(ofServingSize ? { serving_size: ofServingSize } : {}),
-                ...(ofServingQuantity != null ? { serving_quantity: ofServingQuantity } : {}),
-              };
-              console.log('[AddFood] PATH A: ✅ built offProduct with serving_size=', offProduct?.serving_size);
-            }
-            if (offProduct && !offProduct.product_name && !offProduct.generic_name) {
-              offProduct = { ...offProduct, product_name: result.item?.name || food.name };
-            }
-          } else {
-            console.log('[AddFood] PATH A: edge function returned not found, falling through');
+          if (result.found && result.item?.off_data) {
+            offProduct = result.item.off_data;
+            if (offProduct && !offProduct.product_name) offProduct = { ...offProduct, product_name: food.name };
           }
-        } else {
-          console.warn('[AddFood] PATH A: edge function error', response.status, '— falling through');
         }
       }
 
-      // PATH B: no barcode or edge function failed → query food_items directly for off_data
       if (!offProduct && food.food_item_id) {
-        console.log('[AddFood] PATH B: querying food_items for off_data, id:', food.food_item_id);
-        const { data: fi, error: fiError } = await supabase
-          .from('food_items')
-          .select(`id, name, brand, barcode,
-                   serving_size, serving_unit, serving_description,
-                   serving_count, serving_quantity, calories, protein, carbs, fat, fiber,
-                   macros_per, nutriments, off_data`)
-          .eq('id', food.food_item_id)
-          .maybeSingle();
-
-        if (fiError || !fi) {
-          console.warn('[AddFood] PATH B: food_items query failed, falling back to buildOffProductFromFoodItemId:', fiError);
-          offProduct = await buildOffProductFromFoodItemId(food.food_item_id);
-        } else if ((fi as any).off_data && typeof (fi as any).off_data === 'object') {
-          // off_data present — use it directly, it has the correct serving_size string
-          const rawOff = (fi as any).off_data as OpenFoodFactsProduct;
-          offProduct = {
-            ...rawOff,
-            product_name: fi.name || rawOff.product_name || '',
-            brands: (fi as any).brand || rawOff.brands || '',
-            code: (fi as any).barcode || rawOff.code || undefined,
-          };
-          console.log('[AddFood] PATH B: ✅ off_data from food_items, serving_size=', offProduct.serving_size);
-        } else {
-          // No off_data — build synthetic from columns
-          offProduct = buildSyntheticOffData(fi as any);
-          console.log('[AddFood] PATH B: ✅ synthetic from columns, serving_size=', offProduct?.serving_size);
-
-          // Override serving using the description saved at log time — most accurate source of truth.
-          const savedDesc = food.last_serving_description?.trim();
-          const savedGrams = food.last_logged_grams;
-          if (offProduct && savedDesc && savedGrams && savedGrams > 0) {
-            const isPlainGrams = /^\d+(\.\d+)?\s*(g|ml)$/i.test(savedDesc);
-            if (isPlainGrams) {
-              offProduct = {
-                ...offProduct,
-                serving_size: `${savedGrams} g`,
-                serving_quantity: savedGrams,
-              };
-            } else {
-              offProduct = {
-                ...offProduct,
-                serving_size: `${savedDesc} (${savedGrams} g)`,
-                serving_quantity: savedGrams,
-              };
-            }
-            console.log('[AddFood] PATH B: overrode serving from last_serving_description=', savedDesc, '→', offProduct.serving_size);
-          }
-
-          // PATH B fallback: try to find a better food_item with same name that has off_data
-          if (!offProduct || (offProduct.serving_quantity === 100 && !(offProduct as any).off_data)) {
-            console.log('[AddFood] PATH B: serving_size=100 and no off_data — searching for better food_item with same name');
-            const { data: betterFi } = await supabase
-              .from('food_items')
-              .select('id, name, brand, barcode, serving_size, serving_quantity, serving_description, serving_count, off_data, calories, protein, carbs, fat, fiber, macros_per, nutriments')
-              .ilike('name', fi.name ?? '')
-              .not('off_data', 'is', null)
-              .limit(1)
-              .maybeSingle();
-
-            if (betterFi && (betterFi as any).off_data) {
-              const rawOff = (betterFi as any).off_data as OpenFoodFactsProduct;
-              offProduct = {
-                ...rawOff,
-                product_name: betterFi.name || rawOff.product_name || '',
-                brands: (betterFi as any).brand || rawOff.brands || '',
-                code: (betterFi as any).barcode || rawOff.code || undefined,
-              };
-              console.log('[AddFood] PATH B: ✅ found better food_item with off_data, serving_size=', offProduct.serving_size);
-            }
-          }
-        }
-        console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size, '| serving_quantity=', offProduct?.serving_quantity);
+        offProduct = await buildOffProductFromFoodItemId(food.food_item_id);
       }
 
-      // PATH C: user-created food (no food_item_id, no barcode) → query foods table
       if (!offProduct) {
-        console.log('[AddFood] PATH C: user-created food, querying foods table:', food.id);
-        const { data: foodData, error: foodError } = await supabase
+        const { data: foodData } = await supabase
           .from('foods')
           .select('id, name, brand, barcode, calories, protein, carbs, fats, fiber, serving_amount, serving_unit')
           .eq('id', food.id)
           .maybeSingle();
-
-        if (foodError || !foodData) {
-          console.error('[AddFood] PATH C: Error fetching food data:', foodError);
-          Alert.alert('Error', 'Failed to load food details');
-          return;
+        if (foodData) {
+          offProduct = {
+            code: foodData.barcode || '',
+            product_name: foodData.name,
+            brands: foodData.brand || '',
+            serving_size: `${foodData.serving_amount ?? 100}g`,
+            serving_quantity: foodData.serving_amount ?? 100,
+            nutriments: {
+              'energy-kcal_100g': foodData.calories,
+              'proteins_100g': foodData.protein,
+              'carbohydrates_100g': foodData.carbs,
+              'fat_100g': foodData.fats,
+              'fiber_100g': foodData.fiber,
+            },
+          } as OpenFoodFactsProduct;
         }
-
-        console.log('[AddFood] PATH C: ✅ foods table data fetched');
-        offProduct = {
-          code: foodData.barcode || '',
-          product_name: foodData.name,
-          brands: foodData.brand || '',
-          serving_size: `${foodData.serving_amount ?? 100}g`,
-          serving_quantity: foodData.serving_amount ?? 100,
-          nutriments: {
-            'energy-kcal_100g': foodData.calories,
-            'proteins_100g': foodData.protein,
-            'carbohydrates_100g': foodData.carbs,
-            'fat_100g': foodData.fats,
-            'fiber_100g': foodData.fiber,
-          },
-        } as OpenFoodFactsProduct;
       }
 
       if (!offProduct) {
@@ -969,7 +814,6 @@ export default function AddFoodScreen() {
         return;
       }
 
-      console.log('[AddFood] Navigating to /food-details | serving_size=', offProduct.serving_size, '| food_item_id:', food.food_item_id || '');
       router.push({
         pathname: '/food-details',
         params: {
@@ -984,10 +828,8 @@ export default function AddFoodScreen() {
           source: 'barcode',
         },
       });
-
-      console.log('[AddFood] ✅ Navigation triggered successfully');
     } catch (error) {
-      console.error('[AddFood] Error opening recent food details:', error);
+      console.error('[AddFood] handleOpenRecentFoodDetails error:', error);
       Alert.alert('Error', 'An unexpected error occurred');
     }
   }, [router, mealType, date, context, returnTo, mode, planId]);

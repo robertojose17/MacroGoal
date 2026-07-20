@@ -299,6 +299,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           meal_item_off_data: (item.off_data as any) ?? undefined,
           last_serving_description: item.serving_description ?? undefined,
           last_logged_grams: Number(item.grams) || undefined,
+          meal_item_id: item.id, // meal_items.id — used to open food-details via itemId path
         });
 
       } else if (f) {

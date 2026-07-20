@@ -57,6 +57,7 @@ export interface Food {
   meal_item_off_data?: any; // Raw off_data saved directly on meal_items at log time — most reliable serving source
   last_serving_description?: string; // serving_description saved at log time (e.g. "3 servings", "120 g", "1 serving")
   last_logged_grams?: number; // Total grams logged in the most recent meal_item for this food
+  meal_item_id?: string; // meal_items.id — used to open food-details via itemId path (same as Today's Food edit)
 }
 
 export interface Meal {
