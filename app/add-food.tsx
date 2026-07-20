@@ -737,6 +737,7 @@ export default function AddFoodScreen() {
    * PATH C: user-created food (no food_item_id, no barcode) → query foods table.
    */
   const handleOpenRecentFoodDetails = useCallback(async (food: Food) => {
+    // v2 - last_logged serving fix
     console.log('[AddFood] ========== OPENING RECENT FOOD DETAILS ==========');
     console.log('[AddFood] Food:', food.name, '| food_item_id:', food.food_item_id, '| barcode:', food.barcode, '| off_data present:', !!food.off_data);
 
@@ -755,29 +756,25 @@ export default function AddFoodScreen() {
         } as OpenFoodFactsProduct;
         console.log('[AddFood] PATH 0: ✅ offProduct built, serving_size=', offProduct.serving_size);
 
-        // If serving_size is just a plain gram value (no real serving description) and we have
-        // last-logged data, reconstruct the serving from how the user actually logged it.
-        if (
-          food.last_logged_grams && food.last_logged_quantity &&
-          offProduct &&
-          (!offProduct.serving_size || /^\d+(\.\d+)?\s*(g|ml)$/i.test(String(offProduct.serving_size)))
-        ) {
-          const gramsPerServing = Math.round(food.last_logged_grams / food.last_logged_quantity);
-          const count = food.last_logged_quantity;
-          if (count > 1) {
+        // Override serving using the description saved at log time — most accurate source of truth.
+        const savedDesc0 = food.last_serving_description?.trim();
+        const savedGrams0 = food.last_logged_grams;
+        if (offProduct && savedDesc0 && savedGrams0 && savedGrams0 > 0) {
+          const isPlainGrams0 = /^\d+(\.\d+)?\s*(g|ml)$/i.test(savedDesc0);
+          if (isPlainGrams0) {
             offProduct = {
               ...offProduct,
-              serving_size: `${count} servings (${food.last_logged_grams} g)`,
-              serving_quantity: food.last_logged_grams,
+              serving_size: `${savedGrams0} g`,
+              serving_quantity: savedGrams0,
             };
           } else {
             offProduct = {
               ...offProduct,
-              serving_size: `1 serving (${gramsPerServing} g)`,
-              serving_quantity: gramsPerServing,
+              serving_size: `${savedDesc0} (${savedGrams0} g)`,
+              serving_quantity: savedGrams0,
             };
           }
-          console.log('[AddFood] PATH 0: overrode serving from last_logged data, serving_size=', offProduct.serving_size);
+          console.log('[AddFood] PATH 0: overrode serving from last_serving_description=', savedDesc0, '→', offProduct.serving_size);
         }
       }
 
@@ -875,29 +872,25 @@ export default function AddFoodScreen() {
           offProduct = buildSyntheticOffData(fi as any);
           console.log('[AddFood] PATH B: ✅ synthetic from columns, serving_size=', offProduct?.serving_size);
 
-          // If serving_size is just a plain gram value (no real serving description) and we have
-          // last-logged data, reconstruct the serving from how the user actually logged it.
-          if (
-            food.last_logged_grams && food.last_logged_quantity &&
-            offProduct &&
-            (!offProduct.serving_size || /^\d+(\.\d+)?\s*(g|ml)$/i.test(String(offProduct.serving_size)))
-          ) {
-            const gramsPerServing = Math.round(food.last_logged_grams / food.last_logged_quantity);
-            const count = food.last_logged_quantity;
-            if (count > 1) {
+          // Override serving using the description saved at log time — most accurate source of truth.
+          const savedDesc = food.last_serving_description?.trim();
+          const savedGrams = food.last_logged_grams;
+          if (offProduct && savedDesc && savedGrams && savedGrams > 0) {
+            const isPlainGrams = /^\d+(\.\d+)?\s*(g|ml)$/i.test(savedDesc);
+            if (isPlainGrams) {
               offProduct = {
                 ...offProduct,
-                serving_size: `${count} servings (${food.last_logged_grams} g)`,
-                serving_quantity: food.last_logged_grams,
+                serving_size: `${savedGrams} g`,
+                serving_quantity: savedGrams,
               };
             } else {
               offProduct = {
                 ...offProduct,
-                serving_size: `1 serving (${gramsPerServing} g)`,
-                serving_quantity: gramsPerServing,
+                serving_size: `${savedDesc} (${savedGrams} g)`,
+                serving_quantity: savedGrams,
               };
             }
-            console.log('[AddFood] PATH B: overrode serving from last_logged data, serving_size=', offProduct.serving_size);
+            console.log('[AddFood] PATH B: overrode serving from last_serving_description=', savedDesc, '→', offProduct.serving_size);
           }
         }
         console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size, '| serving_quantity=', offProduct?.serving_quantity);

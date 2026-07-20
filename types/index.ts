@@ -55,8 +55,8 @@ export interface Food {
   last_serving_description?: string; // Last used serving description for recent foods
   food_item_id?: string; // food_items.id from the global catalog (null for user-created foods)
   off_data?: any; // Raw OpenFoodFacts object stored in food_items.off_data (has correct serving_size string)
+  last_serving_description?: string; // serving_description saved at log time (e.g. "3 servings", "120 g", "1 serving")
   last_logged_grams?: number; // Total grams logged in the most recent meal_item for this food
-  last_logged_quantity?: number; // Number of servings logged in the most recent meal_item for this food
 }
 
 export interface Meal {

@@ -295,8 +295,8 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           is_favorite: false,
           food_item_id: fi.id,
           off_data: fi.off_data ?? undefined,
+          last_serving_description: item.serving_description ?? undefined,
           last_logged_grams: Number(item.grams) || undefined,
-          last_logged_quantity: Number(item.quantity) || undefined,
         });
 
       } else if (f) {
