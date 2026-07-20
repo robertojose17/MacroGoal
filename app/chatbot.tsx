@@ -587,11 +587,6 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
    * - my_meals_builder: Add ingredients to My Meal draft and navigate back to Create Meal screen
    * - meal_log (or undefined): Log ingredients to diary and navigate back to Foods tab
    * 
-   * CRITICAL FIX FOR RECENT FOODS:
-   * Store foods with per-100g nutrition values in the foods table
-   * Store the actual quantity/serving in the meal_items table
-   * This ensures foods appear correctly in Recent Foods
-   * 
    * CRITICAL FIX FOR NAVIGATION:
    * Use router.back() instead of router.push() to close the AI Meal Estimator
    * and return to the existing Foods tab (previous screen)

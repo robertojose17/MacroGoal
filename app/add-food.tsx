@@ -7,7 +7,6 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
-import { getRecentFoods } from '@/utils/foodDatabase';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
 import { OpenFoodFactsProduct } from '@/utils/openFoodFacts';
 import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
@@ -19,7 +18,6 @@ import { addMealPlanItem } from '@/utils/mealPlansApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
 import { usePremium } from '@/hooks/usePremium';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
@@ -82,9 +80,6 @@ export default function AddFoodScreen() {
   
   const [activeTab, setActiveTab] = useState<TabType>('all');
   
-  const HIDDEN_RECENT_FOODS_KEY = 'hidden_recent_food_ids';
-  const [recentFoods, setRecentFoods] = useState<Food[]>([]);
-  const [hiddenRecentIds, setHiddenRecentIds] = useState<Set<string>>(new Set());
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,16 +207,11 @@ export default function AddFoodScreen() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const recent = await getRecentFoods();
-      setRecentFoods(recent);
-
-      const stored = await AsyncStorage.getItem(HIDDEN_RECENT_FOODS_KEY);
-      if (stored) setHiddenRecentIds(new Set(JSON.parse(stored)));
 
       // Load favorites
       await loadFavorites();
 
-      console.log('[AddFood] Loaded data:', { recent: recent.length });
+      console.log('[AddFood] Loaded data');
     } catch (error) {
       console.error('[AddFood] Error loading data:', error);
     } finally {
@@ -730,409 +720,6 @@ export default function AddFoodScreen() {
   }, [router, mealType, date, context, returnTo, mode, planId]);
 
   /**
-   * Open food details for a recent food.
-   * PATH A: food has a barcode → use lookup-barcode edge function (same as barcode scanner)
-   *         guarantees identical off_data with correct serving_size/serving_quantity.
-   * PATH B: no barcode but has food_item_id → buildOffProductFromFoodItemId fallback.
-   * PATH C: user-created food (no food_item_id, no barcode) → query foods table.
-   */
-  const handleOpenRecentFoodDetails = useCallback(async (food: Food) => {
-    console.log('[AddFood] handleOpenRecentFoodDetails:', food.name, '| meal_item_id:', food.meal_item_id);
-
-    // If we have the meal_item_id, use the itemId path — same as Today's Food edit.
-    // FoodDetailsLayout loads directly from meal_items JOIN food_items — no reconstruction, always correct.
-    if (food.meal_item_id) {
-      router.push({
-        pathname: '/food-details',
-        params: {
-          itemId: food.meal_item_id,
-          meal: mealType,
-          date: date,
-          context: context || '',
-          returnTo: returnTo || '',
-          mode: mode || '',
-          planId: planId || '',
-        },
-      });
-      return;
-    }
-
-    // Fallback for foods without meal_item_id (legacy / user-created foods table)
-    try {
-      let offProduct: OpenFoodFactsProduct | null = null;
-
-      if (food.barcode) {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ barcode: food.barcode }),
-        });
-        if (response.ok) {
-          const result = await response.json();
-          if (result.found && result.item?.off_data) {
-            offProduct = result.item.off_data;
-            if (offProduct && !offProduct.product_name) offProduct = { ...offProduct, product_name: food.name };
-          }
-        }
-      }
-
-      if (!offProduct && food.food_item_id) {
-        offProduct = await buildOffProductFromFoodItemId(food.food_item_id);
-      }
-
-      if (!offProduct) {
-        const { data: foodData } = await supabase
-          .from('foods')
-          .select('id, name, brand, barcode, calories, protein, carbs, fats, fiber, serving_amount, serving_unit')
-          .eq('id', food.id)
-          .maybeSingle();
-        if (foodData) {
-          offProduct = {
-            code: foodData.barcode || '',
-            product_name: foodData.name,
-            brands: foodData.brand || '',
-            serving_size: `${foodData.serving_amount ?? 100}g`,
-            serving_quantity: foodData.serving_amount ?? 100,
-            nutriments: {
-              'energy-kcal_100g': foodData.calories,
-              'proteins_100g': foodData.protein,
-              'carbohydrates_100g': foodData.carbs,
-              'fat_100g': foodData.fats,
-              'fiber_100g': foodData.fiber,
-            },
-          } as OpenFoodFactsProduct;
-        }
-      }
-
-      if (!offProduct) {
-        Alert.alert('Error', 'Failed to load food details');
-        return;
-      }
-
-      router.push({
-        pathname: '/food-details',
-        params: {
-          offData: JSON.stringify(offProduct),
-          meal: mealType,
-          date: date,
-          context: context || '',
-          returnTo: returnTo || '',
-          mode: mode || '',
-          planId: planId || '',
-          food_item_id: food.food_item_id || '',
-          source: 'barcode',
-        },
-      });
-    } catch (error) {
-      console.error('[AddFood] handleOpenRecentFoodDetails error:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
-    }
-  }, [router, mealType, date, context, returnTo, mode, planId]);
-
-  /**
-   * FAST ADD: Add recent food directly to My Meal draft
-   * Only available in my_meals_builder context
-   */
-  const handleQuickAddRecentFood = useCallback(async (food: Food) => {
-    console.log('[AddFood] ========== QUICK ADD RECENT FOOD ==========');
-    console.log('[AddFood] Food:', food.name);
-    console.log('[AddFood] Context:', context);
-
-    if (context !== 'my_meals_builder') {
-      console.log('[AddFood] ❌ Quick add only available in my_meals_builder context');
-      return;
-    }
-
-    try {
-      // Fetch the full food data — prefer food_items for barcode foods
-      let calories100g = 0, protein100g = 0, carbs100g = 0, fats100g = 0, fiber100g = 0;
-
-      if (food.food_item_id) {
-        console.log('[AddFood] Quick add: querying food_items:', food.food_item_id);
-        const { data: fiData, error: fiError } = await supabase
-          .from('food_items')
-          .select('*')
-          .eq('id', food.food_item_id)
-          .maybeSingle();
-
-        if (fiError || !fiData) {
-          console.warn('[AddFood] Quick add: food_items lookup failed, falling back to foods:', fiError);
-          // fall through to foods lookup below
-          const { data: fbData, error: fbError } = await supabase
-            .from('foods')
-            .select('*')
-            .eq('id', food.id)
-            .maybeSingle();
-          if (fbError || !fbData) {
-            console.error('[AddFood] Quick add: fallback foods lookup failed:', fbError);
-            Alert.alert('Error', 'Failed to load food details');
-            return;
-          }
-          calories100g = fbData.calories ?? 0;
-          protein100g = fbData.protein ?? 0;
-          carbs100g = fbData.carbs ?? 0;
-          fats100g = fbData.fats ?? 0;
-          fiber100g = fbData.fiber ?? 0;
-        } else {
-          const n = fiData.nutriments && typeof fiData.nutriments === 'object' ? fiData.nutriments as Record<string, number> : null;
-          calories100g = n ? (n['energy-kcal_100g'] ?? 0) : (fiData.calories ?? fiData.energy_kcal ?? 0);
-          protein100g  = n ? (n['proteins_100g'] ?? 0)    : (fiData.protein ?? fiData.proteins ?? 0);
-          carbs100g    = n ? (n['carbohydrates_100g'] ?? 0): (fiData.carbs ?? fiData.carbohydrates ?? 0);
-          fats100g     = n ? (n['fat_100g'] ?? 0)         : (fiData.fats ?? fiData.fat ?? 0);
-          fiber100g    = n ? (n['fiber_100g'] ?? 0)       : (fiData.fiber ?? 0);
-        }
-      } else {
-        console.log('[AddFood] Quick add: querying foods table:', food.id);
-        const { data: foodData, error: foodError } = await supabase
-          .from('foods')
-          .select('*')
-          .eq('id', food.id)
-          .maybeSingle();
-
-        if (foodError || !foodData) {
-          console.error('[AddFood] Error fetching food data:', foodError);
-          Alert.alert('Error', 'Failed to load food details');
-          return;
-        }
-        calories100g = foodData.calories ?? 0;
-        protein100g  = foodData.protein ?? 0;
-        carbs100g    = foodData.carbs ?? 0;
-        fats100g     = foodData.fats ?? 0;
-        fiber100g    = foodData.fiber ?? 0;
-      }
-
-      // Use the food's serving_amount as the default (this is the grams from last time)
-      const gramsToAdd = food.serving_amount;
-      const multiplier = gramsToAdd / 100;
-
-      // Calculate nutrition for the default serving
-      const calories = calories100g * multiplier;
-      const protein = protein100g * multiplier;
-      const carbs = carbs100g * multiplier;
-      const fats = fats100g * multiplier;
-      const fiber = fiber100g * multiplier;
-
-      // Add to draft
-      await addToDraft({
-        food_id: food.id,
-        food_item_id: food.food_item_id || undefined,
-        food_name: food.name,
-        food_brand: food.brand || undefined,
-        serving_amount: gramsToAdd,
-        serving_unit: 'g',
-        servings_count: 1,
-        calories: safeNum(calories),
-        protein: safeNum(protein),
-        carbs: safeNum(carbs),
-        fats: safeNum(fats),
-        fiber: safeNum(fiber),
-      });
-
-      console.log('[AddFood] ✅ Quick added recent food to My Meal draft!');
-      showSuccessBanner('Added');
-    } catch (error) {
-      console.error('[AddFood] Error quick adding recent food:', error);
-      Alert.alert('Error', 'Failed to add food');
-    }
-  }, [context, showSuccessBanner]);
-
-  /**
-   * Add a recent food directly (for meal log context)
-   * Shows success banner immediately after add
-   * CRITICAL: Only works in meal_log context, not in my_meals_builder
-   */
-  const handleHideRecentFood = useCallback(async (food: Food) => {
-    const key = food.food_item_id || food.id;
-    console.log('[AddFood] Hiding recent food:', food.name, 'key:', key);
-    setHiddenRecentIds(prev => {
-      const next = new Set(prev);
-      next.add(key);
-      AsyncStorage.setItem(HIDDEN_RECENT_FOODS_KEY, JSON.stringify([...next]));
-      return next;
-    });
-  }, []);
-
-  const handleAddRecentFood = useCallback(async (food: Food) => {
-    console.log('[AddFood] ========== ADD RECENT FOOD ==========');
-    console.log('[AddFood] Food:', food.name);
-    console.log('[AddFood] Context:', context);
-    console.log('[AddFood] Mode:', mode);
-    console.log('[AddFood] Plan ID:', planId);
-
-    // MEAL PLAN MODE: add directly to plan
-    if (mode === 'meal-plan' && planId) {
-      try {
-        const { data: foodData, error: foodError } = await supabase
-          .from('foods').select('*').eq('id', food.id).single();
-        if (foodError || !foodData) { Alert.alert('Error', 'Failed to load food details'); return; }
-        const gramsToAdd = food.serving_amount;
-        const multiplier = gramsToAdd / 100;
-        console.log('[AddFood] Adding recent food to meal plan:', planId, food.name);
-        await addMealPlanItem(planId, {
-          date,
-          meal_type: mealType,
-          food_name: food.name,
-          brand: food.brand || undefined,
-          quantity: multiplier,
-          grams: gramsToAdd,
-          serving_description: food.last_serving_description || formatServing(food.serving_amount, food.serving_unit),
-          calories: safeNum(foodData.calories * multiplier),
-          protein: safeNum(foodData.protein * multiplier),
-          carbs: safeNum(foodData.carbs * multiplier),
-          fats: safeNum(foodData.fats * multiplier),
-          fiber: safeNum(foodData.fiber * multiplier),
-        });
-        showSuccessBanner('Added to plan');
-      } catch (err) {
-        console.error('[AddFood] Error adding recent food to plan:', err);
-        Alert.alert('Error', 'Failed to add food to plan');
-      }
-      return;
-    }
-
-    // CRITICAL: If in my_meals_builder context, don't allow quick add
-    if (context === 'my_meals_builder') {
-      console.log('[AddFood] ❌ Cannot quick-add in my_meals_builder context');
-      Alert.alert('Not Available', 'Please tap the food to view details and add it to your meal.');
-      return;
-    }
-
-    try {
-      let foodId: string | null = null;
-      let calories: number, protein: number, carbs: number, fats: number, fiber: number;
-      let foodName = food.name;
-      let foodBrand = food.brand ?? null;
-
-      if (food.food_item_id) {
-        // Barcode/food_items path — use food_items as source of truth
-        console.log('[AddFood] Recent food is barcode food, fetching from food_items:', food.food_item_id);
-        const { data: fi, error: fiError } = await supabase
-          .from('food_items')
-          .select('id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per')
-          .eq('id', food.food_item_id)
-          .maybeSingle();
-
-        if (fiError || !fi) {
-          console.error('[AddFood] Error fetching food_items data:', fiError);
-          Alert.alert('Error', 'Failed to load food details');
-          return;
-        }
-
-        foodName  = fi.name ?? food.name;
-        foodBrand = fi.brand ?? food.brand ?? null;
-        foodId    = null;
-
-        const servingSize = Number(fi.serving_size) || 100;
-        const divisor     = fi.macros_per === '100g' ? 100 : servingSize;
-        const multiplier  = food.serving_amount / divisor;
-
-        calories = Math.round((fi.calories ?? 0) * multiplier);
-        protein  = Math.round((fi.protein  ?? 0) * multiplier * 10) / 10;
-        carbs    = Math.round((fi.carbs    ?? 0) * multiplier * 10) / 10;
-        fats     = Math.round((fi.fat      ?? 0) * multiplier * 10) / 10;
-        fiber    = Math.round((fi.fiber    ?? 0) * multiplier * 10) / 10;
-
-        console.log(`[AddFood] food_items path: serving_size=${servingSize}, macros_per=${fi.macros_per}, divisor=${divisor}, serving_amount=${food.serving_amount}, multiplier=${multiplier.toFixed(3)}, cal=${calories}`);
-      } else {
-        // Regular food from foods table
-        console.log('[AddFood] Recent food is regular food, fetching from foods:', food.id);
-        const { data: foodData, error: foodError } = await supabase
-          .from('foods')
-          .select('id, name, brand, calories, protein, carbs, fats, fiber, serving_amount')
-          .eq('id', food.id)
-          .maybeSingle();
-
-        if (foodError || !foodData) {
-          console.error('[AddFood] Error fetching food data:', foodError);
-          Alert.alert('Error', 'Failed to load food details');
-          return;
-        }
-
-        foodId    = foodData.id;
-        foodName  = foodData.name ?? food.name;
-        foodBrand = foodData.brand ?? food.brand ?? null;
-
-        // foods table stores macros per-serving — use directly
-        calories = Math.round(foodData.calories ?? 0);
-        protein  = Math.round((foodData.protein  ?? 0) * 10) / 10;
-        carbs    = Math.round((foodData.carbs    ?? 0) * 10) / 10;
-        fats     = Math.round((foodData.fats     ?? 0) * 10) / 10;
-        fiber    = Math.round((foodData.fiber    ?? 0) * 10) / 10;
-      }
-
-      const gramsToAdd = food.serving_amount;
-      const servingDescription = food.last_serving_description
-        || (food.serving_unit && food.serving_unit !== 'g' && food.serving_unit !== 'ml'
-            ? food.serving_unit
-            : formatServing(food.serving_amount, food.serving_unit));
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Error', 'You must be logged in to add food'); return; }
-
-      console.log('[AddFood] log_food RPC recent food:', foodName, 'cal=', calories, 'serving=', servingDescription);
-      const { data: rpcDataRecent, error: rpcErrorRecent } = await supabase.rpc('log_food', {
-        p_user_id: user.id,
-        p_date: date,
-        p_meal_type: mealType,
-        p_food_id: foodId,
-        p_food_item_id: food.food_item_id ?? null,
-        p_food_name: foodName,
-        p_food_brand: foodBrand,
-        p_quantity: gramsToAdd / 100,
-        p_calories: safeNum(calories),
-        p_protein: safeNum(protein),
-        p_carbs: safeNum(carbs),
-        p_fats: safeNum(fats),
-        p_fiber: safeNum(fiber),
-        p_serving_description: servingDescription,
-        p_grams: gramsToAdd,
-        p_logged_at: new Date().toISOString(),
-      });
-
-      if (rpcErrorRecent) {
-        console.error('[AddFood] log_food RPC error for recent food:', rpcErrorRecent);
-        Alert.alert('Error', 'Failed to add food to meal');
-        return;
-      }
-
-      const mealId = rpcDataRecent?.meal_id;
-      console.log('[AddFood] ✅ Recent food added successfully! meal_id:', mealId, 'meal_item_id:', rpcDataRecent?.meal_item_id);
-      console.log('[AddFood] Triggering success banner');
-
-      // ── Log food usage (fire-and-forget) — use catalog food_item_id, not foods.id ──
-      if (food.food_item_id) {
-        console.log('[AddFood] Logging food usage for recent food, food_item_id:', food.food_item_id);
-        logFoodUsage(food.food_item_id, 'search');
-      } else {
-        console.log('[AddFood] Skipping logFoodUsage for recent food — no catalog food_item_id');
-      }
-
-      // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
-      const xpSourceId = `${mealId}_${food.id}_${date}`;
-      console.log('[AddFood] awarding meal XP for recent food, source_id:', xpSourceId);
-      tryAwardMealLogged(xpSourceId, mealType, date);
-      evaluateDailyGoals(date);
-
-      // Notify challenge hook that a meal was logged
-      emitMealLogged();
-      trackFirstMealIfNeeded();
-      
-      // Show success banner (will interrupt if one is already showing)
-      showSuccessBanner();
-      
-      console.log('[AddFood] Keeping modal open for multiple adds');
-    } catch (error) {
-      console.error('[AddFood] Error adding recent food:', error);
-      Alert.alert('Error', 'An unexpected error occurred while adding food');
-    }
-  }, [context, mode, planId, date, mealType, showSuccessBanner]);
-
-  /**
    * Open food details for a favorite
    * CRITICAL: Pass context through to Food Details
    */
@@ -1535,81 +1122,6 @@ export default function AddFoodScreen() {
       Alert.alert('Error', error.message || 'Failed to remove favorite. Please try again.');
     }
   }, [favorites]);
-
-  const renderFoodItem = useCallback((food: Food, index: number) => {
-    const calories = Math.round(food.calories);
-    const protein = Math.round(food.protein);
-    const carbs = Math.round(food.carbs);
-    const fat = Math.round(food.fats);
-
-    // serving_unit now contains the full display text from extractServingSize e.g. "1 piece (28 g)"
-    const servingText = food.serving_unit || `${food.serving_amount}g`;
-
-    return (
-      <SwipeToDeleteRow
-        key={food.id ?? `recent-food-${index}`}
-        onDelete={() => handleHideRecentFood(food)}
-      >
-        <TouchableOpacity
-          style={[
-            styles.foodCard,
-            { backgroundColor: isDark ? colors.cardDark : colors.card }
-          ]}
-          onPress={() => handleOpenRecentFoodDetails(food)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.foodInfo}>
-            <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
-              {food.name}
-            </Text>
-            {food.brand ? (
-              <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
-                {food.brand}
-              </Text>
-            ) : null}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-              <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                {servingText}
-              </Text>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {protein}g</Text>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {carbs}g</Text>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {fat}g</Text>
-            </View>
-          </View>
-
-          <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
-              {calories}
-            </Text>
-            <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-              kcal
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              console.log('[AddFood] Recent food + button pressed:', food.name, 'context:', context);
-              if (context === 'my_meals_builder') {
-                handleQuickAddRecentFood(food);
-              } else {
-                handleAddRecentFood(food);
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name="plus"
-              android_material_icon_name="add"
-              size={20}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </SwipeToDeleteRow>
-    );
-  }, [isDark, context, handleOpenRecentFoodDetails, handleQuickAddRecentFood, handleAddRecentFood, handleHideRecentFood]);
 
   const renderSearchResultItem = useCallback((item: SearchResultItem, index: number) => {
     const displayName = item.product.product_name || 'Unknown Product';
@@ -2167,24 +1679,13 @@ export default function AddFoodScreen() {
     }
     
     return (
-      <React.Fragment>
-        <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          Recent Foods
+      <View style={styles.emptyState}>
+        <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+          Search for a food to get started
         </Text>
-        {recentFoods.filter(food => !hiddenRecentIds.has(food.food_item_id || food.id)).length > 0 ? (
-          recentFoods
-            .filter(food => !hiddenRecentIds.has(food.food_item_id || food.id))
-            .map((food, index) => renderFoodItem(food, index))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              No recent foods yet
-            </Text>
-          </View>
-        )}
-      </React.Fragment>
+      </View>
     );
-  }, [searchQuery, isSearching, searchError, searchResults, recentFoods, hiddenRecentIds, isDark, handleRetrySearch, renderSearchResultItem, renderFoodItem]);
+  }, [searchQuery, isSearching, searchError, searchResults, isDark, handleRetrySearch, renderSearchResultItem]);
 
   return (
     <SafeAreaView 
