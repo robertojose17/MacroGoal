@@ -760,11 +760,45 @@ export default function AddFoodScreen() {
         if (response.ok) {
           const result = await response.json();
           if (result.found && result.item) {
-            offProduct = result.item?.off_data ?? buildSyntheticOffData(result.item);
+            if (result.item?.off_data) {
+              // Cache hit with off_data — use it directly
+              offProduct = result.item.off_data;
+              console.log('[AddFood] PATH A: ✅ cache hit with off_data, serving_size=', offProduct?.serving_size);
+            } else {
+              // Cache hit but off_data is null — fetch original serving_size string from OpenFoodFacts
+              console.log('[AddFood] PATH A: off_data is null, fetching serving_size from OpenFoodFacts for barcode:', food.barcode);
+              let ofServingSize: string | undefined;
+              let ofServingQuantity: number | undefined;
+              try {
+                const ofResponse = await fetch(
+                  `https://world.openfoodfacts.org/api/v0/product/${food.barcode}.json`,
+                  { headers: { 'User-Agent': 'MacroGoal/1.0' } }
+                );
+                if (ofResponse.ok) {
+                  const ofData = await ofResponse.json();
+                  if (ofData.status === 1 && ofData.product) {
+                    ofServingSize = ofData.product.serving_size || undefined;
+                    ofServingQuantity = ofData.product.serving_quantity
+                      ? Number(ofData.product.serving_quantity)
+                      : undefined;
+                    console.log('[AddFood] PATH A: OFacts serving_size=', ofServingSize, '| serving_quantity=', ofServingQuantity);
+                  }
+                }
+              } catch (ofErr) {
+                console.warn('[AddFood] PATH A: OpenFoodFacts fetch failed (non-fatal):', ofErr);
+              }
+              // Build synthetic off_data and override serving fields with OFacts originals if available
+              const synthetic = buildSyntheticOffData(result.item);
+              offProduct = {
+                ...synthetic,
+                ...(ofServingSize ? { serving_size: ofServingSize } : {}),
+                ...(ofServingQuantity != null ? { serving_quantity: ofServingQuantity } : {}),
+              };
+              console.log('[AddFood] PATH A: ✅ built offProduct with serving_size=', offProduct?.serving_size);
+            }
             if (offProduct && !offProduct.product_name && !offProduct.generic_name) {
               offProduct = { ...offProduct, product_name: result.item?.name || food.name };
             }
-            console.log('[AddFood] PATH A: ✅ got off_data from edge function, serving_size=', offProduct?.serving_size);
           } else {
             console.log('[AddFood] PATH A: edge function returned not found, falling through');
           }
@@ -798,7 +832,37 @@ export default function AddFoodScreen() {
           if (retryResponse.ok) {
             const retryResult = await retryResponse.json();
             if (retryResult.found && retryResult.item) {
-              const retryOff = retryResult.item?.off_data ?? buildSyntheticOffData(retryResult.item);
+              let retryOff: OpenFoodFactsProduct | null = null;
+              if (retryResult.item?.off_data) {
+                retryOff = retryResult.item.off_data;
+              } else {
+                // off_data null on retry — fetch from OpenFoodFacts
+                try {
+                  const retryBarcode = offProduct?.code || retryResult.item?.barcode;
+                  if (retryBarcode) {
+                    const ofRetryResponse = await fetch(
+                      `https://world.openfoodfacts.org/api/v0/product/${retryBarcode}.json`,
+                      { headers: { 'User-Agent': 'MacroGoal/1.0' } }
+                    );
+                    if (ofRetryResponse.ok) {
+                      const ofRetryData = await ofRetryResponse.json();
+                      if (ofRetryData.status === 1 && ofRetryData.product) {
+                        const synthetic = buildSyntheticOffData(retryResult.item);
+                        retryOff = {
+                          ...synthetic,
+                          ...(ofRetryData.product.serving_size ? { serving_size: ofRetryData.product.serving_size } : {}),
+                          ...(ofRetryData.product.serving_quantity != null ? { serving_quantity: Number(ofRetryData.product.serving_quantity) } : {}),
+                        };
+                      }
+                    }
+                  }
+                } catch (ofRetryErr) {
+                  console.warn('[AddFood] PATH B retry: OFacts fetch failed (non-fatal):', ofRetryErr);
+                }
+                if (!retryOff) {
+                  retryOff = buildSyntheticOffData(retryResult.item);
+                }
+              }
               if (retryOff && parseFloat(String(retryOff.serving_quantity ?? 0)) > 0 && parseFloat(String(retryOff.serving_quantity ?? 0)) !== 100) {
                 offProduct = retryOff;
                 if (!offProduct.product_name && !offProduct.generic_name) {
