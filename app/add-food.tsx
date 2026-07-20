@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
+import { getRecentFoods, RecentFoodItem } from '@/utils/foodDatabase';
 import { OpenFoodFactsProduct } from '@/utils/openFoodFacts';
 import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
@@ -84,6 +85,9 @@ export default function AddFoodScreen() {
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingSavedMeals, setLoadingSavedMeals] = useState(false);
+  const [recentFoods, setRecentFoods] = useState<RecentFoodItem[]>([]);
+  const [loadingRecentFoods, setLoadingRecentFoods] = useState(false);
+  const [hiddenRecentIds, setHiddenRecentIds] = useState<Set<string>>(new Set());
 
   // INLINE SEARCH STATE — hybrid engine
   const [searchQuery, setSearchQuery] = useState('');
@@ -204,6 +208,22 @@ export default function AddFoodScreen() {
     }
   }, []);
 
+  const loadRecentFoods = useCallback(async () => {
+    try {
+      setLoadingRecentFoods(true);
+      console.log('[AddFood] Loading recent foods');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoadingRecentFoods(false); return; }
+      const items = await getRecentFoods(user.id);
+      setRecentFoods(items);
+      console.log('[AddFood] Loaded', items.length, 'recent foods');
+    } catch (error) {
+      console.error('[AddFood] Error loading recent foods:', error);
+    } finally {
+      setLoadingRecentFoods(false);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -211,13 +231,16 @@ export default function AddFoodScreen() {
       // Load favorites
       await loadFavorites();
 
+      // Load recent foods
+      await loadRecentFoods();
+
       console.log('[AddFood] Loaded data');
     } catch (error) {
       console.error('[AddFood] Error loading data:', error);
     } finally {
       setLoading(false);
     }
-  }, [loadFavorites]);
+  }, [loadFavorites, loadRecentFoods]);
 
   // Load data when screen comes into focus
   useFocusEffect(
@@ -1311,6 +1334,152 @@ export default function AddFoodScreen() {
     );
   }, [isDark, context, handleRemoveFavorite, handleOpenFavoriteDetails, handleQuickAddFavorite, handleAddFavorite]);
 
+  const handleQuickAddRecentFood = useCallback(async (item: RecentFoodItem) => {
+    console.log('[AddFood] Quick add recent food:', item.food_name);
+    if (context === 'my_meals_builder') {
+      Alert.alert('Not Available', 'Please tap the food to view details and add it to your meal.');
+      return;
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Error', 'You must be logged in to add food'); return; }
+
+      const grams = item.quantity;
+      const multiplier = grams / 100;
+      const calories = safeNum(item.calories_per_100 * multiplier);
+      const protein = safeNum(item.protein_per_100 * multiplier);
+      const carbs = safeNum(item.carbs_per_100 * multiplier);
+      const fat = safeNum(item.fat_per_100 * multiplier);
+      const fiber = safeNum(item.fiber_per_100 * multiplier);
+
+      console.log('[AddFood] Logging recent food via RPC:', item.food_name, 'grams=', grams, 'calories=', calories);
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+        p_user_id: user.id,
+        p_date: date,
+        p_meal_type: mealType,
+        p_food_id: null,
+        p_food_item_id: item.food_item_id,
+        p_quantity: multiplier,
+        p_calories: calories,
+        p_protein: protein,
+        p_carbs: carbs,
+        p_fats: fat,
+        p_fiber: fiber,
+        p_serving_description: item.serving_description || `${Math.round(grams)}g`,
+        p_grams: grams,
+        p_logged_at: new Date().toISOString(),
+      });
+
+      if (rpcError) {
+        console.error('[AddFood] RPC error logging recent food:', rpcError);
+        Alert.alert('Error', 'Failed to add food to meal');
+        return;
+      }
+
+      const mealId = rpcData?.meal_id;
+      const xpSourceId = `${mealId}_${item.food_item_id}_${date}`;
+      tryAwardMealLogged(xpSourceId, mealType, date);
+      evaluateDailyGoals(date);
+      emitMealLogged();
+      trackFirstMealIfNeeded();
+      showSuccessBanner();
+    } catch (error) {
+      console.error('[AddFood] Error quick adding recent food:', error);
+      Alert.alert('Error', 'An unexpected error occurred');
+    }
+  }, [context, date, mealType, showSuccessBanner]);
+
+  const handleOpenRecentFoodDetails = useCallback((item: RecentFoodItem) => {
+    console.log('[AddFood] Opening recent food details:', item.food_name, 'meal_item_id:', item.meal_item_id);
+    router.push({
+      pathname: '/food-details',
+      params: {
+        itemId: item.meal_item_id,
+        mealType,
+        date,
+        returnTo: returnTo || '/(tabs)/(home)',
+        mode: '',
+        context: context || '',
+        planId: planId || '',
+      },
+    });
+  }, [router, mealType, date, returnTo, context, planId]);
+
+  const renderRecentFoodItem = useCallback((item: RecentFoodItem, index: number) => {
+    if (hiddenRecentIds.has(item.food_item_id)) return null;
+
+    const grams = item.quantity;
+    const multiplier = grams / 100;
+    const calories = Math.round(item.calories_per_100 * multiplier);
+    const protein = Math.round(item.protein_per_100 * multiplier);
+    const carbs = Math.round(item.carbs_per_100 * multiplier);
+    const fat = Math.round(item.fat_per_100 * multiplier);
+    const servingText = item.serving_description || `${Math.round(grams)}g`;
+
+    return (
+      <React.Fragment key={item.food_item_id}>
+        <SwipeToDeleteRow
+          onDelete={() => {
+            console.log('[AddFood] Hiding recent food:', item.food_name);
+            setHiddenRecentIds(prev => new Set([...prev, item.food_item_id]));
+          }}
+        >
+          <TouchableOpacity
+            style={[styles.foodCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+            onPress={() => handleOpenRecentFoodDetails(item)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.foodInfo}>
+              <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
+                {item.food_name}
+              </Text>
+              {item.food_brand ? (
+                <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
+                  {item.food_brand}
+                </Text>
+              ) : null}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                  {servingText}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {protein}g</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {carbs}g</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {fat}g</Text>
+              </View>
+            </View>
+
+            <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
+                {calories}
+              </Text>
+              <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                kcal
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                console.log('[AddFood] Recent food + button pressed:', item.food_name);
+                handleQuickAddRecentFood(item);
+              }}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="plus"
+                android_material_icon_name="add"
+                size={20}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </SwipeToDeleteRow>
+      </React.Fragment>
+    );
+  }, [isDark, hiddenRecentIds, handleOpenRecentFoodDetails, handleQuickAddRecentFood]);
+
   /**
    * QUICK ADD: Add entire saved meal to meal log
    * Adds all foods from the saved meal with 1 serving each
@@ -1887,6 +2056,27 @@ export default function AddFoodScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
+              </React.Fragment>
+            )}
+
+            {activeTab === 'all' && (
+              <React.Fragment>
+                <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  Recent Foods
+                </Text>
+                {loadingRecentFoods ? (
+                  <View style={styles.emptyState}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  </View>
+                ) : recentFoods.filter(f => !hiddenRecentIds.has(f.food_item_id)).length > 0 ? (
+                  recentFoods.map((item, index) => renderRecentFoodItem(item, index))
+                ) : (
+                  <View style={[styles.emptyState, { paddingVertical: 16 }]}>
+                    <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Foods you log will appear here
+                    </Text>
+                  </View>
+                )}
               </React.Fragment>
             )}
 

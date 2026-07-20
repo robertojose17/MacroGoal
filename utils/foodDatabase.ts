@@ -382,3 +382,111 @@ export async function updateDailySummary(date: string): Promise<void> {
     // CRITICAL: Do not throw, app must continue
   }
 }
+
+export interface RecentFoodItem {
+  meal_item_id: string;
+  food_item_id: string;
+  food_name: string;
+  food_brand: string | null;
+  serving_description: string | null;
+  serving_size: number;
+  serving_count: number | null;
+  calories_per_100: number;
+  protein_per_100: number;
+  carbs_per_100: number;
+  fat_per_100: number;
+  fiber_per_100: number;
+  quantity: number; // grams logged last time
+  off_data: any;
+}
+
+export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> {
+  try {
+    console.log('[FoodDB] Getting recent foods for user:', userId);
+    // Get the user's most recent meal_ids (last 90 days)
+    const { data: meals, error: mealsError } = await supabase
+      .from('meals')
+      .select('id')
+      .eq('user_id', userId)
+      .gte('date', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+
+    if (mealsError || !meals || meals.length === 0) return [];
+
+    const mealIds = meals.map((m: any) => m.id);
+
+    // Get meal_items with food_items join, only where food_item_id is set
+    const { data: items, error: itemsError } = await supabase
+      .from('meal_items')
+      .select(`
+        id,
+        food_item_id,
+        quantity,
+        created_at,
+        meal_id,
+        food_items (
+          id,
+          name,
+          brand,
+          calories,
+          protein,
+          carbs,
+          fat,
+          fiber,
+          serving_size,
+          serving_description,
+          serving_count,
+          off_data
+        )
+      `)
+      .in('meal_id', mealIds)
+      .not('food_item_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (itemsError || !items) return [];
+
+    // Deduplicate by food_item_id — keep the most recent (first occurrence since sorted desc)
+    const seen = new Set<string>();
+    const result: RecentFoodItem[] = [];
+
+    for (const item of items as any[]) {
+      const fi = item.food_items;
+      if (!fi || seen.has(item.food_item_id)) continue;
+      seen.add(item.food_item_id);
+
+      // Build serving description — columns first, then off_data fallback
+      let servingDesc: string | null = null;
+      if (fi.serving_description && fi.serving_size) {
+        const count = fi.serving_count ?? 1;
+        servingDesc = `${count} ${fi.serving_description} (${Math.round(fi.serving_size)}g)`;
+      } else if (fi.off_data?.serving_size) {
+        servingDesc = String(fi.off_data.serving_size);
+      }
+
+      result.push({
+        meal_item_id: item.id,
+        food_item_id: item.food_item_id,
+        food_name: fi.name,
+        food_brand: fi.brand ?? null,
+        serving_description: servingDesc,
+        serving_size: fi.serving_size ?? 100,
+        serving_count: fi.serving_count ?? null,
+        calories_per_100: fi.calories ?? 0,
+        protein_per_100: fi.protein ?? 0,
+        carbs_per_100: fi.carbs ?? 0,
+        fat_per_100: fi.fat ?? 0,
+        fiber_per_100: fi.fiber ?? 0,
+        quantity: item.quantity ?? fi.serving_size ?? 100,
+        off_data: fi.off_data ?? null,
+      });
+
+      if (result.length >= 50) break;
+    }
+
+    console.log('[FoodDB] Returning', result.length, 'recent foods');
+    return result;
+  } catch (error) {
+    console.error('[FoodDB] Error getting recent foods:', error);
+    return [];
+  }
+}
