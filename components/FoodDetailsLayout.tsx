@@ -581,6 +581,21 @@ export default function FoodDetailsLayout({
   // NOT from extractServingSize — so they stay in sync.
   const [editDefaultGramsPerUnit, setEditDefaultGramsPerUnit] = useState<number | null>(null);
 
+  // Resolve the authoritative gram value from a product, with full fallback chain.
+  // Priority: serving_quantity → parse "(Xg)" from serving_size string → plain "Xg" → 100
+  const resolveProductGrams = (prod: OpenFoodFactsProduct): number => {
+    const qty = prod.serving_quantity != null ? parseFloat(String(prod.serving_quantity)) : NaN;
+    if (isFinite(qty) && qty > 0) return qty;
+    // Parse "(Xg)" or "(X g)" from serving_size string
+    const ss = typeof prod.serving_size === 'string' ? prod.serving_size : '';
+    const m = ss.match(/\((\d+\.?\d*)\s*(?:g|ml)\)/i);
+    if (m) return parseFloat(m[1]);
+    // Parse plain "Xg" or "X g" serving_size
+    const m2 = ss.match(/^(\d+\.?\d*)\s*(?:g|ml)$/i);
+    if (m2) return parseFloat(m2[1]);
+    return 100;
+  };
+
   // Memoized serving options — must be declared before any early returns to satisfy Rules of Hooks.
   // `product` may be null during loading; we guard with a fallback so the array is always valid.
   const servingOptions = useMemo<ServingOption[]>(() => {
@@ -588,9 +603,7 @@ export default function FoodDetailsLayout({
 
     if (product) {
       // ── Natural unit (cookie, egg, slice, etc.) ──────────────────────────
-      const totalGrams = product.serving_quantity
-        ? parseFloat(String(product.serving_quantity))
-        : null;
+      const totalGrams = resolveProductGrams(product);
 
       const servingSizeStr = typeof product.serving_size === 'string' ? product.serving_size.trim() : '';
       const { unitName: rawUnitName, unitCount } = extractUnitFromString(servingSizeStr);
@@ -601,9 +614,9 @@ export default function FoodDetailsLayout({
       const defGrams =
         mode === 'edit' && editDefaultGramsPerUnit !== null
           ? editDefaultGramsPerUnit
-          : (totalGrams ?? 100);
+          : totalGrams;
 
-      if (totalGrams && totalGrams > 0 && unitName) {
+      if (totalGrams > 0 && unitName) {
         const singular = singularizeUnit(unitName);
         // Capitalize first letter for display
         const singularDisplay = singular.charAt(0).toUpperCase() + singular.slice(1);
@@ -707,28 +720,8 @@ export default function FoodDetailsLayout({
       setFoodItemRef({ serving_size: servingInfo.grams, macros_per: '100g' });
       setServingUnit('serving');
 
-      // Resolve totalGrams with priority chain:
-      // 1. serving_quantity (now backfilled in DB for 97% of items)
-      // 2. servingInfo.grams (from extractServingSize which parses the serving_size string)
-      // 3. Parse "(Xg)" pattern directly from serving_size string
-      // 4. 100g absolute last resort
-      const rawQty = parsedProduct.serving_quantity;
-      const parsedQty = rawQty != null ? parseFloat(String(rawQty)) : NaN;
-      let totalGrams: number;
-      console.log('[FoodDetails] loadViewData: resolving totalGrams — serving_quantity=', rawQty, 'servingInfo.grams=', servingInfo.grams, 'serving_size=', parsedProduct.serving_size);
-      if (isFinite(parsedQty) && parsedQty > 0) {
-        totalGrams = parsedQty;
-        console.log('[FoodDetails] loadViewData: totalGrams from serving_quantity =', totalGrams);
-      } else if (servingInfo.grams > 0 && servingInfo.grams !== 100) {
-        totalGrams = servingInfo.grams;
-        console.log('[FoodDetails] loadViewData: totalGrams from servingInfo.grams =', totalGrams);
-      } else {
-        // Try to parse "(Xg)" from serving_size string directly
-        const ssStr = typeof parsedProduct.serving_size === 'string' ? parsedProduct.serving_size : '';
-        const m = ssStr.match(/\((\d+\.?\d*)\s*g\)/i);
-        totalGrams = m ? parseFloat(m[1]) : (servingInfo.grams > 0 ? servingInfo.grams : 100);
-        console.log('[FoodDetails] loadViewData: totalGrams from fallback (ssStr=', ssStr, ', match=', m ? m[1] : null, ') =', totalGrams);
-      }
+      const totalGrams = resolveProductGrams(parsedProduct);
+      console.log('[FoodDetails] loadViewData: totalGrams=', totalGrams, '| serving_quantity=', parsedProduct.serving_quantity, '| serving_size=', parsedProduct.serving_size);
 
       // Extract unit name and count from the serving_size string (display only)
       const servingSizeStr = typeof parsedProduct.serving_size === 'string' ? parsedProduct.serving_size.trim() : '';
