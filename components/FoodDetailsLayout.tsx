@@ -1691,9 +1691,10 @@ export default function FoodDetailsLayout({
             draftFoodId = newFoodForDraft.id;
           }
 
-          // Step 1b: Upsert to food_items when offData is present so food_item_id is always set
+          // Step 1b: Upsert to food_items when product is present so food_item_id is always set
           let draftFoodItemId: string | null = null;
-          if (offData) {
+          if (product) {
+            console.log('[FoodDetailsLayout] upsertFoodItem (my_meals_builder)', product.code ?? product.product_name);
             draftFoodItemId = await upsertFoodItem(product);
           }
 
@@ -1720,9 +1721,10 @@ export default function FoodDetailsLayout({
             router.back();
           }, 500);
         } else {
-          // ── Upsert to food_items (global catalog) when offData present — always populate food_item_id ──
+          // ── Upsert to food_items (global catalog) when product present — always populate food_item_id ──
           let foodItemId: string | null = null;
-          if (offData) {
+          if (product) {
+            console.log('[FoodDetailsLayout] upsertFoodItem (main branch)', product.code ?? product.product_name);
             foodItemId = await upsertFoodItem(product);
           }
 
