@@ -744,6 +744,19 @@ export default function AddFoodScreen() {
     try {
       let offProduct: OpenFoodFactsProduct | null = null;
 
+      // PATH -1: meal_items.off_data — the original offData saved at log time.
+      // This is the most reliable source — same data that was used when the food was first logged.
+      if (food.meal_item_off_data && typeof food.meal_item_off_data === 'object') {
+        console.log('[AddFood] PATH -1: using meal_items.off_data directly');
+        offProduct = {
+          ...food.meal_item_off_data,
+          product_name: food.name || food.meal_item_off_data.product_name || '',
+          brands: food.brand || food.meal_item_off_data.brands || '',
+          code: food.barcode || food.meal_item_off_data.code || undefined,
+        } as OpenFoodFactsProduct;
+        console.log('[AddFood] PATH -1: ✅ serving_size=', offProduct.serving_size, '| serving_quantity=', offProduct.serving_quantity);
+      }
+
       // PATH 0: off_data already on the Food object (populated by getRecentFoods) — use it directly.
       // This is the fast path for the vast majority of recent foods (AI Estimated, catalog items).
       if (food.off_data && typeof food.off_data === 'object') {

@@ -1796,6 +1796,7 @@ export default function FoodDetailsLayout({
           }
 
           // Step 3: Insert the meal item linking food → meal
+          console.log('[FoodDetails] Inserting meal_item with off_data present:', !!offData);
           const { error: mealItemError } = await supabase
             .from('meal_items')
             .insert([{
@@ -1812,6 +1813,7 @@ export default function FoodDetailsLayout({
               fiber: safeMacros.fiber,
               serving_description: servingDescription,
               grams: totalGrams,
+              off_data: offData ? JSON.parse(offData) : null,
             }]);
 
           if (mealItemError) {

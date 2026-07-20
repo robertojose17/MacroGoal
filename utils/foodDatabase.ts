@@ -193,6 +193,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
         serving_description,
         quantity,
         grams,
+        off_data,
         created_at,
         meals!inner (
           user_id
@@ -295,6 +296,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           is_favorite: false,
           food_item_id: fi.id,
           off_data: fi.off_data ?? undefined,
+          meal_item_off_data: (item.off_data as any) ?? undefined,
           last_serving_description: item.serving_description ?? undefined,
           last_logged_grams: Number(item.grams) || undefined,
         });
