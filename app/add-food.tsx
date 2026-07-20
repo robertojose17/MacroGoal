@@ -738,13 +738,26 @@ export default function AddFoodScreen() {
    */
   const handleOpenRecentFoodDetails = useCallback(async (food: Food) => {
     console.log('[AddFood] ========== OPENING RECENT FOOD DETAILS ==========');
-    console.log('[AddFood] Food:', food.name, '| food_item_id:', food.food_item_id, '| barcode:', food.barcode);
+    console.log('[AddFood] Food:', food.name, '| food_item_id:', food.food_item_id, '| barcode:', food.barcode, '| off_data present:', !!food.off_data);
 
     try {
       let offProduct: OpenFoodFactsProduct | null = null;
 
+      // PATH 0: off_data already on the Food object (populated by getRecentFoods) — use it directly.
+      // This is the fast path for the vast majority of recent foods (AI Estimated, catalog items).
+      if (food.off_data && typeof food.off_data === 'object') {
+        console.log('[AddFood] PATH 0: using off_data already on food object, serving_size=', food.off_data.serving_size);
+        offProduct = {
+          ...food.off_data,
+          product_name: food.name || food.off_data.product_name || '',
+          brands: food.brand || food.off_data.brands || '',
+          code: food.barcode || food.off_data.code || undefined,
+        } as OpenFoodFactsProduct;
+        console.log('[AddFood] PATH 0: ✅ offProduct built, serving_size=', offProduct.serving_size);
+      }
+
       // PATH A: food has a barcode → use the same lookup-barcode edge function as the scanner
-      if (food.barcode) {
+      if (!offProduct && food.barcode) {
         console.log('[AddFood] PATH A: barcode lookup via edge function:', food.barcode);
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
@@ -807,74 +820,37 @@ export default function AddFoodScreen() {
         }
       }
 
-      // PATH B: no barcode or edge function failed → use food_item_id lookup
+      // PATH B: no barcode or edge function failed → query food_items directly for off_data
       if (!offProduct && food.food_item_id) {
-        console.log('[AddFood] PATH B: building off_data from food_item_id:', food.food_item_id);
-        offProduct = await buildOffProductFromFoodItemId(food.food_item_id);
-        console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size, '| serving_quantity=', offProduct?.serving_quantity);
-      }
+        console.log('[AddFood] PATH B: querying food_items for off_data, id:', food.food_item_id);
+        const { data: fi, error: fiError } = await supabase
+          .from('food_items')
+          .select(`id, name, brand, barcode,
+                   serving_size, serving_unit, serving_description,
+                   serving_count, serving_quantity, calories, protein, carbs, fat, fiber,
+                   macros_per, nutriments, off_data`)
+          .eq('id', food.food_item_id)
+          .maybeSingle();
 
-      // PATH B retry: if PATH B result has a barcode but serving_quantity looks like a fallback (100),
-      // re-try via the lookup-barcode edge function to get authoritative off_data
-      if (offProduct && offProduct.code && offProduct.serving_quantity === 100) {
-        console.log('[AddFood] PATH B result has suspicious serving_quantity=100, retrying via barcode:', offProduct.code);
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token;
-          const retryResponse = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ barcode: offProduct.code }),
-          });
-          if (retryResponse.ok) {
-            const retryResult = await retryResponse.json();
-            if (retryResult.found && retryResult.item) {
-              let retryOff: OpenFoodFactsProduct | null = null;
-              if (retryResult.item?.off_data) {
-                retryOff = retryResult.item.off_data;
-              } else {
-                // off_data null on retry — fetch from OpenFoodFacts
-                try {
-                  const retryBarcode = offProduct?.code || retryResult.item?.barcode;
-                  if (retryBarcode) {
-                    const ofRetryResponse = await fetch(
-                      `https://world.openfoodfacts.org/api/v0/product/${retryBarcode}.json`,
-                      { headers: { 'User-Agent': 'MacroGoal/1.0' } }
-                    );
-                    if (ofRetryResponse.ok) {
-                      const ofRetryData = await ofRetryResponse.json();
-                      if (ofRetryData.status === 1 && ofRetryData.product) {
-                        const synthetic = buildSyntheticOffData(retryResult.item);
-                        retryOff = {
-                          ...synthetic,
-                          ...(ofRetryData.product.serving_size ? { serving_size: ofRetryData.product.serving_size } : {}),
-                          ...(ofRetryData.product.serving_quantity != null ? { serving_quantity: Number(ofRetryData.product.serving_quantity) } : {}),
-                        };
-                      }
-                    }
-                  }
-                } catch (ofRetryErr) {
-                  console.warn('[AddFood] PATH B retry: OFacts fetch failed (non-fatal):', ofRetryErr);
-                }
-                if (!retryOff) {
-                  retryOff = buildSyntheticOffData(retryResult.item);
-                }
-              }
-              if (retryOff && parseFloat(String(retryOff.serving_quantity ?? 0)) > 0 && parseFloat(String(retryOff.serving_quantity ?? 0)) !== 100) {
-                offProduct = retryOff;
-                if (!offProduct.product_name && !offProduct.generic_name) {
-                  offProduct = { ...offProduct, product_name: retryResult.item?.name || food.name };
-                }
-                console.log('[AddFood] PATH B retry: ✅ got better off_data, serving_quantity=', offProduct.serving_quantity);
-              }
-            }
-          }
-        } catch (retryErr) {
-          console.warn('[AddFood] PATH B retry failed (non-fatal):', retryErr);
+        if (fiError || !fi) {
+          console.warn('[AddFood] PATH B: food_items query failed, falling back to buildOffProductFromFoodItemId:', fiError);
+          offProduct = await buildOffProductFromFoodItemId(food.food_item_id);
+        } else if ((fi as any).off_data && typeof (fi as any).off_data === 'object') {
+          // off_data present — use it directly, it has the correct serving_size string
+          const rawOff = (fi as any).off_data as OpenFoodFactsProduct;
+          offProduct = {
+            ...rawOff,
+            product_name: fi.name || rawOff.product_name || '',
+            brands: (fi as any).brand || rawOff.brands || '',
+            code: (fi as any).barcode || rawOff.code || undefined,
+          };
+          console.log('[AddFood] PATH B: ✅ off_data from food_items, serving_size=', offProduct.serving_size);
+        } else {
+          // No off_data — build synthetic from columns
+          offProduct = buildSyntheticOffData(fi as any);
+          console.log('[AddFood] PATH B: ✅ synthetic from columns, serving_size=', offProduct?.serving_size);
         }
+        console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size, '| serving_quantity=', offProduct?.serving_quantity);
       }
 
       // PATH C: user-created food (no food_item_id, no barcode) → query foods table

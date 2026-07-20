@@ -201,7 +201,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           id, name, brand, barcode,
           serving_size, serving_unit, serving_description,
           serving_count, serving_quantity, calories, protein, carbs, fat, fiber,
-          macros_per
+          macros_per, off_data
         ),
         foods:food_id (
           id, name, brand,
@@ -294,6 +294,7 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
           user_created: false,
           is_favorite: false,
           food_item_id: fi.id,
+          off_data: fi.off_data ?? undefined,
         });
 
       } else if (f) {
