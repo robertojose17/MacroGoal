@@ -922,7 +922,7 @@ export default function FoodDetailsLayout({
       if (mealItem.food_item_id) {
         const { data: fetchedFoodItem } = await supabase
           .from('food_items')
-          .select('id, name, brand, barcode, calories, protein, carbs, fat, fiber, serving_size, serving_unit, serving_quantity, serving_description, serving_count, macros_per, nutriments, sugar_g, saturated_fat_g, polyunsaturated_fat_g, monounsaturated_fat_g, trans_fat_g, cholesterol_mg, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg, vitamin_b12_mcg, folate_mcg, choline_mg, pantothenic_acid_mg, selenium_mcg, source, usda_fdc_id, data_quality_score, ingredients_text, allergens')
+          .select('id, name, brand, barcode, calories, protein, carbs, fat, fiber, serving_size, serving_unit, serving_quantity, serving_description, serving_count, macros_per, nutriments, sugar_g, saturated_fat_g, polyunsaturated_fat_g, monounsaturated_fat_g, trans_fat_g, cholesterol_mg, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg, vitamin_b12_mcg, folate_mcg, choline_mg, pantothenic_acid_mg, selenium_mcg, source, usda_fdc_id, data_quality_score, ingredients_text, allergens, off_data')
           .eq('id', mealItem.food_item_id)
           .single();
         foodItem = fetchedFoodItem;
@@ -930,14 +930,17 @@ export default function FoodDetailsLayout({
         if (foodItem) {
           // Build mockProduct from individual columns
           const n = foodItem;
-          // serving_size is now TOTAL grams of one standard serving (new architecture)
-          const servingSize = n.serving_description && n.serving_size
-            ? (() => {
-                const sc = Number(n.serving_count) || 1;
-                const totalG = Number(n.serving_size); // serving_size IS total grams
-                return `${sc} ${n.serving_description} (${totalG} g)`;
-              })()
-            : n.serving_size ? `${n.serving_size} g` : undefined;
+          // Prefer off_data.serving_size (original OFacts string e.g. "1 slice (28g)")
+          // Fall back to reconstructing from columns only when off_data is absent
+          const servingSize = n.off_data?.serving_size
+            ? String(n.off_data.serving_size)
+            : n.serving_description && n.serving_size
+              ? (() => {
+                  const sc = Number(n.serving_count) || 1;
+                  const totalG = Number(n.serving_size);
+                  return `${sc} ${n.serving_description} (${totalG} g)`;
+                })()
+              : n.serving_size ? `${n.serving_size} g` : undefined;
           mockProduct = {
             code: n.barcode || undefined,
             product_name: n.name,
