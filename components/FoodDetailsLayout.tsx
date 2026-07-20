@@ -1153,12 +1153,16 @@ export default function FoodDetailsLayout({
   }, [itemId, router]);
 
   useEffect(() => {
-    if (mode === 'view') {
+    if (itemId) {
+      // itemId always means edit/load from DB — mode may be empty when coming from Recent Foods
+      console.log('[FoodDetailsLayout] loadEditItem triggered', { itemId, mode });
+      loadEditItem();
+    } else if (mode === 'view') {
       loadViewData();
     } else if (mode === 'edit') {
       loadEditItem();
     }
-  }, [mode, loadViewData, loadEditItem]);
+  }, [mode, itemId, loadViewData, loadEditItem]);
 
   useEffect(() => {
     if (bannerQueue.length > 0) {
