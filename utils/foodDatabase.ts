@@ -339,9 +339,8 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       }
     }
 
-    // Deduplicate by name — if two entries have the same name (case-insensitive),
-    // keep the one with off_data present, otherwise keep the one with the larger serving_size
-    // (larger serving_size = more specific, not the generic 100g fallback).
+    // Deduplicate by name — prefer the entry with serving_description present (columns are
+    // source of truth), then fall back to off_data presence, then prefer serving_size != 100.
     const nameMap = new Map<string, Food>();
     for (const food of results) {
       const key = (food.name ?? '').toLowerCase().trim();
@@ -349,16 +348,17 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       if (!existing) {
         nameMap.set(key, food);
       } else {
-        const existingHasOff = !!(existing as any).off_data;
-        const newHasOff = !!(food as any).off_data;
-        if (newHasOff && !existingHasOff) {
+        const existingHasDesc = !!(existing as any).serving_description || !!(existing as any).off_data?.serving_size;
+        const newHasDesc = !!(food as any).serving_description || !!(food as any).off_data?.serving_size;
+        const existingServing = Number((existing as any).serving_amount) || 100;
+        const newServing = Number((food as any).serving_amount) || 100;
+
+        if (newHasDesc && !existingHasDesc) {
           nameMap.set(key, food);
-        } else if (!newHasOff && existingHasOff) {
+        } else if (!newHasDesc && existingHasDesc) {
           // keep existing
         } else {
-          // Both have or both lack off_data — prefer the one with serving_size != 100
-          const existingServing = Number((existing as any).serving_amount) || 100;
-          const newServing = Number((food as any).serving_amount) || 100;
+          // Both have or both lack description — prefer serving_size != 100
           if (newServing !== 100 && existingServing === 100) {
             nameMap.set(key, food);
           }
