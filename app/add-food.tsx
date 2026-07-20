@@ -892,6 +892,29 @@ export default function AddFoodScreen() {
             }
             console.log('[AddFood] PATH B: overrode serving from last_serving_description=', savedDesc, '→', offProduct.serving_size);
           }
+
+          // PATH B fallback: try to find a better food_item with same name that has off_data
+          if (!offProduct || (offProduct.serving_quantity === 100 && !(offProduct as any).off_data)) {
+            console.log('[AddFood] PATH B: serving_size=100 and no off_data — searching for better food_item with same name');
+            const { data: betterFi } = await supabase
+              .from('food_items')
+              .select('id, name, brand, barcode, serving_size, serving_quantity, serving_description, serving_count, off_data, calories, protein, carbs, fat, fiber, macros_per, nutriments')
+              .ilike('name', fi.name ?? '')
+              .not('off_data', 'is', null)
+              .limit(1)
+              .maybeSingle();
+
+            if (betterFi && (betterFi as any).off_data) {
+              const rawOff = (betterFi as any).off_data as OpenFoodFactsProduct;
+              offProduct = {
+                ...rawOff,
+                product_name: betterFi.name || rawOff.product_name || '',
+                brands: (betterFi as any).brand || rawOff.brands || '',
+                code: (betterFi as any).barcode || rawOff.code || undefined,
+              };
+              console.log('[AddFood] PATH B: ✅ found better food_item with off_data, serving_size=', offProduct.serving_size);
+            }
+          }
         }
         console.log('[AddFood] PATH B: serving_size=', offProduct?.serving_size, '| serving_quantity=', offProduct?.serving_quantity);
       }

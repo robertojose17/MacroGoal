@@ -336,8 +336,37 @@ export async function getRecentFoods(limit: number = 20): Promise<Food[]> {
       }
     }
 
-    console.log(`[FoodDB] getRecentFoods: returning ${results.length} recent foods`);
-    return results;
+    // Deduplicate by name — if two entries have the same name (case-insensitive),
+    // keep the one with off_data present, otherwise keep the one with the larger serving_size
+    // (larger serving_size = more specific, not the generic 100g fallback).
+    const nameMap = new Map<string, Food>();
+    for (const food of results) {
+      const key = (food.name ?? '').toLowerCase().trim();
+      const existing = nameMap.get(key);
+      if (!existing) {
+        nameMap.set(key, food);
+      } else {
+        const existingHasOff = !!(existing as any).off_data;
+        const newHasOff = !!(food as any).off_data;
+        if (newHasOff && !existingHasOff) {
+          nameMap.set(key, food);
+        } else if (!newHasOff && existingHasOff) {
+          // keep existing
+        } else {
+          // Both have or both lack off_data — prefer the one with serving_size != 100
+          const existingServing = Number((existing as any).serving_amount) || 100;
+          const newServing = Number((food as any).serving_amount) || 100;
+          if (newServing !== 100 && existingServing === 100) {
+            nameMap.set(key, food);
+          }
+        }
+      }
+    }
+    // Rebuild results in original order (recency), deduplicated by name
+    const deduped = results.filter(f => nameMap.get((f.name ?? '').toLowerCase().trim()) === f);
+
+    console.log(`[FoodDB] getRecentFoods: returning ${deduped.length} recent foods (deduped from ${results.length})`);
+    return deduped.slice(0, limit);
   } catch (error) {
     console.error('[FoodDB] getRecentFoods: unexpected error:', error);
     return [];
