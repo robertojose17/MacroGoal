@@ -21,6 +21,7 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { TouchableOpacity } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { calcDailyScore } from '@/utils/consistencyMath';
 
 const PHOTOS_ENDPOINT = `${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`;
 
@@ -66,125 +67,97 @@ export default function ShareProgressScreen() {
   const progressScale = availableWidth / PROGRESS_CARD_WIDTH;
   const progressPreviewHeight = PROGRESS_CARD_HEIGHT * progressScale;
 
-  const calculateProteinAccuracyScore = useCallback((proteinLogged: number, proteinTarget: number): number => {
-    if (proteinTarget === 0) {
-      return 0;
-    }
-
-    const percentage = (proteinLogged / proteinTarget) * 100;
-
-    if (percentage >= 95 && percentage <= 105) {
-      return 25;
-    } else if (percentage >= 80 && percentage < 95) {
-      return 20;
-    } else if (percentage >= 60 && percentage < 80) {
-      return 15;
-    } else if (percentage >= 40 && percentage < 60) {
-      return 10;
-    } else if (percentage < 40) {
-      return Math.round((percentage / 40) * 5);
-    } else {
-      const excess = percentage - 105;
-      const penalty = Math.min(10, excess / 5);
-      return Math.max(15, Math.round(25 - penalty));
-    }
-  }, []);
-
-  const calculateConsistencyScore = useCallback(async (userId: string, startDate: string, proteinTarget: number): Promise<number> => {
+  const calculateConsistencyScore = useCallback(async (userId: string, startDate: string, _proteinTarget: number): Promise<number> => {
     try {
       const today = toLocalDateString();
 
-      const { data: allMeals } = await supabase
-        .from('meals')
-        .select(`
-          id,
-          date,
-          meal_items (
-            id,
-            calories,
-            protein
-          )
-        `)
-        .eq('user_id', userId)
-        .gte('date', startDate)
-        .lte('date', today)
-        .order('date', { ascending: true });
+      console.log('[ShareProgress] Calculating consistency score for range:', startDate, '→', today);
 
-      const dailyData: { [date: string]: { calories: number; protein: number; hasMeals: boolean } } = {};
+      // Fetch meals and active goal in parallel (same as ConsistencyScore.tsx)
+      const [{ data: allMeals, error: mealsError }, { data: goalData, error: goalError }] =
+        await Promise.all([
+          supabase
+            .from('meals')
+            .select('id, date, meal_items(id, calories, protein)')
+            .eq('user_id', userId)
+            .gte('date', startDate)
+            .lte('date', today)
+            .order('date', { ascending: true }),
+          supabase
+            .from('goals')
+            .select('daily_calories, protein_g')
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
 
-      if (allMeals && allMeals.length > 0) {
-        for (const meal of allMeals) {
-          if (!dailyData[meal.date]) {
-            dailyData[meal.date] = { calories: 0, protein: 0, hasMeals: false };
-          }
-
-          if (meal.meal_items && meal.meal_items.length > 0) {
-            dailyData[meal.date].hasMeals = true;
-
-            for (const item of meal.meal_items) {
-              const itemCalories = parseFloat(String(item.calories || '0'));
-              const itemProtein = parseFloat(String(item.protein || '0'));
-
-              dailyData[meal.date].calories += itemCalories;
-              dailyData[meal.date].protein += itemProtein;
-            }
-          }
-        }
-      }
-
-      const allDatesInRange: string[] = [];
-      const start = new Date(startDate + 'T00:00:00');
-      const end = new Date(today + 'T00:00:00');
-      const currentDate = new Date(start);
-
-      while (currentDate <= end) {
-        const dateStr = toLocalDateString(currentDate);
-        allDatesInRange.push(dateStr);
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      const hasNoData = Object.keys(dailyData).length === 0;
-      if (allDatesInRange.length > 2 && hasNoData) {
+      if (mealsError) {
+        console.error('[ShareProgress] Error loading meals:', mealsError);
         return 0;
       }
-
-      const dailyScores: { trackingScore: number; streakScore: number; proteinScore: number }[] = [];
-      let currentStreakDays = 0;
-
-      for (let i = 0; i < allDatesInRange.length; i++) {
-        const date = allDatesInRange[i];
-        const dayData = dailyData[date];
-
-        const hasTracking = dayData?.hasMeals || false;
-        const trackingScore = hasTracking ? 40 : 0;
-
-        if (hasTracking) {
-          currentStreakDays++;
-        } else {
-          currentStreakDays = Math.floor(currentStreakDays * 0.3);
-        }
-
-        const streakScore = currentStreakDays > 0
-          ? Math.round(35 * (1 - Math.exp(-0.1 * currentStreakDays)))
-          : 0;
-
-        const proteinLogged = dayData?.protein || 0;
-        const proteinScore = calculateProteinAccuracyScore(proteinLogged, proteinTarget);
-
-        dailyScores.push({ trackingScore, streakScore, proteinScore });
+      if (goalError) {
+        console.error('[ShareProgress] Error loading goal:', goalError);
       }
 
-      const avgTracking = dailyScores.reduce((sum, day) => sum + day.trackingScore, 0) / dailyScores.length;
-      const avgStreak = dailyScores.reduce((sum, day) => sum + day.streakScore, 0) / dailyScores.length;
-      const avgProtein = dailyScores.reduce((sum, day) => sum + day.proteinScore, 0) / dailyScores.length;
+      const calorieTarget = goalData?.daily_calories || 2000;
+      const proteinTarget = goalData?.protein_g || 150;
+      console.log('[ShareProgress] Targets — calories:', calorieTarget, 'protein:', proteinTarget);
 
-      const totalScore = Math.round(avgTracking + avgStreak + avgProtein);
-      return Math.max(0, Math.min(100, totalScore));
+      // Build per-day totals map
+      const dailyData: Record<string, { calories: number; protein: number; hasMeals: boolean }> = {};
+
+      for (const meal of allMeals ?? []) {
+        if (!dailyData[meal.date]) {
+          dailyData[meal.date] = { calories: 0, protein: 0, hasMeals: false };
+        }
+        for (const item of meal.meal_items ?? []) {
+          const cal = parseFloat(String(item.calories || '0'));
+          const prot = parseFloat(String(item.protein || '0'));
+          if (cal > 0 || prot > 0) {
+            dailyData[meal.date].hasMeals = true;
+          }
+          dailyData[meal.date].calories += cal;
+          dailyData[meal.date].protein += prot;
+        }
+      }
+
+      // Generate every date in range
+      const allDates: string[] = [];
+      const cur = new Date(startDate + 'T00:00:00');
+      const end = new Date(today + 'T00:00:00');
+      while (cur <= end) {
+        allDates.push(toLocalDateString(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      const totalDays = allDates.length;
+      let sumDailyScore = 0;
+
+      for (const date of allDates) {
+        const day = dailyData[date];
+        const hasTracking = day?.hasMeals ?? false;
+        const dayScore = calcDailyScore(
+          hasTracking,
+          day?.calories ?? 0,
+          calorieTarget,
+          day?.protein ?? 0,
+          proteinTarget,
+        );
+        sumDailyScore += dayScore;
+        console.log(`[ShareProgress] ${date}: tracked=${hasTracking}, score=${dayScore.toFixed(1)}`);
+      }
+
+      const score = totalDays > 0 ? Math.round(sumDailyScore / totalDays) : 0;
+      const finalScore = Math.max(0, Math.min(100, score));
+      console.log('[ShareProgress] Final consistency score:', finalScore);
+      return finalScore;
     } catch (error) {
       console.error('[ShareProgress] Error calculating consistency score:', error);
       return 0;
     }
-  }, [calculateProteinAccuracyScore]);
+  }, []);
 
   const calculateWeightGoalProgress = async (
     userId: string,
