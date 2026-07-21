@@ -20,6 +20,7 @@ import { type OpenFoodFactsProduct } from '@/utils/openFoodFacts';
 import { ResultSource, SearchResultItem, buildResultItem, mergeProducts } from '@/utils/foodSearchUtils';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { hybridSearch } from '@/utils/foodSearchHybrid';
+import { logFoodUsage } from '@/utils/logFoodUsage';
 
 
 
@@ -303,6 +304,14 @@ export default function FoodSearchScreen() {
     (item: SearchResultItem) => {
       console.log('[FoodSearch] Product selected:', item.product.product_name, '| source:', item.source);
       console.log('[FoodSearch] Navigating to food-details, context:', context, 'returnTo:', returnTo);
+      if (item.source === 'supabase' && item.product.code) {
+        console.log('[FoodSearch] Logging food usage for supabase product:', item.product.code);
+        try {
+          logFoodUsage(item.product.code).catch(() => {});
+        } catch {
+          // fire-and-forget, never block navigation
+        }
+      }
       router.push({
         pathname: '/food-details',
         params: {

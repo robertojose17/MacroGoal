@@ -1,6 +1,6 @@
 
 import { type OpenFoodFactsProduct } from './openFoodFacts';
-import { getLocalCache } from './foodSearchCache';
+import { getLocalCache, setLocalCache } from './foodSearchCache';
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 const SUPABASE_TIMEOUT_MS = 5000;
 
@@ -118,6 +118,7 @@ export async function hybridSearch(
     }
     if (products && products.length >= 1) {
       callbacks.onSupabaseHit?.(products);
+      setLocalCache(query, products).catch(() => {});
     }
   } catch (err) {
     console.warn('[HybridSearch] Supabase stage error:', err);
