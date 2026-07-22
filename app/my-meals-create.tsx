@@ -392,15 +392,32 @@ export default function MyMealsCreateScreen() {
               activeOpacity={0.7}
               disabled={isSwiping}
             >
-              <View style={styles.foodInfo}>
-                <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-                  {item.food_name}
-                </Text>
-                {item.food_brand ? (
-                  <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {item.food_brand}
+              <View style={[styles.foodInfo, { flex: 1 }]}>
+                {/* Row 1: name (+ calories if NO brand) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text, flex: 1 }]} numberOfLines={2}>
+                    {item.food_name}
                   </Text>
+                  {!item.food_brand && (
+                    <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+                      <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>{Math.round(item.calories)}</Text>
+                      <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>kcal</Text>
+                    </View>
+                  )}
+                </View>
+                {/* Row 2: brand (+ calories if HAS brand) */}
+                {item.food_brand ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, flex: 1 }]} numberOfLines={1}>
+                      {item.food_brand}
+                    </Text>
+                    <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+                      <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>{Math.round(item.calories)}</Text>
+                      <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>kcal</Text>
+                    </View>
+                  </View>
                 ) : null}
+                {/* Row 3: per serving + macros */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
                   <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
                     per {servingText}
@@ -412,14 +429,6 @@ export default function MyMealsCreateScreen() {
                   <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
                   <Text style={{ fontSize: 12, fontWeight: '600', color: colors.fats }}>F: {Math.round(item.fats)}g</Text>
                 </View>
-              </View>
-              <View style={styles.foodCalories}>
-                <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>
-                  {Math.round(item.calories)}
-                </Text>
-                <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  kcal
-                </Text>
               </View>
             </TouchableOpacity>
           )}
