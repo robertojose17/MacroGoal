@@ -139,7 +139,7 @@ importers:
         version: 1.25.0(react-native-svg@15.15.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       onesignal-expo-plugin:
         specifier: ^2.6.0
-        version: 2.7.0(expo@54.0.35)(react-native-onesignal@5.5.4(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3)
+        version: 2.7.0(expo@54.0.35)(react-native-onesignal@5.5.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3)
       patch-package:
         specifier: ^8.0.1
         version: 8.0.1
@@ -172,7 +172,7 @@ importers:
         version: 16.4.0(expo@54.0.35)(react@19.1.0)
       react-native-health-connect:
         specifier: ^3.5.3
-        version: 3.5.3(@expo/config-plugins@57.0.5(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+        version: 3.5.3(@expo/config-plugins@57.0.6(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-maps:
         specifier: ^1.20.1
         version: 1.29.0(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -181,7 +181,7 @@ importers:
         version: 0.35.10(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-onesignal:
         specifier: ^5.4.7
-        version: 5.5.4(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
+        version: 5.5.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
       react-native-purchases:
         specifier: ^9.12.0
         version: 9.15.2(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -1055,8 +1055,8 @@ packages:
   '@expo/config-plugins@54.0.4':
     resolution: {integrity: sha512-g2yXGICdoOw5i3LkQSDxl2Q5AlQCrG7oniu0pCPPO+UxGb7He4AFqSvPSy8HpRUj55io17hT62FTjYRD+d6j3Q==}
 
-  '@expo/config-plugins@57.0.5':
-    resolution: {integrity: sha512-xhUGgzpFWRghDUH98+Wl4RDakYhTsbyMg6aOYiBjRzPO/THH8tKMw3vlksgFYlU2PkiAdABJN3tNPf5qmvOQhA==}
+  '@expo/config-plugins@57.0.6':
+    resolution: {integrity: sha512-7CmKrS5Rnu8aSZyNlxH2qzA7Ls1HEa4EQvEVOAkHDKPr1e4Cg/nz7I7dUl09QDTVjMvkKYDH4Th0DuAsgqASaw==}
 
   '@expo/config-types@54.0.10':
     resolution: {integrity: sha512-/J16SC2an1LdtCZ67xhSkGXpALYUVUNyZws7v+PVsFZxClYehDSoKLqyRaGkpHlYrCc08bS0RF5E0JV6g50psA==}
@@ -1067,8 +1067,8 @@ packages:
   '@expo/config@12.0.13':
     resolution: {integrity: sha512-Cu52arBa4vSaupIWsF0h7F/Cg//N374nYb7HAxV0I4KceKA7x2UXpYaHOL7EEYYvp7tZdThBjvGpVmr8ScIvaQ==}
 
-  '@expo/config@57.0.5':
-    resolution: {integrity: sha512-XqveHQzr6PTqHGnv6NVVZ1CFgB/TgR2mKtHsJA/gYS/76pe2cP1yK/O820xGW2RTnDGTmyhOdagmK6khcN46vg==}
+  '@expo/config@57.0.6':
+    resolution: {integrity: sha512-VpMJpB/De/fb9bBFVVBiK6Ntg9lt0kAleLH9hcZz85CYRUQ3jVFVA8rNC5f8y4cp2+FiiPNFp62+kEOFI6pDiw==}
 
   '@expo/devcert@1.2.1':
     resolution: {integrity: sha512-qC4eaxmKMTmJC2ahwyui6ud8f3W60Ss7pMkpBq40Hu3zyiAaugPXnZ24145U7K36qO9UHdZUVxsCvIpz2RYYCA==}
@@ -1091,8 +1091,8 @@ packages:
     resolution: {integrity: sha512-mdVoAMcux1WlM6kd1RoWiHRNqKqS+J6mKmWQ/BKgeh937S/fcW58EE68O6nc4KDXtWi3PBeNHskOFcgyIuD4hw==}
     hasBin: true
 
-  '@expo/image-utils@0.11.3':
-    resolution: {integrity: sha512-yMVjkndhXm9mct0uMq+ndxqT6FgAnhucdUfmXuQ6V6uE021GOiYCACO+KZ0MB4vearPSvbWTGfi32QQr2qocfQ==}
+  '@expo/image-utils@0.11.4':
+    resolution: {integrity: sha512-pn/4770DIEOcYZr484uazuwg20FX/qaDkeMRF6J+oxejynDmEmO8wLsCudaNShFE0BhyKGQTYrs2rsRhqrqESw==}
 
   '@expo/image-utils@0.8.14':
     resolution: {integrity: sha512-5Sn+jG4Cw+shC2wDMXoqSAJnvERbiwzHn05FpWtD5IBflfTIs5gUmjzwiGVyjOdlMSQhgRrw/AymPbmO9h9mpQ==}
@@ -1215,8 +1215,8 @@ packages:
   '@expo/plist@0.8.1':
     resolution: {integrity: sha512-3gTReGIUm0oRaMClsAJYxBnVPCl6fVpsl8HS+DTVxDhW4GyVyxg9E/Znm3BvcHtUJ51RJJI14pC1wvrNilCRHw==}
 
-  '@expo/prebuild-config@57.0.8':
-    resolution: {integrity: sha512-NQjRuTLvxUnggK57pKTHLtzS8YYtjrQSGYu+CjgWaO8lNlqdoBbvHrxGYtc9tBuOI3xVPaTfuIvjikxX1r+UhQ==}
+  '@expo/prebuild-config@57.0.9':
+    resolution: {integrity: sha512-8g7RoXFvO/dxvLzRE/bvphzDL4bfV0w3/4Aj6DfwvgymZ1ULz5gW2x0js94opZRoZvWw4SolH6/74hLlZT3rAA==}
 
   '@expo/require-utils@55.0.5':
     resolution: {integrity: sha512-U4K/CQ2VpXuwfNGsN+daKmYOt15hCP8v/pXaYH6eut7kdYZo6SfJ1yr67BIcJ+1Gzzs+QzTxswAZChKpXmceyw==}
@@ -1226,10 +1226,10 @@ packages:
       typescript:
         optional: true
 
-  '@expo/require-utils@57.0.3':
-    resolution: {integrity: sha512-ns05X1K8tM+Qtzp6dNloUFOopSdh3J+HC61BtOR8WHhgtPFyX8TKuO2diqZUqVg9K8yfkWug7g8tBS0qRniSTA==}
+  '@expo/require-utils@57.0.4':
+    resolution: {integrity: sha512-e7xbg/9BTQcsZE/oErafZXtI7kh5IgfasLJ97J5sFSzX2cA74pDvdlhW1KHVSaDkQyQv6h1LSLhsY7dEeOk7hw==}
     peerDependencies:
-      typescript: ^5.0.0 || ^5.0.0-0 || ^6.0.0
+      typescript: ^5.0.0 || ^5.0.0-0 || ^6.0.0 || ^7.0.0
     peerDependenciesMeta:
       typescript:
         optional: true
@@ -3399,8 +3399,8 @@ packages:
     resolution: {integrity: sha512-WOaud6UKg16ciCOj8raKcMOoKFMHLXKI29U29yhgu1lf+Y7VxJyCktUcYo6AM+ccZ7zLD1uWZdMtgnpf+95OXA==}
     hasBin: true
 
-  expo-modules-autolinking@57.0.8:
-    resolution: {integrity: sha512-YBDgbJHlhhhr3JaKErW6znsIL8zQsh206LaDpWrLHV/WluRwhYfZuF/fhkVN7b/DsRxIu0UeCPExaEPMxlC2Hw==}
+  expo-modules-autolinking@57.0.9:
+    resolution: {integrity: sha512-lj2nsAKMMRLXSFnGgaaQrWJ2fdSpLPc/bca6Rkiw4g8zYPn7qX4MRUJgavvzm/hBrzvMnlhXVgJtidOGuwBh+w==}
     hasBin: true
 
   expo-modules-core@3.0.30:
@@ -5318,8 +5318,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  react-native-onesignal@5.5.4:
-    resolution: {integrity: sha512-SuvkZqKo3w01hgCp7m4tBFcd0msE36v6h2uvRpPRWcQMYgBf8rOh/RvBfwiizYHu7wKJwZVbKZQI0YQATkT09g==}
+  react-native-onesignal@5.5.5:
+    resolution: {integrity: sha512-H1XpBDUnKnUbB0NaciEDkHXmHUJQExim9NrscYI8c+R5Q2vExtMaL4MooLRAM48uuOhxvz72U1wiH0Yt9fhdHQ==}
     peerDependencies:
       react-native: '>=0.79.0'
 
@@ -7501,7 +7501,7 @@ snapshots:
       '@expo/osascript': 2.7.0
       '@expo/package-manager': 1.13.0
       '@expo/plist': 0.4.9
-      '@expo/prebuild-config': 57.0.8(typescript@5.9.3)
+      '@expo/prebuild-config': 57.0.9(typescript@5.9.3)
       '@expo/schema-utils': 0.1.8
       '@expo/spawn-async': 1.8.0
       '@expo/ws-tunnel': 1.0.6
@@ -7585,12 +7585,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/config-plugins@57.0.5(typescript@5.9.3)':
+  '@expo/config-plugins@57.0.6(typescript@5.9.3)':
     dependencies:
       '@expo/config-types': 57.0.2
       '@expo/json-file': 11.0.1
       '@expo/plist': 0.8.1
-      '@expo/require-utils': 57.0.3(typescript@5.9.3)
+      '@expo/require-utils': 57.0.4(typescript@5.9.3)
       '@expo/sdk-runtime-versions': 1.0.0
       chalk: 4.1.2
       debug: 4.4.3
@@ -7626,12 +7626,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/config@57.0.5(typescript@5.9.3)':
+  '@expo/config@57.0.6(typescript@5.9.3)':
     dependencies:
-      '@expo/config-plugins': 57.0.5(typescript@5.9.3)
+      '@expo/config-plugins': 57.0.6(typescript@5.9.3)
       '@expo/config-types': 57.0.2
       '@expo/json-file': 11.0.1
-      '@expo/require-utils': 57.0.3(typescript@5.9.3)
+      '@expo/require-utils': 57.0.4(typescript@5.9.3)
       deepmerge: 4.3.1
       getenv: 2.0.0
       glob: 13.0.6
@@ -7682,9 +7682,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/image-utils@0.11.3(typescript@5.9.3)':
+  '@expo/image-utils@0.11.4(typescript@5.9.3)':
     dependencies:
-      '@expo/require-utils': 57.0.3(typescript@5.9.3)
+      '@expo/require-utils': 57.0.4(typescript@5.9.3)
       '@expo/spawn-async': 1.8.0
       chalk: 4.1.2
       getenv: 2.0.0
@@ -7880,16 +7880,16 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
-  '@expo/prebuild-config@57.0.8(typescript@5.9.3)':
+  '@expo/prebuild-config@57.0.9(typescript@5.9.3)':
     dependencies:
-      '@expo/config': 57.0.5(typescript@5.9.3)
-      '@expo/config-plugins': 57.0.5(typescript@5.9.3)
+      '@expo/config': 57.0.6(typescript@5.9.3)
+      '@expo/config-plugins': 57.0.6(typescript@5.9.3)
       '@expo/config-types': 57.0.2
-      '@expo/image-utils': 0.11.3(typescript@5.9.3)
+      '@expo/image-utils': 0.11.4(typescript@5.9.3)
       '@expo/json-file': 11.0.1
       '@react-native/normalize-colors': 0.86.0
       debug: 4.4.3
-      expo-modules-autolinking: 57.0.8(typescript@5.9.3)
+      expo-modules-autolinking: 57.0.9(typescript@5.9.3)
       resolve-from: 5.0.0
       semver: 7.8.5
     transitivePeerDependencies:
@@ -7906,7 +7906,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/require-utils@57.0.3(typescript@5.9.3)':
+  '@expo/require-utils@57.0.4(typescript@5.9.3)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/core': 7.29.7
@@ -10421,9 +10421,9 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
 
-  expo-modules-autolinking@57.0.8(typescript@5.9.3):
+  expo-modules-autolinking@57.0.9(typescript@5.9.3):
     dependencies:
-      '@expo/require-utils': 57.0.3(typescript@5.9.3)
+      '@expo/require-utils': 57.0.4(typescript@5.9.3)
       '@expo/spawn-async': 1.8.0
       chalk: 4.1.2
       commander: 7.2.0
@@ -10501,7 +10501,7 @@ snapshots:
 
   expo-splash-screen@31.0.13(expo@54.0.35)(typescript@5.9.3):
     dependencies:
-      '@expo/prebuild-config': 57.0.8(typescript@5.9.3)
+      '@expo/prebuild-config': 57.0.9(typescript@5.9.3)
       expo: 54.0.35(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@5.1.11)(react-native-webview@13.17.0(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
@@ -12153,11 +12153,11 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  onesignal-expo-plugin@2.7.0(expo@54.0.35)(react-native-onesignal@5.5.4(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3):
+  onesignal-expo-plugin@2.7.0(expo@54.0.35)(react-native-onesignal@5.5.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3):
     dependencies:
       '@expo/image-utils': 0.8.14(typescript@5.9.3)
       expo: 54.0.35(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@5.1.11)(react-native-webview@13.17.0(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
-      react-native-onesignal: 5.5.4(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
+      react-native-onesignal: 5.5.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -12556,9 +12556,9 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  react-native-health-connect@3.5.3(@expo/config-plugins@57.0.5(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+  react-native-health-connect@3.5.3(@expo/config-plugins@57.0.6(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
-      '@expo/config-plugins': 57.0.5(typescript@5.9.3)
+      '@expo/config-plugins': 57.0.6(typescript@5.9.3)
       react: 19.1.0
       react-native: 0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
 
@@ -12580,7 +12580,7 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
 
-  react-native-onesignal@5.5.4(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)):
+  react-native-onesignal@5.5.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)):
     dependencies:
       invariant: 2.2.4
       react-native: 0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
