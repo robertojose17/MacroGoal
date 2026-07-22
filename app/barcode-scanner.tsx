@@ -92,16 +92,17 @@ export default function BarcodeScannerScreen() {
       console.log('[BarcodeScanner] Edge function result — found:', result.found, 'source:', result.source);
 
       if (result.found) {
-        // Use off_data from the item if present (edge function stores it there),
-        // otherwise build synthetically from columns.
-        let offData = result.item?.off_data ?? buildSyntheticOffData(result.item);
-        // If off_data exists but has no product_name, patch it from the DB item columns
-        if (typeof offData === 'object' && offData !== null) {
-          if (!offData.product_name && !offData.generic_name) {
-            offData = { ...offData, product_name: result.item?.name || '' };
-          }
-        }
-        console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, result.item?.off_data ? '— using stored off_data' : '— building synthetic off_data from item');
+        // Always build synthetic offData from DB columns — single source of truth.
+        // Force macros_per to '100g' so buildSyntheticOffData never mis-scales
+        // (old DB rows may have null macros_per, causing a 100/serving_size multiplier).
+        const itemWithDefaults = {
+          ...result.item,
+          macros_per: '100g',
+          name: result.item?.name || '',
+        };
+        const offData = buildSyntheticOffData(itemWithDefaults);
+
+        console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item (macros_per forced to 100g)');
         console.log('[BarcodeScanner] product_name resolved to:', offData?.product_name || offData?.generic_name || '(empty)');
 
         console.log('[BarcodeScanner] 🚀 Navigating to food-details');
