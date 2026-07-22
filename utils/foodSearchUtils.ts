@@ -183,11 +183,15 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
     // Preserve original serving_size string — only reconstruct if missing/empty
     const originalServingSize = base.serving_size && String(base.serving_size).trim() ? base.serving_size : null;
 
+    // Same guard for the off_data path
+    const isJustGramsOff = /^\d+(\.\d+)?\s*(g|ml)$/i.test(servingDesc?.trim() ?? '');
+    const cleanServingDescOff = (servingDesc && !isJustGramsOff) ? servingDesc : null;
+
     const enriched: OpenFoodFactsProduct = {
       ...base,
-      serving_size: originalServingSize ?? (servingDesc
-        ? `${countLabel}${servingDesc} (${totalGrams} g)`
-        : `1 serving (${totalGrams}g)`),
+      serving_size: originalServingSize ?? (cleanServingDescOff
+        ? `${countLabel}${cleanServingDescOff} (${totalGrams} g)`
+        : `1 serving (${totalGrams} g)`),
       serving_quantity: totalGrams,
       _source: (fi as any).source,
       _usda_fdc_id: (fi as any).usda_fdc_id,
@@ -210,9 +214,13 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
     100;
   const servingCount = Number(n.serving_count) || 1;
   const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-  const servingSizeStr = servingDesc
-    ? `${countLabel}${servingDesc} (${totalGrams} g)`
-    : `1 serving (${totalGrams}g)`;
+  // Discard serving_description values that are just grams/ml (e.g. "63g", "30 g", "100ml")
+  const isJustGrams = /^\d+(\.\d+)?\s*(g|ml)$/i.test(servingDesc?.trim() ?? '');
+  const cleanServingDesc = (servingDesc && !isJustGrams) ? servingDesc : null;
+
+  const servingSizeStr = cleanServingDesc
+    ? `${countLabel}${cleanServingDesc} (${totalGrams} g)`
+    : `1 serving (${totalGrams} g)`;
 
   // Nutrients are already per 100g (macros_per is always '100g')
   const to100 = (val: number | null | undefined): number | undefined => {

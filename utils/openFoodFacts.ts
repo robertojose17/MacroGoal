@@ -237,10 +237,19 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
       };
     }
 
-    // No meaningful unit name — use plain grams
+    // No meaningful unit name — show as "1 serving (Xg)" for clarity
     const roundedGrams = parseFloat(totalGrams.toFixed(2));
-    const description = `${roundedGrams} g`;
-    const displayText = `${roundedGrams} g`;
+    if (!hasValidGrams) {
+      return {
+        description: '100 g',
+        grams: 100,
+        displayText: '100 g',
+        hasValidGrams: false,
+        isEstimated: false,
+      };
+    }
+    const description = `1 serving (${roundedGrams} g)`;
+    const displayText = `1 serving (${roundedGrams} g)`;
     return {
       description,
       grams: roundedGrams,
