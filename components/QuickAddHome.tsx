@@ -360,7 +360,6 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
 
   const renderFoodItem = useCallback((food: MyFood, index: number) => {
     const servingText = `${Math.round(food.serving_amount)} ${food.serving_unit}`;
-    const macrosText = `P: ${Math.round(food.protein)}g • C: ${Math.round(food.carbs)}g • F: ${Math.round(food.fats)}g`;
 
     return (
       <React.Fragment key={food.id}>
@@ -380,11 +379,31 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
                 <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
                   {food.name}
                 </Text>
-                <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {food.brand ? `${food.brand} • ` : ''}{servingText} • {Math.round(food.calories)} cal
+                {food.brand ? (
+                  <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    {food.brand}
+                  </Text>
+                ) : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                    per {servingText}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.protein }}>P: {Math.round(food.protein)}g</Text>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.carbs }}>C: {Math.round(food.carbs)}g</Text>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.fats }}>F: {Math.round(food.fats)}g</Text>
+                </View>
+              </View>
+
+              {/* Calories display */}
+              <View style={{ alignItems: 'flex-end', marginRight: 4 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
+                  {Math.round(food.calories)}
                 </Text>
-                <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {macrosText}
+                <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                  kcal
                 </Text>
               </View>
 

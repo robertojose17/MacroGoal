@@ -401,9 +401,17 @@ export default function MyMealsCreateScreen() {
                     {item.food_brand}
                   </Text>
                 ) : null}
-                <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {servingText}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                    per {servingText}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.protein }}>P: {Math.round(item.protein)}g</Text>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.carbs }}>C: {Math.round(item.carbs)}g</Text>
+                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.fats }}>F: {Math.round(item.fats)}g</Text>
+                </View>
               </View>
               <View style={styles.foodCalories}>
                 <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>
