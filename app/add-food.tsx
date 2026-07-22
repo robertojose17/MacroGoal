@@ -1409,13 +1409,13 @@ export default function AddFoodScreen() {
   const renderRecentFoodItem = useCallback((item: RecentFoodItem, index: number) => {
     if (hiddenRecentIds.has(item.food_item_id)) return null;
 
-    const grams = item.quantity;
-    const multiplier = grams / 100;
+    const servingGrams = item.serving_size ?? 100;
+    const multiplier = servingGrams / 100;
     const calories = Math.round(item.calories_per_100 * multiplier);
     const protein = Math.round(item.protein_per_100 * multiplier);
     const carbs = Math.round(item.carbs_per_100 * multiplier);
     const fat = Math.round(item.fat_per_100 * multiplier);
-    const servingText = item.serving_description || `${Math.round(grams)}g`;
+    const servingText = item.serving_description || `${Math.round(servingGrams)}g`;
 
     return (
       <React.Fragment key={item.food_item_id}>
