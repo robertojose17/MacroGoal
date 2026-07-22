@@ -38,6 +38,10 @@ export interface OpenFoodFactsProduct {
   _data_quality_score?: number;
   /** Popularity score from the Supabase food database */
   popularity_score?: number;
+  /** Nutri-Score grade (a–e) from OpenFoodFacts */
+  nutriscore_grade?: string;
+  /** Nutri-Score grade French market variant */
+  nutrition_grade_fr?: string;
   /** Number of times this food was logged in the last 30 days */
   logs_last_30d?: number;
   nutriments?: {

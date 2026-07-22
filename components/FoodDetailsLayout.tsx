@@ -1356,6 +1356,7 @@ export default function FoodDetailsLayout({
       fat: safeNum(nutrition.fat),
       fiber: safeNum(nutrition.fiber),
       nutriments: prod.nutriments || null,
+      nutriscore_grade: (prod.nutriscore_grade || prod.nutrition_grade_fr || null)?.toLowerCase() || null,
       off_data: (() => {
         // Build canonical serving_size to avoid storing corrupted strings (e.g. "1 4 cookies (7.25 g)")
         const canonicalServingSize = servingDesc && servingCountVal && servingCountVal > 1
