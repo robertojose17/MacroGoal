@@ -476,7 +476,7 @@ export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> 
         carbs_per_100: fi.carbs ?? 0,
         fat_per_100: fi.fat ?? 0,
         fiber_per_100: fi.fiber ?? 0,
-        quantity: (item.quantity ?? 1) * (fi.serving_size ?? 100),
+        quantity: item.quantity ?? (fi.serving_size ?? 100),
         off_data: fi.off_data ?? null,
       });
 
