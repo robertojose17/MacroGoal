@@ -5,13 +5,28 @@
  * Every food item row must display serving size as:
  *   {quantity}  {label} ({grams}g)
  *
+ * EXCEPT when the serving unit is a pure measurement unit (g, ml, oz, cup, etc.),
+ * in which case it shows:
+ *   {quantity} {unit}   (no parenthetical grams)
+ *
  * Examples:
  *   "1 serving (63g)",  qty=1  → "1  serving (63g)"
  *   "1 piece (21g)",    qty=2  → "2  piece (21g)"
  *   "2 tbsp (32g)",     qty=1  → "1  tbsp (32g)"
- *   "63 g",             qty=1  → "1  serving (63g)"
+ *   "63 g",             qty=1  → "1  serving (63g)"   ← pure-unit in desc → fallback label
  *   null,               qty=1  → "1  serving (100g)"
+ *   "g",                qty=150 → "150 g"             ← raw pure unit
+ *   "ml",               qty=250 → "250 ml"
+ *   "oz",               qty=2   → "2 oz"
+ *   "cup",              qty=1   → "1 cup"
  */
+
+/** Units that are pure measurements — no parenthetical grams needed. */
+const PURE_UNITS = ['g', 'ml', 'oz', 'cup', 'cups', 'tbsp', 'tsp', 'lb', 'lbs', 'kg', 'fl oz', 'floz'];
+
+function isPureUnit(str: string): boolean {
+  return PURE_UNITS.includes(str.trim().toLowerCase());
+}
 
 /**
  * Parses a serving description string and returns { label, grams }.
@@ -69,7 +84,11 @@ function stripLeadingNumber(str: string): string {
 
 /**
  * Formats a food item row serving display string.
- * Always returns: "{quantity}  {label} ({grams}g)"
+ *
+ * - Pure unit (serving_description is just "g", "ml", "oz", "cup", etc.):
+ *     Returns "{quantity} {unit}"  e.g. "150 g", "250 ml", "2 oz"
+ * - Named serving (everything else):
+ *     Returns "{quantity}  {label} ({grams}g)"  e.g. "1  serving (63g)"
  *
  * @param servingDescription  Raw serving_description from the DB (may be null/undefined)
  * @param quantity            The logged quantity / servings count (defaults to 1)
@@ -81,7 +100,24 @@ export function formatFoodRowServing(
   fallbackGrams?: number,
 ): string {
   const qty = quantity != null && isFinite(quantity) && quantity > 0 ? quantity : 1;
+
+  // Check if the raw serving_description itself is a pure unit word (e.g. "g", "ml", "oz", "cup")
+  const rawDesc = servingDescription ? servingDescription.trim() : '';
+  if (rawDesc && isPureUnit(rawDesc)) {
+    console.log('[servingDisplay] formatFoodRowServing (pure unit)', { servingDescription, quantity: qty, unit: rawDesc });
+    return `${qty} ${rawDesc}`;
+  }
+
   const { label, grams } = parseServingLabel(servingDescription, fallbackGrams);
+
+  // Check if the extracted label (after stripping leading number) is a pure unit
+  // AND the original description did NOT have parenthetical grams (i.e. it was a bare label like "tbsp")
+  const hasParens = rawDesc.includes('(') && rawDesc.includes(')');
+  if (!hasParens && isPureUnit(label)) {
+    console.log('[servingDisplay] formatFoodRowServing (pure unit label)', { servingDescription, quantity: qty, unit: label });
+    return `${qty} ${label}`;
+  }
+
   const gramsDisplay = Number.isInteger(grams) ? grams : parseFloat(grams.toFixed(1));
   console.log('[servingDisplay] formatFoodRowServing', { servingDescription, quantity: qty, fallbackGrams, label, grams: gramsDisplay });
   return `${qty}  ${label} (${gramsDisplay}g)`;
