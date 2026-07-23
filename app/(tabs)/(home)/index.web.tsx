@@ -9,6 +9,7 @@ import ProgressCircle from '@/components/ProgressCircle';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { formatServing } from '@/utils/servingFormat';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { calcMacros } from '@/utils/macros';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -57,13 +58,7 @@ const formatDateForStorage = (date: Date): string => {
 };
 
 const getServingDisplayText = (item: FoodItem): string => {
-  // 1. Best: use the saved serving description (e.g. "2 eggs", "1 slice")
-  if (item.serving_description) return item.serving_description;
-  // 2. Use grams if available (e.g. "63 g")
-  if (item.grams && item.grams > 0) return formatServing(item.grams, 'g');
-  // 3. Fallback: quantity
-  const quantity = item.quantity || 1;
-  return formatServing(quantity * 100, 'g');
+  return formatFoodRowServing(item.serving_description, item.quantity ?? 1, item.grams ?? undefined);
 };
 
 export default function HomeScreen() {

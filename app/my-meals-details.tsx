@@ -12,6 +12,7 @@ import { addMealPlanItem } from '@/utils/mealPlansApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 
 
 interface SavedMealItem {
@@ -624,8 +625,7 @@ export default function MyMealsDetailsScreen() {
           const foodBrand = item.food_items?.brand ?? item.foods?.brand ?? item.food_brand;
           const count = item.servings_count ?? 1;
           const amount = Math.round(item.serving_amount ?? 100);
-          const unit = item.serving_unit ?? 'g';
-          const servingText = count === 1 ? `${amount} ${unit}` : `${count} × ${amount} ${unit}`;
+          const servingText = formatFoodRowServing(null, count, amount);
 
           return (
             <SwipeToDeleteRow key={item.id} onDelete={() => handleDeleteItem(item.id)}>

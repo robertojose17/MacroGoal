@@ -31,6 +31,7 @@ import {
 } from '@/utils/mealPlansApi';
 import { listTemplatePlans, type TemplatePlan } from '@/utils/templatePlansApi';
 import { formatServing } from '@/utils/servingFormat';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { calcMacros } from '@/utils/macros';
 
@@ -97,13 +98,7 @@ interface AvgMacros {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getServingDisplayText = (item: FoodItem): string => {
-  // 1. Best: use the saved serving description (e.g. "2 eggs", "1 slice")
-  if (item.serving_description) return item.serving_description;
-  // 2. Use grams if available (e.g. "63 g")
-  if (item.grams && item.grams > 0) return formatServing(item.grams, 'g');
-  // 3. Fallback: quantity
-  const quantity = item.quantity || 1;
-  return formatServing(quantity * 100, 'g');
+  return formatFoodRowServing(item.serving_description, item.quantity ?? 1, item.grams ?? undefined);
 };
 
 const formatDateRange = (start: string, end: string): string => {
@@ -1011,7 +1006,7 @@ export default function HomeScreen() {
               {/* Row 3: per serving + macros */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
                 <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                  per {getServingDisplayText(item)}
+                  {getServingDisplayText(item)}
                 </Text>
                 <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: colors.protein }}>P: {Math.round(item.protein)}g</Text>

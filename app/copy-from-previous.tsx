@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -608,7 +609,7 @@ export default function CopyFromPreviousScreen() {
                     <View style={styles.foodList}>
                       {meal.entries.map((entry, entryIndex) => {
                         const isSelected = selectedEntries.has(entry.id);
-                        const servingText = entry.serving_description || `${Math.round(entry.grams || 0)} g`;
+                        const servingText = formatFoodRowServing(entry.serving_description, entry.quantity ?? 1, entry.grams ?? undefined);
                         const entryName = entry.food_items?.name ?? entry.foods?.name ?? entry.food_name ?? 'Unknown';
                         const entryBrand = entry.food_items?.brand ?? entry.foods?.brand ?? entry.food_brand ?? null;
                         const entryCalories = Math.round(entry.calories);

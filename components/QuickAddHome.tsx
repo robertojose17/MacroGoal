@@ -8,6 +8,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { addMealPlanItem } from '@/utils/mealPlansApi';
 
 interface MyFood {
@@ -359,7 +360,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
   }, [router, mealType, date, context, returnTo]);
 
   const renderFoodItem = useCallback((food: MyFood, index: number) => {
-    const servingText = `${Math.round(food.serving_amount)} ${food.serving_unit}`;
+    const servingText = formatFoodRowServing(null, 1, food.serving_amount);
 
     return (
       <React.Fragment key={food.id}>

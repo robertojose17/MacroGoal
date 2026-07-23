@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 
 interface MyFood {
   id: string;
@@ -183,7 +184,7 @@ export default function MyFoodsScreen() {
   }, [myFoods]);
 
   const renderFoodItem = useCallback((food: MyFood, index: number) => {
-    const servingText = `${Math.round(food.serving_amount)} ${food.serving_unit}`;
+    const servingText = formatFoodRowServing(null, 1, food.serving_amount);
 
     return (
       <React.Fragment key={food.id}>

@@ -18,6 +18,7 @@ import { addToDraft } from '@/utils/myMealsDraft';
 import { addMealPlanItem } from '@/utils/mealPlansApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
@@ -1249,7 +1250,7 @@ export default function AddFoodScreen() {
     const carbs = Math.round(favorite.per100_carbs * multiplier);
     const fat = Math.round(favorite.per100_fat * multiplier);
 
-    const servingText = favorite.serving_size || `${Math.round(favorite.default_grams)}g`;
+    const servingText = formatFoodRowServing(favorite.serving_size, 1, favorite.default_grams);
 
     return (
       <React.Fragment key={favorite.id ?? `favorite-${index}`}>
@@ -1415,7 +1416,7 @@ export default function AddFoodScreen() {
     const protein = Math.round(item.protein_per_100 * multiplier);
     const carbs = Math.round(item.carbs_per_100 * multiplier);
     const fat = Math.round(item.fat_per_100 * multiplier);
-    const servingText = item.serving_description || `${Math.round(servingGrams)}g`;
+    const servingText = formatFoodRowServing(item.serving_description, 1, servingGrams);
 
     return (
       <React.Fragment key={item.food_item_id}>

@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, TABLE_SAVED_MEALS, TABLE_SAVED_MEAL_ITEMS, initializeDatabase } from '@/lib/supabase/client';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { loadDraft, saveDraft, clearDraft, DraftItem } from '@/utils/myMealsDraft';
+import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { toLocalDateString } from '@/utils/dateUtils';
 
 export default function MyMealsCreateScreen() {
@@ -372,10 +373,7 @@ export default function MyMealsCreateScreen() {
   const totals = calculateTotals();
 
   const renderDraftItem = (item: DraftItem, index: number) => {
-    const servingText = item.serving_description
-      || (item.servings_count !== 1
-          ? `${item.servings_count} × ${item.serving_amount} ${item.serving_unit}`
-          : `${item.serving_amount} ${item.serving_unit}`);
+    const servingText = formatFoodRowServing(item.serving_description ?? null, item.servings_count ?? 1, item.serving_amount);
 
     return (
       <React.Fragment key={item.tempId}>
