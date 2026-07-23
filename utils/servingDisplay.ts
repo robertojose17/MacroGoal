@@ -139,7 +139,7 @@ export function formatFoodRowServing(
     gramsValue = Math.round(totalGrams / qty);
   }
 
-  const gramsDisplay = Number.isInteger(gramsValue) ? gramsValue : parseFloat(gramsValue.toFixed(1));
+  const gramsDisplay = Number.isInteger(gramsValue) ? gramsValue : parseFloat(gramsValue.toFixed(2));
   console.log('[servingDisplay] formatFoodRowServing', { servingDescription, quantity: qty, fallbackGrams, label, grams: gramsDisplay });
   return `${qty}  ${label} (${gramsDisplay}g)`;
 }
