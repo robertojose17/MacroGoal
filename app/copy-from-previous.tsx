@@ -15,6 +15,7 @@ type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 interface FoodEntry {
   id: string;
   meal_id: string;
+  meal_type: MealType;
   food_id: string;
   food_item_id: string | null;
   food_name: string | null;
@@ -27,6 +28,8 @@ interface FoodEntry {
   fiber: number;
   serving_description: string | null;
   grams: number | null;
+  logged_at: string | null;
+  created_at: string | null;
   foods: {
     id: string;
     name: string;
@@ -43,11 +46,10 @@ interface FoodEntry {
   } | null;
 }
 
-interface MealData {
-  type: MealType;
+interface HourGroup {
+  hour: number;
   label: string;
   entries: FoodEntry[];
-  selected: boolean;
 }
 
 interface DateWithData {
@@ -55,6 +57,47 @@ interface DateWithData {
   displayDate: string;
   totalCalories: number;
   itemCount: number;
+}
+
+function getEntryTimestamp(entry: FoodEntry): string | null {
+  return entry.logged_at ?? entry.created_at ?? null;
+}
+
+function formatHourLabel(hour: number): string {
+  const period = hour < 12 ? 'AM' : 'PM';
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${displayHour}:00 ${period}`;
+}
+
+function groupEntriesByHour(entries: FoodEntry[]): HourGroup[] {
+  const hourMap = new Map<number, FoodEntry[]>();
+
+  entries.forEach(entry => {
+    const ts = getEntryTimestamp(entry);
+    let hour = 0;
+    if (ts) {
+      const d = new Date(ts);
+      hour = d.getHours();
+    }
+    const existing = hourMap.get(hour) ?? [];
+    existing.push(entry);
+    hourMap.set(hour, existing);
+  });
+
+  return Array.from(hourMap.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([hour, groupEntries]) => ({
+      hour,
+      label: formatHourLabel(hour),
+      entries: groupEntries.slice().sort((a, b) => {
+        const ta = getEntryTimestamp(a);
+        const tb = getEntryTimestamp(b);
+        if (!ta && !tb) return 0;
+        if (!ta) return 1;
+        if (!tb) return -1;
+        return ta.localeCompare(tb);
+      }),
+    }));
 }
 
 export default function CopyFromPreviousScreen() {
@@ -70,7 +113,7 @@ export default function CopyFromPreviousScreen() {
   const [copying, setCopying] = useState(false);
   const [datesWithData, setDatesWithData] = useState<DateWithData[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [meals, setMeals] = useState<MealData[]>([]);
+  const [hourGroups, setHourGroups] = useState<HourGroup[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
 
   const loadDatesWithData = useCallback(async () => {
@@ -193,6 +236,8 @@ export default function CopyFromPreviousScreen() {
             fiber,
             serving_description,
             grams,
+            logged_at,
+            created_at,
             foods (
               id,
               name,
@@ -218,34 +263,23 @@ export default function CopyFromPreviousScreen() {
         return;
       }
 
-      // Organize meals by type
-      const mealsByType: Record<MealType, FoodEntry[]> = {
-        breakfast: [],
-        lunch: [],
-        dinner: [],
-        snack: [],
-      };
+      // Collect all entries across all meals, preserving meal_type on each entry
+      const allEntries: FoodEntry[] = [];
 
       if (mealsData) {
         mealsData.forEach((meal: any) => {
           if (meal.meal_items) {
             meal.meal_items.forEach((item: any) => {
-              mealsByType[meal.meal_type as MealType].push(item);
+              allEntries.push({ ...item, meal_type: meal.meal_type as MealType });
             });
           }
         });
       }
 
-      const mealsArray: MealData[] = [
-        { type: 'breakfast', label: 'Breakfast', entries: mealsByType.breakfast, selected: false },
-        { type: 'lunch', label: 'Lunch', entries: mealsByType.lunch, selected: false },
-        { type: 'dinner', label: 'Dinner', entries: mealsByType.dinner, selected: false },
-        { type: 'snack', label: 'Snacks', entries: mealsByType.snack, selected: false },
-      ];
-
-      setMeals(mealsArray);
+      const groups = groupEntriesByHour(allEntries);
+      setHourGroups(groups);
       setSelectedEntries(new Set());
-      console.log('[CopyFromPrevious] Loaded meals:', mealsArray.map(m => `${m.label}: ${m.entries.length}`));
+      console.log('[CopyFromPrevious] Loaded hour groups:', groups.map(g => `${g.label}: ${g.entries.length}`));
     } catch (error) {
       console.error('[CopyFromPrevious] Error in loadMealsForDate:', error);
       Alert.alert('Error', 'An unexpected error occurred');
@@ -266,19 +300,18 @@ export default function CopyFromPreviousScreen() {
     setSelectedDate(date);
   };
 
-  const handleMealToggle = (mealType: MealType) => {
-    const meal = meals.find(m => m.type === mealType);
-    if (!meal) return;
+  const handleHourGroupToggle = (hour: number) => {
+    const group = hourGroups.find(g => g.hour === hour);
+    if (!group) return;
 
+    console.log('[CopyFromPrevious] Hour group toggled:', group.label);
     const newSelectedEntries = new Set(selectedEntries);
-    const allSelected = meal.entries.every(entry => selectedEntries.has(entry.id));
+    const allSelected = group.entries.every(entry => selectedEntries.has(entry.id));
 
     if (allSelected) {
-      // Deselect all entries in this meal
-      meal.entries.forEach(entry => newSelectedEntries.delete(entry.id));
+      group.entries.forEach(entry => newSelectedEntries.delete(entry.id));
     } else {
-      // Select all entries in this meal
-      meal.entries.forEach(entry => newSelectedEntries.add(entry.id));
+      group.entries.forEach(entry => newSelectedEntries.add(entry.id));
     }
 
     setSelectedEntries(newSelectedEntries);
@@ -310,17 +343,7 @@ export default function CopyFromPreviousScreen() {
 
       console.log('[CopyFromPrevious] Copying', selectedEntries.size, 'entries to', targetDate);
 
-      // Get all selected entries
-      const entriesToCopy: FoodEntry[] = [];
-      meals.forEach(meal => {
-        meal.entries.forEach(entry => {
-          if (selectedEntries.has(entry.id)) {
-            entriesToCopy.push(entry);
-          }
-        });
-      });
-
-      // Group entries by meal type
+      // Collect all selected entries from hour groups (each entry carries its meal_type)
       const entriesByMealType: Record<MealType, FoodEntry[]> = {
         breakfast: [],
         lunch: [],
@@ -328,10 +351,10 @@ export default function CopyFromPreviousScreen() {
         snack: [],
       };
 
-      meals.forEach(meal => {
-        meal.entries.forEach(entry => {
+      hourGroups.forEach(group => {
+        group.entries.forEach(entry => {
           if (selectedEntries.has(entry.id)) {
-            entriesByMealType[meal.type].push(entry);
+            entriesByMealType[entry.meal_type].push(entry);
           }
         });
       });
@@ -397,17 +420,17 @@ export default function CopyFromPreviousScreen() {
 
   const getSelectedCount = () => selectedEntries.size;
 
-  const isMealFullySelected = (mealType: MealType): boolean => {
-    const meal = meals.find(m => m.type === mealType);
-    if (!meal || meal.entries.length === 0) return false;
-    return meal.entries.every(entry => selectedEntries.has(entry.id));
+  const isHourGroupFullySelected = (hour: number): boolean => {
+    const group = hourGroups.find(g => g.hour === hour);
+    if (!group || group.entries.length === 0) return false;
+    return group.entries.every(entry => selectedEntries.has(entry.id));
   };
 
-  const isMealPartiallySelected = (mealType: MealType): boolean => {
-    const meal = meals.find(m => m.type === mealType);
-    if (!meal || meal.entries.length === 0) return false;
-    const selectedCount = meal.entries.filter(entry => selectedEntries.has(entry.id)).length;
-    return selectedCount > 0 && selectedCount < meal.entries.length;
+  const isHourGroupPartiallySelected = (hour: number): boolean => {
+    const group = hourGroups.find(g => g.hour === hour);
+    if (!group || group.entries.length === 0) return false;
+    const selectedCount = group.entries.filter(entry => selectedEntries.has(entry.id)).length;
+    return selectedCount > 0 && selectedCount < group.entries.length;
   };
 
   if (loading) {
@@ -546,31 +569,29 @@ export default function CopyFromPreviousScreen() {
               Choose entire meals or individual items
             </Text>
 
-            {meals.every(m => m.entries.length === 0) ? (
+            {hourGroups.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyText, { color: isDark ? colors.textDark : colors.text }]}>
                   No foods logged on this date
                 </Text>
               </View>
             ) : (
-              meals.map((meal) => {
-                if (meal.entries.length === 0) return null;
-
-                const fullySelected = isMealFullySelected(meal.type);
-                const partiallySelected = isMealPartiallySelected(meal.type);
+              hourGroups.map((group) => {
+                const fullySelected = isHourGroupFullySelected(group.hour);
+                const partiallySelected = isHourGroupPartiallySelected(group.hour);
 
                 return (
                   <View
-                    key={meal.type}
+                    key={group.hour}
                     style={[
                       styles.mealCard,
                       { backgroundColor: isDark ? colors.cardDark : colors.card }
                     ]}
                   >
-                    {/* Meal Header with Checkbox */}
+                    {/* Hour Header with Checkbox */}
                     <TouchableOpacity
                       style={styles.mealHeader}
-                      onPress={() => handleMealToggle(meal.type)}
+                      onPress={() => handleHourGroupToggle(group.hour)}
                       activeOpacity={0.7}
                     >
                       <View style={styles.mealHeaderLeft}>
@@ -593,10 +614,13 @@ export default function CopyFromPreviousScreen() {
                         </View>
                         <View>
                           <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                            {meal.label}
+                            {group.label}
                           </Text>
                           <Text style={[styles.mealSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                            {meal.entries.length} {meal.entries.length === 1 ? 'item' : 'items'}
+                            {group.entries.length}
+                            <Text>
+                              {group.entries.length === 1 ? ' item' : ' items'}
+                            </Text>
                           </Text>
                         </View>
                       </View>
@@ -607,7 +631,7 @@ export default function CopyFromPreviousScreen() {
 
                     {/* Food Items */}
                     <View style={styles.foodList}>
-                      {meal.entries.map((entry, entryIndex) => {
+                      {group.entries.map((entry, entryIndex) => {
                         const isSelected = selectedEntries.has(entry.id);
                         const servingText = formatFoodRowServing(entry.serving_description, entry.quantity ?? 1, entry.grams ?? undefined);
                         const entryName = entry.food_items?.name ?? entry.foods?.name ?? entry.food_name ?? 'Unknown';
@@ -622,7 +646,7 @@ export default function CopyFromPreviousScreen() {
                             key={entry.id}
                             style={[
                               styles.foodItem,
-                              entryIndex < meal.entries.length - 1 && styles.foodItemBorder
+                              entryIndex < group.entries.length - 1 && styles.foodItemBorder
                             ]}
                             onPress={() => {
                               console.log('[CopyFromPrevious] Entry toggled:', entryName, 'selected:', !isSelected);
@@ -658,12 +682,30 @@ export default function CopyFromPreviousScreen() {
                                 <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
                                   {servingText}
                                 </Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {entryProtein}g</Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {entryCarbs}g</Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {entryFats}g</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>
+                                  P
+                                </Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>
+                                  {entryProtein}g
+                                </Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>
+                                  C
+                                </Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>
+                                  {entryCarbs}g
+                                </Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>
+                                  F
+                                </Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>
+                                  {entryFats}g
+                                </Text>
                               </View>
                               <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: 1 }}>
-                                {entryCalories} kcal
+                                {entryCalories}
+                                <Text>
+                                  {' kcal'}
+                                </Text>
                               </Text>
                             </View>
                           </TouchableOpacity>
