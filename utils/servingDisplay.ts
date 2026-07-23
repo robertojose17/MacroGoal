@@ -108,7 +108,7 @@ export function formatFoodRowServing(
     return `${qty} ${rawDesc}`;
   }
 
-  const { label, grams } = parseServingLabel(servingDescription, fallbackGrams);
+  const { label } = parseServingLabel(servingDescription, fallbackGrams);
 
   // Check if the extracted label (after stripping leading number) is a pure unit
   // AND the original description did NOT have parenthetical grams (i.e. it was a bare label like "tbsp")
@@ -118,7 +118,19 @@ export function formatFoodRowServing(
     return `${qty} ${label}`;
   }
 
-  const gramsDisplay = Number.isInteger(grams) ? grams : parseFloat(grams.toFixed(1));
+  // Extract per-serving grams directly from the label string (e.g. "1 serving (63g)" → 63).
+  // This avoids using totalGrams which is already multiplied by quantity.
+  const perServingGramsMatch = rawDesc.match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+  let gramsValue: number;
+  if (perServingGramsMatch) {
+    gramsValue = parseFloat(perServingGramsMatch[1]);
+  } else {
+    // No parenthetical grams in label — derive per-serving grams from fallback
+    const totalGrams = fallbackGrams != null && fallbackGrams > 0 ? fallbackGrams : 100;
+    gramsValue = Math.round(totalGrams / qty);
+  }
+
+  const gramsDisplay = Number.isInteger(gramsValue) ? gramsValue : parseFloat(gramsValue.toFixed(1));
   console.log('[servingDisplay] formatFoodRowServing', { servingDescription, quantity: qty, fallbackGrams, label, grams: gramsDisplay });
   return `${qty}  ${label} (${gramsDisplay}g)`;
 }
