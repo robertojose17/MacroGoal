@@ -1872,7 +1872,7 @@ export default function AddFoodScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          {context === 'my_meals_builder' ? 'Add to My Meal' : `Add to ${mealLabels[mealType]}`}
+          {'Add Food'}
         </Text>
         <View style={{ width: 24 }} />
       </View>
