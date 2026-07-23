@@ -108,6 +108,15 @@ export function formatFoodRowServing(
     return `${qty} ${rawDesc}`;
   }
 
+  // Check for pattern "{number} {pure unit}" e.g. "1 g", "1 oz", "2 cup"
+  // This handles the case where ServingPicker saves "1 g" instead of bare "g"
+  const numericUnitMatch = rawDesc.match(/^(\d+(?:\.\d+)?)\s*(g|ml|oz|cups?|tbsp|tsp|lbs?|kg|fl\s*oz|floz)$/i);
+  if (numericUnitMatch) {
+    const unit = numericUnitMatch[2].trim();
+    console.log('[servingDisplay] formatFoodRowServing (numeric+unit pattern)', { servingDescription, quantity: qty, unit });
+    return `${qty} ${unit}`;
+  }
+
   const { label } = parseServingLabel(servingDescription, fallbackGrams);
 
   // Check if the extracted label (after stripping leading number) is a pure unit
