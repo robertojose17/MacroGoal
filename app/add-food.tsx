@@ -1346,12 +1346,23 @@ export default function AddFoodScreen() {
       if (!user) { Alert.alert('Error', 'You must be logged in to add food'); return; }
 
       const grams = item.quantity;
-      const multiplier = grams / 100;
-      const calories = safeNum(item.calories_per_100 * multiplier);
-      const protein = safeNum(item.protein_per_100 * multiplier);
-      const carbs = safeNum(item.carbs_per_100 * multiplier);
-      const fat = safeNum(item.fat_per_100 * multiplier);
-      const fiber = safeNum(item.fiber_per_100 * multiplier);
+      const macroResult = calcMacros(
+        {
+          calories: item.calories_per_100,
+          protein: item.protein_per_100,
+          carbs: item.carbs_per_100,
+          fat: item.fat_per_100,
+          fiber: item.fiber_per_100,
+          serving_size: item.serving_size ?? 100,
+          macros_per: item.macros_per,
+        },
+        grams
+      );
+      const calories = safeNum(macroResult.calories);
+      const protein = safeNum(macroResult.protein);
+      const carbs = safeNum(macroResult.carbs);
+      const fat = safeNum(macroResult.fat);
+      const fiber = safeNum(macroResult.fiber);
 
       console.log('[AddFood] Logging recent food via RPC:', item.food_name, 'grams=', grams, 'calories=', calories);
 
@@ -1411,11 +1422,22 @@ export default function AddFoodScreen() {
     if (hiddenRecentIds.has(item.food_item_id)) return null;
 
     const servingGrams = item.quantity ?? item.serving_size ?? 100;
-    const multiplier = servingGrams / 100;
-    const calories = Math.round(item.calories_per_100 * multiplier);
-    const protein = Math.round(item.protein_per_100 * multiplier);
-    const carbs = Math.round(item.carbs_per_100 * multiplier);
-    const fat = Math.round(item.fat_per_100 * multiplier);
+    const macroResult = calcMacros(
+      {
+        calories: item.calories_per_100,
+        protein: item.protein_per_100,
+        carbs: item.carbs_per_100,
+        fat: item.fat_per_100,
+        fiber: item.fiber_per_100,
+        serving_size: item.serving_size ?? 100,
+        macros_per: item.macros_per,
+      },
+      servingGrams
+    );
+    const calories = Math.round(macroResult.calories);
+    const protein = Math.round(macroResult.protein);
+    const carbs = Math.round(macroResult.carbs);
+    const fat = Math.round(macroResult.fat);
     const servingText = formatFoodRowServing(item.serving_description, 1, servingGrams);
 
     return (

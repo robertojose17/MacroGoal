@@ -396,6 +396,7 @@ export interface RecentFoodItem {
   carbs_per_100: number;
   fat_per_100: number;
   fiber_per_100: number;
+  macros_per: string | null;
   quantity: number; // grams logged last time
   off_data: any;
 }
@@ -435,6 +436,7 @@ export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> 
           serving_size,
           serving_description,
           serving_count,
+          macros_per,
           off_data
         )
       `)
@@ -476,6 +478,7 @@ export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> 
         carbs_per_100: fi.carbs ?? 0,
         fat_per_100: fi.fat ?? 0,
         fiber_per_100: fi.fiber ?? 0,
+        macros_per: fi.macros_per ?? null,
         quantity: item.quantity ?? fi.serving_size ?? 100,
         off_data: fi.off_data ?? null,
       });
