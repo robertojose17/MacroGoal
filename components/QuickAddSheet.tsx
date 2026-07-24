@@ -23,7 +23,7 @@ const ACTIONS = [
   { id: 'barcode', label: 'Scan Barcode', icon: '📷', route: '/barcode-scanner' },
   { id: 'search', label: 'Search Food', icon: '🔍', route: '/food-search' },
   { id: 'ai', label: 'AI Estimate', icon: '🤖', route: '/chatbot' },
-  { id: 'quick', label: 'Quick Add', icon: '✏️', route: '/add-food-simple' },
+  { id: 'quick', label: 'Create Food', icon: '✏️', route: '/my-foods-create' },
 ];
 
 function getSmartMealType(): string {
@@ -82,7 +82,7 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
     console.log('[QuickAddSheet] Smart meal type:', mealType);
     // Small delay so sheet closes before navigation
     setTimeout(() => {
-      if (route === '/food-search' || route === '/add-food-simple') {
+      if (route === '/food-search' || route === '/my-foods-create') {
         console.log('[QuickAddSheet] Navigating to:', route, 'with meal:', mealType);
         router.push(`${route}?meal=${mealType}` as any);
       } else {

@@ -369,8 +369,8 @@ export default function RootLayout() {
         console.log("[DeepLink] Navigating to /barcode-scanner");
         router.push("/barcode-scanner");
       } else if (action === "quick-add") {
-        console.log("[DeepLink] Navigating to /add-food-simple");
-        router.push("/add-food-simple");
+        console.log("[DeepLink] Navigating to /my-foods-create");
+        router.push("/my-foods-create");
       }
     } catch (error) {
       console.error("[DeepLink] Error handling deep link:", error);
@@ -460,10 +460,7 @@ export default function RootLayout() {
                   options={{ headerShown: false, presentation: "card" }}
                 />
 
-                <Stack.Screen
-                  name="add-food-simple"
-                  options={{ headerShown: false, presentation: "modal" }}
-                />
+
                 <Stack.Screen
                   name="add-food"
                   options={{ headerShown: false, presentation: "modal" }}

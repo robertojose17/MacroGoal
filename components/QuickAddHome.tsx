@@ -106,7 +106,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
     console.log('[QuickAddHome] Navigation mode:', navigationMode);
 
     router.push({
-      pathname: '/add-food-simple',
+      pathname: '/my-foods-create',
       params: {
         mode: navigationMode,
         meal: mealType,
