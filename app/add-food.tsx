@@ -1410,7 +1410,7 @@ export default function AddFoodScreen() {
   const renderRecentFoodItem = useCallback((item: RecentFoodItem, index: number) => {
     if (hiddenRecentIds.has(item.food_item_id)) return null;
 
-    const servingGrams = item.serving_size ?? 100;
+    const servingGrams = item.quantity ?? item.serving_size ?? 100;
     const multiplier = servingGrams / 100;
     const calories = Math.round(item.calories_per_100 * multiplier);
     const protein = Math.round(item.protein_per_100 * multiplier);
@@ -1421,9 +1421,21 @@ export default function AddFoodScreen() {
     return (
       <React.Fragment key={item.food_item_id}>
         <SwipeToDeleteRow
-          onDelete={() => {
-            console.log('[AddFood] Hiding recent food:', item.food_name);
+          onDelete={async () => {
+            console.log('[AddFood] Deleting recent food permanently:', item.food_name, 'meal_item_id:', item.meal_item_id);
+            // Optimistic UI update
             setHiddenRecentIds(prev => new Set([...prev, item.food_item_id]));
+            setRecentFoods(prev => prev.filter(f => f.meal_item_id !== item.meal_item_id));
+            // Permanent delete from Supabase
+            const { error } = await supabase
+              .from('meal_items')
+              .delete()
+              .eq('id', item.meal_item_id);
+            if (error) {
+              console.error('[AddFood] Failed to delete meal_item:', error.message);
+            } else {
+              console.log('[AddFood] meal_item deleted successfully:', item.meal_item_id);
+            }
           }}
         >
           <TouchableOpacity
