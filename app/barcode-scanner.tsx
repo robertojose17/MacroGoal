@@ -302,7 +302,7 @@ export default function BarcodeScannerScreen() {
           barcodeScannerSettings={{
             barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
           }}
-          onBarcodeScanned={hasScannedRef.current ? undefined : handleBarCodeScanned}
+          onBarcodeScanned={handleBarCodeScanned}
         />
 
         {/* Overlay with scanning frame */}
