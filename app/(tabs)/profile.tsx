@@ -42,6 +42,10 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Coach history state
+  const [coachActions, setCoachActions] = useState<any[]>([]);
+  const [lastAdjustMacrosAction, setLastAdjustMacrosAction] = useState<any>(null);
+
   // Accordion state — collapsed by default
   const [openSection, setOpenSection] = useState<AccordionSection>(null);
 
@@ -85,10 +89,21 @@ export default function ProfileScreen() {
 
       console.log('[Profile] Loading profile for user:', authUser.id);
 
-      const [userResult, goalResult] = await Promise.all([
+      const [userResult, goalResult, coachActionsResult] = await Promise.all([
         supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).order('start_date', { ascending: false }).limit(1),
+        supabase.from('coach_actions').select('id, action_type, summary, previous_value, new_value, created_at').eq('user_id', authUser.id).order('created_at', { ascending: false }).limit(20),
       ]);
+
+      if (coachActionsResult.error) {
+        console.error('[Profile] Error loading coach actions:', coachActionsResult.error);
+      } else {
+        const actions = coachActionsResult.data || [];
+        console.log('[Profile] Coach actions loaded:', actions.length, 'actions');
+        setCoachActions(actions);
+        const lastMacroAction = actions.find((a: any) => a.action_type === 'adjust_macros') || null;
+        setLastAdjustMacrosAction(lastMacroAction);
+      }
 
       if (userResult.error) {
         console.error('[Profile] Error loading user data:', userResult.error);
@@ -735,6 +750,43 @@ export default function ProfileScreen() {
   const isProfileOpen = openSection === 'profile';
   const isGoalOpen = openSection === 'goal';
 
+  // Coach badge helpers
+  const isCoachModifiedCalories = lastAdjustMacrosAction && goal &&
+    lastAdjustMacrosAction.new_value?.daily_calories === goal.daily_calories;
+  const isCoachModifiedProtein = lastAdjustMacrosAction && goal &&
+    lastAdjustMacrosAction.new_value?.protein_g === goal.protein_g;
+  const isCoachModifiedCarbs = lastAdjustMacrosAction && goal &&
+    lastAdjustMacrosAction.new_value?.carbs_g === goal.carbs_g;
+  const isCoachModifiedFats = lastAdjustMacrosAction && goal &&
+    lastAdjustMacrosAction.new_value?.fats_g === goal.fats_g;
+
+  const formatCoachActionDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const getCoachActionIcon = (actionType: string) => {
+    if (actionType === 'adjust_macros') return '🎯';
+    if (actionType === 'update_goal_weight') return '⚖️';
+    if (actionType === 'update_step_goal') return '👟';
+    return '🤖';
+  };
+
+  const handleCoachBadgePress = (fieldLabel: string) => {
+    if (!lastAdjustMacrosAction) return;
+    console.log('[Profile] Coach badge tapped for field:', fieldLabel);
+    const dateStr = new Date(lastAdjustMacrosAction.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    Alert.alert(
+      'Set by AI Coach',
+      `This value was set by your AI Coach on ${dateStr}. You can change it manually in Edit Goals.`
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
@@ -1214,6 +1266,15 @@ export default function ProfileScreen() {
                             <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
                               {goal.daily_calories}
                             </Text>
+                            {isCoachModifiedCalories && (
+                              <TouchableOpacity
+                                style={styles.coachBadge}
+                                onPress={() => handleCoachBadgePress('Calories')}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.coachBadgeText}>{'🤖 Coach'}</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                           <View style={styles.goalItemCompact}>
                             <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1223,6 +1284,15 @@ export default function ProfileScreen() {
                               {goal.protein_g}
                               {'g'}
                             </Text>
+                            {isCoachModifiedProtein && (
+                              <TouchableOpacity
+                                style={styles.coachBadge}
+                                onPress={() => handleCoachBadgePress('Protein')}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.coachBadgeText}>{'🤖 Coach'}</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                           <View style={styles.goalItemCompact}>
                             <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1232,6 +1302,15 @@ export default function ProfileScreen() {
                               {goal.carbs_g}
                               {'g'}
                             </Text>
+                            {isCoachModifiedCarbs && (
+                              <TouchableOpacity
+                                style={styles.coachBadge}
+                                onPress={() => handleCoachBadgePress('Carbs')}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.coachBadgeText}>{'🤖 Coach'}</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                           <View style={styles.goalItemCompact}>
                             <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1241,6 +1320,15 @@ export default function ProfileScreen() {
                               {goal.fats_g}
                               {'g'}
                             </Text>
+                            {isCoachModifiedFats && (
+                              <TouchableOpacity
+                                style={styles.coachBadge}
+                                onPress={() => handleCoachBadgePress('Fats')}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.coachBadgeText}>{'🤖 Coach'}</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                         </View>
                       </View>
@@ -1351,6 +1439,53 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
         </View>
+
+        {/* ── Coach Changes ────────────────────────────────────────────────── */}
+        {isPremium && (
+          <View style={[styles.coachHistoryCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <View style={styles.coachHistoryHeader}>
+              <Text style={styles.coachHistoryIcon}>{'🤖'}</Text>
+              <Text style={[styles.coachHistoryTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                Coach Changes
+              </Text>
+            </View>
+
+            {coachActions.length === 0 ? (
+              <View style={styles.coachHistoryEmpty}>
+                <Text style={styles.coachHistoryEmptyIcon}>{'💬'}</Text>
+                <Text style={[styles.coachHistoryEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  Your Coach hasn't made any changes yet. Ask your Coach to analyze your data and suggest improvements.
+                </Text>
+              </View>
+            ) : (
+              coachActions.map((action, index) => {
+                const actionIcon = getCoachActionIcon(action.action_type);
+                const actionDate = formatCoachActionDate(action.created_at);
+                const isLast = index === coachActions.length - 1;
+                return (
+                  <View key={action.id}>
+                    <View style={styles.coachActionRow}>
+                      <View style={styles.coachActionIconWrap}>
+                        <Text style={styles.coachActionIcon}>{actionIcon}</Text>
+                      </View>
+                      <View style={styles.coachActionContent}>
+                        <Text style={[styles.coachActionSummary, { color: isDark ? colors.textDark : colors.text }]}>
+                          {action.summary}
+                        </Text>
+                        <Text style={[styles.coachActionDate, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                          {actionDate}
+                        </Text>
+                      </View>
+                    </View>
+                    {!isLast && (
+                      <View style={[styles.coachActionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
 
         {/* ── Actions ─────────────────────────────────────────────────────── */}
         <View style={[styles.actionsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
@@ -2312,6 +2447,92 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 16,
+  },
+  // ── Coach Badge (on macro values) ────────────────────────────────────────
+  coachBadge: {
+    marginTop: 4,
+    backgroundColor: '#EDE7F6',
+    borderRadius: 10,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    alignSelf: 'center',
+  },
+  coachBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#4A148C',
+  },
+  // ── Coach History Card ────────────────────────────────────────────────────
+  coachHistoryCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+    elevation: 2,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  coachHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  coachHistoryIcon: {
+    fontSize: 18,
+  },
+  coachHistoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  coachHistoryEmpty: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  coachHistoryEmptyIcon: {
+    fontSize: 28,
+  },
+  coachHistoryEmptyText: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  coachActionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  coachActionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EDE7F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  coachActionIcon: {
+    fontSize: 16,
+  },
+  coachActionContent: {
+    flex: 1,
+    gap: 2,
+  },
+  coachActionSummary: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  coachActionDate: {
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  coachActionDivider: {
+    height: 1,
+    marginLeft: 48,
   },
   // ── Challenger Badge ──────────────────────────────────────────────────────
   badgeRow: {

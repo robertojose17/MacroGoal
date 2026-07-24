@@ -20,6 +20,10 @@ export default function EditGoalsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Coach banner state
+  const [lastCoachMacroAction, setLastCoachMacroAction] = useState<any>(null);
+  const [isCoachModified, setIsCoachModified] = useState(false);
+
   // User data
   const [userId, setUserId] = useState<string>('');
   const [sex, setSex] = useState<Sex>('male');
@@ -86,15 +90,22 @@ export default function EditGoalsScreen() {
         }
       }
 
-      // Load active goal
-      const { data: goalData, error: goalError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
+      // Load active goal and last coach macro action in parallel
+      const [goalResult, coachResult] = await Promise.all([
+        supabase.from('goals').select('*').eq('user_id', user.id).eq('is_active', true).maybeSingle(),
+        supabase.from('coach_actions').select('id, action_type, new_value, created_at').eq('user_id', user.id).eq('action_type', 'adjust_macros').order('created_at', { ascending: false }).limit(1),
+      ]);
+
+      const goalError = goalResult.error;
+      const goalData = goalResult.data;
 
       if (goalError) throw goalError;
+
+      if (coachResult.data && coachResult.data.length > 0) {
+        const coachAction = coachResult.data[0];
+        console.log('[EditGoals] Last coach macro action loaded:', coachAction);
+        setLastCoachMacroAction(coachAction);
+      }
 
       if (goalData) {
         console.log('[EditGoals] Goal data loaded:', goalData);
@@ -124,6 +135,19 @@ export default function EditGoalsScreen() {
           setCustomProteinPercent(proteinPercent.toString());
           setCustomCarbsPercent(carbsPercent.toString());
           setCustomFatsPercent(fatsPercent.toString());
+        }
+
+        // Check if current goals match the last coach macro action
+        if (coachResult.data && coachResult.data.length > 0) {
+          const coachAction = coachResult.data[0];
+          const nv = coachAction.new_value;
+          const coachMatch = nv &&
+            nv.daily_calories === goalData.daily_calories &&
+            nv.protein_g === goalData.protein_g &&
+            nv.carbs_g === goalData.carbs_g &&
+            nv.fats_g === goalData.fats_g;
+          console.log('[EditGoals] Goals match last coach action:', coachMatch);
+          setIsCoachModified(!!coachMatch);
         }
       }
     } catch (error: any) {
@@ -304,6 +328,18 @@ export default function EditGoalsScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Coach Banner */}
+          {isCoachModified && lastCoachMacroAction && (
+            <View style={[styles.coachBanner, { backgroundColor: isDark ? '#2D1B4E' : '#EDE7F6', borderColor: isDark ? '#7B1FA2' : '#CE93D8' }]}>
+              <Text style={styles.coachBannerIcon}>{'⚠️'}</Text>
+              <Text style={[styles.coachBannerText, { color: isDark ? '#CE93D8' : '#4A148C' }]}>
+                {'These goals were last adjusted by your AI Coach on '}
+                {new Date(lastCoachMacroAction.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                {'. Editing them will override the Coach\'s recommendation.'}
+              </Text>
+            </View>
+          )}
+
           {/* Goal Type */}
           <View style={styles.section}>
             <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Goal *</Text>
@@ -648,6 +684,26 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+  },
+  coachBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: spacing.md,
+  },
+  coachBannerIcon: {
+    fontSize: 15,
+    marginTop: 1,
+  },
+  coachBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
   },
   loadingContainer: {
     flex: 1,
