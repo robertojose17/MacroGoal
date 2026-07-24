@@ -1,6 +1,7 @@
 
 import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractUnitFromString } from '@/utils/openFoodFacts';
-import { parseServingString, singularizeUnit } from '@/utils/servingParser';
+import { parseServingString } from '@/utils/servingParser';
+import { singularizeUnit } from '@/utils/stringUtils';
 import ServingPicker from '@/components/ServingPicker';
 import { calcMacros } from '@/utils/macros';
 import { formatServing } from '@/utils/servingFormat';
@@ -1474,8 +1475,8 @@ export default function FoodDetailsLayout({
     }
 
     // 2. Try to find by name + brand (use limit(1) to handle duplicates gracefully)
-    const nameQuery = supabase.from('food_items').select('id').ilike('name', pName).limit(1);
-    if (pBrand) nameQuery.ilike('brand', pBrand);
+    let nameQuery = supabase.from('food_items').select('id').ilike('name', pName).limit(1);
+    if (pBrand) nameQuery = nameQuery.ilike('brand', pBrand);
     const { data: existingByNameRows } = await nameQuery;
     const existingByName = existingByNameRows?.[0] ?? null;
     if (existingByName) {

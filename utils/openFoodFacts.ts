@@ -1,5 +1,5 @@
 
-import { singularizeUnit } from '@/utils/servingParser';
+import { singularizeUnit } from '@/utils/stringUtils';
 
 /**
  * OpenFoodFacts API Integration
