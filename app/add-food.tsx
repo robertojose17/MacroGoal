@@ -1421,7 +1421,7 @@ export default function AddFoodScreen() {
   const renderRecentFoodItem = useCallback((item: RecentFoodItem, index: number) => {
     if (hiddenRecentIds.has(item.food_item_id)) return null;
 
-    const servingGrams = item.quantity ?? item.serving_size ?? 100;
+    const servingGrams = item.serving_size ?? 100;
     const macroResult = calcMacros(
       {
         calories: item.calories_per_100,
