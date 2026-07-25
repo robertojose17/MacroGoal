@@ -858,6 +858,57 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* ── AI Coach Card ───────────────────────────────────────────────── */}
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[Profile] AI Coach card pressed');
+            router.push('/ai-coach');
+          }}
+          activeOpacity={0.85}
+          style={{
+            marginHorizontal: spacing.md,
+            marginBottom: spacing.md,
+            borderRadius: 16,
+            backgroundColor: isDark ? '#1A2535' : '#EBF4F6',
+            borderWidth: 1.5,
+            borderColor: colors.primary,
+            padding: spacing.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+          }}
+        >
+          <View style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: colors.primary + '22',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <IconSymbol
+              ios_icon_name="brain.head.profile"
+              android_material_icon_name="psychology"
+              size={26}
+              color={colors.primary}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? '#F1F5F9' : '#2B2D42', marginBottom: 2 }}>
+              AI Coach
+            </Text>
+            <Text style={{ fontSize: 13, color: isDark ? '#A0A2B8' : '#6B7280', lineHeight: 18 }}>
+              Body Transformation Coach — analyze your progress
+            </Text>
+          </View>
+          <IconSymbol
+            ios_icon_name="chevron.right"
+            android_material_icon_name="arrow-forward"
+            size={18}
+            color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+          />
+        </TouchableOpacity>
+
         {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
         {!isPremium && !premiumLoading && (
           <TouchableOpacity
