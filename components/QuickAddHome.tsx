@@ -195,7 +195,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
 
       // Use the food's serving_amount as the default
       const gramsToAdd = food.serving_amount > 0 ? food.serving_amount : 100;
-      const servingDescription = `${Math.round(gramsToAdd)} ${food.serving_unit || 'g'}`;
+      const servingDescription = food.serving_unit || 'g';
 
       // foods table stores macros per-serving; pass macros_per: 'serving' so calcMacros scales correctly
       const macros = calcMacros(
@@ -284,7 +284,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
           food_item_id: null,
           food_name: food.name,
           food_brand: food.brand ?? null,
-          quantity: gramsToAdd / 100,
+          quantity: gramsToAdd,
           calories: calories,
           protein: protein,
           carbs: carbs,
