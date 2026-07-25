@@ -475,46 +475,22 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
 
   return (
     <View style={styles.container}>
-      {/* Top Action Row - 2 Buttons Side-by-Side (Create New Food hidden in my_meals_builder) */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            { backgroundColor: isDark ? colors.cardDark : colors.card },
-            context === 'my_meals_builder' && styles.actionButtonFull,
-          ]}
-          onPress={handleQuickAddManual}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="plus.circle.fill"
-            android_material_icon_name="add_circle"
-            size={24}
-            color={colors.primary}
-          />
-          <Text style={[styles.actionButtonText, { color: isDark ? colors.textDark : colors.text }]}>
-            Quick Add{'\n'}(Calories & Macros)
-          </Text>
-        </TouchableOpacity>
-
-        {context !== 'my_meals_builder' && (
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-            onPress={handleCreateNewFood}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name="fork.knife"
-              android_material_icon_name="restaurant"
-              size={24}
-              color={colors.primary}
-            />
-            <Text style={[styles.actionButtonText, { color: isDark ? colors.textDark : colors.text }]}>
-              Create New Food
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Create New Food Button */}
+      <TouchableOpacity
+        style={[styles.createNewFoodButton, { backgroundColor: colors.primary }]}
+        onPress={() => { console.log('[QuickAddHome] Create New Food button pressed'); handleCreateNewFood(); }}
+        activeOpacity={0.7}
+      >
+        <IconSymbol
+          ios_icon_name="plus"
+          android_material_icon_name="add"
+          size={20}
+          color="#FFFFFF"
+        />
+        <Text style={styles.createNewFoodButtonText}>
+          Create New Food
+        </Text>
+      </TouchableOpacity>
 
       {/* Saved Foods Section */}
       <View style={styles.savedFoodsSection}>
@@ -603,31 +579,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  actionRow: {
+  createNewFoodButton: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  actionButton: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.lg,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
-    minHeight: 100,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
   },
-  actionButtonFull: {
-    flex: 1,
-  },
-  actionButtonText: {
+  createNewFoodButtonText: {
     ...typography.bodyBold,
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    lineHeight: 18,
+    color: '#FFFFFF',
+    fontSize: 16,
   },
   savedFoodsSection: {
     marginTop: spacing.sm,
