@@ -894,11 +894,18 @@ export default function ProfileScreen() {
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? '#F1F5F9' : '#2B2D42', marginBottom: 2 }}>
-              AI Coach
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? '#F1F5F9' : '#2B2D42' }}>
+                AI Coach
+              </Text>
+              <View style={{ backgroundColor: colors.primary + '26', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.primary }}>
+                  Phase 2
+                </Text>
+              </View>
+            </View>
             <Text style={{ fontSize: 13, color: isDark ? '#A0A2B8' : '#6B7280', lineHeight: 18 }}>
-              Body Transformation Coach — analyze your progress
+              Daily check-ins · Weekly reviews · Meal suggestions
             </Text>
           </View>
           <IconSymbol

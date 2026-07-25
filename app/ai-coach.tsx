@@ -37,11 +37,120 @@ const WELCOME_MESSAGE: MessageWithId = {
 };
 
 const SUGGESTED_PROMPTS = [
+  'Give me my daily check-in',
   'Am I on track this week?',
-  'Why am I not losing weight?',
-  'What should I focus on today?',
-  'Analyze my last 7 days',
+  'What can I eat right now?',
+  'Analyze my last 14 days',
 ];
+
+const QUICK_ACTION_CARDS = [
+  {
+    emoji: '📊',
+    title: 'Daily Check-in',
+    subtitle: 'How am I doing today?',
+    message: 'Give me my daily check-in for today',
+  },
+  {
+    emoji: '📅',
+    title: 'Weekly Review',
+    subtitle: 'Full week summary',
+    message: 'Give me my weekly progress review',
+  },
+  {
+    emoji: '🍽️',
+    title: 'What can I eat?',
+    subtitle: 'Remaining macros',
+    message: 'What can I eat with my remaining macros today?',
+  },
+  {
+    emoji: '💪',
+    title: 'Am I on track?',
+    subtitle: 'Weekly progress check',
+    message: 'Am I on track this week?',
+  },
+  {
+    emoji: '🔍',
+    title: 'Analyze patterns',
+    subtitle: 'Last 14 days',
+    message: 'Detect any patterns in my last 14 days',
+  },
+];
+
+const CRAVING_CHIPS = [
+  'I want something sweet 🍫',
+  'High protein option 💪',
+  'Quick meal under 400 cal ⚡',
+  'I need a snack 🥜',
+];
+
+// ── Markdown-like inline parser ──────────────────────────────────────────────
+function renderStructuredText(
+  content: string,
+  baseTextStyle: object,
+  secondaryColor: string
+): React.ReactNode[] {
+  const lines = content.split('\n');
+  const nodes: React.ReactNode[] = [];
+
+  lines.forEach((line, lineIdx) => {
+    const key = `line-${lineIdx}`;
+
+    // ### Header
+    if (line.startsWith('### ')) {
+      const headerText = line.replace(/^###\s*/, '');
+      nodes.push(
+        <Text key={key} style={[baseTextStyle, styles.mdHeader]}>
+          {headerText}
+        </Text>
+      );
+      return;
+    }
+
+    // Numbered list item: "1. " "2. " etc.
+    const numberedMatch = line.match(/^(\d+)\.\s+(.*)/);
+    if (numberedMatch) {
+      const num = numberedMatch[1];
+      const rest = numberedMatch[2];
+      nodes.push(
+        <View key={key} style={styles.mdListRow}>
+          <Text style={[baseTextStyle, styles.mdListNum]}>{num}.</Text>
+          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(rest, baseTextStyle)}</Text>
+        </View>
+      );
+      return;
+    }
+
+    // Empty line → small spacer
+    if (line.trim() === '') {
+      nodes.push(<View key={key} style={styles.mdSpacer} />);
+      return;
+    }
+
+    // Regular line — handle **bold** inline
+    nodes.push(
+      <Text key={key} style={[baseTextStyle, styles.mdLine]}>
+        {renderBoldInline(line, baseTextStyle)}
+      </Text>
+    );
+  });
+
+  return nodes;
+}
+
+function renderBoldInline(text: string, baseTextStyle: object): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const inner = part.slice(2, -2);
+      return (
+        <Text key={i} style={[baseTextStyle, styles.mdBold]}>
+          {inner}
+        </Text>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
 
 // ── Typing indicator dots ────────────────────────────────────────────────────
 function TypingIndicator({ isDark }: { isDark: boolean }) {
@@ -103,6 +212,43 @@ function TypingIndicator({ isDark }: { isDark: boolean }) {
         <Animated.View style={dotStyle(dot3)} />
       </View>
     </View>
+  );
+}
+
+// ── Quick Action Card ────────────────────────────────────────────────────────
+function QuickActionCard({
+  emoji,
+  title,
+  subtitle,
+  onPress,
+  isDark,
+}: {
+  emoji: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  isDark: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.quickCard,
+        {
+          backgroundColor: isDark ? colors.cardDark : '#FFFFFF',
+          shadowColor: isDark ? '#000' : '#000',
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <Text style={styles.quickCardEmoji}>{emoji}</Text>
+      <Text style={[styles.quickCardTitle, { color: isDark ? colors.textDark : colors.text }]}>
+        {title}
+      </Text>
+      <Text style={[styles.quickCardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        {subtitle}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -225,6 +371,22 @@ export default function AICoachScreen() {
     [handleSend]
   );
 
+  const handleQuickAction = useCallback(
+    (card: typeof QUICK_ACTION_CARDS[number]) => {
+      console.log('[AICoach] Quick action card tapped:', card.title, '→', card.message);
+      handleSend(card.message);
+    },
+    [handleSend]
+  );
+
+  const handleCravingChip = useCallback(
+    (chip: string) => {
+      console.log('[AICoach] Craving chip tapped:', chip);
+      handleSend(chip);
+    },
+    [handleSend]
+  );
+
   const handleSendPress = useCallback(() => {
     console.log('[AICoach] Send button pressed');
     handleSend(inputText);
@@ -241,8 +403,11 @@ export default function AICoachScreen() {
   }, []);
 
   const isOnlyWelcome = messages.length === 1 && messages[0].id === WELCOME_MESSAGE.id;
-
+  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading;
   const canSend = inputText.trim().length > 0 && !loading;
+
+  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const baseAssistantTextStyle = { ...(typography.body as object), lineHeight: 22, color: isDark ? colors.textDark : colors.text };
 
   return (
     <SafeAreaView
@@ -301,6 +466,31 @@ export default function AICoachScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ── Quick Action Cards — welcome state only ── */}
+          {isOnlyWelcome && !loading && (
+            <View style={styles.quickActionsSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                What would you like to do?
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickActionsRow}
+              >
+                {QUICK_ACTION_CARDS.map((card) => (
+                  <QuickActionCard
+                    key={card.title}
+                    emoji={card.emoji}
+                    title={card.title}
+                    subtitle={card.subtitle}
+                    isDark={isDark}
+                    onPress={() => handleQuickAction(card)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {messages.map((message) => {
             const isUser = message.role === 'user';
             const timeText = formatTime(message.timestamp);
@@ -318,6 +508,8 @@ export default function AICoachScreen() {
               );
             }
 
+            const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor);
+
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
                 <View style={[styles.coachAvatarSmall, { backgroundColor: colors.primary + '20' }]}>
@@ -333,9 +525,7 @@ export default function AICoachScreen() {
                     Coach
                   </Text>
                   <View style={[styles.assistantBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-                    <Text style={[styles.assistantBubbleText, { color: isDark ? colors.textDark : colors.text }]}>
-                      {message.content}
-                    </Text>
+                    <View>{structuredNodes}</View>
                     {timeText ? (
                       <Text style={[styles.assistantBubbleTime, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                         {timeText}
@@ -384,6 +574,37 @@ export default function AICoachScreen() {
           )}
         </ScrollView>
 
+        {/* ── Craving chips — above input bar, non-welcome state ── */}
+        {showCravingChips && (
+          <View style={[styles.cravingRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cravingChipsContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {CRAVING_CHIPS.map((chip) => (
+                <TouchableOpacity
+                  key={chip}
+                  style={[
+                    styles.cravingChip,
+                    {
+                      backgroundColor: isDark ? colors.cardDark : colors.card,
+                      borderColor: isDark ? colors.borderDark : colors.border,
+                    },
+                  ]}
+                  onPress={() => handleCravingChip(chip)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
+                    {chip}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* ── Input bar ── */}
         <View
           style={[
@@ -405,7 +626,9 @@ export default function AICoachScreen() {
             placeholder="Ask your coach anything..."
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={inputText}
-            onChangeText={setInputText}
+            onChangeText={(t) => {
+              setInputText(t);
+            }}
             multiline
             maxLength={1000}
             editable={!loading}
@@ -482,6 +705,47 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     paddingBottom: spacing.xl,
   },
+  // ── Quick Action Cards ───────────────────────────────────────────────────
+  quickActionsSection: {
+    marginBottom: spacing.lg,
+  },
+  quickActionsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+    letterSpacing: 0.2,
+  },
+  quickActionsRow: {
+    paddingHorizontal: 0,
+    paddingVertical: 12,
+    gap: 10,
+    flexDirection: 'row',
+  },
+  quickCard: {
+    width: 110,
+    borderRadius: 12,
+    padding: 12,
+    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    alignItems: 'flex-start',
+  },
+  quickCardEmoji: {
+    fontSize: 22,
+    marginBottom: 6,
+  },
+  quickCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 3,
+    lineHeight: 17,
+  },
+  quickCardSubtitle: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '400',
+  },
   // ── User bubble ─────────────────────────────────────────────────────────
   userMessageWrapper: {
     alignSelf: 'flex-end',
@@ -539,14 +803,41 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     elevation: 1,
   },
-  assistantBubbleText: {
-    ...typography.body,
-    lineHeight: 22,
-  },
   assistantBubbleTime: {
     fontSize: 11,
     marginTop: spacing.xs,
     alignSelf: 'flex-end',
+  },
+  // ── Markdown rendering ───────────────────────────────────────────────────
+  mdHeader: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  mdBold: {
+    fontWeight: '700',
+  },
+  mdLine: {
+    lineHeight: 22,
+  },
+  mdSpacer: {
+    height: 6,
+  },
+  mdListRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginVertical: 2,
+    paddingLeft: 4,
+  },
+  mdListNum: {
+    fontWeight: '700',
+    marginRight: 6,
+    minWidth: 18,
+  },
+  mdListText: {
+    flex: 1,
+    lineHeight: 22,
   },
   // ── Typing indicator ────────────────────────────────────────────────────
   typingWrapper: {
@@ -589,6 +880,27 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 14,
+    fontWeight: '500',
+  },
+  // ── Craving chips ────────────────────────────────────────────────────────
+  cravingRow: {
+    borderTopWidth: 1,
+    paddingVertical: 8,
+  },
+  cravingChipsContent: {
+    paddingHorizontal: spacing.md,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cravingChip: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  cravingChipText: {
+    fontSize: 13,
     fontWeight: '500',
   },
   // ── Input bar ───────────────────────────────────────────────────────────
