@@ -1257,6 +1257,30 @@ export default function CheckInsScreen() {
                 <CommunityLeaderboard isDark={isDark} refreshKey={leaderboardRefreshKey} />
               </View>
             </AnimatedListItem>
+
+            {/* Ask Coach row */}
+            <AnimatedListItem index={trackers.length + 2}>
+              <Pressable
+                style={({ pressed }) => [styles.askCoachRow, {
+                  backgroundColor: isDark ? colors.cardDark : colors.card,
+                  borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
+                  opacity: pressed ? 0.75 : 1,
+                }]}
+                onPress={() => {
+                  console.log('[CheckIns] Ask Coach — Explain weight trend pressed');
+                  router.push({
+                    pathname: '/(tabs)/coach',
+                    params: { prompt: 'Explain my weight trend from my check-in history' },
+                  });
+                }}
+              >
+                <Text style={styles.askCoachEmoji}>🧠</Text>
+                <Text style={[styles.askCoachText, { color: isDark ? colors.textDark : colors.text }]}>
+                  Explain my weight trend
+                </Text>
+                <Text style={[styles.askCoachArrow, { color: colors.primary }]}>→</Text>
+              </Pressable>
+            </AnimatedListItem>
           </View>
         )}
       </ScrollView>
@@ -1637,4 +1661,19 @@ const styles = StyleSheet.create({
   leaderboardSection: {
     marginTop: spacing.sm,
   },
+
+  // ── Ask Coach row ─────────────────────────────────────────────────────────
+  askCoachRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  askCoachEmoji: { fontSize: 20 },
+  askCoachText: { flex: 1, fontSize: 15, fontWeight: '500' },
+  askCoachArrow: { fontSize: 18, fontWeight: '600' },
 });

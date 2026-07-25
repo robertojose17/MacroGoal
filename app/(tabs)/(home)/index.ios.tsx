@@ -1243,6 +1243,26 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+
+        {/* Ask Coach row */}
+        <TouchableOpacity
+          style={[styles.askCoachRow, {
+            backgroundColor: cardBg,
+            borderColor: isDark ? colors.borderDark : colors.border,
+          }]}
+          onPress={() => {
+            console.log('[Home iOS] Ask Coach — Help me finish today pressed');
+            router.push({
+              pathname: '/(tabs)/coach',
+              params: { prompt: 'Help me finish today — what should I eat for the rest of the day?' },
+            });
+          }}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.askCoachEmoji}>🧠</Text>
+          <Text style={[styles.askCoachText, { color: textPrimary }]}>Help me finish today</Text>
+          <Text style={[styles.askCoachArrow, { color: colors.primary }]}>→</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -1994,6 +2014,20 @@ const styles = StyleSheet.create({
   foodCaloriesValue: { ...typography.bodyBold, fontSize: 18 },
   foodCaloriesLabel: { ...typography.caption },
   bottomSpacer: { height: 40 },
+  // ── Ask Coach row ─────────────────────────────────────────────────────────
+  askCoachRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  askCoachEmoji: { fontSize: 20 },
+  askCoachText: { flex: 1, fontSize: 15, fontWeight: '500' as const },
+  askCoachArrow: { fontSize: 18, fontWeight: '600' as const },
   templateSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
