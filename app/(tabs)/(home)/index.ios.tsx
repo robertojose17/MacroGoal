@@ -799,14 +799,13 @@ export default function HomeScreen() {
             .eq('meal_id', mealId)
             .eq('is_scheduled', true);
 
-          const existingNames = new Set((existingItems || []).map((e: any) => e.food_name));
+          const existingNames = new Set((existingItems || []).map((e: any) => e.food_name?.toLowerCase()));
 
           const itemsToInsert = byMealType[mealType]
-            .filter((pi: any) => !existingNames.has(pi.food_name))
+            .filter((pi: any) => !existingNames.has(pi.food_name?.toLowerCase()))
             .map((pi: any) => ({
               meal_id: mealId,
               food_name: pi.food_name,
-              brand: pi.brand ?? null,
               quantity: pi.quantity ?? 1,
               grams: pi.grams ?? null,
               serving_unit: pi.serving_unit ?? null,
@@ -828,6 +827,7 @@ export default function HomeScreen() {
               .insert(itemsToInsert);
             if (insertError) {
               console.error('[Home iOS] Error inserting scheduled meal_items:', insertError);
+              throw new Error(`Failed to insert meal items for ${dateStr} ${mealType}: ${insertError.message}`);
             }
           } else {
             console.log('[Home iOS] All items already scheduled for', dateStr, mealType);
