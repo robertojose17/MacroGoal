@@ -70,7 +70,7 @@ export default function GoalWeightCard({
             .limit(1),
           supabase
             .from('users')
-            .select('maintenance_calories, goal_weight, current_weight')
+            .select('goal_weight, current_weight')
             .eq('id', authUser.id)
             .maybeSingle(),
         ]);
@@ -142,11 +142,10 @@ export default function GoalWeightCard({
         }
 
         if (goal) {
-          const maintenanceCals = userData?.maintenance_calories ?? 2000;
-          console.log('[GoalWeightCard] loaded goal data — dailyCalories:', goal.daily_calories, 'maintenanceCalories:', maintenanceCals, 'lossRateLbsPerWeek:', goal.loss_rate_lbs_per_week);
+          console.log('[GoalWeightCard] loaded goal data — dailyCalories:', goal.daily_calories, 'lossRateLbsPerWeek:', goal.loss_rate_lbs_per_week);
           setGoalData({
             dailyCalories: goal.daily_calories ?? 2000,
-            maintenanceCalories: maintenanceCals,
+            maintenanceCalories: 2000,
             lossRateLbsPerWeek: parseFloat(goal.loss_rate_lbs_per_week) || 0,
           });
         }

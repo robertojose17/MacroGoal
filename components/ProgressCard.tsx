@@ -265,7 +265,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('current_weight, goal_weight, preferred_units, maintenance_calories, created_at')
+        .select('current_weight, goal_weight, preferred_units, created_at')
         .eq('id', userId)
         .maybeSingle();
 
@@ -373,8 +373,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       const rawLossRate = goalData?.loss_rate_lbs_per_week;
       // For maintain/gain goals loss_rate is null — use a default so the planned line spans 90 days
       const weeklyLossLbs = parseFloat(rawLossRate) > 0 ? parseFloat(rawLossRate) : 1.0;
-      const maintenanceCalories = userData.maintenance_calories || 2000;
-      const dailyCalories = goalData?.daily_calories || maintenanceCalories || 2000;
+      const dailyCalories = goalData?.daily_calories || 2000;
 
       const hasValidData =
         !isNaN(startWeightLbs) && startWeightLbs > 0 &&
@@ -1268,7 +1267,7 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
 
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('current_weight, goal_weight, preferred_units, maintenance_calories, created_at')
+          .select('current_weight, goal_weight, preferred_units, created_at')
           .eq('id', uid)
           .maybeSingle();
 
@@ -1326,11 +1325,10 @@ export function WeightProgressMiniChart({ userId, isDark, height = 120 }: Weight
 
         const rawLossRate = goalData?.loss_rate_lbs_per_week;
         const weeklyLossLbs = parseFloat(rawLossRate) > 0 ? parseFloat(rawLossRate) : 1.0;
-        const maintenanceCalories = userData.maintenance_calories || 2000;
-        const dailyCalories = goalData?.daily_calories || maintenanceCalories || 2000;
+        const dailyCalories = goalData?.daily_calories || 2000;
 
         if (!cancelled) {
-          setMiniProfileData({ startDate, startWeightLbs, goalWeightLbs, weeklyLossLbs, maintenanceCalories, dailyCalories });
+          setMiniProfileData({ startDate, startWeightLbs, goalWeightLbs, weeklyLossLbs, maintenanceCalories: 2000, dailyCalories });
           await loadMiniCalorieLogs(uid, startDate);
           await loadMiniWeightCheckIns(uid, startDate);
           setMiniLoading(false);

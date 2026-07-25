@@ -351,6 +351,7 @@ export default function CompleteOnboardingScreen() {
         carbs_g: macros.carbs,
         fats_g: macros.fats,
         fiber_g: macros.fiber,
+        macro_preset: 'lean_body',
         is_active: true,
       };
 

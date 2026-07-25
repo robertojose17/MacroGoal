@@ -114,27 +114,23 @@ export default function EditGoalsScreen() {
         if (goalData.loss_rate_lbs_per_week) {
           setLossRateLbsPerWeek(goalData.loss_rate_lbs_per_week);
         }
-        
-        // Try to detect which preset was used based on macro ratios
-        const totalCals = goalData.daily_calories;
-        const proteinPercent = Math.round((goalData.protein_g * 4 / totalCals) * 100);
-        const carbsPercent = Math.round((goalData.carbs_g * 4 / totalCals) * 100);
-        const fatsPercent = Math.round((goalData.fats_g * 9 / totalCals) * 100);
-        
-        console.log('[EditGoals] Current macro percentages:', { proteinPercent, carbsPercent, fatsPercent });
-        
-        // Check if it matches a preset (with 2% tolerance)
-        if (Math.abs(proteinPercent - 30) <= 2 && Math.abs(carbsPercent - 40) <= 2 && Math.abs(fatsPercent - 30) <= 2) {
-          setMacroPreset('balanced');
-        } else if (Math.abs(proteinPercent - 40) <= 2 && Math.abs(carbsPercent - 35) <= 2 && Math.abs(fatsPercent - 25) <= 2) {
-          setMacroPreset('high_protein');
-        } else if (Math.abs(proteinPercent - 35) <= 2 && Math.abs(carbsPercent - 25) <= 2 && Math.abs(fatsPercent - 40) <= 2) {
-          setMacroPreset('low_carb');
-        } else {
+
+        // Read macro_preset directly from the goals row
+        const savedPreset: MacroPreset = goalData.macro_preset || 'lean_body';
+        console.log('[EditGoals] macro_preset from DB:', savedPreset);
+
+        if (savedPreset === 'custom') {
+          // Derive percentages from stored macro grams for display
+          const totalCals = goalData.daily_calories;
+          const proteinPercent = Math.round((goalData.protein_g * 4 / totalCals) * 100);
+          const carbsPercent = Math.round((goalData.carbs_g * 4 / totalCals) * 100);
+          const fatsPercent = Math.round((goalData.fats_g * 9 / totalCals) * 100);
           setMacroPreset('custom');
           setCustomProteinPercent(proteinPercent.toString());
           setCustomCarbsPercent(carbsPercent.toString());
           setCustomFatsPercent(fatsPercent.toString());
+        } else {
+          setMacroPreset(savedPreset);
         }
 
         // Check if current goals match the last coach macro action
@@ -243,6 +239,7 @@ export default function EditGoalsScreen() {
         carbs_g: macros.carbs,
         fats_g: macros.fats,
         fiber_g: macros.fiber,
+        macro_preset: macroPreset,
         is_active: true,
         start_date: existingStartDate || null,
       };
