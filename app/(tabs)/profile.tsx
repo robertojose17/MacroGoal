@@ -867,8 +867,10 @@ export default function ProfileScreen() {
           activeOpacity={0.85}
           style={{
             marginHorizontal: spacing.md,
-            marginBottom: spacing.md,
+            marginBottom: 0,
             borderRadius: 16,
+            borderBottomLeftRadius: 0,
+            borderBottomRightRadius: 0,
             backgroundColor: isDark ? '#1A2535' : '#EBF4F6',
             borderWidth: 1.5,
             borderColor: colors.primary,
@@ -900,7 +902,7 @@ export default function ProfileScreen() {
               </Text>
               <View style={{ backgroundColor: colors.primary + '26', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.primary }}>
-                  Phase 2
+                  Phase 4
                 </Text>
               </View>
             </View>
@@ -915,6 +917,84 @@ export default function ProfileScreen() {
             color={isDark ? colors.textSecondaryDark : colors.textSecondary}
           />
         </TouchableOpacity>
+
+        {/* ── AI Coach sub-rows ────────────────────────────────────────────── */}
+        <View style={{
+          marginHorizontal: spacing.md,
+          marginBottom: spacing.md,
+          borderWidth: 1.5,
+          borderTopWidth: 0,
+          borderColor: colors.primary,
+          borderBottomLeftRadius: 16,
+          borderBottomRightRadius: 16,
+          backgroundColor: isDark ? '#1A2535' : '#EBF4F6',
+          overflow: 'hidden',
+        }}>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Profile] Action History row pressed');
+              router.push('/coach-action-history');
+            }}
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: spacing.lg,
+              paddingVertical: 11,
+              borderTopWidth: 1,
+              borderTopColor: isDark ? colors.primary + '40' : colors.primary + '30',
+              gap: spacing.sm,
+            }}
+          >
+            <IconSymbol
+              ios_icon_name="clock"
+              android_material_icon_name="history"
+              size={15}
+              color={colors.primary}
+            />
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: '500', color: isDark ? '#A0A2B8' : '#6B7280' }}>
+              Action History
+            </Text>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={13}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Profile] Coach Permissions row pressed');
+              router.push('/coach-permissions');
+            }}
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: spacing.lg,
+              paddingVertical: 11,
+              borderTopWidth: 1,
+              borderTopColor: isDark ? colors.primary + '40' : colors.primary + '30',
+              gap: spacing.sm,
+            }}
+          >
+            <IconSymbol
+              ios_icon_name="gearshape"
+              android_material_icon_name="settings"
+              size={15}
+              color={colors.primary}
+            />
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: '500', color: isDark ? '#A0A2B8' : '#6B7280' }}>
+              Coach Permissions
+            </Text>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={13}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
 
         {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
         {!isPremium && !premiumLoading && (

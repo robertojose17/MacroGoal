@@ -11,13 +11,14 @@ import {
   Platform,
   Alert,
   Animated,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { useAICoach, CoachMessage } from '@/hooks/useAICoach';
+import { useAICoach, CoachMessage, ActionProposal } from '@/hooks/useAICoach';
 
 // ── ID generator ────────────────────────────────────────────────────────────
 let msgCounter = 0;
@@ -74,6 +75,18 @@ const QUICK_ACTION_CARDS = [
     subtitle: 'Last 14 days',
     message: 'Detect any patterns in my last 14 days',
   },
+  {
+    emoji: '🏪',
+    title: 'Find at Store',
+    subtitle: 'Walmart macro picks',
+    message: 'What can I buy at Walmart that fits my macros?',
+  },
+  {
+    emoji: '🍔',
+    title: 'Restaurant Menu',
+    subtitle: 'Under 500 cal options',
+    message: "What can I order at McDonald's under 500 calories?",
+  },
 ];
 
 const CRAVING_CHIPS = [
@@ -83,14 +96,81 @@ const CRAVING_CHIPS = [
   'I need a snack 🥜',
 ];
 
+// ── Store badge detection ────────────────────────────────────────────────────
+const STORE_COLORS: Record<string, { bg: string; text: string }> = {
+  walmart: { bg: '#0071CE', text: '#FFFFFF' },
+  publix: { bg: '#007A33', text: '#FFFFFF' },
+  "mcdonald's": { bg: '#DA291C', text: '#FFFFFF' },
+  mcdonalds: { bg: '#DA291C', text: '#FFFFFF' },
+  "burger king": { bg: '#F5821F', text: '#FFFFFF' },
+  subway: { bg: '#009B48', text: '#FFFFFF' },
+  target: { bg: '#CC0000', text: '#FFFFFF' },
+  costco: { bg: '#005DAA', text: '#FFFFFF' },
+  kroger: { bg: '#003087', text: '#FFFFFF' },
+  "whole foods": { bg: '#00674B', text: '#FFFFFF' },
+  chipotle: { bg: '#A81612', text: '#FFFFFF' },
+  starbucks: { bg: '#00704A', text: '#FFFFFF' },
+};
+
+function detectStore(line: string): { name: string; colors: { bg: string; text: string } } | null {
+  const lower = line.toLowerCase();
+  for (const [store, storeColors] of Object.entries(STORE_COLORS)) {
+    if (lower.includes(store)) {
+      const displayName = store.charAt(0).toUpperCase() + store.slice(1);
+      return { name: displayName, colors: storeColors };
+    }
+  }
+  return null;
+}
+
+// ── Product card detection ───────────────────────────────────────────────────
+function isProductLine(line: string): boolean {
+  return /^-\s+\*\*/.test(line.trim());
+}
+
+function parseProductLine(line: string): { name: string; details: string } {
+  const trimmed = line.trim().replace(/^-\s+/, '');
+  // Match **Name** — details or **Name**: details
+  const match = trimmed.match(/^\*\*([^*]+)\*\*\s*[—:-]\s*(.*)/);
+  if (match) {
+    return { name: match[1].trim(), details: match[2].trim() };
+  }
+  // Fallback: strip bold markers
+  const nameOnly = trimmed.replace(/\*\*/g, '');
+  return { name: nameOnly, details: '' };
+}
+
+function countProductLines(lines: string[]): number {
+  return lines.filter(isProductLine).length;
+}
+
+// ── Action type formatting ───────────────────────────────────────────────────
+function formatActionType(actionType: string): { label: string; color: string } {
+  const map: Record<string, { label: string; color: string }> = {
+    update_goal: { label: 'Goal Change', color: '#3B82F6' },
+    add_food_to_diary: { label: 'Add Food', color: '#10B981' },
+    create_meal: { label: 'Create Meal', color: '#8B5CF6' },
+    create_meal_plan: { label: 'Meal Plan', color: '#F59E0B' },
+    schedule_reminder: { label: 'Reminder', color: '#EC4899' },
+    update_preferences: { label: 'Preferences', color: '#6B7280' },
+  };
+  const key = (actionType || '').toLowerCase().replace(/\s+/g, '_');
+  return map[key] || { label: actionType || 'Action', color: colors.primary };
+}
+
 // ── Markdown-like inline parser ──────────────────────────────────────────────
 function renderStructuredText(
   content: string,
   baseTextStyle: object,
-  secondaryColor: string
+  secondaryColor: string,
+  isDark: boolean
 ): React.ReactNode[] {
   const lines = content.split('\n');
   const nodes: React.ReactNode[] = [];
+
+  // Check if this message has 3+ product lines → render product cards
+  const productLineCount = countProductLines(lines);
+  const useProductCards = productLineCount >= 3;
 
   lines.forEach((line, lineIdx) => {
     const key = `line-${lineIdx}`;
@@ -115,6 +195,40 @@ function renderStructuredText(
         <View key={key} style={styles.mdListRow}>
           <Text style={[baseTextStyle, styles.mdListNum]}>{num}.</Text>
           <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(rest, baseTextStyle)}</Text>
+        </View>
+      );
+      return;
+    }
+
+    // Product card lines
+    if (useProductCards && isProductLine(line)) {
+      const { name, details } = parseProductLine(line);
+      const store = detectStore(line);
+      nodes.push(
+        <View
+          key={key}
+          style={[
+            styles.productCard,
+            { backgroundColor: isDark ? '#2A2C40' : '#FFFFFF' },
+          ]}
+        >
+          <View style={styles.productCardHeader}>
+            <Text style={[styles.productCardName, { color: isDark ? colors.textDark : colors.text }]}>
+              {name}
+            </Text>
+            {store && (
+              <View style={[styles.storeBadge, { backgroundColor: store.colors.bg }]}>
+                <Text style={[styles.storeBadgeText, { color: store.colors.text }]}>
+                  {store.name}
+                </Text>
+              </View>
+            )}
+          </View>
+          {details.length > 0 && (
+            <Text style={[styles.productCardDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {details}
+            </Text>
+          )}
         </View>
       );
       return;
@@ -252,6 +366,206 @@ function QuickActionCard({
   );
 }
 
+// ── Action Confirmation Bottom Sheet ────────────────────────────────────────
+function ActionConfirmSheet({
+  visible,
+  action,
+  isDark,
+  onConfirm,
+  onReject,
+}: {
+  visible: boolean;
+  action: ActionProposal | null;
+  isDark: boolean;
+  onConfirm: (action_id: string, confirmation_token: string) => void;
+  onReject: () => void;
+}) {
+  const [evidenceExpanded, setEvidenceExpanded] = useState(false);
+
+  useEffect(() => {
+    if (visible) setEvidenceExpanded(false);
+  }, [visible]);
+
+  if (!action) return null;
+
+  const proposal = action.proposal;
+  const actionTypeInfo = formatActionType(proposal.action_type || proposal.goal_type || '');
+  const isReversible = proposal.is_reversible !== false;
+
+  const currentVal = proposal.current_value !== undefined ? String(proposal.current_value) : null;
+  const proposedVal = proposal.proposed_value !== undefined ? String(proposal.proposed_value) : null;
+  const goalType = proposal.goal_type || proposal.action_type || '';
+  const unitLabel = goalType.toLowerCase().includes('calorie') ? ' cal' : '';
+
+  const evidenceText = proposal.data_evidence
+    ? JSON.stringify(proposal.data_evidence, null, 2)
+    : null;
+
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const textColor = isDark ? colors.textDark : colors.text;
+  const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const borderColor = isDark ? colors.borderDark : colors.border;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        console.log('[AICoach] Action sheet dismissed via back button');
+        onReject();
+      }}
+    >
+      <View style={styles.sheetBackdrop}>
+        <TouchableOpacity style={styles.sheetBackdropTouch} activeOpacity={1} onPress={onReject} />
+        <View style={[styles.sheetContainer, { backgroundColor: cardBg }]}>
+          {/* Header */}
+          <View style={[styles.sheetHeader, { borderBottomColor: borderColor }]}>
+            <Text style={[styles.sheetTitle, { color: textColor }]}>
+              Coach Recommendation
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[AICoach] Action sheet close button pressed');
+                onReject();
+              }}
+              style={styles.sheetCloseBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[styles.sheetCloseX, { color: secondaryText }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Action type badge */}
+            <View style={styles.sheetBadgeRow}>
+              <View style={[styles.sheetBadge, { backgroundColor: actionTypeInfo.color + '22' }]}>
+                <Text style={[styles.sheetBadgeText, { color: actionTypeInfo.color }]}>
+                  {actionTypeInfo.label}
+                </Text>
+              </View>
+            </View>
+
+            {/* Proposed change */}
+            {currentVal && proposedVal && (
+              <View style={[styles.sheetChangeCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
+                <Text style={[styles.sheetChangeLabel, { color: secondaryText }]}>
+                  Proposed Change
+                </Text>
+                <View style={styles.sheetChangeRow}>
+                  <Text style={[styles.sheetChangeValue, { color: textColor }]}>
+                    {currentVal}
+                    {unitLabel}
+                  </Text>
+                  <Text style={[styles.sheetChangeArrow, { color: actionTypeInfo.color }]}>
+                    →
+                  </Text>
+                  <Text style={[styles.sheetChangeValue, { color: actionTypeInfo.color }]}>
+                    {proposedVal}
+                    {unitLabel}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Reason */}
+            {proposal.reason ? (
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
+                  Reason
+                </Text>
+                <Text style={[styles.sheetSectionBody, { color: secondaryText }]}>
+                  {proposal.reason}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Expected effect */}
+            {proposal.expected_effect ? (
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
+                  Expected Effect
+                </Text>
+                <Text style={[styles.sheetSectionBody, { color: secondaryText }]}>
+                  {proposal.expected_effect}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Data evidence (collapsible) */}
+            {evidenceText ? (
+              <View style={styles.sheetSection}>
+                <TouchableOpacity
+                  style={styles.sheetEvidenceToggle}
+                  onPress={() => {
+                    const next = !evidenceExpanded;
+                    console.log('[AICoach] Evidence section toggled:', next ? 'expanded' : 'collapsed');
+                    setEvidenceExpanded(next);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
+                    Data Used
+                  </Text>
+                  <Text style={[styles.sheetEvidenceChevron, { color: secondaryText }]}>
+                    {evidenceExpanded ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {evidenceExpanded && (
+                  <View style={[styles.sheetEvidenceBox, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
+                    <Text style={[styles.sheetEvidenceText, { color: secondaryText }]}>
+                      {evidenceText}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+
+            {/* Reversible badge */}
+            <View style={[styles.sheetReversibleBadge, { backgroundColor: isReversible ? '#10B98122' : '#F59E0B22' }]}>
+              <Text style={[styles.sheetReversibleText, { color: isReversible ? '#10B981' : '#F59E0B' }]}>
+                {isReversible ? '✓ This change can be undone' : '⚠ This change cannot be undone'}
+              </Text>
+            </View>
+          </ScrollView>
+
+          {/* Buttons */}
+          <View style={[styles.sheetButtons, { borderTopColor: borderColor }]}>
+            <TouchableOpacity
+              style={[styles.sheetConfirmBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                console.log('[AICoach] Confirm action pressed, action_id:', action.action_id);
+                onConfirm(action.action_id, action.confirmation_token);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sheetConfirmBtnText}>
+                Confirm
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sheetRejectBtn, { borderColor }]}
+              onPress={() => {
+                console.log('[AICoach] Reject action pressed, action_id:', action.action_id);
+                onReject();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.sheetRejectBtnText, { color: secondaryText }]}>
+                Reject
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function AICoachScreen() {
   const router = useRouter();
@@ -264,7 +578,7 @@ export default function AICoachScreen() {
   const [messages, setMessages] = useState<MessageWithId[]>([WELCOME_MESSAGE]);
   const [inputText, setInputText] = useState('');
 
-  const { sendMessage, loading } = useAICoach();
+  const { sendMessage, loading, pendingAction, clearPendingAction, confirmAction } = useAICoach();
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -392,6 +706,48 @@ export default function AICoachScreen() {
     handleSend(inputText);
   }, [handleSend, inputText]);
 
+  const handleConfirmAction = useCallback(
+    async (action_id: string, confirmation_token: string) => {
+      console.log('[AICoach] Confirming action:', action_id);
+      const confirmText = `Confirmed. Please execute action_id: ${action_id} with confirmation_token: ${confirmation_token}`;
+
+      const userMsg: MessageWithId = {
+        id: genId(),
+        role: 'user',
+        content: confirmText,
+        timestamp: Date.now(),
+      };
+
+      clearPendingAction();
+      setMessages((prev) => [...prev, userMsg]);
+
+      const history: CoachMessage[] = [...messages, userMsg].map(({ role, content, timestamp }) => ({
+        role,
+        content,
+        timestamp,
+      }));
+
+      console.log('[AICoach] Sending confirmation to ai-coach, history length:', history.length);
+
+      try {
+        const reply = await sendMessage(history);
+        if (!isMountedRef.current) return;
+        if (reply) {
+          const assistantMsg: MessageWithId = {
+            id: genId(),
+            role: 'assistant',
+            content: reply,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+        }
+      } catch (e: any) {
+        console.error('[AICoach] Error confirming action:', e?.message);
+      }
+    },
+    [clearPendingAction, messages, sendMessage]
+  );
+
   const formatTime = useCallback((timestamp: number): string => {
     try {
       const d = new Date(timestamp);
@@ -450,7 +806,38 @@ export default function AICoachScreen() {
           </View>
         </View>
 
-        <View style={{ width: 40 }} />
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[AICoach] Action history button pressed');
+              router.push('/coach-action-history');
+            }}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <IconSymbol
+              ios_icon_name="clock"
+              android_material_icon_name="history"
+              size={20}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[AICoach] Permissions settings button pressed');
+              router.push('/coach-permissions');
+            }}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <IconSymbol
+              ios_icon_name="gearshape"
+              android_material_icon_name="settings"
+              size={20}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Chat area ── */}
@@ -508,7 +895,7 @@ export default function AICoachScreen() {
               );
             }
 
-            const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor);
+            const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
 
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
@@ -649,6 +1036,18 @@ export default function AICoachScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ── Action Confirmation Bottom Sheet ── */}
+      <ActionConfirmSheet
+        visible={pendingAction !== null}
+        action={pendingAction}
+        isDark={isDark}
+        onConfirm={handleConfirmAction}
+        onReject={() => {
+          console.log('[AICoach] Action rejected by user');
+          clearPendingAction();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -677,6 +1076,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flex: 1,
+    justifyContent: 'center',
   },
   headerIconWrap: {
     width: 40,
@@ -693,6 +1094,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 16,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // ── Layout ──────────────────────────────────────────────────────────────
   keyboardView: {
@@ -839,6 +1251,41 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 22,
   },
+  // ── Product cards ────────────────────────────────────────────────────────
+  productCard: {
+    borderRadius: 8,
+    padding: 10,
+    marginVertical: 4,
+    elevation: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+  },
+  productCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 3,
+  },
+  productCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  productCardDetails: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  storeBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  storeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
   // ── Typing indicator ────────────────────────────────────────────────────
   typingWrapper: {
     alignSelf: 'flex-start',
@@ -925,5 +1372,155 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // ── Action Confirmation Sheet ────────────────────────────────────────────
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheetBackdropTouch: {
+    flex: 1,
+  },
+  sheetContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCloseX: {
+    fontSize: 18,
+    fontWeight: '400',
+  },
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sheetScrollContent: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  sheetBadgeRow: {
+    flexDirection: 'row',
+  },
+  sheetBadge: {
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  sheetBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  sheetChangeCard: {
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  sheetChangeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  sheetChangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  sheetChangeValue: {
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  sheetChangeArrow: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  sheetSection: {
+    gap: 6,
+  },
+  sheetSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  sheetSectionBody: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  sheetEvidenceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sheetEvidenceChevron: {
+    fontSize: 12,
+  },
+  sheetEvidenceBox: {
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    borderWidth: 1,
+    marginTop: 6,
+  },
+  sheetEvidenceText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 16,
+  },
+  sheetReversibleBadge: {
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  sheetReversibleText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sheetButtons: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    gap: spacing.sm,
+  },
+  sheetConfirmBtn: {
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  sheetConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  sheetRejectBtn: {
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  sheetRejectBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
