@@ -44,6 +44,7 @@ export default function MyFoodsCreateScreen() {
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
   const [fiber, setFiber] = useState('');
+  const [quantity, setQuantity] = useState('1');
   const [saving, setSaving] = useState(false);
 
   // Determine effective mode:
@@ -104,8 +105,8 @@ export default function MyFoodsCreateScreen() {
       const payload = {
         name: foodName.trim(),
         brand: brand.trim() || null,
-        serving_amount: isLibraryMode ? (parseFloat(servingAmount) || 100) : 1,
-        serving_unit: isLibraryMode ? servingUnit : 'serving',
+        serving_amount: parseFloat(servingAmount) || 100,
+        serving_unit: servingUnit,
         calories: parseFloat(calories) || 0,
         protein: parseFloat(protein) || 0,
         carbs: parseFloat(carbs) || 0,
@@ -138,27 +139,34 @@ export default function MyFoodsCreateScreen() {
 
       console.log('[MyFoodsCreate] Food created successfully, id:', foodData.id);
 
-      const finalCalories = parseFloat(calories) || 0;
-      const finalProtein = parseFloat(protein) || 0;
-      const finalCarbs = parseFloat(carbs) || 0;
-      const finalFats = parseFloat(fats) || 0;
-      const finalFiber = parseFloat(fiber) || 0;
+      const baseCalories = parseFloat(calories) || 0;
+      const baseProtein = parseFloat(protein) || 0;
+      const baseCarbs = parseFloat(carbs) || 0;
+      const baseFats = parseFloat(fats) || 0;
+      const baseFiber = parseFloat(fiber) || 0;
+      const parsedQuantity = parseFloat(quantity) || 1;
+
+      const finalCalories = baseCalories;
+      const finalProtein = baseProtein;
+      const finalCarbs = baseCarbs;
+      const finalFats = baseFats;
+      const finalFiber = baseFiber;
 
       // ── MODE: mymeal ──────────────────────────────────────────────────────
       if (effectiveMode === 'mymeal') {
-        console.log('[MyFoodsCreate] Mode is mymeal, adding food to meal draft');
+        console.log('[MyFoodsCreate] Mode is mymeal, adding food to meal draft, quantity:', parsedQuantity);
         await addToDraft({
           food_id: foodData.id,
           food_name: foodData.name,
           food_brand: foodData.brand || undefined,
-          serving_amount: 1,
-          serving_unit: 'serving',
-          servings_count: 1,
-          calories: finalCalories,
-          protein: finalProtein,
-          carbs: finalCarbs,
-          fats: finalFats,
-          fiber: finalFiber,
+          serving_amount: parseFloat(servingAmount) || 100,
+          serving_unit: servingUnit,
+          servings_count: parsedQuantity,
+          calories: baseCalories * parsedQuantity,
+          protein: baseProtein * parsedQuantity,
+          carbs: baseCarbs * parsedQuantity,
+          fats: baseFats * parsedQuantity,
+          fiber: baseFiber * parsedQuantity,
         });
         console.log('[MyFoodsCreate] Food added to draft, navigating back to meal builder');
         setSaving(false);
@@ -170,19 +178,21 @@ export default function MyFoodsCreateScreen() {
       // ── MODE: diary ───────────────────────────────────────────────────────
       if (effectiveMode === 'diary') {
         console.log('[MyFoodsCreate] Calling log_food RPC for food:', foodData.name, 'mealType:', mealType, 'date:', date);
+        const servingLabel = parsedQuantity !== 1 ? `${quantity} servings` : '1 serving';
+        console.log('[MyFoodsCreate] Diary mode quantity:', parsedQuantity, 'serving description:', servingLabel);
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
           p_date: date,
           p_meal_type: mealType,
           p_food_id: foodData.id,
           p_food_item_id: null,
-          p_quantity: 1,
-          p_calories: finalCalories,
-          p_protein: finalProtein,
-          p_carbs: finalCarbs,
-          p_fats: finalFats,
-          p_fiber: finalFiber,
-          p_serving_description: '1 serving',
+          p_quantity: parsedQuantity,
+          p_calories: baseCalories * parsedQuantity,
+          p_protein: baseProtein * parsedQuantity,
+          p_carbs: baseCarbs * parsedQuantity,
+          p_fats: baseFats * parsedQuantity,
+          p_fiber: baseFiber * parsedQuantity,
+          p_serving_description: servingLabel,
           p_grams: null,
           p_logged_at: new Date().toISOString(),
         });
@@ -246,7 +256,7 @@ export default function MyFoodsCreateScreen() {
 
   const screenTitle = effectiveMode === 'library' ? 'Create Custom Food' : 'Create Food';
 
-  const showServingFields = effectiveMode === 'library';
+  const showServingFields = true;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -311,47 +321,63 @@ export default function MyFoodsCreateScreen() {
               />
             </View>
 
-            {showServingFields && (
-              <>
-                <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-                  Serving Size
+            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
+              Serving Size
+            </Text>
+
+            <View style={styles.servingRow}>
+              <View style={styles.servingAmountInput}>
+                <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
+                  Amount
                 </Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                  placeholder="100"
+                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={servingAmount}
+                  onChangeText={setServingAmount}
+                  returnKeyType="next"
+                />
+              </View>
 
-                <View style={styles.servingRow}>
-                  <View style={styles.servingAmountInput}>
-                    <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                      Amount
-                    </Text>
-                    <TextInput
-                      style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                      placeholder="100"
-                      placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                      keyboardType="decimal-pad"
-                      value={servingAmount}
-                      onChangeText={setServingAmount}
-                      returnKeyType="next"
-                    />
-                  </View>
+              <View style={styles.servingUnitInput}>
+                <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
+                  Unit
+                </Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                  placeholder="g"
+                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                  value={servingUnit}
+                  onChangeText={setServingUnit}
+                  returnKeyType="next"
+                />
+              </View>
+            </View>
 
-                  <View style={styles.servingUnitInput}>
-                    <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                      Unit
-                    </Text>
-                    <TextInput
-                      style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                      placeholder="g"
-                      placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                      value={servingUnit}
-                      onChangeText={setServingUnit}
-                      returnKeyType="next"
-                    />
-                  </View>
-                </View>
-              </>
+            {effectiveMode !== 'library' && (
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
+                  Quantity (servings)
+                </Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                  placeholder="1"
+                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={quantity}
+                  onChangeText={(v) => {
+                    console.log('[MyFoodsCreate] Quantity changed:', v);
+                    setQuantity(v);
+                  }}
+                  returnKeyType="next"
+                />
+              </View>
             )}
 
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-              {showServingFields ? 'Nutrition (per serving)' : 'Food Details'}
+              Nutrition (per serving)
             </Text>
 
             <View style={styles.inputGroup}>
