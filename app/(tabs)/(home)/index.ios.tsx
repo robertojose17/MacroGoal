@@ -56,6 +56,7 @@ interface FoodItem {
   food_brand?: string | null;
   name?: string;
   brand?: string;
+  is_scheduled?: boolean;
   food_items?: {
     id: string;
     name: string;
@@ -151,6 +152,7 @@ export default function HomeScreen() {
   const [newPlanModalVisible, setNewPlanModalVisible] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [newPlanSaving, setNewPlanSaving] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
 
   // ── Referral code modal ──
   const REFERRAL_PROMPT_KEY = 'referral_prompt_shown_v1';
@@ -307,6 +309,7 @@ export default function HomeScreen() {
             logged_at,
             food_name,
             food_brand,
+            is_scheduled,
             food_items!meal_items_food_item_id_fkey (
               id,
               name,
@@ -357,13 +360,17 @@ export default function HomeScreen() {
                   brand: item.food_brand ?? item.food_items?.brand ?? undefined,
                   meal_type: meal.meal_type,
                   logged_at: item.logged_at ?? null,
+                  is_scheduled: item.is_scheduled ?? false,
                 };
                 mealsByType[meal.meal_type as MealType].push(enriched);
-                totalCals += macros.calories;
-                totalP    += macros.protein;
-                totalC    += macros.carbs;
-                totalF    += macros.fats;
-                totalFib  += macros.fiber;
+                // Exclude scheduled (not-yet-eaten) items from daily totals
+                if (!enriched.is_scheduled) {
+                  totalCals += macros.calories;
+                  totalP    += macros.protein;
+                  totalC    += macros.carbs;
+                  totalF    += macros.fats;
+                  totalFib  += macros.fiber;
+                }
               });
             }
           });
@@ -678,6 +685,167 @@ export default function HomeScreen() {
     );
   };
 
+  // ── Mark scheduled item as eaten ──
+  const handleMarkEaten = async (itemId: string) => {
+    console.log('[Home iOS] Mark as eaten pressed for item:', itemId);
+    try {
+      const { error } = await supabase
+        .from('meal_items')
+        .update({ is_scheduled: false })
+        .eq('id', itemId);
+      if (error) {
+        console.error('[Home iOS] Error marking item as eaten:', error);
+        throw error;
+      }
+      console.log('[Home iOS] Item marked as eaten:', itemId);
+      await loadData();
+    } catch (err: any) {
+      console.error('[Home iOS] handleMarkEaten error:', err);
+      Alert.alert('Error', 'Failed to mark item as eaten. Please try again.');
+    }
+  };
+
+  // ── Schedule this week's plan into Today's Food ──
+  const handleSchedulePlan = async () => {
+    console.log('[Home iOS] handleSchedulePlan started');
+    setIsScheduling(true);
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error('[Home iOS] handleSchedulePlan: no user', userError);
+        throw new Error('No authenticated user');
+      }
+
+      // Compute startOfWeek (same logic as renderPlanningContent)
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7) + weekOffset * 7);
+      weekStart.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < DAYS.length; i++) {
+        const day = DAYS[i];
+        const planId = currentWeekPlan[day];
+        if (!planId) continue;
+
+        // Compute the calendar date for this day (Mon=0 offset)
+        const dayDate = new Date(weekStart);
+        dayDate.setDate(weekStart.getDate() + i);
+        const yyyy = dayDate.getFullYear();
+        const mm = String(dayDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(dayDate.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        console.log('[Home iOS] Scheduling day:', day, 'date:', dateStr, 'planId:', planId);
+
+        // Fetch meal plan items for this plan
+        const { data: planItems, error: planItemsError } = await supabase
+          .from('meal_plan_items')
+          .select('*')
+          .eq('plan_id', planId);
+
+        if (planItemsError) {
+          console.error('[Home iOS] Error fetching meal_plan_items for plan:', planId, planItemsError);
+          continue;
+        }
+        if (!planItems || planItems.length === 0) {
+          console.log('[Home iOS] No items in plan:', planId, 'for day:', day);
+          continue;
+        }
+
+        // Group by meal_type
+        const byMealType: Record<string, typeof planItems> = {};
+        planItems.forEach((pi: any) => {
+          const mt = pi.meal_type || 'snack';
+          if (!byMealType[mt]) byMealType[mt] = [];
+          byMealType[mt].push(pi);
+        });
+
+        for (const mealType of Object.keys(byMealType)) {
+          // Upsert meal row
+          let mealId: string | null = null;
+          const { data: upsertData, error: upsertError } = await supabase
+            .from('meals')
+            .upsert(
+              { user_id: user.id, date: dateStr, meal_type: mealType },
+              { onConflict: 'user_id,date,meal_type' }
+            )
+            .select('id')
+            .maybeSingle();
+
+          if (upsertError || !upsertData) {
+            console.warn('[Home iOS] Upsert meals failed, falling back to select:', upsertError);
+            // Fallback: select existing
+            const { data: existingMeal } = await supabase
+              .from('meals')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('date', dateStr)
+              .eq('meal_type', mealType)
+              .maybeSingle();
+            mealId = existingMeal?.id ?? null;
+          } else {
+            mealId = upsertData.id;
+          }
+
+          if (!mealId) {
+            console.error('[Home iOS] Could not get meal_id for', dateStr, mealType);
+            continue;
+          }
+
+          // Insert items, skipping duplicates by food_name
+          const { data: existingItems } = await supabase
+            .from('meal_items')
+            .select('food_name')
+            .eq('meal_id', mealId)
+            .eq('is_scheduled', true);
+
+          const existingNames = new Set((existingItems || []).map((e: any) => e.food_name));
+
+          const itemsToInsert = byMealType[mealType]
+            .filter((pi: any) => !existingNames.has(pi.food_name))
+            .map((pi: any) => ({
+              meal_id: mealId,
+              food_name: pi.food_name,
+              brand: pi.brand ?? null,
+              quantity: pi.quantity ?? 1,
+              grams: pi.grams ?? null,
+              serving_unit: pi.serving_unit ?? null,
+              serving_description: pi.serving_description ?? null,
+              calories: pi.calories ?? 0,
+              protein: pi.protein ?? 0,
+              carbs: pi.carbs ?? 0,
+              fats: pi.fats ?? 0,
+              fiber: pi.fiber ?? 0,
+              food_item_id: pi.food_item_id ?? null,
+              food_id: pi.food_id ?? null,
+              is_scheduled: true,
+            }));
+
+          if (itemsToInsert.length > 0) {
+            console.log('[Home iOS] Inserting', itemsToInsert.length, 'scheduled items for', dateStr, mealType);
+            const { error: insertError } = await supabase
+              .from('meal_items')
+              .insert(itemsToInsert);
+            if (insertError) {
+              console.error('[Home iOS] Error inserting scheduled meal_items:', insertError);
+            }
+          } else {
+            console.log('[Home iOS] All items already scheduled for', dateStr, mealType);
+          }
+        }
+      }
+
+      console.log('[Home iOS] handleSchedulePlan complete, refreshing data');
+      await loadData();
+      Alert.alert('Done!', 'Your meals have been scheduled. Check them off as you eat them!');
+    } catch (err: any) {
+      console.error('[Home iOS] handleSchedulePlan error:', err);
+      Alert.alert('Error', 'Failed to schedule plan. Please try again.');
+    } finally {
+      setIsScheduling(false);
+    }
+  };
+
   // ── Planning derived values ──
   const assignedDays = DAYS.filter(d => currentWeekPlan[d] != null);
   const avgMacros = assignedDays.length === 0 ? null : (() => {
@@ -938,6 +1106,74 @@ export default function HomeScreen() {
                       const calsRounded = Math.round(item.calories);
                       const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? (item as any).foods?.name ?? 'Unknown Food';
                       const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
+                      const isScheduledItem = item.is_scheduled === true;
+                      const contentOpacity = isScheduledItem ? 0.5 : 1;
+
+                      if (isScheduledItem) {
+                        // Scheduled (not-yet-eaten) item — checkmark on left, muted/italic style
+                        return (
+                          <View key={item.id}>
+                            <View style={[styles.foodItem, { flexDirection: 'row', alignItems: 'center' }]}>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  console.log('[Home iOS] Mark as eaten tapped for item:', item.id, foodName);
+                                  handleMarkEaten(item.id);
+                                }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={{ marginRight: 10 }}
+                              >
+                                <Text style={{ fontSize: 22, color: '#14B8A6', lineHeight: 26 }}>{'○'}</Text>
+                              </TouchableOpacity>
+                              <View style={[styles.foodInfo, { opacity: contentOpacity, flex: 1 }]}>
+                                <Text style={[styles.foodName, { color: textPrimary, fontStyle: 'italic' }]}>
+                                  {foodName}
+                                </Text>
+                                {foodBrand && (
+                                  <Text style={[styles.foodBrand, { color: textSec, fontStyle: 'italic' }]}>
+                                    {foodBrand}
+                                  </Text>
+                                )}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {servingText}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {'  ·  '}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: colors.protein }]}>
+                                    {proteinRounded}
+                                    {'P'}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {'  '}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: colors.carbs }]}>
+                                    {carbsRounded}
+                                    {'C'}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {'  '}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: colors.fats }]}>
+                                    {fatsRounded}
+                                    {'F'}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={[styles.foodCalories, { opacity: contentOpacity }]}>
+                                <Text style={[styles.foodCaloriesValue, { color: textSec }]}>
+                                  {calsRounded}
+                                </Text>
+                                <Text style={[styles.foodCaloriesLabel, { color: textSec }]}>
+                                  kcal
+                                </Text>
+                              </View>
+                            </View>
+                            {!isLastInSession && <View style={[styles.itemSeparator, { backgroundColor: dividerColor }]} />}
+                          </View>
+                        );
+                      }
+
                       return (
                         <View key={item.id}>
                           <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
@@ -1188,6 +1424,45 @@ export default function HomeScreen() {
             >
               <Text style={{ fontSize: 16 }}>🛒</Text>
               <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Grocery List</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Schedule This Plan button */}
+          {assignedPlanIds.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Home iOS] Schedule This Plan button pressed');
+                Alert.alert(
+                  'Schedule This Plan',
+                  "This will add all planned meals for this week to Today's Food. You can check them off as you eat them.",
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Schedule', onPress: handleSchedulePlan },
+                  ]
+                );
+              }}
+              activeOpacity={0.8}
+              disabled={isScheduling}
+              style={{
+                marginTop: 8,
+                backgroundColor: 'transparent',
+                borderRadius: 10,
+                paddingVertical: 11,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                borderWidth: 1.5,
+                borderColor: '#14B8A6',
+                opacity: isScheduling ? 0.6 : 1,
+              }}
+            >
+              {isScheduling ? (
+                <ActivityIndicator size="small" color="#14B8A6" />
+              ) : (
+                <Text style={{ fontSize: 16 }}>📅</Text>
+              )}
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#14B8A6' }}>Schedule This Plan</Text>
             </TouchableOpacity>
           )}
         </View>
