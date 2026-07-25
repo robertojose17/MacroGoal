@@ -19,6 +19,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAICoach, CoachMessage, ActionProposal } from '@/hooks/useAICoach';
+import { supabase } from '@/lib/supabase/client';
 
 // ── ID generator ────────────────────────────────────────────────────────────
 let msgCounter = 0;
@@ -86,6 +87,12 @@ const QUICK_ACTION_CARDS = [
     title: 'Restaurant Menu',
     subtitle: 'Under 500 cal options',
     message: "What can I order at McDonald's under 500 calories?",
+  },
+  {
+    emoji: '🧠',
+    title: 'My Profile',
+    subtitle: "Coach's memory",
+    message: 'What have you learned about me so far?',
   },
 ];
 
@@ -566,6 +573,116 @@ function ActionConfirmSheet({
   );
 }
 
+// ── Empathy phrase detection ─────────────────────────────────────────────────
+const EMPATHY_PHRASES = [
+  'i understand',
+  'i hear you',
+  "that's frustrating",
+  'that must feel',
+  "it's okay",
+  "don't be hard on yourself",
+  "you're not failing",
+  'recovery',
+  'return to your normal',
+];
+
+function detectsEmpathy(content: string): boolean {
+  const lower = content.toLowerCase();
+  return EMPATHY_PHRASES.some((phrase) => lower.includes(phrase));
+}
+
+// ── Status card types ────────────────────────────────────────────────────────
+type CoachRecommendation = {
+  user_status: string;
+  evidence_strength: string;
+  created_at: string;
+  recommendation_text: string;
+};
+
+function getStatusInfo(userStatus: string): { icon: string; label: string } {
+  const map: Record<string, { icon: string; label: string }> = {
+    on_track: { icon: '✅', label: 'On Track' },
+    faster_than_expected: { icon: '🚀', label: 'Ahead of Schedule' },
+    slower_than_expected: { icon: '📉', label: 'Below Target' },
+    possible_plateau: { icon: '⚠️', label: 'Possible Plateau' },
+    low_adherence: { icon: '📋', label: 'Low Adherence' },
+    incomplete_logging: { icon: '📝', label: 'Incomplete Logging' },
+    approaching_goal: { icon: '🎯', label: 'Approaching Goal' },
+    goal_achieved: { icon: '🏆', label: 'Goal Achieved' },
+    insufficient_data: { icon: '🔍', label: 'Gathering Data' },
+    at_risk_of_quitting: { icon: '💪', label: "Let's Get Back on Track" },
+  };
+  return map[userStatus] ?? { icon: '📊', label: 'Status Unknown' };
+}
+
+function getEvidenceBadge(strength: string): { label: string; color: string; bg: string } {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    strong: { label: 'Strong data', color: '#059669', bg: '#D1FAE5' },
+    moderate: { label: 'Moderate data', color: '#D97706', bg: '#FEF3C7' },
+    limited: { label: 'Limited data', color: '#EA580C', bg: '#FFEDD5' },
+    insufficient: { label: 'Insufficient data', color: '#DC2626', bg: '#FEE2E2' },
+  };
+  return map[(strength ?? '').toLowerCase()] ?? { label: 'Moderate data', color: '#D97706', bg: '#FEF3C7' };
+}
+
+function getRelativeTime(isoDate: string): string {
+  try {
+    const diff = Date.now() - new Date(isoDate).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 60) return `Updated ${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Updated ${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Updated 1 day ago';
+    return `Updated ${days} days ago`;
+  } catch {
+    return '';
+  }
+}
+
+// ── Status Card Component ────────────────────────────────────────────────────
+function StatusCard({
+  recommendation,
+  isDark,
+  onPress,
+}: {
+  recommendation: CoachRecommendation;
+  isDark: boolean;
+  onPress: () => void;
+}) {
+  const textColor = isDark ? colors.textDark : colors.text;
+  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+
+  const statusInfo = getStatusInfo(recommendation.user_status);
+  const evidenceBadge = getEvidenceBadge(recommendation.evidence_strength);
+  const relativeTime = getRelativeTime(recommendation.created_at);
+
+  return (
+    <TouchableOpacity
+      style={[styles.statusCard, { backgroundColor: cardBg }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={styles.statusCardHeader}>
+        <Text style={styles.statusCardIcon}>{statusInfo.icon}</Text>
+        <View style={styles.statusCardTitleCol}>
+          <Text style={[styles.statusCardTitle, { color: textColor }]}>{statusInfo.label}</Text>
+          {relativeTime ? (
+            <Text style={[styles.statusCardTime, { color: secondaryColor }]}>{relativeTime}</Text>
+          ) : null}
+        </View>
+        <View style={[styles.evidenceBadge, { backgroundColor: evidenceBadge.bg }]}>
+          <Text style={[styles.evidenceBadgeText, { color: evidenceBadge.color }]}>{evidenceBadge.label}</Text>
+        </View>
+      </View>
+      <Text style={[styles.statusCardHint, { color: secondaryColor }]}>
+        Tap for full assessment →
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function AICoachScreen() {
   const router = useRouter();
@@ -577,12 +694,41 @@ export default function AICoachScreen() {
 
   const [messages, setMessages] = useState<MessageWithId[]>([WELCOME_MESSAGE]);
   const [inputText, setInputText] = useState('');
+  const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
 
   const { sendMessage, loading, pendingAction, clearPendingAction, confirmAction } = useAICoach();
 
   useEffect(() => {
     isMountedRef.current = true;
     console.log('[AICoach] Screen mounted');
+
+    // Fetch latest recommendation for Phase 8 status card
+    (async () => {
+      try {
+        console.log('[AICoach] Fetching latest coach recommendation');
+        const { data, error } = await supabase
+          .from('coach_recommendations')
+          .select('user_status, evidence_strength, created_at, recommendation_text')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (error) {
+          if (error.code !== 'PGRST116') {
+            console.warn('[AICoach] Error fetching recommendation:', error.message);
+          }
+          return;
+        }
+        if (data) {
+          console.log('[AICoach] Latest recommendation fetched, status:', data.user_status);
+          if (isMountedRef.current) {
+            setLatestRecommendation(data as CoachRecommendation);
+          }
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Recommendation fetch error:', e?.message);
+      }
+    })();
+
     return () => {
       isMountedRef.current = false;
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -809,6 +955,21 @@ export default function AICoachScreen() {
         <View style={styles.headerRight}>
           <TouchableOpacity
             onPress={() => {
+              console.log('[AICoach] Memory button pressed');
+              router.push('/coach-memory');
+            }}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <IconSymbol
+              ios_icon_name="brain"
+              android_material_icon_name="psychology"
+              size={20}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
               console.log('[AICoach] Action history button pressed');
               router.push('/coach-action-history');
             }}
@@ -878,6 +1039,23 @@ export default function AICoachScreen() {
             </View>
           )}
 
+          {/* ── Phase 8 Status Card — welcome state only ── */}
+          {isOnlyWelcome && !loading && latestRecommendation && (
+            <View style={styles.statusCardSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Current Status
+              </Text>
+              <StatusCard
+                recommendation={latestRecommendation}
+                isDark={isDark}
+                onPress={() => {
+                  console.log('[AICoach] Status card tapped, sending status assessment request');
+                  handleSend('Give me my current status assessment');
+                }}
+              />
+            </View>
+          )}
+
           {messages.map((message) => {
             const isUser = message.role === 'user';
             const timeText = formatTime(message.timestamp);
@@ -896,6 +1074,8 @@ export default function AICoachScreen() {
             }
 
             const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
+
+            const showEmpathyBadge = detectsEmpathy(message.content);
 
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
@@ -919,6 +1099,11 @@ export default function AICoachScreen() {
                       </Text>
                     ) : null}
                   </View>
+                  {showEmpathyBadge && (
+                    <View style={styles.empathyBadge}>
+                      <Text style={styles.empathyBadgeText}>💙 Supportive response</Text>
+                    </View>
+                  )}
                 </View>
               </View>
             );
@@ -1522,5 +1707,65 @@ const styles = StyleSheet.create({
   sheetRejectBtnText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // ── Empathy badge ────────────────────────────────────────────────────────────
+  empathyBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  empathyBadgeText: {
+    fontSize: 11,
+    color: '#2563EB',
+    fontWeight: '500',
+  },
+  // ── Status card ──────────────────────────────────────────────────────────────
+  statusCardSection: {
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  statusCard: {
+    borderRadius: 12,
+    padding: 14,
+    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    gap: 8,
+  },
+  statusCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusCardIcon: {
+    fontSize: 22,
+  },
+  statusCardTitleCol: {
+    flex: 1,
+    gap: 2,
+  },
+  statusCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  statusCardTime: {
+    fontSize: 12,
+  },
+  evidenceBadge: {
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  evidenceBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statusCardHint: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

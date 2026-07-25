@@ -942,6 +942,38 @@ export default function ProfileScreen() {
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Profile iOS] Memory row pressed');
+              router.push('/coach-memory');
+            }}
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: spacing.lg,
+              paddingVertical: 11,
+              borderTopWidth: 1,
+              borderTopColor: isDark ? colors.primary + '40' : colors.primary + '30',
+              gap: spacing.sm,
+            }}
+          >
+            <IconSymbol
+              ios_icon_name="brain"
+              android_material_icon_name="psychology"
+              size={15}
+              color={colors.primary}
+            />
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: '500', color: isDark ? '#A0A2B8' : '#6B7280' }}>
+              Memory
+            </Text>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={13}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
