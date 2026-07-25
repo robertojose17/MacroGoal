@@ -612,31 +612,6 @@ export default function DashboardScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* ── Ask Coach row ── */}
-        <TouchableOpacity
-          style={[
-            styles.askCoachRow,
-            {
-              backgroundColor: isDark ? colors.cardDark : colors.card,
-              borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
-            },
-          ]}
-          onPress={() => {
-            console.log('[Dashboard] Ask Coach button pressed — navigating to coach with prompt');
-            router.push({
-              pathname: '/(tabs)/coach',
-              params: { prompt: 'What should I focus on today based on my dashboard?' },
-            });
-          }}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.askCoachEmoji}>🧠</Text>
-          <Text style={[styles.askCoachText, { color: isDark ? colors.textDark : colors.text }]}>
-            What should I focus on today?
-          </Text>
-          <Text style={[styles.askCoachArrow, { color: colors.primary }]}>→</Text>
-        </TouchableOpacity>
-
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -845,22 +820,6 @@ const styles = StyleSheet.create({
   skeletonText: {
     borderRadius: borderRadius.sm,
   },
-  // ── Ask Coach row ─────────────────────────────────────────────────────────
-  askCoachRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    gap: spacing.sm,
-  },
-  askCoachEmoji: { fontSize: 20 },
-  askCoachText: { flex: 1, fontSize: 15, fontWeight: '500' },
-  askCoachArrow: { fontSize: 18, fontWeight: '600' },
   // ── Share progress button ─────────────────────────────────────────────────
   shareProgressButton: {
     alignItems: 'center',
