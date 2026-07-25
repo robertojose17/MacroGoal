@@ -44,8 +44,10 @@ export default function MyFoodsCreateScreen() {
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
   const [fiber, setFiber] = useState('');
-  const [quantity, setQuantity] = useState('1');
+  const [showUnitDropdown, setShowUnitDropdown] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const UNIT_OPTIONS = ['g', 'oz', 'ml', 'fl oz', 'cup', 'tbsp', 'tsp', 'serving', 'piece', 'slice'];
 
   // Determine effective mode:
   // - 'mymeal' if mode === 'mymeal'
@@ -144,29 +146,22 @@ export default function MyFoodsCreateScreen() {
       const baseCarbs = parseFloat(carbs) || 0;
       const baseFats = parseFloat(fats) || 0;
       const baseFiber = parseFloat(fiber) || 0;
-      const parsedQuantity = parseFloat(quantity) || 1;
-
-      const finalCalories = baseCalories;
-      const finalProtein = baseProtein;
-      const finalCarbs = baseCarbs;
-      const finalFats = baseFats;
-      const finalFiber = baseFiber;
 
       // ── MODE: mymeal ──────────────────────────────────────────────────────
       if (effectiveMode === 'mymeal') {
-        console.log('[MyFoodsCreate] Mode is mymeal, adding food to meal draft, quantity:', parsedQuantity);
+        console.log('[MyFoodsCreate] Mode is mymeal, adding food to meal draft');
         await addToDraft({
           food_id: foodData.id,
           food_name: foodData.name,
           food_brand: foodData.brand || undefined,
           serving_amount: parseFloat(servingAmount) || 100,
           serving_unit: servingUnit,
-          servings_count: parsedQuantity,
-          calories: baseCalories * parsedQuantity,
-          protein: baseProtein * parsedQuantity,
-          carbs: baseCarbs * parsedQuantity,
-          fats: baseFats * parsedQuantity,
-          fiber: baseFiber * parsedQuantity,
+          servings_count: 1,
+          calories: baseCalories,
+          protein: baseProtein,
+          carbs: baseCarbs,
+          fats: baseFats,
+          fiber: baseFiber,
         });
         console.log('[MyFoodsCreate] Food added to draft, navigating back to meal builder');
         setSaving(false);
@@ -178,21 +173,19 @@ export default function MyFoodsCreateScreen() {
       // ── MODE: diary ───────────────────────────────────────────────────────
       if (effectiveMode === 'diary') {
         console.log('[MyFoodsCreate] Calling log_food RPC for food:', foodData.name, 'mealType:', mealType, 'date:', date);
-        const servingLabel = parsedQuantity !== 1 ? `${quantity} servings` : '1 serving';
-        console.log('[MyFoodsCreate] Diary mode quantity:', parsedQuantity, 'serving description:', servingLabel);
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
           p_date: date,
           p_meal_type: mealType,
           p_food_id: foodData.id,
           p_food_item_id: null,
-          p_quantity: parsedQuantity,
-          p_calories: baseCalories * parsedQuantity,
-          p_protein: baseProtein * parsedQuantity,
-          p_carbs: baseCarbs * parsedQuantity,
-          p_fats: baseFats * parsedQuantity,
-          p_fiber: baseFiber * parsedQuantity,
-          p_serving_description: servingLabel,
+          p_quantity: 1,
+          p_calories: baseCalories,
+          p_protein: baseProtein,
+          p_carbs: baseCarbs,
+          p_fats: baseFats,
+          p_fiber: baseFiber,
+          p_serving_description: '1 serving',
           p_grams: null,
           p_logged_at: new Date().toISOString(),
         });
@@ -345,34 +338,62 @@ export default function MyFoodsCreateScreen() {
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
                   Unit
                 </Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                  placeholder="g"
-                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                  value={servingUnit}
-                  onChangeText={setServingUnit}
-                  returnKeyType="next"
-                />
+                <TouchableOpacity
+                  style={[styles.unitButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border }]}
+                  onPress={() => {
+                    console.log('[MyFoodsCreate] Unit dropdown toggled, current unit:', servingUnit);
+                    setShowUnitDropdown(prev => !prev);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.unitButtonText, { color: isDark ? colors.textDark : colors.text }]}>
+                    {servingUnit}
+                  </Text>
+                  <IconSymbol
+                    ios_icon_name={showUnitDropdown ? 'chevron.up' : 'chevron.down'}
+                    android_material_icon_name={showUnitDropdown ? 'expand_less' : 'expand_more'}
+                    size={16}
+                    color={isDark ? colors.textDark : colors.text}
+                  />
+                </TouchableOpacity>
               </View>
             </View>
 
-            {effectiveMode !== 'library' && (
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Quantity (servings)
-                </Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                  placeholder="1"
-                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                  keyboardType="decimal-pad"
-                  value={quantity}
-                  onChangeText={(v) => {
-                    console.log('[MyFoodsCreate] Quantity changed:', v);
-                    setQuantity(v);
-                  }}
-                  returnKeyType="next"
-                />
+            {showUnitDropdown && (
+              <View style={[styles.unitDropdown, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}>
+                {UNIT_OPTIONS.map((unit, index) => {
+                  const isSelected = unit === servingUnit;
+                  const isLast = index === UNIT_OPTIONS.length - 1;
+                  const selectedBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
+                  return (
+                    <TouchableOpacity
+                      key={unit}
+                      style={[
+                        styles.unitDropdownOption,
+                        { borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth, borderBottomColor: isDark ? colors.borderDark : colors.border },
+                        isSelected && { backgroundColor: selectedBg },
+                      ]}
+                      onPress={() => {
+                        console.log('[MyFoodsCreate] Unit selected:', unit);
+                        setServingUnit(unit);
+                        setShowUnitDropdown(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.unitDropdownOptionText, { color: isDark ? colors.textDark : colors.text }]}>
+                        {unit}
+                      </Text>
+                      {isSelected && (
+                        <IconSymbol
+                          ios_icon_name="checkmark"
+                          android_material_icon_name="check"
+                          size={16}
+                          color={colors.primary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
 
@@ -542,6 +563,39 @@ const styles = StyleSheet.create({
   },
   servingUnitInput: {
     flex: 1,
+  },
+  unitButton: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  unitButtonText: {
+    fontSize: 16,
+  },
+  unitDropdown: {
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  unitDropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    minHeight: 48,
+  },
+  unitDropdownOptionText: {
+    fontSize: 16,
   },
   macroRow: {
     flexDirection: 'row',
