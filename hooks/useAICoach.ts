@@ -74,9 +74,14 @@ function extractActionProposal(text: string): { cleanText: string; proposal: Act
   }
 }
 
-export function useAICoach() {
+type UseAICoachOptions = {
+  weightUnit?: string;
+};
+
+export function useAICoach(options?: UseAICoachOptions) {
   const [state, setState] = useState<State>({ status: 'idle', error: null });
   const [pendingAction, setPendingAction] = useState<ActionProposal | null>(null);
+  const weightUnit = options?.weightUnit ?? 'lb';
 
   const clearPendingAction = useCallback(() => {
     console.log('[useAICoach] Clearing pending action');
@@ -95,10 +100,11 @@ export function useAICoach() {
     console.log('[useAICoach] 📤 Sending messages to ai-coach function');
     console.log('[useAICoach] Message count:', messages.length);
     console.log('[useAICoach] Last user message:', messages[messages.length - 1]?.content?.slice(0, 80));
+    console.log('[useAICoach] weight_unit:', weightUnit);
 
     try {
       const { data, error } = await supabase.functions.invoke('ai-coach', {
-        body: { messages },
+        body: { messages, weight_unit: weightUnit },
       });
 
       console.log('[useAICoach] 📥 Response received');
@@ -158,7 +164,7 @@ export function useAICoach() {
       setState({ status: 'error', error: e?.message ?? 'Unexpected error' });
       throw e;
     }
-  }, []);
+  }, [weightUnit]);
 
   const confirmAction = useCallback(
     async (

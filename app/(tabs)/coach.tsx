@@ -329,13 +329,14 @@ export default function CoachScreen() {
   const [pendingActions, setPendingActions] = useState<any[]>([]);
   const [recentMessages, setRecentMessages] = useState<any[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [weightUnit, setWeightUnit] = useState<string>('lb');
 
   // ── Chat state ────────────────────────────────────────────────────────────
   const [chatMessages, setChatMessages] = useState<CoachMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
-  const { sendMessage, loading: coachLoading, pendingAction, clearPendingAction, confirmAction } = useAICoach();
+  const { sendMessage, loading: coachLoading, pendingAction, clearPendingAction, confirmAction } = useAICoach({ weightUnit });
 
   // ── Derived colors ────────────────────────────────────────────────────────
   const bgColor = isDark ? colors.backgroundDark : colors.background;
@@ -388,6 +389,16 @@ export default function CoachScreen() {
 
       console.log('[Coach] loadHubData: user id =', user.id);
 
+      // Fetch preferred_units for weight display
+      const { data: prefData } = await supabase
+        .from('users')
+        .select('preferred_units')
+        .eq('id', user.id)
+        .maybeSingle();
+      const resolvedUnit = prefData?.preferred_units === 'metric' ? 'kg' : 'lb';
+      console.log('[Coach] loadHubData: preferred_units =', prefData?.preferred_units, '→ weightUnit =', resolvedUnit);
+      if (isMountedRef.current) setWeightUnit(resolvedUnit);
+
       // Parallel: pending actions + recent messages
       const [pendingResult, messagesResult] = await Promise.all([
         supabase
@@ -414,15 +425,15 @@ export default function CoachScreen() {
       setRecentMessages(messagesResult.data ?? []);
 
       // Load assessment + score in parallel (edge function calls)
-      loadAssessment(user.id);
-      loadWeeklyScore(user.id);
+      loadAssessment(user.id, resolvedUnit);
+      loadWeeklyScore(user.id, resolvedUnit);
     } catch (err) {
       console.error('[Coach] loadHubData error:', err);
     }
   }, []);
 
-  const loadAssessment = async (uid: string) => {
-    console.log('[Coach] loadAssessment: invoking ai-coach for status check');
+  const loadAssessment = async (uid: string, unit: string) => {
+    console.log('[Coach] loadAssessment: invoking ai-coach for status check, weight_unit:', unit);
     setAssessmentLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('ai-coach', {
@@ -432,6 +443,7 @@ export default function CoachScreen() {
             content: 'Give me a one-sentence status: am I on track? Start with my status label in brackets like [On Track] or [Low Adherence] then one sentence.',
           }],
           user_id: uid,
+          weight_unit: unit,
         },
       });
 
@@ -458,8 +470,8 @@ export default function CoachScreen() {
     }
   };
 
-  const loadWeeklyScore = async (uid: string) => {
-    console.log('[Coach] loadWeeklyScore: invoking ai-coach for score');
+  const loadWeeklyScore = async (uid: string, unit: string) => {
+    console.log('[Coach] loadWeeklyScore: invoking ai-coach for score, weight_unit:', unit);
     setScoreLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('ai-coach', {
@@ -469,6 +481,7 @@ export default function CoachScreen() {
             content: 'Calculate my weekly transformation score as a number 0-100. Reply ONLY with JSON like: {"score":72,"calories":15,"protein":18,"steps":12,"logging":14,"weighins":13}',
           }],
           user_id: uid,
+          weight_unit: unit,
         },
       });
 
@@ -592,19 +605,6 @@ export default function CoachScreen() {
         contentContainerStyle={hubStyles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={hubStyles.header}>
-          <View style={hubStyles.headerLeft}>
-            <View style={[hubStyles.avatarCircle, { backgroundColor: colors.primary }]}>
-              <Text style={hubStyles.avatarEmoji}>🧠</Text>
-            </View>
-            <View>
-              <Text style={[hubStyles.headerTitle, { color: textColor }]}>AI Coach</Text>
-              <Text style={[hubStyles.headerSub, { color: subColor }]}>Powered by GPT-4o</Text>
-            </View>
-          </View>
-        </View>
-
         {/* 1. Today's Assessment Card */}
         <View style={[hubStyles.card, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
           <Text style={[hubStyles.sectionLabel, { color: subColor }]}>TODAY'S ASSESSMENT</Text>
@@ -989,18 +989,6 @@ const styles = StyleSheet.create({
 
 const hubStyles = StyleSheet.create({
   scrollContent: { paddingBottom: spacing.xl },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  avatarCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  avatarEmoji: { fontSize: 20 },
-  headerTitle: { ...typography.h3 },
-  headerSub: { fontSize: 12, marginTop: 1 },
   card: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
