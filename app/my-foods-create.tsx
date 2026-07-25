@@ -185,8 +185,8 @@ export default function MyFoodsCreateScreen() {
           p_carbs: baseCarbs,
           p_fats: baseFats,
           p_fiber: baseFiber,
-          p_serving_description: '1 serving',
-          p_grams: null,
+          p_serving_description: `${servingAmount} ${servingUnit}`,
+          p_grams: parseFloat(servingAmount) || 100,
           p_logged_at: new Date().toISOString(),
         });
 
