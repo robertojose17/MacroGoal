@@ -331,7 +331,7 @@ function TypingIndicator({ isDark }: { isDark: boolean }) {
   return (
     <View style={[styles.typingBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
       <Image
-        source={require('@/assets/images/dcc0d827-214c-441d-ae55-325558142da3.png')}
+        source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
         style={styles.coachAvatarImage}
         resizeMode="cover"
       />
@@ -1245,7 +1245,7 @@ export default function AICoachScreen() {
 
         <View style={styles.headerCenter}>
           <Image
-            source={require('@/assets/images/dcc0d827-214c-441d-ae55-325558142da3.png')}
+            source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
             style={styles.headerCoachImage}
             resizeMode="cover"
           />
@@ -1410,7 +1410,7 @@ export default function AICoachScreen() {
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
                 <Image
-                  source={require('@/assets/images/dcc0d827-214c-441d-ae55-325558142da3.png')}
+                  source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
                   style={styles.coachAvatarImage}
                   resizeMode="cover"
                 />
