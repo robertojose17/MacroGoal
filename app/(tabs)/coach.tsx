@@ -43,13 +43,30 @@ function parseStatusLabel(text: string): string {
   return 'Insufficient Data';
 }
 
-// ─── Markdown / Structured Message Renderer ───────────────────────────────────
+// ─── Markdown Cleaner ─────────────────────────────────────────────────────────
 
-type Segment =
-  | { type: 'heading'; text: string }
-  | { type: 'bullet'; text: string }
-  | { type: 'numbered'; num: number; text: string }
-  | { type: 'paragraph'; parts: InlinePart[] };
+function cleanMarkdown(text: string): string {
+  return text
+    // Remove ### headings — keep the text
+    .replace(/^#{1,6}\s+/gm, '')
+    // Remove **bold** — keep the text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    // Remove *italic* — keep the text
+    .replace(/\*(.+?)\*/g, '$1')
+    // Remove bullet points (- item or * item at line start)
+    .replace(/^[*-]\s+/gm, '')
+    // Remove numbered list dots (1. item → item)
+    .replace(/^\d+\.\s+/gm, '')
+    // Remove horizontal rules
+    .replace(/^[-*_]{3,}$/gm, '')
+    // Remove blockquotes
+    .replace(/^>\s+/gm, '')
+    // Collapse 3+ newlines to 2
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// ─── Message Renderer ─────────────────────────────────────────────────────────
 
 type InlinePart = { bold: boolean; text: string };
 
@@ -67,83 +84,28 @@ function parseInline(raw: string): InlinePart[] {
   return parts;
 }
 
-function parseSegments(text: string): Segment[] {
-  const lines = text.split('\n');
-  const segments: Segment[] = [];
-  let paraLines: string[] = [];
-
-  const flushPara = () => {
-    const joined = paraLines.join(' ').trim();
-    if (joined) segments.push({ type: 'paragraph', parts: parseInline(joined) });
-    paraLines = [];
-  };
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) { flushPara(); continue; }
-
-    const headingMatch = line.match(/^###\s+(.+)/);
-    if (headingMatch) { flushPara(); segments.push({ type: 'heading', text: headingMatch[1] }); continue; }
-
-    const numberedMatch = line.match(/^(\d+)\.\s+(.+)/);
-    if (numberedMatch) { flushPara(); segments.push({ type: 'numbered', num: parseInt(numberedMatch[1], 10), text: numberedMatch[2] }); continue; }
-
-    const bulletMatch = line.match(/^[*-]\s+(.+)/);
-    if (bulletMatch) { flushPara(); segments.push({ type: 'bullet', text: bulletMatch[1] }); continue; }
-
-    paraLines.push(line);
-  }
-  flushPara();
-  return segments;
-}
-
 function renderMessageContent(text: string, textColor: string, subColor: string): React.ReactNode {
-  const segments = parseSegments(text);
-  return segments.map((seg, i) => {
-    if (seg.type === 'heading') {
-      return (
-        <Text key={i} style={[mdStyles.heading, { color: textColor, marginTop: i === 0 ? 0 : spacing.md }]}>
-          {seg.text}
-        </Text>
-      );
-    }
-    if (seg.type === 'bullet') {
-      return (
-        <View key={i} style={mdStyles.listRow}>
-          <Text style={[mdStyles.bullet, { color: subColor }]}>{'•'}</Text>
-          <Text style={[mdStyles.listText, { color: textColor }]}>{seg.text}</Text>
-        </View>
-      );
-    }
-    if (seg.type === 'numbered') {
-      const numStr = String(seg.num) + '.';
-      return (
-        <View key={i} style={mdStyles.listRow}>
-          <Text style={[mdStyles.bullet, { color: subColor }]}>{numStr}</Text>
-          <Text style={[mdStyles.listText, { color: textColor }]}>{seg.text}</Text>
-        </View>
-      );
-    }
-    // paragraph
-    return (
-      <Text key={i} style={[mdStyles.paragraph, { color: textColor, marginTop: i === 0 ? 0 : spacing.sm }]}>
-        {seg.parts.map((part, j) =>
-          part.bold
-            ? <Text key={j} style={mdStyles.bold}>{part.text}</Text>
-            : <Text key={j}>{part.text}</Text>
-        )}
-      </Text>
-    );
-  });
+  const paragraphs = text.split('\n\n').filter(p => p.trim());
+  return (
+    <View style={{ gap: 8 }}>
+      {paragraphs.map((para, i) => {
+        const parts = parseInline(para.trim());
+        return (
+          <Text key={i} style={{ color: textColor, fontSize: 15, lineHeight: 22 }}>
+            {parts.map((part, j) => (
+              <Text key={j} style={part.bold ? { fontWeight: '700' } : undefined}>
+                {part.text}
+              </Text>
+            ))}
+          </Text>
+        );
+      })}
+    </View>
+  );
 }
 
 const mdStyles = StyleSheet.create({
-  heading: { fontSize: 15, fontWeight: '700', lineHeight: 22 },
-  paragraph: { fontSize: 15, lineHeight: 22 },
   bold: { fontWeight: '700' },
-  listRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.xs },
-  bullet: { fontSize: 15, lineHeight: 22, width: 20, flexShrink: 0 },
-  listText: { fontSize: 15, lineHeight: 22, flex: 1 },
 });
 
 // ─── Typing Indicator ─────────────────────────────────────────────────────────
@@ -564,15 +526,16 @@ export default function CoachScreen() {
         return;
       }
 
-      const message: string = data?.message ?? '';
-      console.log('[Coach] loadAssessment response:', message.slice(0, 80));
+      const rawMessage: string = data?.message ?? '';
+      console.log('[Coach] loadAssessment response:', rawMessage.slice(0, 80));
+      const cleanMessage = cleanMarkdown(rawMessage);
 
-      const status = parseStatusLabel(message);
-      const priority = message.replace(/\[[^\]]+\]\s*/, '').trim();
+      const status = parseStatusLabel(cleanMessage);
+      const priority = cleanMessage.replace(/\[[^\]]+\]\s*/, '').trim();
 
       setAssessmentStatus(status);
       setAssessmentPriority(priority);
-      setAssessmentFullText(message);
+      setAssessmentFullText(cleanMessage);
     } catch (err) {
       console.error('[Coach] loadAssessment catch:', err);
     } finally {
@@ -586,10 +549,7 @@ export default function CoachScreen() {
     try {
       const { data, error } = await supabase.functions.invoke('ai-coach', {
         body: {
-          messages: [{
-            role: 'user',
-            content: 'Calculate my weekly transformation score as a number 0-100. Reply ONLY with JSON like: {"score":72,"calories":15,"protein":18,"steps":12,"logging":14,"weighins":13}',
-          }],
+          tool_call: 'get_weekly_score',
           user_id: uid,
           weight_unit: unit,
         },
@@ -649,7 +609,7 @@ export default function CoachScreen() {
       const reply = await sendMessage(msgs);
       if (!isMountedRef.current) return;
       if (reply) {
-        const assistantMsg: CoachMessage = { role: 'assistant', content: reply, timestamp: Date.now() };
+        const assistantMsg: CoachMessage = { role: 'assistant', content: cleanMarkdown(reply), timestamp: Date.now() };
         setChatMessages(prev => [...prev, assistantMsg]);
         console.log('[Coach] sendChatMessage: reply received, length:', reply.length);
       }
@@ -989,21 +949,14 @@ export default function CoachScreen() {
           {/* Messages */}
           {chatMessages.map((msg, idx) => {
             const isUser = msg.role === 'user';
-            const isStructured = !isUser && msg.content.includes('###');
-            const bubbleBg = isUser
-              ? colors.primary
-              : isStructured
-                ? 'transparent'
-                : cardBg;
+            const bubbleBg = isUser ? colors.primary : cardBg;
             const bubbleTextColor = isUser ? '#FFFFFF' : textColor;
-            const bubblePadding = isStructured ? spacing.md + 4 : undefined;
             return (
               <View
                 key={idx}
                 style={[
                   chatStyles.messageWrapper,
                   isUser ? chatStyles.userWrapper : chatStyles.assistantWrapper,
-                  isStructured && chatStyles.structuredWrapper,
                 ]}
               >
                 {!isUser && (
@@ -1011,12 +964,7 @@ export default function CoachScreen() {
                     <Text style={chatStyles.avatarEmoji}>🧠</Text>
                   </View>
                 )}
-                <View style={[
-                  chatStyles.bubble,
-                  { backgroundColor: bubbleBg },
-                  isStructured && [chatStyles.structuredBubble, { borderColor }],
-                  bubblePadding !== undefined && { paddingHorizontal: bubblePadding, paddingVertical: bubblePadding },
-                ]}>
+                <View style={[chatStyles.bubble, { backgroundColor: bubbleBg }]}>
                   {isUser
                     ? <Text style={[chatStyles.bubbleText, { color: bubbleTextColor }]}>{msg.content}</Text>
                     : renderMessageContent(msg.content, bubbleTextColor, isDark ? colors.textSecondaryDark : colors.textSecondary)
