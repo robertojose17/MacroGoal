@@ -12,6 +12,7 @@ import {
   Alert,
   Animated,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -279,14 +280,11 @@ function TypingIndicator({ isDark }: { isDark: boolean }) {
 
   return (
     <View style={[styles.typingBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-      <View style={[styles.coachAvatarSmall, { backgroundColor: colors.primary + '20' }]}>
-        <IconSymbol
-          ios_icon_name="brain.head.profile"
-          android_material_icon_name="psychology"
-          size={14}
-          color={colors.primary}
-        />
-      </View>
+      <Image
+        source={require('@/assets/images/dcc0d827-214c-441d-ae55-325558142da3.png')}
+        style={styles.coachAvatarImage}
+        resizeMode="cover"
+      />
       <View style={styles.typingDots}>
         <Animated.View style={dotStyle(dot1)} />
         <Animated.View style={dotStyle(dot2)} />
@@ -903,14 +901,11 @@ export default function AICoachScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <View style={[styles.headerIconWrap, { backgroundColor: colors.primary + '18' }]}>
-            <IconSymbol
-              ios_icon_name="brain.head.profile"
-              android_material_icon_name="psychology"
-              size={22}
-              color={colors.primary}
-            />
-          </View>
+          <Image
+            source={require('@/assets/images/dcc0d827-214c-441d-ae55-325558142da3.png')}
+            style={styles.headerCoachImage}
+            resizeMode="cover"
+          />
           <View>
             <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
               AI Coach
@@ -1071,14 +1066,11 @@ export default function AICoachScreen() {
 
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
-                <View style={[styles.coachAvatarSmall, { backgroundColor: colors.primary + '20' }]}>
-                  <IconSymbol
-                    ios_icon_name="brain.head.profile"
-                    android_material_icon_name="psychology"
-                    size={14}
-                    color={colors.primary}
-                  />
-                </View>
+                <Image
+                  source={require('@/assets/images/dcc0d827-214c-441d-ae55-325558142da3.png')}
+                  style={styles.coachAvatarImage}
+                  resizeMode="cover"
+                />
                 <View style={styles.assistantBubbleColumn}>
                   <Text style={[styles.coachLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                     Coach
@@ -1263,6 +1255,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerCoachImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  coachAvatarImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginTop: 18,
   },
   headerTitle: {
     ...typography.h3,
