@@ -20,6 +20,25 @@ type State =
   | { status: 'success'; error: null }
   | { status: 'error'; error: string };
 
+export type MealPlanMeal = {
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  food_name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber?: number;
+  grams?: number;
+  quantity?: number;
+  serving_unit?: string;
+  dish_description?: string;
+};
+
+export type MealPlanDay = {
+  date: string;
+  meals: MealPlanMeal[];
+};
+
 export type ActionProposal = {
   action_id: string;
   confirmation_token: string;
@@ -32,6 +51,10 @@ export type ActionProposal = {
     is_reversible?: boolean;
     data_evidence?: Record<string, unknown>;
     action_type?: string;
+    plan_name?: string;
+    start_date?: string;
+    end_date?: string;
+    days?: MealPlanDay[];
     [key: string]: unknown;
   };
 };

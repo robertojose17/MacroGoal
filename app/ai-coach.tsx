@@ -21,6 +21,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAICoach, CoachMessage, ActionProposal } from '@/hooks/useAICoach';
 import { supabase } from '@/lib/supabase/client';
+import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 
 // ── ID generator ────────────────────────────────────────────────────────────
 let msgCounter = 0;
@@ -446,6 +447,16 @@ function ActionConfirmSheet({
   const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
 
+  const isMealPlan = proposal.action_type === 'create_meal_plan' && proposal.days && proposal.days.length > 0;
+
+  // Pre-compute meal plan summary values
+  const mealPlanDays = proposal.days || [];
+  const totalMealPlanMeals = mealPlanDays.reduce((sum, d) => sum + d.meals.length, 0);
+  const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
+  const totalCalories = mealPlanDays.reduce((sum, d) => sum + d.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
+  const avgCalPerDay = mealPlanDays.length > 0 ? Math.round(totalCalories / mealPlanDays.length) : 0;
+  const confirmBtnText = isMealPlan ? 'Create Meal Plan' : 'Confirm';
+
   return (
     <Modal
       visible={visible}
@@ -490,26 +501,110 @@ function ActionConfirmSheet({
               </View>
             </View>
 
-            {/* Proposed change */}
-            {currentVal && proposedVal && (
-              <View style={[styles.sheetChangeCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
-                <Text style={[styles.sheetChangeLabel, { color: secondaryText }]}>
-                  Proposed Change
+            {/* Meal plan preview */}
+            {isMealPlan ? (
+              <View style={[styles.mealPlanPreviewCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
+                <Text style={[styles.mealPlanPreviewTitle, { color: textColor }]}>
+                  {proposal.plan_name || 'AI Meal Plan'}
                 </Text>
-                <View style={styles.sheetChangeRow}>
-                  <Text style={[styles.sheetChangeValue, { color: textColor }]}>
-                    {currentVal}
-                    {unitLabel}
+                {(proposal.start_date || proposal.end_date) ? (
+                  <Text style={[styles.mealPlanPreviewDateRange, { color: secondaryText }]}>
+                    {proposal.start_date}
+                    {proposal.start_date && proposal.end_date ? ' → ' : ''}
+                    {proposal.end_date}
                   </Text>
-                  <Text style={[styles.sheetChangeArrow, { color: actionTypeInfo.color }]}>
-                    →
+                ) : null}
+                <View style={styles.mealPlanPreviewSummaryRow}>
+                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
+                    {mealPlanDays.length}
                   </Text>
-                  <Text style={[styles.sheetChangeValue, { color: actionTypeInfo.color }]}>
-                    {proposedVal}
-                    {unitLabel}
+                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
+                    {' days'}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryDot, { color: secondaryText }]}>
+                    {'  •  '}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
+                    {mealsPerDay}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
+                    {' meals/day'}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryDot, { color: secondaryText }]}>
+                    {'  •  '}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
+                    {'~'}
+                    {avgCalPerDay}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
+                    {' cal/day'}
                   </Text>
                 </View>
+                <ScrollView
+                  style={styles.mealPlanDayScroll}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
+                  {mealPlanDays.map((day, dayIdx) => {
+                    const dayDate = new Date(day.date + 'T00:00:00');
+                    const dayLabel = isNaN(dayDate.getTime())
+                      ? day.date
+                      : dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    return (
+                      <View key={dayIdx} style={styles.mealPlanDayBlock}>
+                        <Text style={[styles.mealPlanDayHeader, { color: textColor }]}>
+                          {dayLabel}
+                        </Text>
+                        {day.meals.map((meal, mealIdx) => {
+                          const mealTypeLabel = meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1);
+                          return (
+                            <View key={mealIdx} style={styles.mealPlanMealRow}>
+                              <Text style={[styles.mealPlanMealDot, { color: secondaryText }]}>
+                                {'• '}
+                              </Text>
+                              <Text style={[styles.mealPlanMealType, { color: secondaryText }]}>
+                                {mealTypeLabel}
+                                {': '}
+                              </Text>
+                              <Text style={[styles.mealPlanMealName, { color: textColor }]}>
+                                {meal.food_name}
+                              </Text>
+                              <Text style={[styles.mealPlanMealCal, { color: secondaryText }]}>
+                                {' ('}
+                                {meal.calories}
+                                {' cal)'}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
               </View>
+            ) : (
+              /* Proposed change — generic */
+              currentVal && proposedVal ? (
+                <View style={[styles.sheetChangeCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
+                  <Text style={[styles.sheetChangeLabel, { color: secondaryText }]}>
+                    Proposed Change
+                  </Text>
+                  <View style={styles.sheetChangeRow}>
+                    <Text style={[styles.sheetChangeValue, { color: textColor }]}>
+                      {currentVal}
+                      {unitLabel}
+                    </Text>
+                    <Text style={[styles.sheetChangeArrow, { color: actionTypeInfo.color }]}>
+                      →
+                    </Text>
+                    <Text style={[styles.sheetChangeValue, { color: actionTypeInfo.color }]}>
+                      {proposedVal}
+                      {unitLabel}
+                    </Text>
+                  </View>
+                </View>
+              ) : null
             )}
 
             {/* Reason */}
@@ -536,8 +631,8 @@ function ActionConfirmSheet({
               </View>
             ) : null}
 
-            {/* Data evidence (collapsible) */}
-            {evidenceText ? (
+            {/* Data evidence (collapsible) — only for non-meal-plan actions */}
+            {!isMealPlan && evidenceText ? (
               <View style={styles.sheetSection}>
                 <TouchableOpacity
                   style={styles.sheetEvidenceToggle}
@@ -578,13 +673,13 @@ function ActionConfirmSheet({
             <TouchableOpacity
               style={[styles.sheetConfirmBtn, { backgroundColor: colors.primary }]}
               onPress={() => {
-                console.log('[AICoach] Confirm action pressed, action_id:', action.action_id);
+                console.log('[AICoach] Confirm action pressed, action_id:', action.action_id, 'type:', proposal.action_type);
                 onConfirm(action.action_id, action.confirmation_token);
               }}
               activeOpacity={0.85}
             >
               <Text style={styles.sheetConfirmBtnText}>
-                Confirm
+                {confirmBtnText}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -728,6 +823,7 @@ export default function AICoachScreen() {
   const [messages, setMessages] = useState<MessageWithId[]>([WELCOME_MESSAGE]);
   const [inputText, setInputText] = useState('');
   const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
+  const [creatingPlan, setCreatingPlan] = useState(false);
 
   const { sendMessage, loading, pendingAction, clearPendingAction, confirmAction } = useAICoach();
 
@@ -888,6 +984,76 @@ export default function AICoachScreen() {
   const handleConfirmAction = useCallback(
     async (action_id: string, confirmation_token: string) => {
       console.log('[AICoach] Confirming action:', action_id);
+
+      // Handle create_meal_plan directly — do NOT send to AI
+      if (
+        pendingAction &&
+        pendingAction.proposal.action_type === 'create_meal_plan' &&
+        pendingAction.proposal.days &&
+        pendingAction.proposal.days.length > 0
+      ) {
+        const proposal = pendingAction.proposal;
+        const planName = proposal.plan_name || 'AI Meal Plan';
+        const startDate = proposal.start_date || '';
+        const endDate = proposal.end_date || '';
+        const days = proposal.days!;
+
+        console.log('[AICoach] create_meal_plan confirmed, plan_name:', planName, 'days:', days.length);
+        setCreatingPlan(true);
+        clearPendingAction();
+
+        try {
+          console.log('[AICoach] Calling createMealPlan:', planName, startDate, endDate);
+          const plan = await createMealPlan({ name: planName, start_date: startDate, end_date: endDate });
+          console.log('[AICoach] Meal plan created, id:', plan.id);
+
+          const allItems = days.flatMap((day) =>
+            day.meals.map((meal) => ({ day, meal }))
+          );
+          const totalMeals = allItems.length;
+          console.log('[AICoach] Adding', totalMeals, 'meal items in parallel');
+
+          await Promise.all(
+            allItems.map(({ day, meal }) =>
+              addMealPlanItem(plan.id, {
+                date: day.date,
+                meal_type: meal.meal_type,
+                food_name: meal.food_name,
+                calories: meal.calories,
+                protein: meal.protein,
+                carbs: meal.carbs,
+                fats: meal.fats,
+                fiber: meal.fiber,
+                grams: meal.grams,
+                quantity: meal.quantity,
+                serving_unit: meal.serving_unit,
+                dish_description: meal.dish_description,
+              })
+            )
+          );
+
+          console.log('[AICoach] All meal items added successfully');
+
+          const successMsg: MessageWithId = {
+            id: genId(),
+            role: 'assistant',
+            content: `✅ Your meal plan "${plan.name}" has been created! It covers ${days.length} day${days.length !== 1 ? 's' : ''} with ${totalMeals} meal${totalMeals !== 1 ? 's' : ''}. Opening it now...`,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, successMsg]);
+
+          console.log('[AICoach] Navigating to meal-plan-detail, id:', plan.id);
+          router.push(`/meal-plan-detail?id=${plan.id}`);
+        } catch (e: any) {
+          console.error('[AICoach] Error creating meal plan:', e?.message);
+          Alert.alert('Error', 'Could not create meal plan. Please try again.');
+        } finally {
+          if (isMountedRef.current) setCreatingPlan(false);
+        }
+        return;
+      }
+
+      // Default flow for all other action types
       const confirmText = `Confirmed. Please execute action_id: ${action_id} with confirmation_token: ${confirmation_token}`;
 
       const userMsg: MessageWithId = {
@@ -924,7 +1090,7 @@ export default function AICoachScreen() {
         console.error('[AICoach] Error confirming action:', e?.message);
       }
     },
-    [clearPendingAction, messages, sendMessage]
+    [clearPendingAction, messages, pendingAction, router, sendMessage]
   );
 
   const formatTime = useCallback((timestamp: number): string => {
@@ -1802,6 +1968,71 @@ const styles = StyleSheet.create({
   sheetRejectBtnText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // ── Meal plan preview (in ActionConfirmSheet) ───────────────────────────────
+  mealPlanPreviewCard: {
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    gap: 6,
+  },
+  mealPlanPreviewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  mealPlanPreviewDateRange: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  mealPlanPreviewSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  mealPlanPreviewSummary: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  mealPlanPreviewSummaryLabel: {
+    fontSize: 13,
+  },
+  mealPlanPreviewSummaryDot: {
+    fontSize: 13,
+  },
+  mealPlanDayScroll: {
+    maxHeight: 300,
+  },
+  mealPlanDayBlock: {
+    marginBottom: 10,
+  },
+  mealPlanDayHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  mealPlanMealRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    paddingLeft: 4,
+    marginBottom: 1,
+  },
+  mealPlanMealDot: {
+    fontSize: 12,
+  },
+  mealPlanMealType: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  mealPlanMealName: {
+    fontSize: 12,
+    flex: 1,
+    flexShrink: 1,
+  },
+  mealPlanMealCal: {
+    fontSize: 12,
   },
   // ── Empathy badge ────────────────────────────────────────────────────────────
   empathyBadge: {
