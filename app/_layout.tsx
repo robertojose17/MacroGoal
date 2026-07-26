@@ -30,6 +30,15 @@ import { trackOnboardingEvent } from "@/utils/onboardingAnalytics";
 import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
 import mobileAds from "@/utils/mobileAds";
 
+// GestureHandlerRootView — native only
+let GestureHandlerRootView: any = null;
+if (Platform.OS !== "web") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    GestureHandlerRootView = require("react-native-gesture-handler").GestureHandlerRootView;
+  } catch {}
+}
+
 // OneSignal — native only
 let OneSignal: any = null;
 if (Platform.OS !== "web") {
@@ -423,7 +432,7 @@ export default function RootLayout() {
     },
   };
 
-  return (
+  const content = (
     <NotificationProvider>
       <ErrorBoundary>
       <SafeAreaProvider>
@@ -590,4 +599,8 @@ export default function RootLayout() {
     </ErrorBoundary>
     </NotificationProvider>
   );
+
+  return GestureHandlerRootView ? (
+    <GestureHandlerRootView style={{ flex: 1 }}>{content}</GestureHandlerRootView>
+  ) : content;
 }
