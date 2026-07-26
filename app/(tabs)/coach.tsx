@@ -1118,11 +1118,10 @@ export default function CoachScreen() {
         ) : (
           <View style={styles.headerLeft}>
             <View style={[styles.coachAvatar, { backgroundColor: colors.primary }]}>
-              <Text style={styles.coachAvatarEmoji}>🧠</Text>
+              <Text style={styles.coachAvatarEmoji}>💪</Text>
             </View>
             <View>
-              <Text style={[styles.headerTitle, { color: textColor }]}>AI Coach</Text>
-              <Text style={[styles.headerSub, { color: subColor }]}>Powered by GPT-4o</Text>
+              <Text style={[styles.headerTitle, { color: textColor }]}>Coach</Text>
             </View>
           </View>
         )}
