@@ -136,49 +136,118 @@ function renderStructuredText(
   const lines = content.split('\n');
   const nodes: React.ReactNode[] = [];
 
-  // Check if this message has 3+ product lines → render product cards
   const productLineCount = countProductLines(lines);
   const useProductCards = productLineCount >= 3;
 
-  lines.forEach((line, lineIdx) => {
+  // Pre-pass: tag each line with its type
+  type LineTag =
+    | { type: 'header'; text: string }
+    | { type: 'numbered'; num: string; text: string }
+    | { type: 'bullet'; text: string }
+    | { type: 'product'; raw: string }
+    | { type: 'empty' }
+    | { type: 'text'; raw: string };
+
+  const tagged: LineTag[] = lines.map((line) => {
+    if (line.startsWith('### ')) return { type: 'header', text: line.replace(/^###\s*/, '') };
+    const numberedMatch = line.match(/^(\d+)\.\s+(.*)/);
+    if (numberedMatch) return { type: 'numbered', num: numberedMatch[1], text: numberedMatch[2] };
+    if (useProductCards && isProductLine(line)) return { type: 'product', raw: line };
+    if (line.trim() === '') return { type: 'empty' };
+    // Bullet: starts with "- " or "• " (product lines already caught above)
+    const bulletMatch = line.match(/^[-•]\s+(.*)/);
+    if (bulletMatch) return { type: 'bullet', text: bulletMatch[1] };
+    return { type: 'text', raw: line };
+  });
+
+  // Second pass: convert consecutive bullet groups of 2+ into auto-numbered items
+  type ResolvedTag =
+    | { type: 'header'; text: string }
+    | { type: 'numbered'; num: string; text: string }
+    | { type: 'auto-numbered'; num: number; text: string }
+    | { type: 'bullet-single'; text: string }
+    | { type: 'product'; raw: string }
+    | { type: 'empty' }
+    | { type: 'text'; raw: string };
+
+  const resolved: ResolvedTag[] = [];
+  let i = 0;
+  while (i < tagged.length) {
+    const tag = tagged[i];
+    if (tag.type === 'bullet') {
+      // Collect consecutive bullets
+      const group: string[] = [];
+      let j = i;
+      while (j < tagged.length && tagged[j].type === 'bullet') {
+        group.push((tagged[j] as { type: 'bullet'; text: string }).text);
+        j++;
+      }
+      if (group.length >= 2) {
+        group.forEach((text, idx) => {
+          console.log(`[renderStructuredText] auto-numbered bullet ${idx + 1}: ${text}`);
+          resolved.push({ type: 'auto-numbered', num: idx + 1, text });
+        });
+      } else {
+        console.log(`[renderStructuredText] single bullet: ${group[0]}`);
+        resolved.push({ type: 'bullet-single', text: group[0] });
+      }
+      i = j;
+    } else {
+      resolved.push(tag as ResolvedTag);
+      i++;
+    }
+  }
+
+  resolved.forEach((tag, lineIdx) => {
     const key = `line-${lineIdx}`;
 
-    // ### Header
-    if (line.startsWith('### ')) {
-      const headerText = line.replace(/^###\s*/, '');
+    if (tag.type === 'header') {
       nodes.push(
         <Text key={key} style={[baseTextStyle, styles.mdHeader]}>
-          {headerText}
+          {tag.text}
         </Text>
       );
       return;
     }
 
-    // Numbered list item: "1. " "2. " etc.
-    const numberedMatch = line.match(/^(\d+)\.\s+(.*)/);
-    if (numberedMatch) {
-      const num = numberedMatch[1];
-      const rest = numberedMatch[2];
+    if (tag.type === 'numbered') {
       nodes.push(
         <View key={key} style={styles.mdListRow}>
-          <Text style={[baseTextStyle, styles.mdListNum]}>{num}.</Text>
-          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(rest, baseTextStyle)}</Text>
+          <Text style={[baseTextStyle, styles.mdListNum]}>{tag.num}.</Text>
+          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(tag.text, baseTextStyle)}</Text>
         </View>
       );
       return;
     }
 
-    // Product card lines
-    if (useProductCards && isProductLine(line)) {
+    if (tag.type === 'auto-numbered') {
+      nodes.push(
+        <View key={key} style={styles.mdListRow}>
+          <Text style={[baseTextStyle, styles.mdListNum]}>{tag.num}.</Text>
+          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(tag.text, baseTextStyle)}</Text>
+        </View>
+      );
+      return;
+    }
+
+    if (tag.type === 'bullet-single') {
+      nodes.push(
+        <View key={key} style={styles.mdListRow}>
+          <Text style={[baseTextStyle, styles.mdListNum]}>•</Text>
+          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(tag.text, baseTextStyle)}</Text>
+        </View>
+      );
+      return;
+    }
+
+    if (tag.type === 'product') {
+      const line = tag.raw;
       const { name, details } = parseProductLine(line);
       const store = detectStore(line);
       nodes.push(
         <View
           key={key}
-          style={[
-            styles.productCard,
-            { backgroundColor: isDark ? '#2A2C40' : '#FFFFFF' },
-          ]}
+          style={[styles.productCard, { backgroundColor: isDark ? '#2A2C40' : '#FFFFFF' }]}
         >
           <View style={styles.productCardHeader}>
             <Text style={[styles.productCardName, { color: isDark ? colors.textDark : colors.text }]}>
@@ -186,9 +255,7 @@ function renderStructuredText(
             </Text>
             {store && (
               <View style={[styles.storeBadge, { backgroundColor: store.colors.bg }]}>
-                <Text style={[styles.storeBadgeText, { color: store.colors.text }]}>
-                  {store.name}
-                </Text>
+                <Text style={[styles.storeBadgeText, { color: store.colors.text }]}>{store.name}</Text>
               </View>
             )}
           </View>
@@ -202,16 +269,15 @@ function renderStructuredText(
       return;
     }
 
-    // Empty line → small spacer
-    if (line.trim() === '') {
+    if (tag.type === 'empty') {
       nodes.push(<View key={key} style={styles.mdSpacer} />);
       return;
     }
 
-    // Regular line — handle **bold** inline
+    // text
     nodes.push(
       <Text key={key} style={[baseTextStyle, styles.mdLine]}>
-        {renderBoldInline(line, baseTextStyle)}
+        {renderBoldInline(tag.raw, baseTextStyle)}
       </Text>
     );
   });
