@@ -12,53 +12,13 @@ import {
   Pressable,
   Dimensions,
   Platform,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
-
-// ─── Gesture / Reanimated (native only) ──────────────────────────────────────
-
-let useSharedValue: any = null;
-let useAnimatedStyle: any = null;
-let withSpring: any = null;
-let runOnJS: any = null;
-let AnimatedImage: any = null;
-let GestureDetector: any = null;
-let Gesture: any = null;
-// True only when the real native Reanimated module is loaded (not a stub).
-// Detected by checking for the internal worklet runtime marker that stubs lack.
-let reanimatedIsNative = false;
-// True only when the real react-native-gesture-handler is loaded (not a stub).
-// Detected by checking that Gesture.Pan() returns an object with an .onUpdate method.
-// The stub returns a plain {} with no methods.
-let gestureHandlerIsNative = false;
-
-if (Platform.OS !== 'web') {
-  try {
-    const Reanimated = require('react-native-reanimated');
-    useSharedValue = Reanimated.useSharedValue;
-    useAnimatedStyle = Reanimated.useAnimatedStyle;
-    withSpring = Reanimated.withSpring;
-    runOnJS = Reanimated.runOnJS;
-    AnimatedImage = Reanimated.default?.createAnimatedComponent
-      ? Reanimated.default.createAnimatedComponent(require('react-native').Image)
-      : null;
-    // Detect real Reanimated vs stub: real module exports `makeShareable`
-    // and has the global worklet runtime; stubs do not.
-    reanimatedIsNative = typeof Reanimated.makeShareable === 'function';
-  } catch {}
-  try {
-    const GH = require('react-native-gesture-handler');
-    GestureDetector = GH.GestureDetector;
-    Gesture = GH.Gesture;
-    // Real gesture-handler's Gesture.Pan() returns an object with .onUpdate method.
-    // The stub returns a plain {} with no methods — guard against that.
-    const testGesture = GH.Gesture?.Pan?.();
-    gestureHandlerIsNative = typeof testGesture?.onUpdate === 'function';
-  } catch {}
-}
 
 // ─── AsyncStorage helpers ─────────────────────────────────────────────────────
 
@@ -110,121 +70,116 @@ interface ZoomablePhotoProps {
   isDark: boolean;
 }
 
-// ─── ZoomablePhoto (native) ───────────────────────────────────────────────────
-// Defined only when gesture/reanimated are available so hooks are always called
-// unconditionally inside this component.
+function ZoomablePhoto({ uri, photoId, width, height }: ZoomablePhotoProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
-function ZoomablePhotoNative({ uri, photoId, width, height }: ZoomablePhotoProps) {
-  const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const savedTranslateX = useSharedValue(0);
-  const savedTranslateY = useSharedValue(0);
+  // Track raw values for math
+  const scaleRef = useRef(1);
+  const txRef = useRef(0);
+  const tyRef = useRef(0);
+
+  // For pinch: track initial distance between 2 touches
+  const initialDistance = useRef<number | null>(null);
+  const initialScale = useRef(1);
+
+  // For pan: track initial touch centroid
+  const initialTouchX = useRef(0);
+  const initialTouchY = useRef(0);
+  const initialTxRef = useRef(0);
+  const initialTyRef = useRef(0);
 
   useEffect(() => {
     loadPhotoTransform(photoId).then((saved) => {
       if (saved) {
-        scale.value = saved.scale;
-        savedScale.value = saved.scale;
-        translateX.value = saved.translateX;
-        translateY.value = saved.translateY;
-        savedTranslateX.value = saved.translateX;
-        savedTranslateY.value = saved.translateY;
+        scaleRef.current = saved.scale;
+        txRef.current = saved.translateX;
+        tyRef.current = saved.translateY;
+        scale.setValue(saved.scale);
+        translateX.setValue(saved.translateX);
+        translateY.setValue(saved.translateY);
         console.log('[ZoomablePhoto] Restored transform for', photoId, saved);
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoId]);
 
-  const saveTransform = (s: number, tx: number, ty: number) => {
-    console.log('[ZoomablePhoto] Saving transform for', photoId, { scale: s, translateX: tx, translateY: ty });
-    savePhotoTransform(photoId, s, tx, ty);
-  };
-  const jsSave = runOnJS(saveTransform);
-
-  const pinchGesture = Gesture.Pinch()
-    .onUpdate((e: any) => {
-      const newScale = Math.min(4.0, Math.max(1.0, savedScale.value * e.scale));
-      scale.value = newScale;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2) {
+          const dx = touches[1].pageX - touches[0].pageX;
+          const dy = touches[1].pageY - touches[0].pageY;
+          initialDistance.current = Math.sqrt(dx * dx + dy * dy);
+          initialScale.current = scaleRef.current;
+          initialTouchX.current = (touches[0].pageX + touches[1].pageX) / 2;
+          initialTouchY.current = (touches[0].pageY + touches[1].pageY) / 2;
+        } else {
+          initialTouchX.current = touches[0].pageX;
+          initialTouchY.current = touches[0].pageY;
+        }
+        initialTxRef.current = txRef.current;
+        initialTyRef.current = tyRef.current;
+        console.log('[ZoomablePhoto] Gesture started, touches:', touches.length, 'photoId:', photoId);
+      },
+      onPanResponderMove: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2 && initialDistance.current !== null) {
+          const dx = touches[1].pageX - touches[0].pageX;
+          const dy = touches[1].pageY - touches[0].pageY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const newScale = Math.min(4.0, Math.max(1.0, initialScale.current * (dist / initialDistance.current)));
+          scaleRef.current = newScale;
+          scale.setValue(newScale);
+          const cx = (touches[0].pageX + touches[1].pageX) / 2;
+          const cy = (touches[0].pageY + touches[1].pageY) / 2;
+          const newTx = initialTxRef.current + (cx - initialTouchX.current);
+          const newTy = initialTyRef.current + (cy - initialTouchY.current);
+          txRef.current = newTx;
+          tyRef.current = newTy;
+          translateX.setValue(newTx);
+          translateY.setValue(newTy);
+        } else if (touches.length === 1) {
+          const newTx = initialTxRef.current + (touches[0].pageX - initialTouchX.current);
+          const newTy = initialTyRef.current + (touches[0].pageY - initialTouchY.current);
+          txRef.current = newTx;
+          tyRef.current = newTy;
+          translateX.setValue(newTx);
+          translateY.setValue(newTy);
+        }
+      },
+      onPanResponderRelease: () => {
+        initialDistance.current = null;
+        console.log('[ZoomablePhoto] Gesture released, saving transform for', photoId, { scale: scaleRef.current, translateX: txRef.current, translateY: tyRef.current });
+        savePhotoTransform(photoId, scaleRef.current, txRef.current, tyRef.current);
+      },
+      onPanResponderTerminate: () => {
+        initialDistance.current = null;
+        console.log('[ZoomablePhoto] Gesture terminated, saving transform for', photoId, { scale: scaleRef.current, translateX: txRef.current, translateY: tyRef.current });
+        savePhotoTransform(photoId, scaleRef.current, txRef.current, tyRef.current);
+      },
     })
-    .onEnd((e: any) => {
-      const newScale = Math.min(4.0, Math.max(1.0, savedScale.value * e.scale));
-      scale.value = newScale;
-      savedScale.value = newScale;
-      jsSave(newScale, translateX.value, translateY.value);
-    });
-
-  const panGesture = Gesture.Pan()
-    .minPointers(1)
-    .maxPointers(2)
-    .onUpdate((e: any) => {
-      translateX.value = savedTranslateX.value + e.translationX;
-      translateY.value = savedTranslateY.value + e.translationY;
-    })
-    .onEnd((e: any) => {
-      const newTx = savedTranslateX.value + e.translationX;
-      const newTy = savedTranslateY.value + e.translationY;
-      translateX.value = newTx;
-      translateY.value = newTy;
-      savedTranslateX.value = newTx;
-      savedTranslateY.value = newTy;
-      jsSave(scale.value, newTx, newTy);
-    });
-
-  const composed = Gesture.Simultaneous(pinchGesture, panGesture);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
-
-  const Img = AnimatedImage || Image;
+  ).current;
 
   return (
-    <GestureDetector gesture={composed}>
-      <Img
+    <Animated.View
+      style={{ width, height, overflow: 'hidden' }}
+      {...panResponder.panHandlers}
+    >
+      <Animated.Image
         source={{ uri }}
-        style={[{ width, height }, animatedStyle]}
+        style={[
+          { width, height },
+          { transform: [{ translateX }, { translateY }, { scale }] },
+        ]}
         resizeMode="cover"
       />
-    </GestureDetector>
+    </Animated.View>
   );
-}
-
-// ─── ZoomablePhoto (web / fallback) ──────────────────────────────────────────
-
-function ZoomablePhotoWeb({ uri, width, height }: ZoomablePhotoProps) {
-  return (
-    <Image
-      source={{ uri }}
-      style={{ width, height }}
-      resizeMode="cover"
-    />
-  );
-}
-
-// ─── ZoomablePhoto (router) ───────────────────────────────────────────────────
-
-function ZoomablePhoto(props: ZoomablePhotoProps) {
-  // Use the native gesture+animation path only when the real Reanimated module
-  // is loaded (not the web/preview stub) AND all gesture handler APIs exist.
-  const isNative =
-    Platform.OS !== 'web' &&
-    reanimatedIsNative &&
-    gestureHandlerIsNative &&
-    useSharedValue !== null &&
-    useAnimatedStyle !== null &&
-    GestureDetector !== null &&
-    Gesture !== null;
-
-  if (isNative) {
-    return <ZoomablePhotoNative {...props} />;
-  }
-  return <ZoomablePhotoWeb {...props} />;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
