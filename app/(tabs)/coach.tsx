@@ -17,6 +17,7 @@ import {
   Animated,
   Easing,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -1117,9 +1118,10 @@ export default function CoachScreen() {
           </TouchableOpacity>
         ) : (
           <View style={styles.headerLeft}>
-            <View style={[styles.coachAvatar, { backgroundColor: colors.primary }]}>
-              <Text style={styles.coachAvatarEmoji}>💪</Text>
-            </View>
+            <Image
+              source={require('../../assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
+              style={styles.coachAvatarImage}
+            />
             <View>
               <Text style={[styles.headerTitle, { color: textColor }]}>Coach</Text>
             </View>
@@ -1160,8 +1162,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  coachAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  coachAvatarEmoji: { fontSize: 18 },
+  coachAvatarImage: { width: 36, height: 36, borderRadius: 18 },
   headerTitle: { ...typography.h3 },
   headerSub: { fontSize: 12, marginTop: 1 },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
