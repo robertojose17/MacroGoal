@@ -34,13 +34,26 @@ module.exports = {
   TapGestureHandler: TapGestureHandler,
   GestureDetector: GestureDetector,
   PinchGestureHandler: PinchGestureHandler,
-  Gesture: {
-    Pan: function() { return {}; },
-    Tap: function() { return {}; },
-    Simultaneous: function() { return {}; },
-    Race: function() { return {}; },
-    Exclusive: function() { return {}; },
-  },
+  Gesture: (function() {
+    function makeNoopGesture() {
+      var g = {};
+      ['onBegin','onStart','onUpdate','onEnd','onFinalize','onTouchesDown','onTouchesMove','onTouchesUp','onTouchesCancelled','enabled','shouldCancelWhenOutside','hitSlop','minPointers','maxPointers','minDistance','minVelocity','simultaneousWithExternalGesture','requireExternalGestureToFail','blocksExternalGesture','withRef','withTestId','manualActivation','activateAfterLongPress','runOnJS'].forEach(function(m) {
+        g[m] = function() { return g; };
+      });
+      return g;
+    }
+    return {
+      Pan: makeNoopGesture,
+      Pinch: makeNoopGesture,
+      Tap: makeNoopGesture,
+      LongPress: makeNoopGesture,
+      Rotation: makeNoopGesture,
+      Fling: makeNoopGesture,
+      Simultaneous: function() { return makeNoopGesture(); },
+      Race: function() { return makeNoopGesture(); },
+      Exclusive: function() { return makeNoopGesture(); },
+    };
+  })(),
   ScrollView: ScrollView,
   FlatList: FlatList,
   TouchableOpacity: TouchableOpacity,

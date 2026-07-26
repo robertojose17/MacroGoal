@@ -30,6 +30,10 @@ let Gesture: any = null;
 // True only when the real native Reanimated module is loaded (not a stub).
 // Detected by checking for the internal worklet runtime marker that stubs lack.
 let reanimatedIsNative = false;
+// True only when the real react-native-gesture-handler is loaded (not a stub).
+// Detected by checking that Gesture.Pan() returns an object with an .onUpdate method.
+// The stub returns a plain {} with no methods.
+let gestureHandlerIsNative = false;
 
 if (Platform.OS !== 'web') {
   try {
@@ -49,6 +53,10 @@ if (Platform.OS !== 'web') {
     const GH = require('react-native-gesture-handler');
     GestureDetector = GH.GestureDetector;
     Gesture = GH.Gesture;
+    // Real gesture-handler's Gesture.Pan() returns an object with .onUpdate method.
+    // The stub returns a plain {} with no methods — guard against that.
+    const testGesture = GH.Gesture?.Pan?.();
+    gestureHandlerIsNative = typeof testGesture?.onUpdate === 'function';
   } catch {}
 }
 
@@ -207,6 +215,7 @@ function ZoomablePhoto(props: ZoomablePhotoProps) {
   const isNative =
     Platform.OS !== 'web' &&
     reanimatedIsNative &&
+    gestureHandlerIsNative &&
     useSharedValue !== null &&
     useAnimatedStyle !== null &&
     GestureDetector !== null &&
