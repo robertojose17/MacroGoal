@@ -11,6 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
+import { ZoomablePhoto } from '@/components/ZoomablePhoto';
 
 export const PROGRESS_CARD_WIDTH = Dimensions.get('window').width;
 export const PROGRESS_CARD_HEIGHT = 640;
@@ -45,6 +46,11 @@ export interface ShareableProgressCardProps {
   username?: string | null;
   beforeTransform?: PhotoTransform | null;
   afterTransform?: PhotoTransform | null;
+  /** Photo IDs used as AsyncStorage keys for ZoomablePhoto (interactive mode only) */
+  beforePhotoId?: string | null;
+  afterPhotoId?: string | null;
+  /** When true, renders ZoomablePhoto (pinch/pan). When false (default), renders static Image with transform. */
+  interactive?: boolean;
 }
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -55,7 +61,22 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
-    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, consistencyScore, weightLost, username, beforeTransform, afterTransform },
+    {
+      beforePhoto,
+      afterPhoto,
+      beforeDate,
+      afterDate,
+      beforeWeight,
+      afterWeight,
+      consistencyScore,
+      weightLost,
+      username,
+      beforeTransform,
+      afterTransform,
+      beforePhotoId,
+      afterPhotoId,
+      interactive = false,
+    },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -63,6 +84,9 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     // useState for visual placeholder re-renders
     const [beforeLoadedState, setBeforeLoadedState] = useState(false);
     const [afterLoadedState, setAfterLoadedState] = useState(false);
+
+    // Measured dimensions for ZoomablePhoto (flex:1 containers need onLayout)
+    const [photoDimensions, setPhotoDimensions] = useState<{ width: number; height: number } | null>(null);
 
     const beforeTransformStyle = beforeTransform
       ? { transform: [{ scale: beforeTransform.scale }, { translateX: beforeTransform.translateX }, { translateY: beforeTransform.translateY }] }
@@ -135,6 +159,10 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
       },
     }), [beforePhoto, afterPhoto]);
 
+    // Determine whether to use ZoomablePhoto for each slot
+    const useZoomBefore = interactive && !!beforePhoto && !!beforePhotoId;
+    const useZoomAfter = interactive && !!afterPhoto && !!afterPhotoId;
+
     return (
       <CaptureWrapper
         ref={viewShotRef}
@@ -160,27 +188,46 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
           {/* ── PHOTOS ROW ── */}
           <View style={styles.photoRow}>
             {/* BEFORE */}
-            <View style={styles.photoContainer}>
-              {!beforeLoadedState && (
-                <View style={styles.photoPlaceholder}>
-                  <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
-                </View>
+            <View
+              style={styles.photoContainer}
+              onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+                if (width > 0 && height > 0) {
+                  setPhotoDimensions({ width, height });
+                }
+              }}
+            >
+              {useZoomBefore && photoDimensions ? (
+                <ZoomablePhoto
+                  uri={beforePhoto as string}
+                  photoId={beforePhotoId as string}
+                  width={photoDimensions.width}
+                  height={photoDimensions.height}
+                />
+              ) : (
+                <>
+                  {!beforeLoadedState && (
+                    <View style={styles.photoPlaceholder}>
+                      <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+                    </View>
+                  )}
+                  <Image
+                    source={resolveImageSource(beforePhoto)}
+                    style={[styles.photo, beforeTransformStyle]}
+                    resizeMode="cover"
+                    onLoad={() => {
+                      console.log('[ShareableProgressCard] Before photo loaded');
+                      beforeLoadedRef.current = true;
+                      setBeforeLoadedState(true);
+                    }}
+                    onError={() => {
+                      console.warn('[ShareableProgressCard] Before photo failed to load');
+                      beforeLoadedRef.current = true;
+                      setBeforeLoadedState(true);
+                    }}
+                  />
+                </>
               )}
-              <Image
-                source={resolveImageSource(beforePhoto)}
-                style={[styles.photo, beforeTransformStyle]}
-                resizeMode="cover"
-                onLoad={() => {
-                  console.log('[ShareableProgressCard] Before photo loaded');
-                  beforeLoadedRef.current = true;
-                  setBeforeLoadedState(true);
-                }}
-                onError={() => {
-                  console.warn('[ShareableProgressCard] Before photo failed to load');
-                  beforeLoadedRef.current = true;
-                  setBeforeLoadedState(true);
-                }}
-              />
             </View>
 
             {/* Divider between photos */}
@@ -188,26 +235,37 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 
             {/* AFTER */}
             <View style={styles.photoContainer}>
-              {!afterLoadedState && (
-                <View style={styles.photoPlaceholder}>
-                  <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
-                </View>
+              {useZoomAfter && photoDimensions ? (
+                <ZoomablePhoto
+                  uri={afterPhoto as string}
+                  photoId={afterPhotoId as string}
+                  width={photoDimensions.width}
+                  height={photoDimensions.height}
+                />
+              ) : (
+                <>
+                  {!afterLoadedState && (
+                    <View style={styles.photoPlaceholder}>
+                      <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+                    </View>
+                  )}
+                  <Image
+                    source={resolveImageSource(afterPhoto)}
+                    style={[styles.photo, afterTransformStyle]}
+                    resizeMode="cover"
+                    onLoad={() => {
+                      console.log('[ShareableProgressCard] After photo loaded');
+                      afterLoadedRef.current = true;
+                      setAfterLoadedState(true);
+                    }}
+                    onError={() => {
+                      console.warn('[ShareableProgressCard] After photo failed to load');
+                      afterLoadedRef.current = true;
+                      setAfterLoadedState(true);
+                    }}
+                  />
+                </>
               )}
-              <Image
-                source={resolveImageSource(afterPhoto)}
-                style={[styles.photo, afterTransformStyle]}
-                resizeMode="cover"
-                onLoad={() => {
-                  console.log('[ShareableProgressCard] After photo loaded');
-                  afterLoadedRef.current = true;
-                  setAfterLoadedState(true);
-                }}
-                onError={() => {
-                  console.warn('[ShareableProgressCard] After photo failed to load');
-                  afterLoadedRef.current = true;
-                  setAfterLoadedState(true);
-                }}
-              />
             </View>
           </View>
 

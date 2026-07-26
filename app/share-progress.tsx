@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
-  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -67,26 +66,20 @@ interface CardData {
   afterWeight?: number | null;
   beforeTransform?: PhotoTransform | null;
   afterTransform?: PhotoTransform | null;
+  beforePhotoId?: string | null;
+  afterPhotoId?: string | null;
 }
 
 export default function ShareProgressScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { width: screenWidth } = useWindowDimensions();
 
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [cardData, setCardData] = useState<CardData | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const viewShotRef = useRef<ShareableProgressCardHandle>(null);
-
-  // ─── Preview scale computation ────────────────────────────────────────────
-  // Available width = screenWidth - horizontal padding (spacing.md * 2 = 32)
-  const availableWidth = screenWidth - spacing.md * 2;
-
-  const progressScale = availableWidth / PROGRESS_CARD_WIDTH;
-  const progressPreviewHeight = PROGRESS_CARD_HEIGHT * progressScale;
 
   const calculateConsistencyScore = useCallback(async (userId: string, startDate: string, _proteinTarget: number): Promise<number> => {
     try {
@@ -578,6 +571,8 @@ export default function ShareProgressScreen() {
         afterWeight: afterWeightLbs,
         beforeTransform,
         afterTransform,
+        beforePhotoId: beforeEntry?.id ?? null,
+        afterPhotoId: afterEntry?.id ?? null,
       });
 
       setLoading(false);
@@ -734,42 +729,25 @@ export default function ShareProgressScreen() {
             />
           </View>
 
-          {/* On-screen scaled preview */}
+          {/* On-screen full-size interactive preview */}
           <View style={styles.previewCenterContainer}>
-            <View
-              style={[
-                styles.previewWrapper,
-                {
-                  width: PROGRESS_CARD_WIDTH * progressScale,
-                  height: progressPreviewHeight,
-                },
-              ]}
-            >
-              <View
-                style={{
-                  width: PROGRESS_CARD_WIDTH,
-                  height: PROGRESS_CARD_HEIGHT,
-                  transform: [{ scale: progressScale }],
-                  transformOrigin: 'top left',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                }}
-              >
-                <ShareableProgressCard
-                  beforePhoto={cardData.beforePhotoUrl}
-                  afterPhoto={cardData.afterPhotoUrl}
-                  beforeDate={cardData.beforeDateLabel}
-                  afterDate={cardData.afterDateLabel}
-                  beforeWeight={cardData.beforeWeight}
-                  afterWeight={cardData.afterWeight}
-                  consistencyScore={cardData.consistencyScore}
-                  weightLost={cardData.weightLost}
-                  username={username}
-                  beforeTransform={cardData.beforeTransform}
-                  afterTransform={cardData.afterTransform}
-                />
-              </View>
+            <View style={styles.previewWrapper}>
+              <ShareableProgressCard
+                beforePhoto={cardData.beforePhotoUrl}
+                afterPhoto={cardData.afterPhotoUrl}
+                beforeDate={cardData.beforeDateLabel}
+                afterDate={cardData.afterDateLabel}
+                beforeWeight={cardData.beforeWeight}
+                afterWeight={cardData.afterWeight}
+                consistencyScore={cardData.consistencyScore}
+                weightLost={cardData.weightLost}
+                username={username}
+                beforeTransform={cardData.beforeTransform}
+                afterTransform={cardData.afterTransform}
+                beforePhotoId={cardData.beforePhotoId}
+                afterPhotoId={cardData.afterPhotoId}
+                interactive={true}
+              />
             </View>
           </View>
         </>
@@ -884,9 +862,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   previewWrapper: {
+    width: PROGRESS_CARD_WIDTH,
+    height: PROGRESS_CARD_HEIGHT,
     overflow: 'hidden',
     borderRadius: borderRadius.xl,
-    boxShadow: '0px 8px 24px rgba(0,0,0,0.12)',
     elevation: 8,
   },
   // ── Username banner ───────────────────────────────────────────────────────
