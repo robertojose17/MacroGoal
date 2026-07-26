@@ -46,61 +46,21 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const QUICK_ACTION_CARDS = [
-  {
-    emoji: '📊',
-    title: 'Daily Check-in',
-    subtitle: 'How am I doing today?',
-    message: 'Give me my daily check-in for today',
-  },
-  {
-    emoji: '📅',
-    title: 'Weekly Review',
-    subtitle: 'Full week summary',
-    message: 'Give me my weekly progress review',
-  },
-  {
-    emoji: '🍽️',
-    title: 'What can I eat?',
-    subtitle: 'Remaining macros',
-    message: 'What can I eat with my remaining macros today?',
-  },
-  {
-    emoji: '💪',
-    title: 'Am I on track?',
-    subtitle: 'Weekly progress check',
-    message: 'Am I on track this week?',
-  },
-  {
-    emoji: '🔍',
-    title: 'Analyze patterns',
-    subtitle: 'Last 14 days',
-    message: 'Detect any patterns in my last 14 days',
-  },
-  {
-    emoji: '🏪',
-    title: 'Find at Store',
-    subtitle: 'Walmart macro picks',
-    message: 'What can I buy at Walmart that fits my macros?',
-  },
-  {
-    emoji: '🍔',
-    title: 'Restaurant Menu',
-    subtitle: 'Under 500 cal options',
-    message: "What can I order at McDonald's under 500 calories?",
-  },
-  {
-    emoji: '🧠',
-    title: 'My Profile',
-    subtitle: "Coach's memory",
-    message: 'What have you learned about me so far?',
-  },
+  { iosIcon: 'chart.bar.fill', androidIcon: 'bar_chart', title: 'Daily Check-in', subtitle: 'How am I doing today?', message: 'Give me my daily check-in for today' },
+  { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Weekly Review', subtitle: 'Full week summary', message: 'Give me my weekly progress review' },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'What can I eat?', subtitle: 'Remaining macros', message: 'What can I eat with my remaining macros today?' },
+  { iosIcon: 'target', androidIcon: 'track_changes', title: 'Am I on track?', subtitle: 'Weekly progress check', message: 'Am I on track this week?' },
+  { iosIcon: 'magnifyingglass', androidIcon: 'search', title: 'Analyze patterns', subtitle: 'Last 14 days', message: 'Detect any patterns in my last 14 days' },
+  { iosIcon: 'cart.fill', androidIcon: 'shopping_cart', title: 'Find at Store', subtitle: 'Walmart macro picks', message: 'What can I buy at Walmart that fits my macros?' },
+  { iosIcon: 'menucard.fill', androidIcon: 'menu_book', title: 'Restaurant Menu', subtitle: 'Under 500 cal options', message: "What can I order at McDonald's under 500 calories?" },
+  { iosIcon: 'brain', androidIcon: 'psychology', title: 'My Profile', subtitle: "Coach's memory", message: 'What have you learned about me so far?' },
 ];
 
 const CRAVING_CHIPS = [
-  'I want something sweet 🍫',
-  'High protein option 💪',
-  'Quick meal under 400 cal ⚡',
-  'I need a snack 🥜',
+  { label: 'I want something sweet', iosIcon: 'heart.fill', androidIcon: 'favorite', message: 'I want something sweet' },
+  { label: 'High protein option', iosIcon: 'bolt.fill', androidIcon: 'flash_on', message: 'High protein option' },
+  { label: 'Quick meal under 400 cal', iosIcon: 'timer', androidIcon: 'timer', message: 'Quick meal under 400 cal' },
+  { label: 'I need a snack', iosIcon: 'leaf.fill', androidIcon: 'eco', message: 'I need a snack' },
 ];
 
 // ── Store badge detection ────────────────────────────────────────────────────
@@ -338,13 +298,15 @@ function TypingIndicator({ isDark }: { isDark: boolean }) {
 
 // ── Quick Action Card ────────────────────────────────────────────────────────
 function QuickActionCard({
-  emoji,
+  iosIcon,
+  androidIcon,
   title,
   subtitle,
   onPress,
   isDark,
 }: {
-  emoji: string;
+  iosIcon: string;
+  androidIcon: string;
   title: string;
   subtitle: string;
   onPress: () => void;
@@ -362,7 +324,14 @@ function QuickActionCard({
       onPress={onPress}
       activeOpacity={0.75}
     >
-      <Text style={styles.quickCardEmoji}>{emoji}</Text>
+      <View style={[styles.quickCardIconWrap, { backgroundColor: colors.primary + '18' }]}>
+        <IconSymbol
+          ios_icon_name={iosIcon}
+          android_material_icon_name={androidIcon}
+          size={20}
+          color={colors.primary}
+        />
+      </View>
       <Text style={[styles.quickCardTitle, { color: isDark ? colors.textDark : colors.text }]}>
         {title}
       </Text>
@@ -840,9 +809,9 @@ export default function AICoachScreen() {
   );
 
   const handleCravingChip = useCallback(
-    (chip: string) => {
-      console.log('[AICoach] Craving chip tapped:', chip);
-      handleSend(chip);
+    (chip: { label: string; iosIcon: string; androidIcon: string; message: string }) => {
+      console.log('[AICoach] Craving chip tapped:', chip.label);
+      handleSend(chip.message);
     },
     [handleSend]
   );
@@ -1028,7 +997,8 @@ export default function AICoachScreen() {
                 {QUICK_ACTION_CARDS.map((card) => (
                   <QuickActionCard
                     key={card.title}
-                    emoji={card.emoji}
+                    iosIcon={card.iosIcon}
+                    androidIcon={card.androidIcon}
                     title={card.title}
                     subtitle={card.subtitle}
                     isDark={isDark}
@@ -1036,6 +1006,28 @@ export default function AICoachScreen() {
                   />
                 ))}
               </ScrollView>
+            </View>
+          )}
+
+          {/* ── Craving chips hub — welcome state only ── */}
+          {isOnlyWelcome && !loading && (
+            <View style={styles.cravingHubSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Quick questions
+              </Text>
+              <View style={styles.cravingHubRow}>
+                {CRAVING_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.label}
+                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => handleCravingChip(chip)}
+                    activeOpacity={0.75}
+                  >
+                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
+                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1157,7 +1149,7 @@ export default function AICoachScreen() {
             >
               {CRAVING_CHIPS.map((chip) => (
                 <TouchableOpacity
-                  key={chip}
+                  key={chip.label}
                   style={[
                     styles.cravingChip,
                     {
@@ -1168,8 +1160,9 @@ export default function AICoachScreen() {
                   onPress={() => handleCravingChip(chip)}
                   activeOpacity={0.7}
                 >
+                  <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={14} color={isDark ? colors.textDark : colors.text} />
                   <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
-                    {chip}
+                    {chip.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1328,8 +1321,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     alignItems: 'flex-start',
   },
-  quickCardEmoji: {
-    fontSize: 22,
+  quickCardIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 6,
   },
   quickCardTitle: {
@@ -1526,12 +1523,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cravingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderWidth: 1,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },
   cravingChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // ── Craving hub (welcome state) ──────────────────────────────────────────
+  cravingHubSection: {
+    marginBottom: spacing.lg,
+  },
+  cravingHubRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  cravingHubChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    elevation: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+  },
+  cravingHubChipText: {
     fontSize: 13,
     fontWeight: '500',
   },
