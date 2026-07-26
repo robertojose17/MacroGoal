@@ -1595,7 +1595,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    marginLeft: 4,
   },
   headerIconWrap: {
     width: 40,
@@ -1605,9 +1606,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerCoachImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   coachAvatarImage: {
     width: 28,
@@ -1617,7 +1620,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...typography.h3,
-    fontSize: 18,
+    fontSize: 17,
+    fontWeight: '700',
   },
   headerSubtitle: {
     fontSize: 12,
