@@ -1,381 +1,462 @@
 
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-} from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
-  Animated,
-  Easing,
-  ActivityIndicator,
+  Alert,
   Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
-import { useAICoach, type CoachMessage, type ActionProposal } from '@/hooks/useAICoach';
 
-// ─── Status badge config ──────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
-  'On Track': '#10B981',
-  'Low Adherence': '#F59E0B',
-  'Possible Plateau': '#EAB308',
-  'Insufficient Data': '#6B7280',
-  'Progressing Faster': '#3B82F6',
+type Confidence = 'high' | 'moderate' | 'low';
+type ProgressDirection = 'losing' | 'gaining' | 'stable' | 'insufficient_data';
+type InsightType =
+  | 'pattern_detected'
+  | 'positive_reinforcement'
+  | 'risk'
+  | 'missing_data'
+  | 'milestone'
+  | 'behavior_correlation';
+
+type CoachDashboard = {
+  greeting: string;
+  coach_focus: {
+    headline: string;
+    instruction: string;
+    why: string;
+    do_not_change: string;
+    next_review: string;
+    confidence: Confidence;
+  };
+  today_plan: {
+    summary: string;
+    biggest_opportunity: string;
+    cta_label: string;
+    cta_prompt: string;
+  };
+  weekly_execution: {
+    score: number;
+    score_label: string;
+    breakdown_summary: string;
+    vs_last_week: string;
+    what_drove_score: string;
+  };
+  progress_trend: {
+    direction: ProgressDirection;
+    weekly_rate_display: string;
+    vs_expected: string;
+    interpretation: string;
+    data_note: string;
+  };
+  recommendation: {
+    title: string;
+    what: string;
+    why: string;
+    current_value: string;
+    proposed_value: string;
+    expected_impact: string;
+    trial_duration: string;
+    review_date: string;
+    action_type: string;
+    proposed_numeric: number;
+    current_numeric: number;
+  } | null;
+  insight: {
+    type: InsightType;
+    title: string;
+    explanation: string;
+    evidence: string;
+    recommended_action: string;
+    cta_label: string;
+    cta_prompt: string;
+  } | null;
+  quick_actions: {
+    label: string;
+    ios_icon: string;
+    android_icon: string;
+    prompt: string;
+  }[];
+  computed: {
+    calories_goal: number;
+    calories_logged: number;
+    calories_remaining: number;
+    protein_goal: number;
+    protein_logged: number;
+    protein_remaining: number;
+    meals_logged_today: number;
+    score: number;
+    score_breakdown: {
+      calories: number;
+      protein: number;
+      steps: number;
+      logging: number;
+      weighins: number;
+    };
+    weekly_rate: number;
+    weight_unit: string;
+    weight_entries_last_14: number;
+    status: string;
+    confidence: string;
+    data_sufficient: boolean;
+    days_logged_last_7: number;
+  };
+  active_experiment: {
+    id: string;
+    variable: string;
+    previous_value: number;
+    new_value: number;
+    reason: string;
+    started_at: string;
+    review_at: string;
+    adherence_pct: number | null;
+  } | null;
+  recent_insights: {
+    id: string;
+    type: string;
+    title: string;
+    explanation: string;
+    status: string;
+    created_at: string;
+  }[];
+  generated_at: string;
 };
 
-function parseStatusLabel(text: string): string {
-  const match = text.match(/\[([^\]]+)\]/);
-  if (match) return match[1];
-  return 'Insufficient Data';
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CACHE_KEY = 'coach_dashboard_cache';
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+const STATUS_COLORS: Record<string, string> = {
+  on_track: '#10B981',
+  ahead: '#3B82F6',
+  behind: '#EF4444',
+  plateau: '#F59E0B',
+  low_adherence: '#F59E0B',
+  insufficient_data: '#6B7280',
+};
+
+const INSIGHT_TYPE_COLORS: Record<InsightType, string> = {
+  pattern_detected: '#8B5CF6',
+  positive_reinforcement: '#10B981',
+  risk: '#EF4444',
+  missing_data: '#6B7280',
+  milestone: '#F59E0B',
+  behavior_correlation: '#3B82F6',
+};
+
+const INSIGHT_TYPE_LABELS: Record<InsightType, string> = {
+  pattern_detected: 'Pattern',
+  positive_reinforcement: 'Win',
+  risk: 'Risk',
+  missing_data: 'Missing Data',
+  milestone: 'Milestone',
+  behavior_correlation: 'Correlation',
+};
+
+const CONFIDENCE_COLORS: Record<Confidence, string> = {
+  high: '#10B981',
+  moderate: '#F59E0B',
+  low: '#6B7280',
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
 }
 
-// ─── Markdown Cleaner ─────────────────────────────────────────────────────────
-
-function cleanMarkdown(text: string): string {
-  return text
-    // Remove ### headings — keep the text
-    .replace(/^#{1,6}\s+/gm, '')
-    // Remove **bold** — keep the text
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    // Remove *italic* — keep the text
-    .replace(/\*(.+?)\*/g, '$1')
-    // Remove bullet points (- item or * item at line start)
-    .replace(/^[*-]\s+/gm, '')
-    // Remove numbered list dots (1. item → item)
-    .replace(/^\d+\.\s+/gm, '')
-    // Remove horizontal rules
-    .replace(/^[-*_]{3,}$/gm, '')
-    // Remove blockquotes
-    .replace(/^>\s+/gm, '')
-    // Collapse 3+ newlines to 2
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+function getStatusColor(status: string): string {
+  const key = status.toLowerCase().replace(/\s+/g, '_');
+  return STATUS_COLORS[key] ?? '#6B7280';
 }
 
-// ─── Message Renderer ─────────────────────────────────────────────────────────
+function formatStatusLabel(status: string): string {
+  return status
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-type InlinePart = { bold: boolean; text: string };
+function formatVariableName(variable: string): string {
+  return variable
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-function parseInline(raw: string): InlinePart[] {
-  const parts: InlinePart[] = [];
-  const regex = /\*\*(.+?)\*\*/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(raw)) !== null) {
-    if (match.index > last) parts.push({ bold: false, text: raw.slice(last, match.index) });
-    parts.push({ bold: true, text: match[1] });
-    last = match.index + match[0].length;
+function calcExperimentProgress(startedAt: string, reviewAt: string): number {
+  const start = new Date(startedAt).getTime();
+  const end = new Date(reviewAt).getTime();
+  const now = Date.now();
+  if (end <= start) return 0;
+  return Math.min(Math.max((now - start) / (end - start), 0), 1);
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return iso;
   }
-  if (last < raw.length) parts.push({ bold: false, text: raw.slice(last) });
-  return parts;
 }
 
-function renderMessageContent(text: string, textColor: string, subColor: string): React.ReactNode {
-  const paragraphs = text.split('\n\n').filter(p => p.trim());
-  return (
-    <View style={{ gap: 8 }}>
-      {paragraphs.map((para, i) => {
-        const parts = parseInline(para.trim());
-        return (
-          <Text key={i} style={{ color: textColor, fontSize: 15, lineHeight: 22 }}>
-            {parts.map((part, j) => (
-              <Text key={j} style={part.bold ? { fontWeight: '700' } : undefined}>
-                {part.text}
-              </Text>
-            ))}
-          </Text>
-        );
-      })}
-    </View>
-  );
-}
+// ─── SkeletonBlock ────────────────────────────────────────────────────────────
 
-const mdStyles = StyleSheet.create({
-  bold: { fontWeight: '700' },
-});
-
-// ─── Typing Indicator ─────────────────────────────────────────────────────────
-
-function TypingIndicator({ isDark }: { isDark: boolean }) {
-  const dot1 = useRef(new Animated.Value(0)).current;
-  const dot2 = useRef(new Animated.Value(0)).current;
-  const dot3 = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animateDot = (dot: Animated.Value, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(dot, { toValue: -6, duration: 300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.delay(600),
-        ])
-      );
-    const a1 = animateDot(dot1, 0);
-    const a2 = animateDot(dot2, 150);
-    const a3 = animateDot(dot3, 300);
-    a1.start(); a2.start(); a3.start();
-    return () => { a1.stop(); a2.stop(); a3.stop(); };
-  }, [dot1, dot2, dot3]);
-
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-
-  const dotStyle = {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: subColor,
-    marginHorizontal: 3,
-  };
-
-  return (
-    <View style={typingStyles.wrapper}>
-      <View style={[typingStyles.bubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-        <Animated.View style={[dotStyle, { transform: [{ translateY: dot1 }] }]} />
-        <Animated.View style={[dotStyle, { transform: [{ translateY: dot2 }] }]} />
-        <Animated.View style={[dotStyle, { transform: [{ translateY: dot3 }] }]} />
-      </View>
-      <Text style={[typingStyles.analyzingText, { color: subColor }]}>Analyzing your data...</Text>
-    </View>
-  );
-}
-
-const typingStyles = StyleSheet.create({
-  wrapper: { alignSelf: 'flex-start', marginBottom: spacing.md },
-  bubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  analyzingText: { fontSize: 12, marginTop: 4, marginLeft: spacing.xs },
-});
-
-// ─── Circular Progress Ring ───────────────────────────────────────────────────
-
-function CircularProgress({ score, isDark }: { score: number; isDark: boolean }) {
-  const scoreColor = score >= 80 ? '#10B981' : score >= 60 ? '#EAB308' : score >= 40 ? '#F59E0B' : '#EF4444';
-  const size = 120;
-  const strokeWidth = 10;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const progress = Math.min(Math.max(score, 0), 100) / 100;
-
-  // Two-half-circle approach using Views
-  const rotation = progress * 360;
-  const bgColor = isDark ? colors.cardDark : colors.card;
-  const trackColor = isDark ? '#3A3C52' : '#E5E7EB';
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      {/* Track ring */}
-      <View style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: strokeWidth,
-        borderColor: trackColor,
-      }} />
-      {/* Progress arc — left half */}
-      <View style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: strokeWidth,
-        borderColor: 'transparent',
-        borderLeftColor: rotation > 180 ? scoreColor : 'transparent',
-        borderBottomColor: rotation > 90 ? scoreColor : 'transparent',
-        transform: [{ rotate: '0deg' }],
-      }} />
-      {/* Progress arc — right half */}
-      <View style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: strokeWidth,
-        borderColor: 'transparent',
-        borderRightColor: rotation > 0 ? scoreColor : 'transparent',
-        borderTopColor: rotation > 270 ? scoreColor : 'transparent',
-        transform: [{ rotate: `${Math.min(rotation, 180) - 180}deg` }],
-      }} />
-      {/* Score text */}
-      <View style={{ alignItems: 'center' }}>
-        <Text style={{ fontSize: 28, fontWeight: '700', color: scoreColor }}>{score}</Text>
-        <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontWeight: '500' }}>/ 100</Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Skeleton Block ───────────────────────────────────────────────────────────
-
-function SkeletonBlock({ width, height, isDark, style }: { width?: number | string; height: number; isDark: boolean; style?: object }) {
-  return (
-    <View style={[{
-      width: width ?? '100%',
-      height,
-      borderRadius: borderRadius.md,
-      backgroundColor: isDark ? '#3A3C52' : '#D4D6DA',
-      opacity: 0.4,
-    }, style]} />
-  );
-}
-
-// ─── Confirmation Sheet ───────────────────────────────────────────────────────
-
-function ConfirmationSheet({
-  action,
+function SkeletonBlock({
+  width,
+  height,
   isDark,
-  onConfirm,
-  onReject,
+  style,
 }: {
-  action: ActionProposal;
+  width?: number | string;
+  height: number;
   isDark: boolean;
-  onConfirm: () => void;
-  onReject: () => void;
+  style?: object;
 }) {
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  return (
+    <View
+      style={[
+        {
+          width: width ?? '100%',
+          height,
+          borderRadius: borderRadius.md,
+          backgroundColor: isDark ? '#3A3C52' : '#D4D6DA',
+          opacity: 0.4,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+// ─── MacroProgressBar ─────────────────────────────────────────────────────────
+
+function MacroProgressBar({
+  label,
+  logged,
+  goal,
+  remaining,
+  barColor,
+  isDark,
+}: {
+  label: string;
+  logged: number;
+  goal: number;
+  remaining: number;
+  barColor: string;
+  isDark: boolean;
+}) {
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const borderColor = isDark ? colors.borderDark : colors.border;
-
-  const actionType = action.proposal?.action_type ?? action.proposal?.goal_type ?? 'Update';
-  const currentVal = action.proposal?.current_value;
-  const proposedVal = action.proposal?.proposed_value;
-  const reason = action.proposal?.reason ?? '';
+  const trackColor = isDark ? '#3A3C52' : '#E5E7EB';
+  const safeGoal = goal > 0 ? goal : 1;
+  const pct = Math.min(logged / safeGoal, 1);
+  const pctDisplay = Math.round(pct * 100);
+  const remainingDisplay = Math.max(remaining, 0);
 
   return (
-    <View style={[confirmStyles.sheet, { backgroundColor: cardBg, borderTopColor: borderColor }]}>
-      <View style={confirmStyles.handle} />
-      <Text style={[confirmStyles.title, { color: textColor }]}>Coach Recommendation</Text>
-      <Text style={[confirmStyles.actionType, { color: colors.primary }]}>{String(actionType).replace(/_/g, ' ').toUpperCase()}</Text>
+    <View style={{ flex: 1 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{label}</Text>
+        <Text style={{ fontSize: 11, color: subColor }}>{pctDisplay}%</Text>
+      </View>
+      <View style={{ height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden' }}>
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: barColor, width: `${pctDisplay}%` }} />
+      </View>
+      <Text style={{ fontSize: 11, color: subColor, marginTop: 3 }}>
+        {logged}
+        {' / '}
+        {goal}
+        {' · '}
+        {remainingDisplay}
+        {' left'}
+      </Text>
+    </View>
+  );
+}
 
-      {(currentVal !== undefined || proposedVal !== undefined) && (
-        <View style={confirmStyles.valuesRow}>
-          {currentVal !== undefined && (
-            <View style={confirmStyles.valueBox}>
-              <Text style={[confirmStyles.valueLabel, { color: subColor }]}>Current</Text>
-              <Text style={[confirmStyles.valueNum, { color: textColor }]}>{String(currentVal)}</Text>
-            </View>
-          )}
-          <IconSymbol ios_icon_name="arrow.right" android_material_icon_name="arrow-forward" size={20} color={colors.primary} />
-          {proposedVal !== undefined && (
-            <View style={confirmStyles.valueBox}>
-              <Text style={[confirmStyles.valueLabel, { color: subColor }]}>Proposed</Text>
-              <Text style={[confirmStyles.valueNum, { color: '#10B981' }]}>{String(proposedVal)}</Text>
-            </View>
-          )}
+// ─── ScoreBreakdownRow ────────────────────────────────────────────────────────
+
+function ScoreBreakdownRow({
+  label,
+  pts,
+  color,
+  isDark,
+}: {
+  label: string;
+  pts: number;
+  color: string;
+  isDark: boolean;
+}) {
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+      <Text style={{ fontSize: 12, color: subColor, flex: 1 }}>{label}</Text>
+      <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{pts}pts</Text>
+    </View>
+  );
+}
+
+// ─── SectionLabel ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ text, isDark }: { text: string; isDark: boolean }) {
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  return (
+    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.8, color: subColor, marginBottom: spacing.sm }}>
+      {text}
+    </Text>
+  );
+}
+
+// ─── Card ─────────────────────────────────────────────────────────────────────
+
+function Card({
+  children,
+  isDark,
+  style,
+  onPress,
+}: {
+  children: React.ReactNode;
+  isDark: boolean;
+  style?: object;
+  onPress?: () => void;
+}) {
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const inner = (
+    <View
+      style={[
+        {
+          backgroundColor: cardBg,
+          borderRadius: 16,
+          padding: spacing.md,
+          borderWidth: 1,
+          borderColor,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: isDark ? 0.2 : 0.06,
+          shadowRadius: 8,
+          elevation: 2,
+          marginHorizontal: spacing.md,
+          marginBottom: spacing.md,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+        {inner}
+      </TouchableOpacity>
+    );
+  }
+  return inner;
+}
+
+// ─── SkeletonHub ──────────────────────────────────────────────────────────────
+
+function SkeletonHub({ isDark }: { isDark: boolean }) {
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const skCard = (children: React.ReactNode) => (
+    <View
+      style={{
+        backgroundColor: cardBg,
+        borderRadius: 16,
+        padding: spacing.md,
+        borderWidth: 1,
+        borderColor,
+        marginHorizontal: spacing.md,
+        marginBottom: spacing.md,
+      }}
+    >
+      {children}
+    </View>
+  );
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      {/* Greeting */}
+      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 8 }}>
+        <SkeletonBlock height={22} width="55%" isDark={isDark} />
+        <SkeletonBlock height={14} width="30%" isDark={isDark} />
+      </View>
+
+      {/* Coach Focus */}
+      {skCard(
+        <View style={{ gap: 10 }}>
+          <SkeletonBlock height={11} width="35%" isDark={isDark} />
+          <SkeletonBlock height={28} isDark={isDark} />
+          <SkeletonBlock height={18} width="80%" isDark={isDark} />
+          <SkeletonBlock height={14} isDark={isDark} />
         </View>
       )}
 
-      {reason ? (
-        <Text style={[confirmStyles.reason, { color: subColor }]}>{reason}</Text>
-      ) : null}
+      {/* Today's Plan */}
+      {skCard(
+        <View style={{ gap: 10 }}>
+          <SkeletonBlock height={11} width="30%" isDark={isDark} />
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <SkeletonBlock height={60} isDark={isDark} style={{ flex: 1 }} />
+            <SkeletonBlock height={60} isDark={isDark} style={{ flex: 1 }} />
+          </View>
+          <SkeletonBlock height={14} isDark={isDark} />
+          <SkeletonBlock height={40} isDark={isDark} />
+        </View>
+      )}
 
-      <View style={confirmStyles.buttonRow}>
-        <TouchableOpacity
-          style={[confirmStyles.rejectBtn, { borderColor }]}
-          onPress={() => {
-            console.log('[Coach] Action rejected, action_id:', action.action_id);
-            onReject();
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={[confirmStyles.rejectText, { color: textColor }]}>Reject</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={confirmStyles.confirmBtn}
-          onPress={() => {
-            console.log('[Coach] Action confirmed, action_id:', action.action_id);
-            onConfirm();
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={confirmStyles.confirmText}>Confirm</Text>
-        </TouchableOpacity>
+      {/* Score + Trend */}
+      <View style={{ flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm, marginBottom: spacing.md }}>
+        <View style={{ flex: 1, backgroundColor: cardBg, borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor, gap: 8 }}>
+          <SkeletonBlock height={11} width="70%" isDark={isDark} />
+          <SkeletonBlock height={40} width={60} isDark={isDark} />
+          <SkeletonBlock height={12} isDark={isDark} />
+          <SkeletonBlock height={12} isDark={isDark} />
+        </View>
+        <View style={{ flex: 1, backgroundColor: cardBg, borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor, gap: 8 }}>
+          <SkeletonBlock height={11} width="60%" isDark={isDark} />
+          <SkeletonBlock height={32} width={80} isDark={isDark} />
+          <SkeletonBlock height={12} isDark={isDark} />
+        </View>
       </View>
-    </View>
+
+      {/* Quick Actions */}
+      <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md, gap: 8 }}>
+        <SkeletonBlock height={11} width="30%" isDark={isDark} />
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonBlock key={i} height={72} width={88} isDark={isDark} style={{ borderRadius: 12 }} />
+          ))}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
-
-const confirmStyles = StyleSheet.create({
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    borderTopWidth: 1,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#D1D5DB',
-    alignSelf: 'center',
-    marginBottom: spacing.md,
-  },
-  title: { ...typography.h3, marginBottom: spacing.xs },
-  actionType: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: spacing.md },
-  valuesRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
-  valueBox: { alignItems: 'center', flex: 1 },
-  valueLabel: { fontSize: 12, marginBottom: 2 },
-  valueNum: { fontSize: 22, fontWeight: '700' },
-  reason: { ...typography.caption, lineHeight: 20, marginBottom: spacing.lg },
-  buttonRow: { flexDirection: 'row', gap: spacing.sm },
-  rejectBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  rejectText: { fontSize: 16, fontWeight: '600' },
-  confirmBtn: {
-    flex: 1,
-    backgroundColor: '#10B981',
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  confirmText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-});
-
-// ─── Quick Action Card ────────────────────────────────────────────────────────
-
-const QUICK_ACTIONS = [
-  { emoji: '📊', label: 'Daily Check-in', prompt: 'Give me my daily check-in — how am I doing today?' },
-  { emoji: '📅', label: 'Weekly Review', prompt: 'Give me my weekly review — what went well and what can I improve?' },
-  { emoji: '🍽️', label: 'What can I eat?', prompt: 'What can I eat right now that fits my remaining macros?' },
-  { emoji: '💪', label: 'Am I on track?', prompt: 'Am I on track to hit my goals this week?' },
-  { emoji: '🔍', label: 'Analyze patterns', prompt: 'Analyze my nutrition and weight patterns over the past 2 weeks' },
-  { emoji: '🧠', label: 'My Memory', prompt: null, route: '/coach-memory' as const },
-];
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -383,970 +464,744 @@ export default function CoachScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { prompt: incomingPrompt } = useLocalSearchParams<{ prompt?: string }>();
 
-  // ── Mode: 'hub' | 'chat' ──────────────────────────────────────────────────
-  const [mode, setMode] = useState<'hub' | 'chat'>('hub');
-
-  // ── Hub state ─────────────────────────────────────────────────────────────
-  const [assessmentLoading, setAssessmentLoading] = useState(true);
-  const [assessmentStatus, setAssessmentStatus] = useState('Insufficient Data');
-  const [assessmentPriority, setAssessmentPriority] = useState('');
-  const [assessmentFullText, setAssessmentFullText] = useState('');
-
-  const [scoreLoading, setScoreLoading] = useState(true);
-  const [weeklyScore, setWeeklyScore] = useState(0);
-  const [scoreBars, setScoreBars] = useState<{ label: string; pts: number; color: string }[]>([]);
-
-  const [pendingActions, setPendingActions] = useState<any[]>([]);
-  const [recentMessages, setRecentMessages] = useState<any[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [dashboard, setDashboard] = useState<CoachDashboard | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [weightUnit, setWeightUnit] = useState<string>('lb');
-
-  // ── Chat state ────────────────────────────────────────────────────────────
-  const [chatMessages, setChatMessages] = useState<CoachMessage[]>([]);
-  const [inputText, setInputText] = useState('');
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [focusExpanded, setFocusExpanded] = useState(false);
+  const [dismissedRecommendation, setDismissedRecommendation] = useState(false);
   const isMountedRef = useRef(true);
-  const { sendMessage, loading: coachLoading, pendingAction, clearPendingAction, confirmAction } = useAICoach({ weightUnit });
 
-  // ── Derived colors ────────────────────────────────────────────────────────
+  // ── Colors ────────────────────────────────────────────────────────────────
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const cardBg = isDark ? colors.cardDark : colors.card;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
+  // ── Load dashboard ────────────────────────────────────────────────────────
 
-  // Handle incoming prompt param
-  useEffect(() => {
-    if (incomingPrompt) {
-      console.log('[Coach] Incoming prompt param detected:', incomingPrompt.slice(0, 60));
-      switchToChat(incomingPrompt);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incomingPrompt]);
+  const loadDashboard = useCallback(async (showSkeleton = false) => {
+    console.log('[CoachHub] loadDashboard called, showSkeleton:', showSkeleton);
+    if (showSkeleton) setLoading(true);
+    setError(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('[Coach] Tab focused — refreshing hub data');
-      loadHubData();
-    }, [loadHubData])
-  );
-
-  // Scroll to bottom when chat messages change
-  useEffect(() => {
-    if (mode === 'chat') {
-      setTimeout(() => {
-        if (isMountedRef.current && scrollViewRef.current) {
-          try { scrollViewRef.current.scrollToEnd({ animated: true }); } catch (_) {}
-        }
-      }, 120);
-    }
-  }, [chatMessages.length, coachLoading, mode]);
-
-  // ── Hub data loading ──────────────────────────────────────────────────────
-
-  const loadHubData = useCallback(async () => {
-    console.log('[Coach] loadHubData: fetching user');
     try {
+      // Resolve weight unit
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      if (isMountedRef.current) setUserId(user.id);
+      if (!user) {
+        console.warn('[CoachHub] No authenticated user');
+        if (isMountedRef.current) setLoading(false);
+        return;
+      }
 
-      console.log('[Coach] loadHubData: user id =', user.id);
-
-      // Fetch preferred_units for weight display
       const { data: prefData } = await supabase
         .from('users')
         .select('preferred_units')
         .eq('id', user.id)
         .maybeSingle();
       const resolvedUnit = prefData?.preferred_units === 'metric' ? 'kg' : 'lb';
-      console.log('[Coach] loadHubData: preferred_units =', prefData?.preferred_units, '→ weightUnit =', resolvedUnit);
       if (isMountedRef.current) setWeightUnit(resolvedUnit);
 
-      // Parallel: pending actions + recent messages
-      const [pendingResult, messagesResult] = await Promise.all([
-        supabase
-          .from('coach_action_log')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('coach_messages')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('type', 'proactive')
-          .order('sent_at', { ascending: false })
-          .limit(3),
-      ]);
+      // Check cache
+      try {
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed: CoachDashboard = JSON.parse(cached);
+          const age = Date.now() - new Date(parsed.generated_at).getTime();
+          if (age < CACHE_TTL_MS) {
+            console.log('[CoachHub] Cache hit, age:', Math.round(age / 1000), 's');
+            if (isMountedRef.current) {
+              setDashboard(parsed);
+              setLoading(false);
+            }
+            // Still fetch fresh in background
+            fetchFreshDashboard(resolvedUnit);
+            return;
+          } else {
+            console.log('[CoachHub] Cache expired, age:', Math.round(age / 1000), 's');
+          }
+        }
+      } catch (cacheErr) {
+        console.warn('[CoachHub] Cache read error:', cacheErr);
+      }
 
-      if (!isMountedRef.current) return;
-
-      console.log('[Coach] loadHubData: pending actions =', pendingResult.data?.length ?? 0);
-      console.log('[Coach] loadHubData: recent messages =', messagesResult.data?.length ?? 0);
-
-      setPendingActions(pendingResult.data ?? []);
-      setRecentMessages(messagesResult.data ?? []);
-
-      // Load assessment + score in parallel (edge function calls)
-      loadAssessment(user.id, resolvedUnit);
-      loadWeeklyScore(user.id, resolvedUnit);
-    } catch (err) {
-      console.error('[Coach] loadHubData error:', err);
+      // No valid cache — fetch fresh and show skeleton
+      if (isMountedRef.current) setLoading(true);
+      await fetchFreshDashboard(resolvedUnit);
+    } catch (err: any) {
+      console.error('[CoachHub] loadDashboard error:', err?.message ?? err);
+      if (isMountedRef.current) {
+        setError('Couldn\'t load your coaching data');
+        setLoading(false);
+      }
     }
   }, []);
 
-  const loadAssessment = async (uid: string, unit: string) => {
-    console.log('[Coach] loadAssessment: invoking ai-coach for status check, weight_unit:', unit);
-    setAssessmentLoading(true);
+  const fetchFreshDashboard = async (unit: string) => {
+    console.log('[CoachHub] fetchFreshDashboard, weight_unit:', unit);
     try {
-      const { data, error } = await supabase.functions.invoke('ai-coach', {
-        body: {
-          messages: [{
-            role: 'user',
-            content: 'Give me a one-sentence status: am I on track? Start with my status label in brackets like [On Track] or [Low Adherence] then one sentence.',
-          }],
-          user_id: uid,
-          weight_unit: unit,
+      const { data: { session } } = await supabase.auth.getSession();
+      const jwt = session?.access_token;
+
+      console.log('[CoachHub] POST /functions/v1/get-coach-dashboard');
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-coach-dashboard`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwt ?? SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
         },
+        body: JSON.stringify({ weight_unit: unit }),
       });
 
-      if (!isMountedRef.current) return;
-
-      if (error) {
-        console.error('[Coach] loadAssessment error:', error);
-        return;
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[CoachHub] get-coach-dashboard HTTP error:', response.status, errText.slice(0, 200));
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const rawMessage: string = data?.message ?? '';
-      console.log('[Coach] loadAssessment response:', rawMessage.slice(0, 80));
-      const cleanMessage = cleanMarkdown(rawMessage);
+      const data: CoachDashboard = await response.json();
+      console.log('[CoachHub] Dashboard received, generated_at:', data.generated_at);
 
-      const status = parseStatusLabel(cleanMessage);
-      const priority = cleanMessage.replace(/\[[^\]]+\]\s*/, '').trim();
-
-      setAssessmentStatus(status);
-      setAssessmentPriority(priority);
-      setAssessmentFullText(cleanMessage);
-    } catch (err) {
-      console.error('[Coach] loadAssessment catch:', err);
-    } finally {
-      if (isMountedRef.current) setAssessmentLoading(false);
-    }
-  };
-
-  const loadWeeklyScore = async (uid: string, unit: string) => {
-    console.log('[Coach] loadWeeklyScore: invoking ai-coach for score, weight_unit:', unit);
-    setScoreLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-coach', {
-        body: {
-          tool_call: 'get_weekly_score',
-          user_id: uid,
-          weight_unit: unit,
-        },
-      });
-
-      if (!isMountedRef.current) return;
-
-      if (error) {
-        console.error('[Coach] loadWeeklyScore error:', error);
-        return;
-      }
-
-      const message: string = data?.message ?? '';
-      console.log('[Coach] loadWeeklyScore response:', message.slice(0, 120));
-
-      // Try to parse JSON from response
+      // Cache it
       try {
-        const jsonMatch = message.match(/\{[^}]+\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          const score = Number(parsed.score) || 0;
-          setWeeklyScore(score);
-          setScoreBars([
-            { label: 'Calories', pts: Number(parsed.calories) || 0, color: colors.calories },
-            { label: 'Protein', pts: Number(parsed.protein) || 0, color: colors.protein },
-            { label: 'Steps', pts: Number(parsed.steps) || 0, color: '#10B981' },
-            { label: 'Logging', pts: Number(parsed.logging) || 0, color: colors.primary },
-            { label: 'Weigh-ins', pts: Number(parsed.weighins) || 0, color: '#8B5CF6' },
-          ]);
-          console.log('[Coach] loadWeeklyScore parsed score:', score);
-        }
-      } catch (parseErr) {
-        console.warn('[Coach] loadWeeklyScore JSON parse failed:', parseErr);
+        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      } catch (cacheErr) {
+        console.warn('[CoachHub] Cache write error:', cacheErr);
       }
-    } catch (err) {
-      console.error('[Coach] loadWeeklyScore catch:', err);
-    } finally {
-      if (isMountedRef.current) setScoreLoading(false);
-    }
-  };
 
-  // ── Chat helpers ──────────────────────────────────────────────────────────
-
-  const switchToChat = useCallback((initialPrompt?: string) => {
-    console.log('[Coach] Switching to chat mode, initialPrompt:', initialPrompt?.slice(0, 60) ?? 'none');
-    setMode('chat');
-    if (initialPrompt) {
-      const userMsg: CoachMessage = { role: 'user', content: initialPrompt, timestamp: Date.now() };
-      setChatMessages([userMsg]);
-      sendChatMessage([userMsg]);
-    }
-  }, [sendChatMessage]);
-
-  const sendChatMessage = useCallback(async (msgs: CoachMessage[]) => {
-    console.log('[Coach] sendChatMessage: sending', msgs.length, 'messages');
-    try {
-      const reply = await sendMessage(msgs);
-      if (!isMountedRef.current) return;
-      if (reply) {
-        const assistantMsg: CoachMessage = { role: 'assistant', content: cleanMarkdown(reply), timestamp: Date.now() };
-        setChatMessages(prev => [...prev, assistantMsg]);
-        console.log('[Coach] sendChatMessage: reply received, length:', reply.length);
+      if (isMountedRef.current) {
+        setDashboard(data);
+        setLoading(false);
+        setError(null);
       }
     } catch (err: any) {
-      console.error('[Coach] sendChatMessage error:', err?.message);
-      if (!isMountedRef.current) return;
-      const errMsg: CoachMessage = {
-        role: 'assistant',
-        content: "Sorry, something went wrong. Please try again.",
-        timestamp: Date.now(),
-      };
-      setChatMessages(prev => [...prev, errMsg]);
-    }
-  }, [sendMessage]);
-
-  const handleSend = useCallback(() => {
-    const text = inputText.trim();
-    if (!text || coachLoading) return;
-    console.log('[Coach] Send button pressed, message:', text.slice(0, 60));
-    const userMsg: CoachMessage = { role: 'user', content: text, timestamp: Date.now() };
-    const newMessages = [...chatMessages, userMsg];
-    setChatMessages(newMessages);
-    setInputText('');
-    sendChatMessage(newMessages);
-  }, [inputText, coachLoading, chatMessages, sendChatMessage]);
-
-  const handleConfirmAction = useCallback(async () => {
-    if (!pendingAction) return;
-    console.log('[Coach] Confirming action:', pendingAction.action_id);
-    try {
-      const reply = await confirmAction(
-        pendingAction.action_id,
-        pendingAction.confirmation_token,
-        sendMessage,
-        chatMessages,
-      );
-      if (reply && isMountedRef.current) {
-        const assistantMsg: CoachMessage = { role: 'assistant', content: reply, timestamp: Date.now() };
-        setChatMessages(prev => [...prev, assistantMsg]);
+      console.error('[CoachHub] fetchFreshDashboard error:', err?.message ?? err);
+      if (isMountedRef.current) {
+        setError('Couldn\'t load your coaching data');
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('[Coach] confirmAction error:', err);
     }
-  }, [pendingAction, confirmAction, sendMessage, chatMessages]);
+  };
 
-  const handleRejectAction = useCallback(() => {
-    console.log('[Coach] Rejecting action:', pendingAction?.action_id);
-    clearPendingAction();
-    const rejectMsg: CoachMessage = { role: 'user', content: 'No thanks, I will keep my current settings.', timestamp: Date.now() };
-    const newMessages = [...chatMessages, rejectMsg];
-    setChatMessages(newMessages);
-    sendChatMessage(newMessages);
-  }, [pendingAction, clearPendingAction, chatMessages, sendChatMessage]);
+  useFocusEffect(
+    useCallback(() => {
+      isMountedRef.current = true;
+      console.log('[CoachHub] Tab focused — reloading dashboard');
+      setDismissedRecommendation(false);
+      loadDashboard(true);
+      return () => {
+        isMountedRef.current = false;
+      };
+    }, [loadDashboard])
+  );
 
-  // ── Render Hub ────────────────────────────────────────────────────────────
+  // ── Accept Recommendation ─────────────────────────────────────────────────
 
-  const renderHub = () => {
-    const statusColor = STATUS_COLORS[assessmentStatus] ?? '#6B7280';
+  const handleAcceptRecommendation = useCallback(async (rec: NonNullable<CoachDashboard['recommendation']>) => {
+    console.log('[CoachHub] Accept recommendation pressed, action_type:', rec.action_type, 'proposed_numeric:', rec.proposed_numeric);
+    try {
+      if (rec.action_type === 'update_goal') {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        console.log('[CoachHub] Updating goals table for user:', user.id);
+        // Deactivate current active goal
+        await supabase
+          .from('goals')
+          .update({ is_active: false })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        // Insert new goal
+        const { error: insertErr } = await supabase
+          .from('goals')
+          .insert({
+            user_id: user.id,
+            calories: rec.proposed_numeric,
+            is_active: true,
+            created_at: new Date().toISOString(),
+          });
+
+        if (insertErr) {
+          console.error('[CoachHub] Goal insert error:', insertErr.message);
+          Alert.alert('Error', 'Could not update your goal. Please try again.');
+          return;
+        }
+
+        console.log('[CoachHub] Goal updated successfully');
+      }
+
+      Alert.alert('Done!', 'Recommendation accepted. Your coach will track the results.');
+      setDismissedRecommendation(true);
+
+      // Invalidate cache and reload
+      await AsyncStorage.removeItem(CACHE_KEY);
+      loadDashboard(false);
+    } catch (err: any) {
+      console.error('[CoachHub] handleAcceptRecommendation error:', err?.message ?? err);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    }
+  }, [loadDashboard]);
+
+  // ── Navigate to chat ──────────────────────────────────────────────────────
+
+  const openChat = useCallback((prompt?: string) => {
+    if (prompt) {
+      console.log('[CoachHub] Opening chat with prompt:', prompt.slice(0, 60));
+      router.push(`/ai-coach?prompt=${encodeURIComponent(prompt)}`);
+    } else {
+      console.log('[CoachHub] Opening chat (no prompt)');
+      router.push('/ai-coach');
+    }
+  }, [router]);
+
+  // ── Render sections ───────────────────────────────────────────────────────
+
+  const renderGreeting = (d: CoachDashboard) => {
+    const statusColor = getStatusColor(d.computed.status);
+    const statusLabel = formatStatusLabel(d.computed.status);
+    const confidenceText = d.computed.confidence === 'high'
+      ? '(high confidence)'
+      : d.computed.confidence === 'moderate'
+        ? '(moderate confidence)'
+        : '(limited data)';
 
     return (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={hubStyles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 1. Today's Assessment Card */}
-        <View style={[hubStyles.card, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-          <Text style={[hubStyles.sectionLabel, { color: subColor }]}>TODAY'S ASSESSMENT</Text>
-          {assessmentLoading ? (
-            <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-              <SkeletonBlock height={24} width="40%" isDark={isDark} />
-              <SkeletonBlock height={16} isDark={isDark} />
-              <SkeletonBlock height={16} width="80%" isDark={isDark} />
-            </View>
-          ) : (
-            <>
-              <View style={[hubStyles.statusBadge, { backgroundColor: statusColor + '22' }]}>
-                <View style={[hubStyles.statusDot, { backgroundColor: statusColor }]} />
-                <Text style={[hubStyles.statusText, { color: statusColor }]}>{assessmentStatus}</Text>
-              </View>
-              {assessmentPriority ? (
-                <Text style={[hubStyles.priorityText, { color: textColor }]}>{assessmentPriority}</Text>
-              ) : null}
-              <TouchableOpacity
-                style={[hubStyles.viewAnalysisBtn, { borderColor: colors.primary }]}
-                onPress={() => {
-                  console.log('[Coach] View Full Analysis pressed');
-                  switchToChat('Give me my full assessment');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[hubStyles.viewAnalysisBtnText, { color: colors.primary }]}>View Full Analysis →</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* 2. Weekly Transformation Score */}
-        <View style={[hubStyles.card, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-          <Text style={[hubStyles.sectionLabel, { color: subColor }]}>WEEKLY TRANSFORMATION SCORE</Text>
-          {scoreLoading ? (
-            <View style={{ alignItems: 'center', paddingVertical: spacing.lg, gap: spacing.sm }}>
-              <SkeletonBlock height={120} width={120} isDark={isDark} style={{ borderRadius: 60 }} />
-              <SkeletonBlock height={14} width="60%" isDark={isDark} />
-            </View>
-          ) : (
-            <>
-              <View style={{ alignItems: 'center', marginVertical: spacing.md }}>
-                <CircularProgress score={weeklyScore} isDark={isDark} />
-              </View>
-              {scoreBars.length > 0 && (
-                <View style={hubStyles.scoreBarsRow}>
-                  {scoreBars.map((bar) => (
-                    <View key={bar.label} style={hubStyles.scoreBarItem}>
-                      <View style={[hubStyles.scoreBarDot, { backgroundColor: bar.color }]} />
-                      <Text style={[hubStyles.scoreBarLabel, { color: subColor }]}>{bar.label}</Text>
-                      <Text style={[hubStyles.scoreBarPts, { color: textColor }]}>{bar.pts}pts</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[Coach] Why this score? tapped');
-                  switchToChat('Explain my weekly transformation score in detail');
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[hubStyles.whyScoreText, { color: colors.primary }]}>Why this score? →</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* 3. Pending Actions (only if count > 0) */}
-        {pendingActions.length > 0 && (
-          <View style={[hubStyles.card, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-            <View style={hubStyles.pendingHeader}>
-              <Text style={[hubStyles.sectionLabel, { color: subColor }]}>PENDING ACTIONS</Text>
-              <View style={hubStyles.pendingBadge}>
-                <Text style={hubStyles.pendingBadgeText}>{pendingActions.length}</Text>
-              </View>
-            </View>
-            <Text style={[hubStyles.pendingSubtitle, { color: textColor }]}>
-              {pendingActions.length}
-              {' action'}
-              {pendingActions.length !== 1 ? 's' : ''}
-              {' need your approval'}
-            </Text>
-            {pendingActions.slice(0, 2).map((action: any) => {
-              const actionType = String(action.action_type ?? '').replace(/_/g, ' ');
-              const proposedVal = action.proposed_value;
-              return (
-                <View key={action.id} style={[hubStyles.pendingItem, { borderColor }]}>
-                  <Text style={[hubStyles.pendingItemType, { color: colors.primary }]}>{actionType}</Text>
-                  {proposedVal !== undefined && proposedVal !== null ? (
-                    <Text style={[hubStyles.pendingItemVal, { color: subColor }]}>
-                      {'→ '}
-                      {String(proposedVal)}
-                    </Text>
-                  ) : null}
-                </View>
-              );
-            })}
-            <TouchableOpacity
-              style={[hubStyles.reviewBtn, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                console.log('[Coach] Review pending actions pressed');
-                router.push('/coach-action-history');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={hubStyles.reviewBtnText}>Review</Text>
-            </TouchableOpacity>
+      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
+        <Text style={{ ...typography.h3, color: textColor, marginBottom: 6 }}>{d.greeting}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: statusColor + '22', borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 4 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: statusColor }} />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: statusColor }}>{statusLabel}</Text>
           </View>
-        )}
-
-        {/* 4. Quick Coach Actions */}
-        <View style={{ marginBottom: spacing.md }}>
-          <Text style={[hubStyles.sectionLabel, { color: subColor, paddingHorizontal: spacing.md, marginBottom: spacing.sm }]}>QUICK ACTIONS</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={hubStyles.quickActionsScroll}>
-            {QUICK_ACTIONS.map((action) => (
-              <TouchableOpacity
-                key={action.label}
-                style={[hubStyles.quickActionCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}
-                onPress={() => {
-                  console.log('[Coach] Quick action tapped:', action.label);
-                  if (action.route) {
-                    router.push(action.route);
-                  } else if (action.prompt) {
-                    switchToChat(action.prompt);
-                  }
-                }}
-                activeOpacity={0.75}
-              >
-                <Text style={hubStyles.quickActionEmoji}>{action.emoji}</Text>
-                <Text style={[hubStyles.quickActionLabel, { color: textColor }]}>{action.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <Text style={{ fontSize: 12, color: subColor }}>{confidenceText}</Text>
         </View>
-
-        {/* 5. Recent Coach Insights */}
-        {recentMessages.length > 0 && (
-          <View style={{ marginBottom: spacing.md }}>
-            <Text style={[hubStyles.sectionLabel, { color: subColor, paddingHorizontal: spacing.md, marginBottom: spacing.sm }]}>RECENT INSIGHTS</Text>
-            {recentMessages.map((msg: any) => {
-              const preview = String(msg.content ?? '').slice(0, 100);
-              const sentAt = msg.sent_at ? new Date(msg.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-              return (
-                <TouchableOpacity
-                  key={msg.id}
-                  style={[hubStyles.insightCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}
-                  onPress={() => {
-                    console.log('[Coach] Recent insight tapped, id:', msg.id);
-                    switchToChat(msg.content);
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <View style={hubStyles.insightRow}>
-                    <Text style={[hubStyles.insightPreview, { color: textColor }]}>
-                      {preview}
-                      {String(msg.content ?? '').length > 100 ? '…' : ''}
-                    </Text>
-                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={subColor} />
-                  </View>
-                  {sentAt ? (
-                    <Text style={[hubStyles.insightDate, { color: subColor }]}>{sentAt}</Text>
-                  ) : null}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {/* 6. Coach Settings Row */}
-        <View style={[hubStyles.card, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-          <Text style={[hubStyles.sectionLabel, { color: subColor, marginBottom: spacing.sm }]}>COACH SETTINGS</Text>
-          <View style={hubStyles.settingsRow}>
-            {[
-              { label: 'Memory', icon: 'brain.head.profile', route: '/coach-memory' as const },
-              { label: 'Permissions', icon: 'lock.shield', route: '/coach-permissions' as const },
-              { label: 'History', icon: 'clock.arrow.circlepath', route: '/coach-action-history' as const },
-            ].map((item) => (
-              <TouchableOpacity
-                key={item.label}
-                style={[hubStyles.settingsItem, { borderColor }]}
-                onPress={() => {
-                  console.log('[Coach] Settings item pressed:', item.label);
-                  router.push(item.route);
-                }}
-                activeOpacity={0.75}
-              >
-                <IconSymbol ios_icon_name={item.icon} android_material_icon_name="settings" size={20} color={colors.primary} />
-                <Text style={[hubStyles.settingsLabel, { color: textColor }]}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      </View>
     );
   };
 
-  // ── Chat suggestion chips ─────────────────────────────────────────────────
-
-  const QUICK_REPLY_CHIPS = [
-    { label: '🍫 I want something sweet' },
-    { label: '🍗 High-protein option' },
-    { label: '⚡ Quick meal idea' },
-    { label: '📊 How am I doing?' },
-    { label: '🔄 What should I eat now?' },
-  ];
-
-  const EMPTY_SUGGESTIONS = [
-    { label: '📋 Daily check-in', prompt: 'Give me my full daily check-in with remaining macros, steps, and today\'s priority.' },
-    { label: '📈 Explain my progress', prompt: 'Analyze my weight trend and tell me if I\'m on track toward my goal.' },
-    { label: '🍽️ What should I eat?', prompt: 'What should I eat for my next meal based on my remaining macros today?' },
-    { label: '🎯 Am I on track?', prompt: 'Am I on track this week? Give me a full assessment with evidence.' },
-  ];
-
-  const handleChipPress = useCallback((chipLabel: string) => {
-    console.log('[Coach] Quick-reply chip tapped:', chipLabel);
-    const userMsg: CoachMessage = { role: 'user', content: chipLabel, timestamp: Date.now() };
-    const newMessages = [...chatMessages, userMsg];
-    setChatMessages(newMessages);
-    sendChatMessage(newMessages);
-  }, [chatMessages, sendChatMessage]);
-
-  // ── Render Chat ───────────────────────────────────────────────────────────
-
-  const renderChat = () => {
-    const canSend = inputText.trim().length > 0 && !coachLoading;
-    const sendBtnBg = canSend ? colors.primary : (isDark ? colors.borderDark : colors.border);
-    const hasMessages = chatMessages.length > 0;
+  const renderCoachFocus = (d: CoachDashboard) => {
+    const conf = d.coach_focus.confidence;
+    const confColor = CONFIDENCE_COLORS[conf] ?? '#6B7280';
+    const confLabel = conf.charAt(0).toUpperCase() + conf.slice(1);
 
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={chatStyles.messagesContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Empty state */}
-          {!hasMessages && (
-            <View style={chatStyles.emptyState}>
-              <Text style={chatStyles.emptyChatEmoji}>🧠</Text>
-              <Text style={[chatStyles.emptyChatTitle, { color: textColor }]}>Your personal coach</Text>
-              <Text style={[chatStyles.emptyChatSub, { color: subColor }]}>
-                {"I've reviewed your nutrition, weight, and activity data. Ask me anything or tap a suggestion below."}
-              </Text>
-              <View style={chatStyles.suggestionsGrid}>
-                {EMPTY_SUGGESTIONS.map((s) => (
-                  <TouchableOpacity
-                    key={s.label}
-                    style={[chatStyles.suggestionBtn, { backgroundColor: cardBg, borderColor }]}
-                    onPress={() => {
-                      console.log('[Coach] Empty-state suggestion tapped:', s.label);
-                      switchToChat(s.prompt);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[chatStyles.suggestionBtnText, { color: textColor }]}>{s.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Messages */}
-          {chatMessages.map((msg, idx) => {
-            const isUser = msg.role === 'user';
-            const bubbleBg = isUser ? colors.primary : cardBg;
-            const bubbleTextColor = isUser ? '#FFFFFF' : textColor;
-            return (
-              <View
-                key={idx}
-                style={[
-                  chatStyles.messageWrapper,
-                  isUser ? chatStyles.userWrapper : chatStyles.assistantWrapper,
-                ]}
-              >
-                {!isUser && (
-                  <View style={[chatStyles.avatarSmall, { backgroundColor: colors.primary }]}>
-                    <Text style={chatStyles.avatarEmoji}>🧠</Text>
-                  </View>
-                )}
-                <View style={[chatStyles.bubble, { backgroundColor: bubbleBg }]}>
-                  {isUser
-                    ? <Text style={[chatStyles.bubbleText, { color: bubbleTextColor }]}>{msg.content}</Text>
-                    : renderMessageContent(msg.content, bubbleTextColor, isDark ? colors.textSecondaryDark : colors.textSecondary)
-                  }
-                </View>
-              </View>
-            );
-          })}
-
-          {coachLoading && <TypingIndicator isDark={isDark} />}
-        </ScrollView>
-
-        {/* Quick-reply chips — shown when chat has messages and not loading */}
-        {hasMessages && !coachLoading && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={[chatStyles.chipsScroll, { borderTopColor: borderColor }]}
-            contentContainerStyle={chatStyles.chipsContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {QUICK_REPLY_CHIPS.map((chip) => (
-              <TouchableOpacity
-                key={chip.label}
-                style={[chatStyles.chip, { backgroundColor: cardBg, borderColor }]}
-                onPress={() => handleChipPress(chip.label)}
-                activeOpacity={0.75}
-              >
-                <Text style={[chatStyles.chipText, { color: textColor }]}>{chip.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-
-        {/* Input bar */}
-        <View style={[chatStyles.inputContainer, { backgroundColor: cardBg, borderTopColor: borderColor }]}>
-          <TextInput
-            style={[chatStyles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, color: textColor }]}
-            placeholder="Ask your coach anything..."
-            placeholderTextColor={subColor}
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={600}
-            editable={!coachLoading}
-            returnKeyType="send"
-            onSubmitEditing={() => {
-              if (canSend) {
-                console.log('[Coach] Send via keyboard return key');
-                handleSend();
-              }
-            }}
-          />
-          <TouchableOpacity
-            style={[chatStyles.sendButton, { backgroundColor: sendBtnBg }]}
-            onPress={() => {
-              console.log('[Coach] Send button pressed');
-              handleSend();
-            }}
-            disabled={!canSend}
-            activeOpacity={0.8}
-          >
-            <IconSymbol ios_icon_name="arrow.up" android_material_icon_name="send" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+      <Card isDark={isDark} style={{ borderWidth: 2, borderColor: colors.primary + '40' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.xs }}>
+          <SectionLabel text="YOUR FOCUS TODAY" isDark={isDark} />
+          <View style={{ backgroundColor: confColor + '22', borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 3 }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: confColor }}>{confLabel}</Text>
+          </View>
         </View>
 
-        {/* Confirmation sheet overlay */}
-        {pendingAction && (
-          <ConfirmationSheet
-            action={pendingAction}
-            isDark={isDark}
-            onConfirm={handleConfirmAction}
-            onReject={handleRejectAction}
-          />
+        {!d.computed.data_sufficient && (
+          <View style={{ backgroundColor: '#F59E0B22', borderRadius: borderRadius.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+            <Text style={{ fontSize: 13, color: '#F59E0B', fontWeight: '600' }}>Keep logging to unlock personalized coaching</Text>
+            <Text style={{ fontSize: 12, color: subColor, marginTop: 2 }}>Log your meals and weight daily for the best insights.</Text>
+          </View>
         )}
-      </KeyboardAvoidingView>
+
+        <Text style={{ ...typography.h2, color: textColor, marginBottom: spacing.sm }}>{d.coach_focus.headline}</Text>
+        <Text style={{ fontSize: 15, fontWeight: '600', color: colors.primary, lineHeight: 22, marginBottom: spacing.sm }}>{d.coach_focus.instruction}</Text>
+
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[CoachHub] Coach Focus "Why?" toggled, expanded:', !focusExpanded);
+            setFocusExpanded((v) => !v);
+          }}
+          activeOpacity={0.7}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '600', color: subColor }}>Why?</Text>
+          <IconSymbol
+            ios_icon_name={focusExpanded ? 'chevron.up' : 'chevron.down'}
+            android_material_icon_name={focusExpanded ? 'expand-less' : 'expand-more'}
+            size={14}
+            color={subColor}
+          />
+        </TouchableOpacity>
+
+        {focusExpanded && (
+          <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>{d.coach_focus.why}</Text>
+            {d.coach_focus.do_not_change ? (
+              <View style={{ backgroundColor: isDark ? '#3A3C52' : '#F3F4F6', borderRadius: borderRadius.sm, padding: spacing.sm }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: subColor, marginBottom: 2 }}>DO NOT CHANGE</Text>
+                <Text style={{ fontSize: 13, color: textColor }}>{d.coach_focus.do_not_change}</Text>
+              </View>
+            ) : null}
+            {d.coach_focus.next_review ? (
+              <Text style={{ fontSize: 12, color: subColor }}>Next review: {d.coach_focus.next_review}</Text>
+            ) : null}
+          </View>
+        )}
+      </Card>
+    );
+  };
+
+  const renderTodayPlan = (d: CoachDashboard) => {
+    const c = d.computed;
+    return (
+      <Card isDark={isDark}>
+        <SectionLabel text="TODAY'S PLAN" isDark={isDark} />
+
+        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
+          <MacroProgressBar
+            label="Calories"
+            logged={c.calories_logged}
+            goal={c.calories_goal}
+            remaining={c.calories_remaining}
+            barColor={colors.calories}
+            isDark={isDark}
+          />
+          <MacroProgressBar
+            label="Protein"
+            logged={c.protein_logged}
+            goal={c.protein_goal}
+            remaining={c.protein_remaining}
+            barColor={colors.protein}
+            isDark={isDark}
+          />
+        </View>
+
+        <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: spacing.sm }}>{d.today_plan.summary}</Text>
+
+        {d.today_plan.biggest_opportunity ? (
+          <View style={{ backgroundColor: colors.primary + '18', borderRadius: borderRadius.sm, padding: spacing.sm, marginBottom: spacing.md }}>
+            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600', lineHeight: 18 }}>{d.today_plan.biggest_opportunity}</Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
+          onPress={() => {
+            console.log('[CoachHub] Today Plan CTA pressed:', d.today_plan.cta_label);
+            openChat(d.today_plan.cta_prompt);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{d.today_plan.cta_label}</Text>
+        </TouchableOpacity>
+      </Card>
+    );
+  };
+
+  const renderExecutionAndTrend = (d: CoachDashboard) => {
+    const score = d.weekly_execution.score;
+    const scoreColor = score >= 80 ? '#10B981' : score >= 60 ? '#F59E0B' : '#EF4444';
+    const breakdown = d.computed.score_breakdown;
+
+    const directionIcon = d.progress_trend.direction === 'losing'
+      ? '↓'
+      : d.progress_trend.direction === 'gaining'
+        ? '↑'
+        : '→';
+    const directionColor = d.progress_trend.direction === 'losing'
+      ? '#10B981'
+      : d.progress_trend.direction === 'gaining'
+        ? '#EF4444'
+        : '#F59E0B';
+
+    return (
+      <View style={{ flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm, marginBottom: spacing.md }}>
+        {/* Execution Score */}
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: cardBg,
+            borderRadius: 16,
+            padding: spacing.md,
+            borderWidth: 1,
+            borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: isDark ? 0.2 : 0.06,
+            shadowRadius: 8,
+            elevation: 2,
+          }}
+          onPress={() => {
+            console.log('[CoachHub] Execution Score card tapped');
+            openChat('Explain my weekly execution score in detail');
+          }}
+          activeOpacity={0.8}
+        >
+          <SectionLabel text="EXECUTION SCORE" isDark={isDark} />
+          <Text style={{ fontSize: 44, fontWeight: '800', color: scoreColor, lineHeight: 50 }}>{score}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: scoreColor, marginBottom: spacing.sm }}>{d.weekly_execution.score_label}</Text>
+
+          <ScoreBreakdownRow label="Calories" pts={breakdown.calories} color={colors.calories} isDark={isDark} />
+          <ScoreBreakdownRow label="Protein" pts={breakdown.protein} color={colors.protein} isDark={isDark} />
+          <ScoreBreakdownRow label="Steps" pts={breakdown.steps} color="#10B981" isDark={isDark} />
+          <ScoreBreakdownRow label="Logging" pts={breakdown.logging} color={colors.primary} isDark={isDark} />
+          <ScoreBreakdownRow label="Weigh-ins" pts={breakdown.weighins} color="#8B5CF6" isDark={isDark} />
+
+          {d.weekly_execution.vs_last_week ? (
+            <Text style={{ fontSize: 11, color: subColor, marginTop: spacing.xs }}>{d.weekly_execution.vs_last_week}</Text>
+          ) : null}
+        </TouchableOpacity>
+
+        {/* Progress Trend */}
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: cardBg,
+            borderRadius: 16,
+            padding: spacing.md,
+            borderWidth: 1,
+            borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: isDark ? 0.2 : 0.06,
+            shadowRadius: 8,
+            elevation: 2,
+          }}
+          onPress={() => {
+            console.log('[CoachHub] Progress Trend card tapped');
+            openChat('Analyze my weight trend and progress');
+          }}
+          activeOpacity={0.8}
+        >
+          <SectionLabel text="WEIGHT TREND" isDark={isDark} />
+          <Text style={{ fontSize: 36, fontWeight: '800', color: directionColor, lineHeight: 44 }}>{directionIcon}</Text>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: textColor, marginBottom: 4 }}>{d.progress_trend.weekly_rate_display}</Text>
+
+          {d.progress_trend.vs_expected ? (
+            <View style={{ backgroundColor: directionColor + '22', borderRadius: borderRadius.sm, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: spacing.sm }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: directionColor }}>{d.progress_trend.vs_expected}</Text>
+            </View>
+          ) : null}
+
+          <Text style={{ fontSize: 12, color: textColor, lineHeight: 17, marginBottom: spacing.xs }}>{d.progress_trend.interpretation}</Text>
+
+          {d.progress_trend.data_note ? (
+            <Text style={{ fontSize: 11, color: subColor, lineHeight: 15 }}>{d.progress_trend.data_note}</Text>
+          ) : null}
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderActiveExperiment = (exp: NonNullable<CoachDashboard['active_experiment']>) => {
+    const progress = calcExperimentProgress(exp.started_at, exp.review_at);
+    const pctDisplay = Math.round(progress * 100);
+    const trackColor = isDark ? '#3A3C52' : '#E5E7EB';
+    const varLabel = formatVariableName(exp.variable);
+    const reviewDate = formatDate(exp.review_at);
+
+    return (
+      <Card
+        isDark={isDark}
+        onPress={() => {
+          console.log('[CoachHub] Active Experiment card tapped, id:', exp.id);
+          openChat('How is my current experiment going?');
+        }}
+      >
+        <SectionLabel text="ACTIVE EXPERIMENT" isDark={isDark} />
+        <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, marginBottom: 4 }}>{varLabel}</Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: subColor }}>{exp.previous_value}</Text>
+          <IconSymbol ios_icon_name="arrow.right" android_material_icon_name="arrow-forward" size={16} color={colors.primary} />
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#10B981' }}>{exp.new_value}</Text>
+        </View>
+
+        {exp.reason ? (
+          <Text style={{ fontSize: 13, color: subColor, lineHeight: 18, marginBottom: spacing.sm }}>{exp.reason}</Text>
+        ) : null}
+
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden', marginBottom: 4 }}>
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.primary, width: `${pctDisplay}%` }} />
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 11, color: subColor }}>{pctDisplay}% complete</Text>
+          <Text style={{ fontSize: 11, color: subColor }}>Review: {reviewDate}</Text>
+        </View>
+      </Card>
+    );
+  };
+
+  const renderInsight = (insight: NonNullable<CoachDashboard['insight']>) => {
+    const typeColor = INSIGHT_TYPE_COLORS[insight.type] ?? '#6B7280';
+    const typeLabel = INSIGHT_TYPE_LABELS[insight.type] ?? insight.type;
+
+    return (
+      <Card isDark={isDark}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm }}>
+          <SectionLabel text="COACH INSIGHT" isDark={isDark} />
+          <View style={{ backgroundColor: typeColor + '22', borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 3 }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: typeColor }}>{typeLabel}</Text>
+          </View>
+        </View>
+
+        <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, marginBottom: spacing.xs }}>{insight.title}</Text>
+        <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: spacing.xs }}>{insight.explanation}</Text>
+
+        {insight.evidence ? (
+          <Text style={{ fontSize: 12, color: subColor, lineHeight: 17, marginBottom: spacing.md }}>{insight.evidence}</Text>
+        ) : null}
+
+        <TouchableOpacity
+          style={{ backgroundColor: typeColor, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
+          onPress={() => {
+            console.log('[CoachHub] Insight CTA pressed:', insight.cta_label);
+            openChat(insight.cta_prompt);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{insight.cta_label}</Text>
+        </TouchableOpacity>
+      </Card>
+    );
+  };
+
+  const renderRecommendation = (rec: NonNullable<CoachDashboard['recommendation']>) => {
+    if (dismissedRecommendation) return null;
+
+    return (
+      <Card isDark={isDark}>
+        <SectionLabel text="RECOMMENDED CHANGE" isDark={isDark} />
+        <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, marginBottom: 4 }}>{rec.title}</Text>
+        <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: spacing.sm }}>{rec.what}</Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm }}>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 11, color: subColor, marginBottom: 2 }}>Current</Text>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: textColor }}>{rec.current_value}</Text>
+          </View>
+          <IconSymbol ios_icon_name="arrow.right" android_material_icon_name="arrow-forward" size={18} color={colors.primary} />
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 11, color: subColor, marginBottom: 2 }}>Proposed</Text>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#10B981' }}>{rec.proposed_value}</Text>
+          </View>
+        </View>
+
+        {rec.expected_impact ? (
+          <View style={{ backgroundColor: '#10B98118', borderRadius: borderRadius.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+            <Text style={{ fontSize: 13, color: '#10B981', fontWeight: '600', lineHeight: 18 }}>{rec.expected_impact}</Text>
+          </View>
+        ) : null}
+
+        <View style={{ flexDirection: 'row', gap: 4, marginBottom: spacing.md }}>
+          {rec.trial_duration ? (
+            <Text style={{ fontSize: 12, color: subColor }}>Trial: {rec.trial_duration}</Text>
+          ) : null}
+          {rec.trial_duration && rec.review_date ? (
+            <Text style={{ fontSize: 12, color: subColor }}> · </Text>
+          ) : null}
+          {rec.review_date ? (
+            <Text style={{ fontSize: 12, color: subColor }}>Review: {rec.review_date}</Text>
+          ) : null}
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
+            onPress={() => {
+              console.log('[CoachHub] Accept recommendation pressed:', rec.title);
+              handleAcceptRecommendation(rec);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Accept</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{ flex: 1, borderWidth: 1, borderColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
+            onPress={() => {
+              console.log('[CoachHub] Ask Why pressed for recommendation:', rec.title);
+              openChat(`Why are you recommending ${rec.what}?`);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '700' }}>Ask Why</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{ paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => {
+              console.log('[CoachHub] Not Now pressed for recommendation:', rec.title);
+              setDismissedRecommendation(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: subColor, fontSize: 13, fontWeight: '600' }}>Not Now</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+    );
+  };
+
+  const renderQuickActions = (d: CoachDashboard) => {
+    const actions = d.quick_actions ?? [];
+    if (actions.length === 0) return null;
+
+    return (
+      <View style={{ marginBottom: spacing.md }}>
+        <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.8, color: subColor, paddingHorizontal: spacing.md, marginBottom: spacing.sm }}>
+          QUICK ACTIONS
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+          {actions.map((action, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={{
+                width: 96,
+                backgroundColor: cardBg,
+                borderRadius: 14,
+                padding: spacing.sm + 4,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 1,
+                gap: 6,
+              }}
+              onPress={() => {
+                console.log('[CoachHub] Quick action tapped:', action.label);
+                openChat(action.prompt);
+              }}
+              activeOpacity={0.75}
+            >
+              <IconSymbol
+                ios_icon_name={action.ios_icon}
+                android_material_icon_name={action.android_icon}
+                size={22}
+                color={colors.primary}
+              />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: textColor, textAlign: 'center', lineHeight: 15 }}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const renderSettingsRow = () => {
+    const items = [
+      { label: 'Memory', ios_icon: 'brain.head.profile', android_icon: 'psychology', route: '/coach-memory' as const },
+      { label: 'Permissions', ios_icon: 'lock.shield', android_icon: 'security', route: '/coach-permissions' as const },
+      { label: 'History', ios_icon: 'clock.arrow.circlepath', android_icon: 'history', route: '/coach-action-history' as const },
+    ];
+
+    return (
+      <Card isDark={isDark}>
+        <SectionLabel text="COACH SETTINGS" isDark={isDark} />
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          {items.map((item) => (
+            <TouchableOpacity
+              key={item.label}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor,
+                borderRadius: borderRadius.md,
+                paddingVertical: spacing.md,
+                alignItems: 'center',
+                gap: spacing.xs,
+              }}
+              onPress={() => {
+                console.log('[CoachHub] Settings item pressed:', item.label);
+                router.push(item.route);
+              }}
+              activeOpacity={0.75}
+            >
+              <IconSymbol ios_icon_name={item.ios_icon} android_material_icon_name={item.android_icon} size={20} color={colors.primary} />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Card>
     );
   };
 
   // ── Main render ───────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }} edges={['top']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: borderColor }]}>
-        {mode === 'chat' ? (
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => {
-              console.log('[Coach] Back to Hub pressed');
-              setMode('hub');
-              setChatMessages([]);
-              setInputText('');
-            }}
-            activeOpacity={0.7}
-          >
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={20} color={colors.primary} />
-            <Text style={[styles.backText, { color: colors.primary }]}>Hub</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.headerLeft}>
-            <Image
-              source={require('../../assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
-              style={styles.coachAvatarImage}
-            />
-            <View>
-              <Text style={[styles.headerTitle, { color: textColor }]}>Coach</Text>
-            </View>
-          </View>
-        )}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: spacing.md,
+          paddingTop: Platform.OS === 'android' ? spacing.lg : spacing.sm,
+          paddingBottom: spacing.sm,
+          borderBottomWidth: 1,
+          borderBottomColor: borderColor,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <Image
+            source={resolveImageSource(require('../../assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg'))}
+            style={{ width: 36, height: 36, borderRadius: 18 }}
+          />
+          <Text style={{ ...typography.h3, color: textColor }}>Coach</Text>
+        </View>
 
-        {mode === 'hub' && (
-          <TouchableOpacity
-            style={[styles.chatButton, { backgroundColor: colors.primary }]}
-            onPress={() => {
-              console.log('[Coach] Open chat button pressed from hub');
-              switchToChat();
-            }}
-            activeOpacity={0.8}
-          >
-            <IconSymbol ios_icon_name="bubble.left.and.bubble.right" android_material_icon_name="chat" size={16} color="#fff" />
-            <Text style={styles.chatButtonText}>Chat</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            backgroundColor: colors.primary,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            borderRadius: borderRadius.full,
+          }}
+          onPress={() => {
+            console.log('[CoachHub] Chat button pressed from header');
+            openChat();
+          }}
+          activeOpacity={0.8}
+        >
+          <IconSymbol ios_icon_name="bubble.left.and.bubble.right" android_material_icon_name="chat" size={15} color="#fff" />
+          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Chat</Text>
+        </TouchableOpacity>
       </View>
 
-      {mode === 'hub' ? renderHub() : renderChat()}
+      {/* Body */}
+      {loading ? (
+        <SkeletonHub isDark={isDark} />
+      ) : error ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
+          <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={40} color={subColor} />
+          <Text style={{ ...typography.h3, color: textColor, marginTop: spacing.md, textAlign: 'center' }}>Couldn't load your coaching data</Text>
+          <Text style={{ fontSize: 14, color: subColor, marginTop: spacing.sm, textAlign: 'center' }}>Check your connection and try again.</Text>
+          <TouchableOpacity
+            style={{ marginTop: spacing.lg, backgroundColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.xl }}
+            onPress={() => {
+              console.log('[CoachHub] Retry button pressed');
+              loadDashboard(true);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : dashboard ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderGreeting(dashboard)}
+          {renderCoachFocus(dashboard)}
+          {renderTodayPlan(dashboard)}
+          {renderExecutionAndTrend(dashboard)}
+          {dashboard.active_experiment ? renderActiveExperiment(dashboard.active_experiment) : null}
+          {dashboard.insight ? renderInsight(dashboard.insight) : null}
+          {dashboard.recommendation && !dismissedRecommendation ? renderRecommendation(dashboard.recommendation) : null}
+          {renderQuickActions(dashboard)}
+          {renderSettingsRow()}
+        </ScrollView>
+      ) : null}
     </SafeAreaView>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: Platform.OS === 'android' ? spacing.lg : spacing.sm,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  coachAvatarImage: { width: 36, height: 36, borderRadius: 18 },
-  headerTitle: { ...typography.h3 },
-  headerSub: { fontSize: 12, marginTop: 1 },
-  backButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  backText: { fontSize: 16, fontWeight: '600' },
-  chatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-  },
-  chatButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-});
-
-const hubStyles = StyleSheet.create({
-  scrollContent: { paddingBottom: spacing.xl },
-  card: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: spacing.sm,
-  },
-  // Assessment
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
-  },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 14, fontWeight: '700' },
-  priorityText: { ...typography.body, lineHeight: 22, marginBottom: spacing.md },
-  viewAnalysisBtn: {
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  viewAnalysisBtnText: { fontSize: 14, fontWeight: '600' },
-  // Score
-  scoreBarsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  scoreBarItem: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: '30%' },
-  scoreBarDot: { width: 8, height: 8, borderRadius: 4 },
-  scoreBarLabel: { fontSize: 12 },
-  scoreBarPts: { fontSize: 12, fontWeight: '600' },
-  whyScoreText: { fontSize: 14, fontWeight: '600', marginTop: spacing.xs },
-  // Pending
-  pendingHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
-  pendingBadge: {
-    backgroundColor: '#EF4444',
-    borderRadius: borderRadius.full,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  pendingBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  pendingSubtitle: { ...typography.body, marginBottom: spacing.sm },
-  pendingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    marginBottom: spacing.xs,
-  },
-  pendingItemType: { fontSize: 14, fontWeight: '600', textTransform: 'capitalize', flex: 1 },
-  pendingItemVal: { fontSize: 14 },
-  reviewBtn: {
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  reviewBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  // Quick actions
-  quickActionsScroll: { paddingHorizontal: spacing.md, gap: spacing.sm },
-  quickActionCard: {
-    width: 100,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  quickActionEmoji: { fontSize: 28, marginBottom: spacing.xs },
-  quickActionLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 16 },
-  // Insights
-  insightCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-  },
-  insightRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  insightPreview: { ...typography.caption, flex: 1, lineHeight: 20 },
-  insightDate: { fontSize: 11, marginTop: spacing.xs },
-  // Settings
-  settingsRow: { flexDirection: 'row', gap: spacing.sm },
-  settingsItem: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  settingsLabel: { fontSize: 12, fontWeight: '600' },
-});
-
-const chatStyles = StyleSheet.create({
-  messagesContent: { padding: spacing.md, paddingBottom: spacing.lg },
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  emptyChatEmoji: { fontSize: 48, marginBottom: spacing.md },
-  emptyChatTitle: { ...typography.h3, marginBottom: spacing.sm, textAlign: 'center' },
-  emptyChatSub: { ...typography.caption, textAlign: 'center', lineHeight: 20, marginBottom: spacing.lg },
-  suggestionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    justifyContent: 'center',
-    width: '100%',
-  },
-  suggestionBtn: {
-    width: '47%',
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  suggestionBtnText: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
-  // Messages
-  messageWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: spacing.md,
-    maxWidth: '85%',
-  },
-  userWrapper: { alignSelf: 'flex-end', flexDirection: 'row-reverse' },
-  assistantWrapper: { alignSelf: 'flex-start' },
-  structuredWrapper: { maxWidth: '100%', width: '100%' },
-  avatarSmall: {
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: spacing.xs, marginBottom: 2, flexShrink: 0,
-  },
-  avatarEmoji: { fontSize: 14 },
-  bubble: {
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  structuredBubble: {
-    borderWidth: 1,
-    shadowOpacity: 0,
-    elevation: 0,
-    flex: 1,
-  },
-  bubbleText: { ...typography.body, lineHeight: 21 },
-  // Quick-reply chips
-  chipsScroll: {
-    borderTopWidth: 1,
-    maxHeight: 52,
-  },
-  chipsContent: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-  },
-  chipText: { fontSize: 13, fontWeight: '500' },
-  // Input
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: spacing.md,
-    borderTopWidth: 1,
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    maxHeight: 100,
-    ...typography.body,
-  },
-  sendButton: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-});
