@@ -27,6 +27,12 @@ export interface ShareableProgressCardHandle {
   captureWhenReady: () => Promise<string>;
 }
 
+export interface PhotoTransform {
+  scale: number;
+  translateX: number;
+  translateY: number;
+}
+
 export interface ShareableProgressCardProps {
   beforePhoto?: string | null;
   afterPhoto?: string | null;
@@ -37,6 +43,8 @@ export interface ShareableProgressCardProps {
   consistencyScore?: number;
   weightLost?: number;
   username?: string | null;
+  beforeTransform?: PhotoTransform | null;
+  afterTransform?: PhotoTransform | null;
 }
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -47,7 +55,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
-    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, consistencyScore, weightLost, username },
+    { beforePhoto, afterPhoto, beforeDate, afterDate, beforeWeight, afterWeight, consistencyScore, weightLost, username, beforeTransform, afterTransform },
     ref
   ) {
     const viewShotRef = useRef<any>(null);
@@ -55,6 +63,13 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     // useState for visual placeholder re-renders
     const [beforeLoadedState, setBeforeLoadedState] = useState(false);
     const [afterLoadedState, setAfterLoadedState] = useState(false);
+
+    const beforeTransformStyle = beforeTransform
+      ? { transform: [{ scale: beforeTransform.scale }, { translateX: beforeTransform.translateX }, { translateY: beforeTransform.translateY }] }
+      : {};
+    const afterTransformStyle = afterTransform
+      ? { transform: [{ scale: afterTransform.scale }, { translateX: afterTransform.translateX }, { translateY: afterTransform.translateY }] }
+      : {};
 
     // useRef for stale-closure-free capture polling
     const beforeLoadedRef = useRef(false);
@@ -153,7 +168,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
               )}
               <Image
                 source={resolveImageSource(beforePhoto)}
-                style={styles.photo}
+                style={[styles.photo, beforeTransformStyle]}
                 resizeMode="cover"
                 onLoad={() => {
                   console.log('[ShareableProgressCard] Before photo loaded');
@@ -180,7 +195,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
               )}
               <Image
                 source={resolveImageSource(afterPhoto)}
-                style={styles.photo}
+                style={[styles.photo, afterTransformStyle]}
                 resizeMode="cover"
                 onLoad={() => {
                   console.log('[ShareableProgressCard] After photo loaded');

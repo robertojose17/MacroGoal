@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import ShareableProgressCard, { ShareableProgressCardHandle, PROGRESS_CARD_WIDTH, PROGRESS_CARD_HEIGHT } from '@/components/ShareableProgressCard';
+import ShareableProgressCard, { ShareableProgressCardHandle, PROGRESS_CARD_WIDTH, PROGRESS_CARD_HEIGHT, PhotoTransform } from '@/components/ShareableProgressCard';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { TouchableOpacity } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -30,6 +30,25 @@ let ViewShot: any = null;
 if (Platform.OS !== 'web') {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   try { ViewShot = require('react-native-view-shot').default; } catch {}
+}
+
+async function loadPhotoTransform(photoId: string | null): Promise<PhotoTransform | null> {
+  if (!photoId) return null;
+  try {
+    const [s, tx, ty] = await Promise.all([
+      AsyncStorage.getItem(`@photoTransform.${photoId}.scale`),
+      AsyncStorage.getItem(`@photoTransform.${photoId}.translateX`),
+      AsyncStorage.getItem(`@photoTransform.${photoId}.translateY`),
+    ]);
+    if (!s) return null;
+    return {
+      scale: parseFloat(s),
+      translateX: parseFloat(tx ?? '0'),
+      translateY: parseFloat(ty ?? '0'),
+    };
+  } catch {
+    return null;
+  }
 }
 
 interface CardData {
@@ -46,6 +65,8 @@ interface CardData {
   calorieDeficit?: number;
   beforeWeight?: number | null;
   afterWeight?: number | null;
+  beforeTransform?: PhotoTransform | null;
+  afterTransform?: PhotoTransform | null;
 }
 
 export default function ShareProgressScreen() {
@@ -458,6 +479,14 @@ export default function ShareProgressScreen() {
       const beforePhotoUrl: string | null = beforeEntry?.photo_url ?? null;
       const afterPhotoUrl: string | null = afterEntry?.photo_url ?? null;
 
+      // Load saved pinch/pan transforms for each photo
+      const [beforeTransform, afterTransform] = await Promise.all([
+        loadPhotoTransform(beforeEntry?.id ?? null),
+        loadPhotoTransform(afterEntry?.id ?? null),
+      ]);
+      console.log('[ShareProgress] Before transform:', beforeTransform);
+      console.log('[ShareProgress] After transform:', afterTransform);
+
       const formatDateLabel = (dateStr: string | null | undefined): string => {
         if (!dateStr) return '';
         // Handle both 'YYYY-MM-DD' and full ISO timestamps
@@ -547,6 +576,8 @@ export default function ShareProgressScreen() {
         calorieDeficit,
         beforeWeight: beforeWeightLbs,
         afterWeight: afterWeightLbs,
+        beforeTransform,
+        afterTransform,
       });
 
       setLoading(false);
@@ -698,6 +729,8 @@ export default function ShareProgressScreen() {
               consistencyScore={cardData.consistencyScore}
               weightLost={cardData.weightLost}
               username={username}
+              beforeTransform={cardData.beforeTransform}
+              afterTransform={cardData.afterTransform}
             />
           </View>
 
@@ -733,6 +766,8 @@ export default function ShareProgressScreen() {
                   consistencyScore={cardData.consistencyScore}
                   weightLost={cardData.weightLost}
                   username={username}
+                  beforeTransform={cardData.beforeTransform}
+                  afterTransform={cardData.afterTransform}
                 />
               </View>
             </View>

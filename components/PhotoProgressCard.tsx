@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,197 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
+
+// ─── Gesture / Reanimated (native only) ──────────────────────────────────────
+
+let Animated: any = null;
+let useSharedValue: any = null;
+let useAnimatedStyle: any = null;
+let useAnimatedGestureHandler: any = null;
+let runOnJS: any = null;
+let PinchGestureHandler: any = null;
+let PanGestureHandler: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const Reanimated = require('react-native-reanimated');
+    Animated = Reanimated.default?.View
+      ? Reanimated.default
+      : Reanimated;
+    useSharedValue = Reanimated.useSharedValue;
+    useAnimatedStyle = Reanimated.useAnimatedStyle;
+    useAnimatedGestureHandler = Reanimated.useAnimatedGestureHandler;
+    runOnJS = Reanimated.runOnJS;
+  } catch {}
+  try {
+    const GH = require('react-native-gesture-handler');
+    PinchGestureHandler = GH.PinchGestureHandler;
+    PanGestureHandler = GH.PanGestureHandler;
+  } catch {}
+}
+
+// ─── AsyncStorage helpers ─────────────────────────────────────────────────────
+
+async function savePhotoTransform(
+  photoId: string,
+  scale: number,
+  translateX: number,
+  translateY: number
+) {
+  try {
+    await Promise.all([
+      AsyncStorage.setItem(`@photoTransform.${photoId}.scale`, String(scale)),
+      AsyncStorage.setItem(`@photoTransform.${photoId}.translateX`, String(translateX)),
+      AsyncStorage.setItem(`@photoTransform.${photoId}.translateY`, String(translateY)),
+    ]);
+    console.log('[ZoomablePhoto] Transform saved for', photoId, { scale, translateX, translateY });
+  } catch (e) {
+    console.warn('[ZoomablePhoto] Failed to save transform for', photoId, e);
+  }
+}
+
+async function loadPhotoTransform(
+  photoId: string
+): Promise<{ scale: number; translateX: number; translateY: number } | null> {
+  try {
+    const [s, tx, ty] = await Promise.all([
+      AsyncStorage.getItem(`@photoTransform.${photoId}.scale`),
+      AsyncStorage.getItem(`@photoTransform.${photoId}.translateX`),
+      AsyncStorage.getItem(`@photoTransform.${photoId}.translateY`),
+    ]);
+    if (!s) return null;
+    return {
+      scale: parseFloat(s),
+      translateX: parseFloat(tx ?? '0'),
+      translateY: parseFloat(ty ?? '0'),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── ZoomablePhoto ────────────────────────────────────────────────────────────
+
+interface ZoomablePhotoProps {
+  uri: string;
+  photoId: string;
+  width: number;
+  height: number;
+  isDark: boolean;
+}
+
+// ─── ZoomablePhoto (native) ───────────────────────────────────────────────────
+// Defined only when gesture/reanimated are available so hooks are always called
+// unconditionally inside this component.
+
+function ZoomablePhotoNative({ uri, photoId, width, height }: ZoomablePhotoProps) {
+  const scale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  const lastScale = useRef(1);
+  const lastTranslateX = useRef(0);
+  const lastTranslateY = useRef(0);
+
+  useEffect(() => {
+    loadPhotoTransform(photoId).then((saved) => {
+      if (saved) {
+        scale.value = saved.scale;
+        translateX.value = saved.translateX;
+        translateY.value = saved.translateY;
+        lastScale.current = saved.scale;
+        lastTranslateX.current = saved.translateX;
+        lastTranslateY.current = saved.translateY;
+        console.log('[ZoomablePhoto] Restored transform for', photoId, saved);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoId]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
+
+  const jsSave = runOnJS(savePhotoTransform);
+
+  const pinchHandler = useAnimatedGestureHandler({
+    onActive: (event: any) => {
+      const newScale = Math.min(4.0, Math.max(1.0, lastScale.current * event.scale));
+      scale.value = newScale;
+    },
+    onEnd: (event: any) => {
+      const newScale = Math.min(4.0, Math.max(1.0, lastScale.current * event.scale));
+      scale.value = newScale;
+      lastScale.current = newScale;
+      jsSave(photoId, newScale, translateX.value, translateY.value);
+    },
+  });
+
+  const panHandler = useAnimatedGestureHandler({
+    onActive: (event: any) => {
+      translateX.value = lastTranslateX.current + event.translationX;
+      translateY.value = lastTranslateY.current + event.translationY;
+    },
+    onEnd: (event: any) => {
+      const newTx = lastTranslateX.current + event.translationX;
+      const newTy = lastTranslateY.current + event.translationY;
+      translateX.value = newTx;
+      translateY.value = newTy;
+      lastTranslateX.current = newTx;
+      lastTranslateY.current = newTy;
+      jsSave(photoId, scale.value, newTx, newTy);
+    },
+  });
+
+  const AnimatedImage = (Animated && Animated.Image) ? Animated.Image : Image;
+
+  return (
+    <PanGestureHandler onGestureEvent={panHandler} minPointers={1} maxPointers={1}>
+      <PinchGestureHandler onGestureEvent={pinchHandler}>
+        <AnimatedImage
+          source={{ uri }}
+          style={[{ width, height }, animatedStyle]}
+          resizeMode="cover"
+        />
+      </PinchGestureHandler>
+    </PanGestureHandler>
+  );
+}
+
+// ─── ZoomablePhoto (web / fallback) ──────────────────────────────────────────
+
+function ZoomablePhotoWeb({ uri, width, height }: ZoomablePhotoProps) {
+  return (
+    <Image
+      source={{ uri }}
+      style={{ width, height }}
+      resizeMode="cover"
+    />
+  );
+}
+
+// ─── ZoomablePhoto (router) ───────────────────────────────────────────────────
+
+function ZoomablePhoto(props: ZoomablePhotoProps) {
+  const isNative =
+    Platform.OS !== 'web' &&
+    useSharedValue !== null &&
+    useAnimatedStyle !== null &&
+    useAnimatedGestureHandler !== null &&
+    PinchGestureHandler !== null &&
+    PanGestureHandler !== null;
+
+  if (isNative) {
+    return <ZoomablePhotoNative {...props} />;
+  }
+  return <ZoomablePhotoWeb {...props} />;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CheckInPhoto {
   id: string;
@@ -276,7 +467,9 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
   const textColor = isDark ? colors.textDark : colors.text;
   const subtextColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
-  const photoHeight = Math.floor((Dimensions.get('window').width - spacing.md * 2) * 0.75);
+  const windowWidth = Dimensions.get('window').width;
+  const photoHeight = Math.floor((windowWidth - spacing.md * 2) * 0.75);
+  const photoWidth = (windowWidth - spacing.md * 2) / 2;
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const beforePhoto = photos.find((p) => p.id === beforeId) ?? null;
@@ -358,11 +551,13 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Single photo */}
       {singlePhoto && afterPhoto && (
         <View style={styles.photosRow}>
-          <View style={styles.photoWrapper}>
-            <Image
-              source={{ uri: afterPhoto.photo_url }}
-              style={[styles.photo, { width: '100%', height: photoHeight }]}
-              resizeMode="cover"
+          <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
+            <ZoomablePhoto
+              uri={afterPhoto.photo_url}
+              photoId={afterPhoto.id}
+              width={photoWidth}
+              height={photoHeight}
+              isDark={isDark}
             />
             <View style={styles.datePillRow}>
               <DatePill
@@ -398,11 +593,13 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Two or more photos */}
       {!emptyState && !singlePhoto && beforePhoto && afterPhoto && (
         <View style={styles.photosRow}>
-          <View style={styles.photoWrapper}>
-            <Image
-              source={{ uri: beforePhoto.photo_url }}
-              style={[styles.photo, { width: '100%', height: photoHeight }]}
-              resizeMode="cover"
+          <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
+            <ZoomablePhoto
+              uri={beforePhoto.photo_url}
+              photoId={beforePhoto.id}
+              width={photoWidth}
+              height={photoHeight}
+              isDark={isDark}
             />
             <View style={styles.datePillRow}>
               <DatePill
@@ -415,11 +612,13 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
           <View style={[styles.photoSeparator, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
-          <View style={styles.photoWrapper}>
-            <Image
-              source={{ uri: afterPhoto.photo_url }}
-              style={[styles.photo, { width: '100%', height: photoHeight }]}
-              resizeMode="cover"
+          <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
+            <ZoomablePhoto
+              uri={afterPhoto.photo_url}
+              photoId={afterPhoto.id}
+              width={photoWidth}
+              height={photoHeight}
+              isDark={isDark}
             />
             <View style={styles.datePillRow}>
               <DatePill
