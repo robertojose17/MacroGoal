@@ -2045,7 +2045,7 @@ export default function FoodDetailsLayout({
           const dataSource = (product as any)._source as string | undefined;
           const qualityScore = (product as any)._data_quality_score as number | undefined;
 
-          if (!hasAnyMicro && !ingredientsText && !allergensTags) return null;
+          if (!hasAnyMicro && !ingredientsText && !(allergensTags && allergensTags.length > 0)) return null;
 
           const sourceLabel =
             dataSource === 'usda' ? 'USDA' :
@@ -2065,28 +2065,8 @@ export default function FoodDetailsLayout({
 
           return (
             <View style={styles.microSection}>
-              {/* Badges row */}
-              {(sourceLabel || qualityBadgeLabel) && (
-                <View style={styles.badgeRow}>
-                  {sourceLabel && (
-                    <View style={[styles.badge, { backgroundColor: isDark ? '#1e3a5f' : '#dbeafe' }]}>
-                      <Text style={[styles.badgeText, { color: isDark ? '#93c5fd' : '#1d4ed8' }]}>
-                        {sourceLabel}
-                      </Text>
-                    </View>
-                  )}
-                  {qualityBadgeLabel && qualityBadgeColor && (
-                    <View style={[styles.badge, { backgroundColor: qualityBadgeColor + '22' }]}>
-                      <Text style={[styles.badgeText, { color: qualityBadgeColor }]}>
-                        {qualityBadgeLabel}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
               {/* Toggle button */}
-              {hasAnyMicro && (
+              {(hasAnyMicro || ingredientsText || (allergensTags && allergensTags.length > 0)) && (
                 <TouchableOpacity
                   style={[styles.microToggle, { backgroundColor: cardBackground }]}
                   onPress={() => {
@@ -2161,24 +2141,24 @@ export default function FoodDetailsLayout({
                       ))}
                     </>
                   )}
-                </View>
-              )}
 
-              {/* Ingredients */}
-              {ingredientsText && (
-                <View style={[styles.microCard, { backgroundColor: cardBackground }]}>
-                  <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666' }]}>Ingredients</Text>
-                  <Text style={[styles.ingredientsText, { color: isDark ? '#ccc' : '#444' }]}>{ingredientsText}</Text>
-                </View>
-              )}
+                  {/* Ingredients */}
+                  {ingredientsText && (
+                    <>
+                      <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666', marginTop: spacing.md }]}>Ingredients</Text>
+                      <Text style={[styles.ingredientsText, { color: isDark ? '#ccc' : '#444' }]}>{ingredientsText}</Text>
+                    </>
+                  )}
 
-              {/* Allergens */}
-              {allergensTags && allergensTags.length > 0 && (
-                <View style={[styles.microCard, { backgroundColor: cardBackground }]}>
-                  <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666' }]}>Allergens</Text>
-                  <Text style={[styles.allergensText, { color: isDark ? '#fca5a5' : '#b91c1c' }]}>
-                    {allergensTags.join(', ')}
-                  </Text>
+                  {/* Allergens */}
+                  {allergensTags && allergensTags.length > 0 && (
+                    <>
+                      <Text style={[styles.microSubheading, { color: isDark ? '#fca5a5' : '#b91c1c', marginTop: spacing.md }]}>Allergens</Text>
+                      <Text style={[styles.allergensText, { color: isDark ? '#fca5a5' : '#b91c1c' }]}>
+                        {allergensTags.join(', ')}
+                      </Text>
+                    </>
+                  )}
                 </View>
               )}
             </View>
