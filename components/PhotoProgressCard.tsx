@@ -20,13 +20,13 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 // ─── Gesture / Reanimated (native only) ──────────────────────────────────────
 
-let Animated: any = null;
 let useSharedValue: any = null;
 let useAnimatedStyle: any = null;
-let useAnimatedGestureHandler: any = null;
+let withSpring: any = null;
 let runOnJS: any = null;
-let PinchGestureHandler: any = null;
-let PanGestureHandler: any = null;
+let AnimatedImage: any = null;
+let GestureDetector: any = null;
+let Gesture: any = null;
 // True only when the real native Reanimated module is loaded (not a stub).
 // Detected by checking for the internal worklet runtime marker that stubs lack.
 let reanimatedIsNative = false;
@@ -34,21 +34,21 @@ let reanimatedIsNative = false;
 if (Platform.OS !== 'web') {
   try {
     const Reanimated = require('react-native-reanimated');
-    Animated = Reanimated.default?.View
-      ? Reanimated.default
-      : Reanimated;
     useSharedValue = Reanimated.useSharedValue;
     useAnimatedStyle = Reanimated.useAnimatedStyle;
-    useAnimatedGestureHandler = Reanimated.useAnimatedGestureHandler;
+    withSpring = Reanimated.withSpring;
     runOnJS = Reanimated.runOnJS;
+    AnimatedImage = Reanimated.default?.createAnimatedComponent
+      ? Reanimated.default.createAnimatedComponent(require('react-native').Image)
+      : null;
     // Detect real Reanimated vs stub: real module exports `makeShareable`
     // and has the global worklet runtime; stubs do not.
     reanimatedIsNative = typeof Reanimated.makeShareable === 'function';
   } catch {}
   try {
     const GH = require('react-native-gesture-handler');
-    PinchGestureHandler = GH.PinchGestureHandler;
-    PanGestureHandler = GH.PanGestureHandler;
+    GestureDetector = GH.GestureDetector;
+    Gesture = GH.Gesture;
   } catch {}
 }
 
@@ -107,82 +107,83 @@ interface ZoomablePhotoProps {
 // unconditionally inside this component.
 
 function ZoomablePhotoNative({ uri, photoId, width, height }: ZoomablePhotoProps) {
-  // All hooks must be called unconditionally — guard against stub/missing APIs
-  // by checking at render time and falling back to a plain Image if needed.
   const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
-
-  const lastScale = useRef(1);
-  const lastTranslateX = useRef(0);
-  const lastTranslateY = useRef(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
 
   useEffect(() => {
     loadPhotoTransform(photoId).then((saved) => {
       if (saved) {
         scale.value = saved.scale;
+        savedScale.value = saved.scale;
         translateX.value = saved.translateX;
         translateY.value = saved.translateY;
-        lastScale.current = saved.scale;
-        lastTranslateX.current = saved.translateX;
-        lastTranslateY.current = saved.translateY;
+        savedTranslateX.value = saved.translateX;
+        savedTranslateY.value = saved.translateY;
         console.log('[ZoomablePhoto] Restored transform for', photoId, saved);
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoId]);
 
+  const saveTransform = (s: number, tx: number, ty: number) => {
+    console.log('[ZoomablePhoto] Saving transform for', photoId, { scale: s, translateX: tx, translateY: ty });
+    savePhotoTransform(photoId, s, tx, ty);
+  };
+  const jsSave = runOnJS(saveTransform);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e: any) => {
+      const newScale = Math.min(4.0, Math.max(1.0, savedScale.value * e.scale));
+      scale.value = newScale;
+    })
+    .onEnd((e: any) => {
+      const newScale = Math.min(4.0, Math.max(1.0, savedScale.value * e.scale));
+      scale.value = newScale;
+      savedScale.value = newScale;
+      jsSave(newScale, translateX.value, translateY.value);
+    });
+
+  const panGesture = Gesture.Pan()
+    .minPointers(1)
+    .maxPointers(2)
+    .onUpdate((e: any) => {
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
+    })
+    .onEnd((e: any) => {
+      const newTx = savedTranslateX.value + e.translationX;
+      const newTy = savedTranslateY.value + e.translationY;
+      translateX.value = newTx;
+      translateY.value = newTy;
+      savedTranslateX.value = newTx;
+      savedTranslateY.value = newTy;
+      jsSave(scale.value, newTx, newTy);
+    });
+
+  const composed = Gesture.Simultaneous(pinchGesture, panGesture);
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: scale.value },
       { translateX: translateX.value },
       { translateY: translateY.value },
+      { scale: scale.value },
     ],
   }));
 
-  const jsSave = runOnJS(savePhotoTransform);
-
-  const pinchHandler = useAnimatedGestureHandler({
-    onActive: (event: any) => {
-      const newScale = Math.min(4.0, Math.max(1.0, lastScale.current * event.scale));
-      scale.value = newScale;
-    },
-    onEnd: (event: any) => {
-      const newScale = Math.min(4.0, Math.max(1.0, lastScale.current * event.scale));
-      scale.value = newScale;
-      lastScale.current = newScale;
-      jsSave(photoId, newScale, translateX.value, translateY.value);
-    },
-  });
-
-  const panHandler = useAnimatedGestureHandler({
-    onActive: (event: any) => {
-      translateX.value = lastTranslateX.current + event.translationX;
-      translateY.value = lastTranslateY.current + event.translationY;
-    },
-    onEnd: (event: any) => {
-      const newTx = lastTranslateX.current + event.translationX;
-      const newTy = lastTranslateY.current + event.translationY;
-      translateX.value = newTx;
-      translateY.value = newTy;
-      lastTranslateX.current = newTx;
-      lastTranslateY.current = newTy;
-      jsSave(photoId, scale.value, newTx, newTy);
-    },
-  });
-
-  const AnimatedImage = (Animated && Animated.Image) ? Animated.Image : Image;
+  const Img = AnimatedImage || Image;
 
   return (
-    <PanGestureHandler onGestureEvent={panHandler} minPointers={1} maxPointers={1}>
-      <PinchGestureHandler onGestureEvent={pinchHandler}>
-        <AnimatedImage
-          source={{ uri }}
-          style={[{ width, height }, animatedStyle]}
-          resizeMode="cover"
-        />
-      </PinchGestureHandler>
-    </PanGestureHandler>
+    <GestureDetector gesture={composed}>
+      <Img
+        source={{ uri }}
+        style={[{ width, height }, animatedStyle]}
+        resizeMode="cover"
+      />
+    </GestureDetector>
   );
 }
 
@@ -208,9 +209,8 @@ function ZoomablePhoto(props: ZoomablePhotoProps) {
     reanimatedIsNative &&
     useSharedValue !== null &&
     useAnimatedStyle !== null &&
-    useAnimatedGestureHandler !== null &&
-    PinchGestureHandler !== null &&
-    PanGestureHandler !== null;
+    GestureDetector !== null &&
+    Gesture !== null;
 
   if (isNative) {
     return <ZoomablePhotoNative {...props} />;
