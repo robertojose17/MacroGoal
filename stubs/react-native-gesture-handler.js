@@ -22,6 +22,9 @@ function TapGestureHandler(props) {
 function GestureDetector(props) {
   return React.createElement(View, null, props.children);
 }
+function PinchGestureHandler(props) {
+  return React.createElement(View, null, props.children);
+}
 
 module.exports = {
   default: {},
@@ -30,6 +33,7 @@ module.exports = {
   PanGestureHandler: PanGestureHandler,
   TapGestureHandler: TapGestureHandler,
   GestureDetector: GestureDetector,
+  PinchGestureHandler: PinchGestureHandler,
   Gesture: {
     Pan: function() { return {}; },
     Tap: function() { return {}; },

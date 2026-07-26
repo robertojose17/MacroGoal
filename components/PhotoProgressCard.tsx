@@ -27,6 +27,9 @@ let useAnimatedGestureHandler: any = null;
 let runOnJS: any = null;
 let PinchGestureHandler: any = null;
 let PanGestureHandler: any = null;
+// True only when the real native Reanimated module is loaded (not a stub).
+// Detected by checking for the internal worklet runtime marker that stubs lack.
+let reanimatedIsNative = false;
 
 if (Platform.OS !== 'web') {
   try {
@@ -38,6 +41,9 @@ if (Platform.OS !== 'web') {
     useAnimatedStyle = Reanimated.useAnimatedStyle;
     useAnimatedGestureHandler = Reanimated.useAnimatedGestureHandler;
     runOnJS = Reanimated.runOnJS;
+    // Detect real Reanimated vs stub: real module exports `makeShareable`
+    // and has the global worklet runtime; stubs do not.
+    reanimatedIsNative = typeof Reanimated.makeShareable === 'function';
   } catch {}
   try {
     const GH = require('react-native-gesture-handler');
@@ -101,6 +107,8 @@ interface ZoomablePhotoProps {
 // unconditionally inside this component.
 
 function ZoomablePhotoNative({ uri, photoId, width, height }: ZoomablePhotoProps) {
+  // All hooks must be called unconditionally — guard against stub/missing APIs
+  // by checking at render time and falling back to a plain Image if needed.
   const scale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -193,8 +201,11 @@ function ZoomablePhotoWeb({ uri, width, height }: ZoomablePhotoProps) {
 // ─── ZoomablePhoto (router) ───────────────────────────────────────────────────
 
 function ZoomablePhoto(props: ZoomablePhotoProps) {
+  // Use the native gesture+animation path only when the real Reanimated module
+  // is loaded (not the web/preview stub) AND all gesture handler APIs exist.
   const isNative =
     Platform.OS !== 'web' &&
+    reanimatedIsNative &&
     useSharedValue !== null &&
     useAnimatedStyle !== null &&
     useAnimatedGestureHandler !== null &&
