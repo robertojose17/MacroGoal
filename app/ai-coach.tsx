@@ -19,7 +19,7 @@ import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { useAICoach, CoachMessage, ActionProposal } from '@/hooks/useAICoach';
+import { useAICoach, Message, ActionProposal } from '@/hooks/useAICoach';
 import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 
@@ -30,15 +30,7 @@ const genId = () => {
   return `coach-${Date.now()}-${msgCounter}`;
 };
 
-type MessageWithId = CoachMessage & { id: string };
-
-const WELCOME_MESSAGE: MessageWithId = {
-  id: genId(),
-  role: 'assistant',
-  content:
-    "Hi! I'm your AI Body Transformation Coach. I have access to your nutrition logs, weight history, and step data. Ask me anything about your progress — I'll analyze your real data to give you honest, specific feedback.",
-  timestamp: Date.now(),
-};
+type MessageWithId = Message;
 
 const SUGGESTED_PROMPTS = [
   'Give me my daily check-in',
@@ -99,12 +91,10 @@ function isProductLine(line: string): boolean {
 
 function parseProductLine(line: string): { name: string; details: string } {
   const trimmed = line.trim().replace(/^-\s+/, '');
-  // Match **Name** — details or **Name**: details
   const match = trimmed.match(/^\*\*([^*]+)\*\*\s*[—:-]\s*(.*)/);
   if (match) {
     return { name: match[1].trim(), details: match[2].trim() };
   }
-  // Fallback: strip bold markers
   const nameOnly = trimmed.replace(/\*\*/g, '');
   return { name: nameOnly, details: '' };
 }
@@ -140,7 +130,6 @@ function renderStructuredText(
   const productLineCount = countProductLines(lines);
   const useProductCards = productLineCount >= 3;
 
-  // Pre-pass: tag each line with its type
   type LineTag =
     | { type: 'header'; text: string }
     | { type: 'numbered'; num: string; text: string }
@@ -155,13 +144,11 @@ function renderStructuredText(
     if (numberedMatch) return { type: 'numbered', num: numberedMatch[1], text: numberedMatch[2] };
     if (useProductCards && isProductLine(line)) return { type: 'product', raw: line };
     if (line.trim() === '') return { type: 'empty' };
-    // Bullet: starts with "- " or "• " (product lines already caught above)
     const bulletMatch = line.match(/^[-•]\s+(.*)/);
     if (bulletMatch) return { type: 'bullet', text: bulletMatch[1] };
     return { type: 'text', raw: line };
   });
 
-  // Second pass: convert consecutive bullet groups of 2+ into auto-numbered items
   type ResolvedTag =
     | { type: 'header'; text: string }
     | { type: 'numbered'; num: string; text: string }
@@ -176,7 +163,6 @@ function renderStructuredText(
   while (i < tagged.length) {
     const tag = tagged[i];
     if (tag.type === 'bullet') {
-      // Collect consecutive bullets
       const group: string[] = [];
       let j = i;
       while (j < tagged.length && tagged[j].type === 'bullet') {
@@ -185,11 +171,9 @@ function renderStructuredText(
       }
       if (group.length >= 2) {
         group.forEach((text, idx) => {
-          console.log(`[renderStructuredText] auto-numbered bullet ${idx + 1}: ${text}`);
           resolved.push({ type: 'auto-numbered', num: idx + 1, text });
         });
       } else {
-        console.log(`[renderStructuredText] single bullet: ${group[0]}`);
         resolved.push({ type: 'bullet-single', text: group[0] });
       }
       i = j;
@@ -275,7 +259,6 @@ function renderStructuredText(
       return;
     }
 
-    // text
     nodes.push(
       <Text key={key} style={[baseTextStyle, styles.mdLine]}>
         {renderBoldInline(tag.raw, baseTextStyle)}
@@ -358,6 +341,27 @@ function TypingIndicator({ isDark }: { isDark: boolean }) {
         <Animated.View style={dotStyle(dot3)} />
       </View>
     </View>
+  );
+}
+
+// ── Blinking cursor for streaming messages ───────────────────────────────────
+function StreamingCursor({ isDark }: { isDark: boolean }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisible((v) => !v);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const cursorColor = isDark ? colors.textDark : colors.text;
+  const cursorOpacity = visible ? 1 : 0;
+
+  return (
+    <Text style={[styles.streamingCursor, { color: cursorColor, opacity: cursorOpacity }]}>
+      {'|'}
+    </Text>
   );
 }
 
@@ -449,7 +453,6 @@ function ActionConfirmSheet({
 
   const isMealPlan = proposal.action_type === 'create_meal_plan' && proposal.days && proposal.days.length > 0;
 
-  // Pre-compute meal plan summary values
   const mealPlanDays = proposal.days || [];
   const totalMealPlanMeals = mealPlanDays.reduce((sum, d) => sum + d.meals.length, 0);
   const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
@@ -584,7 +587,6 @@ function ActionConfirmSheet({
                 </ScrollView>
               </View>
             ) : (
-              /* Proposed change — generic */
               currentVal && proposedVal ? (
                 <View style={[styles.sheetChangeCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
                   <Text style={[styles.sheetChangeLabel, { color: secondaryText }]}>
@@ -631,7 +633,7 @@ function ActionConfirmSheet({
               </View>
             ) : null}
 
-            {/* Data evidence (collapsible) — only for non-meal-plan actions */}
+            {/* Data evidence (collapsible) */}
             {!isMealPlan && evidenceText ? (
               <View style={styles.sheetSection}>
                 <TouchableOpacity
@@ -820,12 +822,19 @@ export default function AICoachScreen() {
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [messages, setMessages] = useState<MessageWithId[]>([WELCOME_MESSAGE]);
   const [inputText, setInputText] = useState('');
   const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
   const [creatingPlan, setCreatingPlan] = useState(false);
 
-  const { sendMessage, loading, pendingAction, clearPendingAction, confirmAction } = useAICoach();
+  const {
+    sendMessage,
+    loading,
+    pendingAction,
+    clearPendingAction,
+    messages,
+    setMessages,
+    conversationId,
+  } = useAICoach();
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -897,39 +906,17 @@ export default function AICoachScreen() {
       setMessages((prev) => [...prev, userMsg]);
       setInputText('');
 
-      // Build conversation history (exclude welcome id, keep role/content/timestamp)
-      const history: CoachMessage[] = [...messages, userMsg].map(({ role, content, timestamp }) => ({
+      // Build conversation history (role/content/timestamp only)
+      const history = [...messages, userMsg].map(({ role, content, timestamp }) => ({
         role,
         content,
         timestamp,
       }));
 
-      console.log('[AICoach] Invoking ai-coach edge function with', history.length, 'messages');
+      console.log('[AICoach] Invoking ai-coach SSE with', history.length, 'messages, conversation_id:', conversationId);
 
       try {
-        const reply = await sendMessage(history);
-
-        if (!isMountedRef.current) return;
-
-        if (reply) {
-          console.log('[AICoach] Received reply, length:', reply.length);
-          const assistantMsg: MessageWithId = {
-            id: genId(),
-            role: 'assistant',
-            content: reply,
-            timestamp: Date.now(),
-          };
-          setMessages((prev) => [...prev, assistantMsg]);
-        } else {
-          console.warn('[AICoach] Empty reply from edge function');
-          const errMsg: MessageWithId = {
-            id: genId(),
-            role: 'assistant',
-            content: 'Something went wrong. Please try again.',
-            timestamp: Date.now(),
-          };
-          setMessages((prev) => [...prev, errMsg]);
-        }
+        await sendMessage(history);
       } catch (e: any) {
         if (!isMountedRef.current) return;
         console.error('[AICoach] Error from sendMessage:', e?.message);
@@ -949,7 +936,7 @@ export default function AICoachScreen() {
         setMessages((prev) => [...prev, errMsg]);
       }
     },
-    [loading, messages, sendMessage]
+    [loading, messages, sendMessage, conversationId, setMessages]
   );
 
   const handleSuggestedPrompt = useCallback(
@@ -985,7 +972,7 @@ export default function AICoachScreen() {
     async (action_id: string, confirmation_token: string) => {
       console.log('[AICoach] Confirming action:', action_id);
 
-      // Handle create_meal_plan directly — do NOT send to AI
+      // ── create_meal_plan ──────────────────────────────────────────────────
       if (
         pendingAction &&
         pendingAction.proposal.action_type === 'create_meal_plan' &&
@@ -1053,7 +1040,131 @@ export default function AICoachScreen() {
         return;
       }
 
-      // Default flow for all other action types
+      // ── add_food_to_diary ─────────────────────────────────────────────────
+      if (pendingAction && pendingAction.proposal.action_type === 'add_food_to_diary') {
+        const proposal = pendingAction.proposal;
+        console.log('[AICoach] add_food_to_diary confirmed, food_name:', proposal.food_name);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn('[AICoach] No user for add_food_to_diary');
+          return;
+        }
+
+        const date = (proposal.date as string | undefined) || new Date().toISOString().split('T')[0];
+        const mealType = (proposal.meal_type as string | undefined) || 'snack';
+
+        console.log('[AICoach] Upserting meal row, date:', date, 'meal_type:', mealType);
+
+        let mealId: string | null = null;
+        const { data: upsertData } = await supabase
+          .from('meals')
+          .upsert(
+            { user_id: user.id, date, meal_type: mealType },
+            { onConflict: 'user_id,date,meal_type' }
+          )
+          .select('id')
+          .maybeSingle();
+
+        if (upsertData) {
+          mealId = upsertData.id;
+        } else {
+          const { data: existing } = await supabase
+            .from('meals')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('date', date)
+            .eq('meal_type', mealType)
+            .maybeSingle();
+          mealId = existing?.id ?? null;
+        }
+
+        if (!mealId) {
+          console.error('[AICoach] Could not get meal_id for add_food_to_diary');
+          Alert.alert('Error', 'Could not add food to diary.');
+          return;
+        }
+
+        console.log('[AICoach] Inserting meal_item, meal_id:', mealId, 'food:', proposal.food_name);
+        const { error: insertError } = await supabase.from('meal_items').insert({
+          meal_id: mealId,
+          food_name: proposal.food_name,
+          quantity: (proposal.quantity as number | undefined) ?? 1,
+          grams: (proposal.grams as number | undefined) ?? null,
+          serving_unit: (proposal.serving_unit as string | undefined) ?? null,
+          calories: (proposal.calories as number | undefined) ?? 0,
+          protein: (proposal.protein as number | undefined) ?? 0,
+          carbs: (proposal.carbs as number | undefined) ?? 0,
+          fats: (proposal.fats as number | undefined) ?? 0,
+          fiber: (proposal.fiber as number | undefined) ?? 0,
+        });
+
+        if (insertError) {
+          console.error('[AICoach] Error inserting meal_item:', insertError.message);
+          Alert.alert('Error', 'Could not add food to diary.');
+          return;
+        }
+
+        clearPendingAction();
+        const foodName = String(proposal.food_name ?? 'food');
+        const calories = Number(proposal.calories ?? 0);
+        const successContent = `✅ Added **${foodName}** (${calories} cal) to your ${mealType} on ${date}.`;
+        console.log('[AICoach] Food added to diary successfully:', foodName);
+        setMessages((prev) => [
+          ...prev,
+          { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
+        ]);
+        return;
+      }
+
+      // ── update_goal ───────────────────────────────────────────────────────
+      if (pendingAction && pendingAction.proposal.action_type === 'update_goal') {
+        const proposal = pendingAction.proposal;
+        console.log('[AICoach] update_goal confirmed, proposed_value:', proposal.proposed_value);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn('[AICoach] No user for update_goal');
+          return;
+        }
+
+        console.log('[AICoach] Deactivating current goals for user:', user.id);
+        await supabase
+          .from('goals')
+          .update({ is_active: false })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        const newCalories = Number(proposal.proposed_value ?? proposal.current_value ?? 0);
+        console.log('[AICoach] Inserting new goal, daily_calories:', newCalories);
+        const { error: goalError } = await supabase.from('goals').insert({
+          user_id: user.id,
+          goal_type: (proposal.goal_type as string | undefined) ?? 'maintain',
+          daily_calories: newCalories,
+          protein_g: (proposal.protein_g as number | undefined) ?? null,
+          carbs_g: (proposal.carbs_g as number | undefined) ?? null,
+          fats_g: (proposal.fats_g as number | undefined) ?? null,
+          fiber_g: (proposal.fiber_g as number | undefined) ?? null,
+          is_active: true,
+        });
+
+        if (goalError) {
+          console.error('[AICoach] Error inserting new goal:', goalError.message);
+          Alert.alert('Error', 'Could not update your goals.');
+          return;
+        }
+
+        clearPendingAction();
+        const successContent = `✅ Your daily calorie goal has been updated to **${newCalories} kcal**.`;
+        console.log('[AICoach] Goal updated successfully, new daily_calories:', newCalories);
+        setMessages((prev) => [
+          ...prev,
+          { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
+        ]);
+        return;
+      }
+
+      // ── Default: send confirmation text to AI ─────────────────────────────
       const confirmText = `Confirmed. Please execute action_id: ${action_id} with confirmation_token: ${confirmation_token}`;
 
       const userMsg: MessageWithId = {
@@ -1066,7 +1177,7 @@ export default function AICoachScreen() {
       clearPendingAction();
       setMessages((prev) => [...prev, userMsg]);
 
-      const history: CoachMessage[] = [...messages, userMsg].map(({ role, content, timestamp }) => ({
+      const history = [...messages, userMsg].map(({ role, content, timestamp }) => ({
         role,
         content,
         timestamp,
@@ -1075,22 +1186,12 @@ export default function AICoachScreen() {
       console.log('[AICoach] Sending confirmation to ai-coach, history length:', history.length);
 
       try {
-        const reply = await sendMessage(history);
-        if (!isMountedRef.current) return;
-        if (reply) {
-          const assistantMsg: MessageWithId = {
-            id: genId(),
-            role: 'assistant',
-            content: reply,
-            timestamp: Date.now(),
-          };
-          setMessages((prev) => [...prev, assistantMsg]);
-        }
+        await sendMessage(history);
       } catch (e: any) {
         console.error('[AICoach] Error confirming action:', e?.message);
       }
     },
-    [clearPendingAction, messages, pendingAction, router, sendMessage]
+    [clearPendingAction, messages, pendingAction, router, sendMessage, setMessages]
   );
 
   const formatTime = useCallback((timestamp: number): string => {
@@ -1103,9 +1204,19 @@ export default function AICoachScreen() {
     }
   }, []);
 
-  const isOnlyWelcome = messages.length === 1 && messages[0].id === WELCOME_MESSAGE.id;
+  // Determine if we're in the "welcome" state (only the welcome message, no user messages)
+  const hasUserMessages = messages.some((m) => m.role === 'user');
+  const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
   const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading;
   const canSend = inputText.trim().length > 0 && !loading;
+
+  // Find the last streaming message (for cursor)
+  const lastStreamingMsgId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].isStreaming) return messages[i].id;
+    }
+    return null;
+  })();
 
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const baseAssistantTextStyle = { ...(typography.body as object), lineHeight: 22, color: isDark ? colors.textDark : colors.text };
@@ -1278,6 +1389,7 @@ export default function AICoachScreen() {
           {messages.map((message) => {
             const isUser = message.role === 'user';
             const timeText = formatTime(message.timestamp);
+            const isThisStreaming = message.isStreaming === true && message.id === lastStreamingMsgId;
 
             if (isUser) {
               return (
@@ -1293,7 +1405,6 @@ export default function AICoachScreen() {
             }
 
             const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
-
             const showEmpathyBadge = detectsEmpathy(message.content);
 
             return (
@@ -1308,8 +1419,13 @@ export default function AICoachScreen() {
                     Coach
                   </Text>
                   <View style={[styles.assistantBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-                    <View>{structuredNodes}</View>
-                    {timeText ? (
+                    <View>
+                      {structuredNodes}
+                      {isThisStreaming && (
+                        <StreamingCursor isDark={isDark} />
+                      )}
+                    </View>
+                    {!isThisStreaming && timeText ? (
                       <Text style={[styles.assistantBubbleTime, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                         {timeText}
                       </Text>
@@ -1325,8 +1441,8 @@ export default function AICoachScreen() {
             );
           })}
 
-          {/* Typing indicator */}
-          {loading && (
+          {/* Typing indicator — only show when loading but no streaming message yet */}
+          {loading && !lastStreamingMsgId && (
             <View style={styles.typingWrapper}>
               <TypingIndicator isDark={isDark} />
             </View>
@@ -1636,6 +1752,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: spacing.xs,
     alignSelf: 'flex-end',
+  },
+  // ── Streaming cursor ─────────────────────────────────────────────────────
+  streamingCursor: {
+    fontSize: 16,
+    fontWeight: '300',
+    lineHeight: 22,
   },
   // ── Markdown rendering ───────────────────────────────────────────────────
   mdHeader: {
