@@ -42,6 +42,109 @@ function parseStatusLabel(text: string): string {
   return 'Insufficient Data';
 }
 
+// ─── Markdown / Structured Message Renderer ───────────────────────────────────
+
+type Segment =
+  | { type: 'heading'; text: string }
+  | { type: 'bullet'; text: string }
+  | { type: 'numbered'; num: number; text: string }
+  | { type: 'paragraph'; parts: InlinePart[] };
+
+type InlinePart = { bold: boolean; text: string };
+
+function parseInline(raw: string): InlinePart[] {
+  const parts: InlinePart[] = [];
+  const regex = /\*\*(.+?)\*\*/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(raw)) !== null) {
+    if (match.index > last) parts.push({ bold: false, text: raw.slice(last, match.index) });
+    parts.push({ bold: true, text: match[1] });
+    last = match.index + match[0].length;
+  }
+  if (last < raw.length) parts.push({ bold: false, text: raw.slice(last) });
+  return parts;
+}
+
+function parseSegments(text: string): Segment[] {
+  const lines = text.split('\n');
+  const segments: Segment[] = [];
+  let paraLines: string[] = [];
+
+  const flushPara = () => {
+    const joined = paraLines.join(' ').trim();
+    if (joined) segments.push({ type: 'paragraph', parts: parseInline(joined) });
+    paraLines = [];
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flushPara(); continue; }
+
+    const headingMatch = line.match(/^###\s+(.+)/);
+    if (headingMatch) { flushPara(); segments.push({ type: 'heading', text: headingMatch[1] }); continue; }
+
+    const numberedMatch = line.match(/^(\d+)\.\s+(.+)/);
+    if (numberedMatch) { flushPara(); segments.push({ type: 'numbered', num: parseInt(numberedMatch[1], 10), text: numberedMatch[2] }); continue; }
+
+    const bulletMatch = line.match(/^[*-]\s+(.+)/);
+    if (bulletMatch) { flushPara(); segments.push({ type: 'bullet', text: bulletMatch[1] }); continue; }
+
+    paraLines.push(line);
+  }
+  flushPara();
+  return segments;
+}
+
+function renderMessageContent(text: string, textColor: string, subColor: string): React.ReactNode {
+  const segments = parseSegments(text);
+  return segments.map((seg, i) => {
+    if (seg.type === 'heading') {
+      return (
+        <Text key={i} style={[mdStyles.heading, { color: textColor, marginTop: i === 0 ? 0 : spacing.md }]}>
+          {seg.text}
+        </Text>
+      );
+    }
+    if (seg.type === 'bullet') {
+      return (
+        <View key={i} style={mdStyles.listRow}>
+          <Text style={[mdStyles.bullet, { color: subColor }]}>{'•'}</Text>
+          <Text style={[mdStyles.listText, { color: textColor }]}>{seg.text}</Text>
+        </View>
+      );
+    }
+    if (seg.type === 'numbered') {
+      const numStr = String(seg.num) + '.';
+      return (
+        <View key={i} style={mdStyles.listRow}>
+          <Text style={[mdStyles.bullet, { color: subColor }]}>{numStr}</Text>
+          <Text style={[mdStyles.listText, { color: textColor }]}>{seg.text}</Text>
+        </View>
+      );
+    }
+    // paragraph
+    return (
+      <Text key={i} style={[mdStyles.paragraph, { color: textColor, marginTop: i === 0 ? 0 : spacing.sm }]}>
+        {seg.parts.map((part, j) =>
+          part.bold
+            ? <Text key={j} style={mdStyles.bold}>{part.text}</Text>
+            : <Text key={j}>{part.text}</Text>
+        )}
+      </Text>
+    );
+  });
+}
+
+const mdStyles = StyleSheet.create({
+  heading: { fontSize: 15, fontWeight: '700', lineHeight: 22 },
+  paragraph: { fontSize: 15, lineHeight: 22 },
+  bold: { fontWeight: '700' },
+  listRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.xs },
+  bullet: { fontSize: 15, lineHeight: 22, width: 20, flexShrink: 0 },
+  listText: { fontSize: 15, lineHeight: 22, flex: 1 },
+});
+
 // ─── Typing Indicator ─────────────────────────────────────────────────────────
 
 function TypingIndicator({ isDark }: { isDark: boolean }) {
@@ -66,22 +169,28 @@ function TypingIndicator({ isDark }: { isDark: boolean }) {
     return () => { a1.stop(); a2.stop(); a3.stop(); };
   }, [dot1, dot2, dot3]);
 
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+
   const dotStyle = {
     width: 8, height: 8, borderRadius: 4,
-    backgroundColor: isDark ? colors.textSecondaryDark : colors.textSecondary,
+    backgroundColor: subColor,
     marginHorizontal: 3,
   };
 
   return (
-    <View style={[typingStyles.bubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-      <Animated.View style={[dotStyle, { transform: [{ translateY: dot1 }] }]} />
-      <Animated.View style={[dotStyle, { transform: [{ translateY: dot2 }] }]} />
-      <Animated.View style={[dotStyle, { transform: [{ translateY: dot3 }] }]} />
+    <View style={typingStyles.wrapper}>
+      <View style={[typingStyles.bubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+        <Animated.View style={[dotStyle, { transform: [{ translateY: dot1 }] }]} />
+        <Animated.View style={[dotStyle, { transform: [{ translateY: dot2 }] }]} />
+        <Animated.View style={[dotStyle, { transform: [{ translateY: dot3 }] }]} />
+      </View>
+      <Text style={[typingStyles.analyzingText, { color: subColor }]}>Analyzing your data...</Text>
     </View>
   );
 }
 
 const typingStyles = StyleSheet.create({
+  wrapper: { alignSelf: 'flex-start', marginBottom: spacing.md },
   bubble: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -89,8 +198,8 @@ const typingStyles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    marginBottom: spacing.md,
   },
+  analyzingText: { fontSize: 12, marginTop: 4, marginLeft: spacing.xs },
 });
 
 // ─── Circular Progress Ring ───────────────────────────────────────────────────
@@ -805,11 +914,37 @@ export default function CoachScreen() {
     );
   };
 
+  // ── Chat suggestion chips ─────────────────────────────────────────────────
+
+  const QUICK_REPLY_CHIPS = [
+    { label: '🍫 I want something sweet' },
+    { label: '🍗 High-protein option' },
+    { label: '⚡ Quick meal idea' },
+    { label: '📊 How am I doing?' },
+    { label: '🔄 What should I eat now?' },
+  ];
+
+  const EMPTY_SUGGESTIONS = [
+    { label: '📋 Daily check-in', prompt: 'Give me my full daily check-in with remaining macros, steps, and today\'s priority.' },
+    { label: '📈 Explain my progress', prompt: 'Analyze my weight trend and tell me if I\'m on track toward my goal.' },
+    { label: '🍽️ What should I eat?', prompt: 'What should I eat for my next meal based on my remaining macros today?' },
+    { label: '🎯 Am I on track?', prompt: 'Am I on track this week? Give me a full assessment with evidence.' },
+  ];
+
+  const handleChipPress = useCallback((chipLabel: string) => {
+    console.log('[Coach] Quick-reply chip tapped:', chipLabel);
+    const userMsg: CoachMessage = { role: 'user', content: chipLabel, timestamp: Date.now() };
+    const newMessages = [...chatMessages, userMsg];
+    setChatMessages(newMessages);
+    sendChatMessage(newMessages);
+  }, [chatMessages, sendChatMessage]);
+
   // ── Render Chat ───────────────────────────────────────────────────────────
 
   const renderChat = () => {
     const canSend = inputText.trim().length > 0 && !coachLoading;
     const sendBtnBg = canSend ? colors.primary : (isDark ? colors.borderDark : colors.border);
+    const hasMessages = chatMessages.length > 0;
 
     return (
       <KeyboardAvoidingView
@@ -824,24 +959,50 @@ export default function CoachScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {chatMessages.length === 0 && (
-            <View style={[chatStyles.emptyChat, { backgroundColor: cardBg }]}>
+          {/* Empty state */}
+          {!hasMessages && (
+            <View style={chatStyles.emptyState}>
               <Text style={chatStyles.emptyChatEmoji}>🧠</Text>
-              <Text style={[chatStyles.emptyChatTitle, { color: textColor }]}>Ask me anything</Text>
-              <Text style={[chatStyles.emptyChatSub, { color: subColor }]}>I have access to your nutrition, weight, and activity data.</Text>
+              <Text style={[chatStyles.emptyChatTitle, { color: textColor }]}>Your personal coach</Text>
+              <Text style={[chatStyles.emptyChatSub, { color: subColor }]}>
+                {"I've reviewed your nutrition, weight, and activity data. Ask me anything or tap a suggestion below."}
+              </Text>
+              <View style={chatStyles.suggestionsGrid}>
+                {EMPTY_SUGGESTIONS.map((s) => (
+                  <TouchableOpacity
+                    key={s.label}
+                    style={[chatStyles.suggestionBtn, { backgroundColor: cardBg, borderColor }]}
+                    onPress={() => {
+                      console.log('[Coach] Empty-state suggestion tapped:', s.label);
+                      switchToChat(s.prompt);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[chatStyles.suggestionBtnText, { color: textColor }]}>{s.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
+          {/* Messages */}
           {chatMessages.map((msg, idx) => {
             const isUser = msg.role === 'user';
-            const bubbleBg = isUser ? colors.primary : cardBg;
+            const isStructured = !isUser && msg.content.includes('###');
+            const bubbleBg = isUser
+              ? colors.primary
+              : isStructured
+                ? 'transparent'
+                : cardBg;
             const bubbleTextColor = isUser ? '#FFFFFF' : textColor;
+            const bubblePadding = isStructured ? spacing.md + 4 : undefined;
             return (
               <View
                 key={idx}
                 style={[
                   chatStyles.messageWrapper,
                   isUser ? chatStyles.userWrapper : chatStyles.assistantWrapper,
+                  isStructured && chatStyles.structuredWrapper,
                 ]}
               >
                 {!isUser && (
@@ -849,8 +1010,16 @@ export default function CoachScreen() {
                     <Text style={chatStyles.avatarEmoji}>🧠</Text>
                   </View>
                 )}
-                <View style={[chatStyles.bubble, { backgroundColor: bubbleBg }]}>
-                  <Text style={[chatStyles.bubbleText, { color: bubbleTextColor }]}>{msg.content}</Text>
+                <View style={[
+                  chatStyles.bubble,
+                  { backgroundColor: bubbleBg },
+                  isStructured && [chatStyles.structuredBubble, { borderColor }],
+                  bubblePadding !== undefined && { paddingHorizontal: bubblePadding, paddingVertical: bubblePadding },
+                ]}>
+                  {isUser
+                    ? <Text style={[chatStyles.bubbleText, { color: bubbleTextColor }]}>{msg.content}</Text>
+                    : renderMessageContent(msg.content, bubbleTextColor, isDark ? colors.textSecondaryDark : colors.textSecondary)
+                  }
                 </View>
               </View>
             );
@@ -858,6 +1027,28 @@ export default function CoachScreen() {
 
           {coachLoading && <TypingIndicator isDark={isDark} />}
         </ScrollView>
+
+        {/* Quick-reply chips — shown when chat has messages and not loading */}
+        {hasMessages && !coachLoading && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[chatStyles.chipsScroll, { borderTopColor: borderColor }]}
+            contentContainerStyle={chatStyles.chipsContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {QUICK_REPLY_CHIPS.map((chip) => (
+              <TouchableOpacity
+                key={chip.label}
+                style={[chatStyles.chip, { backgroundColor: cardBg, borderColor }]}
+                onPress={() => handleChipPress(chip.label)}
+                activeOpacity={0.75}
+              >
+                <Text style={[chatStyles.chipText, { color: textColor }]}>{chip.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Input bar */}
         <View style={[chatStyles.inputContainer, { backgroundColor: cardBg, borderTopColor: borderColor }]}>
@@ -1108,15 +1299,38 @@ const hubStyles = StyleSheet.create({
 
 const chatStyles = StyleSheet.create({
   messagesContent: { padding: spacing.md, paddingBottom: spacing.lg },
-  emptyChat: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+  // Empty state
+  emptyState: {
     alignItems: 'center',
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
-  emptyChatEmoji: { fontSize: 40, marginBottom: spacing.md },
-  emptyChatTitle: { ...typography.h3, marginBottom: spacing.xs, textAlign: 'center' },
-  emptyChatSub: { ...typography.caption, textAlign: 'center', lineHeight: 20 },
+  emptyChatEmoji: { fontSize: 48, marginBottom: spacing.md },
+  emptyChatTitle: { ...typography.h3, marginBottom: spacing.sm, textAlign: 'center' },
+  emptyChatSub: { ...typography.caption, textAlign: 'center', lineHeight: 20, marginBottom: spacing.lg },
+  suggestionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  suggestionBtn: {
+    width: '47%',
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  suggestionBtnText: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
+  // Messages
   messageWrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -1125,6 +1339,7 @@ const chatStyles = StyleSheet.create({
   },
   userWrapper: { alignSelf: 'flex-end', flexDirection: 'row-reverse' },
   assistantWrapper: { alignSelf: 'flex-start' },
+  structuredWrapper: { maxWidth: '100%', width: '100%' },
   avatarSmall: {
     width: 28, height: 28, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
@@ -1141,7 +1356,32 @@ const chatStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  structuredBubble: {
+    borderWidth: 1,
+    shadowOpacity: 0,
+    elevation: 0,
+    flex: 1,
+  },
   bubbleText: { ...typography.body, lineHeight: 21 },
+  // Quick-reply chips
+  chipsScroll: {
+    borderTopWidth: 1,
+    maxHeight: 52,
+  },
+  chipsContent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  chipText: { fontSize: 13, fontWeight: '500' },
+  // Input
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
