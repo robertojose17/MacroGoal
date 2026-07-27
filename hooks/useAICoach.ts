@@ -75,7 +75,7 @@ export type Message = {
   timestamp: number;
   isStreaming?: boolean;
   actionProposal?: ActionProposal;
-  actionStatus?: 'pending' | 'confirmed' | 'declined';
+  actionStatus?: 'pending' | 'confirming' | 'confirmed' | 'declined';
 };
 
 type State =

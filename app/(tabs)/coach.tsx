@@ -419,7 +419,7 @@ function InlineActionCard({
 }: {
   messageId: string;
   action: ActionProposal;
-  actionStatus: 'pending' | 'confirmed' | 'declined';
+  actionStatus: 'pending' | 'confirming' | 'confirmed' | 'declined';
   isDark: boolean;
   onConfirm: (messageId: string) => void;
   onDecline: (messageId: string) => void;
@@ -524,6 +524,8 @@ function InlineActionCard({
     );
   }
 
+  const isConfirming = actionStatus === 'confirming';
+
   if (actionStatus === 'confirmed') {
     return (
       <View style={[styles.inlineActionStatusBadge]}>
@@ -557,36 +559,36 @@ function InlineActionCard({
 
       {/* Meal plan summary or value change */}
       {isMealPlan ? (
-        <View style={{ marginBottom: 8 }}>
-          <Text style={[{ fontSize: 14, fontWeight: '700', marginBottom: 2 }, { color: textColor }]}>
+        <View style={{ marginBottom: 10 }}>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: textColor, marginBottom: 8 }}>
             {proposal.plan_name || 'AI Meal Plan'}
           </Text>
-          <View style={styles.inlineActionChangeRow}>
-            <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
-              {mealPlanDays.length}
-            </Text>
-            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
-              {' days'}
-            </Text>
-            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
-              {'  •  '}
-            </Text>
-            <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
-              {mealsPerDay}
-            </Text>
-            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
-              {' meals/day'}
-            </Text>
-            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
-              {'  •  '}
-            </Text>
-            <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
-              {'~'}
-              {avgCalPerDay}
-            </Text>
-            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
-              {' cal/day'}
-            </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1, backgroundColor: actionTypeInfo.color + '15', borderRadius: 8, padding: 8, alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: actionTypeInfo.color }}>
+                {mealPlanDays.length}
+              </Text>
+              <Text style={{ fontSize: 11, color: secondaryText, marginTop: 2 }}>
+                {'days'}
+              </Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: actionTypeInfo.color + '15', borderRadius: 8, padding: 8, alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: actionTypeInfo.color }}>
+                {mealsPerDay}
+              </Text>
+              <Text style={{ fontSize: 11, color: secondaryText, marginTop: 2 }}>
+                {'meals/day'}
+              </Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: actionTypeInfo.color + '15', borderRadius: 8, padding: 8, alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: actionTypeInfo.color }}>
+                {'~'}
+                {avgCalPerDay}
+              </Text>
+              <Text style={{ fontSize: 11, color: secondaryText, marginTop: 2 }}>
+                {'cal/day'}
+              </Text>
+            </View>
           </View>
         </View>
       ) : currentVal && proposedVal ? (
@@ -628,15 +630,17 @@ function InlineActionCard({
       {/* Buttons */}
       <View style={styles.inlineActionButtons}>
         <TouchableOpacity
-          style={[styles.inlineActionConfirmBtn, { backgroundColor: colors.primary }]}
+          style={[styles.inlineActionConfirmBtn, { backgroundColor: colors.primary, opacity: isConfirming ? 0.7 : 1 }]}
           onPress={() => {
+            if (isConfirming) return;
             console.log('[AICoach] Inline confirm pressed, messageId:', messageId, 'action_id:', action.action_id, 'type:', action.action_type || proposal.action_type);
             onConfirm(messageId);
           }}
           activeOpacity={0.85}
+          disabled={isConfirming}
         >
           <Text style={styles.inlineActionConfirmText}>
-            {confirmBtnText}
+            {isConfirming ? 'Creating...' : confirmBtnText}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -973,9 +977,9 @@ export default function CoachScreen() {
       const actionType = actionProposal.action_type || proposal.action_type || '';
       console.log('[AICoach] Confirming inline action:', action_id, 'type:', actionType);
 
-      // Mark as confirmed immediately
+      // Mark as confirming while async work runs
       setMessages((prev) =>
-        prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
+        prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirming' as const } : m)
       );
 
       // ── create_meal_plan ──────────────────────────────────────────────────
@@ -1034,9 +1038,15 @@ export default function CoachScreen() {
 
           console.log('[AICoach] Navigating to meal-plan-detail, id:', plan.id);
           router.push(`/meal-plan-detail?id=${plan.id}`);
+          setMessages((prev) =>
+            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
+          );
         } catch (e: any) {
           console.error('[AICoach] Error creating meal plan:', e?.message);
           Alert.alert('Error', 'Could not create meal plan. Please try again.');
+          setMessages((prev) =>
+            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
+          );
         } finally {
           if (isMountedRef.current) setCreatingPlan(false);
         }
