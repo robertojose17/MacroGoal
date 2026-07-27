@@ -1075,31 +1075,8 @@ export default function CoachScreen() {
         return;
       }
 
-      // ── Default: send confirmation text to AI ─────────────────────────────
-      const confirmText = `Confirmed. Please execute action_id: ${action_id} with confirmation_token: ${confirmation_token}`;
-
-      const userMsg: MessageWithId = {
-        id: genId(),
-        role: 'user',
-        content: confirmText,
-        timestamp: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, userMsg]);
-
-      const history = [...messages, userMsg].map(({ role, content, timestamp }) => ({
-        role,
-        content,
-        timestamp,
-      }));
-
-      console.log('[AICoach] Sending confirmation to ai-coach, history length:', history.length);
-
-      try {
-        await sendMessage(history);
-      } catch (e: any) {
-        console.error('[AICoach] Error confirming action:', e?.message);
-      }
+      // ── Default: unrecognized action_type — mark confirmed silently ──────────
+      return;
     },
     [messages, router, sendMessage, setMessages]
   );
