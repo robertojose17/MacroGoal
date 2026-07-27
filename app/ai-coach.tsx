@@ -1366,6 +1366,21 @@ export default function AICoachScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+              <View style={styles.suggestedInlineRow}>
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <TouchableOpacity
+                    key={prompt}
+                    style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => {
+                      console.log('[AICoach] Suggested prompt chip pressed:', prompt);
+                      handleSuggestedPrompt(prompt);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1448,34 +1463,7 @@ export default function AICoachScreen() {
             </View>
           )}
 
-          {/* Suggested prompts — only when conversation is at welcome state */}
-          {isOnlyWelcome && !loading && (
-            <View style={styles.suggestedContainer}>
-              <Text style={[styles.suggestedLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Try asking...
-              </Text>
-              <View style={styles.suggestedChips}>
-                {SUGGESTED_PROMPTS.map((prompt) => (
-                  <TouchableOpacity
-                    key={prompt}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor: isDark ? colors.cardDark : colors.card,
-                        borderColor: isDark ? colors.borderDark : colors.border,
-                      },
-                    ]}
-                    onPress={() => handleSuggestedPrompt(prompt)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.chipText, { color: isDark ? colors.textDark : colors.text }]}>
-                      {prompt}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
+
         </ScrollView>
 
         {/* ── Craving chips — above input bar, non-welcome state ── */}
@@ -1919,6 +1907,23 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   cravingHubChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  suggestedInlineRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  suggestedInlineChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  suggestedInlineChipText: {
     fontSize: 13,
     fontWeight: '500',
   },
