@@ -6,7 +6,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AdBannerFooter } from '@/components/AdBannerFooter';
-import GoPremiumFloatingBadge from '@/components/GoPremiumFloatingBadge';
+
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -110,7 +110,6 @@ export default function TabLayout() {
         />
       </Tabs>
       <AdBannerFooter />
-      <GoPremiumFloatingBadge />
     </View>
   );
 }
