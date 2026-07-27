@@ -29,7 +29,7 @@ const genId = () => {
   return `coach-${Date.now()}-${msgCounter}`;
 };
 
-type MessageWithId = Message;
+type MessageWithId = Message & { showUpgradeButton?: boolean };
 
 const SUGGESTED_PROMPTS = [
   'Analyze my last 14 days',
@@ -888,6 +888,7 @@ export default function CoachScreen() {
             ? `No more guessing. No more plateaus.\n\nYour results are driven by both nutrition and training. Nutrition can account for around 70–80% of your progress, while training makes up the remaining 20–30%. Our Coaching Feature helps you master the nutrition side so you can get 100% from every workout.\n\nWith the Coaching Feature, you can:\n\n• 🗓 Get personalized meal plans\n• 📸 Track and identify meals from photos\n• 📊 Analyze your last 14 days of nutrition\n• 🎯 Automatically adjust your goals based on your progress\n• 🚀 Identify what may be slowing down your weight loss\n• 🍰 Craving dessert? Discover products that fit your goals and find out where to get them\n• 🛒 Get smarter restaurant, grocery store, and product recommendations\n• 💬 Receive real-time coaching and direct, actionable advice\n\nUpgrade to Premium and start making progress again.`
             : 'Something went wrong. Please try again.',
           timestamp: Date.now(),
+          showUpgradeButton: e?.isSubscriptionError ? true : undefined,
         };
         setMessages((prev) => [...prev, errMsg]);
       }
@@ -1416,6 +1417,26 @@ export default function CoachScreen() {
                         <StreamingCursor isDark={isDark} />
                       )}
                     </View>
+                    {message.showUpgradeButton && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log('[AICoach] Go Premium button pressed');
+                          router.push('/subscription');
+                        }}
+                        style={{
+                          marginTop: 16,
+                          backgroundColor: '#F59E0B',
+                          borderRadius: 12,
+                          paddingVertical: 14,
+                          paddingHorizontal: 20,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>
+                          🚀 Go Premium
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     {message.actionProposal && message.actionStatus ? (
                       <InlineActionCard
                         messageId={message.id}
