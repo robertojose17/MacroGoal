@@ -7,6 +7,11 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
+// Stub out native-only packages that crash in Expo Go / web preview
+config.resolver.extraNodeModules = {
+  'react-native-onesignal': path.resolve(__dirname, 'stubs/react-native-onesignal.js'),
+};
+
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),

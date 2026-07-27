@@ -39,9 +39,10 @@ if (Platform.OS !== "web") {
   } catch {}
 }
 
-// OneSignal — native only
+// OneSignal — native only, not available in Expo Go
+const isExpoGo = Constants.appOwnership === "expo";
 let OneSignal: any = null;
-if (Platform.OS !== "web") {
+if (Platform.OS !== "web" && !isExpoGo) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     OneSignal = require("react-native-onesignal").OneSignal;
