@@ -11,7 +11,6 @@ import {
   Platform,
   Alert,
   Animated,
-  Modal,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -406,48 +405,35 @@ function QuickActionCard({
   );
 }
 
-// ── Action Confirmation Bottom Sheet ────────────────────────────────────────
-function ActionConfirmSheet({
-  visible,
+// ── Inline Action Card ───────────────────────────────────────────────────────
+function InlineActionCard({
+  messageId,
   action,
+  actionStatus,
   isDark,
   onConfirm,
-  onReject,
+  onDecline,
 }: {
-  visible: boolean;
-  action: ActionProposal | null;
+  messageId: string;
+  action: ActionProposal;
+  actionStatus: 'pending' | 'confirmed' | 'declined';
   isDark: boolean;
-  onConfirm: (action_id: string, confirmation_token: string) => void;
-  onReject: () => void;
+  onConfirm: (messageId: string) => void;
+  onDecline: (messageId: string) => void;
 }) {
-  const [evidenceExpanded, setEvidenceExpanded] = useState(false);
-
-  useEffect(() => {
-    if (visible) setEvidenceExpanded(false);
-  }, [visible]);
-
-  if (!action) return null;
-
   const proposal = action.proposal;
   const actionTypeInfo = formatActionType(proposal.action_type || proposal.goal_type || '');
-  const isReversible = proposal.is_reversible !== false;
+  const borderColor = isDark ? colors.borderDark : colors.border;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? '#1E2035' : '#F7F8FC';
 
   const currentVal = proposal.current_value !== undefined ? String(proposal.current_value) : null;
   const proposedVal = proposal.proposed_value !== undefined ? String(proposal.proposed_value) : null;
   const goalType = proposal.goal_type || proposal.action_type || '';
   const unitLabel = goalType.toLowerCase().includes('calorie') ? ' cal' : '';
 
-  const evidenceText = proposal.data_evidence
-    ? JSON.stringify(proposal.data_evidence, null, 2)
-    : null;
-
-  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
-  const textColor = isDark ? colors.textDark : colors.text;
-  const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const borderColor = isDark ? colors.borderDark : colors.border;
-
   const isMealPlan = proposal.action_type === 'create_meal_plan' && proposal.days && proposal.days.length > 0;
-
   const mealPlanDays = proposal.days || [];
   const totalMealPlanMeals = mealPlanDays.reduce((sum, d) => sum + d.meals.length, 0);
   const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
@@ -455,246 +441,135 @@ function ActionConfirmSheet({
   const avgCalPerDay = mealPlanDays.length > 0 ? Math.round(totalCalories / mealPlanDays.length) : 0;
   const confirmBtnText = isMealPlan ? 'Create Meal Plan' : 'Confirm';
 
+  if (actionStatus === 'confirmed') {
+    return (
+      <View style={[styles.inlineActionStatusBadge]}>
+        <Text style={[styles.inlineActionStatusText, { color: '#10B981' }]}>
+          {'✅ Action confirmed'}
+        </Text>
+      </View>
+    );
+  }
+
+  if (actionStatus === 'declined') {
+    return (
+      <View style={[styles.inlineActionStatusBadge]}>
+        <Text style={[styles.inlineActionStatusText, { color: secondaryText }]}>
+          {'❌ Declined'}
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={() => {
-        console.log('[AICoach] Action sheet dismissed via back button');
-        onReject();
-      }}
-    >
-      <View style={styles.sheetBackdrop}>
-        <TouchableOpacity style={styles.sheetBackdropTouch} activeOpacity={1} onPress={onReject} />
-        <View style={[styles.sheetContainer, { backgroundColor: cardBg }]}>
-          {/* Header */}
-          <View style={[styles.sheetHeader, { borderBottomColor: borderColor }]}>
-            <Text style={[styles.sheetTitle, { color: textColor }]}>
-              Coach Recommendation
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                console.log('[AICoach] Action sheet close button pressed');
-                onReject();
-              }}
-              style={styles.sheetCloseBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={[styles.sheetCloseX, { color: secondaryText }]}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.sheetScroll}
-            contentContainerStyle={styles.sheetScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Action type badge */}
-            <View style={styles.sheetBadgeRow}>
-              <View style={[styles.sheetBadge, { backgroundColor: actionTypeInfo.color + '22' }]}>
-                <Text style={[styles.sheetBadgeText, { color: actionTypeInfo.color }]}>
-                  {actionTypeInfo.label}
-                </Text>
-              </View>
-            </View>
-
-            {/* Meal plan preview */}
-            {isMealPlan ? (
-              <View style={[styles.mealPlanPreviewCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
-                <Text style={[styles.mealPlanPreviewTitle, { color: textColor }]}>
-                  {proposal.plan_name || 'AI Meal Plan'}
-                </Text>
-                {(proposal.start_date || proposal.end_date) ? (
-                  <Text style={[styles.mealPlanPreviewDateRange, { color: secondaryText }]}>
-                    {proposal.start_date}
-                    {proposal.start_date && proposal.end_date ? ' → ' : ''}
-                    {proposal.end_date}
-                  </Text>
-                ) : null}
-                <View style={styles.mealPlanPreviewSummaryRow}>
-                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
-                    {mealPlanDays.length}
-                  </Text>
-                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
-                    {' days'}
-                  </Text>
-                  <Text style={[styles.mealPlanPreviewSummaryDot, { color: secondaryText }]}>
-                    {'  •  '}
-                  </Text>
-                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
-                    {mealsPerDay}
-                  </Text>
-                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
-                    {' meals/day'}
-                  </Text>
-                  <Text style={[styles.mealPlanPreviewSummaryDot, { color: secondaryText }]}>
-                    {'  •  '}
-                  </Text>
-                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
-                    {'~'}
-                    {avgCalPerDay}
-                  </Text>
-                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
-                    {' cal/day'}
-                  </Text>
-                </View>
-                <ScrollView
-                  style={styles.mealPlanDayScroll}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
-                >
-                  {mealPlanDays.map((day, dayIdx) => {
-                    const dayDate = new Date(day.date + 'T00:00:00');
-                    const dayLabel = isNaN(dayDate.getTime())
-                      ? day.date
-                      : dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                    return (
-                      <View key={dayIdx} style={styles.mealPlanDayBlock}>
-                        <Text style={[styles.mealPlanDayHeader, { color: textColor }]}>
-                          {dayLabel}
-                        </Text>
-                        {day.meals.map((meal, mealIdx) => {
-                          const mealTypeLabel = meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1);
-                          return (
-                            <View key={mealIdx} style={styles.mealPlanMealRow}>
-                              <Text style={[styles.mealPlanMealDot, { color: secondaryText }]}>
-                                {'• '}
-                              </Text>
-                              <Text style={[styles.mealPlanMealType, { color: secondaryText }]}>
-                                {mealTypeLabel}
-                                {': '}
-                              </Text>
-                              <Text style={[styles.mealPlanMealName, { color: textColor }]}>
-                                {meal.food_name}
-                              </Text>
-                              <Text style={[styles.mealPlanMealCal, { color: secondaryText }]}>
-                                {' ('}
-                                {meal.calories}
-                                {' cal)'}
-                              </Text>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ) : (
-              currentVal && proposedVal ? (
-                <View style={[styles.sheetChangeCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
-                  <Text style={[styles.sheetChangeLabel, { color: secondaryText }]}>
-                    Proposed Change
-                  </Text>
-                  <View style={styles.sheetChangeRow}>
-                    <Text style={[styles.sheetChangeValue, { color: textColor }]}>
-                      {currentVal}
-                      {unitLabel}
-                    </Text>
-                    <Text style={[styles.sheetChangeArrow, { color: actionTypeInfo.color }]}>
-                      →
-                    </Text>
-                    <Text style={[styles.sheetChangeValue, { color: actionTypeInfo.color }]}>
-                      {proposedVal}
-                      {unitLabel}
-                    </Text>
-                  </View>
-                </View>
-              ) : null
-            )}
-
-            {/* Reason */}
-            {proposal.reason ? (
-              <View style={styles.sheetSection}>
-                <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
-                  Reason
-                </Text>
-                <Text style={[styles.sheetSectionBody, { color: secondaryText }]}>
-                  {proposal.reason}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Expected effect */}
-            {proposal.expected_effect ? (
-              <View style={styles.sheetSection}>
-                <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
-                  Expected Effect
-                </Text>
-                <Text style={[styles.sheetSectionBody, { color: secondaryText }]}>
-                  {proposal.expected_effect}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Data evidence (collapsible) */}
-            {!isMealPlan && evidenceText ? (
-              <View style={styles.sheetSection}>
-                <TouchableOpacity
-                  style={styles.sheetEvidenceToggle}
-                  onPress={() => {
-                    const next = !evidenceExpanded;
-                    console.log('[AICoach] Evidence section toggled:', next ? 'expanded' : 'collapsed');
-                    setEvidenceExpanded(next);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
-                    Data Used
-                  </Text>
-                  <Text style={[styles.sheetEvidenceChevron, { color: secondaryText }]}>
-                    {evidenceExpanded ? '▲' : '▼'}
-                  </Text>
-                </TouchableOpacity>
-                {evidenceExpanded && (
-                  <View style={[styles.sheetEvidenceBox, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
-                    <Text style={[styles.sheetEvidenceText, { color: secondaryText }]}>
-                      {evidenceText}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : null}
-
-            {/* Reversible badge */}
-            <View style={[styles.sheetReversibleBadge, { backgroundColor: isReversible ? '#10B98122' : '#F59E0B22' }]}>
-              <Text style={[styles.sheetReversibleText, { color: isReversible ? '#10B981' : '#F59E0B' }]}>
-                {isReversible ? '✓ This change can be undone' : '⚠ This change cannot be undone'}
-              </Text>
-            </View>
-          </ScrollView>
-
-          {/* Buttons */}
-          <View style={[styles.sheetButtons, { borderTopColor: borderColor }]}>
-            <TouchableOpacity
-              style={[styles.sheetConfirmBtn, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                console.log('[AICoach] Confirm action pressed, action_id:', action.action_id, 'type:', proposal.action_type);
-                onConfirm(action.action_id, action.confirmation_token);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.sheetConfirmBtnText}>
-                {confirmBtnText}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.sheetRejectBtn, { borderColor }]}
-              onPress={() => {
-                console.log('[AICoach] Reject action pressed, action_id:', action.action_id);
-                onReject();
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.sheetRejectBtnText, { color: secondaryText }]}>
-                Reject
-              </Text>
-            </TouchableOpacity>
-          </View>
+    <View style={[styles.inlineActionCard, { backgroundColor: cardBg, borderColor }]}>
+      {/* Badge row */}
+      <View style={styles.inlineActionBadgeRow}>
+        <View style={[styles.inlineActionBadge, { backgroundColor: actionTypeInfo.color + '22' }]}>
+          <Text style={[styles.inlineActionBadgeText, { color: actionTypeInfo.color }]}>
+            {actionTypeInfo.label}
+          </Text>
         </View>
       </View>
-    </Modal>
+
+      {/* Meal plan summary or value change */}
+      {isMealPlan ? (
+        <View style={{ marginBottom: 8 }}>
+          <Text style={[{ fontSize: 14, fontWeight: '700', marginBottom: 2 }, { color: textColor }]}>
+            {proposal.plan_name || 'AI Meal Plan'}
+          </Text>
+          <View style={styles.inlineActionChangeRow}>
+            <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
+              {mealPlanDays.length}
+            </Text>
+            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
+              {' days'}
+            </Text>
+            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
+              {'  •  '}
+            </Text>
+            <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
+              {mealsPerDay}
+            </Text>
+            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
+              {' meals/day'}
+            </Text>
+            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
+              {'  •  '}
+            </Text>
+            <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
+              {'~'}
+              {avgCalPerDay}
+            </Text>
+            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
+              {' cal/day'}
+            </Text>
+          </View>
+        </View>
+      ) : currentVal && proposedVal ? (
+        <View style={[styles.inlineActionChangeRow, { marginBottom: 8 }]}>
+          <Text style={[styles.inlineActionValue, { color: textColor }]}>
+            {currentVal}
+            {unitLabel}
+          </Text>
+          <Text style={[styles.inlineActionArrow, { color: actionTypeInfo.color }]}>
+            {'→'}
+          </Text>
+          <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
+            {proposedVal}
+            {unitLabel}
+          </Text>
+        </View>
+      ) : proposal.food_name ? (
+        <View style={[styles.inlineActionChangeRow, { marginBottom: 8 }]}>
+          <Text style={[styles.inlineActionValue, { color: textColor }]}>
+            {String(proposal.food_name)}
+          </Text>
+          {proposal.calories !== undefined ? (
+            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
+              {'  '}
+              {Number(proposal.calories)}
+              {' cal'}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Reason */}
+      {proposal.reason ? (
+        <Text style={[styles.inlineActionReason, { color: secondaryText }]}>
+          {proposal.reason}
+        </Text>
+      ) : null}
+
+      {/* Buttons */}
+      <View style={styles.inlineActionButtons}>
+        <TouchableOpacity
+          style={[styles.inlineActionConfirmBtn, { backgroundColor: colors.primary }]}
+          onPress={() => {
+            console.log('[AICoach] Inline confirm pressed, messageId:', messageId, 'action_id:', action.action_id, 'type:', proposal.action_type);
+            onConfirm(messageId);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.inlineActionConfirmText}>
+            {confirmBtnText}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.inlineActionDeclineBtn, { borderColor }]}
+          onPress={() => {
+            console.log('[AICoach] Inline decline pressed, messageId:', messageId, 'action_id:', action.action_id);
+            onDecline(messageId);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.inlineActionDeclineText, { color: secondaryText }]}>
+            Decline
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -963,18 +838,64 @@ export default function CoachScreen() {
     handleSend(inputText);
   }, [handleSend, inputText]);
 
-  const handleConfirmAction = useCallback(
-    async (action_id: string, confirmation_token: string) => {
-      console.log('[AICoach] Confirming action:', action_id);
+  // ── Intercept pendingAction and attach it inline to the last assistant message ──
+  useEffect(() => {
+    if (!pendingAction) return;
+    console.log('[AICoach] pendingAction received, attaching inline to last assistant message, action_id:', pendingAction.action_id);
+    setMessages((prev) => {
+      const reversedIdx = [...prev].reverse().findIndex((m) => m.role === 'assistant' && !m.actionProposal);
+      if (reversedIdx === -1) {
+        // No suitable assistant message — add a standalone proposal message
+        return [
+          ...prev,
+          {
+            id: genId(),
+            role: 'assistant' as const,
+            content: '',
+            timestamp: Date.now(),
+            actionProposal: pendingAction,
+            actionStatus: 'pending' as const,
+          },
+        ];
+      }
+      const realIdx = prev.length - 1 - reversedIdx;
+      return prev.map((m, i) =>
+        i === realIdx ? { ...m, actionProposal: pendingAction, actionStatus: 'pending' as const } : m
+      );
+    });
+    clearPendingAction();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAction]);
+
+  const handleConfirmInline = useCallback(
+    async (messageId: string) => {
+      console.log('[AICoach] handleConfirmInline called, messageId:', messageId);
+
+      // Find the message to get its actionProposal
+      const targetMsg = messages.find((m) => m.id === messageId);
+      const actionProposal = targetMsg?.actionProposal;
+      if (!actionProposal) {
+        console.warn('[AICoach] handleConfirmInline: no actionProposal found for messageId:', messageId);
+        return;
+      }
+
+      const action_id = actionProposal.action_id;
+      const confirmation_token = actionProposal.confirmation_token;
+      const proposal = actionProposal.proposal;
+
+      console.log('[AICoach] Confirming inline action:', action_id, 'type:', proposal.action_type);
+
+      // Mark as confirmed immediately
+      setMessages((prev) =>
+        prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
+      );
 
       // ── create_meal_plan ──────────────────────────────────────────────────
       if (
-        pendingAction &&
-        pendingAction.proposal.action_type === 'create_meal_plan' &&
-        pendingAction.proposal.days &&
-        pendingAction.proposal.days.length > 0
+        proposal.action_type === 'create_meal_plan' &&
+        proposal.days &&
+        proposal.days.length > 0
       ) {
-        const proposal = pendingAction.proposal;
         const planName = proposal.plan_name || 'AI Meal Plan';
         const startDate = proposal.start_date || '';
         const endDate = proposal.end_date || '';
@@ -982,7 +903,6 @@ export default function CoachScreen() {
 
         console.log('[AICoach] create_meal_plan confirmed, plan_name:', planName, 'days:', days.length);
         setCreatingPlan(true);
-        clearPendingAction();
 
         try {
           console.log('[AICoach] Calling createMealPlan:', planName, startDate, endDate);
@@ -1036,8 +956,7 @@ export default function CoachScreen() {
       }
 
       // ── add_food_to_diary ─────────────────────────────────────────────────
-      if (pendingAction && pendingAction.proposal.action_type === 'add_food_to_diary') {
-        const proposal = pendingAction.proposal;
+      if (proposal.action_type === 'add_food_to_diary') {
         console.log('[AICoach] add_food_to_diary confirmed, food_name:', proposal.food_name);
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -1100,7 +1019,6 @@ export default function CoachScreen() {
           return;
         }
 
-        clearPendingAction();
         const foodName = String(proposal.food_name ?? 'food');
         const calories = Number(proposal.calories ?? 0);
         const successContent = `✅ Added **${foodName}** (${calories} cal) to your ${mealType} on ${date}.`;
@@ -1113,8 +1031,7 @@ export default function CoachScreen() {
       }
 
       // ── update_goal ───────────────────────────────────────────────────────
-      if (pendingAction && pendingAction.proposal.action_type === 'update_goal') {
-        const proposal = pendingAction.proposal;
+      if (proposal.action_type === 'update_goal') {
         console.log('[AICoach] update_goal confirmed, proposed_value:', proposal.proposed_value);
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -1149,7 +1066,6 @@ export default function CoachScreen() {
           return;
         }
 
-        clearPendingAction();
         const successContent = `✅ Your daily calorie goal has been updated to **${newCalories} kcal**.`;
         console.log('[AICoach] Goal updated successfully, new daily_calories:', newCalories);
         setMessages((prev) => [
@@ -1169,7 +1085,6 @@ export default function CoachScreen() {
         timestamp: Date.now(),
       };
 
-      clearPendingAction();
       setMessages((prev) => [...prev, userMsg]);
 
       const history = [...messages, userMsg].map(({ role, content, timestamp }) => ({
@@ -1186,7 +1101,24 @@ export default function CoachScreen() {
         console.error('[AICoach] Error confirming action:', e?.message);
       }
     },
-    [clearPendingAction, messages, pendingAction, router, sendMessage, setMessages]
+    [messages, router, sendMessage, setMessages]
+  );
+
+  const handleDeclineInline = useCallback(
+    (messageId: string) => {
+      console.log('[AICoach] handleDeclineInline called, messageId:', messageId);
+      setMessages((prev) =>
+        prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'declined' as const } : m)
+      );
+      const followUp: MessageWithId = {
+        id: genId(),
+        role: 'assistant',
+        content: "No problem! Let me know if you'd like to make any other changes.",
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, followUp]);
+    },
+    [setMessages]
   );
 
   const formatTime = useCallback((timestamp: number): string => {
@@ -1420,6 +1352,16 @@ export default function CoachScreen() {
                         <StreamingCursor isDark={isDark} />
                       )}
                     </View>
+                    {message.actionProposal && message.actionStatus ? (
+                      <InlineActionCard
+                        messageId={message.id}
+                        action={message.actionProposal}
+                        actionStatus={message.actionStatus}
+                        isDark={isDark}
+                        onConfirm={handleConfirmInline}
+                        onDecline={handleDeclineInline}
+                      />
+                    ) : null}
                     {!isThisStreaming && timeText ? (
                       <Text style={[styles.assistantBubbleTime, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                         {timeText}
@@ -1522,17 +1464,6 @@ export default function CoachScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ── Action Confirmation Bottom Sheet ── */}
-      <ActionConfirmSheet
-        visible={pendingAction !== null}
-        action={pendingAction}
-        isDark={isDark}
-        onConfirm={handleConfirmAction}
-        onReject={() => {
-          console.log('[AICoach] Action rejected by user');
-          clearPendingAction();
-        }}
-      />
     </SafeAreaView>
   );
 }
@@ -1915,155 +1846,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // ── Action Confirmation Sheet ────────────────────────────────────────────
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheetBackdropTouch: {
-    flex: 1,
-  },
-  sheetContainer: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '85%',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-  },
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  sheetCloseBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetCloseX: {
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  sheetScroll: {
-    flexGrow: 0,
-  },
-  sheetScrollContent: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  sheetBadgeRow: {
-    flexDirection: 'row',
-  },
-  sheetBadge: {
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  sheetBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  sheetChangeCard: {
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+  // ── Inline Action Card ───────────────────────────────────────────────────
+  inlineActionCard: {
     borderWidth: 1,
-    alignItems: 'center',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
   },
-  sheetChangeLabel: {
+  inlineActionBadgeRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  inlineActionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  inlineActionBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
   },
-  sheetChangeRow: {
+  inlineActionChangeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 8,
+    marginBottom: 8,
+    flexWrap: 'wrap',
   },
-  sheetChangeValue: {
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  sheetChangeArrow: {
-    fontSize: 22,
+  inlineActionValue: {
+    fontSize: 15,
     fontWeight: '700',
   },
-  sheetSection: {
-    gap: 6,
+  inlineActionArrow: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.primary,
   },
-  sheetSectionTitle: {
+  inlineActionReason: {
     fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    lineHeight: 18,
+    marginBottom: 12,
   },
-  sheetSectionBody: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  sheetEvidenceToggle: {
+  inlineActionButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
   },
-  sheetEvidenceChevron: {
-    fontSize: 12,
-  },
-  sheetEvidenceBox: {
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm,
-    borderWidth: 1,
-    marginTop: 6,
-  },
-  sheetEvidenceText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    lineHeight: 16,
-  },
-  sheetReversibleBadge: {
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+  inlineActionConfirmBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  sheetReversibleText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  sheetButtons: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    gap: spacing.sm,
-  },
-  sheetConfirmBtn: {
-    borderRadius: borderRadius.md,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  sheetConfirmBtnText: {
+  inlineActionConfirmText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontSize: 14,
   },
-  sheetRejectBtn: {
-    borderRadius: borderRadius.md,
-    paddingVertical: 14,
+  inlineActionDeclineBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: 'center',
     borderWidth: 1,
   },
-  sheetRejectBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
+  inlineActionDeclineText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  inlineActionStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 6,
+  },
+  inlineActionStatusText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   // ── Meal plan preview (in ActionConfirmSheet) ───────────────────────────────
   mealPlanPreviewCard: {

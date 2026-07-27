@@ -10,21 +10,6 @@ export type CoachMessage = {
   timestamp: number;
 };
 
-// Message type used internally in the hook (with streaming flag)
-export type Message = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-  isStreaming?: boolean;
-};
-
-type State =
-  | { status: 'idle'; error: null }
-  | { status: 'loading'; error: null }
-  | { status: 'success'; error: null }
-  | { status: 'error'; error: string };
-
 export type MealPlanMeal = {
   meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   food_name: string;
@@ -80,6 +65,23 @@ export type ActionProposal = {
     [key: string]: unknown;
   };
 };
+
+// Message type used internally in the hook (with streaming flag)
+export type Message = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  isStreaming?: boolean;
+  actionProposal?: ActionProposal;
+  actionStatus?: 'pending' | 'confirmed' | 'declined';
+};
+
+type State =
+  | { status: 'idle'; error: null }
+  | { status: 'loading'; error: null }
+  | { status: 'success'; error: null }
+  | { status: 'error'; error: string };
 
 type UseAICoachOptions = {
   weightUnit?: string;
