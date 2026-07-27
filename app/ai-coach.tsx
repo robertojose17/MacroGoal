@@ -33,19 +33,14 @@ const genId = () => {
 type MessageWithId = Message;
 
 const SUGGESTED_PROMPTS = [
-  'Give me my daily check-in',
-  'Am I on track this week?',
-  'What can I eat right now?',
   'Analyze my last 14 days',
 ];
 
 const QUICK_ACTION_CARDS = [
-  { iosIcon: 'chart.bar.fill', androidIcon: 'bar_chart', title: 'Daily Check-in', subtitle: 'How am I doing today?', message: 'Give me my daily check-in for today' },
   { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Weekly Review', subtitle: 'Full week summary', message: 'Give me my weekly progress review' },
   { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'What can I eat?', subtitle: 'Remaining macros', message: 'What can I eat with my remaining macros today?' },
   { iosIcon: 'target', androidIcon: 'track_changes', title: 'Am I on track?', subtitle: 'Weekly progress check', message: 'Am I on track this week?' },
   { iosIcon: 'magnifyingglass', androidIcon: 'search', title: 'Analyze patterns', subtitle: 'Last 14 days', message: 'Detect any patterns in my last 14 days' },
-  { iosIcon: 'cart.fill', androidIcon: 'shopping_cart', title: 'Find at Store', subtitle: 'Walmart macro picks', message: 'What can I buy at Walmart that fits my macros?' },
   { iosIcon: 'menucard.fill', androidIcon: 'menu_book', title: 'Restaurant Menu', subtitle: 'Under 500 cal options', message: "What can I order at McDonald's under 500 calories?" },
   { iosIcon: 'brain', androidIcon: 'psychology', title: 'My Profile', subtitle: "Coach's memory", message: 'What have you learned about me so far?' },
 ];
