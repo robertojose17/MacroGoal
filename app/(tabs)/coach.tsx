@@ -422,7 +422,7 @@ function InlineActionCard({
   onDecline: (messageId: string) => void;
 }) {
   const proposal = action.proposal;
-  const actionTypeInfo = formatActionType(proposal.action_type || proposal.goal_type || '');
+  const actionTypeInfo = formatActionType(action.action_type || proposal.action_type || proposal.goal_type || '');
   const borderColor = isDark ? colors.borderDark : colors.border;
   const textColor = isDark ? colors.textDark : colors.text;
   const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -433,7 +433,7 @@ function InlineActionCard({
   const goalType = proposal.goal_type || proposal.action_type || '';
   const unitLabel = goalType.toLowerCase().includes('calorie') ? ' cal' : '';
 
-  const isMealPlan = proposal.action_type === 'create_meal_plan' && proposal.days && proposal.days.length > 0;
+  const isMealPlan = (action.action_type === 'create_meal_plan' || proposal.action_type === 'create_meal_plan') && proposal.days && proposal.days.length > 0;
   const mealPlanDays = proposal.days || [];
   const totalMealPlanMeals = mealPlanDays.reduce((sum, d) => sum + d.meals.length, 0);
   const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
@@ -547,7 +547,7 @@ function InlineActionCard({
         <TouchableOpacity
           style={[styles.inlineActionConfirmBtn, { backgroundColor: colors.primary }]}
           onPress={() => {
-            console.log('[AICoach] Inline confirm pressed, messageId:', messageId, 'action_id:', action.action_id, 'type:', proposal.action_type);
+            console.log('[AICoach] Inline confirm pressed, messageId:', messageId, 'action_id:', action.action_id, 'type:', action.action_type || proposal.action_type);
             onConfirm(messageId);
           }}
           activeOpacity={0.85}
@@ -883,7 +883,8 @@ export default function CoachScreen() {
       const confirmation_token = actionProposal.confirmation_token;
       const proposal = actionProposal.proposal;
 
-      console.log('[AICoach] Confirming inline action:', action_id, 'type:', proposal.action_type);
+      const actionType = actionProposal.action_type || proposal.action_type || '';
+      console.log('[AICoach] Confirming inline action:', action_id, 'type:', actionType);
 
       // Mark as confirmed immediately
       setMessages((prev) =>
@@ -892,7 +893,7 @@ export default function CoachScreen() {
 
       // ── create_meal_plan ──────────────────────────────────────────────────
       if (
-        proposal.action_type === 'create_meal_plan' &&
+        actionType === 'create_meal_plan' &&
         proposal.days &&
         proposal.days.length > 0
       ) {
@@ -956,7 +957,7 @@ export default function CoachScreen() {
       }
 
       // ── add_food_to_diary ─────────────────────────────────────────────────
-      if (proposal.action_type === 'add_food_to_diary') {
+      if (actionType === 'add_food_to_diary') {
         console.log('[AICoach] add_food_to_diary confirmed, food_name:', proposal.food_name);
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -1031,7 +1032,7 @@ export default function CoachScreen() {
       }
 
       // ── update_goal ───────────────────────────────────────────────────────
-      if (proposal.action_type === 'update_goal') {
+      if (actionType === 'update_goal') {
         console.log('[AICoach] update_goal confirmed, proposed_value:', proposal.proposed_value);
 
         const { data: { user } } = await supabase.auth.getUser();

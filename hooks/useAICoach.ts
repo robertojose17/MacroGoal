@@ -31,6 +31,7 @@ export type MealPlanDay = {
 
 export type ActionProposal = {
   action_id: string;
+  action_type?: string;  // root-level action_type from edge function
   confirmation_token: string;
   proposal: {
     goal_type?: string;
