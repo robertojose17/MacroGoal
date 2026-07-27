@@ -905,7 +905,7 @@ export default function SubscriptionScreen() {
                     {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.darkPlanCardTitle}>7-Day Free Trial</Text>
+                    <Text style={styles.darkPlanCardTitle}>Free Trial</Text>
                     <Text style={styles.darkPlanCardPrice}>{yearlyPrice}/year</Text>
                     {yearlyMonthlyEquiv && (
                       <Text style={styles.darkPlanCardSub}>Only {yearlyMonthlyEquiv}</Text>
