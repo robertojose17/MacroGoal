@@ -1251,7 +1251,7 @@ export default function AICoachScreen() {
           />
           <View>
             <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              AI Coach
+              Coach
             </Text>
             <Text style={[styles.headerSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Body Transformation Coach

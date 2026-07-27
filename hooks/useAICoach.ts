@@ -91,18 +91,10 @@ function genMsgId() {
   return `coach-${Date.now()}-${msgCounter}`;
 }
 
-const WELCOME_MESSAGE: Message = {
-  id: 'welcome',
-  role: 'assistant',
-  content:
-    "Hi! I'm your AI Body Transformation Coach. I have access to your nutrition logs, weight history, and step data. Ask me anything about your progress — I'll analyze your real data to give you honest, specific feedback.",
-  timestamp: Date.now(),
-};
-
 export function useAICoach(options?: UseAICoachOptions) {
   const [state, setState] = useState<State>({ status: 'idle', error: null });
   const [pendingAction, setPendingAction] = useState<ActionProposal | null>(null);
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const weightUnit = options?.weightUnit ?? 'lb';
   const isMountedRef = useRef(true);
