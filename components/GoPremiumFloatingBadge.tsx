@@ -21,12 +21,10 @@ export default function GoPremiumFloatingBadge() {
     router.push('/subscription');
   };
 
-  // Hide on auth, onboarding, and index (splash/redirect) screens
+  // Hide on auth, onboarding, and choose-username screens
   const isAuthOrOnboarding =
     pathname.startsWith('/auth') ||
     pathname.startsWith('/onboarding') ||
-    pathname === '/' ||
-    pathname === '/index' ||
     pathname.startsWith('/choose-username');
 
   if (!visible || isPremium || isAuthOrOnboarding) return null;
