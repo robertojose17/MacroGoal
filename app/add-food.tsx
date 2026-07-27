@@ -1403,19 +1403,39 @@ export default function AddFoodScreen() {
   }, [context, date, mealType, showSuccessBanner]);
 
   const handleOpenRecentFoodDetails = useCallback((item: RecentFoodItem) => {
-    console.log('[AddFood] Opening recent food details:', item.food_name, 'meal_item_id:', item.meal_item_id);
-    router.push({
-      pathname: '/food-details',
-      params: {
-        itemId: item.meal_item_id,
-        mealType,
-        date,
-        returnTo: returnTo || '/(tabs)/(home)',
-        mode: '',
-        context: context || '',
-        planId: planId || '',
-      },
-    });
+    console.log('[AddFood] Opening recent food details:', item.food_name, 'off_data:', !!item.off_data);
+
+    if (item.off_data) {
+      // Has OFF data — open in view mode from the food catalog (1 serving default, matches row display)
+      router.push({
+        pathname: '/food-details',
+        params: {
+          offData: JSON.stringify(item.off_data),
+          meal: mealType,
+          date,
+          returnTo: returnTo || '/(tabs)/(home)',
+          mode: 'view',
+          context: context || '',
+          planId: planId || '',
+          source: 'recent',
+        },
+      });
+    } else {
+      // No OFF data — fall back to loading from meal_item (existing behavior)
+      router.push({
+        pathname: '/food-details',
+        params: {
+          itemId: item.meal_item_id,
+          meal: mealType,
+          date,
+          returnTo: returnTo || '/(tabs)/(home)',
+          mode: '',
+          context: context || '',
+          planId: planId || '',
+          source: 'recent',
+        },
+      });
+    }
   }, [router, mealType, date, returnTo, context, planId]);
 
   const renderRecentFoodItem = useCallback((item: RecentFoodItem, index: number) => {
