@@ -434,12 +434,92 @@ function InlineActionCard({
   const unitLabel = goalType.toLowerCase().includes('calorie') ? ' cal' : '';
 
   const isMealPlan = (action.action_type === 'create_meal_plan' || proposal.action_type === 'create_meal_plan') && proposal.days && proposal.days.length > 0;
+  const isAddFood = (action.action_type === 'add_food_to_diary' || proposal.action_type === 'add_food_to_diary');
   const mealPlanDays = proposal.days || [];
   const totalMealPlanMeals = mealPlanDays.reduce((sum, d) => sum + d.meals.length, 0);
   const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
   const totalCalories = mealPlanDays.reduce((sum, d) => sum + d.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
   const avgCalPerDay = mealPlanDays.length > 0 ? Math.round(totalCalories / mealPlanDays.length) : 0;
-  const confirmBtnText = isMealPlan ? 'Create Meal Plan' : 'Confirm';
+  const confirmBtnText = isAddFood ? 'Yes, add it' : isMealPlan ? 'Create Meal Plan' : 'Confirm';
+  const declineBtnText = isAddFood ? 'No thanks' : 'Decline';
+
+  // ── add_food_to_diary: special compact card ──────────────────────────────
+  if (isAddFood) {
+    const foodCalories = proposal.calories !== undefined ? Number(proposal.calories) : null;
+    const foodProtein = proposal.protein !== undefined ? Number(proposal.protein) : null;
+    const foodMealType = proposal.meal_type ? String(proposal.meal_type) : null;
+
+    const macroCalText = foodCalories !== null ? `${foodCalories} cal` : '';
+    const macroProteinText = foodProtein !== null ? `${foodProtein}g protein` : '';
+    const macroMealText = foodMealType ?? '';
+
+    const macroParts = [macroCalText, macroProteinText, macroMealText].filter(Boolean);
+    const macroLine = macroParts.join('  •  ');
+
+    if (actionStatus === 'confirmed') {
+      return (
+        <View style={[styles.inlineActionStatusBadge]}>
+          <Text style={[styles.inlineActionStatusText, { color: '#10B981' }]}>
+            {'✅ Added to your meals'}
+          </Text>
+        </View>
+      );
+    }
+
+    if (actionStatus === 'declined') {
+      return (
+        <View style={[styles.inlineActionStatusBadge]}>
+          <Text style={[styles.inlineActionStatusText, { color: secondaryText }]}>
+            {'❌ Not added'}
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.inlineActionCard, { backgroundColor: cardBg, borderColor }]}>
+        <Text style={[styles.inlineAddFoodTitle, { color: textColor }]}>
+          {'🍽  Add to today\'s meals?'}
+        </Text>
+        {proposal.food_name ? (
+          <Text style={[styles.inlineAddFoodName, { color: textColor }]}>
+            {String(proposal.food_name)}
+          </Text>
+        ) : null}
+        {macroLine.length > 0 ? (
+          <Text style={[styles.inlineAddFoodMacros, { color: secondaryText }]}>
+            {macroLine}
+          </Text>
+        ) : null}
+        <View style={styles.inlineActionButtons}>
+          <TouchableOpacity
+            style={[styles.inlineActionConfirmBtn, { backgroundColor: colors.primary }]}
+            onPress={() => {
+              console.log('[AICoach] add_food_to_diary confirm pressed, messageId:', messageId, 'food:', proposal.food_name, 'calories:', proposal.calories);
+              onConfirm(messageId);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.inlineActionConfirmText}>
+              {confirmBtnText}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.inlineActionDeclineBtn, { borderColor }]}
+            onPress={() => {
+              console.log('[AICoach] add_food_to_diary decline pressed, messageId:', messageId, 'food:', proposal.food_name);
+              onDecline(messageId);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.inlineActionDeclineText, { color: secondaryText }]}>
+              {declineBtnText}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   if (actionStatus === 'confirmed') {
     return (
@@ -565,7 +645,7 @@ function InlineActionCard({
           activeOpacity={0.85}
         >
           <Text style={[styles.inlineActionDeclineText, { color: secondaryText }]}>
-            Decline
+            {declineBtnText}
           </Text>
         </TouchableOpacity>
       </View>
@@ -2026,5 +2106,20 @@ const styles = StyleSheet.create({
   statusCardHint: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  // ── add_food_to_diary card ────────────────────────────────────────────────
+  inlineAddFoodTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  inlineAddFoodName: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  inlineAddFoodMacros: {
+    fontSize: 12,
+    marginBottom: 12,
   },
 });
