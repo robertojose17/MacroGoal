@@ -1,1207 +1,2193 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   ScrollView,
+  KeyboardAvoidingView,
   Platform,
   Alert,
+  Animated,
+  Modal,
   Image,
-  ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useAICoach, Message, ActionProposal } from '@/hooks/useAICoach';
 import { supabase } from '@/lib/supabase/client';
+import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Confidence = 'high' | 'moderate' | 'low';
-type ProgressDirection = 'losing' | 'gaining' | 'stable' | 'insufficient_data';
-type InsightType =
-  | 'pattern_detected'
-  | 'positive_reinforcement'
-  | 'risk'
-  | 'missing_data'
-  | 'milestone'
-  | 'behavior_correlation';
-
-type CoachDashboard = {
-  greeting: string;
-  coach_focus: {
-    headline: string;
-    instruction: string;
-    why: string;
-    do_not_change: string;
-    next_review: string;
-    confidence: Confidence;
-  };
-  today_plan: {
-    summary: string;
-    biggest_opportunity: string;
-    cta_label: string;
-    cta_prompt: string;
-  };
-  weekly_execution: {
-    score: number;
-    score_label: string;
-    breakdown_summary: string;
-    vs_last_week: string;
-    what_drove_score: string;
-  };
-  progress_trend: {
-    direction: ProgressDirection;
-    weekly_rate_display: string;
-    vs_expected: string;
-    interpretation: string;
-    data_note: string;
-  };
-  recommendation: {
-    title: string;
-    what: string;
-    why: string;
-    current_value: string;
-    proposed_value: string;
-    expected_impact: string;
-    trial_duration: string;
-    review_date: string;
-    action_type: string;
-    proposed_numeric: number;
-    current_numeric: number;
-  } | null;
-  insight: {
-    type: InsightType;
-    title: string;
-    explanation: string;
-    evidence: string;
-    recommended_action: string;
-    cta_label: string;
-    cta_prompt: string;
-  } | null;
-  quick_actions: {
-    label: string;
-    ios_icon: string;
-    android_icon: string;
-    prompt: string;
-  }[];
-  computed: {
-    calories_goal: number;
-    calories_logged: number;
-    calories_remaining: number;
-    protein_goal: number;
-    protein_logged: number;
-    protein_remaining: number;
-    meals_logged_today: number;
-    score: number;
-    score_breakdown: {
-      calories: number;
-      protein: number;
-      steps: number;
-      logging: number;
-      weighins: number;
-    };
-    weekly_rate: number;
-    weight_unit: string;
-    weight_entries_last_14: number;
-    status: string;
-    confidence: string;
-    data_sufficient: boolean;
-    days_logged_last_7: number;
-  };
-  active_experiment: {
-    id: string;
-    variable: string;
-    previous_value: number;
-    new_value: number;
-    reason: string;
-    started_at: string;
-    review_at: string;
-    adherence_pct: number | null;
-  } | null;
-  recent_insights: {
-    id: string;
-    type: string;
-    title: string;
-    explanation: string;
-    status: string;
-    created_at: string;
-  }[];
-  generated_at: string;
+// ── ID generator ────────────────────────────────────────────────────────────
+let msgCounter = 0;
+const genId = () => {
+  msgCounter += 1;
+  return `coach-${Date.now()}-${msgCounter}`;
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+type MessageWithId = Message;
 
-const CACHE_KEY = 'coach_dashboard_cache';
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const SUGGESTED_PROMPTS = [
+  'Analyze my last 14 days',
+];
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const QUICK_ACTION_CARDS = [
+  { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Weekly Review', subtitle: 'Full week summary', message: 'Give me my weekly progress review' },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'What can I eat?', subtitle: 'Remaining macros', message: 'What can I eat with my remaining macros today?' },
+  { iosIcon: 'target', androidIcon: 'track_changes', title: 'Am I on track?', subtitle: 'Weekly progress check', message: 'Am I on track this week?' },
+  { iosIcon: 'magnifyingglass', androidIcon: 'search', title: 'Analyze patterns', subtitle: 'Last 14 days', message: 'Detect any patterns in my last 14 days' },
+  { iosIcon: 'menucard.fill', androidIcon: 'menu_book', title: 'Restaurant Menu', subtitle: 'Under 500 cal options', message: "What can I order at McDonald's under 500 calories?" },
+  { iosIcon: 'brain', androidIcon: 'psychology', title: 'My Profile', subtitle: "Coach's memory", message: 'What have you learned about me so far?' },
+];
 
-const STATUS_COLORS: Record<string, string> = {
-  on_track: '#10B981',
-  ahead: '#3B82F6',
-  behind: '#EF4444',
-  plateau: '#F59E0B',
-  low_adherence: '#F59E0B',
-  insufficient_data: '#6B7280',
+const CRAVING_CHIPS = [
+  { label: 'I want something sweet', iosIcon: 'heart.fill', androidIcon: 'favorite', message: 'I want something sweet' },
+  { label: 'High protein option', iosIcon: 'bolt.fill', androidIcon: 'flash_on', message: 'High protein option' },
+  { label: 'Quick meal under 400 cal', iosIcon: 'timer', androidIcon: 'timer', message: 'Quick meal under 400 cal' },
+  { label: 'I need a snack', iosIcon: 'leaf.fill', androidIcon: 'eco', message: 'I need a snack' },
+];
+
+// ── Store badge detection ────────────────────────────────────────────────────
+const STORE_COLORS: Record<string, { bg: string; text: string }> = {
+  walmart: { bg: '#0071CE', text: '#FFFFFF' },
+  publix: { bg: '#007A33', text: '#FFFFFF' },
+  "mcdonald's": { bg: '#DA291C', text: '#FFFFFF' },
+  mcdonalds: { bg: '#DA291C', text: '#FFFFFF' },
+  "burger king": { bg: '#F5821F', text: '#FFFFFF' },
+  subway: { bg: '#009B48', text: '#FFFFFF' },
+  target: { bg: '#CC0000', text: '#FFFFFF' },
+  costco: { bg: '#005DAA', text: '#FFFFFF' },
+  kroger: { bg: '#003087', text: '#FFFFFF' },
+  "whole foods": { bg: '#00674B', text: '#FFFFFF' },
+  chipotle: { bg: '#A81612', text: '#FFFFFF' },
+  starbucks: { bg: '#00704A', text: '#FFFFFF' },
 };
 
-const INSIGHT_TYPE_COLORS: Record<InsightType, string> = {
-  pattern_detected: '#8B5CF6',
-  positive_reinforcement: '#10B981',
-  risk: '#EF4444',
-  missing_data: '#6B7280',
-  milestone: '#F59E0B',
-  behavior_correlation: '#3B82F6',
-};
-
-const INSIGHT_TYPE_LABELS: Record<InsightType, string> = {
-  pattern_detected: 'Pattern',
-  positive_reinforcement: 'Win',
-  risk: 'Risk',
-  missing_data: 'Missing Data',
-  milestone: 'Milestone',
-  behavior_correlation: 'Correlation',
-};
-
-const CONFIDENCE_COLORS: Record<Confidence, string> = {
-  high: '#10B981',
-  moderate: '#F59E0B',
-  low: '#6B7280',
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
-
-function getStatusColor(status: string): string {
-  const key = status.toLowerCase().replace(/\s+/g, '_');
-  return STATUS_COLORS[key] ?? '#6B7280';
-}
-
-function formatStatusLabel(status: string): string {
-  return status
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatVariableName(variable: string): string {
-  return variable
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function calcExperimentProgress(startedAt: string, reviewAt: string): number {
-  const start = new Date(startedAt).getTime();
-  const end = new Date(reviewAt).getTime();
-  const now = Date.now();
-  if (end <= start) return 0;
-  return Math.min(Math.max((now - start) / (end - start), 0), 1);
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
+function detectStore(line: string): { name: string; colors: { bg: string; text: string } } | null {
+  const lower = line.toLowerCase();
+  for (const [store, storeColors] of Object.entries(STORE_COLORS)) {
+    if (lower.includes(store)) {
+      const displayName = store.charAt(0).toUpperCase() + store.slice(1);
+      return { name: displayName, colors: storeColors };
+    }
   }
+  return null;
 }
 
-// ─── SkeletonBlock ────────────────────────────────────────────────────────────
-
-function SkeletonBlock({
-  width,
-  height,
-  isDark,
-  style,
-}: {
-  width?: number | string;
-  height: number;
-  isDark: boolean;
-  style?: object;
-}) {
-  return (
-    <View
-      style={[
-        {
-          width: width ?? '100%',
-          height,
-          borderRadius: borderRadius.md,
-          backgroundColor: isDark ? '#3A3C52' : '#D4D6DA',
-          opacity: 0.4,
-        },
-        style,
-      ]}
-    />
-  );
+// ── Product card detection ───────────────────────────────────────────────────
+function isProductLine(line: string): boolean {
+  return /^-\s+\*\*/.test(line.trim());
 }
 
-// ─── MacroProgressBar ─────────────────────────────────────────────────────────
+function parseProductLine(line: string): { name: string; details: string } {
+  const trimmed = line.trim().replace(/^-\s+/, '');
+  const match = trimmed.match(/^\*\*([^*]+)\*\*\s*[—:-]\s*(.*)/);
+  if (match) {
+    return { name: match[1].trim(), details: match[2].trim() };
+  }
+  const nameOnly = trimmed.replace(/\*\*/g, '');
+  return { name: nameOnly, details: '' };
+}
 
-function MacroProgressBar({
-  label,
-  logged,
-  goal,
-  remaining,
-  barColor,
-  isDark,
-}: {
-  label: string;
-  logged: number;
-  goal: number;
-  remaining: number;
-  barColor: string;
-  isDark: boolean;
-}) {
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const trackColor = isDark ? '#3A3C52' : '#E5E7EB';
-  const safeGoal = goal > 0 ? goal : 1;
-  const pct = Math.min(logged / safeGoal, 1);
-  const pctDisplay = Math.round(pct * 100);
-  const remainingDisplay = Math.max(remaining, 0);
+function countProductLines(lines: string[]): number {
+  return lines.filter(isProductLine).length;
+}
 
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-        <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{label}</Text>
-        <Text style={{ fontSize: 11, color: subColor }}>{pctDisplay}%</Text>
-      </View>
-      <View style={{ height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden' }}>
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: barColor, width: `${pctDisplay}%` }} />
-      </View>
-      <Text style={{ fontSize: 11, color: subColor, marginTop: 3 }}>
-        {logged}
-        {' / '}
-        {goal}
-        {' · '}
-        {remainingDisplay}
-        {' left'}
+// ── Action type formatting ───────────────────────────────────────────────────
+function formatActionType(actionType: string): { label: string; color: string } {
+  const map: Record<string, { label: string; color: string }> = {
+    update_goal: { label: 'Goal Change', color: '#3B82F6' },
+    add_food_to_diary: { label: 'Add Food', color: '#10B981' },
+    create_meal: { label: 'Create Meal', color: '#8B5CF6' },
+    create_meal_plan: { label: 'Meal Plan', color: '#F59E0B' },
+    schedule_reminder: { label: 'Reminder', color: '#EC4899' },
+    update_preferences: { label: 'Preferences', color: '#6B7280' },
+  };
+  const key = (actionType || '').toLowerCase().replace(/\s+/g, '_');
+  return map[key] || { label: actionType || 'Action', color: colors.primary };
+}
+
+// ── Markdown-like inline parser ──────────────────────────────────────────────
+function renderStructuredText(
+  content: string,
+  baseTextStyle: object,
+  secondaryColor: string,
+  isDark: boolean
+): React.ReactNode[] {
+  const lines = content.split('\n');
+  const nodes: React.ReactNode[] = [];
+
+  const productLineCount = countProductLines(lines);
+  const useProductCards = productLineCount >= 3;
+
+  type LineTag =
+    | { type: 'header'; text: string }
+    | { type: 'numbered'; num: string; text: string }
+    | { type: 'bullet'; text: string }
+    | { type: 'product'; raw: string }
+    | { type: 'empty' }
+    | { type: 'text'; raw: string };
+
+  const tagged: LineTag[] = lines.map((line) => {
+    if (line.startsWith('### ')) return { type: 'header', text: line.replace(/^###\s*/, '') };
+    const numberedMatch = line.match(/^(\d+)\.\s+(.*)/);
+    if (numberedMatch) return { type: 'numbered', num: numberedMatch[1], text: numberedMatch[2] };
+    if (useProductCards && isProductLine(line)) return { type: 'product', raw: line };
+    if (line.trim() === '') return { type: 'empty' };
+    const bulletMatch = line.match(/^[-•]\s+(.*)/);
+    if (bulletMatch) return { type: 'bullet', text: bulletMatch[1] };
+    return { type: 'text', raw: line };
+  });
+
+  type ResolvedTag =
+    | { type: 'header'; text: string }
+    | { type: 'numbered'; num: string; text: string }
+    | { type: 'auto-numbered'; num: number; text: string }
+    | { type: 'bullet-single'; text: string }
+    | { type: 'product'; raw: string }
+    | { type: 'empty' }
+    | { type: 'text'; raw: string };
+
+  const resolved: ResolvedTag[] = [];
+  let i = 0;
+  while (i < tagged.length) {
+    const tag = tagged[i];
+    if (tag.type === 'bullet') {
+      const group: string[] = [];
+      let j = i;
+      while (j < tagged.length && tagged[j].type === 'bullet') {
+        group.push((tagged[j] as { type: 'bullet'; text: string }).text);
+        j++;
+      }
+      if (group.length >= 2) {
+        group.forEach((text, idx) => {
+          resolved.push({ type: 'auto-numbered', num: idx + 1, text });
+        });
+      } else {
+        resolved.push({ type: 'bullet-single', text: group[0] });
+      }
+      i = j;
+    } else {
+      resolved.push(tag as ResolvedTag);
+      i++;
+    }
+  }
+
+  resolved.forEach((tag, lineIdx) => {
+    const key = `line-${lineIdx}`;
+
+    if (tag.type === 'header') {
+      nodes.push(
+        <Text key={key} style={[baseTextStyle, styles.mdHeader]}>
+          {tag.text}
+        </Text>
+      );
+      return;
+    }
+
+    if (tag.type === 'numbered') {
+      nodes.push(
+        <View key={key} style={styles.mdListRow}>
+          <Text style={[baseTextStyle, styles.mdListNum]}>{tag.num}.</Text>
+          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(tag.text, baseTextStyle)}</Text>
+        </View>
+      );
+      return;
+    }
+
+    if (tag.type === 'auto-numbered') {
+      nodes.push(
+        <View key={key} style={styles.mdListRow}>
+          <Text style={[baseTextStyle, styles.mdListNum]}>{tag.num}.</Text>
+          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(tag.text, baseTextStyle)}</Text>
+        </View>
+      );
+      return;
+    }
+
+    if (tag.type === 'bullet-single') {
+      nodes.push(
+        <View key={key} style={styles.mdListRow}>
+          <Text style={[baseTextStyle, styles.mdListNum]}>•</Text>
+          <Text style={[baseTextStyle, styles.mdListText]}>{renderBoldInline(tag.text, baseTextStyle)}</Text>
+        </View>
+      );
+      return;
+    }
+
+    if (tag.type === 'product') {
+      const line = tag.raw;
+      const { name, details } = parseProductLine(line);
+      const store = detectStore(line);
+      nodes.push(
+        <View
+          key={key}
+          style={[styles.productCard, { backgroundColor: isDark ? '#2A2C40' : '#FFFFFF' }]}
+        >
+          <View style={styles.productCardHeader}>
+            <Text style={[styles.productCardName, { color: isDark ? colors.textDark : colors.text }]}>
+              {name}
+            </Text>
+            {store && (
+              <View style={[styles.storeBadge, { backgroundColor: store.colors.bg }]}>
+                <Text style={[styles.storeBadgeText, { color: store.colors.text }]}>{store.name}</Text>
+              </View>
+            )}
+          </View>
+          {details.length > 0 && (
+            <Text style={[styles.productCardDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {details}
+            </Text>
+          )}
+        </View>
+      );
+      return;
+    }
+
+    if (tag.type === 'empty') {
+      nodes.push(<View key={key} style={styles.mdSpacer} />);
+      return;
+    }
+
+    nodes.push(
+      <Text key={key} style={[baseTextStyle, styles.mdLine]}>
+        {renderBoldInline(tag.raw, baseTextStyle)}
       </Text>
+    );
+  });
+
+  return nodes;
+}
+
+function renderBoldInline(text: string, baseTextStyle: object): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const inner = part.slice(2, -2);
+      return (
+        <Text key={i} style={[baseTextStyle, styles.mdBold]}>
+          {inner}
+        </Text>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
+// ── Typing indicator dots ────────────────────────────────────────────────────
+function TypingIndicator({ isDark }: { isDark: boolean }) {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animateDot = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay(600 - delay),
+        ])
+      );
+
+    const a1 = animateDot(dot1, 0);
+    const a2 = animateDot(dot2, 200);
+    const a3 = animateDot(dot3, 400);
+    a1.start();
+    a2.start();
+    a3.start();
+
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
+  const dotStyle = (anim: Animated.Value) => ({
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: isDark ? colors.textSecondaryDark : colors.textSecondary,
+    opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
+    transform: [
+      {
+        translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }),
+      },
+    ],
+  });
+
+  return (
+    <View style={[styles.typingBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+      <Image
+        source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
+        style={styles.coachAvatarImage}
+        resizeMode="cover"
+      />
+      <View style={styles.typingDots}>
+        <Animated.View style={dotStyle(dot1)} />
+        <Animated.View style={dotStyle(dot2)} />
+        <Animated.View style={dotStyle(dot3)} />
+      </View>
     </View>
   );
 }
 
-// ─── ScoreBreakdownRow ────────────────────────────────────────────────────────
+// ── Blinking cursor for streaming messages ───────────────────────────────────
+function StreamingCursor({ isDark }: { isDark: boolean }) {
+  const [visible, setVisible] = useState(true);
 
-function ScoreBreakdownRow({
-  label,
-  pts,
-  color,
-  isDark,
-}: {
-  label: string;
-  pts: number;
-  color: string;
-  isDark: boolean;
-}) {
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisible((v) => !v);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const cursorColor = isDark ? colors.textDark : colors.text;
+  const cursorOpacity = visible ? 1 : 0;
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
-      <Text style={{ fontSize: 12, color: subColor, flex: 1 }}>{label}</Text>
-      <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{pts}pts</Text>
-    </View>
-  );
-}
-
-// ─── SectionLabel ─────────────────────────────────────────────────────────────
-
-function SectionLabel({ text, isDark }: { text: string; isDark: boolean }) {
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  return (
-    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.8, color: subColor, marginBottom: spacing.sm }}>
-      {text}
+    <Text style={[styles.streamingCursor, { color: cursorColor, opacity: cursorOpacity }]}>
+      {'|'}
     </Text>
   );
 }
 
-// ─── Card ─────────────────────────────────────────────────────────────────────
-
-function Card({
-  children,
-  isDark,
-  style,
+// ── Quick Action Card ────────────────────────────────────────────────────────
+function QuickActionCard({
+  iosIcon,
+  androidIcon,
+  title,
+  subtitle,
   onPress,
+  isDark,
 }: {
-  children: React.ReactNode;
+  iosIcon: string;
+  androidIcon: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
   isDark: boolean;
-  style?: object;
-  onPress?: () => void;
 }) {
-  const cardBg = isDark ? colors.cardDark : colors.card;
-  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
-
-  const inner = (
-    <View
+  return (
+    <TouchableOpacity
       style={[
+        styles.quickCard,
         {
-          backgroundColor: cardBg,
-          borderRadius: 16,
-          padding: spacing.md,
-          borderWidth: 1,
-          borderColor,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: isDark ? 0.2 : 0.06,
-          shadowRadius: 8,
-          elevation: 2,
-          marginHorizontal: spacing.md,
-          marginBottom: spacing.md,
+          backgroundColor: isDark ? colors.cardDark : '#FFFFFF',
+          shadowColor: isDark ? '#000' : '#000',
         },
-        style,
       ]}
+      onPress={onPress}
+      activeOpacity={0.75}
     >
-      {children}
-    </View>
+      <View style={[styles.quickCardIconWrap, { backgroundColor: colors.primary + '18' }]}>
+        <IconSymbol
+          ios_icon_name={iosIcon}
+          android_material_icon_name={androidIcon}
+          size={20}
+          color={colors.primary}
+        />
+      </View>
+      <Text style={[styles.quickCardTitle, { color: isDark ? colors.textDark : colors.text }]}>
+        {title}
+      </Text>
+      <Text style={[styles.quickCardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        {subtitle}
+      </Text>
+    </TouchableOpacity>
   );
-
-  if (onPress) {
-    return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
-        {inner}
-      </TouchableOpacity>
-    );
-  }
-  return inner;
 }
 
-// ─── SkeletonHub ──────────────────────────────────────────────────────────────
+// ── Action Confirmation Bottom Sheet ────────────────────────────────────────
+function ActionConfirmSheet({
+  visible,
+  action,
+  isDark,
+  onConfirm,
+  onReject,
+}: {
+  visible: boolean;
+  action: ActionProposal | null;
+  isDark: boolean;
+  onConfirm: (action_id: string, confirmation_token: string) => void;
+  onReject: () => void;
+}) {
+  const [evidenceExpanded, setEvidenceExpanded] = useState(false);
 
-function SkeletonHub({ isDark }: { isDark: boolean }) {
-  const cardBg = isDark ? colors.cardDark : colors.card;
-  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  useEffect(() => {
+    if (visible) setEvidenceExpanded(false);
+  }, [visible]);
 
-  const skCard = (children: React.ReactNode) => (
-    <View
-      style={{
-        backgroundColor: cardBg,
-        borderRadius: 16,
-        padding: spacing.md,
-        borderWidth: 1,
-        borderColor,
-        marginHorizontal: spacing.md,
-        marginBottom: spacing.md,
-      }}
-    >
-      {children}
-    </View>
-  );
+  if (!action) return null;
+
+  const proposal = action.proposal;
+  const actionTypeInfo = formatActionType(proposal.action_type || proposal.goal_type || '');
+  const isReversible = proposal.is_reversible !== false;
+
+  const currentVal = proposal.current_value !== undefined ? String(proposal.current_value) : null;
+  const proposedVal = proposal.proposed_value !== undefined ? String(proposal.proposed_value) : null;
+  const goalType = proposal.goal_type || proposal.action_type || '';
+  const unitLabel = goalType.toLowerCase().includes('calorie') ? ' cal' : '';
+
+  const evidenceText = proposal.data_evidence
+    ? JSON.stringify(proposal.data_evidence, null, 2)
+    : null;
+
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const textColor = isDark ? colors.textDark : colors.text;
+  const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const borderColor = isDark ? colors.borderDark : colors.border;
+
+  const isMealPlan = proposal.action_type === 'create_meal_plan' && proposal.days && proposal.days.length > 0;
+
+  const mealPlanDays = proposal.days || [];
+  const totalMealPlanMeals = mealPlanDays.reduce((sum, d) => sum + d.meals.length, 0);
+  const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
+  const totalCalories = mealPlanDays.reduce((sum, d) => sum + d.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
+  const avgCalPerDay = mealPlanDays.length > 0 ? Math.round(totalCalories / mealPlanDays.length) : 0;
+  const confirmBtnText = isMealPlan ? 'Create Meal Plan' : 'Confirm';
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-      {/* Greeting */}
-      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 8 }}>
-        <SkeletonBlock height={22} width="55%" isDark={isDark} />
-        <SkeletonBlock height={14} width="30%" isDark={isDark} />
-      </View>
-
-      {/* Coach Focus */}
-      {skCard(
-        <View style={{ gap: 10 }}>
-          <SkeletonBlock height={11} width="35%" isDark={isDark} />
-          <SkeletonBlock height={28} isDark={isDark} />
-          <SkeletonBlock height={18} width="80%" isDark={isDark} />
-          <SkeletonBlock height={14} isDark={isDark} />
-        </View>
-      )}
-
-      {/* Today's Plan */}
-      {skCard(
-        <View style={{ gap: 10 }}>
-          <SkeletonBlock height={11} width="30%" isDark={isDark} />
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-            <SkeletonBlock height={60} isDark={isDark} style={{ flex: 1 }} />
-            <SkeletonBlock height={60} isDark={isDark} style={{ flex: 1 }} />
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        console.log('[AICoach] Action sheet dismissed via back button');
+        onReject();
+      }}
+    >
+      <View style={styles.sheetBackdrop}>
+        <TouchableOpacity style={styles.sheetBackdropTouch} activeOpacity={1} onPress={onReject} />
+        <View style={[styles.sheetContainer, { backgroundColor: cardBg }]}>
+          {/* Header */}
+          <View style={[styles.sheetHeader, { borderBottomColor: borderColor }]}>
+            <Text style={[styles.sheetTitle, { color: textColor }]}>
+              Coach Recommendation
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[AICoach] Action sheet close button pressed');
+                onReject();
+              }}
+              style={styles.sheetCloseBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[styles.sheetCloseX, { color: secondaryText }]}>✕</Text>
+            </TouchableOpacity>
           </View>
-          <SkeletonBlock height={14} isDark={isDark} />
-          <SkeletonBlock height={40} isDark={isDark} />
-        </View>
-      )}
 
-      {/* Score + Trend */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm, marginBottom: spacing.md }}>
-        <View style={{ flex: 1, backgroundColor: cardBg, borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor, gap: 8 }}>
-          <SkeletonBlock height={11} width="70%" isDark={isDark} />
-          <SkeletonBlock height={40} width={60} isDark={isDark} />
-          <SkeletonBlock height={12} isDark={isDark} />
-          <SkeletonBlock height={12} isDark={isDark} />
-        </View>
-        <View style={{ flex: 1, backgroundColor: cardBg, borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor, gap: 8 }}>
-          <SkeletonBlock height={11} width="60%" isDark={isDark} />
-          <SkeletonBlock height={32} width={80} isDark={isDark} />
-          <SkeletonBlock height={12} isDark={isDark} />
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Action type badge */}
+            <View style={styles.sheetBadgeRow}>
+              <View style={[styles.sheetBadge, { backgroundColor: actionTypeInfo.color + '22' }]}>
+                <Text style={[styles.sheetBadgeText, { color: actionTypeInfo.color }]}>
+                  {actionTypeInfo.label}
+                </Text>
+              </View>
+            </View>
+
+            {/* Meal plan preview */}
+            {isMealPlan ? (
+              <View style={[styles.mealPlanPreviewCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
+                <Text style={[styles.mealPlanPreviewTitle, { color: textColor }]}>
+                  {proposal.plan_name || 'AI Meal Plan'}
+                </Text>
+                {(proposal.start_date || proposal.end_date) ? (
+                  <Text style={[styles.mealPlanPreviewDateRange, { color: secondaryText }]}>
+                    {proposal.start_date}
+                    {proposal.start_date && proposal.end_date ? ' → ' : ''}
+                    {proposal.end_date}
+                  </Text>
+                ) : null}
+                <View style={styles.mealPlanPreviewSummaryRow}>
+                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
+                    {mealPlanDays.length}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
+                    {' days'}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryDot, { color: secondaryText }]}>
+                    {'  •  '}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
+                    {mealsPerDay}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
+                    {' meals/day'}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryDot, { color: secondaryText }]}>
+                    {'  •  '}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummary, { color: actionTypeInfo.color }]}>
+                    {'~'}
+                    {avgCalPerDay}
+                  </Text>
+                  <Text style={[styles.mealPlanPreviewSummaryLabel, { color: secondaryText }]}>
+                    {' cal/day'}
+                  </Text>
+                </View>
+                <ScrollView
+                  style={styles.mealPlanDayScroll}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
+                  {mealPlanDays.map((day, dayIdx) => {
+                    const dayDate = new Date(day.date + 'T00:00:00');
+                    const dayLabel = isNaN(dayDate.getTime())
+                      ? day.date
+                      : dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    return (
+                      <View key={dayIdx} style={styles.mealPlanDayBlock}>
+                        <Text style={[styles.mealPlanDayHeader, { color: textColor }]}>
+                          {dayLabel}
+                        </Text>
+                        {day.meals.map((meal, mealIdx) => {
+                          const mealTypeLabel = meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1);
+                          return (
+                            <View key={mealIdx} style={styles.mealPlanMealRow}>
+                              <Text style={[styles.mealPlanMealDot, { color: secondaryText }]}>
+                                {'• '}
+                              </Text>
+                              <Text style={[styles.mealPlanMealType, { color: secondaryText }]}>
+                                {mealTypeLabel}
+                                {': '}
+                              </Text>
+                              <Text style={[styles.mealPlanMealName, { color: textColor }]}>
+                                {meal.food_name}
+                              </Text>
+                              <Text style={[styles.mealPlanMealCal, { color: secondaryText }]}>
+                                {' ('}
+                                {meal.calories}
+                                {' cal)'}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : (
+              currentVal && proposedVal ? (
+                <View style={[styles.sheetChangeCard, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
+                  <Text style={[styles.sheetChangeLabel, { color: secondaryText }]}>
+                    Proposed Change
+                  </Text>
+                  <View style={styles.sheetChangeRow}>
+                    <Text style={[styles.sheetChangeValue, { color: textColor }]}>
+                      {currentVal}
+                      {unitLabel}
+                    </Text>
+                    <Text style={[styles.sheetChangeArrow, { color: actionTypeInfo.color }]}>
+                      →
+                    </Text>
+                    <Text style={[styles.sheetChangeValue, { color: actionTypeInfo.color }]}>
+                      {proposedVal}
+                      {unitLabel}
+                    </Text>
+                  </View>
+                </View>
+              ) : null
+            )}
+
+            {/* Reason */}
+            {proposal.reason ? (
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
+                  Reason
+                </Text>
+                <Text style={[styles.sheetSectionBody, { color: secondaryText }]}>
+                  {proposal.reason}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Expected effect */}
+            {proposal.expected_effect ? (
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
+                  Expected Effect
+                </Text>
+                <Text style={[styles.sheetSectionBody, { color: secondaryText }]}>
+                  {proposal.expected_effect}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Data evidence (collapsible) */}
+            {!isMealPlan && evidenceText ? (
+              <View style={styles.sheetSection}>
+                <TouchableOpacity
+                  style={styles.sheetEvidenceToggle}
+                  onPress={() => {
+                    const next = !evidenceExpanded;
+                    console.log('[AICoach] Evidence section toggled:', next ? 'expanded' : 'collapsed');
+                    setEvidenceExpanded(next);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.sheetSectionTitle, { color: textColor }]}>
+                    Data Used
+                  </Text>
+                  <Text style={[styles.sheetEvidenceChevron, { color: secondaryText }]}>
+                    {evidenceExpanded ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {evidenceExpanded && (
+                  <View style={[styles.sheetEvidenceBox, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor }]}>
+                    <Text style={[styles.sheetEvidenceText, { color: secondaryText }]}>
+                      {evidenceText}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+
+            {/* Reversible badge */}
+            <View style={[styles.sheetReversibleBadge, { backgroundColor: isReversible ? '#10B98122' : '#F59E0B22' }]}>
+              <Text style={[styles.sheetReversibleText, { color: isReversible ? '#10B981' : '#F59E0B' }]}>
+                {isReversible ? '✓ This change can be undone' : '⚠ This change cannot be undone'}
+              </Text>
+            </View>
+          </ScrollView>
+
+          {/* Buttons */}
+          <View style={[styles.sheetButtons, { borderTopColor: borderColor }]}>
+            <TouchableOpacity
+              style={[styles.sheetConfirmBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                console.log('[AICoach] Confirm action pressed, action_id:', action.action_id, 'type:', proposal.action_type);
+                onConfirm(action.action_id, action.confirmation_token);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sheetConfirmBtnText}>
+                {confirmBtnText}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sheetRejectBtn, { borderColor }]}
+              onPress={() => {
+                console.log('[AICoach] Reject action pressed, action_id:', action.action_id);
+                onReject();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.sheetRejectBtnText, { color: secondaryText }]}>
+                Reject
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-
-      {/* Quick Actions */}
-      <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md, gap: 8 }}>
-        <SkeletonBlock height={11} width="30%" isDark={isDark} />
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          {[0, 1, 2, 3].map((i) => (
-            <SkeletonBlock key={i} height={72} width={88} isDark={isDark} style={{ borderRadius: 12 }} />
-          ))}
-        </View>
-      </View>
-    </ScrollView>
+    </Modal>
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ── Empathy phrase detection ─────────────────────────────────────────────────
+const EMPATHY_PHRASES = [
+  'i understand',
+  'i hear you',
+  "that's frustrating",
+  'that must feel',
+  "it's okay",
+  "don't be hard on yourself",
+  "you're not failing",
+  'recovery',
+  'return to your normal',
+];
 
+function detectsEmpathy(content: string): boolean {
+  const lower = content.toLowerCase();
+  return EMPATHY_PHRASES.some((phrase) => lower.includes(phrase));
+}
+
+// ── Status card types ────────────────────────────────────────────────────────
+type CoachRecommendation = {
+  user_status: string;
+  evidence_strength: string;
+  created_at: string;
+  recommendation_text: string;
+};
+
+function getStatusInfo(userStatus: string): { icon: string; label: string } {
+  const map: Record<string, { icon: string; label: string }> = {
+    on_track: { icon: '✅', label: 'On Track' },
+    faster_than_expected: { icon: '🚀', label: 'Ahead of Schedule' },
+    slower_than_expected: { icon: '📉', label: 'Below Target' },
+    possible_plateau: { icon: '⚠️', label: 'Possible Plateau' },
+    low_adherence: { icon: '📋', label: 'Low Adherence' },
+    incomplete_logging: { icon: '📝', label: 'Incomplete Logging' },
+    approaching_goal: { icon: '🎯', label: 'Approaching Goal' },
+    goal_achieved: { icon: '🏆', label: 'Goal Achieved' },
+    insufficient_data: { icon: '🔍', label: 'Gathering Data' },
+    at_risk_of_quitting: { icon: '💪', label: "Let's Get Back on Track" },
+  };
+  return map[userStatus] ?? { icon: '📊', label: 'Status Unknown' };
+}
+
+function getEvidenceBadge(strength: string): { label: string; color: string; bg: string } {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    strong: { label: 'Strong data', color: '#059669', bg: '#D1FAE5' },
+    moderate: { label: 'Moderate data', color: '#D97706', bg: '#FEF3C7' },
+    limited: { label: 'Limited data', color: '#EA580C', bg: '#FFEDD5' },
+    insufficient: { label: 'Insufficient data', color: '#DC2626', bg: '#FEE2E2' },
+  };
+  return map[(strength ?? '').toLowerCase()] ?? { label: 'Moderate data', color: '#D97706', bg: '#FEF3C7' };
+}
+
+function getRelativeTime(isoDate: string): string {
+  try {
+    const diff = Date.now() - new Date(isoDate).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 60) return `Updated ${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Updated ${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Updated 1 day ago';
+    return `Updated ${days} days ago`;
+  } catch {
+    return '';
+  }
+}
+
+// ── Status Card Component ────────────────────────────────────────────────────
+function StatusCard({
+  recommendation,
+  isDark,
+  onPress,
+}: {
+  recommendation: CoachRecommendation;
+  isDark: boolean;
+  onPress: () => void;
+}) {
+  const textColor = isDark ? colors.textDark : colors.text;
+  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+
+  const statusInfo = getStatusInfo(recommendation.user_status);
+  const evidenceBadge = getEvidenceBadge(recommendation.evidence_strength);
+  const relativeTime = getRelativeTime(recommendation.created_at);
+
+  return (
+    <TouchableOpacity
+      style={[styles.statusCard, { backgroundColor: cardBg }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={styles.statusCardHeader}>
+        <Text style={styles.statusCardIcon}>{statusInfo.icon}</Text>
+        <View style={styles.statusCardTitleCol}>
+          <Text style={[styles.statusCardTitle, { color: textColor }]}>{statusInfo.label}</Text>
+          {relativeTime ? (
+            <Text style={[styles.statusCardTime, { color: secondaryColor }]}>{relativeTime}</Text>
+          ) : null}
+        </View>
+        <View style={[styles.evidenceBadge, { backgroundColor: evidenceBadge.bg }]}>
+          <Text style={[styles.evidenceBadgeText, { color: evidenceBadge.color }]}>{evidenceBadge.label}</Text>
+        </View>
+      </View>
+      <Text style={[styles.statusCardHint, { color: secondaryColor }]}>
+        Tap for full assessment →
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Main screen ──────────────────────────────────────────────────────────────
 export default function CoachScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-
-  const [loading, setLoading] = useState(true);
-  const [dashboard, setDashboard] = useState<CoachDashboard | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [weightUnit, setWeightUnit] = useState<string>('lb');
-  const [focusExpanded, setFocusExpanded] = useState(false);
-  const [dismissedRecommendation, setDismissedRecommendation] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Colors ────────────────────────────────────────────────────────────────
-  const bgColor = isDark ? colors.backgroundDark : colors.background;
-  const cardBg = isDark ? colors.cardDark : colors.card;
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const borderColor = isDark ? colors.borderDark : colors.border;
+  const [inputText, setInputText] = useState('');
+  const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
+  const [creatingPlan, setCreatingPlan] = useState(false);
 
-  // ── Load dashboard ────────────────────────────────────────────────────────
+  const {
+    sendMessage,
+    loading,
+    pendingAction,
+    clearPendingAction,
+    messages,
+    setMessages,
+    conversationId,
+  } = useAICoach();
 
-  const loadDashboard = useCallback(async (showSkeleton = false) => {
-    console.log('[CoachHub] loadDashboard called, showSkeleton:', showSkeleton);
-    if (showSkeleton) setLoading(true);
-    setError(null);
+  useEffect(() => {
+    isMountedRef.current = true;
+    console.log('[AICoach] Screen mounted');
 
-    try {
-      // Resolve weight unit
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.warn('[CoachHub] No authenticated user');
-        if (isMountedRef.current) setLoading(false);
+    // Fetch latest recommendation for Phase 8 status card
+    (async () => {
+      try {
+        console.log('[AICoach] Fetching latest coach recommendation');
+        const { data, error } = await supabase
+          .from('coach_recommendations')
+          .select('user_status, evidence_strength, created_at, recommendation_text')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (error) {
+          if (error.code !== 'PGRST116') {
+            console.warn('[AICoach] Error fetching recommendation:', error.message);
+          }
+          return;
+        }
+        if (data) {
+          console.log('[AICoach] Latest recommendation fetched, status:', data.user_status);
+          if (isMountedRef.current) {
+            setLatestRecommendation(data as CoachRecommendation);
+          }
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Recommendation fetch error:', e?.message);
+      }
+    })();
+
+    return () => {
+      isMountedRef.current = false;
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    if (!isMountedRef.current) return;
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current && scrollViewRef.current) {
+        try {
+          scrollViewRef.current.scrollToEnd({ animated: true });
+        } catch (_) {}
+      }
+    }, 100);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages.length, loading, scrollToBottom]);
+
+  const handleSend = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || loading) return;
+
+      console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
+
+      const userMsg: MessageWithId = {
+        id: genId(),
+        role: 'user',
+        content: trimmed,
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, userMsg]);
+      setInputText('');
+
+      // Build conversation history (role/content/timestamp only)
+      const history = [...messages, userMsg].map(({ role, content, timestamp }) => ({
+        role,
+        content,
+        timestamp,
+      }));
+
+      console.log('[AICoach] Invoking ai-coach SSE with', history.length, 'messages, conversation_id:', conversationId);
+
+      try {
+        await sendMessage(history);
+      } catch (e: any) {
+        if (!isMountedRef.current) return;
+        console.error('[AICoach] Error from sendMessage:', e?.message);
+
+        if (e?.isSubscriptionError) {
+          Alert.alert('Subscription Required', 'AI Coach requires an active subscription.');
+        } else {
+          Alert.alert('Error', 'Something went wrong. Please try again.');
+        }
+
+        const errMsg: MessageWithId = {
+          id: genId(),
+          role: 'assistant',
+          content: 'Something went wrong. Please try again.',
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, errMsg]);
+      }
+    },
+    [loading, messages, sendMessage, conversationId, setMessages]
+  );
+
+  const handleSuggestedPrompt = useCallback(
+    (prompt: string) => {
+      console.log('[AICoach] Suggested prompt tapped:', prompt);
+      handleSend(prompt);
+    },
+    [handleSend]
+  );
+
+  const handleQuickAction = useCallback(
+    (card: typeof QUICK_ACTION_CARDS[number]) => {
+      console.log('[AICoach] Quick action card tapped:', card.title, '→', card.message);
+      handleSend(card.message);
+    },
+    [handleSend]
+  );
+
+  const handleCravingChip = useCallback(
+    (chip: { label: string; iosIcon: string; androidIcon: string; message: string }) => {
+      console.log('[AICoach] Craving chip tapped:', chip.label);
+      handleSend(chip.message);
+    },
+    [handleSend]
+  );
+
+  const handleSendPress = useCallback(() => {
+    console.log('[AICoach] Send button pressed');
+    handleSend(inputText);
+  }, [handleSend, inputText]);
+
+  const handleConfirmAction = useCallback(
+    async (action_id: string, confirmation_token: string) => {
+      console.log('[AICoach] Confirming action:', action_id);
+
+      // ── create_meal_plan ──────────────────────────────────────────────────
+      if (
+        pendingAction &&
+        pendingAction.proposal.action_type === 'create_meal_plan' &&
+        pendingAction.proposal.days &&
+        pendingAction.proposal.days.length > 0
+      ) {
+        const proposal = pendingAction.proposal;
+        const planName = proposal.plan_name || 'AI Meal Plan';
+        const startDate = proposal.start_date || '';
+        const endDate = proposal.end_date || '';
+        const days = proposal.days!;
+
+        console.log('[AICoach] create_meal_plan confirmed, plan_name:', planName, 'days:', days.length);
+        setCreatingPlan(true);
+        clearPendingAction();
+
+        try {
+          console.log('[AICoach] Calling createMealPlan:', planName, startDate, endDate);
+          const plan = await createMealPlan({ name: planName, start_date: startDate, end_date: endDate });
+          console.log('[AICoach] Meal plan created, id:', plan.id);
+
+          const allItems = days.flatMap((day) =>
+            day.meals.map((meal) => ({ day, meal }))
+          );
+          const totalMeals = allItems.length;
+          console.log('[AICoach] Adding', totalMeals, 'meal items in parallel');
+
+          await Promise.all(
+            allItems.map(({ day, meal }) =>
+              addMealPlanItem(plan.id, {
+                date: day.date,
+                meal_type: meal.meal_type,
+                food_name: meal.food_name,
+                calories: meal.calories,
+                protein: meal.protein,
+                carbs: meal.carbs,
+                fats: meal.fats,
+                fiber: meal.fiber,
+                grams: meal.grams,
+                quantity: meal.quantity,
+                serving_unit: meal.serving_unit,
+                dish_description: meal.dish_description,
+              })
+            )
+          );
+
+          console.log('[AICoach] All meal items added successfully');
+
+          const successMsg: MessageWithId = {
+            id: genId(),
+            role: 'assistant',
+            content: `✅ Your meal plan "${plan.name}" has been created! It covers ${days.length} day${days.length !== 1 ? 's' : ''} with ${totalMeals} meal${totalMeals !== 1 ? 's' : ''}. Opening it now...`,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, successMsg]);
+
+          console.log('[AICoach] Navigating to meal-plan-detail, id:', plan.id);
+          router.push(`/meal-plan-detail?id=${plan.id}`);
+        } catch (e: any) {
+          console.error('[AICoach] Error creating meal plan:', e?.message);
+          Alert.alert('Error', 'Could not create meal plan. Please try again.');
+        } finally {
+          if (isMountedRef.current) setCreatingPlan(false);
+        }
         return;
       }
 
-      const { data: prefData } = await supabase
-        .from('users')
-        .select('preferred_units')
-        .eq('id', user.id)
-        .maybeSingle();
-      const resolvedUnit = prefData?.preferred_units === 'metric' ? 'kg' : 'lb';
-      if (isMountedRef.current) setWeightUnit(resolvedUnit);
+      // ── add_food_to_diary ─────────────────────────────────────────────────
+      if (pendingAction && pendingAction.proposal.action_type === 'add_food_to_diary') {
+        const proposal = pendingAction.proposal;
+        console.log('[AICoach] add_food_to_diary confirmed, food_name:', proposal.food_name);
 
-      // Check cache
-      try {
-        const cached = await AsyncStorage.getItem(CACHE_KEY);
-        if (cached) {
-          const parsed: CoachDashboard = JSON.parse(cached);
-          const age = Date.now() - new Date(parsed.generated_at).getTime();
-          if (age < CACHE_TTL_MS) {
-            console.log('[CoachHub] Cache hit, age:', Math.round(age / 1000), 's');
-            if (isMountedRef.current) {
-              setDashboard(parsed);
-              setLoading(false);
-            }
-            // Still fetch fresh in background
-            fetchFreshDashboard(resolvedUnit);
-            return;
-          } else {
-            console.log('[CoachHub] Cache expired, age:', Math.round(age / 1000), 's');
-          }
-        }
-      } catch (cacheErr) {
-        console.warn('[CoachHub] Cache read error:', cacheErr);
-      }
-
-      // No valid cache — fetch fresh and show skeleton
-      if (isMountedRef.current) setLoading(true);
-      await fetchFreshDashboard(resolvedUnit);
-    } catch (err: any) {
-      console.error('[CoachHub] loadDashboard error:', err?.message ?? err);
-      if (isMountedRef.current) {
-        setError('Couldn\'t load your coaching data');
-        setLoading(false);
-      }
-    }
-  }, []);
-
-  const fetchFreshDashboard = async (unit: string) => {
-    console.log('[CoachHub] fetchFreshDashboard, weight_unit:', unit);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const jwt = session?.access_token;
-
-      console.log('[CoachHub] POST /functions/v1/get-coach-dashboard');
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-coach-dashboard`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwt ?? SUPABASE_ANON_KEY}`,
-          'apikey': SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ weight_unit: unit }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('[CoachHub] get-coach-dashboard HTTP error:', response.status, errText.slice(0, 200));
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data: CoachDashboard = await response.json();
-      console.log('[CoachHub] Dashboard received, generated_at:', data.generated_at);
-
-      // Cache it
-      try {
-        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
-      } catch (cacheErr) {
-        console.warn('[CoachHub] Cache write error:', cacheErr);
-      }
-
-      if (isMountedRef.current) {
-        setDashboard(data);
-        setLoading(false);
-        setError(null);
-      }
-    } catch (err: any) {
-      console.error('[CoachHub] fetchFreshDashboard error:', err?.message ?? err);
-      if (isMountedRef.current) {
-        setError('Couldn\'t load your coaching data');
-        setLoading(false);
-      }
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      isMountedRef.current = true;
-      console.log('[CoachHub] Tab focused — reloading dashboard');
-      setDismissedRecommendation(false);
-      loadDashboard(true);
-      return () => {
-        isMountedRef.current = false;
-      };
-    }, [loadDashboard])
-  );
-
-  // ── Accept Recommendation ─────────────────────────────────────────────────
-
-  const handleAcceptRecommendation = useCallback(async (rec: NonNullable<CoachDashboard['recommendation']>) => {
-    console.log('[CoachHub] Accept recommendation pressed, action_type:', rec.action_type, 'proposed_numeric:', rec.proposed_numeric);
-    try {
-      if (rec.action_type === 'update_goal') {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) {
+          console.warn('[AICoach] No user for add_food_to_diary');
+          return;
+        }
 
-        console.log('[CoachHub] Updating goals table for user:', user.id);
-        // Deactivate current active goal
+        const date = (proposal.date as string | undefined) || new Date().toISOString().split('T')[0];
+        const mealType = (proposal.meal_type as string | undefined) || 'snack';
+
+        console.log('[AICoach] Upserting meal row, date:', date, 'meal_type:', mealType);
+
+        let mealId: string | null = null;
+        const { data: upsertData } = await supabase
+          .from('meals')
+          .upsert(
+            { user_id: user.id, date, meal_type: mealType },
+            { onConflict: 'user_id,date,meal_type' }
+          )
+          .select('id')
+          .maybeSingle();
+
+        if (upsertData) {
+          mealId = upsertData.id;
+        } else {
+          const { data: existing } = await supabase
+            .from('meals')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('date', date)
+            .eq('meal_type', mealType)
+            .maybeSingle();
+          mealId = existing?.id ?? null;
+        }
+
+        if (!mealId) {
+          console.error('[AICoach] Could not get meal_id for add_food_to_diary');
+          Alert.alert('Error', 'Could not add food to diary.');
+          return;
+        }
+
+        console.log('[AICoach] Inserting meal_item, meal_id:', mealId, 'food:', proposal.food_name);
+        const { error: insertError } = await supabase.from('meal_items').insert({
+          meal_id: mealId,
+          food_name: proposal.food_name,
+          quantity: (proposal.quantity as number | undefined) ?? 1,
+          grams: (proposal.grams as number | undefined) ?? null,
+          serving_unit: (proposal.serving_unit as string | undefined) ?? null,
+          calories: (proposal.calories as number | undefined) ?? 0,
+          protein: (proposal.protein as number | undefined) ?? 0,
+          carbs: (proposal.carbs as number | undefined) ?? 0,
+          fats: (proposal.fats as number | undefined) ?? 0,
+          fiber: (proposal.fiber as number | undefined) ?? 0,
+        });
+
+        if (insertError) {
+          console.error('[AICoach] Error inserting meal_item:', insertError.message);
+          Alert.alert('Error', 'Could not add food to diary.');
+          return;
+        }
+
+        clearPendingAction();
+        const foodName = String(proposal.food_name ?? 'food');
+        const calories = Number(proposal.calories ?? 0);
+        const successContent = `✅ Added **${foodName}** (${calories} cal) to your ${mealType} on ${date}.`;
+        console.log('[AICoach] Food added to diary successfully:', foodName);
+        setMessages((prev) => [
+          ...prev,
+          { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
+        ]);
+        return;
+      }
+
+      // ── update_goal ───────────────────────────────────────────────────────
+      if (pendingAction && pendingAction.proposal.action_type === 'update_goal') {
+        const proposal = pendingAction.proposal;
+        console.log('[AICoach] update_goal confirmed, proposed_value:', proposal.proposed_value);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn('[AICoach] No user for update_goal');
+          return;
+        }
+
+        console.log('[AICoach] Deactivating current goals for user:', user.id);
         await supabase
           .from('goals')
           .update({ is_active: false })
           .eq('user_id', user.id)
           .eq('is_active', true);
 
-        // Insert new goal
-        const { error: insertErr } = await supabase
-          .from('goals')
-          .insert({
-            user_id: user.id,
-            calories: rec.proposed_numeric,
-            is_active: true,
-            created_at: new Date().toISOString(),
-          });
+        const newCalories = Number(proposal.proposed_value ?? proposal.current_value ?? 0);
+        console.log('[AICoach] Inserting new goal, daily_calories:', newCalories);
+        const { error: goalError } = await supabase.from('goals').insert({
+          user_id: user.id,
+          goal_type: (proposal.goal_type as string | undefined) ?? 'maintain',
+          daily_calories: newCalories,
+          protein_g: (proposal.protein_g as number | undefined) ?? null,
+          carbs_g: (proposal.carbs_g as number | undefined) ?? null,
+          fats_g: (proposal.fats_g as number | undefined) ?? null,
+          fiber_g: (proposal.fiber_g as number | undefined) ?? null,
+          is_active: true,
+        });
 
-        if (insertErr) {
-          console.error('[CoachHub] Goal insert error:', insertErr.message);
-          Alert.alert('Error', 'Could not update your goal. Please try again.');
+        if (goalError) {
+          console.error('[AICoach] Error inserting new goal:', goalError.message);
+          Alert.alert('Error', 'Could not update your goals.');
           return;
         }
 
-        console.log('[CoachHub] Goal updated successfully');
+        clearPendingAction();
+        const successContent = `✅ Your daily calorie goal has been updated to **${newCalories} kcal**.`;
+        console.log('[AICoach] Goal updated successfully, new daily_calories:', newCalories);
+        setMessages((prev) => [
+          ...prev,
+          { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
+        ]);
+        return;
       }
 
-      Alert.alert('Done!', 'Recommendation accepted. Your coach will track the results.');
-      setDismissedRecommendation(true);
+      // ── Default: send confirmation text to AI ─────────────────────────────
+      const confirmText = `Confirmed. Please execute action_id: ${action_id} with confirmation_token: ${confirmation_token}`;
 
-      // Invalidate cache and reload
-      await AsyncStorage.removeItem(CACHE_KEY);
-      loadDashboard(false);
-    } catch (err: any) {
-      console.error('[CoachHub] handleAcceptRecommendation error:', err?.message ?? err);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      const userMsg: MessageWithId = {
+        id: genId(),
+        role: 'user',
+        content: confirmText,
+        timestamp: Date.now(),
+      };
+
+      clearPendingAction();
+      setMessages((prev) => [...prev, userMsg]);
+
+      const history = [...messages, userMsg].map(({ role, content, timestamp }) => ({
+        role,
+        content,
+        timestamp,
+      }));
+
+      console.log('[AICoach] Sending confirmation to ai-coach, history length:', history.length);
+
+      try {
+        await sendMessage(history);
+      } catch (e: any) {
+        console.error('[AICoach] Error confirming action:', e?.message);
+      }
+    },
+    [clearPendingAction, messages, pendingAction, router, sendMessage, setMessages]
+  );
+
+  const formatTime = useCallback((timestamp: number): string => {
+    try {
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
     }
-  }, [loadDashboard]);
+  }, []);
 
-  // ── Navigate to chat ──────────────────────────────────────────────────────
+  // Determine if we're in the "welcome" state (only the welcome message, no user messages)
+  const hasUserMessages = messages.some((m) => m.role === 'user');
+  const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
+  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading;
+  const canSend = inputText.trim().length > 0 && !loading;
 
-  const openChat = useCallback((prompt?: string) => {
-    if (prompt) {
-      console.log('[CoachHub] Opening chat with prompt:', prompt.slice(0, 60));
-      router.push(`/ai-coach?prompt=${encodeURIComponent(prompt)}`);
-    } else {
-      console.log('[CoachHub] Opening chat (no prompt)');
-      router.push('/ai-coach');
+  // Find the last streaming message (for cursor)
+  const lastStreamingMsgId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].isStreaming) return messages[i].id;
     }
-  }, [router]);
+    return null;
+  })();
 
-  // ── Render sections ───────────────────────────────────────────────────────
-
-  const renderGreeting = (d: CoachDashboard) => {
-    const statusColor = getStatusColor(d.computed.status);
-    const statusLabel = formatStatusLabel(d.computed.status);
-    const confidenceText = d.computed.confidence === 'high'
-      ? '(high confidence)'
-      : d.computed.confidence === 'moderate'
-        ? '(moderate confidence)'
-        : '(limited data)';
-
-    return (
-      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
-        <Text style={{ ...typography.h3, color: textColor, marginBottom: 6 }}>{d.greeting}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: statusColor + '22', borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 4 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: statusColor }} />
-            <Text style={{ fontSize: 13, fontWeight: '700', color: statusColor }}>{statusLabel}</Text>
-          </View>
-          <Text style={{ fontSize: 12, color: subColor }}>{confidenceText}</Text>
-        </View>
-      </View>
-    );
-  };
-
-  const renderCoachFocus = (d: CoachDashboard) => {
-    const conf = d.coach_focus.confidence;
-    const confColor = CONFIDENCE_COLORS[conf] ?? '#6B7280';
-    const confLabel = conf.charAt(0).toUpperCase() + conf.slice(1);
-
-    return (
-      <Card isDark={isDark} style={{ borderWidth: 2, borderColor: colors.primary + '40' }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.xs }}>
-          <SectionLabel text="YOUR FOCUS TODAY" isDark={isDark} />
-          <View style={{ backgroundColor: confColor + '22', borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 3 }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: confColor }}>{confLabel}</Text>
-          </View>
-        </View>
-
-        {!d.computed.data_sufficient && (
-          <View style={{ backgroundColor: '#F59E0B22', borderRadius: borderRadius.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-            <Text style={{ fontSize: 13, color: '#F59E0B', fontWeight: '600' }}>Keep logging to unlock personalized coaching</Text>
-            <Text style={{ fontSize: 12, color: subColor, marginTop: 2 }}>Log your meals and weight daily for the best insights.</Text>
-          </View>
-        )}
-
-        <Text style={{ ...typography.h2, color: textColor, marginBottom: spacing.sm }}>{d.coach_focus.headline}</Text>
-        <Text style={{ fontSize: 15, fontWeight: '600', color: colors.primary, lineHeight: 22, marginBottom: spacing.sm }}>{d.coach_focus.instruction}</Text>
-
-        <TouchableOpacity
-          onPress={() => {
-            console.log('[CoachHub] Coach Focus "Why?" toggled, expanded:', !focusExpanded);
-            setFocusExpanded((v) => !v);
-          }}
-          activeOpacity={0.7}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: '600', color: subColor }}>Why?</Text>
-          <IconSymbol
-            ios_icon_name={focusExpanded ? 'chevron.up' : 'chevron.down'}
-            android_material_icon_name={focusExpanded ? 'expand-less' : 'expand-more'}
-            size={14}
-            color={subColor}
-          />
-        </TouchableOpacity>
-
-        {focusExpanded && (
-          <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
-            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>{d.coach_focus.why}</Text>
-            {d.coach_focus.do_not_change ? (
-              <View style={{ backgroundColor: isDark ? '#3A3C52' : '#F3F4F6', borderRadius: borderRadius.sm, padding: spacing.sm }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: subColor, marginBottom: 2 }}>DO NOT CHANGE</Text>
-                <Text style={{ fontSize: 13, color: textColor }}>{d.coach_focus.do_not_change}</Text>
-              </View>
-            ) : null}
-            {d.coach_focus.next_review ? (
-              <Text style={{ fontSize: 12, color: subColor }}>Next review: {d.coach_focus.next_review}</Text>
-            ) : null}
-          </View>
-        )}
-      </Card>
-    );
-  };
-
-  const renderTodayPlan = (d: CoachDashboard) => {
-    const c = d.computed;
-    return (
-      <Card isDark={isDark}>
-        <SectionLabel text="TODAY'S PLAN" isDark={isDark} />
-
-        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
-          <MacroProgressBar
-            label="Calories"
-            logged={c.calories_logged}
-            goal={c.calories_goal}
-            remaining={c.calories_remaining}
-            barColor={colors.calories}
-            isDark={isDark}
-          />
-          <MacroProgressBar
-            label="Protein"
-            logged={c.protein_logged}
-            goal={c.protein_goal}
-            remaining={c.protein_remaining}
-            barColor={colors.protein}
-            isDark={isDark}
-          />
-        </View>
-
-        <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: spacing.sm }}>{d.today_plan.summary}</Text>
-
-        {d.today_plan.biggest_opportunity ? (
-          <View style={{ backgroundColor: colors.primary + '18', borderRadius: borderRadius.sm, padding: spacing.sm, marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600', lineHeight: 18 }}>{d.today_plan.biggest_opportunity}</Text>
-          </View>
-        ) : null}
-
-        <TouchableOpacity
-          style={{ backgroundColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
-          onPress={() => {
-            console.log('[CoachHub] Today Plan CTA pressed:', d.today_plan.cta_label);
-            openChat(d.today_plan.cta_prompt);
-          }}
-          activeOpacity={0.85}
-        >
-          <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{d.today_plan.cta_label}</Text>
-        </TouchableOpacity>
-      </Card>
-    );
-  };
-
-  const renderExecutionAndTrend = (d: CoachDashboard) => {
-    const score = d.weekly_execution.score;
-    const scoreColor = score >= 80 ? '#10B981' : score >= 60 ? '#F59E0B' : '#EF4444';
-    const breakdown = d.computed.score_breakdown;
-
-    const directionIcon = d.progress_trend.direction === 'losing'
-      ? '↓'
-      : d.progress_trend.direction === 'gaining'
-        ? '↑'
-        : '→';
-    const directionColor = d.progress_trend.direction === 'losing'
-      ? '#10B981'
-      : d.progress_trend.direction === 'gaining'
-        ? '#EF4444'
-        : '#F59E0B';
-
-    return (
-      <View style={{ flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm, marginBottom: spacing.md }}>
-        {/* Execution Score */}
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: cardBg,
-            borderRadius: 16,
-            padding: spacing.md,
-            borderWidth: 1,
-            borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.2 : 0.06,
-            shadowRadius: 8,
-            elevation: 2,
-          }}
-          onPress={() => {
-            console.log('[CoachHub] Execution Score card tapped');
-            openChat('Explain my weekly execution score in detail');
-          }}
-          activeOpacity={0.8}
-        >
-          <SectionLabel text="EXECUTION SCORE" isDark={isDark} />
-          <Text style={{ fontSize: 44, fontWeight: '800', color: scoreColor, lineHeight: 50 }}>{score}</Text>
-          <Text style={{ fontSize: 12, fontWeight: '600', color: scoreColor, marginBottom: spacing.sm }}>{d.weekly_execution.score_label}</Text>
-
-          <ScoreBreakdownRow label="Calories" pts={breakdown.calories} color={colors.calories} isDark={isDark} />
-          <ScoreBreakdownRow label="Protein" pts={breakdown.protein} color={colors.protein} isDark={isDark} />
-          <ScoreBreakdownRow label="Steps" pts={breakdown.steps} color="#10B981" isDark={isDark} />
-          <ScoreBreakdownRow label="Logging" pts={breakdown.logging} color={colors.primary} isDark={isDark} />
-          <ScoreBreakdownRow label="Weigh-ins" pts={breakdown.weighins} color="#8B5CF6" isDark={isDark} />
-
-          {d.weekly_execution.vs_last_week ? (
-            <Text style={{ fontSize: 11, color: subColor, marginTop: spacing.xs }}>{d.weekly_execution.vs_last_week}</Text>
-          ) : null}
-        </TouchableOpacity>
-
-        {/* Progress Trend */}
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: cardBg,
-            borderRadius: 16,
-            padding: spacing.md,
-            borderWidth: 1,
-            borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.2 : 0.06,
-            shadowRadius: 8,
-            elevation: 2,
-          }}
-          onPress={() => {
-            console.log('[CoachHub] Progress Trend card tapped');
-            openChat('Analyze my weight trend and progress');
-          }}
-          activeOpacity={0.8}
-        >
-          <SectionLabel text="WEIGHT TREND" isDark={isDark} />
-          <Text style={{ fontSize: 36, fontWeight: '800', color: directionColor, lineHeight: 44 }}>{directionIcon}</Text>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: textColor, marginBottom: 4 }}>{d.progress_trend.weekly_rate_display}</Text>
-
-          {d.progress_trend.vs_expected ? (
-            <View style={{ backgroundColor: directionColor + '22', borderRadius: borderRadius.sm, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: spacing.sm }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: directionColor }}>{d.progress_trend.vs_expected}</Text>
-            </View>
-          ) : null}
-
-          <Text style={{ fontSize: 12, color: textColor, lineHeight: 17, marginBottom: spacing.xs }}>{d.progress_trend.interpretation}</Text>
-
-          {d.progress_trend.data_note ? (
-            <Text style={{ fontSize: 11, color: subColor, lineHeight: 15 }}>{d.progress_trend.data_note}</Text>
-          ) : null}
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const renderActiveExperiment = (exp: NonNullable<CoachDashboard['active_experiment']>) => {
-    const progress = calcExperimentProgress(exp.started_at, exp.review_at);
-    const pctDisplay = Math.round(progress * 100);
-    const trackColor = isDark ? '#3A3C52' : '#E5E7EB';
-    const varLabel = formatVariableName(exp.variable);
-    const reviewDate = formatDate(exp.review_at);
-
-    return (
-      <Card
-        isDark={isDark}
-        onPress={() => {
-          console.log('[CoachHub] Active Experiment card tapped, id:', exp.id);
-          openChat('How is my current experiment going?');
-        }}
-      >
-        <SectionLabel text="ACTIVE EXPERIMENT" isDark={isDark} />
-        <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, marginBottom: 4 }}>{varLabel}</Text>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: subColor }}>{exp.previous_value}</Text>
-          <IconSymbol ios_icon_name="arrow.right" android_material_icon_name="arrow-forward" size={16} color={colors.primary} />
-          <Text style={{ fontSize: 18, fontWeight: '700', color: '#10B981' }}>{exp.new_value}</Text>
-        </View>
-
-        {exp.reason ? (
-          <Text style={{ fontSize: 13, color: subColor, lineHeight: 18, marginBottom: spacing.sm }}>{exp.reason}</Text>
-        ) : null}
-
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden', marginBottom: 4 }}>
-          <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.primary, width: `${pctDisplay}%` }} />
-        </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 11, color: subColor }}>{pctDisplay}% complete</Text>
-          <Text style={{ fontSize: 11, color: subColor }}>Review: {reviewDate}</Text>
-        </View>
-      </Card>
-    );
-  };
-
-  const renderInsight = (insight: NonNullable<CoachDashboard['insight']>) => {
-    const typeColor = INSIGHT_TYPE_COLORS[insight.type] ?? '#6B7280';
-    const typeLabel = INSIGHT_TYPE_LABELS[insight.type] ?? insight.type;
-
-    return (
-      <Card isDark={isDark}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm }}>
-          <SectionLabel text="COACH INSIGHT" isDark={isDark} />
-          <View style={{ backgroundColor: typeColor + '22', borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 3 }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: typeColor }}>{typeLabel}</Text>
-          </View>
-        </View>
-
-        <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, marginBottom: spacing.xs }}>{insight.title}</Text>
-        <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: spacing.xs }}>{insight.explanation}</Text>
-
-        {insight.evidence ? (
-          <Text style={{ fontSize: 12, color: subColor, lineHeight: 17, marginBottom: spacing.md }}>{insight.evidence}</Text>
-        ) : null}
-
-        <TouchableOpacity
-          style={{ backgroundColor: typeColor, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
-          onPress={() => {
-            console.log('[CoachHub] Insight CTA pressed:', insight.cta_label);
-            openChat(insight.cta_prompt);
-          }}
-          activeOpacity={0.85}
-        >
-          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{insight.cta_label}</Text>
-        </TouchableOpacity>
-      </Card>
-    );
-  };
-
-  const renderRecommendation = (rec: NonNullable<CoachDashboard['recommendation']>) => {
-    if (dismissedRecommendation) return null;
-
-    return (
-      <Card isDark={isDark}>
-        <SectionLabel text="RECOMMENDED CHANGE" isDark={isDark} />
-        <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, marginBottom: 4 }}>{rec.title}</Text>
-        <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: spacing.sm }}>{rec.what}</Text>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm }}>
-          <View style={{ alignItems: 'center' }}>
-            <Text style={{ fontSize: 11, color: subColor, marginBottom: 2 }}>Current</Text>
-            <Text style={{ fontSize: 20, fontWeight: '700', color: textColor }}>{rec.current_value}</Text>
-          </View>
-          <IconSymbol ios_icon_name="arrow.right" android_material_icon_name="arrow-forward" size={18} color={colors.primary} />
-          <View style={{ alignItems: 'center' }}>
-            <Text style={{ fontSize: 11, color: subColor, marginBottom: 2 }}>Proposed</Text>
-            <Text style={{ fontSize: 20, fontWeight: '700', color: '#10B981' }}>{rec.proposed_value}</Text>
-          </View>
-        </View>
-
-        {rec.expected_impact ? (
-          <View style={{ backgroundColor: '#10B98118', borderRadius: borderRadius.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-            <Text style={{ fontSize: 13, color: '#10B981', fontWeight: '600', lineHeight: 18 }}>{rec.expected_impact}</Text>
-          </View>
-        ) : null}
-
-        <View style={{ flexDirection: 'row', gap: 4, marginBottom: spacing.md }}>
-          {rec.trial_duration ? (
-            <Text style={{ fontSize: 12, color: subColor }}>Trial: {rec.trial_duration}</Text>
-          ) : null}
-          {rec.trial_duration && rec.review_date ? (
-            <Text style={{ fontSize: 12, color: subColor }}> · </Text>
-          ) : null}
-          {rec.review_date ? (
-            <Text style={{ fontSize: 12, color: subColor }}>Review: {rec.review_date}</Text>
-          ) : null}
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <TouchableOpacity
-            style={{ flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
-            onPress={() => {
-              console.log('[CoachHub] Accept recommendation pressed:', rec.title);
-              handleAcceptRecommendation(rec);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Accept</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{ flex: 1, borderWidth: 1, borderColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, alignItems: 'center' }}
-            onPress={() => {
-              console.log('[CoachHub] Ask Why pressed for recommendation:', rec.title);
-              openChat(`Why are you recommending ${rec.what}?`);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '700' }}>Ask Why</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{ paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' }}
-            onPress={() => {
-              console.log('[CoachHub] Not Now pressed for recommendation:', rec.title);
-              setDismissedRecommendation(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={{ color: subColor, fontSize: 13, fontWeight: '600' }}>Not Now</Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
-    );
-  };
-
-  const renderQuickActions = (d: CoachDashboard) => {
-    const actions = d.quick_actions ?? [];
-    if (actions.length === 0) return null;
-
-    return (
-      <View style={{ marginBottom: spacing.md }}>
-        <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.8, color: subColor, paddingHorizontal: spacing.md, marginBottom: spacing.sm }}>
-          QUICK ACTIONS
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
-          {actions.map((action, idx) => (
-            <TouchableOpacity
-              key={idx}
-              style={{
-                width: 96,
-                backgroundColor: cardBg,
-                borderRadius: 14,
-                padding: spacing.sm + 4,
-                alignItems: 'center',
-                borderWidth: 1,
-                borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 4,
-                elevation: 1,
-                gap: 6,
-              }}
-              onPress={() => {
-                console.log('[CoachHub] Quick action tapped:', action.label);
-                openChat(action.prompt);
-              }}
-              activeOpacity={0.75}
-            >
-              <IconSymbol
-                ios_icon_name={action.ios_icon}
-                android_material_icon_name={action.android_icon}
-                size={22}
-                color={colors.primary}
-              />
-              <Text style={{ fontSize: 11, fontWeight: '600', color: textColor, textAlign: 'center', lineHeight: 15 }}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    );
-  };
-
-  const renderSettingsRow = () => {
-    const items = [
-      { label: 'Memory', ios_icon: 'brain.head.profile', android_icon: 'psychology', route: '/coach-memory' as const },
-      { label: 'Permissions', ios_icon: 'lock.shield', android_icon: 'security', route: '/coach-permissions' as const },
-      { label: 'History', ios_icon: 'clock.arrow.circlepath', android_icon: 'history', route: '/coach-action-history' as const },
-    ];
-
-    return (
-      <Card isDark={isDark}>
-        <SectionLabel text="COACH SETTINGS" isDark={isDark} />
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          {items.map((item) => (
-            <TouchableOpacity
-              key={item.label}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor,
-                borderRadius: borderRadius.md,
-                paddingVertical: spacing.md,
-                alignItems: 'center',
-                gap: spacing.xs,
-              }}
-              onPress={() => {
-                console.log('[CoachHub] Settings item pressed:', item.label);
-                router.push(item.route);
-              }}
-              activeOpacity={0.75}
-            >
-              <IconSymbol ios_icon_name={item.ios_icon} android_material_icon_name={item.android_icon} size={20} color={colors.primary} />
-              <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Card>
-    );
-  };
-
-  // ── Main render ───────────────────────────────────────────────────────────
+  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const baseAssistantTextStyle = { ...(typography.body as object), lineHeight: 22, color: isDark ? colors.textDark : colors.text };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }} edges={['top']}>
-      {/* Header */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: spacing.md,
-          paddingTop: Platform.OS === 'android' ? spacing.lg : spacing.sm,
-          paddingBottom: spacing.sm,
-          borderBottomWidth: 1,
-          borderBottomColor: borderColor,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+      edges={['top']}
+    >
+      {/* ── Header ── */}
+      <View style={[styles.header, { borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
+        <View style={styles.headerCenter}>
           <Image
-            source={resolveImageSource(require('../../assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg'))}
-            style={{ width: 36, height: 36, borderRadius: 18 }}
+            source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
+            style={styles.headerCoachImage}
+            resizeMode="cover"
           />
-          <Text style={{ ...typography.h3, color: textColor }}>Coach</Text>
+          <View>
+            <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              Coach
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Body Transformation Coach
+            </Text>
+          </View>
         </View>
 
-        <TouchableOpacity
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.xs,
-            backgroundColor: colors.primary,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-            borderRadius: borderRadius.full,
-          }}
-          onPress={() => {
-            console.log('[CoachHub] Chat button pressed from header');
-            openChat();
-          }}
-          activeOpacity={0.8}
-        >
-          <IconSymbol ios_icon_name="bubble.left.and.bubble.right" android_material_icon_name="chat" size={15} color="#fff" />
-          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Chat</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Body */}
-      {loading ? (
-        <SkeletonHub isDark={isDark} />
-      ) : error ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
-          <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={40} color={subColor} />
-          <Text style={{ ...typography.h3, color: textColor, marginTop: spacing.md, textAlign: 'center' }}>Couldn't load your coaching data</Text>
-          <Text style={{ fontSize: 14, color: subColor, marginTop: spacing.sm, textAlign: 'center' }}>Check your connection and try again.</Text>
+        <View style={styles.headerRight}>
           <TouchableOpacity
-            style={{ marginTop: spacing.lg, backgroundColor: colors.primary, borderRadius: borderRadius.lg, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.xl }}
             onPress={() => {
-              console.log('[CoachHub] Retry button pressed');
-              loadDashboard(true);
+              console.log('[AICoach] Memory button pressed');
+              router.push('/coach-memory');
             }}
-            activeOpacity={0.85}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Retry</Text>
+            <IconSymbol
+              ios_icon_name="brain"
+              android_material_icon_name="psychology"
+              size={20}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[AICoach] Action history button pressed');
+              router.push('/coach-action-history');
+            }}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <IconSymbol
+              ios_icon_name="clock"
+              android_material_icon_name="history"
+              size={20}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[AICoach] Permissions settings button pressed');
+              router.push('/coach-permissions');
+            }}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <IconSymbol
+              ios_icon_name="gearshape"
+              android_material_icon_name="settings"
+              size={20}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
           </TouchableOpacity>
         </View>
-      ) : dashboard ? (
+      </View>
+
+      {/* ── Chat area ── */}
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
         <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {renderGreeting(dashboard)}
-          {renderCoachFocus(dashboard)}
-          {renderTodayPlan(dashboard)}
-          {renderExecutionAndTrend(dashboard)}
-          {dashboard.active_experiment ? renderActiveExperiment(dashboard.active_experiment) : null}
-          {dashboard.insight ? renderInsight(dashboard.insight) : null}
-          {dashboard.recommendation && !dismissedRecommendation ? renderRecommendation(dashboard.recommendation) : null}
-          {renderQuickActions(dashboard)}
-          {renderSettingsRow()}
+          {/* ── Quick Action Cards — welcome state only ── */}
+          {isOnlyWelcome && !loading && (
+            <View style={styles.quickActionsSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                What would you like to do?
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickActionsRow}
+              >
+                {QUICK_ACTION_CARDS.map((card) => (
+                  <QuickActionCard
+                    key={card.title}
+                    iosIcon={card.iosIcon}
+                    androidIcon={card.androidIcon}
+                    title={card.title}
+                    subtitle={card.subtitle}
+                    isDark={isDark}
+                    onPress={() => handleQuickAction(card)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ── Craving chips hub — welcome state only ── */}
+          {isOnlyWelcome && !loading && (
+            <View style={styles.cravingHubSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Quick questions
+              </Text>
+              <View style={styles.cravingHubRow}>
+                {CRAVING_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.label}
+                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => handleCravingChip(chip)}
+                    activeOpacity={0.75}
+                  >
+                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
+                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.suggestedInlineRow}>
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <TouchableOpacity
+                    key={prompt}
+                    style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => {
+                      console.log('[AICoach] Suggested prompt chip pressed:', prompt);
+                      handleSuggestedPrompt(prompt);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* ── Phase 8 Status Card — welcome state only ── */}
+          {isOnlyWelcome && !loading && latestRecommendation && (
+            <View style={styles.statusCardSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Current Status
+              </Text>
+              <StatusCard
+                recommendation={latestRecommendation}
+                isDark={isDark}
+                onPress={() => {
+                  console.log('[AICoach] Status card tapped, sending status assessment request');
+                  handleSend('Give me my current status assessment');
+                }}
+              />
+            </View>
+          )}
+
+          {messages.map((message) => {
+            const isUser = message.role === 'user';
+            const timeText = formatTime(message.timestamp);
+            const isThisStreaming = message.isStreaming === true && message.id === lastStreamingMsgId;
+
+            if (isUser) {
+              return (
+                <View key={message.id} style={styles.userMessageWrapper}>
+                  <View style={[styles.userBubble, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.userBubbleText}>{message.content}</Text>
+                    {timeText ? (
+                      <Text style={styles.userBubbleTime}>{timeText}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            }
+
+            const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
+            const showEmpathyBadge = detectsEmpathy(message.content);
+
+            return (
+              <View key={message.id} style={styles.assistantMessageWrapper}>
+                <Image
+                  source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
+                  style={styles.coachAvatarImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.assistantBubbleColumn}>
+                  <Text style={[styles.coachLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    Coach
+                  </Text>
+                  <View style={[styles.assistantBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+                    <View>
+                      {structuredNodes}
+                      {isThisStreaming && (
+                        <StreamingCursor isDark={isDark} />
+                      )}
+                    </View>
+                    {!isThisStreaming && timeText ? (
+                      <Text style={[styles.assistantBubbleTime, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                        {timeText}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {showEmpathyBadge && (
+                    <View style={styles.empathyBadge}>
+                      <Text style={styles.empathyBadgeText}>💙 Supportive response</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Typing indicator — only show when loading but no streaming message yet */}
+          {loading && !lastStreamingMsgId && (
+            <View style={styles.typingWrapper}>
+              <TypingIndicator isDark={isDark} />
+            </View>
+          )}
+
         </ScrollView>
-      ) : null}
+
+        {/* ── Craving chips — above input bar, non-welcome state ── */}
+        {showCravingChips && (
+          <View style={[styles.cravingRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cravingChipsContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {CRAVING_CHIPS.map((chip) => (
+                <TouchableOpacity
+                  key={chip.label}
+                  style={[
+                    styles.cravingChip,
+                    {
+                      backgroundColor: isDark ? colors.cardDark : colors.card,
+                      borderColor: isDark ? colors.borderDark : colors.border,
+                    },
+                  ]}
+                  onPress={() => handleCravingChip(chip)}
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={14} color={isDark ? colors.textDark : colors.text} />
+                  <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ── Input bar ── */}
+        <View
+          style={[
+            styles.inputContainer,
+            {
+              backgroundColor: isDark ? colors.cardDark : colors.card,
+              borderTopColor: isDark ? colors.borderDark : colors.border,
+            },
+          ]}
+        >
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: isDark ? colors.backgroundDark : colors.background,
+                color: isDark ? colors.textDark : colors.text,
+              },
+            ]}
+            placeholder="Ask your coach anything..."
+            placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            value={inputText}
+            onChangeText={(t) => {
+              setInputText(t);
+            }}
+            multiline
+            maxLength={1000}
+            editable={!loading}
+            returnKeyType="default"
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: canSend ? colors.primary : colors.border }]}
+            onPress={handleSendPress}
+            disabled={!canSend}
+            activeOpacity={0.8}
+          >
+            <IconSymbol
+              ios_icon_name="arrow.up"
+              android_material_icon_name="send"
+              size={20}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* ── Action Confirmation Bottom Sheet ── */}
+      <ActionConfirmSheet
+        visible={pendingAction !== null}
+        action={pendingAction}
+        isDark={isDark}
+        onConfirm={handleConfirmAction}
+        onReject={() => {
+          console.log('[AICoach] Action rejected by user');
+          clearPendingAction();
+        }}
+      />
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  // ── Header ──────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  headerCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  headerCoachImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  coachAvatarImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginTop: 18,
+  },
+  headerTitle: {
+    ...typography.h3,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 16,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // ── Layout ──────────────────────────────────────────────────────────────
+  keyboardView: {
+    flex: 1,
+  },
+  messagesContainer: {
+    flex: 1,
+  },
+  messagesContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  // ── Quick Action Cards ───────────────────────────────────────────────────
+  quickActionsSection: {
+    marginBottom: spacing.lg,
+  },
+  quickActionsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+    letterSpacing: 0.2,
+  },
+  quickActionsRow: {
+    paddingHorizontal: 0,
+    paddingVertical: 12,
+    gap: 10,
+    flexDirection: 'row',
+  },
+  quickCard: {
+    width: 110,
+    borderRadius: 12,
+    padding: 12,
+    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    alignItems: 'flex-start',
+  },
+  quickCardIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  quickCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 3,
+    lineHeight: 17,
+  },
+  quickCardSubtitle: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '400',
+  },
+  // ── User bubble ─────────────────────────────────────────────────────────
+  userMessageWrapper: {
+    alignSelf: 'flex-end',
+    maxWidth: '80%',
+    marginBottom: spacing.md,
+  },
+  userBubble: {
+    borderRadius: borderRadius.lg,
+    borderBottomRightRadius: 4,
+    padding: spacing.md,
+    elevation: 1,
+  },
+  userBubbleText: {
+    ...typography.body,
+    color: '#FFFFFF',
+    lineHeight: 22,
+  },
+  userBubbleTime: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.65)',
+    marginTop: spacing.xs,
+    alignSelf: 'flex-end',
+  },
+  // ── Assistant bubble ────────────────────────────────────────────────────
+  assistantMessageWrapper: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    maxWidth: '85%',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  coachAvatarSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    flexShrink: 0,
+  },
+  assistantBubbleColumn: {
+    flex: 1,
+  },
+  coachLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  assistantBubble: {
+    borderRadius: borderRadius.lg,
+    borderBottomLeftRadius: 4,
+    padding: spacing.md,
+    elevation: 1,
+  },
+  assistantBubbleTime: {
+    fontSize: 11,
+    marginTop: spacing.xs,
+    alignSelf: 'flex-end',
+  },
+  // ── Streaming cursor ─────────────────────────────────────────────────────
+  streamingCursor: {
+    fontSize: 16,
+    fontWeight: '300',
+    lineHeight: 22,
+  },
+  // ── Markdown rendering ───────────────────────────────────────────────────
+  mdHeader: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  mdBold: {
+    fontWeight: '700',
+  },
+  mdLine: {
+    lineHeight: 22,
+  },
+  mdSpacer: {
+    height: 6,
+  },
+  mdListRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginVertical: 2,
+    paddingLeft: 4,
+  },
+  mdListNum: {
+    fontWeight: '700',
+    marginRight: 6,
+    minWidth: 18,
+  },
+  mdListText: {
+    flex: 1,
+    lineHeight: 22,
+  },
+  // ── Product cards ────────────────────────────────────────────────────────
+  productCard: {
+    borderRadius: 8,
+    padding: 10,
+    marginVertical: 4,
+    elevation: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+  },
+  productCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 3,
+  },
+  productCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  productCardDetails: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  storeBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  storeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  // ── Typing indicator ────────────────────────────────────────────────────
+  typingWrapper: {
+    alignSelf: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: borderRadius.lg,
+    borderBottomLeftRadius: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    elevation: 1,
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  // ── Suggested prompts ───────────────────────────────────────────────────
+  suggestedContainer: {
+    marginTop: spacing.md,
+  },
+  suggestedLabel: {
+    ...typography.caption,
+    marginBottom: spacing.sm,
+  },
+  suggestedChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  // ── Craving chips ────────────────────────────────────────────────────────
+  cravingRow: {
+    borderTopWidth: 1,
+    paddingVertical: 8,
+  },
+  cravingChipsContent: {
+    paddingHorizontal: spacing.md,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cravingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  cravingChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // ── Craving hub (welcome state) ──────────────────────────────────────────
+  cravingHubSection: {
+    marginBottom: spacing.lg,
+  },
+  cravingHubRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  cravingHubChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    elevation: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+  },
+  cravingHubChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  suggestedInlineRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  suggestedInlineChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  suggestedInlineChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // ── Input bar ───────────────────────────────────────────────────────────
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    padding: spacing.md,
+    borderTopWidth: 1,
+    gap: spacing.sm,
+  },
+  input: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    maxHeight: 120,
+    ...typography.body,
+  },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // ── Action Confirmation Sheet ────────────────────────────────────────────
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheetBackdropTouch: {
+    flex: 1,
+  },
+  sheetContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCloseX: {
+    fontSize: 18,
+    fontWeight: '400',
+  },
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sheetScrollContent: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  sheetBadgeRow: {
+    flexDirection: 'row',
+  },
+  sheetBadge: {
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  sheetBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  sheetChangeCard: {
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  sheetChangeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  sheetChangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  sheetChangeValue: {
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  sheetChangeArrow: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  sheetSection: {
+    gap: 6,
+  },
+  sheetSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  sheetSectionBody: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  sheetEvidenceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sheetEvidenceChevron: {
+    fontSize: 12,
+  },
+  sheetEvidenceBox: {
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    borderWidth: 1,
+    marginTop: 6,
+  },
+  sheetEvidenceText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 16,
+  },
+  sheetReversibleBadge: {
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  sheetReversibleText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sheetButtons: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    gap: spacing.sm,
+  },
+  sheetConfirmBtn: {
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  sheetConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  sheetRejectBtn: {
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  sheetRejectBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // ── Meal plan preview (in ActionConfirmSheet) ───────────────────────────────
+  mealPlanPreviewCard: {
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    gap: 6,
+  },
+  mealPlanPreviewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  mealPlanPreviewDateRange: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  mealPlanPreviewSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  mealPlanPreviewSummary: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  mealPlanPreviewSummaryLabel: {
+    fontSize: 13,
+  },
+  mealPlanPreviewSummaryDot: {
+    fontSize: 13,
+  },
+  mealPlanDayScroll: {
+    maxHeight: 300,
+  },
+  mealPlanDayBlock: {
+    marginBottom: 10,
+  },
+  mealPlanDayHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  mealPlanMealRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    paddingLeft: 4,
+    marginBottom: 1,
+  },
+  mealPlanMealDot: {
+    fontSize: 12,
+  },
+  mealPlanMealType: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  mealPlanMealName: {
+    fontSize: 12,
+    flex: 1,
+    flexShrink: 1,
+  },
+  mealPlanMealCal: {
+    fontSize: 12,
+  },
+  // ── Empathy badge ────────────────────────────────────────────────────────────
+  empathyBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  empathyBadgeText: {
+    fontSize: 11,
+    color: '#2563EB',
+    fontWeight: '500',
+  },
+  // ── Status card ──────────────────────────────────────────────────────────────
+  statusCardSection: {
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  statusCard: {
+    borderRadius: 12,
+    padding: 14,
+    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    gap: 8,
+  },
+  statusCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusCardIcon: {
+    fontSize: 22,
+  },
+  statusCardTitleCol: {
+    flex: 1,
+    gap: 2,
+  },
+  statusCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  statusCardTime: {
+    fontSize: 12,
+  },
+  evidenceBadge: {
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  evidenceBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statusCardHint: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+});
