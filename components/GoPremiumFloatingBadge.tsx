@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePremium } from '@/hooks/usePremium';
 
 export default function GoPremiumFloatingBadge() {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { isPremium } = usePremium();
   const [visible, setVisible] = useState(true);
@@ -20,7 +21,15 @@ export default function GoPremiumFloatingBadge() {
     router.push('/subscription');
   };
 
-  if (!visible || isPremium) return null;
+  // Hide on auth, onboarding, and index (splash/redirect) screens
+  const isAuthOrOnboarding =
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/onboarding') ||
+    pathname === '/' ||
+    pathname === '/index' ||
+    pathname.startsWith('/choose-username');
+
+  if (!visible || isPremium || isAuthOrOnboarding) return null;
 
   const bottomOffset = insets.bottom + 145;
 
