@@ -456,13 +456,34 @@ export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> 
       if (!fi || seen.has(item.food_item_id)) continue;
       seen.add(item.food_item_id);
 
-      // Build serving description — columns first, then off_data fallback
+      // Build serving description — derive a human-readable label
       let servingDesc: string | null = null;
-      if (fi.serving_description && fi.serving_size) {
-        const count = fi.serving_count ?? 1;
-        servingDesc = `${count} ${fi.serving_description} (${Math.round(fi.serving_size)}g)`;
+      const servingSize = fi.serving_size ?? 100;
+      const servingCount = fi.serving_count ?? 1;
+
+      // Helper: is this a raw unit word (g, ml, oz, etc.) rather than a label?
+      const isPureUnitWord = (s: string) =>
+        /^(g|ml|oz|cups?|tbsp|tsp|lbs?|kg|fl\s*oz|floz|gram|grams|milliliter|millilitre)s?$/i.test(s.trim());
+
+      if (fi.serving_description && fi.serving_size && !isPureUnitWord(fi.serving_description)) {
+        // Good human-readable label (e.g. "serving", "slice", "cup")
+        servingDesc = `${servingCount} ${fi.serving_description} (${Math.round(servingSize)}g)`;
       } else if (fi.off_data?.serving_size) {
-        servingDesc = String(fi.off_data.serving_size);
+        // Try to extract a label from off_data.serving_size string (e.g. "1 serving (170g)", "170 g")
+        const offServingStr = String(fi.off_data.serving_size).trim();
+        // If it already looks like "N label (Xg)" or "N label", use it directly
+        const labelMatch = offServingStr.match(/^[\d.]+\s*(.+)$/);
+        const label = labelMatch ? labelMatch[1].trim() : '';
+        if (label && !isPureUnitWord(label)) {
+          // Has a real label — format as "1 label (Xg)"
+          servingDesc = `${servingCount} ${label.replace(/\(\d+g\)/i, '').trim()} (${Math.round(servingSize)}g)`;
+        } else {
+          // Pure grams — show as "1 serving (Xg)"
+          servingDesc = `${servingCount} serving (${Math.round(servingSize)}g)`;
+        }
+      } else {
+        // Fallback: "1 serving (Xg)"
+        servingDesc = `${servingCount} serving (${Math.round(servingSize)}g)`;
       }
 
       result.push({
