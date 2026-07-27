@@ -90,8 +90,15 @@ export function ZoomablePhoto({ uri, photoId, width, height }: ZoomablePhotoProp
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: (evt) => {
+        return evt.nativeEvent.touches.length === 2;
+      },
+      onMoveShouldSetPanResponder: (evt) => {
+        const touches = evt.nativeEvent.touches.length;
+        if (touches === 2) return true;
+        if (touches === 1 && scaleRef.current > 1.01) return true;
+        return false;
+      },
       onPanResponderGrant: (evt) => {
         const touches = evt.nativeEvent.touches;
         if (touches.length === 2) {
