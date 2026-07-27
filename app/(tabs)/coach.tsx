@@ -118,7 +118,10 @@ function renderStructuredText(
   secondaryColor: string,
   isDark: boolean
 ): React.ReactNode[] {
-  const lines = content.split('\n');
+  // Strip ACTION_PROPOSAL block from displayed text
+  const actionProposalIndex = content.indexOf('ACTION_PROPOSAL:');
+  const cleanContent = actionProposalIndex !== -1 ? content.slice(0, actionProposalIndex).trimEnd() : content;
+  const lines = cleanContent.split('\n');
   const nodes: React.ReactNode[] = [];
 
   const productLineCount = countProductLines(lines);
