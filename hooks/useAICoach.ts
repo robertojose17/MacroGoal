@@ -333,7 +333,9 @@ export function useAICoach(options?: UseAICoachOptions) {
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === placeholderMsg.id
-                        ? { ...m, content: 'Something went wrong. Please try again.', isStreaming: false }
+                        ? { ...m, content: String(event.error).includes('Subscription Required')
+                            ? 'Subscription required to use the AI Coach.'
+                            : `Error: ${String(event.error).slice(0, 200)}`, isStreaming: false }
                         : m
                     )
                   );
@@ -348,7 +350,8 @@ export function useAICoach(options?: UseAICoachOptions) {
               if (parseErr?.isSubscriptionError || parseErr?.message?.startsWith('HTTP ')) {
                 throw parseErr;
               }
-              // Silently skip malformed SSE lines
+              // Log SSE errors so they surface in the app console
+              console.error('[useAICoach] SSE event error:', parseErr?.message, 'raw:', jsonStr?.slice(0, 150));
             }
           }
         }

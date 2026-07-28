@@ -335,7 +335,7 @@ INSTRUCTIONS:
             if (!jsonStr || jsonStr === "[DONE]") continue;
             try {
               const chunk = JSON.parse(jsonStr);
-              const delta = chunk.choices?.[0]?.delta?.content ?? "";
+              const delta = chunk.choices?.[0]?.delta?.content || "";
               if (delta) {
                 fullText += delta;
                 await sendEvent({ delta });
