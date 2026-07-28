@@ -1058,15 +1058,16 @@ export default function CoachScreen() {
       // ── create_meal_plan ──────────────────────────────────────────────────
       if (
         actionType === 'create_meal_plan' &&
-        proposal.days &&
-        proposal.days.length > 0
+        (
+          (proposal.items && proposal.items.length > 0) ||
+          (proposal.days && proposal.days.length > 0)
+        )
       ) {
         const planName = proposal.plan_name || 'AI Meal Plan';
         const startDate = proposal.start_date || '';
         const endDate = proposal.end_date || '';
-        const days = proposal.days!;
 
-        console.log('[AICoach] create_meal_plan confirmed, plan_name:', planName, 'days:', days.length);
+        console.log('[AICoach] create_meal_plan confirmed, plan_name:', planName, 'items format:', !!(proposal.items && proposal.items.length > 0));
         setCreatingPlan(true);
 
         try {
@@ -1074,15 +1075,15 @@ export default function CoachScreen() {
           const plan = await createMealPlan({ name: planName, start_date: startDate, end_date: endDate });
           console.log('[AICoach] Meal plan created, id:', plan.id);
 
-          const allItems = days.flatMap((day) =>
-            day.meals.map((meal) => ({ day, meal }))
-          );
-          const totalMeals = allItems.length;
-          console.log('[AICoach] Adding', totalMeals, 'meal items in parallel');
+          let flatItems: any[] = [];
 
-          await Promise.all(
-            allItems.map(({ day, meal }) =>
-              addMealPlanItem(plan.id, {
+          if (proposal.items && proposal.items.length > 0) {
+            // New enriched format — items is already a flat array
+            flatItems = proposal.items;
+          } else if (proposal.days && proposal.days.length > 0) {
+            // Old format — flatten days[].meals[]
+            flatItems = proposal.days.flatMap((day: any) =>
+              day.meals.map((meal: any) => ({
                 date: day.date,
                 meal_type: meal.meal_type,
                 food_name: meal.food_name,
@@ -1095,16 +1096,42 @@ export default function CoachScreen() {
                 quantity: meal.quantity,
                 serving_unit: meal.serving_unit,
                 dish_description: meal.dish_description,
+              }))
+            );
+          }
+
+          const totalMeals = flatItems.length;
+          console.log('[AICoach] Adding', totalMeals, 'meal items in parallel');
+
+          await Promise.all(
+            flatItems.map((item: any) =>
+              addMealPlanItem(plan.id, {
+                date: item.date,
+                meal_type: item.meal_type,
+                food_name: item.food_name,
+                brand: item.brand || undefined,
+                calories: item.calories,
+                protein: item.protein,
+                carbs: item.carbs,
+                fats: item.fats,
+                fiber: item.fiber,
+                grams: item.grams,
+                quantity: item.quantity || 1,
+                serving_unit: item.serving_unit,
+                serving_description: item.serving_description,
+                food_item_id: item.food_item_id || undefined,
+                dish_description: item.dish_description,
               })
             )
           );
 
           console.log('[AICoach] All meal items added successfully');
 
+          const uniqueDays = new Set(flatItems.map((i: any) => i.date)).size;
           const successMsg: MessageWithId = {
             id: genId(),
             role: 'assistant',
-            content: `✅ Your meal plan "${plan.name}" has been created! It covers ${days.length} day${days.length !== 1 ? 's' : ''} with ${totalMeals} meal${totalMeals !== 1 ? 's' : ''}. Opening it now...`,
+            content: `✅ Your meal plan "${plan.name}" has been created! It covers ${uniqueDays} day${uniqueDays !== 1 ? 's' : ''} with ${totalMeals} meal${totalMeals !== 1 ? 's' : ''}. Opening it now...`,
             timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, successMsg]);
