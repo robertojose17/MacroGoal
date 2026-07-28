@@ -546,83 +546,108 @@ function InlineActionCard({
     );
   }
 
+  const planName = proposal.plan_name || 'AI Meal Plan';
+  const daysCount = String(mealPlanDays.length);
+  const mealsPerDayStr = String(mealsPerDay);
+  const avgCalStr = '~' + String(avgCalPerDay);
+
   return (
-    <View style={[styles.inlineActionCard, { backgroundColor: cardBg, borderColor }]}>
-      {/* Badge row */}
+    <View style={[styles.inlineActionCard, { backgroundColor: isDark ? '#1E2035' : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}>
+      {/* Header badge — centered */}
       <View style={styles.inlineActionBadgeRow}>
-        <View style={[styles.inlineActionBadge, { backgroundColor: actionTypeInfo.color + '22' }]}>
-          <Text style={[styles.inlineActionBadgeText, { color: actionTypeInfo.color }]}>
+        <View style={[styles.inlineActionBadge, { backgroundColor: colors.primary }]}>
+          <Text style={styles.inlineActionBadgeText}>
             {actionTypeInfo.label}
           </Text>
         </View>
       </View>
 
-      {/* Meal plan summary or value change */}
+      {/* Meal plan layout */}
       {isMealPlan ? (
-        <View style={{ marginBottom: 10 }}>
-          <Text style={{ fontSize: 15, fontWeight: '700', color: textColor, marginBottom: 8 }}>
-            {proposal.plan_name || 'AI Meal Plan'}
+        <>
+          {/* Plan name */}
+          <Text style={[styles.inlineActionPlanName, { color: textColor }]}>
+            {planName}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1, backgroundColor: actionTypeInfo.color + '15', borderRadius: 8, padding: 8, alignItems: 'center' }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: actionTypeInfo.color }}>
-                {mealPlanDays.length}
+
+          {/* Stats row */}
+          <View style={styles.inlineActionStatsRow}>
+            <View style={[styles.inlineActionStatBox, { backgroundColor: isDark ? '#252740' : '#F0F2F7' }]}>
+              <Text style={[styles.inlineActionStatNumber, { color: textColor }]}>
+                {daysCount}
               </Text>
-              <Text style={{ fontSize: 11, color: secondaryText, marginTop: 2 }}>
+              <Text style={[styles.inlineActionStatLabel, { color: secondaryText }]}>
                 {'days'}
               </Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: actionTypeInfo.color + '15', borderRadius: 8, padding: 8, alignItems: 'center' }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: actionTypeInfo.color }}>
-                {mealsPerDay}
+            <View style={[styles.inlineActionStatBox, { backgroundColor: isDark ? '#252740' : '#F0F2F7' }]}>
+              <Text style={[styles.inlineActionStatNumber, { color: textColor }]}>
+                {mealsPerDayStr}
               </Text>
-              <Text style={{ fontSize: 11, color: secondaryText, marginTop: 2 }}>
+              <Text style={[styles.inlineActionStatLabel, { color: secondaryText }]}>
                 {'meals/day'}
               </Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: actionTypeInfo.color + '15', borderRadius: 8, padding: 8, alignItems: 'center' }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: actionTypeInfo.color }}>
-                {'~'}
-                {avgCalPerDay}
+            <View style={[styles.inlineActionStatBox, { backgroundColor: isDark ? '#252740' : '#F0F2F7' }]}>
+              <Text style={[styles.inlineActionStatNumber, { color: textColor }]}>
+                {avgCalStr}
               </Text>
-              <Text style={{ fontSize: 11, color: secondaryText, marginTop: 2 }}>
+              <Text style={[styles.inlineActionStatLabel, { color: secondaryText }]}>
                 {'cal/day'}
               </Text>
             </View>
           </View>
-        </View>
-      ) : currentVal && proposedVal ? (
-        <View style={[styles.inlineActionChangeRow, { marginBottom: 8 }]}>
-          <Text style={[styles.inlineActionValue, { color: textColor }]}>
-            {currentVal}
-            {unitLabel}
-          </Text>
-          <Text style={[styles.inlineActionArrow, { color: actionTypeInfo.color }]}>
-            {'→'}
-          </Text>
-          <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
-            {proposedVal}
-            {unitLabel}
-          </Text>
-        </View>
-      ) : proposal.food_name ? (
-        <View style={[styles.inlineActionChangeRow, { marginBottom: 8 }]}>
-          <Text style={[styles.inlineActionValue, { color: textColor }]}>
-            {String(proposal.food_name)}
-          </Text>
-          {proposal.calories !== undefined ? (
-            <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
-              {'  '}
-              {Number(proposal.calories)}
-              {' cal'}
+
+          {/* Description */}
+          {proposal.reason ? (
+            <Text style={[styles.inlineActionReason, { color: secondaryText, textAlign: 'center' }]}>
+              {proposal.reason}
             </Text>
           ) : null}
-        </View>
-      ) : null}
-
-      {/* Reason */}
-      {proposal.reason ? (
-        <Text style={[styles.inlineActionReason, { color: secondaryText }]}>
+        </>
+      ) : currentVal && proposedVal ? (
+        <>
+          <View style={[styles.inlineActionChangeRow, { marginBottom: 8, justifyContent: 'center' }]}>
+            <Text style={[styles.inlineActionValue, { color: textColor }]}>
+              {currentVal}
+              {unitLabel}
+            </Text>
+            <Text style={[styles.inlineActionArrow, { color: actionTypeInfo.color }]}>
+              {'→'}
+            </Text>
+            <Text style={[styles.inlineActionValue, { color: actionTypeInfo.color }]}>
+              {proposedVal}
+              {unitLabel}
+            </Text>
+          </View>
+          {proposal.reason ? (
+            <Text style={[styles.inlineActionReason, { color: secondaryText, textAlign: 'center' }]}>
+              {proposal.reason}
+            </Text>
+          ) : null}
+        </>
+      ) : proposal.food_name ? (
+        <>
+          <View style={[styles.inlineActionChangeRow, { marginBottom: 8, justifyContent: 'center' }]}>
+            <Text style={[styles.inlineActionValue, { color: textColor }]}>
+              {String(proposal.food_name)}
+            </Text>
+            {proposal.calories !== undefined ? (
+              <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
+                {'  '}
+                {Number(proposal.calories)}
+                {' cal'}
+              </Text>
+            ) : null}
+          </View>
+          {proposal.reason ? (
+            <Text style={[styles.inlineActionReason, { color: secondaryText, textAlign: 'center' }]}>
+              {proposal.reason}
+            </Text>
+          ) : null}
+        </>
+      ) : proposal.reason ? (
+        <Text style={[styles.inlineActionReason, { color: secondaryText, textAlign: 'center' }]}>
           {proposal.reason}
         </Text>
       ) : null}
@@ -644,14 +669,14 @@ function InlineActionCard({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.inlineActionDeclineBtn, { borderColor }]}
+          style={[styles.inlineActionDeclineBtn, { backgroundColor: isDark ? '#252740' : '#F0F2F7', borderColor: 'transparent' }]}
           onPress={() => {
             console.log('[AICoach] Inline decline pressed, messageId:', messageId, 'action_id:', action.action_id);
             onDecline(messageId);
           }}
           activeOpacity={0.85}
         >
-          <Text style={[styles.inlineActionDeclineText, { color: secondaryText }]}>
+          <Text style={[styles.inlineActionDeclineText, { color: textColor }]}>
             {declineBtnText}
           </Text>
         </TouchableOpacity>
@@ -1998,22 +2023,63 @@ const styles = StyleSheet.create({
   // ── Inline Action Card ───────────────────────────────────────────────────
   inlineActionCard: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 20,
     marginTop: 10,
+    marginHorizontal: 0,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   inlineActionBadgeRow: {
     flexDirection: 'row',
-    marginBottom: 8,
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   inlineActionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   inlineActionBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  inlineActionPlanName: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 14,
+    letterSpacing: -0.3,
+  },
+  inlineActionStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+    marginBottom: 12,
+  },
+  inlineActionStatBox: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  inlineActionStatNumber: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  inlineActionStatLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+    textAlign: 'center',
   },
   inlineActionChangeRow: {
     flexDirection: 'row',
@@ -2021,6 +2087,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
     flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   inlineActionValue: {
     fontSize: 15,
@@ -2034,33 +2101,38 @@ const styles = StyleSheet.create({
   inlineActionReason: {
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 12,
+    marginBottom: 14,
+    textAlign: 'center',
   },
   inlineActionButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
+    width: '100%',
+    marginTop: 4,
   },
   inlineActionConfirmBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    height: 48,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   inlineActionConfirmText: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 14,
   },
   inlineActionDeclineBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    height: 48,
+    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
+    justifyContent: 'center',
+    borderWidth: 0,
   },
   inlineActionDeclineText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   inlineActionStatusBadge: {
     flexDirection: 'row',
