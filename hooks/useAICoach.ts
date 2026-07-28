@@ -203,7 +203,7 @@ export function useAICoach(options?: UseAICoachOptions) {
     setPendingAction(null);
   }, []);
 
-  // ── SSE streaming sendMessage ──────────────────────────────────────────────
+  // ── Non-streaming sendMessage ──────────────────────────────────────────────
   const sendMessage = useCallback(
     async (apiMessages: CoachMessage[], userId?: string): Promise<void> => {
       if (!apiMessages || apiMessages.length === 0) {
@@ -213,8 +213,7 @@ export function useAICoach(options?: UseAICoachOptions) {
 
       setState({ status: 'loading', error: null });
 
-      console.log('[useAICoach] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('[useAICoach] 📤 Sending SSE request to ai-coach');
+      console.log('[useAICoach] Sending request to ai-coach');
       console.log('[useAICoach] Message count:', apiMessages.length);
       console.log('[useAICoach] Last user message:', apiMessages[apiMessages.length - 1]?.content?.slice(0, 80));
       console.log('[useAICoach] weight_unit:', weightUnit);
@@ -223,7 +222,18 @@ export function useAICoach(options?: UseAICoachOptions) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const jwt = session?.access_token;
-        const resolvedUserId = userId ?? session?.user?.id ?? null;
+
+        // Add placeholder while waiting
+        const placeholderMsg: Message = {
+          id: genMsgId(),
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now(),
+          isStreaming: true,
+        };
+        if (isMountedRef.current) {
+          setMessages((prev) => [...prev, placeholderMsg]);
+        }
 
         const response = await expoFetch(
           `${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,
@@ -236,9 +246,7 @@ export function useAICoach(options?: UseAICoachOptions) {
             },
             body: JSON.stringify({
               messages: apiMessages,
-              user_id: resolvedUserId,
               weight_unit: weightUnit,
-              stream: true,
               conversation_id: conversationId ?? null,
             }),
           }
@@ -246,117 +254,45 @@ export function useAICoach(options?: UseAICoachOptions) {
 
         if (!response.ok) {
           const errText = await response.text();
-          console.error('[useAICoach] ❌ HTTP error:', response.status, errText.slice(0, 300));
-
+          console.error('[useAICoach] HTTP error:', response.status, errText.slice(0, 300));
           const isSubscriptionError = response.status === 403 || errText.includes('Subscription Required');
-          setState({ status: 'error', error: errText });
-
+          if (isMountedRef.current) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === placeholderMsg.id
+                  ? { ...m, content: isSubscriptionError ? 'Subscription required to use the AI Coach.' : 'Something went wrong. Please try again.', isStreaming: false }
+                  : m
+              )
+            );
+            setState({ status: 'error', error: errText });
+          }
           if (isSubscriptionError) {
             throw Object.assign(new Error('Subscription Required'), { isSubscriptionError: true });
           }
           throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
         }
 
-        // Add placeholder streaming message
-        const placeholderMsg: Message = {
-          id: genMsgId(),
-          role: 'assistant',
-          content: '',
-          timestamp: Date.now(),
-          isStreaming: true,
-        };
-        console.log('[useAICoach] Adding placeholder streaming message, id:', placeholderMsg.id);
+        const data = await response.json();
+        const fullText: string = data.text || '';
+        console.log('[useAICoach] Response received, length:', fullText.length);
+
         if (isMountedRef.current) {
-          setMessages((prev) => [...prev, placeholderMsg]);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === placeholderMsg.id
+                ? { ...m, content: fullText, isStreaming: false }
+                : m
+            )
+          );
         }
 
-        // Read SSE stream
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullText = '';
-
-        console.log('[useAICoach] Starting SSE stream read');
-
-        let streamDone = false;
-        while (!streamDone) {
-          const { done, value } = await reader.read();
-          if (done) { streamDone = true; break; }
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const jsonStr = line.slice(6).trim();
-            if (!jsonStr) continue;
-            try {
-              const event = JSON.parse(jsonStr);
-
-              if (event.delta) {
-                fullText += event.delta;
-                if (isMountedRef.current) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === placeholderMsg.id ? { ...m, content: fullText } : m
-                    )
-                  );
-                }
-              }
-
-              if (event.done) {
-                const finalText = event.full_text || fullText;
-                console.log('[useAICoach] ✅ Stream done, full_text length:', finalText.length);
-                if (isMountedRef.current) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === placeholderMsg.id
-                        ? { ...m, content: finalText, isStreaming: false }
-                        : m
-                    )
-                  );
-                }
-                if (event.action_proposal) {
-                  console.log('[useAICoach] Action proposal received:', event.action_proposal?.action_id);
-                  if (isMountedRef.current) {
-                    setPendingAction(event.action_proposal as ActionProposal);
-                  }
-                }
-              }
-
-              // Handle legacy non-streaming error in SSE body
-              if (event.error) {
-                console.error('[useAICoach] ❌ Error in SSE event:', event.error);
-                const isSubscriptionError = String(event.error).includes('Subscription Required');
-                setState({ status: 'error', error: String(event.error) });
-                if (isMountedRef.current) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === placeholderMsg.id
-                        ? { ...m, content: String(event.error).includes('Subscription Required')
-                            ? 'Subscription required to use the AI Coach.'
-                            : `Error: ${String(event.error).slice(0, 200)}`, isStreaming: false }
-                        : m
-                    )
-                  );
-                }
-                if (isSubscriptionError) {
-                  throw Object.assign(new Error('Subscription Required'), { isSubscriptionError: true });
-                }
-                throw new Error(String(event.error));
-              }
-            } catch (parseErr: any) {
-              // Only rethrow if it's our own error, not a JSON parse error
-              if (parseErr?.isSubscriptionError || parseErr?.message?.startsWith('HTTP ')) {
-                throw parseErr;
-              }
-              // Log SSE errors so they surface in the app console
-              console.error('[useAICoach] SSE event error:', parseErr?.message, 'raw:', jsonStr?.slice(0, 150));
-            }
+        if (data.action_proposal) {
+          console.log('[useAICoach] Action proposal received:', data.action_proposal?.action_id);
+          if (isMountedRef.current) {
+            setPendingAction(data.action_proposal as ActionProposal);
           }
         }
 
-        console.log('[useAICoach] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         setState({ status: 'success', error: null });
       } catch (e: any) {
         console.error('[useAICoach] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
