@@ -846,10 +846,31 @@ export default function CoachScreen() {
     scrollToBottom();
   }, [messages.length, loading, scrollToBottom]);
 
+  const handleConfirmInlineRef = useRef<(messageId: string) => void>(() => {});
+
   const handleSend = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || loading) return;
+
+      // ── Intercept text confirmations for pending action proposals ──────────
+      const CONFIRM_PHRASES = ['yes', 'sí', 'si', 'confirm', 'ok', 'sure', 'do it', 'go ahead', 'create it', 'save it', 'create plan', 'save plan', 'yep', 'yeah', 'yup'];
+      const isConfirmIntent = CONFIRM_PHRASES.some(p => trimmed.toLowerCase() === p || trimmed.toLowerCase().startsWith(p + ' '));
+      const pendingActionMsg = [...messages].reverse().find((m) => m.actionStatus === 'pending' && m.actionProposal);
+
+      if (isConfirmIntent && pendingActionMsg) {
+        console.log('[AICoach] Text confirmation detected for pending action, intercepting:', pendingActionMsg.id);
+        const userMsg: MessageWithId = {
+          id: genId(),
+          role: 'user',
+          content: trimmed,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, userMsg]);
+        setInputText('');
+        handleConfirmInlineRef.current(pendingActionMsg.id);
+        return;
+      }
 
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
 
@@ -1206,6 +1227,11 @@ export default function CoachScreen() {
     },
     [messages, router, sendMessage, setMessages]
   );
+
+  // Keep ref in sync so handleSend can call handleConfirmInline without a circular dep
+  useEffect(() => {
+    handleConfirmInlineRef.current = handleConfirmInline;
+  }, [handleConfirmInline]);
 
   const handleDeclineInline = useCallback(
     (messageId: string) => {
