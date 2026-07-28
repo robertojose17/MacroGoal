@@ -1,4 +1,3 @@
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -6,7 +5,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_MODEL = "google/gemini-2.0-flash-001";
+const DEFAULT_MODEL = "google/gemini-2.0-flash";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
@@ -21,13 +20,11 @@ function genUUID(): string {
   return crypto.randomUUID();
 }
 
-/** Extract ACTION_PROPOSAL JSON from the AI response text */
 function extractActionProposal(text: string): Record<string, unknown> | null {
   const match = text.match(/ACTION_PROPOSAL:\s*(\{[\s\S]*\})/);
   if (!match) return null;
   try {
     const raw = match[1];
-    // Find the balanced closing brace
     let depth = 0;
     let end = 0;
     for (let i = 0; i < raw.length; i++) {
@@ -49,8 +46,7 @@ Deno.serve(async (req) => {
   }
 
   const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  console.log("[AICoach] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("[AICoach] 📥 New request:", requestId);
+  console.log("[AICoach] New request:", requestId);
 
   try {
     if (req.method !== "POST") {
@@ -61,14 +57,13 @@ Deno.serve(async (req) => {
     }
 
     if (!OPENROUTER_API_KEY) {
-      console.error("[AICoach] ❌ OPENROUTER_API_KEY not configured");
-      return new Response(JSON.stringify({ error: "Configuration Error", detail: "OPENROUTER_API_KEY not set" }), {
+      console.error("[AICoach] OPENROUTER_API_KEY not configured");
+      return new Response(JSON.stringify({ error: "Configuration Error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ── Auth ──────────────────────────────────────────────────────────────────
     const auth = req.headers.get("Authorization") || "";
     if (!auth) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -80,40 +75,29 @@ Deno.serve(async (req) => {
     const token = auth.replace("Bearer ", "");
     const { data: userData, error: authError } = await supabase.auth.getUser(token);
     if (authError || !userData?.user) {
-      console.error("[AICoach] ❌ Auth failed:", authError?.message);
-      return new Response(JSON.stringify({ error: "Unauthorized", detail: authError?.message }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const authUser = userData.user;
-    console.log("[AICoach] ✅ User authenticated:", authUser.id);
+    console.log("[AICoach] User authenticated:", authUser.id);
 
-    // ── Subscription check ────────────────────────────────────────────────────
-    const { data: subscription, error: subError } = await supabase
+    const { data: subscription } = await supabase
       .from("subscriptions")
       .select("status")
       .eq("user_id", authUser.id)
       .maybeSingle();
 
-    if (subError) {
-      console.warn("[AICoach] ⚠️ Subscription check error:", subError.message);
-    } else if (!subscription || (subscription.status !== "active" && subscription.status !== "trialing")) {
-      console.error("[AICoach] ❌ No active subscription for user:", authUser.id);
-      return new Response(JSON.stringify({
-        error: "Subscription Required",
-        detail: "An active subscription is required to use the AI Coach.",
-        subscription_status: subscription?.status || "none",
-      }), {
+    if (!subscription || (subscription.status !== "active" && subscription.status !== "trialing")) {
+      console.error("[AICoach] No active subscription for user:", authUser.id);
+      return new Response(JSON.stringify({ error: "Subscription Required" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log("[AICoach] ✅ Subscription verified:", subscription?.status);
-
-    // ── Parse body ────────────────────────────────────────────────────────────
     let body: {
       messages?: { role: string; content: string; timestamp?: number }[];
       user_id?: string;
@@ -134,8 +118,6 @@ Deno.serve(async (req) => {
     const weightUnit = body.weight_unit || "lb";
     const conversationId = body.conversation_id || null;
 
-    console.log("[AICoach] Messages:", messages.length, "| weight_unit:", weightUnit, "| conversation_id:", conversationId);
-
     if (!messages.length) {
       return new Response(JSON.stringify({ error: "No messages provided" }), {
         status: 400,
@@ -143,7 +125,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── Fetch user context data ───────────────────────────────────────────────
     const userId = authUser.id;
     const today = new Date().toISOString().split("T")[0];
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -151,115 +132,109 @@ Deno.serve(async (req) => {
     const [
       profileResult,
       goalsResult,
-      nutritionResult,
-      weightResult,
-      stepsResult,
+      mealsResult,
+      checkInsResult,
+      trackerEntriesResult,
       memoryResult,
     ] = await Promise.all([
-      supabase.from("users").select("*").eq("id", userId).maybeSingle(),
-      supabase.from("goals").select("*").eq("user_id", userId).eq("is_active", true).order("created_at", { ascending: false }).limit(1),
-      supabase
-        .from("daily_logs")
-        .select("date, calories, protein, carbs, fats, fiber")
-        .eq("user_id", userId)
-        .gte("date", fourteenDaysAgo)
-        .lte("date", today)
-        .order("date", { ascending: false })
-        .limit(14),
-      supabase
-        .from("weight_logs")
-        .select("date, weight")
-        .eq("user_id", userId)
-        .gte("date", fourteenDaysAgo)
-        .order("date", { ascending: false })
-        .limit(14),
-      supabase
-        .from("trackers")
-        .select("name, value, date")
-        .eq("user_id", userId)
-        .eq("name", "steps")
-        .gte("date", fourteenDaysAgo)
-        .order("date", { ascending: false })
-        .limit(7),
-      supabase
-        .from("coach_memory")
-        .select("key, value, updated_at")
-        .eq("user_id", userId)
-        .order("updated_at", { ascending: false })
-        .limit(20),
+      supabase.from("users").select("name, username, sex, date_of_birth, height, current_weight, goal_weight, activity_level").eq("id", userId).maybeSingle(),
+      supabase.from("goals").select("daily_calories, protein_g, carbs_g, fats_g, fiber_g, goal_type, macro_preset").eq("user_id", userId).eq("is_active", true).order("created_at", { ascending: false }).limit(1),
+      supabase.from("meals").select("date, meal_type, meal_items(calories, protein, carbs, fats, fiber)").eq("user_id", userId).gte("date", fourteenDaysAgo).lte("date", today).order("date", { ascending: false }),
+      supabase.from("check_ins").select("date, weight").eq("user_id", userId).gte("date", fourteenDaysAgo).order("date", { ascending: false }).limit(14),
+      supabase.from("tracker_entries").select("value, logged_at, trackers!inner(name, user_id)").eq("trackers.user_id", userId).eq("trackers.name", "steps").gte("logged_at", fourteenDaysAgo + "T00:00:00Z").order("logged_at", { ascending: false }).limit(7),
+      supabase.from("coach_memory").select("key, value, updated_at").eq("user_id", userId).order("updated_at", { ascending: false }).limit(20),
     ]);
 
     const profile = profileResult.data;
     const goals = Array.isArray(goalsResult.data) ? goalsResult.data[0] ?? null : goalsResult.data;
-    const nutritionLogs = nutritionResult.data || [];
-    const weightLogs = weightResult.data || [];
-    const stepsLogs = stepsResult.data || [];
+    const mealsRaw = mealsResult.data || [];
+    const checkIns = checkInsResult.data || [];
+    const trackerEntries = trackerEntriesResult.data || [];
     const memoryItems = memoryResult.data || [];
 
-    console.log("[AICoach] Context fetched — profile:", !!profile, "| goals:", !!goals, "| nutrition days:", nutritionLogs.length, "| weight entries:", weightLogs.length);
+    const nutritionByDate: Record<string, { calories: number; protein: number; carbs: number; fats: number; fiber: number }> = {};
+    for (const meal of mealsRaw) {
+      const date = meal.date as string;
+      if (!nutritionByDate[date]) nutritionByDate[date] = { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+      const items = (meal.meal_items as any[]) || [];
+      for (const item of items) {
+        nutritionByDate[date].calories += Number(item.calories) || 0;
+        nutritionByDate[date].protein += Number(item.protein) || 0;
+        nutritionByDate[date].carbs += Number(item.carbs) || 0;
+        nutritionByDate[date].fats += Number(item.fats) || 0;
+        nutritionByDate[date].fiber += Number(item.fiber) || 0;
+      }
+    }
+    const nutritionLogs = Object.entries(nutritionByDate)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .slice(0, 14)
+      .map(([date, n]) => ({ date, ...n }));
 
-    // ── Build system prompt ───────────────────────────────────────────────────
+    console.log("[AICoach] Context — profile:", !!profile, "| goals:", !!goals, "| nutrition days:", nutritionLogs.length, "| weight entries:", checkIns.length);
+
     const wUnit = weightUnit === "kg" ? "kg" : "lb";
 
-    // USER PROFILE block
+    let age = "unknown";
+    if (profile?.date_of_birth) {
+      const dob = new Date(profile.date_of_birth as string);
+      const ageDiff = Date.now() - dob.getTime();
+      age = String(Math.floor(ageDiff / (365.25 * 24 * 60 * 60 * 1000)));
+    }
+
     const profileBlock = profile
       ? `USER PROFILE:
-- Name: ${profile.full_name || profile.username || "User"}
-- Age: ${profile.age || "unknown"}
-- Height: ${profile.height_cm ? `${profile.height_cm} cm` : "unknown"}
-- Current weight: ${profile.current_weight ? `${profile.current_weight} ${wUnit}` : "unknown"}
-- Goal weight: ${profile.goal_weight ? `${profile.goal_weight} ${wUnit}` : "unknown"}
-- Activity level: ${profile.activity_level || "unknown"}
-- Gender: ${profile.gender || "unknown"}`
+- Name: ${(profile as any).name || (profile as any).username || "User"}
+- Age: ${age}
+- Height: ${(profile as any).height ? `${(profile as any).height} cm` : "unknown"}
+- Sex: ${(profile as any).sex || "unknown"}
+- Current weight: ${(profile as any).current_weight ? `${(profile as any).current_weight} ${wUnit}` : "unknown"}
+- Goal weight: ${(profile as any).goal_weight ? `${(profile as any).goal_weight} ${wUnit}` : "unknown"}
+- Activity level: ${(profile as any).activity_level || "unknown"}`
       : "USER PROFILE: Not available";
 
-    // RECENT NUTRITION block
     let nutritionBlock = "RECENT NUTRITION (last 14 days):\n";
     if (nutritionLogs.length > 0) {
       for (const log of nutritionLogs) {
-        nutritionBlock += `- ${log.date}: ${log.calories ?? 0} cal | P: ${log.protein ?? 0}g | C: ${log.carbs ?? 0}g | F: ${log.fats ?? 0}g | Fiber: ${log.fiber ?? 0}g\n`;
+        nutritionBlock += `- ${log.date}: ${Math.round(log.calories)} cal | P: ${Math.round(log.protein)}g | C: ${Math.round(log.carbs)}g | F: ${Math.round(log.fats)}g | Fiber: ${Math.round(log.fiber)}g\n`;
       }
     } else {
-      nutritionBlock += "- No nutrition data available\n";
+      nutritionBlock += "- No nutrition data logged yet\n";
     }
 
-    // GOALS block
     const goalsBlock = goals
-      ? `CURRENT DAILY TARGETS (always use these exact numbers for meal plans and goal suggestions):
-- Daily calories: ${goals.daily_calories ?? "not set"} kcal
-- Protein: ${goals.protein_g ?? "not set"}g
-- Carbs: ${goals.carbs_g ?? "not set"}g
-- Fats: ${goals.fats_g ?? "not set"}g
-- Fiber: ${goals.fiber_g ?? "not set"}g
-- Goal type: ${goals.goal_type || "not set"}
-- Macro preset: ${goals.macro_preset || "not set"}`
+      ? `CURRENT DAILY TARGETS:
+- Daily calories: ${(goals as any).daily_calories ?? "not set"} kcal
+- Protein: ${(goals as any).protein_g ?? "not set"}g
+- Carbs: ${(goals as any).carbs_g ?? "not set"}g
+- Fats: ${(goals as any).fats_g ?? "not set"}g
+- Fiber: ${(goals as any).fiber_g ?? "not set"}g
+- Goal type: ${(goals as any).goal_type || "not set"}
+- Macro preset: ${(goals as any).macro_preset || "not set"}`
       : "CURRENT DAILY TARGETS: Not set";
 
-    // WEIGHT TREND block
     let weightBlock = "WEIGHT TREND (last 14 days):\n";
-    if (weightLogs.length > 0) {
-      for (const w of weightLogs) {
-        weightBlock += `- ${w.date}: ${w.weight} ${wUnit}\n`;
+    if (checkIns.length > 0) {
+      for (const w of checkIns) {
+        weightBlock += `- ${(w as any).date}: ${(w as any).weight} ${wUnit}\n`;
       }
     } else {
       weightBlock += "- No weight data available\n";
     }
 
-    // STEPS block
     let stepsBlock = "STEPS (last 7 days):\n";
-    if (stepsLogs.length > 0) {
-      for (const s of stepsLogs) {
-        stepsBlock += `- ${s.date}: ${s.value ?? 0} steps\n`;
+    if (trackerEntries.length > 0) {
+      for (const s of trackerEntries) {
+        const dateStr = ((s as any).logged_at as string).split("T")[0];
+        stepsBlock += `- ${dateStr}: ${(s as any).value ?? 0} steps\n`;
       }
     } else {
       stepsBlock += "- No steps data available\n";
     }
 
-    // COACH MEMORY block
     let memoryBlock = "COACH MEMORY:\n";
     if (memoryItems.length > 0) {
       for (const m of memoryItems) {
-        memoryBlock += `- ${m.key}: ${m.value}\n`;
+        memoryBlock += `- ${(m as any).key}: ${(m as any).value}\n`;
       }
     } else {
       memoryBlock += "- No memory entries yet\n";
@@ -286,20 +261,27 @@ INSTRUCTIONS:
 - CRITICAL: When adding food to diary, write only 1 sentence confirming what will be added, then append ACTION_PROPOSAL JSON.
 - If the user asks "why?", "explain", "how did you determine that?", or "show me the data", then provide a complete evidence-based explanation.
 - If multiple recommendations exist, rank the top 3 only.
-- End with "Want to know why I recommend this?" only if you believe an explanation would be useful but the user didn't ask.
 - When proposing a goal change, end your response with: ACTION_PROPOSAL: {"action_type":"update_goal","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"reason":"...","current_value":...,"proposed_value":...,"expected_effect":"..."}}
 - When creating a meal plan, end with: ACTION_PROPOSAL: {"action_type":"create_meal_plan","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"plan_name":"...","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD","reason":"...","days":[{"date":"YYYY-MM-DD","meals":[{"meal_type":"breakfast","food_name":"...","calories":0,"protein":0,"carbs":0,"fats":0,"fiber":0,"grams":0,"quantity":1,"serving_unit":"serving","dish_description":"..."}]}]}}
 - When adding food to diary, end with: ACTION_PROPOSAL: {"action_type":"add_food_to_diary","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"food_name":"...","calories":0,"protein":0,"carbs":0,"fats":0,"date":"YYYY-MM-DD","meal_type":"lunch","quantity":1,"serving_unit":"serving"}}`;
 
-    // ── Build OpenRouter messages ──────────────────────────────────────────────
-    const apiMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-    ];
+    const isGemini = DEFAULT_MODEL.startsWith("google/");
+    let apiMessages: { role: string; content: string }[];
+    if (isGemini) {
+      apiMessages = [
+        { role: "user", content: `[SYSTEM INSTRUCTIONS]\n${systemPrompt}` },
+        { role: "assistant", content: "Understood. I have your full profile, goals, and nutrition history. How can I help?" },
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ];
+    } else {
+      apiMessages = [
+        { role: "system", content: systemPrompt },
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ];
+    }
 
-    console.log("[AICoach] Calling OpenRouter, model:", DEFAULT_MODEL, "| total messages:", apiMessages.length);
+    console.log("[AICoach] Calling OpenRouter, model:", DEFAULT_MODEL, "| messages:", apiMessages.length);
 
-    // ── Stream SSE response ───────────────────────────────────────────────────
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const encoder = new TextEncoder();
@@ -308,7 +290,6 @@ INSTRUCTIONS:
       await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
     };
 
-    // Start streaming in background
     (async () => {
       try {
         const chatRes = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -330,8 +311,8 @@ INSTRUCTIONS:
 
         if (!chatRes.ok) {
           const errText = await chatRes.text();
-          console.error("[AICoach] ❌ OpenRouter error:", chatRes.status, errText.slice(0, 200));
-          await sendEvent({ error: `OpenRouter error ${chatRes.status}: ${errText.slice(0, 100)}` });
+          console.error("[AICoach] OpenRouter error:", chatRes.status, errText.slice(0, 500));
+          await sendEvent({ error: `OpenRouter error ${chatRes.status}: ${errText.slice(0, 200)}` });
           await writer.close();
           return;
         }
@@ -354,7 +335,7 @@ INSTRUCTIONS:
             if (!jsonStr || jsonStr === "[DONE]") continue;
             try {
               const chunk = JSON.parse(jsonStr);
-              const delta = chunk.choices?.[0]?.delta?.content || "";
+              const delta = chunk.choices?.[0]?.delta?.content ?? "";
               if (delta) {
                 fullText += delta;
                 await sendEvent({ delta });
@@ -365,34 +346,32 @@ INSTRUCTIONS:
           }
         }
 
-        console.log("[AICoach] ✅ Stream complete, full_text length:", fullText.length);
+        console.log("[AICoach] Stream complete, full_text length:", fullText.length);
 
-        // Parse ACTION_PROPOSAL from the full response
         const actionProposalRaw = extractActionProposal(fullText);
         let actionProposal: Record<string, unknown> | null = null;
 
         if (actionProposalRaw) {
-          // Ensure action_id and confirmation_token are set
           const proposal = actionProposalRaw as Record<string, unknown>;
+          const action_type = (proposal.action_type as string) || "";
           const action_id = (proposal.action_id as string) || genUUID();
           const confirmation_token = (proposal.confirmation_token as string) || genUUID();
           const innerProposal = (proposal.proposal as Record<string, unknown>) || {};
 
-          // Merge action_type into proposal if not already there
-          if (!innerProposal.action_type && proposal.action_type) {
-            innerProposal.action_type = proposal.action_type;
+          if (!innerProposal.action_type) {
+            innerProposal.action_type = action_type;
           }
 
           actionProposal = {
             action_id,
+            action_type,
             confirmation_token,
             proposal: innerProposal,
           };
 
-          console.log("[AICoach] Action proposal extracted, action_type:", innerProposal.action_type, "| action_id:", action_id);
+          console.log("[AICoach] Action proposal extracted, action_type:", action_type, "| action_id:", action_id);
         }
 
-        // Save messages to conversation if conversation_id provided
         if (conversationId) {
           try {
             const lastUserMsg = messages[messages.length - 1];
@@ -408,14 +387,13 @@ INSTRUCTIONS:
               role: "assistant",
               content: fullText,
             });
-            // Update conversation last_message_at
             await supabase
               .from("coach_conversations")
               .update({ last_message_at: new Date().toISOString() })
               .eq("id", conversationId);
           } catch (saveErr: unknown) {
             const msg = saveErr instanceof Error ? saveErr.message : String(saveErr);
-            console.warn("[AICoach] Failed to save messages to conversation:", msg);
+            console.warn("[AICoach] Failed to save messages:", msg);
           }
         }
 
@@ -426,7 +404,7 @@ INSTRUCTIONS:
         });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error("[AICoach] ❌ Streaming error:", msg);
+        console.error("[AICoach] Streaming error:", msg);
         await sendEvent({ error: msg });
       } finally {
         await writer.close();
@@ -444,8 +422,8 @@ INSTRUCTIONS:
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[AICoach] ❌ Unhandled error:", msg);
-    return new Response(JSON.stringify({ error: "Internal Server Error", detail: msg, request_id: requestId }), {
+    console.error("[AICoach] Unhandled error:", msg);
+    return new Response(JSON.stringify({ error: "Internal Server Error", detail: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
