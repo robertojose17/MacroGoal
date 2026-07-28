@@ -280,17 +280,25 @@ export function useAICoach(options?: UseAICoachOptions) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === placeholderMsg.id
-                ? { ...m, content: fullText, isStreaming: false }
+                ? {
+                    ...m,
+                    content: fullText,
+                    isStreaming: false,
+                    ...(data.action_proposal
+                      ? {
+                          actionProposal: data.action_proposal as ActionProposal,
+                          actionStatus: 'pending' as const,
+                        }
+                      : {}),
+                  }
                 : m
             )
           );
         }
 
         if (data.action_proposal) {
-          console.log('[useAICoach] Action proposal received:', data.action_proposal?.action_id);
-          if (isMountedRef.current) {
-            setPendingAction(data.action_proposal as ActionProposal);
-          }
+          console.log('[useAICoach] Action proposal received and attached inline:', data.action_proposal?.action_id);
+          // Do NOT call setPendingAction here — proposal is already attached directly above
         }
 
         setState({ status: 'success', error: null });
