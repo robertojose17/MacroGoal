@@ -21,13 +21,17 @@ export default function GoPremiumFloatingBadge() {
     router.push('/subscription');
   };
 
-  // Hide on auth, onboarding, and choose-username screens
-  const isAuthOrOnboarding =
-    pathname.startsWith('/auth') ||
-    pathname.startsWith('/onboarding') ||
-    pathname.startsWith('/choose-username');
+  const ALLOWED_PATHS = [
+    '/(tabs)/(home)',
+    '/(tabs)/dashboard',
+    '/(tabs)/coach',
+    '/(tabs)/check-ins',
+    '/(tabs)/profile',
+  ];
 
-  if (!visible || isPremium || isAuthOrOnboarding) return null;
+  const isAllowedScreen = ALLOWED_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
+
+  if (!visible || isPremium || !isAllowedScreen) return null;
 
   const bottomOffset = insets.bottom + 145;
 
