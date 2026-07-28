@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
       memoryResult,
     ] = await Promise.all([
       supabase.from("users").select("*").eq("id", userId).maybeSingle(),
-      supabase.from("goals").select("*").eq("user_id", userId).eq("is_active", true).maybeSingle(),
+      supabase.from("goals").select("*").eq("user_id", userId).eq("is_active", true).order("created_at", { ascending: false }).limit(1),
       supabase
         .from("daily_logs")
         .select("date, calories, protein, carbs, fats, fiber")
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
     ]);
 
     const profile = profileResult.data;
-    const goals = goalsResult.data;
+    const goals = Array.isArray(goalsResult.data) ? goalsResult.data[0] ?? null : goalsResult.data;
     const nutritionLogs = nutritionResult.data || [];
     const weightLogs = weightResult.data || [];
     const stepsLogs = stepsResult.data || [];
@@ -225,14 +225,15 @@ Deno.serve(async (req) => {
 
     // GOALS block
     const goalsBlock = goals
-      ? `CURRENT GOALS:
+      ? `CURRENT DAILY TARGETS (always use these exact numbers for meal plans and goal suggestions):
 - Daily calories: ${goals.daily_calories ?? "not set"} kcal
 - Protein: ${goals.protein_g ?? "not set"}g
 - Carbs: ${goals.carbs_g ?? "not set"}g
 - Fats: ${goals.fats_g ?? "not set"}g
 - Fiber: ${goals.fiber_g ?? "not set"}g
-- Goal type: ${goals.goal_type || "not set"}`
-      : "CURRENT GOALS: Not set";
+- Goal type: ${goals.goal_type || "not set"}
+- Macro preset: ${goals.macro_preset || "not set"}`
+      : "CURRENT DAILY TARGETS: Not set";
 
     // WEIGHT TREND block
     let weightBlock = "WEIGHT TREND (last 14 days):\n";

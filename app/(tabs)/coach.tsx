@@ -1135,32 +1135,57 @@ export default function CoachScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           console.warn('[AICoach] No user for update_goal');
+          setMessages((prev) =>
+            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
+          );
           return;
         }
 
-        console.log('[AICoach] Deactivating current goals for user:', user.id);
+        // Fetch current active goal to preserve all existing fields
+        const { data: currentGoal } = await supabase
+          .from('goals')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        console.log('[AICoach] Current active goal:', currentGoal);
+
+        // Deactivate current goal
         await supabase
           .from('goals')
           .update({ is_active: false })
           .eq('user_id', user.id)
           .eq('is_active', true);
 
-        const newCalories = Number(proposal.proposed_value ?? proposal.current_value ?? 0);
-        console.log('[AICoach] Inserting new goal, daily_calories:', newCalories);
-        const { error: goalError } = await supabase.from('goals').insert({
+        const newCalories = Number(proposal.proposed_value ?? proposal.current_value ?? currentGoal?.daily_calories ?? 0);
+
+        const newGoalData: Record<string, unknown> = {
           user_id: user.id,
-          goal_type: (proposal.goal_type as string | undefined) ?? 'maintain',
+          // Preserve existing fields
+          goal_type: currentGoal?.goal_type ?? 'maintain',
+          macro_preset: currentGoal?.macro_preset ?? null,
+          start_date: currentGoal?.start_date ?? null,
+          loss_rate_lbs_per_week: currentGoal?.loss_rate_lbs_per_week ?? null,
+          goal_intensity: currentGoal?.goal_intensity ?? 1,
+          // Apply new values (AI proposal overrides existing)
           daily_calories: newCalories,
-          protein_g: (proposal.protein_g as number | undefined) ?? null,
-          carbs_g: (proposal.carbs_g as number | undefined) ?? null,
-          fats_g: (proposal.fats_g as number | undefined) ?? null,
-          fiber_g: (proposal.fiber_g as number | undefined) ?? null,
+          protein_g: (proposal.protein_g as number | undefined) ?? currentGoal?.protein_g ?? null,
+          carbs_g: (proposal.carbs_g as number | undefined) ?? currentGoal?.carbs_g ?? null,
+          fats_g: (proposal.fats_g as number | undefined) ?? currentGoal?.fats_g ?? null,
+          fiber_g: (proposal.fiber_g as number | undefined) ?? currentGoal?.fiber_g ?? null,
           is_active: true,
-        });
+        };
+
+        console.log('[AICoach] Inserting new goal:', newGoalData);
+        const { error: goalError } = await supabase.from('goals').insert(newGoalData);
 
         if (goalError) {
           console.error('[AICoach] Error inserting new goal:', goalError.message);
           Alert.alert('Error', 'Could not update your goals.');
+          setMessages((prev) =>
+            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
+          );
           return;
         }
 
@@ -1170,6 +1195,9 @@ export default function CoachScreen() {
           ...prev,
           { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
         ]);
+        setMessages((prev) =>
+          prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
+        );
         return;
       }
 
