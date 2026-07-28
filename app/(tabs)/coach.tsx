@@ -808,6 +808,7 @@ export default function CoachScreen() {
   const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [userWeightUnit, setUserWeightUnit] = useState<string>('lb');
+  const [proactiveInsight, setProactiveInsight] = useState<{ text: string; cta: string; ctaMessage: string } | null>(null);
 
   const {
     sendMessage,
@@ -818,6 +819,11 @@ export default function CoachScreen() {
     setMessages,
     conversationId,
   } = useAICoach({ weightUnit: userWeightUnit });
+
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -873,6 +879,114 @@ export default function CoachScreen() {
         }
       } catch (e: any) {
         console.warn('[AICoach] Weight unit fetch error:', e?.message);
+      }
+    })();
+
+    // Fetch today's nutrition and inject welcome message if no history
+    (async () => {
+      try {
+        // Wait for the hook's conversation init to complete
+        await new Promise((r) => setTimeout(r, 600));
+        if (!isMountedRef.current) return;
+
+        console.log('[AICoach] Fetching today\'s nutrition context');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: todayMeals } = await supabase
+          .from('meals')
+          .select('meal_items(calories, protein, carbs, fats)')
+          .eq('user_id', user.id)
+          .eq('date', todayStr);
+
+        let todayCal = 0, todayProtein = 0, todayCarbs = 0, todayFats = 0;
+        for (const meal of (todayMeals || [])) {
+          for (const item of ((meal as any).meal_items || [])) {
+            todayCal += Number(item.calories) || 0;
+            todayProtein += Number(item.protein) || 0;
+            todayCarbs += Number(item.carbs) || 0;
+            todayFats += Number(item.fats) || 0;
+          }
+        }
+
+        console.log('[AICoach] Today nutrition totals — cal:', Math.round(todayCal), 'protein:', Math.round(todayProtein), 'carbs:', Math.round(todayCarbs), 'fats:', Math.round(todayFats));
+
+        if (todayCal > 0 && messagesRef.current.length === 0) {
+          const hour = new Date().getHours();
+          const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+          const todayCalRounded = Math.round(todayCal);
+          const todayProteinRounded = Math.round(todayProtein);
+          const todayCarbsRounded = Math.round(todayCarbs);
+          const todayFatsRounded = Math.round(todayFats);
+          const welcomeContent = `${greeting}! Here's your nutrition snapshot for today:\n\n**${todayCalRounded} cal** logged  •  **${todayProteinRounded}g** protein  •  **${todayCarbsRounded}g** carbs  •  **${todayFatsRounded}g** fats\n\nWhat can I help you with today?`;
+          console.log('[AICoach] Injecting welcome nutrition message');
+          if (isMountedRef.current) {
+            setMessages([{
+              id: genId(),
+              role: 'assistant',
+              content: welcomeContent,
+              timestamp: Date.now(),
+            }]);
+          }
+        }
+
+        // Proactive insight: last 7 days
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const { data: weekMeals } = await supabase
+          .from('meals')
+          .select('date, meal_items(calories, protein)')
+          .eq('user_id', user.id)
+          .gte('date', sevenDaysAgo)
+          .lte('date', todayStr);
+
+        const { data: goalData } = await supabase
+          .from('goals')
+          .select('protein_g, daily_calories')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // Aggregate by date
+        const dayMap: Record<string, { protein: number }> = {};
+        for (const meal of (weekMeals || [])) {
+          const d = (meal as any).date as string;
+          if (!dayMap[d]) dayMap[d] = { protein: 0 };
+          for (const item of ((meal as any).meal_items || [])) {
+            dayMap[d].protein += Number(item.protein) || 0;
+          }
+        }
+        const daysLogged = Object.keys(dayMap).length;
+        console.log('[AICoach] Proactive insight — days logged this week:', daysLogged);
+
+        if (daysLogged >= 3 && goalData) {
+          const proteinGoal = goalData.protein_g || 0;
+          const daysUnderProtein = Object.values(dayMap).filter((d) => proteinGoal > 0 && d.protein < proteinGoal * 0.8).length;
+
+          if (daysUnderProtein >= 3 && proteinGoal > 0) {
+            console.log('[AICoach] Proactive insight: under protein goal', daysUnderProtein, 'days');
+            if (isMountedRef.current) {
+              setProactiveInsight({
+                text: `You've been under your protein goal ${daysUnderProtein} of the last ${daysLogged} days logged.`,
+                cta: 'Fix my protein',
+                ctaMessage: `I've been under my protein goal ${daysUnderProtein} days this week. Help me fix it.`,
+              });
+            }
+          } else if (daysLogged >= 5) {
+            console.log('[AICoach] Proactive insight: great consistency,', daysLogged, 'days logged');
+            if (isMountedRef.current) {
+              setProactiveInsight({
+                text: `You've logged ${daysLogged} days this week. Great consistency!`,
+                cta: 'See my weekly review',
+                ctaMessage: 'Give me my weekly progress review',
+              });
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Nutrition context fetch error:', e?.message);
       }
     })();
 
@@ -1441,6 +1555,32 @@ export default function CoachScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ── Proactive insight card — welcome state only ── */}
+          {isOnlyWelcome && !loading && proactiveInsight && (
+            <View style={[styles.insightCard, { backgroundColor: isDark ? '#1E2035' : '#EEF2FF', borderColor: isDark ? '#3B4080' : '#C7D2FE' }]}>
+              <View style={styles.insightCardRow}>
+                <Text style={styles.insightCardEmoji}>
+                  {'💡'}
+                </Text>
+                <Text style={[styles.insightCardText, { color: isDark ? colors.textDark : colors.text }]}>
+                  {proactiveInsight.text}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.insightCardCta, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                  console.log('[AICoach] Proactive insight CTA pressed:', proactiveInsight.cta);
+                  handleSend(proactiveInsight.ctaMessage);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.insightCardCtaText}>
+                  {proactiveInsight.cta}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* ── Quick Action Cards — welcome state only ── */}
           {isOnlyWelcome && !loading && (
             <View style={styles.quickActionsSection}>
@@ -2338,5 +2478,39 @@ const styles = StyleSheet.create({
   inlineAddFoodMacros: {
     fontSize: 12,
     marginBottom: 12,
+  },
+  // ── Proactive insight card ────────────────────────────────────────────────
+  insightCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+  },
+  insightCardRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 10,
+  },
+  insightCardEmoji: {
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  insightCardText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  insightCardCta: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignSelf: 'flex-start',
+  },
+  insightCardCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
