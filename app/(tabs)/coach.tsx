@@ -807,6 +807,7 @@ export default function CoachScreen() {
   const [inputText, setInputText] = useState('');
   const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
   const [creatingPlan, setCreatingPlan] = useState(false);
+  const [userWeightUnit, setUserWeightUnit] = useState<string>('lb');
 
   const {
     sendMessage,
@@ -816,7 +817,7 @@ export default function CoachScreen() {
     messages,
     setMessages,
     conversationId,
-  } = useAICoach();
+  } = useAICoach({ weightUnit: userWeightUnit });
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -846,6 +847,32 @@ export default function CoachScreen() {
         }
       } catch (e: any) {
         console.warn('[AICoach] Recommendation fetch error:', e?.message);
+      }
+    })();
+
+    // Fetch user weight unit preference
+    (async () => {
+      try {
+        console.log('[AICoach] Fetching user weight unit preference');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data, error } = await supabase
+          .from('users')
+          .select('weight_unit')
+          .eq('id', user.id)
+          .single();
+        if (error) {
+          console.warn('[AICoach] Error fetching weight unit:', error.message);
+          return;
+        }
+        if (data?.weight_unit) {
+          console.log('[AICoach] User weight unit:', data.weight_unit);
+          if (isMountedRef.current) {
+            setUserWeightUnit(data.weight_unit);
+          }
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Weight unit fetch error:', e?.message);
       }
     })();
 
@@ -1083,7 +1110,7 @@ export default function CoachScreen() {
           setMessages((prev) => [...prev, successMsg]);
 
           console.log('[AICoach] Navigating to meal-plan-detail, id:', plan.id);
-          router.push(`/meal-plan-detail?id=${plan.id}`);
+          router.push(`/meal-plan-detail?planId=${plan.id}`);
           setMessages((prev) =>
             prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
           );
