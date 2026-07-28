@@ -423,5 +423,6 @@ export function useAICoach(options?: UseAICoachOptions) {
     messages,
     setMessages,
     conversationId,
+    setConversationId,
   };
 }

@@ -12,6 +12,7 @@ import {
   Alert,
   Animated,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -752,6 +753,18 @@ function getRelativeTime(isoDate: string): string {
   }
 }
 
+// ── Conversation date formatter ──────────────────────────────────────────────
+function formatConvDate(isoDate: string): string {
+  const d = new Date(isoDate);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 // ── Status Card Component ────────────────────────────────────────────────────
 function StatusCard({
   recommendation,
@@ -818,7 +831,90 @@ export default function CoachScreen() {
     messages,
     setMessages,
     conversationId,
+    setConversationId,
   } = useAICoach({ weightUnit: userWeightUnit });
+
+  // ── History state ──────────────────────────────────────────────────────────
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyConversations, setHistoryConversations] = useState<{
+    id: string;
+    title: string | null;
+    created_at: string;
+    last_message_at: string;
+    preview?: string;
+  }[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const loadHistory = useCallback(async () => {
+    console.log('[AICoach] Loading conversation history');
+    setLoadingHistory(true);
+    try {
+      const { data: convs } = await supabase
+        .from('coach_conversations')
+        .select('id, title, created_at, last_message_at')
+        .order('last_message_at', { ascending: false })
+        .limit(30);
+
+      if (!convs) {
+        console.log('[AICoach] No conversations found in history');
+        return;
+      }
+
+      console.log('[AICoach] History conversations fetched, count:', convs.length);
+
+      const withPreviews = await Promise.all(
+        convs.map(async (conv) => {
+          const { data: msgs } = await supabase
+            .from('coach_messages')
+            .select('content, role')
+            .eq('conversation_id', conv.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          const lastMsg = msgs?.[0];
+          const rawContent = lastMsg ? lastMsg.content : '';
+          const prefix = lastMsg?.role === 'user' ? 'You: ' : '';
+          const preview = lastMsg
+            ? `${prefix}${rawContent.slice(0, 50)}${rawContent.length > 50 ? '...' : ''}`
+            : 'No messages';
+          return { ...conv, preview };
+        })
+      );
+      setHistoryConversations(withPreviews);
+    } catch (e: any) {
+      console.warn('[AICoach] Error loading history:', e?.message);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  const loadConversation = useCallback(async (convId: string) => {
+    console.log('[AICoach] Loading conversation from history, id:', convId);
+    try {
+      const { data: msgs } = await supabase
+        .from('coach_messages')
+        .select('id, role, content, created_at')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+      if (msgs && msgs.length > 0) {
+        console.log('[AICoach] Conversation messages loaded, count:', msgs.length);
+        const mapped = msgs.map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          timestamp: new Date(m.created_at).getTime(),
+        }));
+        setMessages(mapped);
+        setConversationId(convId);
+      } else {
+        console.log('[AICoach] No messages found for conversation:', convId);
+      }
+      setShowHistory(false);
+    } catch (e: any) {
+      console.warn('[AICoach] Error loading conversation:', e?.message);
+    }
+  }, [setMessages, setConversationId]);
 
   const messagesRef = useRef(messages);
   useEffect(() => {
@@ -984,6 +1080,43 @@ export default function CoachScreen() {
               });
             }
           }
+        }
+
+        // Daily insights from coach_daily_insights table
+        try {
+          console.log('[AICoach] Fetching daily insights from coach_daily_insights');
+          const { data: dailyInsight } = await supabase
+            .from('coach_daily_insights')
+            .select('insight_text, cta_message, is_read')
+            .eq('user_id', user.id)
+            .eq('is_read', false)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (dailyInsight && isMountedRef.current) {
+            // Only set if no proactive insight was already set from nutrition analysis
+            setProactiveInsight((prev) => {
+              if (prev) return prev;
+              console.log('[AICoach] Daily insight found, setting proactive insight');
+              return {
+                text: dailyInsight.insight_text,
+                cta: dailyInsight.cta_message || 'Tell me more',
+                ctaMessage: dailyInsight.cta_message || 'Give me my daily coaching insight',
+              };
+            });
+            // Mark as read
+            await supabase
+              .from('coach_daily_insights')
+              .update({ is_read: true })
+              .eq('user_id', user.id)
+              .eq('is_read', false);
+            console.log('[AICoach] Daily insight marked as read');
+          } else {
+            console.log('[AICoach] No unread daily insights found');
+          }
+        } catch (e: any) {
+          console.warn('[AICoach] Daily insights fetch error:', e?.message);
         }
       } catch (e: any) {
         console.warn('[AICoach] Nutrition context fetch error:', e?.message);
@@ -1511,15 +1644,16 @@ export default function CoachScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
-              console.log('[AICoach] Action history button pressed');
-              router.push('/coach-action-history');
+              console.log('[AICoach] Conversation history button pressed');
+              loadHistory();
+              setShowHistory(true);
             }}
             style={styles.headerIconBtn}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <IconSymbol
-              ios_icon_name="clock"
-              android_material_icon_name="history"
+              ios_icon_name="clock.rotate.left"
+              android_material_icon_name="manage_history"
               size={20}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
@@ -1831,6 +1965,108 @@ export default function CoachScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ── Conversation History Modal ── */}
+      <Modal
+        visible={showHistory}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          console.log('[AICoach] History modal closed via back button');
+          setShowHistory(false);
+        }}
+      >
+        <SafeAreaView style={[styles.historyModal, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+          {/* Header */}
+          <View style={[styles.historyHeader, { borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
+            <Text style={[styles.historyTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              Conversation History
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[AICoach] History modal close button pressed');
+                setShowHistory(false);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={20}
+                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* List */}
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }}>
+            {loadingHistory ? (
+              <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: 40 }}>
+                Loading...
+              </Text>
+            ) : historyConversations.length === 0 ? (
+              <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: 40 }}>
+                No conversations yet
+              </Text>
+            ) : (
+              historyConversations.map((conv) => {
+                const convDateLabel = formatConvDate(conv.last_message_at || conv.created_at);
+                const convPreview = conv.preview || 'No messages';
+                return (
+                  <TouchableOpacity
+                    key={conv.id}
+                    style={[styles.historyItem, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => {
+                      console.log('[AICoach] History conversation item pressed, id:', conv.id, 'date:', convDateLabel);
+                      loadConversation(conv.id);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.historyItemDate, { color: colors.primary }]}>
+                      {convDateLabel}
+                    </Text>
+                    <Text style={[styles.historyItemPreview, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={2}>
+                      {convPreview}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+
+            {/* View action history link */}
+            <TouchableOpacity
+              style={styles.historyActionLink}
+              onPress={() => {
+                console.log('[AICoach] View action history link pressed from history modal');
+                setShowHistory(false);
+                router.push('/coach-action-history');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.historyActionLinkText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                View action history →
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+
+          {/* New conversation button */}
+          <View style={{ padding: spacing.md }}>
+            <TouchableOpacity
+              style={[styles.newConvBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                console.log('[AICoach] New conversation button pressed');
+                setMessages([]);
+                setShowHistory(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.newConvBtnText}>
+                + New Conversation
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
     </SafeAreaView>
   );
@@ -2512,5 +2748,55 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  // ── History modal ─────────────────────────────────────────────────────────
+  historyModal: {
+    flex: 1,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  historyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  historyItem: {
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+  },
+  historyItemDate: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  historyItemPreview: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  historyActionLink: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+  },
+  historyActionLinkText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  newConvBtn: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  newConvBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
