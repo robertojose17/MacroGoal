@@ -88,6 +88,28 @@ type UseAICoachOptions = {
   weightUnit?: string;
 };
 
+const WEB_SEARCH_KEYWORDS = [
+  // Restaurants
+  "restaurant", "mcdonald", "chipotle", "subway", "burger king", "starbucks",
+  "taco bell", "wendy's", "wendys", "chick-fil-a", "chickfila", "domino",
+  "pizza hut", "olive garden", "applebee", "menu", "order at", "eat at",
+  // Stores & products
+  "walmart", "target", "costco", "whole foods", "wholefood", "kroger",
+  "publix", "aldi", "trader joe", "grocery", "store", "where to buy",
+  "where can i buy", "where can i find", "price", "how much does",
+  // Real-time / local
+  "near me", "nearby", "current", "latest", "right now", "available",
+  "in stock", "open now",
+  // Specific food lookups
+  "nutrition facts for", "calories in", "ingredients of", "macros of",
+  "how many calories in",
+];
+
+function needsWebSearch(message: string): boolean {
+  const lower = message.toLowerCase();
+  return WEB_SEARCH_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
 let msgCounter = 0;
 function genMsgId() {
   msgCounter += 1;
@@ -213,11 +235,15 @@ export function useAICoach(options?: UseAICoachOptions) {
 
       setState({ status: 'loading', error: null });
 
+      const lastUserContent = apiMessages[apiMessages.length - 1]?.content ?? '';
+      const useWeb = needsWebSearch(lastUserContent);
+
       console.log('[useAICoach] Sending request to ai-coach');
       console.log('[useAICoach] Message count:', apiMessages.length);
-      console.log('[useAICoach] Last user message:', apiMessages[apiMessages.length - 1]?.content?.slice(0, 80));
+      console.log('[useAICoach] Last user message:', lastUserContent.slice(0, 80));
       console.log('[useAICoach] weight_unit:', weightUnit);
       console.log('[useAICoach] conversation_id:', conversationId);
+      console.log('[useAICoach] use_web:', useWeb);
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -248,6 +274,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               messages: apiMessages,
               weight_unit: weightUnit,
               conversation_id: conversationId ?? null,
+              use_web: useWeb,
             }),
           }
         );
