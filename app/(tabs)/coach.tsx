@@ -444,7 +444,7 @@ function InlineActionCard({
   const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
   const totalCalories = mealPlanDays.reduce((sum, d) => sum + d.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
   const avgCalPerDay = mealPlanDays.length > 0 ? Math.round(totalCalories / mealPlanDays.length) : 0;
-  const confirmBtnText = isAddFood ? 'Yes, add it' : isMealPlan ? 'Create Meal Plan' : 'Confirm';
+  const confirmBtnText = isAddFood ? 'Yes, add it' : isMealPlan ? 'Accept' : 'Confirm';
   const declineBtnText = isAddFood ? 'No thanks' : 'Decline';
 
   // ── add_food_to_diary: special compact card ──────────────────────────────
