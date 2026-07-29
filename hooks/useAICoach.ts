@@ -284,13 +284,18 @@ export function useAICoach(options?: UseAICoachOptions) {
           console.error('[useAICoach] HTTP error:', response.status, errText.slice(0, 300));
           const isSubscriptionError = response.status === 403 || errText.includes('Subscription Required');
           if (isMountedRef.current) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === placeholderMsg.id
-                  ? { ...m, content: isSubscriptionError ? 'Subscription required to use the AI Coach.' : 'Something went wrong. Please try again.', isStreaming: false }
-                  : m
-              )
-            );
+            if (isSubscriptionError) {
+              // Remove placeholder so coach.tsx can add the single upgrade message
+              setMessages((prev) => prev.filter((m) => m.id !== placeholderMsg.id));
+            } else {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === placeholderMsg.id
+                    ? { ...m, content: 'Something went wrong. Please try again.', isStreaming: false }
+                    : m
+                )
+              );
+            }
             setState({ status: 'error', error: errText });
           }
           if (isSubscriptionError) {
