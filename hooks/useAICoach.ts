@@ -304,75 +304,11 @@ export function useAICoach(options?: UseAICoachOptions) {
           throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
         }
 
-        // Read SSE stream (with JSON fallback if body is null)
-        let fullText = '';
-        let actionProposal: ActionProposal | null = null;
-
-        if (response.body) {
-          console.log('[useAICoach] Reading SSE stream');
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-
-          try {
-            let readerDone = false;
-            while (!readerDone) {
-              const { done, value } = await reader.read();
-              readerDone = done;
-              if (done) break;
-
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n');
-
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const data = line.slice(6).trim();
-                if (data === '[DONE]') break;
-
-                try {
-                  const parsed = JSON.parse(data);
-
-                  if (parsed.done === true) {
-                    // Final metadata event
-                    if (parsed.action_proposal) {
-                      actionProposal = parsed.action_proposal as ActionProposal;
-                    }
-                    continue;
-                  }
-
-                  if (parsed.token) {
-                    fullText += parsed.token;
-                    // Update message content in real-time
-                    if (isMountedRef.current) {
-                      setMessages((prev) =>
-                        prev.map((m) =>
-                          m.id === placeholderMsg.id
-                            ? { ...m, content: fullText, isStreaming: true }
-                            : m
-                        )
-                      );
-                    }
-                  }
-                } catch {
-                  // ignore parse errors on partial chunks
-                }
-              }
-            }
-          } catch (streamErr: any) {
-            console.warn('[useAICoach] SSE stream read error:', streamErr?.message);
-          }
-        } else {
-          // Fallback: backend returned plain JSON (not SSE yet)
-          console.log('[useAICoach] response.body is null, falling back to response.json()');
-          try {
-            const data = await (response as any).json();
-            fullText = data.text || '';
-            if (data.action_proposal) {
-              actionProposal = data.action_proposal as ActionProposal;
-            }
-          } catch (jsonErr: any) {
-            console.warn('[useAICoach] JSON fallback parse error:', jsonErr?.message);
-          }
-        }
+        // Parse plain JSON response
+        console.log('[useAICoach] Parsing JSON response');
+        const data = await response.json();
+        let fullText: string = data.text || '';
+        let actionProposal: ActionProposal | null = data.action_proposal || null;
 
         console.log('[useAICoach] Response received, length:', fullText.length);
 
