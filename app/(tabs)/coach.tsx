@@ -1815,6 +1815,7 @@ export default function CoachScreen() {
 
             const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
             const showEmpathyBadge = detectsEmpathy(message.content);
+            const isWaitingForFirstToken = isThisStreaming && message.content === '';
 
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
@@ -1827,6 +1828,9 @@ export default function CoachScreen() {
                   <Text style={[styles.coachLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                     Coach
                   </Text>
+                  {isWaitingForFirstToken ? (
+                    <TypingIndicator isDark={isDark} />
+                  ) : (
                   <View style={[styles.assistantBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
                     <View>
                       {structuredNodes}
@@ -1870,6 +1874,7 @@ export default function CoachScreen() {
                       </Text>
                     ) : null}
                   </View>
+                  )}
                   {showEmpathyBadge && (
                     <View style={styles.empathyBadge}>
                       <Text style={styles.empathyBadgeText}>💙 Supportive response</Text>
@@ -1880,12 +1885,7 @@ export default function CoachScreen() {
             );
           })}
 
-          {/* Typing indicator — only show when loading but no streaming message yet */}
-          {loading && !lastStreamingMsgId && (
-            <View style={styles.typingWrapper}>
-              <TypingIndicator isDark={isDark} />
-            </View>
-          )}
+
 
         </ScrollView>
 
