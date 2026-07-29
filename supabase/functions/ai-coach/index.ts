@@ -256,7 +256,7 @@ INSTRUCTIONS:
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ];
 
-    console.log("[AICoach] Calling OpenRouter non-streaming, model:", DEFAULT_MODEL, "messages:", apiMessages.length);
+    console.log("[AICoach] Calling OpenRouter streaming, model:", DEFAULT_MODEL, "messages:", apiMessages.length);
 
     const chatRes = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
@@ -271,7 +271,7 @@ INSTRUCTIONS:
         messages: apiMessages,
         temperature: 0.7,
         max_tokens: 4096,
-        stream: false,
+        stream: true,
       }),
     });
 
@@ -284,51 +284,83 @@ INSTRUCTIONS:
       });
     }
 
-    const chatJson = await chatRes.json();
-    const fullText: string = chatJson.choices?.[0]?.message?.content || "";
-    console.log("[AICoach] Response received, length:", fullText.length);
+    // Stream tokens to client as SSE
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = chatRes.body!.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "";
+        let buffer = "";
 
-    // Parse ACTION_PROPOSAL
-    const actionProposalRaw = extractActionProposal(fullText);
-    let actionProposal: Record<string, unknown> | null = null;
-
-    if (actionProposalRaw) {
-      const proposal = actionProposalRaw as Record<string, unknown>;
-      const action_type = (proposal.action_type as string) || "";
-      const action_id = (proposal.action_id as string) || genUUID();
-      const confirmation_token = (proposal.confirmation_token as string) || genUUID();
-      const innerProposal = (proposal.proposal as Record<string, unknown>) || {};
-      if (!innerProposal.action_type) innerProposal.action_type = action_type;
-
-      actionProposal = {
-        action_id,
-        action_type,
-        confirmation_token,
-        proposal: innerProposal,
-      };
-      console.log("[AICoach] Action proposal:", action_type, action_id);
-    }
-
-    // Save to conversation
-    if (conversationId) {
-      try {
-        const lastUserMsg = messages[messages.length - 1];
-        if (lastUserMsg?.role === "user") {
-          await supabase.from("coach_messages").insert({ conversation_id: conversationId, role: "user", content: lastUserMsg.content });
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed === "data: [DONE]") continue;
+              if (!trimmed.startsWith("data: ")) continue;
+              try {
+                const json = JSON.parse(trimmed.slice(6));
+                const token = json.choices?.[0]?.delta?.content;
+                if (token) {
+                  fullText += token;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
+                }
+              } catch { /* skip malformed */ }
+            }
+          }
+        } finally {
+          reader.releaseLock();
         }
-        await supabase.from("coach_messages").insert({ conversation_id: conversationId, role: "assistant", content: fullText });
-        await supabase.from("coach_conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
-      } catch (saveErr: unknown) {
-        console.warn("[AICoach] Failed to save messages:", saveErr instanceof Error ? saveErr.message : String(saveErr));
-      }
-    }
 
-    return new Response(JSON.stringify({
-      text: fullText,
-      action_proposal: actionProposal,
-    }), {
+        // Parse ACTION_PROPOSAL from full text
+        const actionProposalRaw = extractActionProposal(fullText);
+        let actionProposal: Record<string, unknown> | null = null;
+        if (actionProposalRaw) {
+          const proposal = actionProposalRaw as Record<string, unknown>;
+          const action_type = (proposal.action_type as string) || "";
+          const action_id = (proposal.action_id as string) || genUUID();
+          const confirmation_token = (proposal.confirmation_token as string) || genUUID();
+          const innerProposal = (proposal.proposal as Record<string, unknown>) || {};
+          if (!innerProposal.action_type) innerProposal.action_type = action_type;
+          actionProposal = { action_id, action_type, confirmation_token, proposal: innerProposal };
+          console.log("[AICoach] Action proposal:", action_type, action_id);
+        }
+
+        // Send done event with action_proposal
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, action_proposal: actionProposal })}\n\n`));
+
+        // Save to conversation
+        if (conversationId) {
+          try {
+            const lastUserMsg = messages[messages.length - 1];
+            if (lastUserMsg?.role === "user") {
+              await supabase.from("coach_messages").insert({ conversation_id: conversationId, role: "user", content: lastUserMsg.content });
+            }
+            await supabase.from("coach_messages").insert({ conversation_id: conversationId, role: "assistant", content: fullText });
+            await supabase.from("coach_conv_sessions").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
+          } catch (saveErr: unknown) {
+            console.warn("[AICoach] Failed to save messages:", saveErr instanceof Error ? saveErr.message : String(saveErr));
+          }
+        }
+
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
 
   } catch (e: unknown) {

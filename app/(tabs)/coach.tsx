@@ -1127,7 +1127,7 @@ export default function CoachScreen() {
       isMountedRef.current = false;
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
-  }, []);
+  }, [setMessages]);
 
   const scrollToBottom = useCallback(() => {
     if (!isMountedRef.current) return;
@@ -1551,7 +1551,7 @@ export default function CoachScreen() {
       // ── Default: unrecognized action_type — mark confirmed silently ──────────
       return;
     },
-    [messages, router, sendMessage, setMessages]
+    [messages, router, setMessages]
   );
 
   // Keep ref in sync so handleSend can call handleConfirmInline without a circular dep

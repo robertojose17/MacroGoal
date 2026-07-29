@@ -1200,7 +1200,7 @@ export default function FoodDetailsLayout({
     } finally {
       setLoading(false);
     }
-  }, [itemId, router]);
+  }, [itemId, router, itemTable]);
 
   useEffect(() => {
     if (itemId) {

@@ -304,13 +304,51 @@ export function useAICoach(options?: UseAICoachOptions) {
           throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
         }
 
-        // Parse plain JSON response
-        console.log('[useAICoach] Parsing JSON response');
-        const data = await response.json();
-        let fullText: string = data.text || '';
-        let actionProposal: ActionProposal | null = data.action_proposal || null;
+        // Read SSE stream token by token
+        console.log('[useAICoach] Reading SSE stream');
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        let actionProposal: ActionProposal | null = null;
+        let buffer = '';
 
-        console.log('[useAICoach] Response received, length:', fullText.length);
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed === 'data: [DONE]') continue;
+              if (!trimmed.startsWith('data: ')) continue;
+              try {
+                const parsed = JSON.parse(trimmed.slice(6));
+                if (parsed.token) {
+                  fullText += parsed.token;
+                  // Update message in real time
+                  if (isMountedRef.current) {
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === placeholderMsg.id
+                          ? { ...m, content: fullText, isStreaming: true }
+                          : m
+                      )
+                    );
+                  }
+                }
+                if (parsed.done) {
+                  actionProposal = parsed.action_proposal || null;
+                }
+              } catch { /* skip malformed */ }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        console.log('[useAICoach] Stream complete, length:', fullText.length);
 
         // Finalize message
         if (isMountedRef.current) {

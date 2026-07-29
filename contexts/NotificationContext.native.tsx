@@ -37,7 +37,7 @@ const isExpoGo = Constants.appOwnership === "expo";
 function getOneSignal(): any | null {
   if (isExpoGo) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("react-native-onesignal");
   } catch {
     return null;
