@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
       checkInsResult,
       memoryResult,
     ] = await Promise.all([
-      supabase.from("users").select("name, username, sex, date_of_birth, height, current_weight, goal_weight, activity_level").eq("id", userId).maybeSingle(),
+      supabase.from("users").select("name, username, sex, date_of_birth, height, current_weight, goal_weight, activity_level, weight_unit").eq("id", userId).maybeSingle(),
       supabase.from("goals").select("daily_calories, protein_g, carbs_g, fats_g, fiber_g, goal_type, macro_preset").eq("user_id", userId).eq("is_active", true).order("created_at", { ascending: false }).limit(1),
       supabase.from("meals").select("date, meal_items(calories, protein, carbs, fats, fiber)").eq("user_id", userId).gte("date", fourteenDaysAgo).lte("date", today).order("date", { ascending: false }),
       supabase.from("check_ins").select("date, weight").eq("user_id", userId).gte("date", fourteenDaysAgo).order("date", { ascending: false }).limit(14),
@@ -169,7 +169,10 @@ Deno.serve(async (req) => {
 
     console.log("[AICoach] Context — profile:", !!profile, "goals:", !!goals, "nutrition days:", nutritionLogs.length, "weight:", checkIns.length);
 
-    const wUnit = weightUnit === "kg" ? "kg" : "lb";
+    const dbWeightUnit = (profile as any)?.weight_unit || weightUnit || "lb";
+    const wUnit = dbWeightUnit === "kg" ? "kg" : "lb";
+    const toDisplayWeight = (kg: number): number =>
+      wUnit === "lb" ? Math.round(kg * 2.20462 * 100) / 100 : Math.round(kg * 100) / 100;
 
     let age = "unknown";
     if (profile?.date_of_birth) {
@@ -183,8 +186,8 @@ Deno.serve(async (req) => {
 - Age: ${age}
 - Height: ${(profile as any).height ? `${(profile as any).height} cm` : "unknown"}
 - Sex: ${(profile as any).sex || "unknown"}
-- Current weight: ${(profile as any).current_weight ? `${(profile as any).current_weight} ${wUnit}` : "unknown"}
-- Goal weight: ${(profile as any).goal_weight ? `${(profile as any).goal_weight} ${wUnit}` : "unknown"}
+- Current weight: ${(profile as any).current_weight ? `${toDisplayWeight((profile as any).current_weight)} ${wUnit}` : "unknown"}
+- Goal weight: ${(profile as any).goal_weight ? `${toDisplayWeight((profile as any).goal_weight)} ${wUnit}` : "unknown"}
 - Activity level: ${(profile as any).activity_level || "unknown"}`
       : "USER PROFILE: Not available";
 
@@ -209,7 +212,7 @@ Deno.serve(async (req) => {
     let weightBlock = "WEIGHT TREND:\n";
     if (checkIns.length > 0) {
       for (const w of checkIns) {
-        weightBlock += `- ${(w as any).date}: ${(w as any).weight} ${wUnit}\n`;
+        weightBlock += `- ${(w as any).date}: ${toDisplayWeight((w as any).weight)} ${wUnit}\n`;
       }
     } else {
       weightBlock += "- No weight data\n";
