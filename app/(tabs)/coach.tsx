@@ -328,11 +328,6 @@ function TypingIndicator({ isDark }: { isDark: boolean }) {
 
   return (
     <View style={[styles.typingBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-      <Image
-        source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
-        style={styles.coachAvatarImage}
-        resizeMode="cover"
-      />
       <View style={styles.typingDots}>
         <Animated.View style={dotStyle(dot1)} />
         <Animated.View style={dotStyle(dot2)} />
