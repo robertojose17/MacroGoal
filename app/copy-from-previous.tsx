@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
+import FoodItemRow from '@/components/FoodItemRow';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -635,80 +636,58 @@ export default function CopyFromPreviousScreen() {
                         const isSelected = selectedEntries.has(entry.id);
                         const servingText = formatFoodRowServing(entry.serving_description, entry.quantity ?? 1, entry.grams ?? undefined);
                         const entryName = entry.food_items?.name ?? entry.foods?.name ?? entry.food_name ?? 'Unknown';
-                        const entryBrand = entry.food_items?.brand ?? entry.foods?.brand ?? entry.food_brand ?? null;
-                        const entryCalories = Math.round(entry.calories);
-                        const entryProtein = Math.round(entry.protein || 0);
-                        const entryCarbs = Math.round(entry.carbs || 0);
-                        const entryFats = Math.round(entry.fats || 0);
+                        const entryBrand = entry.food_items?.brand ?? entry.foods?.brand ?? entry.food_brand ?? undefined;
 
                         return (
-                          <TouchableOpacity
+                          <View
                             key={entry.id}
                             style={[
                               styles.foodItem,
-                              entryIndex < group.entries.length - 1 && styles.foodItemBorder
+                              entryIndex < group.entries.length - 1 && styles.foodItemBorder,
+                              { flexDirection: 'row', alignItems: 'center' },
                             ]}
-                            onPress={() => {
-                              console.log('[CopyFromPrevious] Entry toggled:', entryName, 'selected:', !isSelected);
-                              handleEntryToggle(entry.id);
-                            }}
-                            activeOpacity={0.7}
                           >
-                            <View style={[
-                              styles.checkbox,
-                              styles.checkboxSmall,
-                              { borderColor: isDark ? colors.borderDark : colors.border },
-                              isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }
-                            ]}>
-                              {isSelected && (
-                                <IconSymbol
-                                  ios_icon_name="checkmark"
-                                  android_material_icon_name="check"
-                                  size={14}
-                                  color="#FFFFFF"
-                                />
-                              )}
-                            </View>
-                            <View style={styles.foodInfo}>
-                              <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={1}>
-                                {entryName}
-                              </Text>
-                              {entryBrand ? (
-                                <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
-                                  {entryBrand}
-                                </Text>
-                              ) : null}
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-                                <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                                  {servingText}
-                                </Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>
-                                  P
-                                </Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>
-                                  {entryProtein}g
-                                </Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>
-                                  C
-                                </Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>
-                                  {entryCarbs}g
-                                </Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>
-                                  F
-                                </Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>
-                                  {entryFats}g
-                                </Text>
+                            <TouchableOpacity
+                              onPress={() => {
+                                console.log('[CopyFromPrevious] Entry toggled:', entryName, 'selected:', !isSelected);
+                                handleEntryToggle(entry.id);
+                              }}
+                              activeOpacity={0.7}
+                              style={{ paddingRight: 8 }}
+                            >
+                              <View style={[
+                                styles.checkbox,
+                                styles.checkboxSmall,
+                                { borderColor: isDark ? colors.borderDark : colors.border },
+                                isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }
+                              ]}>
+                                {isSelected && (
+                                  <IconSymbol
+                                    ios_icon_name="checkmark"
+                                    android_material_icon_name="check"
+                                    size={14}
+                                    color="#FFFFFF"
+                                  />
+                                )}
                               </View>
-                              <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: 1 }}>
-                                {entryCalories}
-                                <Text>
-                                  {' kcal'}
-                                </Text>
-                              </Text>
+                            </TouchableOpacity>
+                            <View style={{ flex: 1 }}>
+                              <FoodItemRow
+                                name={entryName}
+                                brand={entryBrand}
+                                calories={entry.calories}
+                                protein={entry.protein || 0}
+                                carbs={entry.carbs || 0}
+                                fats={entry.fats || 0}
+                                servingText={servingText}
+                                onPress={() => {
+                                  console.log('[CopyFromPrevious] Entry toggled:', entryName, 'selected:', !isSelected);
+                                  handleEntryToggle(entry.id);
+                                }}
+                                isDark={isDark}
+                              />
                             </View>
-                          </TouchableOpacity>
+                          </View>
                         );
                       })}
                     </View>

@@ -11,6 +11,7 @@ import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { loadDraft, saveDraft, clearDraft, DraftItem } from '@/utils/myMealsDraft';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { toLocalDateString } from '@/utils/dateUtils';
+import FoodItemRow from '@/components/FoodItemRow';
 
 export default function MyMealsCreateScreen() {
   const router = useRouter();
@@ -376,62 +377,23 @@ export default function MyMealsCreateScreen() {
     const servingText = formatFoodRowServing(item.serving_description ?? null, item.servings_count ?? 1, item.serving_amount);
 
     return (
-      <React.Fragment key={item.tempId}>
-        <SwipeToDeleteRow onDelete={() => handleRemoveItem(item.tempId)}>
-          {(isSwiping: boolean) => (
-            <TouchableOpacity
-              style={[styles.foodItem, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-              onPress={() => {
-                if (!isSwiping) {
-                  console.log('[MyMealsCreate] Draft item tapped for edit:', item.food_name);
-                  handleEditDraftItem(item);
-                }
-              }}
-              activeOpacity={0.7}
-              disabled={isSwiping}
-            >
-              <View style={[styles.foodInfo, { flex: 1 }]}>
-                {/* Row 1: name (+ calories if NO brand) */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text, flex: 1 }]} numberOfLines={2}>
-                    {item.food_name}
-                  </Text>
-                  {!item.food_brand && (
-                    <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                      <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>{Math.round(item.calories)}</Text>
-                      <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>kcal</Text>
-                    </View>
-                  )}
-                </View>
-                {/* Row 2: brand (+ calories if HAS brand) */}
-                {item.food_brand ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, flex: 1 }]} numberOfLines={1}>
-                      {item.food_brand}
-                    </Text>
-                    <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                      <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>{Math.round(item.calories)}</Text>
-                      <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>kcal</Text>
-                    </View>
-                  </View>
-                ) : null}
-                {/* Row 3: per serving + macros */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                    per {servingText}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.protein }}>P: {Math.round(item.protein)}g</Text>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.carbs }}>C: {Math.round(item.carbs)}g</Text>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.fats }}>F: {Math.round(item.fats)}g</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-        </SwipeToDeleteRow>
-      </React.Fragment>
+      <View key={item.tempId} style={[styles.foodItem, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+        <FoodItemRow
+          name={item.food_name}
+          brand={item.food_brand ?? undefined}
+          calories={item.calories}
+          protein={item.protein}
+          carbs={item.carbs}
+          fats={item.fats}
+          servingText={servingText}
+          onPress={() => {
+            console.log('[MyMealsCreate] Draft item tapped for edit:', item.food_name);
+            handleEditDraftItem(item);
+          }}
+          onDelete={() => handleRemoveItem(item.tempId)}
+          isDark={isDark}
+        />
+      </View>
     );
   };
 

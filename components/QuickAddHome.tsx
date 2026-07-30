@@ -10,6 +10,7 @@ import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { addMealPlanItem } from '@/utils/mealPlansApi';
+import FoodItemRow from '@/components/FoodItemRow';
 
 interface MyFood {
   id: string;
@@ -363,113 +364,70 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
     const servingText = formatFoodRowServing(null, 1, food.serving_amount);
 
     return (
-      <React.Fragment key={food.id}>
-        <SwipeToDeleteRow onDelete={() => handleDeleteFood(food.id)}>
-          {(isSwiping: boolean) => (
-            <TouchableOpacity
-              style={[styles.foodCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-              onPress={() => {
-                if (!isSwiping) {
-                  handleSelectFood(food);
-                }
-              }}
-              activeOpacity={0.7}
-              disabled={isSwiping}
-            >
-              <View style={[styles.foodInfo, { flex: 1 }]}>
-                {/* Row 1: name (+ calories if NO brand) */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text, flex: 1 }]} numberOfLines={2}>
-                    {food.name}
-                  </Text>
-                  {!food.brand && (
-                    <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>{Math.round(food.calories)}</Text>
-                      <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>kcal</Text>
-                    </View>
-                  )}
-                </View>
-                {/* Row 2: brand (+ calories if HAS brand) */}
-                {food.brand ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, flex: 1 }]} numberOfLines={1}>
-                      {food.brand}
-                    </Text>
-                    <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>{Math.round(food.calories)}</Text>
-                      <Text style={{ fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>kcal</Text>
-                    </View>
-                  </View>
-                ) : null}
-                {/* Row 3: per serving + macros */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                    per {servingText}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.protein }}>P: {Math.round(food.protein)}g</Text>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.carbs }}>C: {Math.round(food.carbs)}g</Text>
-                  <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.fats }}>F: {Math.round(food.fats)}g</Text>
-                </View>
-              </View>
+      <View key={food.id} style={[styles.foodCard, { backgroundColor: isDark ? colors.cardDark : colors.card, flexDirection: 'row', alignItems: 'center' }]}>
+        <View style={{ flex: 1 }}>
+          <FoodItemRow
+            name={food.name}
+            brand={food.brand}
+            calories={food.calories}
+            protein={food.protein}
+            carbs={food.carbs}
+            fats={food.fats}
+            servingText={servingText}
+            onPress={() => handleSelectFood(food)}
+            onDelete={() => handleDeleteFood(food.id)}
+            isDark={isDark}
+          />
+        </View>
 
-              {/* Edit button — always visible for saved foods */}
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  if (!isSwiping) {
-                    handleEditFood(food);
-                  }
-                }}
-                activeOpacity={0.7}
-                disabled={isSwiping}
-              >
-                <IconSymbol
-                  ios_icon_name="pencil"
-                  android_material_icon_name="edit"
-                  size={18}
-                  color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                />
-              </TouchableOpacity>
-              
-              {/* Show quick-add button only in meal_log context */}
-              {context !== 'my_meals_builder' && (
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    if (!isSwiping) {
-                      handleQuickAddFood(food);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                  disabled={isSwiping}
-                >
-                  <IconSymbol
-                    ios_icon_name="plus"
-                    android_material_icon_name="add"
-                    size={20}
-                    color="#FFFFFF"
-                  />
-                </TouchableOpacity>
-              )}
-              
-              {/* Show chevron in my_meals_builder context */}
-              {context === 'my_meals_builder' && (
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron_right"
-                  size={20}
-                  color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                />
-              )}
-            </TouchableOpacity>
-          )}
-        </SwipeToDeleteRow>
-      </React.Fragment>
+        {/* Edit button — always visible for saved foods */}
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            console.log('[QuickAddHome] Edit button pressed for food:', food.name);
+            handleEditFood(food);
+          }}
+          activeOpacity={0.7}
+        >
+          <IconSymbol
+            ios_icon_name="pencil"
+            android_material_icon_name="edit"
+            size={18}
+            color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+          />
+        </TouchableOpacity>
+
+        {/* Show quick-add button only in meal_log context */}
+        {context !== 'my_meals_builder' && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              console.log('[QuickAddHome] Quick-add button pressed for food:', food.name);
+              handleQuickAddFood(food);
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="plus"
+              android_material_icon_name="add"
+              size={20}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Show chevron in my_meals_builder context */}
+        {context === 'my_meals_builder' && (
+          <IconSymbol
+            ios_icon_name="chevron.right"
+            android_material_icon_name="chevron_right"
+            size={20}
+            color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+          />
+        )}
+      </View>
     );
   }, [isDark, context, handleSelectFood, handleEditFood, handleDeleteFood, handleQuickAddFood]);
 

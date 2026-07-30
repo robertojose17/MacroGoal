@@ -21,6 +21,7 @@ import { ResultSource, SearchResultItem, buildResultItem, mergeProducts } from '
 import { toLocalDateString } from '@/utils/dateUtils';
 import { hybridSearch } from '@/utils/foodSearchHybrid';
 import { logFoodUsage } from '@/utils/logFoodUsage';
+import FoodItemRow from '@/components/FoodItemRow';
 
 
 
@@ -58,74 +59,50 @@ const ResultRow = React.memo(
     const fatsDisplay = Math.round(isFinite(item.displayFats) ? item.displayFats : 0);
 
     return (
-      <TouchableOpacity
-        style={[styles.resultCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-        onPress={handlePress}
-        activeOpacity={0.7}
-      >
+      <View style={[styles.resultCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
         <View style={styles.resultContent}>
-          <View style={styles.resultInfo}>
-            <View style={styles.nameRow}>
-              <Text
-                style={[styles.productName, { color: isDark ? colors.textDark : colors.text }]}
-                numberOfLines={2}
-              >
-                {productName}
-              </Text>
-              {isVerified && (
-                <Text style={styles.verifiedBadge}>✓</Text>
-              )}
-              {badge && !isVerified && (
-                <Text style={styles.cacheBadge}>{badge}</Text>
-              )}
-            </View>
-
-            {brand ? (
-              <Text
-                style={[styles.productBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {brand}
-              </Text>
-            ) : null}
-
-            <Text
-              style={[styles.productServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
-            >
-              per {item.servingText}
-            </Text>
-
-            {item.hasNutrition ? (
-              <View style={styles.macrosRow}>
-                <Text style={[styles.macroText, { color: colors.calories }]}>
-                  {caloriesDisplay} cal
-                </Text>
-                <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  •
-                </Text>
-                <Text style={[styles.macroText, { color: colors.protein }]}>
-                  P: {proteinDisplay}g
-                </Text>
-                <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  •
-                </Text>
-                <Text style={[styles.macroText, { color: colors.carbs }]}>
-                  C: {carbsDisplay}g
-                </Text>
-                <Text style={[styles.macroDivider, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  •
-                </Text>
-                <Text style={[styles.macroText, { color: colors.fats }]}>
-                  F: {fatsDisplay}g
-                </Text>
+          <View style={{ flex: 1 }}>
+            {/* Source badges */}
+            {(isVerified || badge) && (
+              <View style={styles.badgeRow}>
+                {isVerified && <Text style={styles.verifiedBadge}>✓</Text>}
+                {badge && !isVerified && <Text style={styles.cacheBadge}>{badge}</Text>}
               </View>
+            )}
+            {item.hasNutrition ? (
+              <FoodItemRow
+                name={productName}
+                brand={brand || undefined}
+                calories={caloriesDisplay}
+                protein={proteinDisplay}
+                carbs={carbsDisplay}
+                fats={fatsDisplay}
+                servingText={item.servingText}
+                onPress={handlePress}
+                isDark={isDark}
+              />
             ) : (
-              <Text style={[styles.noNutritionText, { color: colors.warning || '#FF9500' }]}>
-                Nutrition not available
-              </Text>
+              <TouchableOpacity
+                style={styles.noNutritionRow}
+                onPress={handlePress}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.productName, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={2}>
+                    {productName}
+                  </Text>
+                  {!!brand && (
+                    <Text style={[styles.productBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]} numberOfLines={1}>
+                      {brand}
+                    </Text>
+                  )}
+                  <Text style={[styles.noNutritionText, { color: colors.warning || '#FF9500' }]}>
+                    Nutrition not available
+                  </Text>
+                </View>
+              </TouchableOpacity>
             )}
           </View>
-
           <IconSymbol
             ios_icon_name="chevron.right"
             android_material_icon_name="chevron_right"
@@ -133,7 +110,7 @@ const ResultRow = React.memo(
             color={isDark ? colors.textSecondaryDark : colors.textSecondary}
           />
         </View>
-      </TouchableOpacity>
+      </View>
     );
   },
   (prev, next) =>
@@ -676,6 +653,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: 'italic',
     marginTop: 4,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  noNutritionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
   },
   emptyState: {
     flex: 1,

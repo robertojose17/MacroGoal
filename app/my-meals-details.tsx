@@ -13,6 +13,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { calcMacros } from '@/utils/macros';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
+import FoodItemRow from '@/components/FoodItemRow';
 
 
 interface SavedMealItem {
@@ -617,66 +618,27 @@ export default function MyMealsDetailsScreen() {
 
         {validItems.map((item) => {
           const itemMacros = calcItemMacros(item, parseFloat(servingsMultiplier) || 1);
-          const itemCaloriesRounded = Math.round(itemMacros.calories);
-          const itemProteinRounded = Math.round(itemMacros.protein);
-          const itemCarbsRounded = Math.round(itemMacros.carbs);
-          const itemFatsRounded = Math.round(itemMacros.fats);
           const foodName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? 'Unknown Food';
-          const foodBrand = item.food_items?.brand ?? item.foods?.brand ?? item.food_brand;
+          const foodBrand = item.food_items?.brand ?? item.foods?.brand ?? item.food_brand ?? undefined;
           const count = item.servings_count ?? 1;
           const amount = Math.round(item.serving_amount ?? 100);
           const servingText = formatFoodRowServing(null, count, amount);
 
           return (
-            <SwipeToDeleteRow key={item.id} onDelete={() => handleDeleteItem(item.id)}>
-              {(isSwiping) => (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => { if (!isSwiping) handleItemPress(item); }}
-                  disabled={isSwiping}
-                  style={[styles.foodItem, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-                >
-                  <View style={[styles.foodInfo, { flex: 1 }]}>
-                    {/* Row 1: name (+ calories if NO brand) */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text, flex: 1 }]} numberOfLines={2}>
-                        {foodName}
-                      </Text>
-                      {!foodBrand && (
-                        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                          <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>{itemCaloriesRounded}</Text>
-                          <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>kcal</Text>
-                        </View>
-                      )}
-                    </View>
-                    {/* Row 2: brand (+ calories if HAS brand) */}
-                    {foodBrand ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, flex: 1 }]} numberOfLines={1}>
-                          {foodBrand}
-                        </Text>
-                        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                          <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>{itemCaloriesRounded}</Text>
-                          <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>kcal</Text>
-                        </View>
-                      </View>
-                    ) : null}
-                    {/* Row 3: per serving + macros */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-                      <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                        per {servingText}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.protein }}>P: {itemProteinRounded}g</Text>
-                      <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.carbs }}>C: {itemCarbsRounded}g</Text>
-                      <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>•</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.fats }}>F: {itemFatsRounded}g</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              )}
-            </SwipeToDeleteRow>
+            <View key={item.id} style={[styles.foodItem, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+              <FoodItemRow
+                name={foodName}
+                brand={foodBrand || undefined}
+                calories={itemMacros.calories}
+                protein={itemMacros.protein}
+                carbs={itemMacros.carbs}
+                fats={itemMacros.fats}
+                servingText={servingText}
+                onPress={() => handleItemPress(item)}
+                onDelete={() => handleDeleteItem(item.id)}
+                isDark={isDark}
+              />
+            </View>
           );
         })}
 
