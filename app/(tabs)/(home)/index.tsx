@@ -411,17 +411,18 @@ export default function HomeScreen() {
       const result = await applyReferralCode(referralCode.trim());
       if (result.success) {
         console.log('[Home] Referral code applied successfully');
+        setReferralApplying(false);
         Alert.alert('🎉 Code Applied!', 'You and your friend both earned 1,000 XP!');
+        await dismissReferralModal();
       } else {
         console.warn('[Home] Referral code failed:', result.error);
+        setReferralApplying(false);
         Alert.alert('Invalid Code', result.error || 'Could not apply this code.');
       }
     } catch (e) {
       console.error('[Home] Unexpected error applying referral code:', e);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-    } finally {
       setReferralApplying(false);
-      await dismissReferralModal();
+      Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
 
