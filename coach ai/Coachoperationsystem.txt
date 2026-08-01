@@ -2152,3 +2152,203 @@ The coaching experience should feel continuous, intelligent, and
 personal.
 
 END OF DOCUMENT 12
+
+Macro Goal Coaching System (MGCS)
+
+Version 2.0
+
+Document 13
+
+Runtime Decisions
+
+Validator, Summarizer and Memory Capacity
+
+1. Purpose
+
+This document defines the remaining runtime decisions required before
+implementation.
+
+These policies prevent ambiguity, infinite loops, unnecessary costs, and
+uncontrolled memory growth.
+
+------------------------------------------------------------------------
+
+2. Response Validator Policy
+
+The Response Validator is NOT a second LLM.
+
+Its purpose is to verify that the structured recommendation produced by
+the reasoning pipeline satisfies engineering rules before streaming
+begins.
+
+Whenever possible, validation should be deterministic.
+
+Examples:
+
+-   Evidence exists.
+-   Recommendation selected.
+-   Recommendation is actionable.
+-   Recommendation matches user goals.
+-   No contradictions with database.
+-   Safety rules satisfied.
+-   Language detected correctly.
+
+These checks should be implemented as code rather than another model
+call.
+
+------------------------------------------------------------------------
+
+3. LLM Validation
+
+Only if deterministic validation cannot confidently evaluate a response
+should a lightweight LLM validator be used.
+
+This should be rare.
+
+If invoked:
+
+Maximum validation attempts: 2
+
+Attempt 1: Return structured feedback.
+
+Attempt 2: Regenerate once.
+
+If validation still fails:
+
+Return the best safe validated response available instead of looping.
+
+Infinite regeneration is prohibited.
+
+------------------------------------------------------------------------
+
+4. Conversation Summarizer Model
+
+The Conversation Summarizer runs after the conversation ends.
+
+Its objective is summarization—not coaching.
+
+Therefore it should use the cheapest model that consistently produces
+high-quality structured summaries.
+
+Recommended strategy:
+
+Primary: Small inexpensive summarization model.
+
+Fallback: Main coaching model only if parsing fails.
+
+Because summaries are background jobs, latency is far less important
+than cost efficiency.
+
+------------------------------------------------------------------------
+
+5. Summary Output
+
+The summarizer should always return structured JSON.
+
+Never free-form text.
+
+Required fields:
+
+-   objective
+-   obstacle
+-   decisions
+-   commitments
+-   follow_up
+-   coaching_observations
+-   confidence
+-   importance
+
+Structured summaries are easier to retrieve, rank and search.
+
+------------------------------------------------------------------------
+
+6. Memory Capacity
+
+Memory should not have a hard fixed limit.
+
+Instead it should use intelligent lifecycle management.
+
+Every memory receives:
+
+-   importance
+-   confidence
+-   last_used
+-   last_confirmed
+-   created_at
+
+Low-value memories gradually expire.
+
+High-value memories persist indefinitely.
+
+------------------------------------------------------------------------
+
+7. Working Context Limit
+
+Although storage is effectively unlimited, prompt context is limited.
+
+Default retrieval:
+
+-   Top 20 highest-ranked memories.
+-   Ranked by:
+
+Importance × Confidence × Recency × Usage Frequency
+
+This allows thousands of stored memories while only loading the most
+relevant twenty into the model context.
+
+------------------------------------------------------------------------
+
+8. Memory Lifecycle
+
+New Memory
+
+↓
+
+Observe Again
+
+↓
+
+Increase Confidence
+
+↓
+
+Frequently Used
+
+↓
+
+High Priority
+
+↓
+
+Permanent
+
+Unused memories gradually decay in ranking.
+
+They remain stored unless explicitly deleted or replaced.
+
+------------------------------------------------------------------------
+
+9. Engineering Principles
+
+Never waste expensive model calls.
+
+Prefer deterministic code whenever possible.
+
+Use small models for background intelligence.
+
+Reserve premium reasoning models for user-facing coaching.
+
+Optimize for scalability before optimization of complexity.
+
+------------------------------------------------------------------------
+
+10. Final Principle
+
+The coach should appear infinitely intelligent.
+
+The implementation should remain computationally efficient.
+
+Elite coaching comes from excellent architecture—not from making the
+largest possible number of LLM calls.
+
+END OF DOCUMENT 13
