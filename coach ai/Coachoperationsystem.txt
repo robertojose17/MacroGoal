@@ -1913,3 +1913,242 @@ Continues the relationship instead of restarting it.
 The software should disappear. The coaching relationship should remain.
 
 END OF DOCUMENT 11
+
+Macro Goal Coaching System (MGCS)
+
+Version 2.0
+
+Document 12
+
+System Runtime Policies
+
+Operational Rules for Conversation, Memory, Validation and Language
+
+1. Purpose
+
+This document defines the runtime behavior of MGCS. It removes
+implementation ambiguity by specifying exactly how conversations,
+summaries, memory, follow-ups, validation, and language selection
+operate.
+
+------------------------------------------------------------------------
+
+2. Conversation Lifecycle
+
+A conversation starts with the user’s first message.
+
+A conversation ends when one of the following occurs:
+
+-   The user leaves the chat and no new message is received for 60
+    minutes.
+-   The calendar day changes.
+-   The user explicitly starts a new conversation (future feature).
+
+Only after the conversation ends should a Conversation Summary be
+generated.
+
+------------------------------------------------------------------------
+
+3. Conversation Summarizer Engine
+
+The Conversation Summarizer Engine is independent from the Response
+Generator.
+
+Its job is to summarize coaching, not write responses.
+
+Input: - Entire conversation - User profile - Recommendations made -
+User commitments - Memory updates
+
+Output (structured JSON):
+
+-   Primary objective
+-   Main obstacle
+-   Key decisions
+-   User commitments
+-   Follow-up items
+-   Coaching observations
+-   Confidence score
+-   Importance score
+
+Store every summary in a dedicated table:
+
+coach_conversation_summaries
+
+Suggested columns:
+
+-   id
+-   user_id
+-   conversation_id
+-   summary_json
+-   importance
+-   created_at
+
+------------------------------------------------------------------------
+
+4. Summary Retrieval Policy
+
+Never load every summary.
+
+Default context should include:
+
+-   Five most recent summaries.
+-   Any summary marked High Importance.
+
+Older summaries remain searchable but are excluded from normal prompts.
+
+------------------------------------------------------------------------
+
+5. Follow-Up Engine
+
+Follow-ups are not memories.
+
+Create a dedicated table:
+
+coach_followups
+
+Suggested fields:
+
+-   id
+-   user_id
+-   title
+-   reason
+-   context
+-   due_date
+-   priority
+-   status
+-   created_at
+-   completed_at
+
+Examples:
+
+-   Meal prep check
+-   Weight check-in
+-   Grocery purchase
+-   Restaurant recommendation review
+
+------------------------------------------------------------------------
+
+6. Follow-Up Behavior
+
+Current implementation:
+
+Reactive.
+
+Whenever the user opens the coach, check for due follow-ups.
+
+Example:
+
+“Last week you planned to meal prep on Sunday. How did that go?”
+
+Future versions may add push notifications.
+
+------------------------------------------------------------------------
+
+7. Memory Confidence
+
+Every memory should include internal metadata.
+
+Recommended fields:
+
+-   confidence (0-100)
+-   times_observed
+-   last_confirmed
+-   last_used
+-   source
+
+Confidence is internal only.
+
+Never expose it to the user.
+
+Repeated observations increase confidence.
+
+Conflicting evidence reduces confidence.
+
+------------------------------------------------------------------------
+
+8. Response Validation Pipeline
+
+Validation must occur BEFORE streaming begins.
+
+Pipeline:
+
+Reasoning Engine
+
+↓
+
+Recommendation Engine
+
+↓
+
+Response Validator
+
+↓
+
+Approved?
+
+↓
+
+YES → Start streaming
+
+↓
+
+Memory Writer
+
+Validation checklist:
+
+-   Evidence supported
+-   Personalized
+-   Safe
+-   Actionable
+-   Consistent with user data
+-   Aligned with long-term transformation
+
+Responses failing validation must be regenerated before streaming.
+
+------------------------------------------------------------------------
+
+9. Language Policy
+
+The coach always responds in the user’s preferred coaching language.
+
+Determine language using this priority:
+
+1.  Explicit user preference.
+2.  Stored preferred language.
+3.  Dominant language of the current conversation.
+4.  Latest message (fallback).
+
+If the user says:
+
+“Answer me in English.”
+
+Store:
+
+Preferred Coaching Language = English
+
+Until changed.
+
+The coach should naturally switch languages when the user’s long-term
+preference changes.
+
+------------------------------------------------------------------------
+
+10. Runtime Principles
+
+Every runtime decision should follow these rules:
+
+-   Never repeat unnecessary questions.
+-   Never reload unnecessary context.
+-   Never invent missing information.
+-   Prefer structured data over raw text.
+-   Prefer internal data before external tools.
+-   Stream only validated responses.
+-   Learn after every completed interaction.
+-   Continue relationships instead of restarting them.
+
+The runtime should be invisible.
+
+The coaching experience should feel continuous, intelligent, and
+personal.
+
+END OF DOCUMENT 12
