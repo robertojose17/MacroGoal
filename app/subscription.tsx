@@ -785,22 +785,22 @@ export default function SubscriptionScreen() {
 
   const NEW_FEATURES = [
     {
-      ios: 'fork.knife',
-      android: 'restaurant' as const,
-      title: 'Eat the foods you love',
-      desc: 'No boring diets. Just flexible eating that fits your life.',
+      ios: 'brain.head.profile',
+      android: 'psychology' as const,
+      title: 'Your Personal AI Coach',
+      desc: 'Get answers, guidance and adjustments whenever you need them.',
     },
     {
-      ios: 'chart.line.uptrend.xyaxis',
-      android: 'trending-up' as const,
-      title: 'Lose weight every week',
-      desc: 'A plan that adapts to you and delivers real results.',
+      ios: 'fork.knife.circle.fill',
+      android: 'set-meal' as const,
+      title: 'Never Wonder What To Eat',
+      desc: 'Personalized meal plans, recipes and grocery lists built around you.',
     },
     {
-      ios: 'trophy.fill',
-      android: 'emoji-events' as const,
-      title: 'Feel confident in your body again',
-      desc: 'Look better, feel better, and live better.',
+      ios: 'arrow.triangle.2.circlepath',
+      android: 'autorenew' as const,
+      title: 'Stay On Track',
+      desc: 'Your plan evolves as your body and progress change.',
     },
   ];
 
@@ -815,10 +815,10 @@ export default function SubscriptionScreen() {
 
             {/* LEFT 60% — text block */}
             <View style={{ width: '55%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 8, paddingTop: 72, paddingBottom: 20 }}>
-              <Text style={styles.newHeroLine1}>Unlock your</Text>
-              <Text style={styles.newHeroLine2}>personalized{'\n'}meal plan.</Text>
+              <Text style={styles.newHeroLine1}>Unlock Your</Text>
+              <Text style={styles.newHeroLine2}>Personal Coach.</Text>
               <Text style={styles.newHeroSubtitle}>
-                {'Everything you need to lose weight has already been built for you. Unlock your meal plan, grocery list & more with your free trial.'}
+                {'Everything you need to transform your body—guided by a coach that adapts to you every day.'}
               </Text>
             </View>
 
