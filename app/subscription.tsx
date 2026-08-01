@@ -15,6 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -1012,9 +1013,12 @@ export default function SubscriptionScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.modalButton, { backgroundColor: colors.primary }]}
-              onPress={() => {
+              onPress={async () => {
+                console.log('[Subscription] Get Started pressed → navigating to coach tab');
                 setShowSuccessModal(false);
-                router.back();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) await AsyncStorage.setItem(`first_launch_done_${user.id}`, 'true');
+                router.replace('/(tabs)/coach');
               }}
             >
               <Text style={styles.modalButtonText}>Get Started</Text>

@@ -301,8 +301,15 @@ export default function RootLayout() {
           console.log("[Navigation] No user row or timeout → /onboarding/complete");
           router.replace("/onboarding/complete");
         } else if (result.data.onboarding_completed) {
-          console.log("[Navigation] Onboarding done → /(tabs)/(home)/");
-          router.replace("/(tabs)/(home)/");
+          const firstLaunchDone = await AsyncStorage.getItem(`first_launch_done_${session.user.id}`);
+          if (!firstLaunchDone) {
+            console.log("[Navigation] First launch after onboarding → /(tabs)/coach");
+            await AsyncStorage.setItem(`first_launch_done_${session.user.id}`, 'true');
+            router.replace('/(tabs)/coach');
+          } else {
+            console.log("[Navigation] Onboarding done → /(tabs)/(home)/");
+            router.replace("/(tabs)/(home)/");
+          }
         } else {
           console.log("[Navigation] Onboarding incomplete → /onboarding/complete");
           router.replace("/onboarding/complete");

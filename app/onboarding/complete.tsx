@@ -412,7 +412,12 @@ export default function CompleteOnboardingScreen() {
   const handleSkipTrial = async () => {
     console.log('[Onboarding] Skip trial pressed');
     await trackPaywallActionOnce('skip', sessionIdRef.current ?? undefined);
-    await showNotifPromptThen(() => router.replace('/(tabs)/(home)/'));
+    await showNotifPromptThen(async () => {
+      console.log('[Onboarding] Skip trial → navigating to coach tab for first launch');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await AsyncStorage.setItem(`first_launch_done_${user.id}`, 'true');
+      router.replace('/(tabs)/coach');
+    });
   };
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
