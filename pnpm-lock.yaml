@@ -172,7 +172,7 @@ importers:
         version: 16.4.0(expo@54.0.35)(react@19.1.0)
       react-native-health-connect:
         specifier: ^3.5.3
-        version: 3.5.3(@expo/config-plugins@57.0.6(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+        version: 3.6.0(@expo/config-plugins@57.0.6(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-maps:
         specifier: ^1.20.1
         version: 1.29.0(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -5287,8 +5287,8 @@ packages:
       expo:
         optional: true
 
-  react-native-health-connect@3.5.3:
-    resolution: {integrity: sha512-lco68RbMaWpvElED3/obXTJSzoWopo9k5loN/+1zSdr3iT4STp7BaoziyPx0DIyW1a6DF/lvMesXIubWKE1Srw==}
+  react-native-health-connect@3.6.0:
+    resolution: {integrity: sha512-2xt+Dt7i38mP6mWcdF5I2ZoKGuY/jJDo3tb+nWnwi90+oYIwpfdQUBMVZJTEczpsAxuxX5QeH6OKSc+ErTRvvQ==}
     engines: {node: '>= 16.0.0'}
     peerDependencies:
       '@expo/config-plugins': '>= 6.0.2'
@@ -12556,7 +12556,7 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  react-native-health-connect@3.5.3(@expo/config-plugins@57.0.6(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+  react-native-health-connect@3.6.0(@expo/config-plugins@57.0.6(typescript@5.9.3))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
       '@expo/config-plugins': 57.0.6(typescript@5.9.3)
       react: 19.1.0
