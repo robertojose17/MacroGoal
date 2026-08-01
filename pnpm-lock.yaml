@@ -3348,7 +3348,7 @@ packages:
 
   expo-health-connect@0.1.1:
     resolution: {integrity: sha512-9URHckKOHYt7OvwwTis6TNo9XhV8KivkwARexgQ9KAyLWH8T+jCLI3kd7fhCm0WWp3IyyKit362oX7F1l6JLHA==}
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+    deprecated: Merged into react-native-health-connect v4 — remove this package, replace the expo-health-connect entry in your app.json plugins array with react-native-health-connect, then re-run expo prebuild --clean. See https://github.com/matinzd/react-native-health-connect
     peerDependencies:
       expo: '*'
       react: '*'
