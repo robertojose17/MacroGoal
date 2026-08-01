@@ -592,9 +592,9 @@ function Step0({ onNext }: { onNext: () => void }) {
       >
         <SafeAreaView style={styles.step0Safe} edges={['bottom']}>
           <View style={styles.step0Content}>
-            <Text style={styles.step0Headline}>{'Lose your first 10 lbs\nin 30 days.'}</Text>
+            <Text style={styles.step0Headline}>{'Transform Your Body.'}</Text>
             <Text style={styles.step0Sub}>
-              {'A personalized nutrition system built around your body and favorite foods.'}
+              {'With Coaching That Never Stops.'}
             </Text>
             <TouchableOpacity
               style={styles.primaryBtn}
