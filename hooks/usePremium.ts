@@ -275,7 +275,7 @@ export function usePremium(): UsePremiumReturn {
         setTimeout(() => {
           console.log('[usePremium] ⏱️ Running post-login premium check');
           checkPremiumStatus();
-        }, 500);
+        }, 1500);
       } else if (event === 'INITIAL_SESSION' && session?.user?.id) {
         console.log('[usePremium] 🔐 INITIAL_SESSION event detected, scheduling delayed premium check for user:', session.user.id);
         // loginRevenueCat() in _layout.tsx configures RC atomically on cold start,
@@ -283,7 +283,7 @@ export function usePremium(): UsePremiumReturn {
         setTimeout(() => {
           console.log('[usePremium] ⏱️ Running cold-start premium re-check');
           checkPremiumStatus(true); // force = true to bypass the in-progress guard
-        }, 800);
+        }, 2000);
       } else if (event === 'SIGNED_OUT') {
         console.log('[usePremium] 🚪 SIGNED_OUT event detected, resetting premium status');
         setIsPremium(false);

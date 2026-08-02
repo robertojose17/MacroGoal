@@ -839,6 +839,16 @@ export default function CoachScreen() {
 
   const { isPremium, loading: premiumLoading } = usePremium();
 
+  const mountedAtRef = useRef(Date.now());
+  const [hasWaited, setHasWaited] = useState(false);
+
+  useEffect(() => {
+    const elapsed = Date.now() - mountedAtRef.current;
+    const remaining = Math.max(0, 3000 - elapsed);
+    const timer = setTimeout(() => setHasWaited(true), remaining);
+    return () => clearTimeout(timer);
+  }, []);
+
   const {
     sendMessage,
     loading,
@@ -1682,7 +1692,7 @@ export default function CoachScreen() {
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const baseAssistantTextStyle = { ...(typography.body as object), lineHeight: 22, color: isDark ? colors.textDark : colors.text };
 
-  if (premiumLoading) {
+  if (premiumLoading || !hasWaited) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#0A0A0A' : '#F8F8F8' }}>
         <ActivityIndicator size="large" color={colors.primary} />
