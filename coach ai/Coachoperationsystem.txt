@@ -1430,52 +1430,34 @@ Incoming User Message
 
 ↓
 
-Executive Brain
-
-↓
-
-Conversation Strategy Engine
-
-↓
-
-Tool Selection Engine
-
-↓
-
 Context Builder
 
 ↓
 
-Memory Engine
+MGCS System Prompt
 
 ↓
 
-Evidence Engine
+LLM
 
 ↓
 
-Reasoning Engine
+Immediate Streaming
 
 ↓
 
-Recommendation Engine
+Background Processing
 
-↓
+• Memory Writer
+• Conversation Summary (if applicable)
+• Follow-Up Detection
+• Analytics
 
-Response Generator
+The architecture should remain as simple as possible.
 
-↓
+The LLM performs the reasoning.
 
-Response Validator
-
-↓
-
-Memory Writer
-
-↓
-
-Database + Analytics
-
+The runtime is responsible only for assembling context, exposing tools, streaming the response, and learning after the interaction.
 ------------------------------------------------------------------------
 
 4. Context Builder
@@ -1499,26 +1481,33 @@ Builder can provide it.
 
 5. Tool Selection
 
-Select the minimum set of tools required.
+## 5. Tool Usage
+
+Tool selection is not a standalone runtime engine.
+
+The runtime exposes available tools.
+
+The MGCS System Prompt teaches the LLM when each tool should be used.
 
 Possible tools include:
 
--   Internal database
--   Coach memory
--   Conversation history
--   Web search
--   Restaurant search
--   Grocery search
--   Product discovery
--   Scientific knowledge
--   Image analysis
--   Goal update
--   Meal planner
--   Food diary
+• User profile
+• Goals
+• Nutrition history
+• Coach memory
+• Conversation summaries
+• Restaurant search
+• Grocery search
+• Product discovery
+• Scientific knowledge
+• Image analysis
+• Goal update
+• Meal planner
+• Food diary
 
-Prefer internal sources whenever they fully answer the problem.
+External tools should only be used when they materially improve the recommendation.
 
-------------------------------------------------------------------------
+Whenever internal data is sufficient, no external call should be made.------------------------------------------------------------------------
 
 6. Decision Pipeline
 
@@ -1562,18 +1551,26 @@ Update memory
 
 7. Response Validation
 
-Before sending any response, verify:
+## 7. Response Quality Monitoring
 
--   Is it supported by evidence?
--   Is it personalized?
--   Is it actionable?
--   Is it realistic?
--   Is it safe?
--   Is it aligned with long-term transformation?
--   Does it contradict any known user data?
+The coaching response should begin streaming immediately.
 
-Responses that fail validation should be revised before delivery.
+Quality evaluation should occur after the response has been delivered.
 
+Quality monitoring exists to improve future coaching rather than delaying the current interaction.
+
+Metrics include:
+
+• Personalization
+• Evidence usage
+• Recommendation quality
+• User acceptance
+• Contradictions
+• Safety
+
+Recurring problems should be solved by improving the MGCS System Prompt or engineering logic.
+
+Automatic blocking or regeneration of responses is prohibited.
 ------------------------------------------------------------------------
 
 8. Continuous Learning
@@ -1843,6 +1840,30 @@ conversations instead of entire chat histories. Include: - Current
 challenge - Progress - Decisions made - Follow-up items - Behavior
 changes
 
+Conversation summaries should only be generated when they create future coaching value.
+
+Generate summaries when:
+
+• Eight or more messages occurred.
+
+OR
+
+• A coaching commitment was made.
+
+OR
+
+• A long-term preference was discovered.
+
+OR
+
+• New permanent memory was created.
+
+OR
+
+• A follow-up should occur.
+
+Short transactional conversations should not generate summaries.
+
 Layer 3 — Permanent Memory Store only long-term coaching knowledge: -
 Preferences - Allergies - Habits - Favorite restaurants - Lifestyle -
 Schedule - Communication style - Long-term goals - Motivation triggers -
@@ -1862,6 +1883,13 @@ nights. - I crave sweets after dinner.
 Do not store: - Temporary emotions - One-time calculations - Internal
 reasoning - Short-lived facts
 
+Memory extraction should execute as a lightweight background task.
+
+The premium coaching model should not be used for memory extraction.
+
+Instead, use a lightweight extraction model capable of generating structured memories at minimal cost.
+
+The objective is continuous personalization without significantly increasing conversation cost.
 5. New User Mode
 
 If little or no user data exists: - Start helping immediately. - Explain
@@ -1911,6 +1939,26 @@ tools intelligently. - Never asks unnecessary repeated questions. -
 Continues the relationship instead of restarting it.
 
 The software should disappear. The coaching relationship should remain.
+
+Conversation summaries should NOT be generated for every conversation.
+
+Generate summaries only when:
+
+• The conversation contains at least eight messages.
+
+OR
+
+• A long-term coaching commitment was made.
+
+OR
+
+• New permanent memory was discovered.
+
+OR
+
+• A follow-up should occur.
+
+Otherwise no summary is generated.
 
 END OF DOCUMENT 11
 
@@ -1982,7 +2030,11 @@ Suggested columns:
 -   summary_json
 -   importance
 -   created_at
+Conversation summaries are not mandatory.
 
+They should only be generated when the conversation contains meaningful coaching information that can improve future interactions.
+
+Generating summaries for short informational conversations wastes computation without improving coaching quality.
 ------------------------------------------------------------------------
 
 4. Summary Retrieval Policy
@@ -2068,43 +2120,38 @@ Conflicting evidence reduces confidence.
 
 8. Response Validation Pipeline
 
-Validation must occur BEFORE streaming begins.
+## 8. Runtime Processing Pipeline
 
-Pipeline:
+The runtime should prioritize perceived responsiveness.
 
-Reasoning Engine
+Execution order:
 
-↓
-
-Recommendation Engine
+Request
 
 ↓
 
-Response Validator
+Build Context
 
 ↓
 
-Approved?
+Execute LLM
 
 ↓
 
-YES → Start streaming
+Immediate Streaming
 
 ↓
 
-Memory Writer
+Background Processing
 
-Validation checklist:
+• Memory Writer
+• Conversation Summary (if applicable)
+• Follow-Up Detection
+• Analytics
 
--   Evidence supported
--   Personalized
--   Safe
--   Actionable
--   Consistent with user data
--   Aligned with long-term transformation
+Streaming should never be delayed by quality evaluation.
 
-Responses failing validation must be regenerated before streaming.
-
+The coaching experience always has higher priority than architectural perfection.
 ------------------------------------------------------------------------
 
 9. Language Policy
@@ -2341,8 +2388,17 @@ Reserve premium reasoning models for user-facing coaching.
 Optimize for scalability before optimization of complexity.
 
 ------------------------------------------------------------------------
+## 10. Simplicity Principle
 
-10. Final Principle
+Engineering decisions should be justified by measurable improvements in coaching quality.
+
+If an additional module, model call, orchestration layer, or database operation does not noticeably improve the user's coaching experience, it should not exist.
+
+The objective of MGCS is elite coaching—not architectural complexity.
+
+The best architecture is the simplest one capable of delivering world-class coaching.
+
+11. Final Principle
 
 The coach should appear infinitely intelligent.
 
