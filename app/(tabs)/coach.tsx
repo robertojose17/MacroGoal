@@ -13,6 +13,7 @@ import {
   Animated,
   Image,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -20,6 +21,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAICoach, Message, ActionProposal } from '@/hooks/useAICoach';
+import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 
@@ -834,6 +836,8 @@ export default function CoachScreen() {
 
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
+
+  const { isPremium, loading: premiumLoading } = usePremium();
 
   const {
     sendMessage,
@@ -1677,6 +1681,68 @@ export default function CoachScreen() {
 
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const baseAssistantTextStyle = { ...(typography.body as object), lineHeight: 22, color: isDark ? colors.textDark : colors.text };
+
+  if (premiumLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#0A0A0A' : '#F8F8F8' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!isPremium) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: isDark ? '#0A0A0A' : '#F8F8F8' }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+          <Image
+            source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
+            style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 24 }}
+            resizeMode="cover"
+          />
+          <Text style={{ fontSize: 26, fontWeight: '700', color: isDark ? colors.textDark : colors.text, textAlign: 'center', marginBottom: 12 }}>
+            Meet Your AI Coach
+          </Text>
+          <Text style={{ fontSize: 16, color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', lineHeight: 24, marginBottom: 32 }}>
+            No more guessing. No more plateaus.{'\n\n'}Your results are driven by both nutrition and training. Nutrition can account for around 70–80% of your progress, while training makes up the remaining 20–30%. Our Coaching Feature helps you master the nutrition side so you can get 100% from every workout.
+          </Text>
+          <View style={{ alignSelf: 'stretch', marginBottom: 32 }}>
+            {[
+              '🗓  Personalized meal plans',
+              '📊  Analyze your last 14 days',
+              '🎯  Auto-adjust goals based on progress',
+              '🚀  Identify what may be slowing you down',
+              '🛒  Smarter restaurant & grocery recommendations',
+              '💬  Real-time coaching & actionable advice',
+            ].map((feature) => (
+              <View key={feature} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ fontSize: 15, color: isDark ? colors.textDark : colors.text }}>
+                  {feature}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[AICoach] Go Premium button pressed from paywall screen');
+              router.push('/subscription');
+            }}
+            style={{
+              backgroundColor: '#F59E0B',
+              borderRadius: 14,
+              paddingVertical: 16,
+              paddingHorizontal: 40,
+              alignItems: 'center',
+              alignSelf: 'stretch',
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 17 }}>
+              🚀 Go Premium
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
