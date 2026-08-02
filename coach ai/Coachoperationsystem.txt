@@ -1890,12 +1890,6 @@ The premium coaching model should not be used for memory extraction.
 Instead, use a lightweight extraction model capable of generating structured memories at minimal cost.
 
 The objective is continuous personalization without significantly increasing conversation cost.
-5. New User Mode
-
-If little or no user data exists: - Start helping immediately. - Explain
-recommendations become more personalized over time. - Collect
-information conversationally. - Ask only one high-value question at a
-time. Never present a long intake questionnaire.
 
 6. Unknown Information Policy
 
