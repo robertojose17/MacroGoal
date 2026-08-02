@@ -227,7 +227,7 @@ export function useAICoach(options?: UseAICoachOptions) {
 
   // ── Non-streaming sendMessage ──────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (apiMessages: CoachMessage[], userId?: string): Promise<void> => {
+    async (apiMessages: CoachMessage[], userId?: string, isFirstMessage?: boolean): Promise<void> => {
       if (!apiMessages || apiMessages.length === 0) {
         console.log('[useAICoach] No messages to send');
         return;
@@ -244,6 +244,7 @@ export function useAICoach(options?: UseAICoachOptions) {
       console.log('[useAICoach] weight_unit:', weightUnit);
       console.log('[useAICoach] conversation_id:', conversationId);
       console.log('[useAICoach] use_web:', useWeb);
+      console.log('[useAICoach] is_first_message:', isFirstMessage ?? false);
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -275,6 +276,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               weight_unit: weightUnit,
               conversation_id: conversationId ?? null,
               use_web: useWeb,
+              ...(isFirstMessage ? { is_first_message: true } : {}),
             }),
           }
         );

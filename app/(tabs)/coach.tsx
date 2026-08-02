@@ -52,6 +52,13 @@ const CRAVING_CHIPS = [
   { label: 'I need a snack', iosIcon: 'leaf.fill', androidIcon: 'eco', message: 'I need a snack' },
 ];
 
+// ── New user quick actions (shown after first proactive message for new users) ──
+const NEW_USER_QUICK_ACTIONS = [
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'Log my first meal', subtitle: 'Start tracking', message: 'Help me log my first meal' },
+  { iosIcon: 'target', androidIcon: 'track_changes', title: 'Set my goals', subtitle: 'Calories & macros', message: 'Help me set up my nutrition goals' },
+  { iosIcon: 'person.fill', androidIcon: 'person', title: 'Tell me about yourself', subtitle: 'How you can help', message: 'Tell me about yourself and how you can help me' },
+];
+
 // ── Store badge detection ────────────────────────────────────────────────────
 const STORE_COLORS: Record<string, { bg: string; text: string }> = {
   walmart: { bg: '#0071CE', text: '#FFFFFF' },
@@ -818,6 +825,16 @@ export default function CoachScreen() {
   const [userWeightUnit, setUserWeightUnit] = useState<string>('lb');
   const [proactiveInsight, setProactiveInsight] = useState<{ text: string; cta: string; ctaMessage: string } | null>(null);
 
+  // ── MGCS: Follow-up card ──────────────────────────────────────────────────
+  type FollowUp = { id: string; title: string; reason: string | null; due_date: string | null };
+  const [pendingFollowUp, setPendingFollowUp] = useState<FollowUp | null>(null);
+
+  // ── MGCS: New user mode ───────────────────────────────────────────────────
+  const [isNewUser, setIsNewUser] = useState(false);
+
+  // ── MGCS: Proactive first message sent flag ───────────────────────────────
+  const firstMessageSentRef = useRef(false);
+
   const {
     sendMessage,
     loading,
@@ -973,6 +990,35 @@ export default function CoachScreen() {
       }
     })();
 
+    // ── MGCS: Fetch pending follow-up card ────────────────────────────────
+    (async () => {
+      try {
+        console.log('[AICoach] Fetching pending follow-up card');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: followUp, error } = await supabase
+          .from('coach_followups')
+          .select('id, title, reason, due_date')
+          .eq('user_id', user.id)
+          .eq('status', 'pending')
+          .order('priority', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) {
+          console.warn('[AICoach] Error fetching follow-up:', error.message);
+          return;
+        }
+        if (followUp && isMountedRef.current) {
+          console.log('[AICoach] Pending follow-up found:', followUp.id, followUp.title);
+          setPendingFollowUp(followUp as FollowUp);
+        } else {
+          console.log('[AICoach] No pending follow-ups');
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Follow-up fetch error:', e?.message);
+      }
+    })();
+
     // Fetch today's nutrition and inject welcome message if no history
     (async () => {
       try {
@@ -1003,6 +1049,35 @@ export default function CoachScreen() {
 
         console.log('[AICoach] Today nutrition totals — cal:', Math.round(todayCal), 'protein:', Math.round(todayProtein), 'carbs:', Math.round(todayCarbs), 'fats:', Math.round(todayFats));
 
+        // ── MGCS: New user detection ──────────────────────────────────────
+        const { data: checkIns } = await supabase
+          .from('check_ins')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1);
+        const hasNoData = todayCal === 0 && (!checkIns || checkIns.length === 0);
+        if (hasNoData && isMountedRef.current) {
+          console.log('[AICoach] New user detected — no nutrition data and no check-ins');
+          setIsNewUser(true);
+        }
+
+        // ── MGCS: Proactive first message ─────────────────────────────────
+        // If no conversation history yet, trigger the AI's personalized opening
+        if (messagesRef.current.length === 0 && !firstMessageSentRef.current) {
+          firstMessageSentRef.current = true;
+          console.log('[AICoach] No history — triggering proactive first message (MGCS First Interaction Protocol)');
+          const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
+          try {
+            await sendMessage(triggerMsg, user.id, true);
+            console.log('[AICoach] Proactive first message delivered');
+          } catch (e: any) {
+            console.warn('[AICoach] Proactive first message error:', e?.message);
+            firstMessageSentRef.current = false;
+          }
+          return;
+        }
+
+        // Legacy: inject local welcome snapshot if history already exists and todayCal > 0
         if (todayCal > 0 && messagesRef.current.length === 0) {
           const hour = new Date().getHours();
           const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -1122,6 +1197,7 @@ export default function CoachScreen() {
       isMountedRef.current = false;
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMessages]);
 
   const scrollToBottom = useCallback(() => {
@@ -1583,9 +1659,13 @@ export default function CoachScreen() {
 
   // Determine if we're in the "welcome" state (only the welcome message, no user messages)
   const hasUserMessages = messages.some((m) => m.role === 'user');
+  // Filter out the hidden __FIRST_INTERACTION__ trigger from display
+  const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
   const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading;
   const canSend = inputText.trim().length > 0 && !loading;
+  // After first message arrives, show quick actions (new user gets simplified set)
+  const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
 
   // Find the last streaming message (for cursor)
   const lastStreamingMsgId = (() => {
@@ -1710,6 +1790,58 @@ export default function CoachScreen() {
             </View>
           )}
 
+          {/* ── MGCS: Follow-up card — welcome state only ── */}
+          {isOnlyWelcome && !loading && pendingFollowUp && (
+            <View style={[styles.followUpCard, { backgroundColor: isDark ? colors.cardDark : '#FFFBEB', borderColor: isDark ? '#92400E' : '#FCD34D' }]}>
+              <View style={styles.followUpCardHeader}>
+                <View style={styles.followUpBadge}>
+                  <Text style={styles.followUpBadgeText}>
+                    {'Follow-up'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={async () => {
+                    console.log('[AICoach] Follow-up card dismissed, id:', pendingFollowUp.id);
+                    setPendingFollowUp(null);
+                    try {
+                      await supabase
+                        .from('coach_followups')
+                        .update({ status: 'dismissed' })
+                        .eq('id', pendingFollowUp.id);
+                      console.log('[AICoach] Follow-up marked as dismissed in DB');
+                    } catch (e: any) {
+                      console.warn('[AICoach] Error dismissing follow-up:', e?.message);
+                    }
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <IconSymbol
+                    ios_icon_name="xmark"
+                    android_material_icon_name="close"
+                    size={14}
+                    color={isDark ? colors.textSecondaryDark : '#92400E'}
+                  />
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.followUpTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                {pendingFollowUp.title}
+              </Text>
+              <TouchableOpacity
+                style={[styles.followUpCheckInBtn, { backgroundColor: '#F59E0B' }]}
+                onPress={() => {
+                  console.log('[AICoach] Follow-up check-in button pressed, title:', pendingFollowUp.title);
+                  setPendingFollowUp(null);
+                  handleSend(pendingFollowUp.title);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.followUpCheckInText}>
+                  {'Check in'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* ── Quick Action Cards — welcome state only ── */}
           {isOnlyWelcome && !loading && (
             <View style={styles.quickActionsSection}>
@@ -1721,7 +1853,7 @@ export default function CoachScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.quickActionsRow}
               >
-                {QUICK_ACTION_CARDS.map((card) => (
+                {quickActionsToShow.map((card) => (
                   <QuickActionCard
                     key={card.title}
                     iosIcon={card.iosIcon}
@@ -1790,7 +1922,7 @@ export default function CoachScreen() {
             </View>
           )}
 
-          {messages.map((message) => {
+          {visibleMessages.map((message) => {
             const isUser = message.role === 'user';
             const timeText = formatTime(message.timestamp);
             const isThisStreaming = message.isStreaming === true && message.id === lastStreamingMsgId;
@@ -2740,6 +2872,48 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   insightCardCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  // ── Follow-up card ────────────────────────────────────────────────────────
+  followUpCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+  },
+  followUpCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  followUpBadge: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  followUpBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  followUpTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 21,
+    marginBottom: 12,
+  },
+  followUpCheckInBtn: {
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+  },
+  followUpCheckInText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
