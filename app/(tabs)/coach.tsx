@@ -32,7 +32,7 @@ const genId = () => {
   return `coach-${Date.now()}-${msgCounter}`;
 };
 
-type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean };
+type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean };
 
 const SUGGESTED_PROMPTS = [
   'Analyze my last 14 days',
@@ -840,6 +840,9 @@ export default function CoachScreen() {
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
 
+  // ── Premium gate: track whether first real user message has been sent ─────
+  const firstUserMessageSentRef = useRef(false);
+
   const { isPremium, loading: premiumLoading } = usePremium();
 
   const {
@@ -925,6 +928,10 @@ export default function CoachScreen() {
           timestamp: new Date(m.created_at).getTime(),
         }));
         setMessages(mapped);
+        // If history already has user messages, mark first message as already sent
+        if (mapped.some((m: MessageWithId) => m.role === 'user')) {
+          firstUserMessageSentRef.current = true;
+        }
         setConversationId(convId);
       } else {
         console.log('[AICoach] No messages found for conversation:', convId);
@@ -1251,33 +1258,76 @@ export default function CoachScreen() {
 
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
 
-      // ── Premium gate: block backend call for non-premium users ────────────
+      // ── Premium gate: allow first message through, gate from second onwards ─
       if (!isPremium) {
-        console.log('[AICoach] User is not premium — injecting premium gate message instead of calling backend');
-        const lastMsg = messages[messages.length - 1];
-        const alreadyGated = lastMsg?.isPremiumGate === true;
-        if (alreadyGated) {
-          console.log('[AICoach] Last message is already a premium gate — skipping duplicate');
+        if (!firstUserMessageSentRef.current) {
+          // First message — let it through to the backend
+          console.log('[AICoach] Free user first message — allowing through to backend');
+          firstUserMessageSentRef.current = true;
+          // fall through to normal send flow
+        } else {
+          // Second message onwards — show the elite gate with typing indicator
+          console.log('[AICoach] Free user second+ message — showing premium gate');
+          const lastMsg = messages[messages.length - 1];
+          const alreadyGated = lastMsg?.isPremiumGate === true;
+          if (alreadyGated) {
+            console.log('[AICoach] Last message is already a premium gate — skipping duplicate');
+            setInputText('');
+            return;
+          }
+          const userMsg: MessageWithId = {
+            id: genId(),
+            role: 'user',
+            content: trimmed,
+            timestamp: Date.now(),
+          };
+          const typingMsg: MessageWithId = {
+            id: genId(),
+            role: 'assistant',
+            content: '__TYPING__',
+            timestamp: Date.now(),
+            isTyping: true,
+          };
+          setMessages((prev) => [...prev, userMsg, typingMsg]);
           setInputText('');
+
+          setTimeout(() => {
+            const userText = trimmed.toLowerCase();
+            let coachFirstLine = '';
+
+            if (userText.includes('sweet') || userText.includes('dessert') || userText.includes('craving') || userText.includes('chocolate') || userText.includes('sugar')) {
+              coachFirstLine = "Cravings are almost never about willpower — there's usually something specific triggering them. Based on your goal, here's what I'd focus on first:";
+            } else if (userText.includes('eat out') || userText.includes('restaurant') || userText.includes('fast food') || userText.includes('pizza') || userText.includes('burger')) {
+              coachFirstLine = "Eating out doesn't have to be the problem — it's usually one specific habit that makes it hard. Based on your goal, I can already see where the real friction is:";
+            } else if (userText.includes('energy') || userText.includes('tired') || userText.includes('fatigue') || userText.includes('exhausted')) {
+              coachFirstLine = "Low energy is almost always a nutrition signal, not a willpower problem. Based on your profile, I can already see a few things worth looking at:";
+            } else if (userText.includes('start') || userText.includes('begin') || userText.includes("don't know") || userText.includes('confused') || userText.includes('lost')) {
+              coachFirstLine = "Not knowing where to start is actually the most honest place to be — and it tells me something useful. Based on your goal, here's where I'd begin:";
+            } else if (userText.includes('stuck') || userText.includes('plateau') || userText.includes('not losing') || userText.includes('not working') || userText.includes('nothing works')) {
+              coachFirstLine = "Plateaus almost always have a specific cause — and it's rarely what people think. After looking at your profile, I can already see what's most likely happening:";
+            } else if (userText.includes('protein') || userText.includes('macro') || userText.includes('calorie') || userText.includes('carb') || userText.includes('fat')) {
+              coachFirstLine = "Good question — and based on your current goals, I have a specific answer for your situation. Here's what I'd recommend:";
+            } else if (userText.includes('meal plan') || userText.includes('what to eat') || userText.includes('plan')) {
+              coachFirstLine = "I can build that around your exact goals and what you have available. Based on your profile, here's how I'd structure it:";
+            } else if (userText.includes('weight') || userText.includes('lose') || userText.includes('slim') || userText.includes('thin')) {
+              coachFirstLine = "Weight loss usually comes down to one or two specific things — and they're different for everyone. Based on your goal, I can already see what's most relevant for you:";
+            } else {
+              coachFirstLine = "Good question — and based on your goal, I actually have a specific answer for your situation. Here's what I'd focus on first:";
+            }
+
+            const gateMsg: MessageWithId = {
+              id: genId(),
+              role: 'assistant',
+              content: coachFirstLine,
+              timestamp: Date.now(),
+              showUpgradeButton: true,
+              isPremiumGate: true,
+            };
+            setMessages((prev) => prev.filter((m) => !m.isTyping).concat(gateMsg));
+          }, 1500);
+
           return;
         }
-        const userMsg: MessageWithId = {
-          id: genId(),
-          role: 'user',
-          content: trimmed,
-          timestamp: Date.now(),
-        };
-        const gateMsg: MessageWithId = {
-          id: genId(),
-          role: 'assistant',
-          content: 'The AI Coach is a premium feature. Upgrade to get personalized coaching, meal plans, and more.',
-          timestamp: Date.now(),
-          showUpgradeButton: true,
-          isPremiumGate: true,
-        };
-        setMessages((prev) => [...prev, userMsg, gateMsg]);
-        setInputText('');
-        return;
       }
 
       const userMsg: MessageWithId = {
@@ -1978,9 +2028,10 @@ export default function CoachScreen() {
               );
             }
 
-            const structuredNodes = renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
-            const showEmpathyBadge = detectsEmpathy(message.content);
-            const isWaitingForFirstToken = isThisStreaming && message.content === '';
+            const isGateTyping = message.isTyping === true;
+            const structuredNodes = isGateTyping ? null : renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
+            const showEmpathyBadge = !isGateTyping && detectsEmpathy(message.content);
+            const isWaitingForFirstToken = (isThisStreaming && message.content === '') || isGateTyping;
 
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
@@ -2004,24 +2055,40 @@ export default function CoachScreen() {
                       )}
                     </View>
                     {message.showUpgradeButton && (
-                      <TouchableOpacity
-                        onPress={() => {
-                          console.log('[AICoach] Go Premium button pressed');
-                          router.push('/subscription');
-                        }}
-                        style={{
-                          marginTop: 16,
-                          backgroundColor: '#F59E0B',
+                      <View style={{ marginTop: 16 }}>
+                        <View style={{
+                          backgroundColor: isDark ? '#1C1C1E' : '#F9F5FF',
                           borderRadius: 12,
-                          paddingVertical: 14,
-                          paddingHorizontal: 20,
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>
-                          🚀 Go Premium
-                        </Text>
-                      </TouchableOpacity>
+                          padding: 16,
+                          marginBottom: 10,
+                          borderWidth: 1,
+                          borderColor: isDark ? '#3A2E5A' : '#E5D9FF',
+                        }}>
+                          <Text style={{ color: isDark ? '#E2D9F3' : '#4B2D8A', fontWeight: '700', fontSize: 15, marginBottom: 4 }}>
+                            Your coach has your answer.
+                          </Text>
+                          <Text style={{ color: isDark ? '#A89BC2' : '#6B5B95', fontSize: 13, lineHeight: 19 }}>
+                            Every response is built around your specific goal — not generic advice.
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => {
+                            console.log('[AICoach] See What My Coach Found button pressed');
+                            router.push('/subscription');
+                          }}
+                          style={{
+                            backgroundColor: '#7C3AED',
+                            borderRadius: 12,
+                            paddingVertical: 14,
+                            paddingHorizontal: 20,
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
+                            See What My Coach Found →
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
                     {message.actionProposal && message.actionStatus ? (
                       <InlineActionCard
