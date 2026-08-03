@@ -21,6 +21,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAICoach, Message, ActionProposal } from '@/hooks/useAICoach';
+import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 
@@ -31,7 +32,7 @@ const genId = () => {
   return `coach-${Date.now()}-${msgCounter}`;
 };
 
-type MessageWithId = Message & { showUpgradeButton?: boolean };
+type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean };
 
 const SUGGESTED_PROMPTS = [
   'Analyze my last 14 days',
@@ -836,6 +837,8 @@ export default function CoachScreen() {
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
 
+  const { isPremium } = usePremium();
+
   const {
     sendMessage,
     loading,
@@ -1245,6 +1248,35 @@ export default function CoachScreen() {
 
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
 
+      // ── Premium gate: block backend call for non-premium users ────────────
+      if (!isPremium) {
+        console.log('[AICoach] User is not premium — injecting premium gate message instead of calling backend');
+        const lastMsg = messages[messages.length - 1];
+        const alreadyGated = lastMsg?.isPremiumGate === true;
+        if (alreadyGated) {
+          console.log('[AICoach] Last message is already a premium gate — skipping duplicate');
+          setInputText('');
+          return;
+        }
+        const userMsg: MessageWithId = {
+          id: genId(),
+          role: 'user',
+          content: trimmed,
+          timestamp: Date.now(),
+        };
+        const gateMsg: MessageWithId = {
+          id: genId(),
+          role: 'assistant',
+          content: 'The AI Coach is a premium feature. Upgrade to get personalized coaching, meal plans, and more.',
+          timestamp: Date.now(),
+          showUpgradeButton: true,
+          isPremiumGate: true,
+        };
+        setMessages((prev) => [...prev, userMsg, gateMsg]);
+        setInputText('');
+        return;
+      }
+
       const userMsg: MessageWithId = {
         id: genId(),
         role: 'user',
@@ -1289,7 +1321,7 @@ export default function CoachScreen() {
         setMessages((prev) => [...prev, errMsg]);
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium]
   );
 
   const handleSuggestedPrompt = useCallback(
