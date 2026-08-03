@@ -15,6 +15,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -820,6 +821,7 @@ export default function CoachScreen() {
 
   // ── MGCS: New user mode ───────────────────────────────────────────────────
   const [isNewUser, setIsNewUser] = useState(false);
+  const [isFirstEverSession, setIsFirstEverSession] = useState(false);
 
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
@@ -1061,6 +1063,16 @@ export default function CoachScreen() {
           setIsNewUser(true);
         }
 
+        // ── MGCS: Check first-ever session flag ───────────────────────────
+        const firstInteractionKey = 'coach_first_interaction_done_' + user.id;
+        const firstInteractionDone = await AsyncStorage.getItem(firstInteractionKey);
+        if (!firstInteractionDone) {
+          console.log('[AICoach] First-ever session detected — will show welcome chips');
+          if (isMountedRef.current) setIsFirstEverSession(true);
+        } else {
+          console.log('[AICoach] Returning user — welcome chips suppressed');
+        }
+
         // ── MGCS: Proactive first message ─────────────────────────────────
         // If no conversation history yet, trigger the AI's personalized opening
         if (messagesRef.current.length === 0 && !firstMessageSentRef.current) {
@@ -1070,6 +1082,8 @@ export default function CoachScreen() {
           try {
             await sendMessage(triggerMsg, user.id, true);
             console.log('[AICoach] Proactive first message delivered');
+            await AsyncStorage.setItem(firstInteractionKey, 'true');
+            console.log('[AICoach] First interaction flag persisted for user:', user.id);
           } catch (e: any) {
             console.warn('[AICoach] Proactive first message error:', e?.message);
             firstMessageSentRef.current = false;
@@ -1877,7 +1891,7 @@ export default function CoachScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* ── Proactive insight card — welcome state only ── */}
-          {isOnlyWelcome && !loading && proactiveInsight && (
+          {isOnlyWelcome && isFirstEverSession && !loading && proactiveInsight && (
             <View style={[styles.insightCard, { backgroundColor: isDark ? '#1E2035' : '#EEF2FF', borderColor: isDark ? '#3B4080' : '#C7D2FE' }]}>
               <View style={styles.insightCardRow}>
                 <Text style={styles.insightCardEmoji}>
@@ -1903,7 +1917,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── MGCS: Follow-up card — welcome state only ── */}
-          {isOnlyWelcome && !loading && pendingFollowUp && (
+          {isOnlyWelcome && isFirstEverSession && !loading && pendingFollowUp && (
             <View style={[styles.followUpCard, { backgroundColor: isDark ? colors.cardDark : '#FFFBEB', borderColor: isDark ? '#92400E' : '#FCD34D' }]}>
               <View style={styles.followUpCardHeader}>
                 <View style={styles.followUpBadge}>
@@ -1955,7 +1969,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── Quick Action Cards — welcome state only ── */}
-          {isOnlyWelcome && !loading && (
+          {isOnlyWelcome && isFirstEverSession && !loading && (
             <View style={styles.quickActionsSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 What would you like to do?
@@ -1982,7 +1996,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── Craving chips hub — welcome state only ── */}
-          {isOnlyWelcome && !loading && (
+          {isOnlyWelcome && isFirstEverSession && !loading && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Quick questions
@@ -2020,7 +2034,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── Phase 8 Status Card — welcome state only ── */}
-          {isOnlyWelcome && !loading && latestRecommendation && (
+          {isOnlyWelcome && isFirstEverSession && !loading && latestRecommendation && (
             <View style={styles.statusCardSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Current Status
