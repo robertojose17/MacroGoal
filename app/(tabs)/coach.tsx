@@ -1429,6 +1429,18 @@ export default function CoachScreen() {
             setMessages((prev) => prev.filter((m) => !m.isTyping).concat(gateMsg));
             setIsGated(true);
             console.log('[AICoach] Gate activated after first free message');
+
+            // Save both messages to Supabase so they persist on reopen
+            if (conversationId) {
+              try {
+                await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'user', content: trimmed });
+                await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'assistant', content: coachFirstLine });
+                await supabase.from('coach_conv_sessions').update({ last_message_at: new Date().toISOString() }).eq('id', conversationId);
+                console.log('[AICoach] Gate messages saved to Supabase');
+              } catch (saveErr: any) {
+                console.warn('[AICoach] Failed to save gate messages:', saveErr?.message);
+              }
+            }
           }, 1500);
 
           return;
@@ -1500,6 +1512,16 @@ export default function CoachScreen() {
             showUpgradeButton: true,
           };
           setMessages((prev) => [...prev, gateMsg]);
+          if (conversationId) {
+            try {
+              await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'user', content: trimmed });
+              await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'assistant', content: coachFirstLine });
+              await supabase.from('coach_conv_sessions').update({ last_message_at: new Date().toISOString() }).eq('id', conversationId);
+              console.log('[AICoach] GateLocked messages saved to Supabase');
+            } catch (saveErr: any) {
+              console.warn('[AICoach] Failed to save GateLocked messages:', saveErr?.message);
+            }
+          }
           return;
         }
 
@@ -2104,7 +2126,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── Craving chips hub — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1]?.role === 'assistant' && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Quick questions
