@@ -837,7 +837,7 @@ export default function CoachScreen() {
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
 
-  const { isPremium } = usePremium();
+  const { isPremium, loading: premiumLoading } = usePremium();
 
   const {
     sendMessage,
@@ -1249,7 +1249,7 @@ export default function CoachScreen() {
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
 
       // ── Premium gate: block backend call for non-premium users ────────────
-      if (!isPremium) {
+      if (!isPremium && !premiumLoading) {
         console.log('[AICoach] User is not premium — injecting premium gate message instead of calling backend');
         const lastMsg = messages[messages.length - 1];
         const alreadyGated = lastMsg?.isPremiumGate === true;
