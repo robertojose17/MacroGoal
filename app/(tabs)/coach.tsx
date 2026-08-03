@@ -1089,8 +1089,56 @@ export default function CoachScreen() {
         }
 
         // ── MGCS: Proactive first message ─────────────────────────────────
-        // If no conversation history yet, trigger the AI's personalized opening
+        // Check Supabase directly — messagesRef may be empty due to async load timing
         if (messagesRef.current.length === 0 && !firstMessageSentRef.current) {
+          // Query Supabase to see if this user already has a conversation
+          const { data: existingSessions } = await supabase
+            .from('coach_conv_sessions')
+            .select('id')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (existingSessions && existingSessions.length > 0) {
+            // User has prior conversation — load it and show gate if free
+            const sessionId = existingSessions[0].id;
+            const { data: existingMsgs } = await supabase
+              .from('coach_messages')
+              .select('id, role, content, created_at')
+              .eq('conversation_id', sessionId)
+              .order('created_at', { ascending: true })
+              .limit(100);
+
+            if (existingMsgs && existingMsgs.length > 0) {
+              console.log('[AICoach] Existing conversation found — loading', existingMsgs.length, 'messages');
+              const mapped = existingMsgs.map((m) => ({
+                id: m.id,
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                timestamp: new Date(m.created_at).getTime(),
+              }));
+              if (isMountedRef.current) {
+                setMessages(mapped);
+                setConversationId(sessionId);
+                firstUserMessageSentRef.current = true;
+                firstMessageSentRef.current = true;
+                // Check premium status from users table directly (source of truth)
+                const { data: userData } = await supabase
+                  .from('users')
+                  .select('user_type')
+                  .eq('id', user.id)
+                  .single();
+                const userIsPremium = userData?.user_type === 'premium';
+                if (!userIsPremium) {
+                  setIsGated(true);
+                  console.log('[AICoach] Returning free user — gate activated');
+                }
+              }
+              return;
+            }
+          }
+
+          // No prior conversation — trigger the AI's personalized opening
           firstMessageSentRef.current = true;
           console.log('[AICoach] No history — triggering proactive first message (MGCS First Interaction Protocol)');
           const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
