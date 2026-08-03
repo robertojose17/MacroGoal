@@ -948,17 +948,16 @@ export default function CoachScreen() {
     messagesRef.current = messages;
   }, [messages]);
 
-  // ── Fix 1: Set firstMessageReceived when first assistant message arrives ──
+  // ── Set firstMessageReceived when any real assistant message exists ──
   useEffect(() => {
-    if (!isFirstEverSession || firstMessageReceived) return;
+    if (firstMessageReceived) return;
     const hasRealAssistantMsg = messages.some(
       (m) => m.role === 'assistant' && m.content !== '' && !m.isTyping
     );
     if (hasRealAssistantMsg) {
-      console.log('[AICoach] First assistant message received — showing quick replies');
       setFirstMessageReceived(true);
     }
-  }, [messages, isFirstEverSession, firstMessageReceived]);
+  }, [messages, firstMessageReceived]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1851,7 +1850,7 @@ export default function CoachScreen() {
   // Filter out the hidden __FIRST_INTERACTION__ trigger from display
   const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
-  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading;
+  const showCravingChips = !isOnlyWelcome && firstMessageReceived && inputText.length === 0 && !loading;
   const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !isGated;
   // After first message arrives, show quick actions (new user gets simplified set)
   const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
