@@ -1044,6 +1044,27 @@ export default function CoachScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        // ── Persist free user gate: check if user already sent their first message ──
+        if (!isPremium) {
+          const { data: convs } = await supabase
+            .from('coach_conversations')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1);
+          if (convs && convs.length > 0) {
+            const { count } = await supabase
+              .from('coach_messages')
+              .select('id', { count: 'exact', head: true })
+              .eq('conversation_id', convs[0].id)
+              .eq('role', 'user')
+              .limit(1);
+            if ((count ?? 0) > 0) {
+              firstUserMessageSentRef.current = true;
+              console.log('[AICoach] Free user already sent first message — gate will fire immediately');
+            }
+          }
+        }
+
         const todayStr = new Date().toISOString().split('T')[0];
         const { data: todayMeals } = await supabase
           .from('meals')
