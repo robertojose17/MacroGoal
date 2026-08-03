@@ -21,6 +21,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useChatbot, ChatMessage } from '@/hooks/useChatbot';
+import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
 
@@ -33,7 +34,7 @@ const generateMessageId = () => {
 };
 
 // Extended message type with guaranteed ID
-type MessageWithId = ChatMessage & { id: string };
+type MessageWithId = ChatMessage & { id: string; showUpgradeButton?: boolean };
 
 type Ingredient = {
   id: string;
@@ -102,6 +103,7 @@ export default function ChatbotScreen() {
   const [lastUserMessage, setLastUserMessage] = useState<string>('');
 
   const { sendMessage, loading } = useChatbot();
+  const { isPremium, loading: premiumLoading } = usePremium();
 
   // Setup and cleanup
   useEffect(() => {
@@ -346,6 +348,29 @@ export default function ChatbotScreen() {
       displayMessage = `${displayMessage} [with photo]`;
     }
 
+    // Premium gate — check on every message send
+    if (!isPremium && !premiumLoading) {
+      console.log('[Chatbot] Premium gate triggered — user is not premium');
+      const userMsg: MessageWithId = {
+        id: generateMessageId(),
+        role: 'user',
+        content: displayMessage,
+        timestamp: Date.now(),
+      };
+      const gateMsg: MessageWithId = {
+        id: generateMessageId(),
+        role: 'assistant',
+        content: "The AI Coach is a Premium feature.\n\nUpgrade to Premium to unlock unlimited coaching, personalized advice, and more.",
+        timestamp: Date.now(),
+        showUpgradeButton: true,
+      };
+      setMessages((prev) => [...prev, userMsg, gateMsg]);
+      setInputText('');
+      return;
+    }
+
+    console.log('[Chatbot] Sending message to backend — isPremium:', isPremium, 'premiumLoading:', premiumLoading);
+
     const userMessage: MessageWithId = {
       id: generateMessageId(),
       role: 'user',
@@ -482,7 +507,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       };
       setMessages((prev) => [...prev, errorMessage]);
     }
-  }, [inputText, selectedImage, loading, messages, sendMessage, parseMealData]);
+  }, [inputText, selectedImage, loading, messages, sendMessage, parseMealData, isPremium, premiumLoading]);
 
   // Update ingredient quantity and recalculate totals
   const handleQuantityChange = useCallback(
@@ -1025,6 +1050,18 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                         {formatTime(message.timestamp)}
                       </Text>
                     )}
+                    {message.showUpgradeButton && (
+                      <TouchableOpacity
+                        style={styles.goPremiumButton}
+                        onPress={() => {
+                          console.log('[Chatbot] Go Premium button pressed — navigating to /subscription');
+                          router.push('/subscription');
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.goPremiumButtonText}>Go Premium</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );
@@ -1533,5 +1570,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  goPremiumButton: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignSelf: 'flex-start',
+  },
+  goPremiumButtonText: {
+    ...typography.bodyBold,
+    color: '#FFFFFF',
+    fontSize: 14,
   },
 });
