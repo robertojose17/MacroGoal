@@ -2125,46 +2125,6 @@ export default function CoachScreen() {
             </View>
           )}
 
-          {/* ── Craving chips hub — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1]?.role === 'assistant' && (
-            <View style={styles.cravingHubSection}>
-              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Quick questions
-              </Text>
-              <View style={styles.cravingHubRow}>
-                {CRAVING_CHIPS.map((chip) => (
-                  <TouchableOpacity
-                    key={chip.label}
-                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
-                    onPress={() => handleCravingChip(chip)}
-                    disabled={premiumLoading}
-                    activeOpacity={0.75}
-                  >
-                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
-                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {!isNewUser && (
-                <View style={styles.suggestedInlineRow}>
-                  {SUGGESTED_PROMPTS.map((prompt) => (
-                    <TouchableOpacity
-                      key={prompt}
-                      style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
-                      onPress={() => {
-                        console.log('[AICoach] Suggested prompt chip pressed:', prompt);
-                        handleSuggestedPrompt(prompt);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-
           {/* ── Phase 8 Status Card — welcome state only ── */}
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && latestRecommendation && (
             <View style={styles.statusCardSection}>
@@ -2283,7 +2243,28 @@ export default function CoachScreen() {
             );
           })}
 
-
+          {/* ── Welcome chips — rendered after coach's first message ── */}
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1]?.role === 'assistant' && (
+            <View style={[styles.cravingHubSection, { marginTop: 8 }]}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Quick questions
+              </Text>
+              <View style={styles.cravingHubRow}>
+                {CRAVING_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.label}
+                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => handleCravingChip(chip)}
+                    disabled={premiumLoading}
+                    activeOpacity={0.75}
+                  >
+                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
+                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
 
         </ScrollView>
 
