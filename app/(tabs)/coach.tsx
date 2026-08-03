@@ -48,10 +48,12 @@ const QUICK_ACTION_CARDS = [
 ];
 
 const CRAVING_CHIPS = [
-  { label: 'I want something sweet', iosIcon: 'heart.fill', androidIcon: 'favorite', message: 'I want something sweet' },
-  { label: 'High protein option', iosIcon: 'bolt.fill', androidIcon: 'flash_on', message: 'High protein option' },
-  { label: 'Quick meal under 400 cal', iosIcon: 'timer', androidIcon: 'timer', message: 'Quick meal under 400 cal' },
-  { label: 'I need a snack', iosIcon: 'leaf.fill', androidIcon: 'eco', message: 'I need a snack' },
+  { label: "I don't know where to start", iosIcon: 'questionmark.circle.fill', androidIcon: 'help', message: "I don't know where to start" },
+  { label: "I eat out a lot and can't stay on track", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "I eat out a lot and can't stay on track" },
+  { label: "I have no energy", iosIcon: 'battery.25', androidIcon: 'battery_alert', message: "I have no energy lately" },
+  { label: "I've tried before but nothing sticks", iosIcon: 'arrow.counterclockwise', androidIcon: 'replay', message: "I've tried before but nothing sticks" },
+  { label: "I can't control my cravings", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I can't control my cravings" },
+  { label: "I just have a quick question", iosIcon: 'bubble.left.fill', androidIcon: 'chat', message: "I just have a quick question" },
 ];
 
 // ── New user quick actions (shown after first proactive message for new users) ──
@@ -693,24 +695,6 @@ function InlineActionCard({
   );
 }
 
-// ── Empathy phrase detection ─────────────────────────────────────────────────
-const EMPATHY_PHRASES = [
-  'i understand',
-  'i hear you',
-  "that's frustrating",
-  'that must feel',
-  "it's okay",
-  "don't be hard on yourself",
-  "you're not failing",
-  'recovery',
-  'return to your normal',
-];
-
-function detectsEmpathy(content: string): boolean {
-  const lower = content.toLowerCase();
-  return EMPATHY_PHRASES.some((phrase) => lower.includes(phrase));
-}
-
 // ── Status card types ────────────────────────────────────────────────────────
 type CoachRecommendation = {
   user_status: string;
@@ -842,6 +826,7 @@ export default function CoachScreen() {
 
   // ── Premium gate: track whether first real user message has been sent ─────
   const firstUserMessageSentRef = useRef(false);
+  const [isGated, setIsGated] = useState(false);
 
   const { isPremium, loading: premiumLoading } = usePremium();
 
@@ -931,6 +916,7 @@ export default function CoachScreen() {
         // If history already has user messages, mark first message as already sent
         if (mapped.some((m: MessageWithId) => m.role === 'user')) {
           firstUserMessageSentRef.current = true;
+          if (!isPremium) setIsGated(true);
         }
         setConversationId(convId);
       } else {
@@ -940,7 +926,7 @@ export default function CoachScreen() {
     } catch (e: any) {
       console.warn('[AICoach] Error loading conversation:', e?.message);
     }
-  }, [setMessages, setConversationId]);
+  }, [setMessages, setConversationId, isPremium, setIsGated]);
 
   const messagesRef = useRef(messages);
   useEffect(() => {
@@ -1043,27 +1029,6 @@ export default function CoachScreen() {
         console.log('[AICoach] Fetching today\'s nutrition context');
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-
-        // ── Persist free user gate: check if user already sent their first message ──
-        if (!isPremium) {
-          const { data: convs } = await supabase
-            .from('coach_conversations')
-            .select('id')
-            .eq('user_id', user.id)
-            .limit(1);
-          if (convs && convs.length > 0) {
-            const { count } = await supabase
-              .from('coach_messages')
-              .select('id', { count: 'exact', head: true })
-              .eq('conversation_id', convs[0].id)
-              .eq('role', 'user')
-              .limit(1);
-            if ((count ?? 0) > 0) {
-              firstUserMessageSentRef.current = true;
-              console.log('[AICoach] Free user already sent first message — gate will fire immediately');
-            }
-          }
-        }
 
         const todayStr = new Date().toISOString().split('T')[0];
         const { data: todayMeals } = await supabase
@@ -1235,6 +1200,45 @@ export default function CoachScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMessages]);
 
+  // ── Persistent gate check: runs once premium status is resolved ───────────
+  useEffect(() => {
+    if (premiumLoading) return; // wait until premium status is known
+    if (isPremium) return; // premium users are never gated
+
+    // Free user — check Supabase for existing user messages
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: convs } = await supabase
+          .from('coach_conversations')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(10);
+
+        if (!convs || convs.length === 0) return;
+
+        for (const conv of convs) {
+          const { count } = await supabase
+            .from('coach_messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('conversation_id', conv.id)
+            .eq('role', 'user')
+            .limit(1);
+          if ((count ?? 0) > 0) {
+            firstUserMessageSentRef.current = true;
+            setIsGated(true);
+            console.log('[AICoach] Free user already used first message — gate active');
+            return;
+          }
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Gate check error:', e?.message);
+      }
+    })();
+  }, [isPremium, premiumLoading]);
+
   const scrollToBottom = useCallback(() => {
     if (!isMountedRef.current) return;
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -1345,6 +1349,7 @@ export default function CoachScreen() {
               isPremiumGate: true,
             };
             setMessages((prev) => prev.filter((m) => !m.isTyping).concat(gateMsg));
+            setIsGated(true);
           }, 1500);
 
           return;
@@ -1395,7 +1400,7 @@ export default function CoachScreen() {
         setMessages((prev) => [...prev, errMsg]);
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, isGated, setIsGated]
   );
 
   const handleSuggestedPrompt = useCallback(
@@ -1770,7 +1775,7 @@ export default function CoachScreen() {
   const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
   const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading;
-  const canSend = inputText.trim().length > 0 && !loading && !premiumLoading;
+  const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !isGated;
   // After first message arrives, show quick actions (new user gets simplified set)
   const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
 
@@ -2051,7 +2056,6 @@ export default function CoachScreen() {
 
             const isGateTyping = message.isTyping === true;
             const structuredNodes = isGateTyping ? null : renderStructuredText(message.content, baseAssistantTextStyle, secondaryColor, isDark);
-            const showEmpathyBadge = !isGateTyping && detectsEmpathy(message.content);
             const isWaitingForFirstToken = (isThisStreaming && message.content === '') || isGateTyping;
 
             return (
@@ -2128,11 +2132,6 @@ export default function CoachScreen() {
                     ) : null}
                   </View>
                   )}
-                  {showEmpathyBadge && (
-                    <View style={styles.empathyBadge}>
-                      <Text style={styles.empathyBadgeText}>💙 Supportive response</Text>
-                    </View>
-                  )}
                 </View>
               </View>
             );
@@ -2174,6 +2173,15 @@ export default function CoachScreen() {
           </View>
         )}
 
+        {/* ── Gated hint above input bar ── */}
+        {isGated && !isPremium && (
+          <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center' }}>
+            <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 12, textAlign: 'center' }}>
+              Unlock Premium to continue the conversation
+            </Text>
+          </View>
+        )}
+
         {/* ── Input bar ── */}
         <View
           style={[
@@ -2200,13 +2208,13 @@ export default function CoachScreen() {
             }}
             multiline
             maxLength={1000}
-            editable={!loading && !premiumLoading}
+            editable={!loading && !premiumLoading && !isGated}
             returnKeyType="default"
           />
           <TouchableOpacity
             style={[styles.sendButton, { backgroundColor: canSend ? colors.primary : colors.border }]}
             onPress={handleSendPress}
-            disabled={!canSend}
+            disabled={!canSend || isGated}
             activeOpacity={0.8}
           >
             <IconSymbol
@@ -2892,20 +2900,6 @@ const styles = StyleSheet.create({
   },
   mealPlanMealCal: {
     fontSize: 12,
-  },
-  // ── Empathy badge ────────────────────────────────────────────────────────────
-  empathyBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  empathyBadgeText: {
-    fontSize: 11,
-    color: '#2563EB',
-    fontWeight: '500',
   },
   // ── Status card ──────────────────────────────────────────────────────────────
   statusCardSection: {
