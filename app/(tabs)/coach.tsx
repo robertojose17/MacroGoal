@@ -375,6 +375,7 @@ function QuickActionCard({
   subtitle,
   onPress,
   isDark,
+  disabled,
 }: {
   iosIcon: string;
   androidIcon: string;
@@ -382,6 +383,7 @@ function QuickActionCard({
   subtitle: string;
   onPress: () => void;
   isDark: boolean;
+  disabled?: boolean;
 }) {
   return (
     <TouchableOpacity
@@ -394,6 +396,7 @@ function QuickActionCard({
       ]}
       onPress={onPress}
       activeOpacity={0.75}
+      disabled={disabled}
     >
       <View style={[styles.quickCardIconWrap, { backgroundColor: colors.primary + '18' }]}>
         <IconSymbol
@@ -1249,7 +1252,7 @@ export default function CoachScreen() {
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
 
       // ── Premium gate: block backend call for non-premium users ────────────
-      if (!isPremium && !premiumLoading) {
+      if (!isPremium) {
         console.log('[AICoach] User is not premium — injecting premium gate message instead of calling backend');
         const lastMsg = messages[messages.length - 1];
         const alreadyGated = lastMsg?.isPremiumGate === true;
@@ -1321,7 +1324,7 @@ export default function CoachScreen() {
         setMessages((prev) => [...prev, errMsg]);
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages, isPremium]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading]
   );
 
   const handleSuggestedPrompt = useCallback(
@@ -1696,7 +1699,7 @@ export default function CoachScreen() {
   const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
   const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading;
-  const canSend = inputText.trim().length > 0 && !loading;
+  const canSend = inputText.trim().length > 0 && !loading && !premiumLoading;
   // After first message arrives, show quick actions (new user gets simplified set)
   const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
 
@@ -1895,6 +1898,7 @@ export default function CoachScreen() {
                     subtitle={card.subtitle}
                     isDark={isDark}
                     onPress={() => handleQuickAction(card)}
+                    disabled={premiumLoading}
                   />
                 ))}
               </ScrollView>
@@ -1913,6 +1917,7 @@ export default function CoachScreen() {
                     key={chip.label}
                     style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
                     onPress={() => handleCravingChip(chip)}
+                    disabled={premiumLoading}
                     activeOpacity={0.75}
                   >
                     <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
@@ -2099,7 +2104,7 @@ export default function CoachScreen() {
                 color: isDark ? colors.textDark : colors.text,
               },
             ]}
-            placeholder="Ask your coach anything..."
+            placeholder={premiumLoading ? "Loading..." : "Ask your coach anything..."}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={inputText}
             onChangeText={(t) => {
@@ -2107,7 +2112,7 @@ export default function CoachScreen() {
             }}
             multiline
             maxLength={1000}
-            editable={!loading}
+            editable={!loading && !premiumLoading}
             returnKeyType="default"
           />
           <TouchableOpacity
