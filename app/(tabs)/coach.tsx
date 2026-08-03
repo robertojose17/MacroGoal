@@ -822,6 +822,7 @@ export default function CoachScreen() {
   // ── MGCS: New user mode ───────────────────────────────────────────────────
   const [isNewUser, setIsNewUser] = useState(false);
   const [isFirstEverSession, setIsFirstEverSession] = useState(false);
+  const [firstMessageReceived, setFirstMessageReceived] = useState(false);
 
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
@@ -918,7 +919,19 @@ export default function CoachScreen() {
         // If history already has user messages, mark first message as already sent
         if (mapped.some((m: MessageWithId) => m.role === 'user')) {
           firstUserMessageSentRef.current = true;
-          if (!isPremium) setIsGated(true);
+          if (!isPremium) {
+            setIsGated(true);
+            // Persist gate so it survives app restarts
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
+                console.log('[AICoach] Gate persisted to AsyncStorage from loadConversation');
+              }
+            } catch (e: any) {
+              console.warn('[AICoach] Error persisting gate in loadConversation:', e?.message);
+            }
+          }
         }
         setConversationId(convId);
       } else {
@@ -934,6 +947,18 @@ export default function CoachScreen() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // ── Fix 1: Set firstMessageReceived when first assistant message arrives ──
+  useEffect(() => {
+    if (!isFirstEverSession || firstMessageReceived) return;
+    const hasRealAssistantMsg = messages.some(
+      (m) => m.role === 'assistant' && m.content !== '' && !m.isTyping
+    );
+    if (hasRealAssistantMsg) {
+      console.log('[AICoach] First assistant message received — showing quick replies');
+      setFirstMessageReceived(true);
+    }
+  }, [messages, isFirstEverSession, firstMessageReceived]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1219,11 +1244,21 @@ export default function CoachScreen() {
     if (premiumLoading) return; // wait until premium status is known
     if (isPremium) return; // premium users are never gated
 
-    // Free user — check Supabase for existing user messages
+    // Free user — check AsyncStorage first, then Supabase
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+
+        // Fast path: AsyncStorage check (avoids Supabase round-trip)
+        const gateKey = 'coach_gate_active_' + user.id;
+        const gateStored = await AsyncStorage.getItem(gateKey);
+        if (gateStored === 'true') {
+          firstUserMessageSentRef.current = true;
+          setIsGated(true);
+          console.log('[AICoach] Gate active from AsyncStorage — skipping Supabase check');
+          return;
+        }
 
         const { data: convs } = await supabase
           .from('coach_conversations')
@@ -1243,6 +1278,7 @@ export default function CoachScreen() {
           if ((count ?? 0) > 0) {
             firstUserMessageSentRef.current = true;
             setIsGated(true);
+            await AsyncStorage.setItem(gateKey, 'true');
             console.log('[AICoach] Free user already used first message — gate active');
             return;
           }
@@ -1252,6 +1288,22 @@ export default function CoachScreen() {
       }
     })();
   }, [isPremium, premiumLoading]);
+
+  // ── Fix 3: Clear AsyncStorage gate when user upgrades to Premium ──────────
+  useEffect(() => {
+    if (!isPremium) return;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await AsyncStorage.removeItem('coach_gate_active_' + user.id);
+          console.log('[AICoach] Premium upgrade detected — gate key cleared from AsyncStorage');
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Error clearing gate key on premium upgrade:', e?.message);
+      }
+    })();
+  }, [isPremium]);
 
   const scrollToBottom = useCallback(() => {
     if (!isMountedRef.current) return;
@@ -1330,28 +1382,28 @@ export default function CoachScreen() {
           setMessages((prev) => [...prev, userMsg, typingMsg]);
           setInputText('');
 
-          setTimeout(() => {
+          setTimeout(async () => {
             const userText = trimmed.toLowerCase();
             let coachFirstLine = '';
 
             if (userText.includes('sweet') || userText.includes('dessert') || userText.includes('craving') || userText.includes('chocolate') || userText.includes('sugar')) {
-              coachFirstLine = "Cravings are almost never about willpower — there's usually something specific triggering them. Based on your goal, here's what I'd focus on first:";
+              coachFirstLine = "Cravings are almost never about willpower. There's usually something specific triggering them. Based on your goal, here's what I'd focus on first:";
             } else if (userText.includes('eat out') || userText.includes('restaurant') || userText.includes('fast food') || userText.includes('pizza') || userText.includes('burger')) {
-              coachFirstLine = "Eating out doesn't have to be the problem — it's usually one specific habit that makes it hard. Based on your goal, I can already see where the real friction is:";
+              coachFirstLine = "Eating out doesn't have to be the problem. It's usually one specific habit that makes it hard. Based on your goal, I can already see where the real friction is:";
             } else if (userText.includes('energy') || userText.includes('tired') || userText.includes('fatigue') || userText.includes('exhausted')) {
               coachFirstLine = "Low energy is almost always a nutrition signal, not a willpower problem. Based on your profile, I can already see a few things worth looking at:";
             } else if (userText.includes('start') || userText.includes('begin') || userText.includes("don't know") || userText.includes('confused') || userText.includes('lost')) {
-              coachFirstLine = "Not knowing where to start is actually the most honest place to be — and it tells me something useful. Based on your goal, here's where I'd begin:";
+              coachFirstLine = "Not knowing where to start is actually the most honest place to be, and it tells me something useful. Based on your goal, here's where I'd begin:";
             } else if (userText.includes('stuck') || userText.includes('plateau') || userText.includes('not losing') || userText.includes('not working') || userText.includes('nothing works')) {
-              coachFirstLine = "Plateaus almost always have a specific cause — and it's rarely what people think. After looking at your profile, I can already see what's most likely happening:";
+              coachFirstLine = "Plateaus almost always have a specific cause, and it's rarely what people think. After looking at your profile, I can already see what's most likely happening:";
             } else if (userText.includes('protein') || userText.includes('macro') || userText.includes('calorie') || userText.includes('carb') || userText.includes('fat')) {
-              coachFirstLine = "Good question — and based on your current goals, I have a specific answer for your situation. Here's what I'd recommend:";
+              coachFirstLine = "Good question. Based on your current goals, I have a specific answer for your situation. Here's what I'd recommend:";
             } else if (userText.includes('meal plan') || userText.includes('what to eat') || userText.includes('plan')) {
               coachFirstLine = "I can build that around your exact goals and what you have available. Based on your profile, here's how I'd structure it:";
             } else if (userText.includes('weight') || userText.includes('lose') || userText.includes('slim') || userText.includes('thin')) {
-              coachFirstLine = "Weight loss usually comes down to one or two specific things — and they're different for everyone. Based on your goal, I can already see what's most relevant for you:";
+              coachFirstLine = "Weight loss usually comes down to one or two specific things, and they're different for everyone. Based on your goal, I can already see what's most relevant for you:";
             } else {
-              coachFirstLine = "Good question — and based on your goal, I actually have a specific answer for your situation. Here's what I'd focus on first:";
+              coachFirstLine = "Good question. Based on your goal, I actually have a specific answer for your situation. Here's what I'd focus on first:";
             }
 
             const gateMsg: MessageWithId = {
@@ -1364,6 +1416,17 @@ export default function CoachScreen() {
             };
             setMessages((prev) => prev.filter((m) => !m.isTyping).concat(gateMsg));
             setIsGated(true);
+
+            // Persist gate to AsyncStorage so it survives app restarts
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
+                console.log('[AICoach] Gate persisted to AsyncStorage for user:', user.id);
+              }
+            } catch (e: any) {
+              console.warn('[AICoach] Error persisting gate to AsyncStorage:', e?.message);
+            }
           }, 1500);
 
           return;
@@ -1891,7 +1954,7 @@ export default function CoachScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* ── Proactive insight card — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && !loading && proactiveInsight && (
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && proactiveInsight && (
             <View style={[styles.insightCard, { backgroundColor: isDark ? '#1E2035' : '#EEF2FF', borderColor: isDark ? '#3B4080' : '#C7D2FE' }]}>
               <View style={styles.insightCardRow}>
                 <Text style={styles.insightCardEmoji}>
@@ -1917,7 +1980,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── MGCS: Follow-up card — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && !loading && pendingFollowUp && (
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && pendingFollowUp && (
             <View style={[styles.followUpCard, { backgroundColor: isDark ? colors.cardDark : '#FFFBEB', borderColor: isDark ? '#92400E' : '#FCD34D' }]}>
               <View style={styles.followUpCardHeader}>
                 <View style={styles.followUpBadge}>
@@ -1969,7 +2032,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── Quick Action Cards — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && !loading && (
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
             <View style={styles.quickActionsSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 What would you like to do?
@@ -1996,7 +2059,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── Craving chips hub — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && !loading && (
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Quick questions
@@ -2015,26 +2078,28 @@ export default function CoachScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <View style={styles.suggestedInlineRow}>
-                {SUGGESTED_PROMPTS.map((prompt) => (
-                  <TouchableOpacity
-                    key={prompt}
-                    style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
-                    onPress={() => {
-                      console.log('[AICoach] Suggested prompt chip pressed:', prompt);
-                      handleSuggestedPrompt(prompt);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {!isNewUser && (
+                <View style={styles.suggestedInlineRow}>
+                  {SUGGESTED_PROMPTS.map((prompt) => (
+                    <TouchableOpacity
+                      key={prompt}
+                      style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                      onPress={() => {
+                        console.log('[AICoach] Suggested prompt chip pressed:', prompt);
+                        handleSuggestedPrompt(prompt);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
           {/* ── Phase 8 Status Card — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && !loading && latestRecommendation && (
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && latestRecommendation && (
             <View style={styles.statusCardSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Current Status
