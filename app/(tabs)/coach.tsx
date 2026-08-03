@@ -921,16 +921,7 @@ export default function CoachScreen() {
           firstUserMessageSentRef.current = true;
           if (!isPremium) {
             setIsGated(true);
-            // Persist gate so it survives app restarts
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
-                console.log('[AICoach] Gate persisted to AsyncStorage from loadConversation');
-              }
-            } catch (e: any) {
-              console.warn('[AICoach] Error persisting gate in loadConversation:', e?.message);
-            }
+            console.log('[AICoach] Loaded conversation has user messages — gate active');
           }
         }
         setConversationId(convId);
@@ -1238,70 +1229,44 @@ export default function CoachScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMessages]);
 
-  // ── Persistent gate check: runs once premium status is resolved ───────────
+  // ── Gate check — driven by Supabase, not AsyncStorage ──
   useEffect(() => {
-    if (premiumLoading) return; // wait until premium status is known
-    if (isPremium) return; // premium users are never gated
+    if (isPremium || premiumLoading) return;
 
-    // Free user — check AsyncStorage first, then Supabase
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Fast path: AsyncStorage check (avoids Supabase round-trip)
-        const gateKey = 'coach_gate_active_' + user.id;
-        const gateStored = await AsyncStorage.getItem(gateKey);
-        if (gateStored === 'true') {
-          firstUserMessageSentRef.current = true;
-          setIsGated(true);
-          console.log('[AICoach] Gate active from AsyncStorage — skipping Supabase check');
-          return;
-        }
-
-        const { data: convs } = await supabase
-          .from('coach_conversations')
+        const { data: convRows } = await supabase
+          .from('coach_conv_sessions')
           .select('id')
-          .eq('user_id', user.id)
-          .limit(10);
+          .eq('user_id', user.id);
 
-        if (!convs || convs.length === 0) return;
+        const convIds = (convRows || []).map((r: any) => r.id);
+        if (convIds.length === 0) return; // no conversations yet, not gated
 
-        for (const conv of convs) {
-          const { count } = await supabase
-            .from('coach_messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('conversation_id', conv.id)
-            .eq('role', 'user')
-            .limit(1);
-          if ((count ?? 0) > 0) {
-            firstUserMessageSentRef.current = true;
-            setIsGated(true);
-            await AsyncStorage.setItem(gateKey, 'true');
-            console.log('[AICoach] Free user already used first message — gate active');
-            return;
-          }
+        const { count } = await supabase
+          .from('coach_messages')
+          .select('id', { count: 'exact', head: true })
+          .in('conversation_id', convIds)
+          .eq('role', 'user');
+
+        if ((count ?? 0) > 0) {
+          console.log('[AICoach] Gate check — user has prior messages, gate active');
+          setIsGated(true);
         }
-      } catch (e: any) {
-        console.warn('[AICoach] Gate check error:', e?.message);
+      } catch (e) {
+        console.warn('[AICoach] Gate check failed:', e);
       }
     })();
   }, [isPremium, premiumLoading]);
 
-  // ── Fix 3: Clear AsyncStorage gate when user upgrades to Premium ──────────
+  // ── Clear gate when user becomes premium ──────────────────────────────────
   useEffect(() => {
     if (!isPremium) return;
-    (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await AsyncStorage.removeItem('coach_gate_active_' + user.id);
-          console.log('[AICoach] Premium upgrade detected — gate key cleared from AsyncStorage');
-        }
-      } catch (e: any) {
-        console.warn('[AICoach] Error clearing gate key on premium upgrade:', e?.message);
-      }
-    })();
+    console.log('[AICoach] Premium upgrade detected — clearing gate');
+    setIsGated(false);
   }, [isPremium]);
 
   const scrollToBottom = useCallback(() => {
@@ -1415,17 +1380,7 @@ export default function CoachScreen() {
             };
             setMessages((prev) => prev.filter((m) => !m.isTyping).concat(gateMsg));
             setIsGated(true);
-
-            // Persist gate to AsyncStorage so it survives app restarts
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
-                console.log('[AICoach] Gate persisted to AsyncStorage for user:', user.id);
-              }
-            } catch (e: any) {
-              console.warn('[AICoach] Error persisting gate to AsyncStorage:', e?.message);
-            }
+            console.log('[AICoach] Gate activated after first free message');
           }, 1500);
 
           return;
@@ -1456,6 +1411,49 @@ export default function CoachScreen() {
       } catch (e: any) {
         if (!isMountedRef.current) return;
         console.error('[AICoach] Error from sendMessage:', e?.message);
+
+        // ── Handle GateLocked 403 from backend ──────────────────────────────
+        const isGateLocked = e?.isSubscriptionError && (
+          (e?.message ?? '').includes('GateLocked') ||
+          (e?.message ?? '').includes('"gated":true') ||
+          (e?.message ?? '').includes('"gated": true')
+        );
+
+        if (isGateLocked) {
+          console.log('[AICoach] Backend returned GateLocked 403 — activating gate');
+          setIsGated(true);
+          const userText = trimmed.toLowerCase();
+          let coachFirstLine = '';
+          if (userText.includes('sweet') || userText.includes('dessert') || userText.includes('craving') || userText.includes('chocolate') || userText.includes('sugar')) {
+            coachFirstLine = "Cravings are almost never about willpower. There's usually something specific triggering them. Based on your goal, here's what I'd focus on first:";
+          } else if (userText.includes('eat out') || userText.includes('restaurant') || userText.includes('fast food') || userText.includes('pizza') || userText.includes('burger')) {
+            coachFirstLine = "Eating out doesn't have to be the problem. It's usually one specific habit that makes it hard. Based on your goal, I can already see where the real friction is:";
+          } else if (userText.includes('energy') || userText.includes('tired') || userText.includes('fatigue') || userText.includes('exhausted')) {
+            coachFirstLine = "Low energy is almost always a nutrition signal, not a willpower problem. Based on your profile, I can already see a few things worth looking at:";
+          } else if (userText.includes('start') || userText.includes('begin') || userText.includes("don't know") || userText.includes('confused') || userText.includes('lost')) {
+            coachFirstLine = "Not knowing where to start is actually the most honest place to be, and it tells me something useful. Based on your goal, here's where I'd begin:";
+          } else if (userText.includes('stuck') || userText.includes('plateau') || userText.includes('not losing') || userText.includes('not working') || userText.includes('nothing works')) {
+            coachFirstLine = "Plateaus almost always have a specific cause, and it's rarely what people think. After looking at your profile, I can already see what's most likely happening:";
+          } else if (userText.includes('protein') || userText.includes('macro') || userText.includes('calorie') || userText.includes('carb') || userText.includes('fat')) {
+            coachFirstLine = "Good question. Based on your current goals, I have a specific answer for your situation. Here's what I'd recommend:";
+          } else if (userText.includes('meal plan') || userText.includes('what to eat') || userText.includes('plan')) {
+            coachFirstLine = "I can build that around your exact goals and what you have available. Based on your profile, here's how I'd structure it:";
+          } else if (userText.includes('weight') || userText.includes('lose') || userText.includes('slim') || userText.includes('thin')) {
+            coachFirstLine = "Weight loss usually comes down to one or two specific things, and they're different for everyone. Based on your goal, I can already see what's most relevant for you:";
+          } else {
+            coachFirstLine = "Good question. Based on your goal, I actually have a specific answer for your situation. Here's what I'd focus on first:";
+          }
+          const gateMsg: MessageWithId = {
+            id: genId(),
+            role: 'assistant',
+            content: coachFirstLine,
+            timestamp: Date.now(),
+            isPremiumGate: true,
+            showUpgradeButton: true,
+          };
+          setMessages((prev) => [...prev, gateMsg]);
+          return;
+        }
 
         if (e?.isSubscriptionError) {
           Alert.alert('Subscription Required', 'The coaching feature requires an active subscription.');
