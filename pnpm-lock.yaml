@@ -139,7 +139,7 @@ importers:
         version: 1.28.0(react-native-svg@15.15.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       onesignal-expo-plugin:
         specifier: ^2.6.0
-        version: 2.7.0(expo@54.0.36)(react-native-onesignal@5.5.6(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3)
+        version: 2.7.1(expo@54.0.36)(react-native-onesignal@5.5.6(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3)
       patch-package:
         specifier: ^8.0.1
         version: 8.0.1
@@ -4893,8 +4893,8 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  onesignal-expo-plugin@2.7.0:
-    resolution: {integrity: sha512-iC6g8k3icvLVSTtZ2KfqhKqfB6Q9mVdsG6D+DafbI8RV7wACXDWoqECV3G0OPZzbWtrCOhuBPqWXVkpicIVxgA==}
+  onesignal-expo-plugin@2.7.1:
+    resolution: {integrity: sha512-w7AOPJiMHnuOu15aL+9rjIFXfEk50jm2RLno9R8YTdMW288k9yNDbGNswemTkr18fWCq5FEhadDE55FRl+7oQw==}
     peerDependencies:
       expo: '>=53.0.0'
       react-native-onesignal: '>=5.0.0'
@@ -12122,9 +12122,9 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  onesignal-expo-plugin@2.7.0(expo@54.0.36)(react-native-onesignal@5.5.6(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3):
+  onesignal-expo-plugin@2.7.1(expo@54.0.36)(react-native-onesignal@5.5.6(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3):
     dependencies:
-      '@expo/image-utils': 0.8.15(typescript@5.9.3)
+      '@expo/image-utils': 0.11.4(typescript@5.9.3)
       expo: 54.0.36(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@5.1.11)(react-native-webview@13.17.0(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
       react-native-onesignal: 5.5.6(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
     transitivePeerDependencies:

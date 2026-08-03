@@ -1848,7 +1848,7 @@ export default function CoachScreen() {
   // Filter out the hidden __FIRST_INTERACTION__ trigger from display
   const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
-  const showCravingChips = !isOnlyWelcome && firstMessageReceived && inputText.length === 0 && !loading;
+  const showCravingChips = !isOnlyWelcome && firstMessageReceived && inputText.length === 0 && !loading && !isGated && isPremium;
   const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !isGated;
   // After first message arrives, show quick actions (new user gets simplified set)
   const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
