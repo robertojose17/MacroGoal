@@ -909,30 +909,59 @@ export default function CoachScreen() {
 
       if (msgs && msgs.length > 0) {
         console.log('[AICoach] Conversation messages loaded, count:', msgs.length);
-        const mapped = msgs.map((m) => ({
+        const messageCount = msgs.length;
+        console.log('[AICoach] loadConversation — total message count:', messageCount);
+
+        // Check gate via AsyncStorage first (source of truth, avoids isPremium race condition)
+        let gateActive = false;
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const gateKey = 'coach_gate_active_' + user.id;
+            const gateStored = await AsyncStorage.getItem(gateKey);
+            if (gateStored === 'true') {
+              gateActive = true;
+              console.log('[AICoach] loadConversation — gate active from AsyncStorage');
+            } else if (messageCount >= 4) {
+              // Gate threshold reached — persist and activate regardless of isPremium load state
+              gateActive = true;
+              await AsyncStorage.setItem(gateKey, 'true');
+              console.log('[AICoach] loadConversation — gate threshold reached (', messageCount, 'messages), persisted to AsyncStorage');
+            }
+          }
+        } catch (e: any) {
+          console.warn('[AICoach] Error checking gate in loadConversation:', e?.message);
+        }
+
+        let mapped: MessageWithId[] = msgs.map((m) => ({
           id: m.id,
           role: m.role as 'user' | 'assistant',
           content: m.content,
           timestamp: new Date(m.created_at).getTime(),
         }));
-        setMessages(mapped);
-        // If history already has user messages, mark first message as already sent
-        if (mapped.some((m: MessageWithId) => m.role === 'user')) {
+
+        // If gate is active, mark the last assistant message with gate card flags
+        if (gateActive) {
           firstUserMessageSentRef.current = true;
-          if (!isPremium) {
-            setIsGated(true);
-            // Persist gate so it survives app restarts
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
-                console.log('[AICoach] Gate persisted to AsyncStorage from loadConversation');
-              }
-            } catch (e: any) {
-              console.warn('[AICoach] Error persisting gate in loadConversation:', e?.message);
-            }
+          setIsGated(true);
+          // Find last assistant message and attach gate card flags
+          let lastAssistantIdx = -1;
+          for (let i = mapped.length - 1; i >= 0; i--) {
+            if (mapped[i].role === 'assistant') { lastAssistantIdx = i; break; }
           }
+          if (lastAssistantIdx !== -1) {
+            mapped = mapped.map((m, i) =>
+              i === lastAssistantIdx
+                ? { ...m, showUpgradeButton: true, isPremiumGate: true }
+                : m
+            );
+            console.log('[AICoach] loadConversation — gate card flags applied to last assistant message at index', lastAssistantIdx);
+          }
+        } else if (mapped.some((m: MessageWithId) => m.role === 'user')) {
+          firstUserMessageSentRef.current = true;
         }
+
+        setMessages(mapped);
         setConversationId(convId);
       } else {
         console.log('[AICoach] No messages found for conversation:', convId);
@@ -941,7 +970,7 @@ export default function CoachScreen() {
     } catch (e: any) {
       console.warn('[AICoach] Error loading conversation:', e?.message);
     }
-  }, [setMessages, setConversationId, isPremium, setIsGated]);
+  }, [setMessages, setConversationId, setIsGated]);
 
   const messagesRef = useRef(messages);
   useEffect(() => {
@@ -959,6 +988,71 @@ export default function CoachScreen() {
       setFirstMessageReceived(true);
     }
   }, [messages, isFirstEverSession, firstMessageReceived]);
+
+  // ── Gate restoration: runs when useAICoach loads messages from the initial session ──
+  // This handles the case where the hook loads today's conversation on mount and we need
+  // to restore the gate state without relying on isPremium being loaded yet.
+  const gateRestoredRef = useRef(false);
+  useEffect(() => {
+    // Only run once when messages are first populated by the hook (not by loadConversation)
+    if (gateRestoredRef.current) return;
+    if (messages.length === 0) return;
+    // If messages were already set by loadConversation (which handles its own gate logic), skip
+    // We detect this by checking if any message already has isPremiumGate set
+    if (messages.some((m) => m.isPremiumGate)) {
+      gateRestoredRef.current = true;
+      return;
+    }
+
+    const messageCount = messages.length;
+    console.log('[AICoach] Gate restoration check — message count:', messageCount);
+
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const gateKey = 'coach_gate_active_' + user.id;
+        const gateStored = await AsyncStorage.getItem(gateKey);
+
+        let gateActive = false;
+        if (gateStored === 'true') {
+          gateActive = true;
+          console.log('[AICoach] Gate restoration — gate active from AsyncStorage');
+        } else if (messageCount >= 4) {
+          gateActive = true;
+          await AsyncStorage.setItem(gateKey, 'true');
+          console.log('[AICoach] Gate restoration — threshold reached (', messageCount, 'messages), persisted');
+        }
+
+        if (gateActive && isMountedRef.current) {
+          firstUserMessageSentRef.current = true;
+          setIsGated(true);
+          // Apply gate card flags to last assistant message
+          setMessages((prev) => {
+            let lastAssistantIdx = -1;
+            for (let i = prev.length - 1; i >= 0; i--) {
+              if (prev[i].role === 'assistant') { lastAssistantIdx = i; break; }
+            }
+            if (lastAssistantIdx === -1) return prev;
+            console.log('[AICoach] Gate restoration — applying gate card flags to message at index', lastAssistantIdx);
+            return prev.map((m, i) =>
+              i === lastAssistantIdx
+                ? { ...m, showUpgradeButton: true, isPremiumGate: true }
+                : m
+            );
+          });
+        } else if (messages.some((m) => m.role === 'user')) {
+          firstUserMessageSentRef.current = true;
+        }
+
+        gateRestoredRef.current = true;
+      } catch (e: any) {
+        console.warn('[AICoach] Gate restoration error:', e?.message);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1109,6 +1203,65 @@ export default function CoachScreen() {
             console.log('[AICoach] Proactive first message delivered');
             await AsyncStorage.setItem(firstInteractionKey, 'true');
             console.log('[AICoach] First interaction flag persisted for user:', user.id);
+
+            // ── Problem 2 fix: Persist welcome message to Supabase as fallback ──
+            // The edge function saves it, but there may be a timing issue if conversationId
+            // wasn't set when the stream completed. We upsert from the frontend to guarantee it.
+            try {
+              // Wait a tick for conversationId state to settle
+              await new Promise((r) => setTimeout(r, 200));
+              // Read conversationId from the hook's current state via a fresh Supabase query
+              // (we can't read the hook state here directly, so we look up today's conversation)
+              const { data: { session: sess } } = await supabase.auth.getSession();
+              if (sess) {
+                const todayStr2 = new Date().toISOString().split('T')[0];
+                const { data: todayConvs } = await supabase
+                  .from('coach_conversations')
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .gte('created_at', todayStr2 + 'T00:00:00')
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                const convId = todayConvs?.[0]?.id ?? null;
+                if (convId) {
+                  // Find the welcome assistant message from current messages state
+                  const welcomeMsg = messagesRef.current.find(
+                    (m) => m.role === 'assistant' && m.content.length > 0 && !m.isTyping
+                  );
+                  if (welcomeMsg) {
+                    // Check if it already exists to avoid duplicates
+                    const { count: existingCount } = await supabase
+                      .from('coach_messages')
+                      .select('id', { count: 'exact', head: true })
+                      .eq('conversation_id', convId)
+                      .eq('role', 'assistant')
+                      .limit(1);
+                    if ((existingCount ?? 0) === 0) {
+                      const { error: saveErr } = await supabase
+                        .from('coach_messages')
+                        .insert({
+                          conversation_id: convId,
+                          role: 'assistant',
+                          content: welcomeMsg.content,
+                        });
+                      if (saveErr) {
+                        console.warn('[AICoach] Welcome message fallback save error:', saveErr.message);
+                      } else {
+                        console.log('[AICoach] Welcome message saved to Supabase as fallback, conv_id:', convId);
+                      }
+                    } else {
+                      console.log('[AICoach] Welcome message already exists in Supabase — skipping fallback save');
+                    }
+                  } else {
+                    console.log('[AICoach] No welcome message found in state for fallback save');
+                  }
+                } else {
+                  console.warn('[AICoach] Could not find today\'s conversation for welcome message fallback save');
+                }
+              }
+            } catch (saveE: any) {
+              console.warn('[AICoach] Welcome message fallback save outer error:', saveE?.message);
+            }
           } catch (e: any) {
             console.warn('[AICoach] Proactive first message error:', e?.message);
             firstMessageSentRef.current = false;
