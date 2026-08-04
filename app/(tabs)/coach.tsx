@@ -2179,7 +2179,7 @@ export default function CoachScreen() {
           })}
 
           {/* ── Craving chips hub — welcome state only, premium only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && isPremium && !isGated && (
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Quick questions
