@@ -163,8 +163,11 @@ export function useAICoach(options?: UseAICoachOptions) {
         const conversations: { id: string; last_message_at: string; created_at: string }[] = await listRes.json();
         console.log('[useAICoach] Conversations fetched, count:', conversations.length);
 
-        // Pick the most recent conversation regardless of date
-        const todayConv = conversations.length > 0 ? conversations[0] : null;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayConv = conversations.find((c) => {
+          const d = (c.last_message_at || c.created_at || '').split('T')[0];
+          return d === todayStr;
+        });
 
         if (todayConv) {
           console.log('[useAICoach] Found today\'s conversation, id:', todayConv.id);
@@ -181,30 +184,11 @@ export function useAICoach(options?: UseAICoachOptions) {
             const rawMsgs: { id: string; role: string; content: string; created_at: string }[] = await msgsRes.json();
             console.log('[useAICoach] History messages loaded, count:', rawMsgs.length);
             if (rawMsgs.length > 0 && isMountedRef.current) {
-              // Check premium status so we can attach the gate card to the last assistant message
-              const { data: { session: authSession } } = await supabase.auth.getSession();
-              const userId = authSession?.user?.id;
-              let userIsPremium = true;
-              if (userId) {
-                const { data: userData } = await supabase
-                  .from('users')
-                  .select('user_type')
-                  .eq('id', userId)
-                  .single();
-                userIsPremium = userData?.user_type === 'premium';
-                console.log('[useAICoach] Premium check on history load — isPremium:', userIsPremium);
-              }
-
-              const lastAssistantIdx = userIsPremium
-                ? -1
-                : [...rawMsgs].map((m, i) => ({ role: m.role, i })).filter(x => x.role === 'assistant').pop()?.i ?? -1;
-
-              const mapped: Message[] = rawMsgs.map((m, idx) => ({
+              const mapped: Message[] = rawMsgs.map((m) => ({
                 id: m.id,
                 role: m.role as 'user' | 'assistant',
                 content: m.content,
                 timestamp: new Date(m.created_at).getTime(),
-                ...(idx === lastAssistantIdx ? { showUpgradeButton: true, isPremiumGate: true } : {}),
               }));
               setMessages(mapped);
             }

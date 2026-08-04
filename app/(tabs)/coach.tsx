@@ -921,7 +921,16 @@ export default function CoachScreen() {
           firstUserMessageSentRef.current = true;
           if (!isPremium) {
             setIsGated(true);
-            console.log('[AICoach] Loaded conversation has user messages — gate active');
+            // Persist gate so it survives app restarts
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
+                console.log('[AICoach] Gate persisted to AsyncStorage from loadConversation');
+              }
+            } catch (e: any) {
+              console.warn('[AICoach] Error persisting gate in loadConversation:', e?.message);
+            }
           }
         }
         setConversationId(convId);
@@ -939,16 +948,17 @@ export default function CoachScreen() {
     messagesRef.current = messages;
   }, [messages]);
 
-  // ── Set firstMessageReceived when any real assistant message exists ──
+  // ── Fix 1: Set firstMessageReceived when first assistant message arrives ──
   useEffect(() => {
-    if (firstMessageReceived) return;
+    if (!isFirstEverSession || firstMessageReceived) return;
     const hasRealAssistantMsg = messages.some(
       (m) => m.role === 'assistant' && m.content !== '' && !m.isTyping
     );
     if (hasRealAssistantMsg) {
+      console.log('[AICoach] First assistant message received — showing quick replies');
       setFirstMessageReceived(true);
     }
-  }, [messages, firstMessageReceived]);
+  }, [messages, isFirstEverSession, firstMessageReceived]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1089,81 +1099,8 @@ export default function CoachScreen() {
         }
 
         // ── MGCS: Proactive first message ─────────────────────────────────
-        // Check Supabase directly — messagesRef may be empty due to async load timing
+        // If no conversation history yet, trigger the AI's personalized opening
         if (messagesRef.current.length === 0 && !firstMessageSentRef.current) {
-          // Query Supabase to see if this user already has a conversation
-          const { data: existingSessions } = await supabase
-            .from('coach_conv_sessions')
-            .select('id')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          if (existingSessions && existingSessions.length > 0) {
-            // User has prior conversation — load it and show gate if free
-            const sessionId = existingSessions[0].id;
-            const { data: existingMsgs } = await supabase
-              .from('coach_messages')
-              .select('id, role, content, created_at')
-              .eq('conversation_id', sessionId)
-              .order('created_at', { ascending: true })
-              .limit(100);
-
-            if (existingMsgs && existingMsgs.length > 0) {
-              console.log('[AICoach] Existing conversation found — loading', existingMsgs.length, 'messages');
-
-              // Check premium status from users table directly (source of truth)
-              const { data: userData } = await supabase
-                .from('users')
-                .select('user_type')
-                .eq('id', user.id)
-                .single();
-              const userIsPremium = userData?.user_type === 'premium';
-
-              // Find the last assistant message index so we can attach the gate card to it
-              const lastAssistantIdx = userIsPremium
-                ? -1
-                : [...existingMsgs].map((m, i) => ({ role: m.role, i })).filter(x => x.role === 'assistant').pop()?.i ?? -1;
-
-              const mapped = existingMsgs.map((m, idx) => ({
-                id: m.id,
-                role: m.role as 'user' | 'assistant',
-                content: m.content,
-                timestamp: new Date(m.created_at).getTime(),
-                ...(idx === lastAssistantIdx ? { showUpgradeButton: true, isPremiumGate: true } : {}),
-              }));
-
-              if (isMountedRef.current) {
-                setMessages(mapped);
-                setConversationId(sessionId);
-                firstUserMessageSentRef.current = true;
-                if (!userIsPremium) {
-                  setIsGated(true);
-                  console.log('[AICoach] Returning free user — gate activated');
-                }
-              }
-
-              // Send a daily greeting after history is loaded, but only once per app session
-              if (!firstMessageSentRef.current) {
-                firstMessageSentRef.current = true;
-                console.log('[AICoach] Returning user — sending __DAILY_GREETING__ after history load');
-                setTimeout(async () => {
-                  if (!isMountedRef.current) return;
-                  const greetingMsg = [{ role: 'user' as const, content: '__DAILY_GREETING__', timestamp: Date.now() }];
-                  try {
-                    console.log('[AICoach] Dispatching __DAILY_GREETING__ trigger');
-                    await sendMessage(greetingMsg, user.id, false);
-                    console.log('[AICoach] __DAILY_GREETING__ delivered');
-                  } catch (e: any) {
-                    console.warn('[AICoach] __DAILY_GREETING__ error:', e?.message);
-                  }
-                }, 600);
-              }
-              return;
-            }
-          }
-
-          // No prior conversation — trigger the AI's personalized opening
           firstMessageSentRef.current = true;
           console.log('[AICoach] No history — triggering proactive first message (MGCS First Interaction Protocol)');
           const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
@@ -1302,44 +1239,70 @@ export default function CoachScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMessages]);
 
-  // ── Gate check — driven by Supabase, not AsyncStorage ──
+  // ── Persistent gate check: runs once premium status is resolved ───────────
   useEffect(() => {
-    if (isPremium || premiumLoading) return;
+    if (premiumLoading) return; // wait until premium status is known
+    if (isPremium) return; // premium users are never gated
 
+    // Free user — check AsyncStorage first, then Supabase
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data: convRows } = await supabase
-          .from('coach_conv_sessions')
-          .select('id')
-          .eq('user_id', user.id);
-
-        const convIds = (convRows || []).map((r: any) => r.id);
-        if (convIds.length === 0) return; // no conversations yet, not gated
-
-        const { count } = await supabase
-          .from('coach_messages')
-          .select('id', { count: 'exact', head: true })
-          .in('conversation_id', convIds)
-          .eq('role', 'user');
-
-        if ((count ?? 0) > 0) {
-          console.log('[AICoach] Gate check — user has prior messages, gate active');
+        // Fast path: AsyncStorage check (avoids Supabase round-trip)
+        const gateKey = 'coach_gate_active_' + user.id;
+        const gateStored = await AsyncStorage.getItem(gateKey);
+        if (gateStored === 'true') {
+          firstUserMessageSentRef.current = true;
           setIsGated(true);
+          console.log('[AICoach] Gate active from AsyncStorage — skipping Supabase check');
+          return;
         }
-      } catch (e) {
-        console.warn('[AICoach] Gate check failed:', e);
+
+        const { data: convs } = await supabase
+          .from('coach_conversations')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(10);
+
+        if (!convs || convs.length === 0) return;
+
+        for (const conv of convs) {
+          const { count } = await supabase
+            .from('coach_messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('conversation_id', conv.id)
+            .eq('role', 'user')
+            .limit(1);
+          if ((count ?? 0) > 0) {
+            firstUserMessageSentRef.current = true;
+            setIsGated(true);
+            await AsyncStorage.setItem(gateKey, 'true');
+            console.log('[AICoach] Free user already used first message — gate active');
+            return;
+          }
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Gate check error:', e?.message);
       }
     })();
   }, [isPremium, premiumLoading]);
 
-  // ── Clear gate when user becomes premium ──────────────────────────────────
+  // ── Fix 3: Clear AsyncStorage gate when user upgrades to Premium ──────────
   useEffect(() => {
     if (!isPremium) return;
-    console.log('[AICoach] Premium upgrade detected — clearing gate');
-    setIsGated(false);
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await AsyncStorage.removeItem('coach_gate_active_' + user.id);
+          console.log('[AICoach] Premium upgrade detected — gate key cleared from AsyncStorage');
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Error clearing gate key on premium upgrade:', e?.message);
+      }
+    })();
   }, [isPremium]);
 
   const scrollToBottom = useCallback(() => {
@@ -1453,18 +1416,16 @@ export default function CoachScreen() {
             };
             setMessages((prev) => prev.filter((m) => !m.isTyping).concat(gateMsg));
             setIsGated(true);
-            console.log('[AICoach] Gate activated after first free message');
 
-            // Save both messages to Supabase so they persist on reopen
-            if (conversationId) {
-              try {
-                await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'user', content: trimmed });
-                await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'assistant', content: coachFirstLine });
-                await supabase.from('coach_conv_sessions').update({ last_message_at: new Date().toISOString() }).eq('id', conversationId);
-                console.log('[AICoach] Gate messages saved to Supabase');
-              } catch (saveErr: any) {
-                console.warn('[AICoach] Failed to save gate messages:', saveErr?.message);
+            // Persist gate to AsyncStorage so it survives app restarts
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
+                console.log('[AICoach] Gate persisted to AsyncStorage for user:', user.id);
               }
+            } catch (e: any) {
+              console.warn('[AICoach] Error persisting gate to AsyncStorage:', e?.message);
             }
           }, 1500);
 
@@ -1496,59 +1457,6 @@ export default function CoachScreen() {
       } catch (e: any) {
         if (!isMountedRef.current) return;
         console.error('[AICoach] Error from sendMessage:', e?.message);
-
-        // ── Handle GateLocked 403 from backend ──────────────────────────────
-        const isGateLocked = e?.isSubscriptionError && (
-          (e?.message ?? '').includes('GateLocked') ||
-          (e?.message ?? '').includes('"gated":true') ||
-          (e?.message ?? '').includes('"gated": true')
-        );
-
-        if (isGateLocked) {
-          console.log('[AICoach] Backend returned GateLocked 403 — activating gate');
-          setIsGated(true);
-          const userText = trimmed.toLowerCase();
-          let coachFirstLine = '';
-          if (userText.includes('sweet') || userText.includes('dessert') || userText.includes('craving') || userText.includes('chocolate') || userText.includes('sugar')) {
-            coachFirstLine = "Cravings are almost never about willpower. There's usually something specific triggering them. Based on your goal, here's what I'd focus on first:";
-          } else if (userText.includes('eat out') || userText.includes('restaurant') || userText.includes('fast food') || userText.includes('pizza') || userText.includes('burger')) {
-            coachFirstLine = "Eating out doesn't have to be the problem. It's usually one specific habit that makes it hard. Based on your goal, I can already see where the real friction is:";
-          } else if (userText.includes('energy') || userText.includes('tired') || userText.includes('fatigue') || userText.includes('exhausted')) {
-            coachFirstLine = "Low energy is almost always a nutrition signal, not a willpower problem. Based on your profile, I can already see a few things worth looking at:";
-          } else if (userText.includes('start') || userText.includes('begin') || userText.includes("don't know") || userText.includes('confused') || userText.includes('lost')) {
-            coachFirstLine = "Not knowing where to start is actually the most honest place to be, and it tells me something useful. Based on your goal, here's where I'd begin:";
-          } else if (userText.includes('stuck') || userText.includes('plateau') || userText.includes('not losing') || userText.includes('not working') || userText.includes('nothing works')) {
-            coachFirstLine = "Plateaus almost always have a specific cause, and it's rarely what people think. After looking at your profile, I can already see what's most likely happening:";
-          } else if (userText.includes('protein') || userText.includes('macro') || userText.includes('calorie') || userText.includes('carb') || userText.includes('fat')) {
-            coachFirstLine = "Good question. Based on your current goals, I have a specific answer for your situation. Here's what I'd recommend:";
-          } else if (userText.includes('meal plan') || userText.includes('what to eat') || userText.includes('plan')) {
-            coachFirstLine = "I can build that around your exact goals and what you have available. Based on your profile, here's how I'd structure it:";
-          } else if (userText.includes('weight') || userText.includes('lose') || userText.includes('slim') || userText.includes('thin')) {
-            coachFirstLine = "Weight loss usually comes down to one or two specific things, and they're different for everyone. Based on your goal, I can already see what's most relevant for you:";
-          } else {
-            coachFirstLine = "Good question. Based on your goal, I actually have a specific answer for your situation. Here's what I'd focus on first:";
-          }
-          const gateMsg: MessageWithId = {
-            id: genId(),
-            role: 'assistant',
-            content: coachFirstLine,
-            timestamp: Date.now(),
-            isPremiumGate: true,
-            showUpgradeButton: true,
-          };
-          setMessages((prev) => [...prev, gateMsg]);
-          if (conversationId) {
-            try {
-              await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'user', content: trimmed });
-              await supabase.from('coach_messages').insert({ conversation_id: conversationId, role: 'assistant', content: coachFirstLine });
-              await supabase.from('coach_conv_sessions').update({ last_message_at: new Date().toISOString() }).eq('id', conversationId);
-              console.log('[AICoach] GateLocked messages saved to Supabase');
-            } catch (saveErr: any) {
-              console.warn('[AICoach] Failed to save GateLocked messages:', saveErr?.message);
-            }
-          }
-          return;
-        }
 
         if (e?.isSubscriptionError) {
           Alert.alert('Subscription Required', 'The coaching feature requires an active subscription.');
@@ -1940,12 +1848,10 @@ export default function CoachScreen() {
 
   // Determine if we're in the "welcome" state (only the welcome message, no user messages)
   const hasUserMessages = messages.some((m) => m.role === 'user');
-  // Filter out hidden trigger messages from display
-  const visibleMessages = messages.filter(
-    (m) => !(m.role === 'user' && (m.content === '__FIRST_INTERACTION__' || m.content === '__DAILY_GREETING__'))
-  );
+  // Filter out the hidden __FIRST_INTERACTION__ trigger from display
+  const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
-  const showCravingChips = !isOnlyWelcome && firstMessageReceived && inputText.length === 0 && !loading && !isGated && isPremium;
+  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !isGated && isPremium;
   const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !isGated;
   // After first message arrives, show quick actions (new user gets simplified set)
   const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
@@ -2152,6 +2058,46 @@ export default function CoachScreen() {
             </View>
           )}
 
+          {/* ── Craving chips hub — welcome state only ── */}
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
+            <View style={styles.cravingHubSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Quick questions
+              </Text>
+              <View style={styles.cravingHubRow}>
+                {CRAVING_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.label}
+                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => handleCravingChip(chip)}
+                    disabled={premiumLoading}
+                    activeOpacity={0.75}
+                  >
+                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
+                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {!isNewUser && (
+                <View style={styles.suggestedInlineRow}>
+                  {SUGGESTED_PROMPTS.map((prompt) => (
+                    <TouchableOpacity
+                      key={prompt}
+                      style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                      onPress={() => {
+                        console.log('[AICoach] Suggested prompt chip pressed:', prompt);
+                        handleSuggestedPrompt(prompt);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
           {/* ── Phase 8 Status Card — welcome state only ── */}
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && latestRecommendation && (
             <View style={styles.statusCardSection}>
@@ -2166,6 +2112,38 @@ export default function CoachScreen() {
                   handleSend('Give me my current status assessment');
                 }}
               />
+            </View>
+          )}
+
+          {/* ── Craving chips — below welcome message, welcome state only ── */}
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && isPremium && !isGated && (
+            <View style={[styles.cravingRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.cravingChipsContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                {CRAVING_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.label}
+                    style={[
+                      styles.cravingChip,
+                      {
+                        backgroundColor: isDark ? colors.cardDark : colors.card,
+                        borderColor: isDark ? colors.borderDark : colors.border,
+                      },
+                    ]}
+                    onPress={() => handleCravingChip(chip)}
+                    activeOpacity={0.7}
+                  >
+                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={14} color={isDark ? colors.textDark : colors.text} />
+                    <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
+                      {chip.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
 
@@ -2270,62 +2248,11 @@ export default function CoachScreen() {
             );
           })}
 
-          {/* ── Welcome chips — rendered after coach's first message ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1]?.role === 'assistant' && (
-            <View style={[styles.cravingHubSection, { marginTop: 8 }]}>
-              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Quick questions
-              </Text>
-              <View style={styles.cravingHubRow}>
-                {CRAVING_CHIPS.map((chip) => (
-                  <TouchableOpacity
-                    key={chip.label}
-                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
-                    onPress={() => handleCravingChip(chip)}
-                    disabled={premiumLoading}
-                    activeOpacity={0.75}
-                  >
-                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
-                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
+
 
         </ScrollView>
 
-        {/* ── Craving chips — above input bar, non-welcome state ── */}
-        {showCravingChips && (
-          <View style={[styles.cravingRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.cravingChipsContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {CRAVING_CHIPS.map((chip) => (
-                <TouchableOpacity
-                  key={chip.label}
-                  style={[
-                    styles.cravingChip,
-                    {
-                      backgroundColor: isDark ? colors.cardDark : colors.card,
-                      borderColor: isDark ? colors.borderDark : colors.border,
-                    },
-                  ]}
-                  onPress={() => handleCravingChip(chip)}
-                  activeOpacity={0.7}
-                >
-                  <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={14} color={isDark ? colors.textDark : colors.text} />
-                  <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
-                    {chip.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+        {/* ── Craving chips — rendered inside ScrollView after welcome message ── */}
 
         {/* ── Gated hint above input bar ── */}
         {isGated && !isPremium && (
