@@ -1111,24 +1111,33 @@ export default function CoachScreen() {
 
             if (existingMsgs && existingMsgs.length > 0) {
               console.log('[AICoach] Existing conversation found — loading', existingMsgs.length, 'messages');
-              const mapped = existingMsgs.map((m) => ({
+
+              // Check premium status from users table directly (source of truth)
+              const { data: userData } = await supabase
+                .from('users')
+                .select('user_type')
+                .eq('id', user.id)
+                .single();
+              const userIsPremium = userData?.user_type === 'premium';
+
+              // Find the last assistant message index so we can attach the gate card to it
+              const lastAssistantIdx = userIsPremium
+                ? -1
+                : [...existingMsgs].map((m, i) => ({ role: m.role, i })).filter(x => x.role === 'assistant').pop()?.i ?? -1;
+
+              const mapped = existingMsgs.map((m, idx) => ({
                 id: m.id,
                 role: m.role as 'user' | 'assistant',
                 content: m.content,
                 timestamp: new Date(m.created_at).getTime(),
+                ...(idx === lastAssistantIdx ? { showUpgradeButton: true, isPremiumGate: true } : {}),
               }));
+
               if (isMountedRef.current) {
                 setMessages(mapped);
                 setConversationId(sessionId);
                 firstUserMessageSentRef.current = true;
                 firstMessageSentRef.current = true;
-                // Check premium status from users table directly (source of truth)
-                const { data: userData } = await supabase
-                  .from('users')
-                  .select('user_type')
-                  .eq('id', user.id)
-                  .single();
-                const userIsPremium = userData?.user_type === 'premium';
                 if (!userIsPremium) {
                   setIsGated(true);
                   console.log('[AICoach] Returning free user — gate activated');

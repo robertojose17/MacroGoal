@@ -184,11 +184,30 @@ export function useAICoach(options?: UseAICoachOptions) {
             const rawMsgs: { id: string; role: string; content: string; created_at: string }[] = await msgsRes.json();
             console.log('[useAICoach] History messages loaded, count:', rawMsgs.length);
             if (rawMsgs.length > 0 && isMountedRef.current) {
-              const mapped: Message[] = rawMsgs.map((m) => ({
+              // Check premium status so we can attach the gate card to the last assistant message
+              const { data: { session: authSession } } = await supabase.auth.getSession();
+              const userId = authSession?.user?.id;
+              let userIsPremium = true;
+              if (userId) {
+                const { data: userData } = await supabase
+                  .from('users')
+                  .select('user_type')
+                  .eq('id', userId)
+                  .single();
+                userIsPremium = userData?.user_type === 'premium';
+                console.log('[useAICoach] Premium check on history load — isPremium:', userIsPremium);
+              }
+
+              const lastAssistantIdx = userIsPremium
+                ? -1
+                : [...rawMsgs].map((m, i) => ({ role: m.role, i })).filter(x => x.role === 'assistant').pop()?.i ?? -1;
+
+              const mapped: Message[] = rawMsgs.map((m, idx) => ({
                 id: m.id,
                 role: m.role as 'user' | 'assistant',
                 content: m.content,
                 timestamp: new Date(m.created_at).getTime(),
+                ...(idx === lastAssistantIdx ? { showUpgradeButton: true, isPremiumGate: true } : {}),
               }));
               setMessages(mapped);
             }
