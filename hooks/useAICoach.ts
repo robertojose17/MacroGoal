@@ -123,6 +123,11 @@ export function useAICoach(options?: UseAICoachOptions) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const weightUnit = options?.weightUnit ?? 'lb';
   const isMountedRef = useRef(true);
+  const conversationIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -375,6 +380,38 @@ export function useAICoach(options?: UseAICoachOptions) {
         }
 
         setState({ status: 'success', error: null });
+
+        // Save messages to Supabase from frontend (source of truth)
+        const currentConvId = conversationIdRef.current;
+        console.log('[useAICoach] Post-stream save — conversationId:', currentConvId, 'fullText length:', fullText.length);
+        if (currentConvId && fullText.length > 0) {
+          try {
+            const lastUserMsg = apiMessages[apiMessages.length - 1];
+            // Only save user message if it's not __FIRST_INTERACTION__
+            if (lastUserMsg?.role === 'user' && lastUserMsg.content !== '__FIRST_INTERACTION__') {
+              console.log('[useAICoach] Saving user message to Supabase, conv_id:', currentConvId);
+              await supabase.from('coach_messages').insert({
+                conversation_id: currentConvId,
+                role: 'user',
+                content: lastUserMsg.content,
+              });
+            }
+            // Always save assistant message
+            console.log('[useAICoach] Saving assistant message to Supabase, conv_id:', currentConvId);
+            await supabase.from('coach_messages').insert({
+              conversation_id: currentConvId,
+              role: 'assistant',
+              content: fullText,
+            });
+            // Update last_message_at
+            await supabase.from('coach_conv_sessions').update({ last_message_at: new Date().toISOString() }).eq('id', currentConvId);
+            console.log('[useAICoach] Messages saved successfully to conv_id:', currentConvId);
+          } catch (saveErr: any) {
+            console.warn('[useAICoach] Failed to save messages from frontend:', saveErr?.message);
+          }
+        } else {
+          console.warn('[useAICoach] Skipping message save — conversationId:', currentConvId, 'fullText length:', fullText.length);
+        }
       } catch (e: any) {
         console.error('[useAICoach] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.error('[useAICoach] ❌ CATCH BLOCK ERROR');

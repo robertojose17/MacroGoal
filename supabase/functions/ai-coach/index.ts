@@ -335,19 +335,7 @@ INSTRUCTIONS:
         // Send done event with action_proposal
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, action_proposal: actionProposal })}\n\n`));
 
-        // Save to conversation
-        if (conversationId) {
-          try {
-            const lastUserMsg = messages[messages.length - 1];
-            if (lastUserMsg?.role === "user") {
-              await supabase.from("coach_messages").insert({ conversation_id: conversationId, role: "user", content: lastUserMsg.content });
-            }
-            await supabase.from("coach_messages").insert({ conversation_id: conversationId, role: "assistant", content: fullText });
-            await supabase.from("coach_conv_sessions").update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
-          } catch (saveErr: unknown) {
-            console.warn("[AICoach] Failed to save messages:", saveErr instanceof Error ? saveErr.message : String(saveErr));
-          }
-        }
+        // Message persistence is handled by the frontend after stream completes.
 
         controller.close();
       },

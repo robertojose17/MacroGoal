@@ -1203,65 +1203,6 @@ export default function CoachScreen() {
             console.log('[AICoach] Proactive first message delivered');
             await AsyncStorage.setItem(firstInteractionKey, 'true');
             console.log('[AICoach] First interaction flag persisted for user:', user.id);
-
-            // ── Problem 2 fix: Persist welcome message to Supabase as fallback ──
-            // The edge function saves it, but there may be a timing issue if conversationId
-            // wasn't set when the stream completed. We upsert from the frontend to guarantee it.
-            try {
-              // Wait a tick for conversationId state to settle
-              await new Promise((r) => setTimeout(r, 200));
-              // Read conversationId from the hook's current state via a fresh Supabase query
-              // (we can't read the hook state here directly, so we look up today's conversation)
-              const { data: { session: sess } } = await supabase.auth.getSession();
-              if (sess) {
-                const todayStr2 = new Date().toISOString().split('T')[0];
-                const { data: todayConvs } = await supabase
-                  .from('coach_conversations')
-                  .select('id')
-                  .eq('user_id', user.id)
-                  .gte('created_at', todayStr2 + 'T00:00:00')
-                  .order('created_at', { ascending: false })
-                  .limit(1);
-                const convId = todayConvs?.[0]?.id ?? null;
-                if (convId) {
-                  // Find the welcome assistant message from current messages state
-                  const welcomeMsg = messagesRef.current.find(
-                    (m) => m.role === 'assistant' && m.content.length > 0 && !m.isTyping
-                  );
-                  if (welcomeMsg) {
-                    // Check if it already exists to avoid duplicates
-                    const { count: existingCount } = await supabase
-                      .from('coach_messages')
-                      .select('id', { count: 'exact', head: true })
-                      .eq('conversation_id', convId)
-                      .eq('role', 'assistant')
-                      .limit(1);
-                    if ((existingCount ?? 0) === 0) {
-                      const { error: saveErr } = await supabase
-                        .from('coach_messages')
-                        .insert({
-                          conversation_id: convId,
-                          role: 'assistant',
-                          content: welcomeMsg.content,
-                        });
-                      if (saveErr) {
-                        console.warn('[AICoach] Welcome message fallback save error:', saveErr.message);
-                      } else {
-                        console.log('[AICoach] Welcome message saved to Supabase as fallback, conv_id:', convId);
-                      }
-                    } else {
-                      console.log('[AICoach] Welcome message already exists in Supabase — skipping fallback save');
-                    }
-                  } else {
-                    console.log('[AICoach] No welcome message found in state for fallback save');
-                  }
-                } else {
-                  console.warn('[AICoach] Could not find today\'s conversation for welcome message fallback save');
-                }
-              }
-            } catch (saveE: any) {
-              console.warn('[AICoach] Welcome message fallback save outer error:', saveE?.message);
-            }
           } catch (e: any) {
             console.warn('[AICoach] Proactive first message error:', e?.message);
             firstMessageSentRef.current = false;
