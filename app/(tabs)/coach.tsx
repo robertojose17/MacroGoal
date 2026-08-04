@@ -2058,45 +2058,7 @@ export default function CoachScreen() {
             </View>
           )}
 
-          {/* ── Craving chips hub — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
-            <View style={styles.cravingHubSection}>
-              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Quick questions
-              </Text>
-              <View style={styles.cravingHubRow}>
-                {CRAVING_CHIPS.map((chip) => (
-                  <TouchableOpacity
-                    key={chip.label}
-                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
-                    onPress={() => handleCravingChip(chip)}
-                    disabled={premiumLoading}
-                    activeOpacity={0.75}
-                  >
-                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
-                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {!isNewUser && (
-                <View style={styles.suggestedInlineRow}>
-                  {SUGGESTED_PROMPTS.map((prompt) => (
-                    <TouchableOpacity
-                      key={prompt}
-                      style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
-                      onPress={() => {
-                        console.log('[AICoach] Suggested prompt chip pressed:', prompt);
-                        handleSuggestedPrompt(prompt);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
+
 
           {/* ── Phase 8 Status Card — welcome state only ── */}
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && latestRecommendation && (
@@ -2112,38 +2074,6 @@ export default function CoachScreen() {
                   handleSend('Give me my current status assessment');
                 }}
               />
-            </View>
-          )}
-
-          {/* ── Craving chips — below welcome message, welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && isPremium && !isGated && (
-            <View style={[styles.cravingRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.cravingChipsContent}
-                keyboardShouldPersistTaps="handled"
-              >
-                {CRAVING_CHIPS.map((chip) => (
-                  <TouchableOpacity
-                    key={chip.label}
-                    style={[
-                      styles.cravingChip,
-                      {
-                        backgroundColor: isDark ? colors.cardDark : colors.card,
-                        borderColor: isDark ? colors.borderDark : colors.border,
-                      },
-                    ]}
-                    onPress={() => handleCravingChip(chip)}
-                    activeOpacity={0.7}
-                  >
-                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={14} color={isDark ? colors.textDark : colors.text} />
-                    <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
-                      {chip.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
             </View>
           )}
 
@@ -2248,7 +2178,45 @@ export default function CoachScreen() {
             );
           })}
 
-
+          {/* ── Craving chips hub — welcome state only, premium only ── */}
+          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && isPremium && !isGated && (
+            <View style={styles.cravingHubSection}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Quick questions
+              </Text>
+              <View style={styles.cravingHubRow}>
+                {CRAVING_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.label}
+                    style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => handleCravingChip(chip)}
+                    disabled={premiumLoading}
+                    activeOpacity={0.75}
+                  >
+                    <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
+                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {!isNewUser && (
+                <View style={styles.suggestedInlineRow}>
+                  {SUGGESTED_PROMPTS.map((prompt) => (
+                    <TouchableOpacity
+                      key={prompt}
+                      style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
+                      onPress={() => {
+                        console.log('[AICoach] Suggested prompt chip pressed:', prompt);
+                        handleSuggestedPrompt(prompt);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
 
         </ScrollView>
 
