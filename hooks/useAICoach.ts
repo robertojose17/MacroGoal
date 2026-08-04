@@ -141,6 +141,11 @@ export function useAICoach(options?: UseAICoachOptions) {
         const jwt = session?.access_token;
         if (!jwt) {
           console.log('[useAICoach] No session, skipping conversation load');
+          if (isMountedRef.current) {
+            setHasExistingHistory(false);
+            setLoadedConversationId(null);
+            setHistoryLoaded(true);
+          }
           return;
         }
 
@@ -160,6 +165,11 @@ export function useAICoach(options?: UseAICoachOptions) {
         if (!listRes.ok) {
           const errText = await listRes.text();
           console.warn('[useAICoach] Failed to fetch conversations:', listRes.status, errText.slice(0, 200));
+          if (isMountedRef.current) {
+            setHasExistingHistory(false);
+            setLoadedConversationId(null);
+            setHistoryLoaded(true);
+          }
           return;
         }
 
@@ -266,6 +276,7 @@ export function useAICoach(options?: UseAICoachOptions) {
       } catch (e: any) {
         console.warn('[useAICoach] Conversation init error:', e?.message);
         if (isMountedRef.current) {
+          setLoadedConversationId(null);
           setHistoryLoaded(true);
           console.log('[useAICoach] historyLoaded=true (catch block)');
         }
