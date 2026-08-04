@@ -843,6 +843,7 @@ export default function CoachScreen() {
     conversationId,
     setConversationId,
     historyLoaded,
+    loadedConversationId,
     hasExistingHistory,
   } = useAICoach({ weightUnit: userWeightUnit });
 
@@ -944,8 +945,11 @@ export default function CoachScreen() {
   // ── Send welcome message once history loading is complete ─────────────────
   useEffect(() => {
     if (!historyLoaded) return;
+    if (!loadedConversationId) return;
     if (firstMessageSentRef.current) return;
     firstMessageSentRef.current = true;
+
+    console.log('[AICoach] Welcome effect firing, loadedConversationId:', loadedConversationId, 'hasExistingHistory:', hasExistingHistory);
 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -957,7 +961,7 @@ export default function CoachScreen() {
         setTimeout(async () => {
           if (!isMountedRef.current) return;
           try {
-            await sendMessage([{ role: 'user' as const, content: '__DAILY_GREETING__', timestamp: Date.now() }], user.id, false);
+            await sendMessage([{ role: 'user' as const, content: '__DAILY_GREETING__', timestamp: Date.now() }], user.id, false, loadedConversationId);
             console.log('[AICoach] __DAILY_GREETING__ delivered');
           } catch (e: any) {
             console.warn('[AICoach] __DAILY_GREETING__ error:', e?.message);
@@ -968,7 +972,7 @@ export default function CoachScreen() {
         console.log('[AICoach] New user — sending __FIRST_INTERACTION__');
         const firstInteractionKey = 'coach_first_interaction_done_' + user.id;
         try {
-          await sendMessage([{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }], user.id, true);
+          await sendMessage([{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }], user.id, true, loadedConversationId);
           console.log('[AICoach] __FIRST_INTERACTION__ delivered');
           await AsyncStorage.setItem(firstInteractionKey, 'true');
           console.log('[AICoach] First interaction flag persisted for user:', user.id);
@@ -979,7 +983,7 @@ export default function CoachScreen() {
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyLoaded]);
+  }, [historyLoaded, loadedConversationId]);
 
   // ── Set firstMessageReceived when any real assistant message exists ──
   useEffect(() => {
