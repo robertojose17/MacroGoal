@@ -1521,6 +1521,25 @@ export default function CoachScreen() {
             } catch (e: any) {
               console.warn('[AICoach] Error persisting gate to AsyncStorage:', e?.message);
             }
+
+            // Save user reply #2 and gate message to Supabase
+            try {
+              if (conversationId) {
+                await supabase.from('coach_messages').insert({
+                  conversation_id: conversationId,
+                  role: 'user',
+                  content: trimmed,
+                });
+                await supabase.from('coach_messages').insert({
+                  conversation_id: conversationId,
+                  role: 'assistant',
+                  content: coachFirstLine,
+                });
+                console.log('[AICoach] Gate messages saved to Supabase, conv_id:', conversationId);
+              }
+            } catch (saveErr: any) {
+              console.warn('[AICoach] Error saving gate messages to Supabase:', saveErr?.message);
+            }
           }, 1500);
 
           return;
