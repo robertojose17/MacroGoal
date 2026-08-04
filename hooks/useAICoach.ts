@@ -163,11 +163,8 @@ export function useAICoach(options?: UseAICoachOptions) {
         const conversations: { id: string; last_message_at: string; created_at: string }[] = await listRes.json();
         console.log('[useAICoach] Conversations fetched, count:', conversations.length);
 
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayConv = conversations.find((c) => {
-          const d = (c.last_message_at || c.created_at || '').split('T')[0];
-          return d === todayStr;
-        });
+        // Pick the most recent conversation regardless of date
+        const todayConv = conversations.length > 0 ? conversations[0] : null;
 
         if (todayConv) {
           console.log('[useAICoach] Found today\'s conversation, id:', todayConv.id);
