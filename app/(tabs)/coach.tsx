@@ -1137,11 +1137,27 @@ export default function CoachScreen() {
                 setMessages(mapped);
                 setConversationId(sessionId);
                 firstUserMessageSentRef.current = true;
-                firstMessageSentRef.current = true;
                 if (!userIsPremium) {
                   setIsGated(true);
                   console.log('[AICoach] Returning free user — gate activated');
                 }
+              }
+
+              // Send a daily greeting after history is loaded, but only once per app session
+              if (!firstMessageSentRef.current) {
+                firstMessageSentRef.current = true;
+                console.log('[AICoach] Returning user — sending __DAILY_GREETING__ after history load');
+                setTimeout(async () => {
+                  if (!isMountedRef.current) return;
+                  const greetingMsg = [{ role: 'user' as const, content: '__DAILY_GREETING__', timestamp: Date.now() }];
+                  try {
+                    console.log('[AICoach] Dispatching __DAILY_GREETING__ trigger');
+                    await sendMessage(greetingMsg, user.id, false);
+                    console.log('[AICoach] __DAILY_GREETING__ delivered');
+                  } catch (e: any) {
+                    console.warn('[AICoach] __DAILY_GREETING__ error:', e?.message);
+                  }
+                }, 600);
               }
               return;
             }
@@ -1924,8 +1940,10 @@ export default function CoachScreen() {
 
   // Determine if we're in the "welcome" state (only the welcome message, no user messages)
   const hasUserMessages = messages.some((m) => m.role === 'user');
-  // Filter out the hidden __FIRST_INTERACTION__ trigger from display
-  const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
+  // Filter out hidden trigger messages from display
+  const visibleMessages = messages.filter(
+    (m) => !(m.role === 'user' && (m.content === '__FIRST_INTERACTION__' || m.content === '__DAILY_GREETING__'))
+  );
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
   const showCravingChips = !isOnlyWelcome && firstMessageReceived && inputText.length === 0 && !loading && !isGated && isPremium;
   const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !isGated;
