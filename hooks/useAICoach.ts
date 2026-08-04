@@ -121,6 +121,8 @@ export function useAICoach(options?: UseAICoachOptions) {
   const [pendingAction, setPendingAction] = useState<ActionProposal | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [hasExistingHistory, setHasExistingHistory] = useState(false);
   const weightUnit = options?.weightUnit ?? 'lb';
   const isMountedRef = useRef(true);
 
@@ -207,10 +209,26 @@ export function useAICoach(options?: UseAICoachOptions) {
                 ...(idx === lastAssistantIdx ? { showUpgradeButton: true, isPremiumGate: true } : {}),
               }));
               setMessages(mapped);
+              if (isMountedRef.current) {
+                setHasExistingHistory(rawMsgs.length > 0);
+                setHistoryLoaded(true);
+                console.log('[useAICoach] historyLoaded=true, hasExistingHistory:', rawMsgs.length > 0);
+              }
+            } else {
+              // Messages endpoint returned ok but no messages
+              if (isMountedRef.current) {
+                setHasExistingHistory(false);
+                setHistoryLoaded(true);
+                console.log('[useAICoach] historyLoaded=true, no messages in conversation');
+              }
             }
           } else {
             const errText = await msgsRes.text();
             console.warn('[useAICoach] Failed to load messages:', msgsRes.status, errText.slice(0, 200));
+            if (isMountedRef.current) {
+              setHasExistingHistory(false);
+              setHistoryLoaded(true);
+            }
           }
         } else {
           // Create a new conversation for today
@@ -228,9 +246,18 @@ export function useAICoach(options?: UseAICoachOptions) {
             const errText = await createRes.text();
             console.warn('[useAICoach] Failed to create conversation:', createRes.status, errText.slice(0, 200));
           }
+          if (isMountedRef.current) {
+            setHasExistingHistory(false);
+            setHistoryLoaded(true);
+            console.log('[useAICoach] historyLoaded=true, new conversation (no history)');
+          }
         }
       } catch (e: any) {
         console.warn('[useAICoach] Conversation init error:', e?.message);
+        if (isMountedRef.current) {
+          setHistoryLoaded(true);
+          console.log('[useAICoach] historyLoaded=true (catch block)');
+        }
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -421,5 +448,7 @@ export function useAICoach(options?: UseAICoachOptions) {
     setMessages,
     conversationId,
     setConversationId,
+    historyLoaded,
+    hasExistingHistory,
   };
 }
