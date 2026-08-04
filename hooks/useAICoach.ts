@@ -121,9 +121,6 @@ export function useAICoach(options?: UseAICoachOptions) {
   const [pendingAction, setPendingAction] = useState<ActionProposal | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [loadedConversationId, setLoadedConversationId] = useState<string | null>(null);
-  const [hasExistingHistory, setHasExistingHistory] = useState(false);
   const weightUnit = options?.weightUnit ?? 'lb';
   const isMountedRef = useRef(true);
 
@@ -141,11 +138,6 @@ export function useAICoach(options?: UseAICoachOptions) {
         const jwt = session?.access_token;
         if (!jwt) {
           console.log('[useAICoach] No session, skipping conversation load');
-          if (isMountedRef.current) {
-            setHasExistingHistory(false);
-            setLoadedConversationId(null);
-            setHistoryLoaded(true);
-          }
           return;
         }
 
@@ -165,11 +157,6 @@ export function useAICoach(options?: UseAICoachOptions) {
         if (!listRes.ok) {
           const errText = await listRes.text();
           console.warn('[useAICoach] Failed to fetch conversations:', listRes.status, errText.slice(0, 200));
-          if (isMountedRef.current) {
-            setHasExistingHistory(false);
-            setLoadedConversationId(null);
-            setHistoryLoaded(true);
-          }
           return;
         }
 
@@ -220,29 +207,10 @@ export function useAICoach(options?: UseAICoachOptions) {
                 ...(idx === lastAssistantIdx ? { showUpgradeButton: true, isPremiumGate: true } : {}),
               }));
               setMessages(mapped);
-              if (isMountedRef.current) {
-                setHasExistingHistory(rawMsgs.length > 0);
-                setLoadedConversationId(todayConv.id);
-                setHistoryLoaded(true);
-                console.log('[useAICoach] historyLoaded=true, hasExistingHistory:', rawMsgs.length > 0, 'loadedConversationId:', todayConv.id);
-              }
-            } else {
-              // Messages endpoint returned ok but no messages
-              if (isMountedRef.current) {
-                setHasExistingHistory(false);
-                setLoadedConversationId(todayConv.id);
-                setHistoryLoaded(true);
-                console.log('[useAICoach] historyLoaded=true, no messages in conversation, loadedConversationId:', todayConv.id);
-              }
             }
           } else {
             const errText = await msgsRes.text();
             console.warn('[useAICoach] Failed to load messages:', msgsRes.status, errText.slice(0, 200));
-            if (isMountedRef.current) {
-              setHasExistingHistory(false);
-              setLoadedConversationId(todayConv.id);
-              setHistoryLoaded(true);
-            }
           }
         } else {
           // Create a new conversation for today
@@ -255,31 +223,14 @@ export function useAICoach(options?: UseAICoachOptions) {
           if (createRes.ok) {
             const created: { id: string; created_at: string } = await createRes.json();
             console.log('[useAICoach] New conversation created, id:', created.id);
-            if (isMountedRef.current) {
-              setConversationId(created.id);
-              setHasExistingHistory(false);
-              setLoadedConversationId(created.id);
-              setHistoryLoaded(true);
-              console.log('[useAICoach] historyLoaded=true, new conversation (no history), loadedConversationId:', created.id);
-            }
+            if (isMountedRef.current) setConversationId(created.id);
           } else {
             const errText = await createRes.text();
             console.warn('[useAICoach] Failed to create conversation:', createRes.status, errText.slice(0, 200));
-            if (isMountedRef.current) {
-              setHasExistingHistory(false);
-              setLoadedConversationId(null);
-              setHistoryLoaded(true);
-              console.log('[useAICoach] historyLoaded=true, new conversation creation failed');
-            }
           }
         }
       } catch (e: any) {
         console.warn('[useAICoach] Conversation init error:', e?.message);
-        if (isMountedRef.current) {
-          setLoadedConversationId(null);
-          setHistoryLoaded(true);
-          console.log('[useAICoach] historyLoaded=true (catch block)');
-        }
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -292,7 +243,7 @@ export function useAICoach(options?: UseAICoachOptions) {
 
   // ── Non-streaming sendMessage ──────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (apiMessages: CoachMessage[], userId?: string, isFirstMessage?: boolean, overrideConversationId?: string): Promise<void> => {
+    async (apiMessages: CoachMessage[], userId?: string, isFirstMessage?: boolean): Promise<void> => {
       if (!apiMessages || apiMessages.length === 0) {
         console.log('[useAICoach] No messages to send');
         return;
@@ -307,7 +258,7 @@ export function useAICoach(options?: UseAICoachOptions) {
       console.log('[useAICoach] Message count:', apiMessages.length);
       console.log('[useAICoach] Last user message:', lastUserContent.slice(0, 80));
       console.log('[useAICoach] weight_unit:', weightUnit);
-      console.log('[useAICoach] conversation_id:', overrideConversationId ?? conversationId);
+      console.log('[useAICoach] conversation_id:', conversationId);
       console.log('[useAICoach] use_web:', useWeb);
       console.log('[useAICoach] is_first_message:', isFirstMessage ?? false);
 
@@ -339,7 +290,7 @@ export function useAICoach(options?: UseAICoachOptions) {
             body: JSON.stringify({
               messages: apiMessages,
               weight_unit: weightUnit,
-              conversation_id: overrideConversationId ?? conversationId ?? null,
+              conversation_id: conversationId ?? null,
               use_web: useWeb,
               ...(isFirstMessage ? { is_first_message: true } : {}),
             }),
@@ -470,8 +421,5 @@ export function useAICoach(options?: UseAICoachOptions) {
     setMessages,
     conversationId,
     setConversationId,
-    historyLoaded,
-    loadedConversationId,
-    hasExistingHistory,
   };
 }

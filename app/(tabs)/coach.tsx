@@ -842,9 +842,6 @@ export default function CoachScreen() {
     setMessages,
     conversationId,
     setConversationId,
-    historyLoaded,
-    loadedConversationId,
-    hasExistingHistory,
   } = useAICoach({ weightUnit: userWeightUnit });
 
   // ── History state ──────────────────────────────────────────────────────────
@@ -941,49 +938,6 @@ export default function CoachScreen() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
-  // ── Send welcome message once history loading is complete ─────────────────
-  useEffect(() => {
-    if (!historyLoaded) return;
-    if (!loadedConversationId) return;
-    if (firstMessageSentRef.current) return;
-    firstMessageSentRef.current = true;
-
-    console.log('[AICoach] Welcome effect firing, loadedConversationId:', loadedConversationId, 'hasExistingHistory:', hasExistingHistory);
-
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !isMountedRef.current) return;
-
-      if (hasExistingHistory) {
-        // Returning user — send daily greeting
-        console.log('[AICoach] Returning user — sending __DAILY_GREETING__');
-        setTimeout(async () => {
-          if (!isMountedRef.current) return;
-          try {
-            await sendMessage([{ role: 'user' as const, content: '__DAILY_GREETING__', timestamp: Date.now() }], user.id, false, loadedConversationId);
-            console.log('[AICoach] __DAILY_GREETING__ delivered');
-          } catch (e: any) {
-            console.warn('[AICoach] __DAILY_GREETING__ error:', e?.message);
-          }
-        }, 600);
-      } else {
-        // New user — send first interaction
-        console.log('[AICoach] New user — sending __FIRST_INTERACTION__');
-        const firstInteractionKey = 'coach_first_interaction_done_' + user.id;
-        try {
-          await sendMessage([{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }], user.id, true, loadedConversationId);
-          console.log('[AICoach] __FIRST_INTERACTION__ delivered');
-          await AsyncStorage.setItem(firstInteractionKey, 'true');
-          console.log('[AICoach] First interaction flag persisted for user:', user.id);
-        } catch (e: any) {
-          console.warn('[AICoach] __FIRST_INTERACTION__ error:', e?.message);
-          firstMessageSentRef.current = false;
-        }
-      }
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyLoaded, loadedConversationId]);
 
   // ── Set firstMessageReceived when any real assistant message exists ──
   useEffect(() => {
@@ -1082,9 +1036,11 @@ export default function CoachScreen() {
       }
     })();
 
-    // Fetch today's nutrition context and proactive insights
+    // Fetch today's nutrition and inject welcome message if no history
     (async () => {
       try {
+        // Wait for the hook's conversation init to complete
+        await new Promise((r) => setTimeout(r, 600));
         if (!isMountedRef.current) return;
 
         console.log('[AICoach] Fetching today\'s nutrition context');
@@ -1130,6 +1086,117 @@ export default function CoachScreen() {
           if (isMountedRef.current) setIsFirstEverSession(true);
         } else {
           console.log('[AICoach] Returning user — welcome chips suppressed');
+        }
+
+        // ── MGCS: Proactive first message ─────────────────────────────────
+        // Check Supabase directly — messagesRef may be empty due to async load timing
+        if (messagesRef.current.length === 0 && !firstMessageSentRef.current) {
+          // Query Supabase to see if this user already has a conversation
+          const { data: existingSessions } = await supabase
+            .from('coach_conv_sessions')
+            .select('id')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (existingSessions && existingSessions.length > 0) {
+            // User has prior conversation — load it and show gate if free
+            const sessionId = existingSessions[0].id;
+            const { data: existingMsgs } = await supabase
+              .from('coach_messages')
+              .select('id, role, content, created_at')
+              .eq('conversation_id', sessionId)
+              .order('created_at', { ascending: true })
+              .limit(100);
+
+            if (existingMsgs && existingMsgs.length > 0) {
+              console.log('[AICoach] Existing conversation found — loading', existingMsgs.length, 'messages');
+
+              // Check premium status from users table directly (source of truth)
+              const { data: userData } = await supabase
+                .from('users')
+                .select('user_type')
+                .eq('id', user.id)
+                .single();
+              const userIsPremium = userData?.user_type === 'premium';
+
+              // Find the last assistant message index so we can attach the gate card to it
+              const lastAssistantIdx = userIsPremium
+                ? -1
+                : [...existingMsgs].map((m, i) => ({ role: m.role, i })).filter(x => x.role === 'assistant').pop()?.i ?? -1;
+
+              const mapped = existingMsgs.map((m, idx) => ({
+                id: m.id,
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                timestamp: new Date(m.created_at).getTime(),
+                ...(idx === lastAssistantIdx ? { showUpgradeButton: true, isPremiumGate: true } : {}),
+              }));
+
+              if (isMountedRef.current) {
+                setMessages(mapped);
+                setConversationId(sessionId);
+                firstUserMessageSentRef.current = true;
+                if (!userIsPremium) {
+                  setIsGated(true);
+                  console.log('[AICoach] Returning free user — gate activated');
+                }
+              }
+
+              // Send a daily greeting after history is loaded, but only once per app session
+              if (!firstMessageSentRef.current) {
+                firstMessageSentRef.current = true;
+                console.log('[AICoach] Returning user — sending __DAILY_GREETING__ after history load');
+                setTimeout(async () => {
+                  if (!isMountedRef.current) return;
+                  const greetingMsg = [{ role: 'user' as const, content: '__DAILY_GREETING__', timestamp: Date.now() }];
+                  try {
+                    console.log('[AICoach] Dispatching __DAILY_GREETING__ trigger');
+                    await sendMessage(greetingMsg, user.id, false);
+                    console.log('[AICoach] __DAILY_GREETING__ delivered');
+                  } catch (e: any) {
+                    console.warn('[AICoach] __DAILY_GREETING__ error:', e?.message);
+                  }
+                }, 600);
+              }
+              return;
+            }
+          }
+
+          // No prior conversation — trigger the AI's personalized opening
+          firstMessageSentRef.current = true;
+          console.log('[AICoach] No history — triggering proactive first message (MGCS First Interaction Protocol)');
+          const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
+          try {
+            await sendMessage(triggerMsg, user.id, true);
+            console.log('[AICoach] Proactive first message delivered');
+            await AsyncStorage.setItem(firstInteractionKey, 'true');
+            console.log('[AICoach] First interaction flag persisted for user:', user.id);
+          } catch (e: any) {
+            console.warn('[AICoach] Proactive first message error:', e?.message);
+            firstMessageSentRef.current = false;
+          }
+          return;
+        }
+
+        // Legacy: inject local welcome snapshot if history already exists and todayCal > 0
+        if (todayCal > 0 && messagesRef.current.length === 0) {
+          const hour = new Date().getHours();
+          const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+          const todayCalRounded = Math.round(todayCal);
+          const todayProteinRounded = Math.round(todayProtein);
+          const todayCarbsRounded = Math.round(todayCarbs);
+          const todayFatsRounded = Math.round(todayFats);
+          const welcomeContent = `${greeting}! Here's your nutrition snapshot for today:\n\n**${todayCalRounded} cal** logged  •  **${todayProteinRounded}g** protein  •  **${todayCarbsRounded}g** carbs  •  **${todayFatsRounded}g** fats\n\nWhat can I help you with today?`;
+          console.log('[AICoach] Injecting welcome nutrition message');
+          if (isMountedRef.current) {
+            setMessages([{
+              id: genId(),
+              role: 'assistant',
+              content: welcomeContent,
+              timestamp: Date.now(),
+            }]);
+          }
         }
 
         // Proactive insight: last 7 days
