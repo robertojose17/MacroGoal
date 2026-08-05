@@ -1,5 +1,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useNavigationState } from '@react-navigation/native';
 import {
   View, Modal, TextInput, KeyboardAvoidingView, Animated,
   Dimensions, Alert, Platform, TouchableOpacity, Text, ActivityIndicator, StyleSheet,
@@ -29,10 +30,18 @@ export default function TabLayout() {
   const [referralCode, setReferralCode] = useState('');
   const [referralApplying, setReferralApplying] = useState(false);
   const referralSlideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+  const hasCheckedRef = useRef(false);
+
+  const activeTabName = useNavigationState(state => state?.routes[state?.index]?.name);
 
   useEffect(() => {
-    // Run once on mount with a delay to let the session establish
-    const timer = setTimeout(async () => {
+    // Don't show on coach tab
+    if (!activeTabName || activeTabName === 'coach') return;
+    // Only run once
+    if (hasCheckedRef.current) return;
+    hasCheckedRef.current = true;
+
+    const checkReferralPrompt = async () => {
       try {
         const shownLocally = await AsyncStorage.getItem(REFERRAL_PROMPT_KEY);
         if (shownLocally) return;
@@ -75,11 +84,11 @@ export default function TabLayout() {
       } catch (e) {
         console.warn('[Tab Layout] Failed to check referral prompt:', e);
       }
-    }, 1500);
+    };
 
-    return () => clearTimeout(timer);
+    checkReferralPrompt();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeTabName]);
 
   const dismissReferralModal = async () => {
     console.log('[Tab Layout] Referral modal dismissed');
