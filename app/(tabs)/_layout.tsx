@@ -49,13 +49,15 @@ export default function TabLayout() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('referral_prompt_shown')
           .eq('id', user.id)
           .maybeSingle();
 
-        if (profile?.referral_prompt_shown) {
+        if (profileError) {
+          console.warn('[Tab Layout] Supabase profile query failed, showing modal anyway:', profileError);
+        } else if (profile?.referral_prompt_shown) {
           await AsyncStorage.setItem(REFERRAL_PROMPT_KEY, 'true');
           return;
         }
