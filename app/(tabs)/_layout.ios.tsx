@@ -46,8 +46,20 @@ export default function TabLayout() {
         const shownLocally = await AsyncStorage.getItem(REFERRAL_PROMPT_KEY);
         if (shownLocally) return;
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        let user = null;
+        // Try up to 3 times with 500ms delay — session may not be ready immediately after login
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            user = session.user;
+            break;
+          }
+          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        if (!user) {
+          console.warn('[Tab Layout iOS] No user session after 3 attempts — skipping referral check');
+          return;
+        }
 
         const { data: profile, error: profileError } = await supabase
           .from('users')
