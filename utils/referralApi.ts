@@ -156,7 +156,7 @@ export async function applyReferralCode(code: string): Promise<{ success: boolea
 
   console.log('[referralApi] referral inserted, id:', referral.id);
 
-  // Award XP to both via award-xp edge function
+  // Award XP to referrer
   try {
     await supabase.functions.invoke('award-xp', {
       body: {
@@ -168,7 +168,22 @@ export async function applyReferralCode(code: string): Promise<{ success: boolea
     });
     console.log('[referralApi] XP awarded to referrer');
   } catch (e) {
-    console.warn('[referralApi] XP award failed (non-fatal):', e);
+    console.warn('[referralApi] XP award for referrer failed (non-fatal):', e);
+  }
+
+  // Award XP to referred user
+  try {
+    await supabase.functions.invoke('award-xp', {
+      body: {
+        user_id: user.id,
+        event_type: 'referral_used',
+        source_id: referral.id,
+        metadata: { xp_reward: 1000, referrer_user_id: rc.user_id },
+      },
+    });
+    console.log('[referralApi] XP awarded to referred user');
+  } catch (e) {
+    console.warn('[referralApi] XP award for referred user failed (non-fatal):', e);
   }
 
   return { success: true };
