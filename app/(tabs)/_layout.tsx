@@ -5,7 +5,7 @@ import {
   Dimensions, Alert, Platform, TouchableOpacity, Text, ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { Tabs } from 'expo-router';
-import { useNavigationState } from '@react-navigation/native';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
@@ -25,36 +25,26 @@ export default function TabLayout() {
   const tabBarBorderColor = isDark ? colors.borderDark : colors.border;
 
   // ── Referral modal state ──
-  const hasCheckedRef = useRef(false);
   const [referralModalVisible, setReferralModalVisible] = useState(false);
   const [referralCode, setReferralCode] = useState('');
   const [referralApplying, setReferralApplying] = useState(false);
   const referralSlideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
-  const activeTabName = useNavigationState(state => state?.routes[state?.index]?.name);
-
   useEffect(() => {
-    if (hasCheckedRef.current) return;
-    if (!activeTabName) return;
-    if (activeTabName === 'coach') return;
-
-    hasCheckedRef.current = true;
-    console.log('[Tab Layout] Active tab changed to:', activeTabName, '— running referral check');
-
-    const checkReferralPrompt = async () => {
+    // Run once on mount with a delay to let the session establish
+    const timer = setTimeout(async () => {
       try {
         const shownLocally = await AsyncStorage.getItem(REFERRAL_PROMPT_KEY);
         if (shownLocally) return;
 
         let user = null;
-        // Try up to 3 times with 500ms delay — session may not be ready immediately after login
         for (let attempt = 0; attempt < 3; attempt++) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             user = session.user;
             break;
           }
-          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500));
+          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 600));
         }
         if (!user) {
           console.warn('[Tab Layout] No user session after 3 attempts — skipping referral check');
@@ -85,11 +75,11 @@ export default function TabLayout() {
       } catch (e) {
         console.warn('[Tab Layout] Failed to check referral prompt:', e);
       }
-    };
+    }, 1500);
 
-    checkReferralPrompt();
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTabName]);
+  }, []);
 
   const dismissReferralModal = async () => {
     console.log('[Tab Layout] Referral modal dismissed');
