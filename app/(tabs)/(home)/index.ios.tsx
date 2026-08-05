@@ -3,10 +3,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, Alert, ActivityIndicator, ScrollView, ActionSheetIOS,
-  Modal, TextInput, KeyboardAvoidingView, Animated, Dimensions, Platform,
+  Modal, TextInput, KeyboardAvoidingView, Animated, Dimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { applyReferralCode } from '@/utils/referralApi';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -153,99 +151,6 @@ export default function HomeScreen() {
   const [newPlanName, setNewPlanName] = useState('');
   const [newPlanSaving, setNewPlanSaving] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
-
-  // ── Referral code modal ──
-  const REFERRAL_PROMPT_KEY = 'referral_prompt_shown_v1';
-  const [referralModalVisible, setReferralModalVisible] = useState(false);
-  const [referralCode, setReferralCode] = useState('');
-  const [referralApplying, setReferralApplying] = useState(false);
-  const referralSlideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
-
-  useEffect(() => {
-    const checkReferralPrompt = async () => {
-      try {
-        // Fast local check first — if already shown locally, skip
-        const shownLocally = await AsyncStorage.getItem(REFERRAL_PROMPT_KEY);
-        if (shownLocally) return;
-
-        // Check Supabase — source of truth (survives sign out/sign in)
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: profile } = await supabase
-          .from('users')
-          .select('referral_prompt_shown')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (profile?.referral_prompt_shown) {
-          // Already shown on another device/session — save locally and skip
-          await AsyncStorage.setItem(REFERRAL_PROMPT_KEY, 'true');
-          return;
-        }
-
-        // First time ever — show the modal
-        console.log('[Home iOS] First launch — showing referral code prompt');
-        setReferralModalVisible(true);
-        Animated.spring(referralSlideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 65,
-          friction: 11,
-        }).start();
-      } catch (e) {
-        console.warn('[Home iOS] Failed to check referral prompt:', e);
-      }
-    };
-    checkReferralPrompt();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const dismissReferralModal = async () => {
-    console.log('[Home iOS] Referral modal dismissed');
-    Animated.timing(referralSlideAnim, {
-      toValue: Dimensions.get('window').height,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => setReferralModalVisible(false));
-    try {
-      // Save locally
-      await AsyncStorage.setItem(REFERRAL_PROMPT_KEY, 'true');
-      // Save to Supabase — survives sign out/sign in
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from('users')
-          .update({ referral_prompt_shown: true })
-          .eq('id', user.id);
-      }
-    } catch (e) {
-      console.warn('[Home iOS] Failed to save referral prompt flag:', e);
-    }
-  };
-
-  const handleApplyReferralCode = async () => {
-    if (!referralCode.trim()) return;
-    console.log('[Home iOS] Apply referral code pressed:', referralCode.trim());
-    setReferralApplying(true);
-    try {
-      const result = await applyReferralCode(referralCode.trim());
-      if (result.success) {
-        console.log('[Home iOS] Referral code applied successfully');
-        setReferralApplying(false);
-        Alert.alert('🎉 Code Applied!', 'You and your friend both earned 1,000 XP!');
-        await dismissReferralModal();
-      } else {
-        console.warn('[Home iOS] Referral code failed:', result.error);
-        setReferralApplying(false);
-        Alert.alert('Invalid Code', result.error || 'Could not apply this code.');
-      }
-    } catch (e) {
-      console.error('[Home iOS] Unexpected error applying referral code:', e);
-      setReferralApplying(false);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-    }
-  };
 
   // ── Load tracking data ──
   const loadData = useCallback(async () => {
@@ -1793,75 +1698,6 @@ export default function HomeScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* First-launch referral code modal */}
-      {referralModalVisible && (
-        <Modal transparent animationType="none" visible={referralModalVisible} onRequestClose={dismissReferralModal}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <TouchableOpacity
-              style={referralStyles.overlay}
-              activeOpacity={1}
-              onPress={dismissReferralModal}
-            >
-              <Animated.View
-                style={[
-                  referralStyles.sheet,
-                  { backgroundColor: isDark ? '#252740' : '#FFFFFF', transform: [{ translateY: referralSlideAnim }] },
-                ]}
-              >
-                <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-                  <View style={referralStyles.handle} />
-                  <Text style={[referralStyles.title, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-                    {'🎁 Have a Referral Code?'}
-                  </Text>
-                  <Text style={[referralStyles.subtitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-                    Were you invited to Macro Goal? Enter their code and you both earn 1,000 XP!
-                  </Text>
-                  <TextInput
-                    style={[
-                      referralStyles.input,
-                      {
-                        backgroundColor: isDark ? '#1A1C2E' : '#F0F2F7',
-                        borderColor: isDark ? '#3A3C52' : '#E5E7EB',
-                        color: isDark ? '#F1F5F9' : '#2B2D42',
-                      },
-                    ]}
-                    value={referralCode}
-                    onChangeText={setReferralCode}
-                    placeholder="Enter code here..."
-                    placeholderTextColor={isDark ? '#A0A2B8' : '#6B7280'}
-                    autoCapitalize="characters"
-                    returnKeyType="done"
-                    onSubmitEditing={handleApplyReferralCode}
-                  />
-                  <View style={referralStyles.buttonRow}>
-                    <TouchableOpacity
-                      style={[referralStyles.applyButton, { backgroundColor: '#14B8A6', opacity: referralApplying ? 0.7 : 1 }]}
-                      onPress={handleApplyReferralCode}
-                      disabled={referralApplying}
-                      activeOpacity={0.85}
-                    >
-                      {referralApplying ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Text style={referralStyles.applyButtonText}>Apply Code</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[referralStyles.skipButton, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}
-                      onPress={dismissReferralModal}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[referralStyles.skipButtonText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-                        Skip
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            </TouchableOpacity>
-          </KeyboardAvoidingView>
-        </Modal>
-      )}
 
     </SafeAreaView>
   );
@@ -2065,74 +1901,4 @@ const styles = StyleSheet.create({
   },
 });
 
-const referralStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: spacing.lg,
-    paddingBottom: 40,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: spacing.md,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-    lineHeight: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 16,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-    letterSpacing: 2,
-    fontWeight: '700',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  applyButton: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm + 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  applyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  skipButton: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm + 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  skipButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});
+
