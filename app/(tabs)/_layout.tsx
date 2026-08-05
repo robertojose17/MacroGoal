@@ -1,11 +1,10 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { useNavigationState } from '@react-navigation/native';
 import {
   View, Modal, TextInput, KeyboardAvoidingView, Animated,
   Dimensions, Alert, Platform, TouchableOpacity, Text, ActivityIndicator, StyleSheet,
 } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useSegments } from 'expo-router';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -32,11 +31,12 @@ export default function TabLayout() {
   const referralSlideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
   const hasCheckedRef = useRef(false);
 
-  const activeTabName = useNavigationState(state => state?.routes[state?.index]?.name);
+  const segments = useSegments();
+  const activeTab = segments[1];
 
   useEffect(() => {
     // Don't show on coach tab
-    if (!activeTabName || activeTabName === 'coach') return;
+    if (!activeTab || activeTab === 'coach') return;
     // Only run once
     if (hasCheckedRef.current) return;
     hasCheckedRef.current = true;
@@ -88,7 +88,7 @@ export default function TabLayout() {
 
     checkReferralPrompt();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTabName]);
+  }, [activeTab]);
 
   const dismissReferralModal = async () => {
     console.log('[Tab Layout] Referral modal dismissed');
