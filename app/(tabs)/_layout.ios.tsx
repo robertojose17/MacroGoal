@@ -34,12 +34,11 @@ export default function TabLayout() {
   const activeTabName = useNavigationState(state => state?.routes[state?.index]?.name);
 
   useEffect(() => {
+    // Don't show on coach tab
+    if (!activeTabName || activeTabName === 'coach') return;
+    // Only run once
     if (hasCheckedRef.current) return;
-    if (!activeTabName) return;
-    if (activeTabName === 'coach') return;
-
     hasCheckedRef.current = true;
-    console.log('[Tab Layout iOS] Active tab changed to:', activeTabName, '— running referral check');
 
     const checkReferralPrompt = async () => {
       try {
@@ -47,14 +46,13 @@ export default function TabLayout() {
         if (shownLocally) return;
 
         let user = null;
-        // Try up to 3 times with 500ms delay — session may not be ready immediately after login
         for (let attempt = 0; attempt < 3; attempt++) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             user = session.user;
             break;
           }
-          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500));
+          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 600));
         }
         if (!user) {
           console.warn('[Tab Layout iOS] No user session after 3 attempts — skipping referral check');
