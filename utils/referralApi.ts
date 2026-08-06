@@ -138,7 +138,7 @@ export async function applyReferralCode(code: string): Promise<{ success: boolea
   const { data: rc } = await supabase
     .from('referral_codes')
     .select('id, user_id, code, custom_code')
-    .or(`code.eq."${upperCode}",custom_code.eq."${upperCode}"`)
+    .eq('code', upperCode)
     .maybeSingle();
 
   if (!rc) {
