@@ -35,11 +35,25 @@ export async function getOrCreateReferralCode(): Promise<string | null> {
   const code = generateCode(profile?.username || 'USER');
   console.log('[referralApi] generating new code:', code);
 
-  const { data: inserted } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from('referral_codes')
     .insert({ user_id: user.id, code })
     .select('code')
     .single();
+
+  if (insertError) {
+    console.error('[referralApi] insert error:', JSON.stringify(insertError));
+    // If unique constraint violation, the row was inserted by a race — re-fetch
+    if (insertError.code === '23505') {
+      const { data: refetch } = await supabase
+        .from('referral_codes')
+        .select('code, custom_code')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      return refetch?.custom_code || refetch?.code || null;
+    }
+    return null;
+  }
 
   console.log('[referralApi] inserted code:', inserted?.code);
   return inserted?.code ?? null;
