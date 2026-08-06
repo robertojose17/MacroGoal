@@ -20,8 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { getReferralStats } from '@/utils/referralApi';
-import { supabase } from '@/lib/supabase/client';
+import { getReferralStats, applyReferralCode } from '@/utils/referralApi';
 
 const TEAL = '#14B8A6';
 const GOLD = '#FFB547';
@@ -109,34 +108,14 @@ export default function ReferralsScreen() {
     console.log('[Referrals] Submitting referral code:', trimmed);
     setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in to enter a referral code.');
-        return;
-      }
-      // Look up the referrer by code
-      const { data: rc, error: lookupError } = await supabase
-        .from('referral_codes')
-        .select('id, user_id')
-        .eq('code', trimmed)
-        .maybeSingle();
-      if (lookupError || !rc) {
-        console.warn('[Referrals] Referral code not found:', trimmed);
-        Alert.alert('Invalid Code', 'That referral code was not found. Please check and try again.');
-        return;
-      }
-      if (rc.user_id === user.id) {
-        Alert.alert('Invalid Code', 'You cannot use your own referral code.');
-        return;
-      }
-      // Record the referral
-      const { error: insertError } = await supabase
-        .from('referrals')
-        .insert({ referrer_id: rc.user_id, referred_id: user.id });
-      if (insertError) {
-        console.warn('[Referrals] Insert referral error:', insertError.message);
-        if (insertError.code === '23505') {
+      const result = await applyReferralCode(trimmed);
+      if (!result.success) {
+        if (result.error === 'You have already used a referral code') {
           Alert.alert('Already Used', 'You have already entered a referral code.');
+        } else if (result.error === 'Invalid referral code' || (result.error ?? '').includes('Invalid')) {
+          Alert.alert('Invalid Code', 'That referral code was not found. Please check and try again.');
+        } else if (result.error === "You can't use your own referral code") {
+          Alert.alert('Invalid Code', 'You cannot use your own referral code.');
         } else {
           Alert.alert('Error', 'Could not apply the referral code. Please try again.');
         }
