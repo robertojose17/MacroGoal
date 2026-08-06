@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   RefreshControl, Alert, ActivityIndicator, Modal, ScrollView,
@@ -270,6 +270,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const referralChecked = useRef(false);
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
 
@@ -604,6 +605,24 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('[Home] Screen focused, loading data');
+      if (!referralChecked.current) {
+        referralChecked.current = true;
+        console.log('[Home] Checking referral prompt');
+        (async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          const { data } = await supabase
+            .from('users')
+            .select('referral_prompt_shown')
+            .eq('id', user.id)
+            .single();
+          if (data && !data.referral_prompt_shown) {
+            console.log('[Home] Navigating to referrals with showPrompt');
+            await supabase.from('users').update({ referral_prompt_shown: true }).eq('id', user.id);
+            router.push('/referrals?showPrompt=true');
+          }
+        })();
+      }
       // Auto-advance to today if the date has changed (e.g. app left open overnight)
       setSelectedDate(prev => {
         const today = new Date();

@@ -10,13 +10,18 @@ import {
   ActivityIndicator,
   Animated,
   Clipboard,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { getReferralStats } from '@/utils/referralApi';
+import { supabase } from '@/lib/supabase/client';
 
 const TEAL = '#14B8A6';
 const GOLD = '#FFB547';
@@ -42,6 +47,7 @@ export default function ReferralsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { showPrompt } = useLocalSearchParams<{ showPrompt?: string }>();
 
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState<string | null>(null);
@@ -52,6 +58,11 @@ export default function ReferralsScreen() {
   const [referralList, setReferralList] = useState<{ username: string; joinedAt: string }[]>([]);
   const [applicationStatus, setApplicationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
   const [copied, setCopied] = useState(false);
+
+  // ── Enter referral code modal ──
+  const [enterModalVisible, setEnterModalVisible] = useState(false);
+  const [referralInput, setReferralInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -84,6 +95,65 @@ export default function ReferralsScreen() {
   useFocusEffect(useCallback(() => {
     loadStats();
   }, [loadStats]));
+
+  useEffect(() => {
+    if (showPrompt === 'true') {
+      console.log('[Referrals] showPrompt param detected, opening enter-code modal');
+      setEnterModalVisible(true);
+    }
+  }, [showPrompt]);
+
+  const handleSubmitReferralCode = async () => {
+    const trimmed = referralInput.trim().toUpperCase();
+    if (!trimmed) return;
+    console.log('[Referrals] Submitting referral code:', trimmed);
+    setSubmitting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to enter a referral code.');
+        return;
+      }
+      // Look up the referrer by code
+      const { data: referrer, error: lookupError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('referral_code', trimmed)
+        .single();
+      if (lookupError || !referrer) {
+        console.warn('[Referrals] Referral code not found:', trimmed);
+        Alert.alert('Invalid Code', 'That referral code was not found. Please check and try again.');
+        return;
+      }
+      if (referrer.id === user.id) {
+        Alert.alert('Invalid Code', 'You cannot use your own referral code.');
+        return;
+      }
+      // Record the referral
+      const { error: insertError } = await supabase
+        .from('referrals')
+        .insert({ referrer_id: referrer.id, referred_id: user.id });
+      if (insertError) {
+        console.warn('[Referrals] Insert referral error:', insertError.message);
+        if (insertError.code === '23505') {
+          Alert.alert('Already Used', 'You have already entered a referral code.');
+        } else {
+          Alert.alert('Error', 'Could not apply the referral code. Please try again.');
+        }
+        return;
+      }
+      console.log('[Referrals] Referral code applied successfully');
+      setEnterModalVisible(false);
+      setReferralInput('');
+      Alert.alert('Success! 🎉', 'Referral code applied. You both earned 1,000 XP!');
+      loadStats();
+    } catch (e) {
+      console.error('[Referrals] Unexpected error submitting code:', e);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleCopy = () => {
     if (!code) return;
@@ -338,6 +408,66 @@ export default function ReferralsScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Enter Referral Code Modal */}
+      <Modal
+        visible={enterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEnterModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.modalCard, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="gift-outline" size={24} color={TEAL} />
+              <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.primaryText }]}>
+                Enter a Referral Code
+              </Text>
+            </View>
+            <Text style={[styles.modalSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Got a code from a friend? Enter it below and you both earn 1,000 XP!
+            </Text>
+            <TextInput
+              style={[styles.codeInput, { backgroundColor: isDark ? '#1A1C2E' : '#F0F2F7', borderColor: isDark ? colors.cardBorderDark : colors.cardBorder, color: isDark ? colors.textDark : colors.primaryText }]}
+              placeholder="e.g. ABC123"
+              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+              value={referralInput}
+              onChangeText={setReferralInput}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={20}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}
+                onPress={() => {
+                  console.log('[Referrals] Enter-code modal dismissed');
+                  setEnterModalVisible(false);
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.modalCancelText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  Skip
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, { backgroundColor: TEAL, opacity: submitting ? 0.7 : 1 }]}
+                onPress={handleSubmitReferralCode}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting
+                  ? <ActivityIndicator size="small" color="#FFF" />
+                  : <Text style={styles.modalSubmitText}>Apply Code</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -561,4 +691,73 @@ const styles = StyleSheet.create({
     ...typography.small,
   },
   bottomSpacer: { height: 20 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    ...typography.caption,
+    marginBottom: spacing.md,
+  },
+  codeInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: spacing.md,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 2,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalSubmitBtn: {
+    flex: 2,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubmitText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

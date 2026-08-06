@@ -130,6 +130,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const referralChecked = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -332,6 +333,24 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('[Dashboard] Screen focused, loading data and reporting health metrics');
+      if (!referralChecked.current) {
+        referralChecked.current = true;
+        console.log('[Dashboard] Checking referral prompt');
+        (async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          const { data } = await supabase
+            .from('users')
+            .select('referral_prompt_shown')
+            .eq('id', user.id)
+            .single();
+          if (data && !data.referral_prompt_shown) {
+            console.log('[Dashboard] Navigating to referrals with showPrompt');
+            await supabase.from('users').update({ referral_prompt_shown: true }).eq('id', user.id);
+            router.push('/referrals?showPrompt=true');
+          }
+        })();
+      }
       loadData();
       reportDailyHealthMetrics().then((result) => {
         console.log('[Dashboard] focus health metrics report:', result.eventsPosted);
