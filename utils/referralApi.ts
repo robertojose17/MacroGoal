@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
+import { tryAwardReferral } from '@/utils/xpAwarder';
+import { emitXpRefresh } from '@/utils/xpEvents';
 
 // Generate a unique 6-char code from username + random suffix
 function generateCode(username: string): string {
@@ -170,34 +172,62 @@ export async function applyReferralCode(code: string): Promise<{ success: boolea
 
   console.log('[referralApi] referral inserted, id:', referral.id);
 
-  // Award XP to referrer
+  // Award XP to referred user (current auth user) via awardXp edge function
   try {
-    await supabase.functions.invoke('award-xp', {
-      body: {
-        user_id: rc.user_id,
-        event_type: 'referral_completed',
-        source_id: referral.id,
-        metadata: { xp_reward: 1000, referred_user_id: user.id },
-      },
-    });
-    console.log('[referralApi] XP awarded to referrer');
-  } catch (e) {
-    console.warn('[referralApi] XP award for referrer failed (non-fatal):', e);
-  }
-
-  // Award XP to referred user
-  try {
-    await supabase.functions.invoke('award-xp', {
-      body: {
-        user_id: user.id,
-        event_type: 'referral_used',
-        source_id: referral.id,
-        metadata: { xp_reward: 1000, referrer_user_id: rc.user_id },
-      },
-    });
-    console.log('[referralApi] XP awarded to referred user');
+    console.log('[referralApi] awarding XP to referred user (current user)');
+    tryAwardReferral(referral.id);
+    emitXpRefresh();
+    console.log('[referralApi] XP award triggered for referred user');
   } catch (e) {
     console.warn('[referralApi] XP award for referred user failed (non-fatal):', e);
+  }
+
+  // Award XP to referrer via direct DB write (different user — cannot use JWT-bound edge fn)
+  try {
+    console.log('[referralApi] awarding XP to referrer user_id:', rc.user_id);
+    const today = new Date().toISOString().slice(0, 10);
+    // Use a stable source_id so this is idempotent (unique constraint on xp_ledger)
+    const referrerSourceId = `referral_completed:${referral.id}:referrer`;
+
+    // 1. Insert into xp_ledger for history/dedup
+    const { error: ledgerError } = await supabase
+      .from('xp_ledger')
+      .insert({
+        user_id: rc.user_id,
+        event_type: 'referral_completed',
+        source_id: referrerSourceId,
+        xp_awarded: 1000,
+        date: today,
+        metadata: { xp_reward: 1000, referred_user_id: user.id, referral_id: referral.id },
+      });
+
+    if (ledgerError && ledgerError.code !== '23505') {
+      // 23505 = unique violation = already awarded, that's fine
+      console.warn('[referralApi] xp_ledger insert for referrer failed:', ledgerError);
+    } else {
+      // 2. Increment referrer's total_xp in user_xp (read-then-write to avoid overwrite)
+      const { data: currentXp } = await supabase
+        .from('user_xp')
+        .select('total_xp')
+        .eq('user_id', rc.user_id)
+        .maybeSingle();
+
+      const newTotal = (Number(currentXp?.total_xp) || 0) + 1000;
+      const { error: xpError } = await supabase
+        .from('user_xp')
+        .upsert(
+          { user_id: rc.user_id, total_xp: newTotal },
+          { onConflict: 'user_id' }
+        );
+
+      if (xpError) {
+        console.warn('[referralApi] user_xp upsert for referrer failed:', xpError);
+      } else {
+        console.log('[referralApi] XP awarded to referrer, new total_xp:', newTotal);
+      }
+    }
+  } catch (e) {
+    console.warn('[referralApi] XP award for referrer failed (non-fatal):', e);
   }
 
   return { success: true };
