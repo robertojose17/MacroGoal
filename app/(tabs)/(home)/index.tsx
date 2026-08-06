@@ -608,7 +608,7 @@ export default function HomeScreen() {
       if (!referralChecked.current) {
         referralChecked.current = true;
         console.log('[Home] Checking referral prompt');
-        (async () => {
+        const checkReferral = async () => {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) return;
           const { data } = await supabase
@@ -621,7 +621,15 @@ export default function HomeScreen() {
             await supabase.from('users').update({ referral_prompt_shown: true }).eq('id', user.id);
             router.push('/referrals?showPrompt=true');
           }
-        })();
+        };
+        // Try immediately, then retry after 1.5s in case auth session isn't ready yet
+        checkReferral().catch(() => {}).then(async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            console.log('[Home] Auth not ready, retrying referral check in 1500ms');
+            setTimeout(() => { checkReferral().catch(() => {}); }, 1500);
+          }
+        });
       }
       // Auto-advance to today if the date has changed (e.g. app left open overnight)
       setSelectedDate(prev => {
