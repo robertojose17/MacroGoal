@@ -1372,7 +1372,7 @@ export default function AddFoodScreen() {
         p_meal_type: mealType,
         p_food_id: null,
         p_food_item_id: item.food_item_id,
-        p_quantity: multiplier,
+        p_quantity: 1,
         p_calories: calories,
         p_protein: protein,
         p_carbs: carbs,
