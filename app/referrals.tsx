@@ -115,24 +115,24 @@ export default function ReferralsScreen() {
         return;
       }
       // Look up the referrer by code
-      const { data: referrer, error: lookupError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('referral_code', trimmed)
-        .single();
-      if (lookupError || !referrer) {
+      const { data: rc, error: lookupError } = await supabase
+        .from('referral_codes')
+        .select('id, user_id')
+        .eq('code', trimmed)
+        .maybeSingle();
+      if (lookupError || !rc) {
         console.warn('[Referrals] Referral code not found:', trimmed);
         Alert.alert('Invalid Code', 'That referral code was not found. Please check and try again.');
         return;
       }
-      if (referrer.id === user.id) {
+      if (rc.user_id === user.id) {
         Alert.alert('Invalid Code', 'You cannot use your own referral code.');
         return;
       }
       // Record the referral
       const { error: insertError } = await supabase
         .from('referrals')
-        .insert({ referrer_id: referrer.id, referred_id: user.id });
+        .insert({ referrer_id: rc.user_id, referred_id: user.id });
       if (insertError) {
         console.warn('[Referrals] Insert referral error:', insertError.message);
         if (insertError.code === '23505') {
