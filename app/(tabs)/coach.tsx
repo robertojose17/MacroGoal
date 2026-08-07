@@ -842,6 +842,7 @@ export default function CoachScreen() {
     setMessages,
     conversationId,
     setConversationId,
+    isInitialized,
   } = useAICoach({ weightUnit: userWeightUnit });
 
   // ── History state ──────────────────────────────────────────────────────────
@@ -1140,13 +1141,11 @@ export default function CoachScreen() {
       }
     })();
 
-    // Fetch today's nutrition and inject welcome message if no history
+    // Fetch today's nutrition context (proactive insight + new user detection)
+    // The welcome/first-message logic is handled in a separate useEffect that
+    // depends on isInitialized so there is no race condition.
     (async () => {
       try {
-        // Wait for the hook's conversation init to complete
-        await new Promise((r) => setTimeout(r, 1500));
-        if (!isMountedRef.current) return;
-
         console.log('[AICoach] Fetching today\'s nutrition context');
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
@@ -1183,53 +1182,15 @@ export default function CoachScreen() {
         }
 
         // ── MGCS: Check first-ever session flag ───────────────────────────
-        const firstInteractionKey = 'coach_first_interaction_done_' + user.id;
-        const firstInteractionDone = await AsyncStorage.getItem(firstInteractionKey);
-        if (!firstInteractionDone) {
-          console.log('[AICoach] First-ever session detected — will show welcome chips');
-          if (isMountedRef.current) setIsFirstEverSession(true);
-        } else {
-          console.log('[AICoach] Returning user — welcome chips suppressed');
-        }
-
-        // ── MGCS: Proactive first message ─────────────────────────────────
-        // If no conversation history yet, trigger the AI's personalized opening
-        const hasRealHistory = messagesRef.current.some(
-          (m) => m.content && m.content !== '__FIRST_INTERACTION__' && m.content !== 'Something went wrong. Please try again.'
-        );
-        if (!hasRealHistory && !firstMessageSentRef.current) {
-          firstMessageSentRef.current = true;
-          console.log('[AICoach] No history — triggering proactive first message (MGCS First Interaction Protocol)');
-          const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
-          try {
-            await sendMessage(triggerMsg, user.id, true);
-            console.log('[AICoach] Proactive first message delivered');
-            await AsyncStorage.setItem(firstInteractionKey, 'true');
-            console.log('[AICoach] First interaction flag persisted for user:', user.id);
-          } catch (e: any) {
-            console.warn('[AICoach] Proactive first message error:', e?.message);
-            firstMessageSentRef.current = false;
-          }
-          return;
-        }
-
-        // Legacy: inject local welcome snapshot if history already exists and todayCal > 0
-        if (todayCal > 0 && messagesRef.current.length === 0) {
-          const hour = new Date().getHours();
-          const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-          const todayCalRounded = Math.round(todayCal);
-          const todayProteinRounded = Math.round(todayProtein);
-          const todayCarbsRounded = Math.round(todayCarbs);
-          const todayFatsRounded = Math.round(todayFats);
-          const welcomeContent = `${greeting}! Here's your nutrition snapshot for today:\n\n**${todayCalRounded} cal** logged  •  **${todayProteinRounded}g** protein  •  **${todayCarbsRounded}g** carbs  •  **${todayFatsRounded}g** fats\n\nWhat can I help you with today?`;
-          console.log('[AICoach] Injecting welcome nutrition message');
-          if (isMountedRef.current) {
-            setMessages([{
-              id: genId(),
-              role: 'assistant',
-              content: welcomeContent,
-              timestamp: Date.now(),
-            }]);
+        const { data: { user: userForFlag } } = await supabase.auth.getUser();
+        if (userForFlag) {
+          const firstInteractionKey = 'coach_first_interaction_done_' + userForFlag.id;
+          const firstInteractionDone = await AsyncStorage.getItem(firstInteractionKey);
+          if (!firstInteractionDone) {
+            console.log('[AICoach] First-ever session detected — will show welcome chips');
+            if (isMountedRef.current) setIsFirstEverSession(true);
+          } else {
+            console.log('[AICoach] Returning user — welcome chips suppressed');
           }
         }
 
@@ -1335,6 +1296,87 @@ export default function CoachScreen() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMessages]);
+
+  // ── MGCS: Proactive first message — fires once useAICoach finishes init ─────
+  // Replaces the brittle setTimeout(1500) approach. isInitialized is set to true
+  // by useAICoach only after all DB history loading is complete, so messagesRef
+  // is guaranteed to reflect the real history when this effect runs.
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (firstMessageSentRef.current) return;
+
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        if (!isMountedRef.current) return;
+
+        const firstInteractionKey = 'coach_first_interaction_done_' + user.id;
+
+        const hasRealHistory = messagesRef.current.some(
+          (m) => m.content && m.content !== '__FIRST_INTERACTION__' && m.content !== 'Something went wrong. Please try again.'
+        );
+
+        if (!hasRealHistory) {
+          firstMessageSentRef.current = true;
+          console.log('[AICoach] isInitialized=true, no history — triggering proactive first message (MGCS First Interaction Protocol)');
+          const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
+          try {
+            await sendMessage(triggerMsg, user.id, true);
+            console.log('[AICoach] Proactive first message delivered');
+            await AsyncStorage.setItem(firstInteractionKey, 'true');
+            console.log('[AICoach] First interaction flag persisted for user:', user.id);
+          } catch (e: any) {
+            console.warn('[AICoach] Proactive first message error:', e?.message);
+            firstMessageSentRef.current = false;
+          }
+          return;
+        }
+
+        // Legacy: inject local welcome snapshot if history already exists and todayCal > 0
+        // (only when messages list is empty — i.e. history loaded but setMessages not yet called)
+        if (messagesRef.current.length === 0) {
+          // Fetch today's totals for the snapshot
+          const todayStr = new Date().toISOString().split('T')[0];
+          const { data: todayMeals } = await supabase
+            .from('meals')
+            .select('meal_items(calories, protein, carbs, fats)')
+            .eq('user_id', user.id)
+            .eq('date', todayStr);
+
+          let todayCal = 0, todayProtein = 0, todayCarbs = 0, todayFats = 0;
+          for (const meal of (todayMeals || [])) {
+            for (const item of ((meal as any).meal_items || [])) {
+              todayCal += Number(item.calories) || 0;
+              todayProtein += Number(item.protein) || 0;
+              todayCarbs += Number(item.carbs) || 0;
+              todayFats += Number(item.fats) || 0;
+            }
+          }
+
+          if (todayCal > 0 && isMountedRef.current) {
+            const hour = new Date().getHours();
+            const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+            const todayCalRounded = Math.round(todayCal);
+            const todayProteinRounded = Math.round(todayProtein);
+            const todayCarbsRounded = Math.round(todayCarbs);
+            const todayFatsRounded = Math.round(todayFats);
+            const welcomeContent = `${greeting}! Here's your nutrition snapshot for today:\n\n**${todayCalRounded} cal** logged  •  **${todayProteinRounded}g** protein  •  **${todayCarbsRounded}g** carbs  •  **${todayFatsRounded}g** fats\n\nWhat can I help you with today?`;
+            console.log('[AICoach] Injecting welcome nutrition message');
+            setMessages([{
+              id: genId(),
+              role: 'assistant',
+              content: welcomeContent,
+              timestamp: Date.now(),
+            }]);
+          }
+        }
+      } catch (e: any) {
+        console.warn('[AICoach] Welcome message effect error:', e?.message);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInitialized, conversationId]);
 
   // ── Persistent gate check: runs once premium status is resolved ───────────
   useEffect(() => {

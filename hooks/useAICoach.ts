@@ -121,6 +121,8 @@ export function useAICoach(options?: UseAICoachOptions) {
   const [pendingAction, setPendingAction] = useState<ActionProposal | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const isInitializedRef = useRef(false);
   const weightUnit = options?.weightUnit ?? 'lb';
   const isMountedRef = useRef(true);
   const conversationIdRef = useRef<string | null>(null);
@@ -225,6 +227,13 @@ export function useAICoach(options?: UseAICoachOptions) {
         }
       } catch (e: any) {
         console.warn('[useAICoach] Conversation init error:', e?.message);
+      }
+
+      // Signal that initialization is complete (regardless of success/failure)
+      isInitializedRef.current = true;
+      if (isMountedRef.current) {
+        console.log('[useAICoach] Initialization complete — isInitialized = true');
+        setIsInitialized(true);
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,5 +481,6 @@ export function useAICoach(options?: UseAICoachOptions) {
     setMessages,
     conversationId,
     setConversationId,
+    isInitialized,
   };
 }
