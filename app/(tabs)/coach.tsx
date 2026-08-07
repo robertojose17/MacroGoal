@@ -842,7 +842,7 @@ export default function CoachScreen() {
     setMessages,
     conversationId,
     setConversationId,
-    isInitialized,
+    initResult,
   } = useAICoach({ weightUnit: userWeightUnit });
 
   // ── History state ──────────────────────────────────────────────────────────
@@ -1298,11 +1298,10 @@ export default function CoachScreen() {
   }, [setMessages]);
 
   // ── MGCS: Proactive first message — fires once useAICoach finishes init ─────
-  // Replaces the brittle setTimeout(1500) approach. isInitialized is set to true
-  // by useAICoach only after all DB history loading is complete, so messagesRef
-  // is guaranteed to reflect the real history when this effect runs.
+  // initResult is set atomically by useAICoach with BOTH conversationId and hasHistory
+  // in a single setState call, so this effect always sees consistent values.
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!initResult) return;
     if (firstMessageSentRef.current) return;
 
     (async () => {
@@ -1313,13 +1312,13 @@ export default function CoachScreen() {
 
         const firstInteractionKey = 'coach_first_interaction_done_' + user.id;
 
-        const hasRealHistory = messagesRef.current.some(
-          (m) => m.content && m.content !== '__FIRST_INTERACTION__' && m.content !== 'Something went wrong. Please try again.'
-        );
+        // Use the atomically-captured hasHistory flag — avoids the race where
+        // messagesRef.current hasn't been updated yet when this effect fires.
+        const hasRealHistory = initResult.hasHistory;
 
         if (!hasRealHistory) {
           firstMessageSentRef.current = true;
-          console.log('[AICoach] isInitialized=true, no history — triggering proactive first message (MGCS First Interaction Protocol)');
+          console.log('[AICoach] initResult.hasHistory=false — triggering proactive first message (MGCS First Interaction Protocol)');
           const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
           try {
             await sendMessage(triggerMsg, user.id, true);
@@ -1376,7 +1375,7 @@ export default function CoachScreen() {
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInitialized, conversationId]);
+  }, [initResult]);
 
   // ── Persistent gate check: runs once premium status is resolved ───────────
   useEffect(() => {

@@ -121,7 +121,7 @@ export function useAICoach(options?: UseAICoachOptions) {
   const [pendingAction, setPendingAction] = useState<ActionProposal | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [initResult, setInitResult] = useState<{ conversationId: string | null; hasHistory: boolean } | null>(null);
   const isInitializedRef = useRef(false);
   const weightUnit = options?.weightUnit ?? 'lb';
   const isMountedRef = useRef(true);
@@ -181,8 +181,12 @@ export function useAICoach(options?: UseAICoachOptions) {
           return d === todayStr;
         });
 
+        let finalConvId: string | null = null;
+        let finalHasHistory = false;
+
         if (todayConv) {
           console.log('[useAICoach] Found today\'s conversation, id:', todayConv.id);
+          finalConvId = todayConv.id;
           if (isMountedRef.current) setConversationId(todayConv.id);
 
           // Load messages for this conversation
@@ -202,6 +206,10 @@ export function useAICoach(options?: UseAICoachOptions) {
                 content: m.content,
                 timestamp: new Date(m.created_at).getTime(),
               }));
+              // Check for real history before setMessages so the flag is accurate
+              finalHasHistory = mapped.some(
+                (m) => m.content && m.content !== '__FIRST_INTERACTION__' && m.content !== 'Something went wrong. Please try again.'
+              );
               setMessages(mapped);
             }
           } else {
@@ -219,21 +227,31 @@ export function useAICoach(options?: UseAICoachOptions) {
           if (createRes.ok) {
             const created: { id: string; created_at: string } = await createRes.json();
             console.log('[useAICoach] New conversation created, id:', created.id);
+            finalConvId = created.id;
             if (isMountedRef.current) setConversationId(created.id);
           } else {
             const errText = await createRes.text();
             console.warn('[useAICoach] Failed to create conversation:', createRes.status, errText.slice(0, 200));
           }
         }
+
+        // Set conversationIdRef BEFORE setInitResult so sendMessage always reads the right id
+        conversationIdRef.current = finalConvId;
+
+        // Signal init complete atomically — both pieces of data in one setState call
+        isInitializedRef.current = true;
+        if (isMountedRef.current) {
+          console.log('[useAICoach] Initialization complete — conversationId:', finalConvId, 'hasHistory:', finalHasHistory);
+          setInitResult({ conversationId: finalConvId, hasHistory: finalHasHistory });
+        }
       } catch (e: any) {
         console.warn('[useAICoach] Conversation init error:', e?.message);
-      }
-
-      // Signal that initialization is complete (regardless of success/failure)
-      isInitializedRef.current = true;
-      if (isMountedRef.current) {
-        console.log('[useAICoach] Initialization complete — isInitialized = true');
-        setIsInitialized(true);
+        // Still signal init complete so the coach screen doesn't hang
+        isInitializedRef.current = true;
+        if (isMountedRef.current) {
+          console.log('[useAICoach] Initialization complete after error — conversationId: null, hasHistory: false');
+          setInitResult({ conversationId: null, hasHistory: false });
+        }
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -481,6 +499,6 @@ export function useAICoach(options?: UseAICoachOptions) {
     setMessages,
     conversationId,
     setConversationId,
-    isInitialized,
+    initResult,
   };
 }
