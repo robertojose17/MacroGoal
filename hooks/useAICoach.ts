@@ -124,10 +124,15 @@ export function useAICoach(options?: UseAICoachOptions) {
   const weightUnit = options?.weightUnit ?? 'lb';
   const isMountedRef = useRef(true);
   const conversationIdRef = useRef<string | null>(null);
+  const messagesRef = useRef<Message[]>([]);
 
   useEffect(() => {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -240,11 +245,36 @@ export function useAICoach(options?: UseAICoachOptions) {
 
       setState({ status: 'loading', error: null });
 
-      const lastUserContent = apiMessages[apiMessages.length - 1]?.content ?? '';
+      const newUserMsg = apiMessages[apiMessages.length - 1];
+      const lastUserContent = newUserMsg?.content ?? '';
       const useWeb = needsWebSearch(lastUserContent);
 
+      // Build full history: filter out streaming/placeholder/sentinel messages,
+      // then append the new user message (deduplicating if already present).
+      const EXCLUDED_CONTENTS = new Set(['', '__FIRST_INTERACTION__', 'Something went wrong. Please try again.']);
+      const historyMessages: CoachMessage[] = messagesRef.current
+        .filter((m) => !m.isStreaming && !EXCLUDED_CONTENTS.has(m.content))
+        .map((m) => ({ role: m.role, content: m.content, timestamp: m.timestamp }));
+
+      // Avoid duplicating the new user message if it's already the last item in history
+      const lastHistory = historyMessages[historyMessages.length - 1];
+      const alreadyPresent =
+        lastHistory &&
+        lastHistory.role === newUserMsg?.role &&
+        lastHistory.content === newUserMsg?.content;
+      if (!alreadyPresent && newUserMsg) {
+        historyMessages.push({ role: newUserMsg.role, content: newUserMsg.content, timestamp: newUserMsg.timestamp });
+      }
+
+      // Limit to last 20 messages (10 pairs) to avoid token overflow, always keeping the last item
+      const MAX_HISTORY = 20;
+      const fullMessages: CoachMessage[] =
+        historyMessages.length > MAX_HISTORY
+          ? historyMessages.slice(historyMessages.length - MAX_HISTORY)
+          : historyMessages;
+
       console.log('[useAICoach] Sending request to ai-coach');
-      console.log('[useAICoach] Message count:', apiMessages.length);
+      console.log('[useAICoach] History messages (from DB):', messagesRef.current.length, '→ sending:', fullMessages.length);
       console.log('[useAICoach] Last user message:', lastUserContent.slice(0, 80));
       console.log('[useAICoach] weight_unit:', weightUnit);
       console.log('[useAICoach] conversation_id:', conversationId);
@@ -277,7 +307,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               'apikey': SUPABASE_ANON_KEY,
             },
             body: JSON.stringify({
-              messages: apiMessages,
+              messages: fullMessages,
               weight_unit: weightUnit,
               conversation_id: conversationId ?? null,
               use_web: useWeb,
