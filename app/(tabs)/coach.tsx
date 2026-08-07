@@ -1144,7 +1144,7 @@ export default function CoachScreen() {
     (async () => {
       try {
         // Wait for the hook's conversation init to complete
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 1500));
         if (!isMountedRef.current) return;
 
         console.log('[AICoach] Fetching today\'s nutrition context');
@@ -1194,7 +1194,10 @@ export default function CoachScreen() {
 
         // ── MGCS: Proactive first message ─────────────────────────────────
         // If no conversation history yet, trigger the AI's personalized opening
-        if (messagesRef.current.length === 0 && !firstMessageSentRef.current) {
+        const hasRealHistory = messagesRef.current.some(
+          (m) => m.content && m.content !== '__FIRST_INTERACTION__' && m.content !== 'Something went wrong. Please try again.'
+        );
+        if (!hasRealHistory && !firstMessageSentRef.current) {
           firstMessageSentRef.current = true;
           console.log('[AICoach] No history — triggering proactive first message (MGCS First Interaction Protocol)');
           const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
