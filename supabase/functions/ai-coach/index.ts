@@ -115,23 +115,7 @@ Deno.serve(async (req) => {
     const lastMessageContent = messages[messages.length - 1]?.content;
     const isFirstInteraction = body.is_first_message === true || lastMessageContent === "__FIRST_INTERACTION__";
 
-    if (!isFirstInteraction) {
-      const { data: userRow } = await supabase
-        .from("users")
-        .select("user_type")
-        .eq("id", authUser.id)
-        .maybeSingle();
-
-      if (!userRow || userRow.user_type !== "premium") {
-        console.error("[AICoach] No premium user_type:", authUser.id);
-        return new Response(JSON.stringify({ error: "Subscription Required" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else {
-      console.log("[AICoach] __FIRST_INTERACTION__ sentinel — bypassing subscription check");
-    }
+    // Subscription gating is handled by the frontend (coach.tsx) — backend only verifies auth.
 
     const userId = authUser.id;
     const today = new Date().toISOString().split("T")[0];
