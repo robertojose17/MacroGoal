@@ -309,8 +309,31 @@ export function useAICoach(options?: UseAICoachOptions) {
       console.log('[useAICoach] is_first_message:', isFirstMessage ?? false);
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const jwt = session?.access_token;
+        // Fetch session and ensure we have a valid access token — never fall back to anon key
+        let { data: { session } } = await supabase.auth.getSession();
+        let jwt = session?.access_token;
+
+        if (!jwt) {
+          console.warn('[useAICoach] No access token — attempting session refresh');
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          jwt = refreshData?.session?.access_token;
+        }
+
+        if (!jwt) {
+          console.error('[useAICoach] Session expired after refresh attempt — aborting request');
+          const sessionErrMsg: Message = {
+            id: genMsgId(),
+            role: 'assistant',
+            content: 'Session expired — please restart the app.',
+            timestamp: Date.now(),
+            isStreaming: false,
+          };
+          if (isMountedRef.current) {
+            setMessages((prev) => [...prev, sessionErrMsg]);
+            setState({ status: 'error', error: 'Session expired' });
+          }
+          return;
+        }
 
         // Add placeholder while waiting
         const placeholderMsg: Message = {
@@ -324,13 +347,15 @@ export function useAICoach(options?: UseAICoachOptions) {
           setMessages((prev) => [...prev, placeholderMsg]);
         }
 
+        console.log('[useAICoach] Sending request with valid JWT (length:', jwt.length, ')');
+
         const response = await expoFetch(
           `${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${jwt ?? SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${jwt}`,
               'apikey': SUPABASE_ANON_KEY,
             },
             body: JSON.stringify({
@@ -346,16 +371,23 @@ export function useAICoach(options?: UseAICoachOptions) {
         if (!response.ok) {
           const errText = await response.text();
           console.error('[useAICoach] HTTP error:', response.status, errText.slice(0, 300));
-          const isSubscriptionError = response.status === 403 || errText.includes('Subscription Required');
+          // A 403 with "Subscription Required" is a paywall gate — remove placeholder silently
+          // so coach.tsx can inject its own gate card. Any other error shows a visible message.
+          const isSubscriptionError = response.status === 403 && errText.includes('Subscription Required');
           if (isMountedRef.current) {
             if (isSubscriptionError) {
               // Remove placeholder so coach.tsx can add the single upgrade message
               setMessages((prev) => prev.filter((m) => m.id !== placeholderMsg.id));
             } else {
+              // Auth error or unexpected server error — show visible message in chat
+              const errorContent = response.status === 401
+                ? 'Authentication error — please restart the app and try again.'
+                : 'Something went wrong. Please try again.';
+              console.error('[useAICoach] Non-subscription error (status', response.status, ') — showing error in chat');
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === placeholderMsg.id
-                    ? { ...m, content: 'Something went wrong. Please try again.', isStreaming: false }
+                    ? { ...m, content: errorContent, isStreaming: false }
                     : m
                 )
               );

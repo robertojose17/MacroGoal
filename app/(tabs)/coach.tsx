@@ -1526,13 +1526,7 @@ export default function CoachScreen() {
       // ── Premium gate: allow first 2 messages through, gate from 3rd onwards ─
       // __FIRST_INTERACTION__ is a system sentinel — never subject to the gate
       if (!isPremium && trimmed !== '__FIRST_INTERACTION__') {
-        if (freeMessageCountRef.current < 2) {
-          // First or second message — let through
-          freeMessageCountRef.current += 1;
-          firstUserMessageSentRef.current = true;
-          console.log('[AICoach] Free user message', freeMessageCountRef.current, '— allowing through');
-          // fall through to normal send flow
-        } else {
+        if (freeMessageCountRef.current >= 2) {
           // Third message onwards — show premium gate
           console.log('[AICoach] Free user third+ message — showing premium gate');
           const lastMsg = messages[messages.length - 1];
@@ -1626,6 +1620,10 @@ export default function CoachScreen() {
 
           return;
         }
+        // First or second message — let through, then increment
+        freeMessageCountRef.current += 1;
+        firstUserMessageSentRef.current = true;
+        console.log('[AICoach] Free user message', freeMessageCountRef.current, '— allowing through');
       }
 
       const userMsg: MessageWithId = {
