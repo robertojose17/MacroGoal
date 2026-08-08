@@ -84,25 +84,12 @@ Deno.serve(async (req) => {
     const authUser = userData.user;
     console.log("[AICoach] User authenticated:", authUser.id);
 
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("status")
-      .eq("user_id", authUser.id)
-      .maybeSingle();
-
-    if (!subscription || (subscription.status !== "active" && subscription.status !== "trialing")) {
-      console.error("[AICoach] No active subscription:", authUser.id);
-      return new Response(JSON.stringify({ error: "Subscription Required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     let body: {
       messages?: { role: string; content: string; timestamp?: number }[];
       user_id?: string;
       weight_unit?: string;
       conversation_id?: string;
+      is_first_message?: boolean;
     };
     try {
       body = await req.json();
@@ -122,6 +109,28 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // __FIRST_INTERACTION__ is a system-triggered welcome sentinel — bypass subscription gate entirely
+    const lastMessageContent = messages[messages.length - 1]?.content;
+    const isFirstInteraction = body.is_first_message === true || lastMessageContent === "__FIRST_INTERACTION__";
+
+    if (!isFirstInteraction) {
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("status")
+        .eq("user_id", authUser.id)
+        .maybeSingle();
+
+      if (!subscription || (subscription.status !== "active" && subscription.status !== "trialing")) {
+        console.error("[AICoach] No active subscription:", authUser.id);
+        return new Response(JSON.stringify({ error: "Subscription Required" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      console.log("[AICoach] __FIRST_INTERACTION__ sentinel — bypassing subscription check");
     }
 
     const userId = authUser.id;

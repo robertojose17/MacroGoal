@@ -1329,6 +1329,9 @@ export default function CoachScreen() {
             console.warn('[AICoach] Proactive first message error:', e?.message);
             firstMessageSentRef.current = false;
           }
+          // Reset so the welcome sentinel does NOT consume the free user's first message slot
+          firstUserMessageSentRef.current = false;
+          console.log('[AICoach] firstUserMessageSentRef reset after welcome sentinel');
           return;
         }
 
@@ -1488,7 +1491,8 @@ export default function CoachScreen() {
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
 
       // ── Premium gate: allow first message through, gate from second onwards ─
-      if (!isPremium) {
+      // __FIRST_INTERACTION__ is a system sentinel — never subject to the gate
+      if (!isPremium && trimmed !== '__FIRST_INTERACTION__') {
         if (!firstUserMessageSentRef.current) {
           // First message — let it through to the backend
           console.log('[AICoach] Free user first message — allowing through to backend');
