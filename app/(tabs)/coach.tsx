@@ -1395,6 +1395,26 @@ export default function CoachScreen() {
         const gateKey = 'coach_gate_active_' + user.id;
         const gateStored = await AsyncStorage.getItem(gateKey);
         if (gateStored === 'true') {
+          // Double-check: if user is now premium, clear the stale gate key
+          if (isPremium) {
+            await AsyncStorage.removeItem(gateKey);
+            console.log('[AICoach] Stale gate key cleared — user is premium');
+            return;
+          }
+          // Also check Supabase subscriptions as fallback (handles RevenueCat timing lag)
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (currentUser) {
+            const { data: sub } = await supabase
+              .from('subscriptions')
+              .select('status')
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
+            if (sub && (sub.status === 'active' || sub.status === 'trialing')) {
+              await AsyncStorage.removeItem(gateKey);
+              console.log('[AICoach] Stale gate key cleared — Supabase confirms premium');
+              return;
+            }
+          }
           firstUserMessageSentRef.current = true;
           setIsGated(true);
           console.log('[AICoach] Gate active from AsyncStorage — skipping Supabase check');
@@ -1489,6 +1509,11 @@ export default function CoachScreen() {
       }
 
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
+
+      // ── If user is premium, clear any stale gate state immediately ───────────
+      if (isPremium) {
+        setIsGated(false);
+      }
 
       // ── Premium gate: allow first message through, gate from second onwards ─
       // __FIRST_INTERACTION__ is a system sentinel — never subject to the gate
