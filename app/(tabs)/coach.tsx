@@ -912,7 +912,8 @@ export default function CoachScreen() {
       if (msgs && msgs.length > 0) {
         console.log('[AICoach] Conversation messages loaded, count:', msgs.length);
         const messageCount = msgs.length;
-        console.log('[AICoach] loadConversation — total message count:', messageCount);
+        const userMessageCount = msgs.filter((m: any) => m.role === 'user').length;
+        console.log('[AICoach] loadConversation — total message count:', messageCount, 'user message count:', userMessageCount);
 
         // Check gate via AsyncStorage first (source of truth, avoids isPremium race condition)
         let gateActive = false;
@@ -924,11 +925,11 @@ export default function CoachScreen() {
             if (gateStored === 'true') {
               gateActive = true;
               console.log('[AICoach] loadConversation — gate active from AsyncStorage');
-            } else if (messageCount >= 6) {
+            } else if (userMessageCount >= 2) {
               // Gate threshold reached — persist and activate regardless of isPremium load state
               gateActive = true;
               await AsyncStorage.setItem(gateKey, 'true');
-              console.log('[AICoach] loadConversation — gate threshold reached (', messageCount, 'messages), persisted to AsyncStorage');
+              console.log('[AICoach] loadConversation — gate threshold reached (', userMessageCount, 'user messages), persisted to AsyncStorage');
             }
           }
         } catch (e: any) {
@@ -1010,7 +1011,8 @@ export default function CoachScreen() {
     }
 
     const messageCount = messages.length;
-    console.log('[AICoach] Gate restoration check — message count:', messageCount);
+    const userMessageCount = messages.filter((m) => m.role === 'user').length;
+    console.log('[AICoach] Gate restoration check — message count:', messageCount, 'user message count:', userMessageCount);
 
     (async () => {
       try {
@@ -1024,10 +1026,10 @@ export default function CoachScreen() {
         if (gateStored === 'true') {
           gateActive = true;
           console.log('[AICoach] Gate restoration — gate active from AsyncStorage');
-        } else if (messageCount >= 6) {
+        } else if (userMessageCount >= 2) {
           gateActive = true;
           await AsyncStorage.setItem(gateKey, 'true');
-          console.log('[AICoach] Gate restoration — threshold reached (', messageCount, 'messages), persisted');
+          console.log('[AICoach] Gate restoration — threshold reached (', userMessageCount, 'user messages), persisted');
         }
 
         if (gateActive && isMountedRef.current) {
