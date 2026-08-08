@@ -1619,23 +1619,16 @@ export default function CoachScreen() {
         if (!isMountedRef.current) return;
         console.error('[AICoach] Error from sendMessage:', e?.message);
 
-        if (e?.isSubscriptionError) {
-          Alert.alert('Subscription Required', 'The coaching feature requires an active subscription.');
-        } else {
+        if (!e?.isSubscriptionError) {
           Alert.alert('Error', 'Something went wrong. Please try again.');
+          const errMsg: MessageWithId = {
+            id: genId(),
+            role: 'assistant',
+            content: 'Something went wrong. Please try again.',
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, errMsg]);
         }
-        // Note: no second alert for subscription errors — the one above is sufficient
-
-        const errMsg: MessageWithId = {
-          id: genId(),
-          role: 'assistant',
-          content: e?.isSubscriptionError
-            ? `No more guessing. No more plateaus.\n\nYour results are driven by both nutrition and training. Nutrition can account for around 70–80% of your progress, while training makes up the remaining 20–30%. Our Coaching Feature helps you master the nutrition side so you can get 100% from every workout.\n\nWith the Coaching Feature, you can:\n\n• 🗓 Get personalized meal plans\n• 📸 Track and identify meals from photos\n• 📊 Analyze your last 14 days of nutrition\n• 🎯 Automatically adjust your goals based on your progress\n• 🚀 Identify what may be slowing down your weight loss\n• 🍰 Craving dessert? Discover products that fit your goals and find out where to get them\n• 🛒 Get smarter restaurant, grocery store, and product recommendations\n• 💬 Receive real-time coaching and direct, actionable advice\n\nUpgrade to Premium and start making progress again.`
-            : 'Something went wrong. Please try again.',
-          timestamp: Date.now(),
-          showUpgradeButton: e?.isSubscriptionError ? true : undefined,
-        };
-        setMessages((prev) => [...prev, errMsg]);
       }
     },
     [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, isGated, setIsGated]
