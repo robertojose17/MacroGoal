@@ -336,7 +336,7 @@ export function useAICoach(options?: UseAICoachOptions) {
             body: JSON.stringify({
               messages: fullMessages,
               weight_unit: weightUnit,
-              conversation_id: conversationId ?? null,
+              conversation_id: conversationIdRef.current ?? null,
               use_web: useWeb,
               ...(isFirstMessage ? { is_first_message: true } : {}),
             }),
