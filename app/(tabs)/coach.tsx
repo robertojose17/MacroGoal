@@ -827,8 +827,9 @@ export default function CoachScreen() {
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
 
-  // ── Premium gate: track whether first real user message has been sent ─────
+  // ── Premium gate: track how many free user messages have been sent ──────
   const firstUserMessageSentRef = useRef(false);
+  const freeMessageCountRef = useRef<number>(0);
   const [isGated, setIsGated] = useState(false);
 
   const { isPremium, loading: premiumLoading } = usePremium();
@@ -923,7 +924,7 @@ export default function CoachScreen() {
             if (gateStored === 'true') {
               gateActive = true;
               console.log('[AICoach] loadConversation — gate active from AsyncStorage');
-            } else if (messageCount >= 4) {
+            } else if (messageCount >= 6) {
               // Gate threshold reached — persist and activate regardless of isPremium load state
               gateActive = true;
               await AsyncStorage.setItem(gateKey, 'true');
@@ -944,6 +945,7 @@ export default function CoachScreen() {
         // If gate is active, mark the last assistant message with gate card flags
         if (gateActive) {
           firstUserMessageSentRef.current = true;
+          freeMessageCountRef.current = 2;
           setIsGated(true);
           // Find last assistant message and attach gate card flags
           let lastAssistantIdx = -1;
@@ -960,6 +962,8 @@ export default function CoachScreen() {
           }
         } else if (mapped.some((m: MessageWithId) => m.role === 'user')) {
           firstUserMessageSentRef.current = true;
+          const userMsgCount = mapped.filter((m: MessageWithId) => m.role === 'user').length;
+          freeMessageCountRef.current = Math.min(userMsgCount, 2);
         }
 
         setMessages(mapped);
@@ -1020,7 +1024,7 @@ export default function CoachScreen() {
         if (gateStored === 'true') {
           gateActive = true;
           console.log('[AICoach] Gate restoration — gate active from AsyncStorage');
-        } else if (messageCount >= 4) {
+        } else if (messageCount >= 6) {
           gateActive = true;
           await AsyncStorage.setItem(gateKey, 'true');
           console.log('[AICoach] Gate restoration — threshold reached (', messageCount, 'messages), persisted');
@@ -1028,6 +1032,7 @@ export default function CoachScreen() {
 
         if (gateActive && isMountedRef.current) {
           firstUserMessageSentRef.current = true;
+          freeMessageCountRef.current = 2;
           setIsGated(true);
           // Apply gate card flags to last assistant message
           setMessages((prev) => {
@@ -1045,6 +1050,8 @@ export default function CoachScreen() {
           });
         } else if (messages.some((m) => m.role === 'user')) {
           firstUserMessageSentRef.current = true;
+          const userMsgCount = messages.filter((m) => m.role === 'user').length;
+          freeMessageCountRef.current = Math.min(userMsgCount, 2);
         }
 
         gateRestoredRef.current = true;
@@ -1329,9 +1336,10 @@ export default function CoachScreen() {
             console.warn('[AICoach] Proactive first message error:', e?.message);
             firstMessageSentRef.current = false;
           }
-          // Reset so the welcome sentinel does NOT consume the free user's first message slot
+          // Reset so the welcome sentinel does NOT consume the free user's message slots
           firstUserMessageSentRef.current = false;
-          console.log('[AICoach] firstUserMessageSentRef reset after welcome sentinel');
+          freeMessageCountRef.current = 0;
+          console.log('[AICoach] firstUserMessageSentRef and freeMessageCountRef reset after welcome sentinel');
           return;
         }
 
@@ -1401,17 +1409,17 @@ export default function CoachScreen() {
             console.log('[AICoach] Stale gate key cleared — user is premium');
             return;
           }
-          // Also check Supabase subscriptions as fallback (handles RevenueCat timing lag)
+          // Also check users.user_type as fallback (source of truth for premium status)
           const { data: { user: currentUser } } = await supabase.auth.getUser();
           if (currentUser) {
-            const { data: sub } = await supabase
-              .from('subscriptions')
-              .select('status')
-              .eq('user_id', currentUser.id)
+            const { data: userRow } = await supabase
+              .from('users')
+              .select('user_type')
+              .eq('id', currentUser.id)
               .maybeSingle();
-            if (sub && (sub.status === 'active' || sub.status === 'trialing')) {
+            if (userRow && userRow.user_type === 'premium') {
               await AsyncStorage.removeItem(gateKey);
-              console.log('[AICoach] Stale gate key cleared — Supabase confirms premium');
+              console.log('[AICoach] Stale gate key cleared — users.user_type confirms premium');
               return;
             }
           }
@@ -1434,13 +1442,13 @@ export default function CoachScreen() {
             .from('coach_messages')
             .select('id', { count: 'exact', head: true })
             .eq('conversation_id', conv.id)
-            .eq('role', 'user')
-            .limit(1);
-          if ((count ?? 0) > 0) {
+            .eq('role', 'user');
+          if ((count ?? 0) >= 2) {
             firstUserMessageSentRef.current = true;
+            freeMessageCountRef.current = 2;
             setIsGated(true);
             await AsyncStorage.setItem(gateKey, 'true');
-            console.log('[AICoach] Free user already used first message — gate active');
+            console.log('[AICoach] Free user already used 2 free messages — gate active');
             return;
           }
         }
@@ -1515,17 +1523,18 @@ export default function CoachScreen() {
         setIsGated(false);
       }
 
-      // ── Premium gate: allow first message through, gate from second onwards ─
+      // ── Premium gate: allow first 2 messages through, gate from 3rd onwards ─
       // __FIRST_INTERACTION__ is a system sentinel — never subject to the gate
       if (!isPremium && trimmed !== '__FIRST_INTERACTION__') {
-        if (!firstUserMessageSentRef.current) {
-          // First message — let it through to the backend
-          console.log('[AICoach] Free user first message — allowing through to backend');
+        if (freeMessageCountRef.current < 2) {
+          // First or second message — let through
+          freeMessageCountRef.current += 1;
           firstUserMessageSentRef.current = true;
+          console.log('[AICoach] Free user message', freeMessageCountRef.current, '— allowing through');
           // fall through to normal send flow
         } else {
-          // Second message onwards — show the elite gate with typing indicator
-          console.log('[AICoach] Free user second+ message — showing premium gate');
+          // Third message onwards — show premium gate
+          console.log('[AICoach] Free user third+ message — showing premium gate');
           const lastMsg = messages[messages.length - 1];
           const alreadyGated = lastMsg?.isPremiumGate === true;
           if (alreadyGated) {
