@@ -49,12 +49,10 @@ const QUICK_ACTION_CARDS = [
 ];
 
 const CRAVING_CHIPS = [
-  { label: "I don't know where to start", iosIcon: 'questionmark.circle.fill', androidIcon: 'help', message: "I don't know where to start" },
-  { label: "I eat out a lot and can't stay on track", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "I eat out a lot and can't stay on track" },
-  { label: "I have no energy", iosIcon: 'battery.25', androidIcon: 'battery_alert', message: "I have no energy lately" },
-  { label: "I've tried before but nothing sticks", iosIcon: 'arrow.counterclockwise', androidIcon: 'replay', message: "I've tried before but nothing sticks" },
-  { label: "I can't control my cravings", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I can't control my cravings" },
-  { label: "I want a meal plan", iosIcon: 'menucard.fill', androidIcon: 'menu_book', message: "Can you build me a meal plan?" },
+  { label: "I want something sweet", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I want something sweet, what should I eat?" },
+  { label: "What fast food can I eat?", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "What fast food can I eat that fits my macros?" },
+  { label: "Give me a quick snack idea", iosIcon: 'lightbulb.fill', androidIcon: 'lightbulb', message: "Give me a quick snack idea that fits my goals" },
+  { label: "I'm eating out tonight", iosIcon: 'building.2.fill', androidIcon: 'storefront', message: "I'm eating out tonight, what should I order?" },
 ];
 
 // ── New user quick actions (shown after first proactive message for new users) ──
