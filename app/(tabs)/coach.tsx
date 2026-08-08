@@ -54,14 +54,14 @@ const CRAVING_CHIPS = [
   { label: "I have no energy", iosIcon: 'battery.25', androidIcon: 'battery_alert', message: "I have no energy lately" },
   { label: "I've tried before but nothing sticks", iosIcon: 'arrow.counterclockwise', androidIcon: 'replay', message: "I've tried before but nothing sticks" },
   { label: "I can't control my cravings", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I can't control my cravings" },
-  { label: "I just have a quick question", iosIcon: 'bubble.left.fill', androidIcon: 'chat', message: "I just have a quick question" },
+  { label: "I want a meal plan", iosIcon: 'menucard.fill', androidIcon: 'menu_book', message: "Can you build me a meal plan?" },
 ];
 
 // ── New user quick actions (shown after first proactive message for new users) ──
 const NEW_USER_QUICK_ACTIONS = [
-  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'Log my first meal', subtitle: 'Start tracking', message: 'Help me log my first meal' },
-  { iosIcon: 'target', androidIcon: 'track_changes', title: 'Set my goals', subtitle: 'Calories & macros', message: 'Help me set up my nutrition goals' },
-  { iosIcon: 'person.fill', androidIcon: 'person', title: 'Tell me about yourself', subtitle: 'How you can help', message: 'Tell me about yourself and how you can help me' },
+  { iosIcon: 'house.fill', androidIcon: 'home', title: 'I cook at home', subtitle: 'Mostly home-cooked meals', message: 'I mostly cook at home' },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'I eat out a lot', subtitle: 'Restaurants & takeout', message: 'I eat out a lot, mostly restaurants and takeout' },
+  { iosIcon: 'arrow.left.arrow.right', androidIcon: 'sync_alt', title: 'Mix of both', subtitle: 'Home & eating out', message: 'I do a mix of cooking at home and eating out' },
 ];
 
 // ── Store badge detection ────────────────────────────────────────────────────
@@ -920,16 +920,22 @@ export default function CoachScreen() {
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            const gateKey = 'coach_gate_active_' + user.id;
-            const gateStored = await AsyncStorage.getItem(gateKey);
-            if (gateStored === 'true') {
-              gateActive = true;
-              console.log('[AICoach] loadConversation — gate active from AsyncStorage');
-            } else if (userMessageCount >= 2) {
-              // Gate threshold reached — persist and activate regardless of isPremium load state
-              gateActive = true;
-              await AsyncStorage.setItem(gateKey, 'true');
-              console.log('[AICoach] loadConversation — gate threshold reached (', userMessageCount, 'user messages), persisted to AsyncStorage');
+            if (isPremium) {
+              // Premium users are never gated — clear any stale key and skip
+              await AsyncStorage.removeItem('coach_gate_active_' + user.id);
+              console.log('[AICoach] loadConversation — user is premium, skipping gate check');
+            } else {
+              const gateKey = 'coach_gate_active_' + user.id;
+              const gateStored = await AsyncStorage.getItem(gateKey);
+              if (gateStored === 'true') {
+                gateActive = true;
+                console.log('[AICoach] loadConversation — gate active from AsyncStorage');
+              } else if (userMessageCount >= 2) {
+                // Gate threshold reached — persist and activate regardless of isPremium load state
+                gateActive = true;
+                await AsyncStorage.setItem(gateKey, 'true');
+                console.log('[AICoach] loadConversation — gate threshold reached (', userMessageCount, 'user messages), persisted to AsyncStorage');
+              }
             }
           }
         } catch (e: any) {
@@ -976,7 +982,7 @@ export default function CoachScreen() {
     } catch (e: any) {
       console.warn('[AICoach] Error loading conversation:', e?.message);
     }
-  }, [setMessages, setConversationId, setIsGated]);
+  }, [setMessages, setConversationId, setIsGated, isPremium]);
 
   const messagesRef = useRef(messages);
   useEffect(() => {
@@ -1018,6 +1024,14 @@ export default function CoachScreen() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+
+        // Premium users are never gated
+        if (isPremium) {
+          await AsyncStorage.removeItem('coach_gate_active_' + user.id);
+          console.log('[AICoach] Gate restoration — user is premium, skipping gate');
+          gateRestoredRef.current = true;
+          return;
+        }
 
         const gateKey = 'coach_gate_active_' + user.id;
         const gateStored = await AsyncStorage.getItem(gateKey);
@@ -1393,7 +1407,10 @@ export default function CoachScreen() {
   // ── Persistent gate check: runs once premium status is resolved ───────────
   useEffect(() => {
     if (premiumLoading) return; // wait until premium status is known
-    if (isPremium) return; // premium users are never gated
+    if (isPremium) {
+      setIsGated(false); // explicitly clear any stale gate state
+      return;
+    }
 
     // Free user — check AsyncStorage first, then Supabase
     (async () => {
@@ -2039,8 +2056,9 @@ export default function CoachScreen() {
   // Filter out the hidden __FIRST_INTERACTION__ trigger from display
   const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
-  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !isGated && isPremium;
-  const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !isGated;
+  const effectivelyGated = isGated && !isPremium;
+  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !effectivelyGated && isPremium;
+  const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !effectivelyGated;
   // After first message arrives, show quick actions (new user gets simplified set)
   const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
 
@@ -2445,13 +2463,13 @@ export default function CoachScreen() {
             }}
             multiline
             maxLength={1000}
-            editable={!loading && !premiumLoading && !isGated}
+            editable={!loading && !premiumLoading && !effectivelyGated}
             returnKeyType="default"
           />
           <TouchableOpacity
             style={[styles.sendButton, { backgroundColor: canSend ? colors.primary : colors.border }]}
             onPress={handleSendPress}
-            disabled={!canSend || isGated}
+            disabled={!canSend || effectivelyGated}
             activeOpacity={0.8}
           >
             <IconSymbol
