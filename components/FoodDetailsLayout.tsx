@@ -1552,6 +1552,31 @@ export default function FoodDetailsLayout({
       console.log('[FoodDetails] handleFixNutrition: response status=', data.status, 'message=', data.message);
 
       if (data.status === 'success') {
+        const v = data.values as { calories: number; protein: number; carbs: number; fat: number; fiber: number };
+        // Update per-100g macros so calculateMacros() re-renders with corrected values immediately
+        setPer100Macros({
+          calories: v.calories,
+          protein: v.protein,
+          carbs: v.carbs,
+          fats: v.fat,   // edge fn uses "fat", local state uses "fats"
+          fiber: v.fiber,
+        });
+        // Also patch product.nutriments so micronutrient rows stay consistent
+        setProduct((prev) =>
+          prev
+            ? {
+                ...prev,
+                nutriments: {
+                  ...(prev.nutriments as Record<string, number | undefined>),
+                  'energy-kcal_100g': v.calories,
+                  'proteins_100g': v.protein,
+                  'carbohydrates_100g': v.carbs,
+                  'fat_100g': v.fat,
+                  'fiber_100g': v.fiber,
+                },
+              }
+            : prev
+        );
         setFixItState('success');
       } else if (data.status === 'retry') {
         setFixItState('retry');
