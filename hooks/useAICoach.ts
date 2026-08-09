@@ -444,6 +444,22 @@ export function useAICoach(options?: UseAICoachOptions) {
           reader.releaseLock();
         }
 
+        // Flush any remaining data in buffer after stream ends
+        if (buffer.trim()) {
+          const trimmed = buffer.trim();
+          if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
+            try {
+              const parsed = JSON.parse(trimmed.slice(6));
+              if (parsed.token) {
+                fullText += parsed.token;
+              }
+              if (parsed.done) {
+                actionProposal = parsed.action_proposal || null;
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
+
         console.log('[useAICoach] Stream complete, length:', fullText.length);
 
         // Finalize message
