@@ -136,7 +136,7 @@ importers:
         version: 15.0.11(expo@54.0.36)(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
       lucide-react-native:
         specifier: ^1.7.0
-        version: 1.30.0(react-native-svg@15.15.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+        version: 1.31.0(react-native-svg@15.15.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       onesignal-expo-plugin:
         specifier: ^2.6.0
         version: 2.7.1(expo@54.0.36)(react-native-onesignal@5.5.6(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)))(typescript@5.9.3)
@@ -4436,8 +4436,8 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lucide-react-native@1.30.0:
-    resolution: {integrity: sha512-rhi4+L7guZuQxCnU01QWQAE6SNBJWH9CDtx4/AZuHHaJjFbb1Pcm2MJrzcheWpDBDxRsnpomHUeEsS31oqMe8A==}
+  lucide-react-native@1.31.0:
+    resolution: {integrity: sha512-PwqFe7jqEHaCQDQs5jp8+IeEMrXb/Uq0lBQH3na6iE27IVxW3YUsIArARzXbOvvrfDuYD4d/I+YqRTT7w6djJw==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-native: '*'
@@ -11499,7 +11499,7 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-react-native@1.30.0(react-native-svg@15.15.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+  lucide-react-native@1.31.0(react-native-svg@15.15.5(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
       react: 19.1.0
       react-native: 0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
