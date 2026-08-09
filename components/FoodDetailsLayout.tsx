@@ -16,6 +16,7 @@ import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
 import { logFoodUsage, type FoodLogSource } from '@/utils/logFoodUsage';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -735,6 +736,9 @@ export default function FoodDetailsLayout({
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
   const [showMicroDetails, setShowMicroDetails] = useState(false);
+
+  const [fixItState, setFixItState] = useState<'idle' | 'loading' | 'retry' | 'success' | 'failed'>('idle');
+  const [fixItMessage, setFixItMessage] = useState<string>('');
 
   const backgroundColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -1507,6 +1511,62 @@ export default function FoodDetailsLayout({
     return inserted.id;
   };
 
+  const handleFixNutrition = async () => {
+    console.log('[FoodDetails] "Not accurate? Fix it" tapped, fixItState=', fixItState);
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        base64: true,
+      });
+      if (result.canceled || !result.assets?.[0]?.base64) {
+        console.log('[FoodDetails] handleFixNutrition: camera cancelled or no base64');
+        return;
+      }
+
+      setFixItState('loading');
+      const base64 = result.assets[0].base64;
+      console.log('[FoodDetails] handleFixNutrition: photo captured, sending to fix-nutrition-photo, barcode=', product?.code);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/fix-nutrition-photo`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ barcode: product?.code, photo_base64: base64 }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn('[FoodDetails] handleFixNutrition: edge function returned', response.status, errText.slice(0, 200));
+        setFixItState('failed');
+        setFixItMessage('Could not read the label. Please try again.');
+        return;
+      }
+
+      const data = await response.json();
+      console.log('[FoodDetails] handleFixNutrition: response status=', data.status, 'message=', data.message);
+
+      if (data.status === 'success') {
+        setFixItState('success');
+      } else if (data.status === 'retry') {
+        setFixItState('retry');
+        setFixItMessage(data.message || 'Please retake the photo more clearly.');
+      } else {
+        setFixItState('failed');
+        setFixItMessage(data.message || 'Could not read the label.');
+      }
+    } catch (err) {
+      console.warn('[FoodDetails] handleFixNutrition: error:', err);
+      setFixItState('failed');
+      setFixItMessage('Something went wrong. Please try again.');
+    }
+  };
+
   const handleSave = async () => {
     console.log('[FoodDetails] Save button pressed');
     if (!product) {
@@ -2164,6 +2224,55 @@ export default function FoodDetailsLayout({
             </View>
           );
         })()}
+
+        {source === 'barcode' && fixItState !== 'success' && (
+          <View style={{ marginTop: 8, marginBottom: 16, alignItems: 'center' }}>
+            {fixItState === 'idle' && (
+              <TouchableOpacity onPress={() => {
+                console.log('[FoodDetails] "Not accurate? Fix it" link pressed');
+                handleFixNutrition();
+              }}>
+                <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>
+                  Not accurate? Fix it →
+                </Text>
+              </TouchableOpacity>
+            )}
+            {fixItState === 'loading' && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>Analyzing nutrition label...</Text>
+              </View>
+            )}
+            {fixItState === 'retry' && (
+              <View style={{ alignItems: 'center', gap: 8 }}>
+                <Text style={{ color: '#F59E0B', fontSize: 13, textAlign: 'center' }}>{fixItMessage}</Text>
+                <TouchableOpacity onPress={() => {
+                  console.log('[FoodDetails] "Retake Photo" button pressed');
+                  handleFixNutrition();
+                }} style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F59E0B22', borderRadius: 8 }}>
+                  <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600' }}>Retake Photo</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {fixItState === 'failed' && (
+              <View style={{ alignItems: 'center', gap: 8 }}>
+                <Text style={{ color: '#EF4444', fontSize: 13, textAlign: 'center' }}>{fixItMessage}</Text>
+                <TouchableOpacity onPress={() => {
+                  console.log('[FoodDetails] "Try again" pressed, resetting fixItState to idle');
+                  setFixItState('idle');
+                }}>
+                  <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 12 }}>Try again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {source === 'barcode' && fixItState === 'success' && (
+          <View style={{ marginTop: 8, marginBottom: 16, alignItems: 'center' }}>
+            <Text style={{ color: '#22C55E', fontSize: 13, fontWeight: '600' }}>✓ Nutrition updated!</Text>
+          </View>
+        )}
 
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: colors.primary }]}
