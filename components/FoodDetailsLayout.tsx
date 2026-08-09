@@ -1513,6 +1513,15 @@ export default function FoodDetailsLayout({
 
   const handleFixNutrition = async () => {
     console.log('[FoodDetails] "Not accurate? Fix it" tapped, fixItState=', fixItState);
+    Alert.alert(
+      'Take a photo of the Nutrition Facts label',
+      'Point your camera at the full nutrition facts table. Make sure it\'s well-lit and all values are visible.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[FoodDetails] handleFixNutrition: alert cancelled') },
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            console.log('[FoodDetails] handleFixNutrition: "Take Photo" confirmed, launching camera');
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -1590,6 +1599,10 @@ export default function FoodDetailsLayout({
       setFixItState('failed');
       setFixItMessage('Something went wrong. Please try again.');
     }
+          },
+        },
+      ]
+    );
   };
 
   const handleSave = async () => {
