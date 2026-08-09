@@ -71,6 +71,8 @@ export default function BarcodeScannerScreen() {
       const edgeFnUrl = `${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`;
       console.log('[BarcodeScanner] Edge function URL:', edgeFnUrl);
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const response = await fetch(edgeFnUrl, {
         method: 'POST',
         headers: {
@@ -78,7 +80,9 @@ export default function BarcodeScannerScreen() {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ barcode }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       console.log('[BarcodeScanner] HTTP Status:', response.status);
 
