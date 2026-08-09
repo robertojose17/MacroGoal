@@ -1537,7 +1537,7 @@ export default function FoodDetailsLayout({
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ barcode: product?.code, photo_base64: base64 }),
+        body: JSON.stringify({ barcode: product?.code, imageBase64: base64 }),
       });
 
       if (!response.ok) {
