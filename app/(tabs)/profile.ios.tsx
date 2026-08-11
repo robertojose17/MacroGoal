@@ -1338,7 +1338,7 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <IconSymbol ios_icon_name="person.2" android_material_icon_name="group" size={18} color={isDark ? '#aaa' : '#666'} />
                 <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Invite Friends & Earn XP
+                  Earn Money · Refer Friends 💸
                 </Text>
               </View>
             </View>
