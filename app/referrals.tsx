@@ -83,17 +83,16 @@ export default function ReferralsScreen() {
           return;
         }
         const { data, error } = await supabase
-          .from('creator_terms_acceptance')
-          .select('id')
+          .from('affiliate_applications')
+          .select('terms_accepted')
           .eq('user_id', user.id)
           .maybeSingle();
         if (error) {
           console.error('[Referrals] Error checking terms acceptance:', error);
-          // On error, default to showing terms to be safe
           setTermsAccepted(false);
           return;
         }
-        const accepted = data !== null;
+        const accepted = data?.terms_accepted === true;
         console.log('[Referrals] Terms accepted:', accepted);
         setTermsAccepted(accepted);
       } catch (e) {
@@ -115,12 +114,18 @@ export default function ReferralsScreen() {
         return;
       }
       const { error } = await supabase
-        .from('creator_terms_acceptance')
-        .insert({
-          user_id: user.id,
-          terms_version: 'v1.0',
-          accepted_at: new Date().toISOString(),
-        });
+        .from('affiliate_applications')
+        .upsert(
+          {
+            user_id: user.id,
+            terms_accepted: true,
+            terms_accepted_at: new Date().toISOString(),
+            terms_version: 'v1.0',
+            full_name: '',
+            email: '',
+          },
+          { onConflict: 'user_id' }
+        );
       if (error) {
         console.error('[Referrals] Error saving terms acceptance:', error);
         Alert.alert('Error', 'Could not save your acceptance. Please try again.');
