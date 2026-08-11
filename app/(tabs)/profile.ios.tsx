@@ -1325,7 +1325,7 @@ export default function ProfileScreen() {
           {/* Divider between sections */}
           <View style={[styles.sectionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
 
-          {/* ── Section D: Invite Friends & Earn XP (non-accordion row) ──── */}
+          {/* ── Section D: Earn Money · Refer Friends 💸 (non-accordion row) ──── */}
           <TouchableOpacity
             style={styles.accordionHeader}
             onPress={() => {
