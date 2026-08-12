@@ -56,7 +56,7 @@ export default function ReferralsScreen() {
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState<string | null>(null);
   const [totalReferrals, setTotalReferrals] = useState(0);
-  const [applicationStatus, setApplicationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+
   const [copied, setCopied] = useState(false);
 
   const [earningsStats, setEarningsStats] = useState<ReferralEarningsStats | null>(null);
@@ -151,7 +151,7 @@ export default function ReferralsScreen() {
       ]);
       setCode(stats.code);
       setTotalReferrals(stats.totalReferrals);
-      setApplicationStatus(stats.applicationStatus);
+
       setEarningsStats(earnings);
       if (earnings?.paypal_email) {
         setPaypalInput(earnings.paypal_email);
@@ -463,9 +463,9 @@ export default function ReferralsScreen() {
             <Ionicons name="cash-outline" size={22} color={TEAL} />
             <Text style={[styles.heroTitle, { color: textColor }]}>Refer & Earn</Text>
           </View>
-          <Text style={[styles.heroSubtitle, { color: GOLD }]}>Earn 20% Revenue Share 💰</Text>
+          <Text style={[styles.heroSubtitle, { color: GOLD }]}>Earn 50% Net Revenue Share 💰</Text>
           <Text style={[styles.heroBody, { color: mutedColor }]}>
-            Share Macro Goal with friends, followers, or your audience. When someone you refer becomes a Premium member, you earn 20%.
+            Share Macro Goal with friends, followers, or your audience. When someone you refer becomes a Premium member, you earn 50% of net proceeds (after app store fees).
           </Text>
         </View>
 
@@ -659,7 +659,7 @@ export default function ReferralsScreen() {
             'They download Macro Goal',
             'They enter your code when signing up',
             'They upgrade to Premium',
-            'You earn 20% 💰',
+            'You earn 50% of net proceeds 💰',
           ].map((step, i) => (
             <View key={i} style={styles.howItWorksRow}>
               <View style={[styles.stepBadge, { backgroundColor: TEAL + '22' }]}>
@@ -670,44 +670,7 @@ export default function ReferralsScreen() {
           ))}
         </View>
 
-        {/* Application Status Card */}
-        {applicationStatus !== 'none' && (
-          <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            {applicationStatus === 'pending' && (
-              <View style={styles.statusRow}>
-                <Text style={styles.statusIcon}>{'⏳'}</Text>
-                <View style={styles.statusTextBlock}>
-                  <Text style={[styles.statusTitle, { color: textColor }]}>Application Under Review</Text>
-                  <Text style={[styles.statusBody, { color: mutedColor }]}>
-                    We'll get back to you within 2-3 business days.
-                  </Text>
-                </View>
-              </View>
-            )}
-            {applicationStatus === 'approved' && (
-              <View style={styles.statusRow}>
-                <Text style={styles.statusIcon}>{'✅'}</Text>
-                <View style={styles.statusTextBlock}>
-                  <Text style={[styles.statusTitle, { color: TEAL }]}>You're an Affiliate!</Text>
-                  <Text style={[styles.statusBody, { color: mutedColor }]}>
-                    Check your email for next steps.
-                  </Text>
-                </View>
-              </View>
-            )}
-            {applicationStatus === 'rejected' && (
-              <View style={styles.statusRow}>
-                <Text style={styles.statusIcon}>{'📋'}</Text>
-                <View style={styles.statusTextBlock}>
-                  <Text style={[styles.statusTitle, { color: textColor }]}>Application Reviewed</Text>
-                  <Text style={[styles.statusBody, { color: mutedColor }]}>
-                    We reviewed your application and will reach out if a spot opens up.
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
+
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
