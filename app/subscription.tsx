@@ -974,6 +974,19 @@ export default function SubscriptionScreen() {
               <Text style={styles.darkRestoreText}>Restore Purchases</Text>
             </TouchableOpacity>
 
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={styles.restoreButton}
+                onPress={async () => {
+                  console.log('[Subscription] Redeem Code pressed');
+                  const { Purchases } = loadPurchases();
+                  if (Purchases) await Purchases.presentCodeRedemptionSheet();
+                }}
+              >
+                <Text style={styles.darkRestoreText}>Redeem Code</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.disclaimerContainer}>
               <Text style={styles.darkDisclaimerText}>
                 Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
