@@ -127,41 +127,44 @@ export default function RootLayout() {
       }
     };
 
-    // getSession() races a 3s timeout so a hanging Supabase call never blocks
-    // navigation. isReady is set regardless of the outcome.
-    const sessionPromise = supabase.auth
+    // hasResolved prevents double-calls when both INITIAL_SESSION and
+    // getSession() resolve before the 800ms timeout fires.
+    let hasResolved = false;
+
+    const resolve = (resolvedSession: Session | null, source: string) => {
+      if (!mounted || hasResolved) return;
+      hasResolved = true;
+      console.log(
+        `[App] Auth init complete (via ${source}). User:`,
+        resolvedSession?.user?.id ?? "none"
+      );
+      setSession(resolvedSession);
+      setIsReady(true);
+      if (!appOpenedTrackedRef.current) {
+        appOpenedTrackedRef.current = true;
+        trackOnboardingEvent('app_opened');
+      }
+      runPostInitSideEffects(resolvedSession);
+    };
+
+    // Hard timeout — 800ms max wait regardless of what else resolves.
+    const timeoutId = setTimeout(() => {
+      console.warn("[App] Auth init 800ms timeout — proceeding without session");
+      resolve(null, "timeout");
+    }, 800);
+
+    // Parallel fallback: getSession() — resolves before timeout on a warm network.
+    supabase.auth
       .getSession()
       .then(({ data, error }) => {
         if (error)
           console.warn("[App] getSession error (non-fatal):", error.message);
-        return data?.session ?? null;
-      });
+        resolve(data?.session ?? null, "getSession");
+      })
+      .catch(() => resolve(null, "getSession-catch"));
 
-    const timeoutPromise = new Promise<null>((resolve) =>
-      setTimeout(() => {
-        console.warn("[App] getSession 3s timeout — proceeding without session");
-        resolve(null);
-      }, 3000)
-    );
-
-    Promise.race([sessionPromise, timeoutPromise])
-      .catch(() => null)
-      .then((resolvedSession) => {
-        if (!mounted) return;
-        console.log(
-          "[App] Auth init complete. User:",
-          resolvedSession?.user?.id ?? "none"
-        );
-        setSession(resolvedSession);
-        setIsReady(true);
-        if (!appOpenedTrackedRef.current) {
-          appOpenedTrackedRef.current = true;
-          trackOnboardingEvent('app_opened');
-        }
-        runPostInitSideEffects(resolvedSession);
-      });
-
-    // Ongoing auth state changes
+    // Primary: onAuthStateChange INITIAL_SESSION fires synchronously on iOS
+    // when a cached session exists — this is the fastest path.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
@@ -173,7 +176,13 @@ export default function RootLayout() {
         newSession?.user?.id || "none"
       );
 
-      if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+      if (event === "INITIAL_SESSION") {
+        clearTimeout(timeoutId);
+        resolve(newSession, "INITIAL_SESSION");
+        return;
+      }
+
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
         setSession(newSession);
         if (event === "SIGNED_IN") hasNavigatedRef.current = false;
 
@@ -203,6 +212,7 @@ export default function RootLayout() {
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
