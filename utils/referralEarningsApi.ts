@@ -15,14 +15,19 @@ export interface ReferralEarningsStats {
   earnings_available: number;
   earnings_paid: number;
   earnings_total: number;
+  earnings_total_lifetime?: number;
   premium_converts: number;
   paypal_email: string | null;
+  referral_code: string | null;
+  total_referrals: number;
   recent_earnings: {
     referred_username: string;
     commission_amount: number;
+    purchase_amount: number;
     status: string;
     created_at: string;
     product_id: string;
+    plan_type: string;
   }[];
 }
 

@@ -39,7 +39,8 @@ function productLabel(productId: string): string {
   const lower = (productId || '').toLowerCase();
   if (lower.includes('annual') || lower.includes('yearly') || lower.includes('year')) return 'Annual';
   if (lower.includes('month')) return 'Monthly';
-  return productId || 'Subscription';
+  if (!productId || productId === 'unknown') return 'Subscription';
+  return productId;
 }
 
 export default function ReferralsScreen() {
@@ -152,6 +153,7 @@ export default function ReferralsScreen() {
       setCode(stats.code);
       setTotalReferrals(stats.totalReferrals);
 
+      console.log('[Referrals] earnings stats:', JSON.stringify(earnings?.recent_earnings?.length), 'items');
       setEarningsStats(earnings);
       if (earnings?.paypal_email) {
         setPaypalInput(earnings.paypal_email);
