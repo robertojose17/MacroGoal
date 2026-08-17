@@ -610,6 +610,10 @@ export default function RootLayout() {
                     title: 'Affiliate Application',
                   }}
                 />
+                <Stack.Screen
+                  name="affiliate-welcome"
+                  options={{ title: 'Creator Program', headerShown: false }}
+                />
               </Stack>
           </WidgetProvider>
         </ThemeProvider>

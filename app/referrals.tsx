@@ -134,6 +134,7 @@ export default function ReferralsScreen() {
       }
       console.log('[Referrals] Terms accepted and saved successfully');
       setTermsAccepted(true);
+      router.push('/affiliate-welcome');
     } catch (e) {
       console.error('[Referrals] Unexpected error saving terms:', e);
       Alert.alert('Error', 'Something went wrong. Please try again.');
