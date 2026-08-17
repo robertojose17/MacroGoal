@@ -35,24 +35,21 @@ const genId = () => {
 
 type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean };
 
-const SUGGESTED_PROMPTS = [
-  'Analyze my last 14 days',
-];
-
 const QUICK_ACTION_CARDS = [
-  { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Weekly Review', subtitle: 'Full week summary', message: 'Give me my weekly progress review' },
-  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'What can I eat?', subtitle: 'Remaining macros', message: 'What can I eat with my remaining macros today?' },
-  { iosIcon: 'target', androidIcon: 'track_changes', title: 'Am I on track?', subtitle: 'Weekly progress check', message: 'Am I on track this week?' },
-  { iosIcon: 'magnifyingglass', androidIcon: 'search', title: 'Analyze patterns', subtitle: 'Last 14 days', message: 'Detect any patterns in my last 14 days' },
-  { iosIcon: 'menucard.fill', androidIcon: 'menu_book', title: 'Restaurant Menu', subtitle: 'Under 500 cal options', message: "What can I order at McDonald's under 500 calories?" },
-  { iosIcon: 'brain', androidIcon: 'psychology', title: 'My Profile', subtitle: "Coach's memory", message: 'What have you learned about me so far?' },
+  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm hungry", subtitle: 'Find something to eat', message: "I'm hungry right now, what can I eat?" },
+  { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want sweets', subtitle: 'Sweet cravings', message: "I want something sweet, what can I eat without ruining my progress?" },
+  { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up', subtitle: 'Already cheated today', message: "I already messed up today, what do I do now?" },
+  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: 'Is it working?', subtitle: 'Check my progress', message: "I don't see results, is this even working?" },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'I want junk food', subtitle: 'Cravings hitting hard', message: "I want junk food right now, help me." },
+  { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Plan my week', subtitle: 'Build a meal plan', message: "Build me a meal plan for this week based on my goals." },
 ];
 
 const CRAVING_CHIPS = [
-  { label: "I want something sweet", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I want something sweet, what should I eat?" },
-  { label: "What fast food can I eat?", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "What fast food can I eat that fits my macros?" },
-  { label: "Give me a quick snack idea", iosIcon: 'lightbulb.fill', androidIcon: 'lightbulb', message: "Give me a quick snack idea that fits my goals" },
-  { label: "I'm eating out tonight", iosIcon: 'building.2.fill', androidIcon: 'storefront', message: "I'm eating out tonight, what should I order?" },
+  { label: "I want pizza", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I want pizza, what can I do?" },
+  { label: "I want chocolate", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I want chocolate right now, what are my options?" },
+  { label: "I don't feel like cooking", iosIcon: 'house.fill', androidIcon: 'home', message: "I don't feel like cooking tonight, what should I do?" },
+  { label: "I already cheated today", iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', message: "I already cheated today, is my progress ruined?" },
+  { label: "I want to quit", iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', message: "I feel like giving up, I don't see results and I want to quit." },
 ];
 
 // ── New user quick actions (shown after first proactive message for new users) ──
@@ -822,6 +819,13 @@ export default function CoachScreen() {
   const [isFirstEverSession, setIsFirstEverSession] = useState(false);
   const [firstMessageReceived, setFirstMessageReceived] = useState(false);
 
+  // ── Coach onboarding modal ────────────────────────────────────────────────
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [onboardingAnswers, setOnboardingAnswers] = useState<string[]>([]);
+  const [onboardingCurrentAnswer, setOnboardingCurrentAnswer] = useState<string | null>(null);
+  const onboardingProgressAnim = useRef(new Animated.Value(0)).current;
+
   // ── MGCS: Proactive first message sent flag ───────────────────────────────
   const firstMessageSentRef = useRef(false);
 
@@ -1338,6 +1342,17 @@ export default function CoachScreen() {
         const hasRealHistory = initResult.hasHistory;
 
         if (!hasRealHistory) {
+          // ── Coach onboarding check — show modal before first interaction ──
+          const onboardingDoneKey = 'coach_onboarding_done_' + user.id;
+          const onboardingDone = await AsyncStorage.getItem(onboardingDoneKey);
+          if (!onboardingDone) {
+            console.log('[AICoach] Coach onboarding not done — showing onboarding modal for user:', user.id);
+            if (isMountedRef.current) {
+              setShowOnboarding(true);
+            }
+            return; // __FIRST_INTERACTION__ fires after modal completes
+          }
+
           firstMessageSentRef.current = true;
           console.log('[AICoach] initResult.hasHistory=false — triggering proactive first message (MGCS First Interaction Protocol)');
           const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
@@ -2055,10 +2070,48 @@ export default function CoachScreen() {
   const visibleMessages = messages.filter((m) => !(m.role === 'user' && m.content === '__FIRST_INTERACTION__'));
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
   const effectivelyGated = isGated && !isPremium;
-  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !effectivelyGated && isPremium;
+  const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !effectivelyGated;
   const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !effectivelyGated;
-  // After first message arrives, show quick actions (new user gets simplified set)
-  const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : QUICK_ACTION_CARDS;
+
+  // ── Contextual quick actions by time of day ───────────────────────────────
+  const hour = new Date().getHours();
+  const contextualQuickActions = (() => {
+    if (hour >= 5 && hour < 11) {
+      return [
+        { iosIcon: 'sun.rise.fill', androidIcon: 'wb_sunny', title: "What's for breakfast?", subtitle: 'Start strong', message: "What should I eat for breakfast today?" },
+        { iosIcon: 'target', androidIcon: 'track_changes', title: 'Set my intention', subtitle: 'Plan today', message: "Help me set my nutrition intention for today." },
+        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm hungry", subtitle: 'Morning hunger', message: "I'm hungry this morning, what can I eat?" },
+      ];
+    } else if (hour >= 11 && hour < 15) {
+      return [
+        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'Lunch ideas', subtitle: 'What fits my macros', message: "I'm about to eat lunch, what should I have?" },
+        { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: 'Am I on track?', subtitle: 'Midday check', message: "How am I doing so far today?" },
+        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want sweets', subtitle: 'After lunch cravings', message: "I want something sweet after lunch, what can I have?" },
+      ];
+    } else if (hour >= 15 && hour < 19) {
+      return [
+        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: 'Afternoon snack', subtitle: 'Beat the slump', message: "I need an afternoon snack, what fits my goals?" },
+        { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up', subtitle: 'Recover today', message: "I ate something bad today, how do I recover?" },
+        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'Dinner plan', subtitle: "Tonight's meal", message: "Help me plan dinner tonight." },
+      ];
+    } else {
+      return [
+        { iosIcon: 'moon.fill', androidIcon: 'nightlight', title: 'How did I do?', subtitle: "Today's recap", message: "How did I do today? Give me a recap." },
+        { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up', subtitle: 'Already cheated', message: "I already messed up today, what do I do now?" },
+        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'Night cravings', subtitle: 'Late night hunger', message: "I have late night cravings, what can I eat without ruining my progress?" },
+      ];
+    }
+  })();
+
+  const quickActionsLabel = (() => {
+    if (hour >= 5 && hour < 11) return 'Good morning — what do you need?';
+    if (hour >= 11 && hour < 15) return 'Midday check-in';
+    if (hour >= 15 && hour < 19) return 'Afternoon support';
+    return "How's your day going?";
+  })();
+
+  // After first message arrives, show quick actions (new user gets simplified set, returning users get contextual)
+  const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : contextualQuickActions;
 
   // Find the last streaming message (for cursor)
   const lastStreamingMsgId = (() => {
@@ -2159,7 +2212,10 @@ export default function CoachScreen() {
         >
           {/* ── Proactive insight card — welcome state only ── */}
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && proactiveInsight && (
-            <View style={[styles.insightCard, { backgroundColor: isDark ? '#1E2035' : '#EEF2FF', borderColor: isDark ? '#3B4080' : '#C7D2FE' }]}>
+            <View style={[styles.insightCard, { backgroundColor: isDark ? '#1A1D35' : '#F0F4FF', borderLeftColor: colors.primary }]}>
+              <Text style={[styles.insightCardLabel, { color: colors.primary }]}>
+                {'COACH INSIGHT'}
+              </Text>
               <View style={styles.insightCardRow}>
                 <Text style={styles.insightCardEmoji}>
                   {'💡'}
@@ -2239,7 +2295,7 @@ export default function CoachScreen() {
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
             <View style={styles.quickActionsSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                What would you like to do?
+                {isNewUser ? 'What would you like to do?' : quickActionsLabel}
               </Text>
               <ScrollView
                 horizontal
@@ -2382,7 +2438,7 @@ export default function CoachScreen() {
             );
           })}
 
-          {/* ── Craving chips hub — welcome state only, premium only ── */}
+          {/* ── Craving chips hub — welcome state only ── */}
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -2402,23 +2458,6 @@ export default function CoachScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              {!isNewUser && (
-                <View style={styles.suggestedInlineRow}>
-                  {SUGGESTED_PROMPTS.map((prompt) => (
-                    <TouchableOpacity
-                      key={prompt}
-                      style={[styles.suggestedInlineChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
-                      onPress={() => {
-                        console.log('[AICoach] Suggested prompt chip pressed:', prompt);
-                        handleSuggestedPrompt(prompt);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.suggestedInlineChipText, { color: isDark ? colors.textDark : colors.text }]}>{prompt}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
             </View>
           )}
 
@@ -2479,6 +2518,199 @@ export default function CoachScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ── Coach Onboarding Modal ── */}
+      <Modal
+        visible={showOnboarding}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {}}
+      >
+        <View style={styles.onboardingOverlay}>
+          <View style={[styles.onboardingCard, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF' }]}>
+            {/* Progress bar */}
+            <View style={styles.onboardingProgressTrack}>
+              <Animated.View
+                style={[
+                  styles.onboardingProgressFill,
+                  {
+                    backgroundColor: colors.primary,
+                    width: `${((onboardingStep + 1) / 3) * 100}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={[styles.onboardingStepLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {`Step ${onboardingStep + 1} of 3`}
+            </Text>
+
+            {/* Question */}
+            {onboardingStep === 0 && (
+              <View style={styles.onboardingQuestionBlock}>
+                <Text style={[styles.onboardingQuestion, { color: isDark ? colors.textDark : colors.text }]}>
+                  Have you tracked macros before?
+                </Text>
+                <View style={styles.onboardingOptions}>
+                  {['Never', 'A little', 'Yes, I know what I\'m doing'].map((opt) => {
+                    const isSelected = onboardingCurrentAnswer === opt;
+                    return (
+                      <TouchableOpacity
+                        key={opt}
+                        style={[
+                          styles.onboardingPill,
+                          {
+                            backgroundColor: isSelected ? colors.primary : (isDark ? '#2C2C2E' : '#F2F2F7'),
+                            borderColor: isSelected ? colors.primary : (isDark ? '#3A3A3C' : '#E5E5EA'),
+                          },
+                        ]}
+                        onPress={() => {
+                          console.log('[AICoach] Onboarding step 0 answer selected:', opt);
+                          setOnboardingCurrentAnswer(opt);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.onboardingPillText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
+                          {opt}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {onboardingStep === 1 && (
+              <View style={styles.onboardingQuestionBlock}>
+                <Text style={[styles.onboardingQuestion, { color: isDark ? colors.textDark : colors.text }]}>
+                  What's your biggest challenge right now?
+                </Text>
+                <View style={styles.onboardingOptions}>
+                  {['Cravings', 'Staying consistent', 'Not seeing results', "I don't know what to eat"].map((opt) => {
+                    const isSelected = onboardingCurrentAnswer === opt;
+                    return (
+                      <TouchableOpacity
+                        key={opt}
+                        style={[
+                          styles.onboardingPill,
+                          {
+                            backgroundColor: isSelected ? colors.primary : (isDark ? '#2C2C2E' : '#F2F2F7'),
+                            borderColor: isSelected ? colors.primary : (isDark ? '#3A3A3C' : '#E5E5EA'),
+                          },
+                        ]}
+                        onPress={() => {
+                          console.log('[AICoach] Onboarding step 1 answer selected:', opt);
+                          setOnboardingCurrentAnswer(opt);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.onboardingPillText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
+                          {opt}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {onboardingStep === 2 && (
+              <View style={styles.onboardingQuestionBlock}>
+                <Text style={[styles.onboardingQuestion, { color: isDark ? colors.textDark : colors.text }]}>
+                  Do you currently have a meal plan?
+                </Text>
+                <View style={styles.onboardingOptions}>
+                  {['No, I need one', 'Yes, I have one', 'I eat intuitively'].map((opt) => {
+                    const isSelected = onboardingCurrentAnswer === opt;
+                    return (
+                      <TouchableOpacity
+                        key={opt}
+                        style={[
+                          styles.onboardingPill,
+                          {
+                            backgroundColor: isSelected ? colors.primary : (isDark ? '#2C2C2E' : '#F2F2F7'),
+                            borderColor: isSelected ? colors.primary : (isDark ? '#3A3A3C' : '#E5E5EA'),
+                          },
+                        ]}
+                        onPress={() => {
+                          console.log('[AICoach] Onboarding step 2 answer selected:', opt);
+                          setOnboardingCurrentAnswer(opt);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.onboardingPillText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
+                          {opt}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Next button */}
+            <TouchableOpacity
+              style={[
+                styles.onboardingNextBtn,
+                { backgroundColor: onboardingCurrentAnswer ? colors.primary : (isDark ? '#3A3A3C' : '#E5E5EA') },
+              ]}
+              disabled={!onboardingCurrentAnswer}
+              onPress={async () => {
+                if (!onboardingCurrentAnswer) return;
+                const newAnswers = [...onboardingAnswers, onboardingCurrentAnswer];
+                console.log('[AICoach] Onboarding next pressed, step:', onboardingStep, 'answer:', onboardingCurrentAnswer);
+
+                if (onboardingStep < 2) {
+                  setOnboardingAnswers(newAnswers);
+                  setOnboardingCurrentAnswer(null);
+                  setOnboardingStep(onboardingStep + 1);
+                } else {
+                  // Final step — save and close
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                      const onboardingDoneKey = 'coach_onboarding_done_' + user.id;
+                      const onboardingDataKey = 'coach_onboarding_' + user.id;
+                      await AsyncStorage.setItem(onboardingDataKey, JSON.stringify(newAnswers));
+                      await AsyncStorage.setItem(onboardingDoneKey, 'true');
+                      console.log('[AICoach] Onboarding complete, answers saved for user:', user.id, newAnswers);
+
+                      setShowOnboarding(false);
+                      setOnboardingAnswers([]);
+                      setOnboardingCurrentAnswer(null);
+                      setOnboardingStep(0);
+
+                      // Now fire __FIRST_INTERACTION__
+                      if (!firstMessageSentRef.current && isMountedRef.current) {
+                        firstMessageSentRef.current = true;
+                        console.log('[AICoach] Firing __FIRST_INTERACTION__ after onboarding completion');
+                        const firstInteractionKey = 'coach_first_interaction_done_' + user.id;
+                        const triggerMsg = [{ role: 'user' as const, content: '__FIRST_INTERACTION__', timestamp: Date.now() }];
+                        try {
+                          await sendMessage(triggerMsg, user.id, true);
+                          console.log('[AICoach] Proactive first message delivered after onboarding');
+                          await AsyncStorage.setItem(firstInteractionKey, 'true');
+                        } catch (e: any) {
+                          console.warn('[AICoach] Proactive first message error after onboarding:', e?.message);
+                          firstMessageSentRef.current = false;
+                        }
+                        firstUserMessageSentRef.current = false;
+                        freeMessageCountRef.current = 0;
+                      }
+                    }
+                  } catch (e: any) {
+                    console.warn('[AICoach] Error saving onboarding answers:', e?.message);
+                  }
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.onboardingNextBtnText, { color: onboardingCurrentAnswer ? '#FFFFFF' : (isDark ? '#6B6B6B' : '#AEAEB2') }]}>
+                {onboardingStep < 2 ? 'Next →' : 'Get Started →'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Conversation History Modal ── */}
       <Modal
@@ -3218,9 +3450,15 @@ const styles = StyleSheet.create({
   // ── Proactive insight card ────────────────────────────────────────────────
   insightCard: {
     borderRadius: 12,
-    borderWidth: 1,
+    borderLeftWidth: 4,
     padding: 14,
     marginBottom: 16,
+  },
+  insightCardLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 8,
   },
   insightCardRow: {
     flexDirection: 'row',
@@ -3240,9 +3478,9 @@ const styles = StyleSheet.create({
   },
   insightCardCta: {
     borderRadius: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 14,
-    alignSelf: 'flex-start',
+    alignItems: 'center',
   },
   insightCardCtaText: {
     color: '#FFFFFF',
@@ -3340,5 +3578,73 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 15,
+  },
+  // ── Coach onboarding modal ────────────────────────────────────────────────
+  onboardingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  onboardingCard: {
+    width: '100%',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  onboardingProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  onboardingProgressFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  onboardingStepLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    marginBottom: 20,
+  },
+  onboardingQuestionBlock: {
+    marginBottom: 28,
+  },
+  onboardingQuestion: {
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 30,
+    marginBottom: 20,
+    letterSpacing: -0.3,
+  },
+  onboardingOptions: {
+    gap: 10,
+  },
+  onboardingPill: {
+    borderRadius: 50,
+    borderWidth: 1.5,
+    paddingVertical: 13,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  onboardingPillText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  onboardingNextBtn: {
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  onboardingNextBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
