@@ -76,6 +76,7 @@ export type Message = {
   isStreaming?: boolean;
   actionProposal?: ActionProposal;
   actionStatus?: 'pending' | 'confirming' | 'confirmed' | 'declined';
+  suggestions?: string[];
 };
 
 type State =
@@ -406,6 +407,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         const decoder = new TextDecoder();
         let fullText = '';
         let actionProposal: ActionProposal | null = null;
+        let suggestions: string[] | null = null;
         let buffer = '';
 
         try {
@@ -436,6 +438,7 @@ export function useAICoach(options?: UseAICoachOptions) {
                 }
                 if (parsed.done) {
                   actionProposal = parsed.action_proposal || null;
+                  suggestions = parsed.suggestions || null;
                 }
               } catch { /* skip malformed */ }
             }
@@ -455,6 +458,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               }
               if (parsed.done) {
                 actionProposal = parsed.action_proposal || null;
+                suggestions = parsed.suggestions || null;
               }
             } catch { /* skip malformed */ }
           }
@@ -474,6 +478,7 @@ export function useAICoach(options?: UseAICoachOptions) {
                     ...(actionProposal
                       ? { actionProposal, actionStatus: 'pending' as const }
                       : {}),
+                    ...(suggestions ? { suggestions } : {}),
                   }
                 : m
             )

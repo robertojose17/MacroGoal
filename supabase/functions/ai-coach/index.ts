@@ -20,6 +20,91 @@ function genUUID(): string {
   return crypto.randomUUID();
 }
 
+function generateSuggestions(assistantMessage: string): string[] | null {
+  const msg = assistantMessage.toLowerCase();
+
+  if (
+    msg.includes("tracked macros before") ||
+    msg.includes("new to this") ||
+    msg.includes("experience") ||
+    msg.includes("have you tracked") ||
+    msg.includes("familiar with")
+  ) {
+    return ["Brand new to this", "I've tried before", "Yes, I know my stuff"];
+  }
+
+  if (
+    msg.includes("biggest challenge") ||
+    msg.includes("hardest part") ||
+    msg.includes("struggle") ||
+    msg.includes("what's stopping") ||
+    msg.includes("what stops you")
+  ) {
+    return ["Cravings", "I don't see results", "I keep falling off", "I don't know what to eat"];
+  }
+
+  if (
+    msg.includes("meal plan") ||
+    msg.includes("do you have a plan") ||
+    msg.includes("following a plan") ||
+    msg.includes("have a plan")
+  ) {
+    return ["Yes I have one", "No I don't", "I had one but stopped"];
+  }
+
+  if (
+    msg.includes("cook at home") ||
+    msg.includes("eat out") ||
+    msg.includes("restaurant") ||
+    msg.includes("takeout") ||
+    msg.includes("do you cook")
+  ) {
+    return ["I cook at home", "I eat out a lot", "Mix of both"];
+  }
+
+  if (
+    msg.includes("hungry") ||
+    msg.includes("what can you eat") ||
+    msg.includes("calories left") ||
+    msg.includes("what to eat") ||
+    msg.includes("something to eat")
+  ) {
+    return ["Log what I ate", "Give me options", "I already ate"];
+  }
+
+  if (
+    msg.includes("cheated") ||
+    msg.includes("messed up") ||
+    msg.includes("went over") ||
+    msg.includes("off track") ||
+    msg.includes("bad day")
+  ) {
+    return ["It was just one meal", "I went way over", "I want to start fresh tomorrow"];
+  }
+
+  if (
+    msg.includes("results") ||
+    msg.includes("working") ||
+    msg.includes("progress") ||
+    msg.includes("is it working") ||
+    msg.includes("seeing changes")
+  ) {
+    return ["Show me my progress", "I feel stuck", "What am I doing wrong?"];
+  }
+
+  if (
+    msg.includes("quit") ||
+    msg.includes("give up") ||
+    msg.includes("not worth") ||
+    msg.includes("want to stop") ||
+    msg.includes("frustrated")
+  ) {
+    return ["I'm just frustrated", "I haven't seen any change", "Help me stay motivated"];
+  }
+
+  return null;
+}
+
 function extractActionProposal(text: string): Record<string, unknown> | null {
   const match = text.match(/ACTION_PROPOSAL:\s*(\{[\s\S]*\})/);
   if (!match) return null;
@@ -377,8 +462,12 @@ INSTRUCTIONS:
           console.log("[AICoach] Action proposal:", action_type, action_id);
         }
 
-        // Send done event with action_proposal
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, action_proposal: actionProposal })}\n\n`));
+        // Generate suggestions based on assistant message content
+        const suggestions = generateSuggestions(fullText);
+        console.log("[AICoach] Suggestions generated:", suggestions ? suggestions.length : 0);
+
+        // Send done event with action_proposal and suggestions
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, action_proposal: actionProposal, suggestions })}\n\n`));
 
         // Message persistence is handled by the frontend after stream completes.
 
