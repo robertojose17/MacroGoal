@@ -448,6 +448,14 @@ INSTRUCTIONS:
           reader.releaseLock();
         }
 
+        // Guard: if OpenRouter returned no tokens, send a fallback so the client never gets an empty bubble
+        if (fullText.trim().length === 0) {
+          console.warn("[AICoach] OpenRouter returned empty response — sending fallback token");
+          const fallback = "I'm having trouble responding right now. Please try again.";
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback })}\n\n`));
+          fullText = fallback;
+        }
+
         // Parse ACTION_PROPOSAL from full text
         const actionProposalRaw = extractActionProposal(fullText);
         let actionProposal: Record<string, unknown> | null = null;

@@ -306,8 +306,8 @@ export function useAICoach(options?: UseAICoachOptions) {
         historyMessages.push({ role: newUserMsg.role, content: newUserMsg.content, timestamp: newUserMsg.timestamp });
       }
 
-      // Limit to last 20 messages (10 pairs) to avoid token overflow, always keeping the last item
-      const MAX_HISTORY = 20;
+      // Limit to last 10 messages (5 pairs) to avoid token overflow, always keeping the last item
+      const MAX_HISTORY = 10;
       const fullMessages: CoachMessage[] =
         historyMessages.length > MAX_HISTORY
           ? historyMessages.slice(historyMessages.length - MAX_HISTORY)
@@ -488,6 +488,22 @@ export function useAICoach(options?: UseAICoachOptions) {
 
         console.log('[useAICoach] Stream complete, length:', fullText.length);
 
+        // Guard: empty response — show retry message instead of empty bubble
+        if (fullText.trim().length === 0) {
+          console.warn('[useAICoach] Stream completed with empty response — showing retry message');
+          if (isMountedRef.current) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === placeholderMsg.id
+                  ? { ...m, content: "I didn't catch that. Please try sending your message again.", isStreaming: false }
+                  : m
+              )
+            );
+            setState({ status: 'error', error: 'empty_response' });
+          }
+          return;
+        }
+
         // Finalize message
         if (isMountedRef.current) {
           setMessages((prev) =>
@@ -545,6 +561,7 @@ export function useAICoach(options?: UseAICoachOptions) {
           console.warn('[useAICoach] Skipping message save — conversationId:', currentConvId, 'fullText length:', fullText.length);
         }
       } catch (e: any) {
+        clearTimeout(timeoutId);
         if (e?.name === 'AbortError') {
           console.warn('[useAICoach] Request aborted (timeout)');
           if (isMountedRef.current) {
