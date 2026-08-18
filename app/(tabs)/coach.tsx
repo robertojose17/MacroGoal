@@ -52,12 +52,6 @@ const CRAVING_CHIPS = [
   { label: "I want to quit", iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', message: "I feel like giving up, I don't see results and I want to quit." },
 ];
 
-// ── New user quick actions (shown after first proactive message for new users) ──
-const NEW_USER_QUICK_ACTIONS = [
-  { iosIcon: 'house.fill', androidIcon: 'home', title: 'I cook at home', subtitle: 'Mostly home-cooked meals', message: 'I mostly cook at home' },
-  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'I eat out a lot', subtitle: 'Restaurants & takeout', message: 'I eat out a lot, mostly restaurants and takeout' },
-  { iosIcon: 'arrow.left.arrow.right', androidIcon: 'sync_alt', title: 'Mix of both', subtitle: 'Home & eating out', message: 'I do a mix of cooking at home and eating out' },
-];
 
 // ── Store badge detection ────────────────────────────────────────────────────
 const STORE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -2092,8 +2086,8 @@ export default function CoachScreen() {
     return "How's your day going?";
   })();
 
-  // After first message arrives, show quick actions (new user gets simplified set, returning users get contextual)
-  const quickActionsToShow = isNewUser ? NEW_USER_QUICK_ACTIONS : contextualQuickActions;
+  // After first message arrives, show quick actions for returning users
+  const quickActionsToShow = contextualQuickActions;
 
   // Find the last streaming message (for cursor)
   const lastStreamingMsgId = (() => {
@@ -2273,32 +2267,7 @@ export default function CoachScreen() {
             </View>
           )}
 
-          {/* ── Quick Action Cards — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && (
-            <View style={styles.quickActionsSection}>
-              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {isNewUser ? 'What would you like to do?' : quickActionsLabel}
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.quickActionsRow}
-              >
-                {quickActionsToShow.map((card) => (
-                  <QuickActionCard
-                    key={card.title}
-                    iosIcon={card.iosIcon}
-                    androidIcon={card.androidIcon}
-                    title={card.title}
-                    subtitle={card.subtitle}
-                    isDark={isDark}
-                    onPress={() => handleQuickAction(card)}
-                    disabled={premiumLoading}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          )}
+
 
 
 
