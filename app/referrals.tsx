@@ -472,6 +472,27 @@ export default function ReferralsScreen() {
           </Text>
         </View>
 
+        {/* Creator Program Card */}
+        <TouchableOpacity
+          style={[styles.creatorCard, { borderColor: TEAL }]}
+          onPress={() => {
+            console.log('[Referrals] Creator Program card pressed — navigating to /affiliate-welcome');
+            router.push('/affiliate-welcome');
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.creatorCardLeft}>
+            <View style={[styles.creatorIconCircle, { backgroundColor: TEAL + '22' }]}>
+              <Ionicons name="rocket-outline" size={20} color={TEAL} />
+            </View>
+            <View style={styles.creatorCardText}>
+              <Text style={[styles.creatorCardTitle, { color: TEAL }]}>Creator Program</Text>
+              <Text style={[styles.creatorCardSubtitle, { color: '#6B7280' }]}>Apply or log in to your earnings dashboard</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={TEAL} />
+        </TouchableOpacity>
+
         {/* Your Code Card */}
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <Text style={[styles.codeLabel, { color: mutedColor }]}>YOUR CODE</Text>
@@ -1180,5 +1201,40 @@ const termsGateStyles = StyleSheet.create({
   continueButtonText: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  creatorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  creatorCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  creatorIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  creatorCardText: {
+    flex: 1,
+  },
+  creatorCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  creatorCardSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
   },
 });
