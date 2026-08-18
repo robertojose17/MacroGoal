@@ -162,10 +162,16 @@ export function useAICoach(options?: UseAICoachOptions) {
 
         // GET list of conversations
         console.log('[useAICoach] Fetching conversation list from coach-conversations');
+        const listAbort = new AbortController();
+        const listTimeoutId = setTimeout(() => {
+          listAbort.abort();
+          console.warn('[useAICoach] coach-conversations list fetch timed out after 10s — aborting');
+        }, 10000);
         const listRes = await expoFetch(
           `${SUPABASE_PROJECT_URL}/functions/v1/coach-conversations`,
-          { method: 'GET', headers: authHeaders }
+          { method: 'GET', headers: authHeaders, signal: listAbort.signal }
         );
+        clearTimeout(listTimeoutId);
 
         if (!listRes.ok) {
           const errText = await listRes.text();
@@ -192,10 +198,16 @@ export function useAICoach(options?: UseAICoachOptions) {
 
           // Load messages for this conversation
           console.log('[useAICoach] Loading messages for conversation:', todayConv.id);
+          const msgsAbort = new AbortController();
+          const msgsTimeoutId = setTimeout(() => {
+            msgsAbort.abort();
+            console.warn('[useAICoach] coach-conversations messages fetch timed out after 10s — aborting');
+          }, 10000);
           const msgsRes = await expoFetch(
             `${SUPABASE_PROJECT_URL}/functions/v1/coach-conversations/${todayConv.id}/messages`,
-            { method: 'GET', headers: authHeaders }
+            { method: 'GET', headers: authHeaders, signal: msgsAbort.signal }
           );
+          clearTimeout(msgsTimeoutId);
 
           if (msgsRes.ok) {
             const rawMsgs: { id: string; role: string; content: string; created_at: string }[] = await msgsRes.json();
@@ -350,6 +362,12 @@ export function useAICoach(options?: UseAICoachOptions) {
 
         console.log('[useAICoach] Sending request with valid JWT (length:', jwt.length, ')');
 
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => {
+          abortController.abort();
+          console.warn('[useAICoach] Request timed out after 30s — aborting');
+        }, 30000);
+
         const response = await expoFetch(
           `${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,
           {
@@ -366,6 +384,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               use_web: useWeb,
               ...(isFirstMessage ? { is_first_message: true } : {}),
             }),
+            signal: abortController.signal,
           }
         );
 
@@ -400,6 +419,9 @@ export function useAICoach(options?: UseAICoachOptions) {
           }
           throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
         }
+
+        // Response is OK — cancel the timeout so it doesn't fire during streaming
+        clearTimeout(timeoutId);
 
         // Read SSE stream token by token
         console.log('[useAICoach] Reading SSE stream');
@@ -523,6 +545,21 @@ export function useAICoach(options?: UseAICoachOptions) {
           console.warn('[useAICoach] Skipping message save — conversationId:', currentConvId, 'fullText length:', fullText.length);
         }
       } catch (e: any) {
+        if (e?.name === 'AbortError') {
+          console.warn('[useAICoach] Request aborted (timeout)');
+          if (isMountedRef.current) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === placeholderMsg.id
+                  ? { ...m, content: "I'm taking a bit longer than usual. Please try sending your message again.", isStreaming: false }
+                  : m
+              )
+            );
+            setState({ status: 'error', error: 'timeout' });
+          }
+          return;
+        }
+
         console.error('[useAICoach] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.error('[useAICoach] ❌ CATCH BLOCK ERROR');
         console.error('[useAICoach] Error type:', e?.constructor?.name);
@@ -535,7 +572,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         throw e;
       }
     },
-    [weightUnit, conversationId]
+    [weightUnit]
   );
 
   const loading = state.status === 'loading';
