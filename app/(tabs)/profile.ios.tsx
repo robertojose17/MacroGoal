@@ -1330,7 +1330,7 @@ export default function ProfileScreen() {
             style={styles.accordionHeader}
             onPress={() => {
               console.log('[Profile iOS] Invite Friends & Earn XP pressed');
-              router.push('/referrals');
+              router.push('/affiliate-welcome');
             }}
             activeOpacity={0.7}
           >

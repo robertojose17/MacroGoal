@@ -1418,7 +1418,7 @@ export default function ProfileScreen() {
             style={styles.accordionHeader}
             onPress={() => {
               console.log('[Profile] Refer & Earn pressed');
-              router.push('/referrals');
+              router.push('/affiliate-welcome');
             }}
             activeOpacity={0.7}
           >
