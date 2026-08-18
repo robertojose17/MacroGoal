@@ -36,20 +36,21 @@ const genId = () => {
 type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean; suggestions?: string[] };
 
 const QUICK_ACTION_CARDS = [
-  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm hungry", subtitle: 'Find something to eat', message: "I'm hungry right now, what can I eat?" },
-  { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want sweets', subtitle: 'Sweet cravings', message: "I want something sweet, what can I eat without ruining my progress?" },
-  { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up', subtitle: 'Already cheated today', message: "I already messed up today, what do I do now?" },
-  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: 'Is it working?', subtitle: 'Check my progress', message: "I don't see results, is this even working?" },
-  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'I want junk food', subtitle: 'Cravings hitting hard', message: "I want junk food right now, help me." },
-  { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Plan my week', subtitle: 'Build a meal plan', message: "Build me a meal plan for this week based on my goals." },
+  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm starving", subtitle: 'Need to eat now', message: "I'm starving right now, what can I eat?" },
+  { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I need something sweet', subtitle: 'Craving hitting hard', message: "I need something sweet right now, what are my options without ruining my progress?" },
+  { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up today', subtitle: 'Already went off plan', message: "I messed up today, I ate things I shouldn't have. What do I do now?" },
+  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: "Is this even working?", subtitle: "Not seeing results", message: "I don't see results, is this even working? I feel like I'm doing everything right." },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'I want junk food', subtitle: 'Cravings hitting hard', message: "I really want junk food right now, help me." },
+  { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Build my meal plan', subtitle: 'Plan the week', message: "Build me a meal plan for this week based on my goals." },
 ];
 
 const CRAVING_CHIPS = [
-  { label: "I want pizza", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I want pizza, what can I do?" },
-  { label: "I want chocolate", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I want chocolate right now, what are my options?" },
-  { label: "I don't feel like cooking", iosIcon: 'house.fill', androidIcon: 'home', message: "I don't feel like cooking tonight, what should I do?" },
-  { label: "I already cheated today", iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', message: "I already cheated today, is my progress ruined?" },
+  { label: "I want pizza", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I want pizza right now, what do I do?" },
+  { label: "I want chocolate", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I want chocolate, what can I have?" },
+  { label: "I can't stop eating", iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', message: "I can't stop eating today, I keep snacking. Help." },
+  { label: "I don't feel like cooking", iosIcon: 'house.fill', androidIcon: 'home', message: "I don't feel like cooking tonight, what are my options?" },
   { label: "I want to quit", iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', message: "I feel like giving up, I don't see results and I want to quit." },
+  { label: "I'm eating out tonight", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "I'm eating out tonight, help me order something that fits my goals." },
 ];
 
 
@@ -2091,36 +2092,36 @@ export default function CoachScreen() {
   const contextualQuickActions = (() => {
     if (hour >= 5 && hour < 11) {
       return [
-        { iosIcon: 'sun.rise.fill', androidIcon: 'wb_sunny', title: "What's for breakfast?", subtitle: 'Start strong', message: "What should I eat for breakfast today?" },
-        { iosIcon: 'target', androidIcon: 'track_changes', title: 'Set my intention', subtitle: 'Plan today', message: "Help me set my nutrition intention for today." },
-        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm hungry", subtitle: 'Morning hunger', message: "I'm hungry this morning, what can I eat?" },
+        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm hungry", subtitle: 'Need breakfast', message: "I'm hungry, what should I eat for breakfast?" },
+        { iosIcon: 'bolt.fill', androidIcon: 'bolt', title: 'Give me something quick', subtitle: 'No time to cook', message: "I have no time this morning, give me something quick I can eat." },
+        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want something sweet', subtitle: 'Morning craving', message: "I want something sweet for breakfast, what can I have?" },
       ];
     } else if (hour >= 11 && hour < 15) {
       return [
-        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'Lunch ideas', subtitle: 'What fits my macros', message: "I'm about to eat lunch, what should I have?" },
-        { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: 'Am I on track?', subtitle: 'Midday check', message: "How am I doing so far today?" },
-        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want sweets', subtitle: 'After lunch cravings', message: "I want something sweet after lunch, what can I have?" },
+        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: "I'm eating out", subtitle: 'What do I order?', message: "I'm eating out for lunch, what should I order?" },
+        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm starving", subtitle: 'Need lunch now', message: "I'm starving, what can I eat for lunch right now?" },
+        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I need something sweet', subtitle: 'After lunch craving', message: "I need something sweet after lunch, what are my options?" },
       ];
     } else if (hour >= 15 && hour < 19) {
       return [
-        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: 'Afternoon snack', subtitle: 'Beat the slump', message: "I need an afternoon snack, what fits my goals?" },
-        { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up', subtitle: 'Recover today', message: "I ate something bad today, how do I recover?" },
-        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'Dinner plan', subtitle: "Tonight's meal", message: "Help me plan dinner tonight." },
+        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I need a snack", subtitle: 'Afternoon hunger', message: "I need a snack right now, what fits my goals?" },
+        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want chips or candy', subtitle: 'Craving junk', message: "I want chips or something crunchy, what can I have?" },
+        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: "Help me with dinner", subtitle: "What to eat tonight", message: "Help me figure out what to eat for dinner tonight." },
       ];
     } else {
       return [
-        { iosIcon: 'moon.fill', androidIcon: 'nightlight', title: 'How did I do?', subtitle: "Today's recap", message: "How did I do today? Give me a recap." },
-        { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up', subtitle: 'Already cheated', message: "I already messed up today, what do I do now?" },
-        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'Night cravings', subtitle: 'Late night hunger', message: "I have late night cravings, what can I eat without ruining my progress?" },
+        { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I went off plan', subtitle: 'Had a rough day', message: "I went off plan today, I ate way more than I should have. What do I do?" },
+        { iosIcon: 'moon.fill', androidIcon: 'nightlight', title: "I'm hungry at night", subtitle: 'Late night craving', message: "I'm hungry and it's late, what can I eat without ruining everything?" },
+        { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Prep for tomorrow', subtitle: 'Plan ahead', message: "Help me plan what to eat tomorrow so I stay on track." },
       ];
     }
   })();
 
   const quickActionsLabel = (() => {
-    if (hour >= 5 && hour < 11) return 'Good morning — what do you need?';
-    if (hour >= 11 && hour < 15) return 'Midday check-in';
-    if (hour >= 15 && hour < 19) return 'Afternoon support';
-    return "How's your day going?";
+    if (hour >= 5 && hour < 11) return "What do you need this morning?";
+    if (hour >= 11 && hour < 15) return "What's going on right now?";
+    if (hour >= 15 && hour < 19) return "What do you need?";
+    return "How did today go?";
   })();
 
   // After first message arrives, show quick actions for returning users
