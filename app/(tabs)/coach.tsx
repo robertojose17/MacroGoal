@@ -1480,6 +1480,36 @@ export default function CoachScreen() {
         console.warn('[AICoach] Error clearing gate key on premium upgrade:', e?.message);
       }
     })();
+
+    // Find the blocked user message (the one just before the gate card)
+    const currentMessages = messagesRef.current;
+    const gateIdx = currentMessages.findIndex((m: any) => m.isPremiumGate === true);
+    let blockedMsg: string | null = null;
+    if (gateIdx !== -1) {
+      for (let i = gateIdx - 1; i >= 0; i--) {
+        if (currentMessages[i].role === 'user') {
+          blockedMsg = currentMessages[i].content;
+          break;
+        }
+      }
+    }
+
+    console.log('[AICoach] Premium upgrade — gate card found:', gateIdx !== -1, '| blocked message:', blockedMsg ? blockedMsg.slice(0, 60) : 'none');
+
+    // Remove the gate card from the message list
+    setMessages((prev: any[]) => prev.filter((m: any) => !m.isPremiumGate));
+
+    // Reset gate refs/state
+    freeMessageCountRef.current = 0;
+    setIsGated(false);
+
+    // Re-send the blocked message after state settles
+    if (blockedMsg) {
+      setTimeout(() => {
+        console.log('[AICoach] Re-sending blocked message after premium upgrade:', blockedMsg!.slice(0, 60));
+        handleSendRef.current(blockedMsg!);
+      }, 300);
+    }
   }, [isPremium]);
 
   const scrollToBottom = useCallback(() => {
@@ -1499,6 +1529,7 @@ export default function CoachScreen() {
   }, [messages.length, loading, scrollToBottom]);
 
   const handleConfirmInlineRef = useRef<(messageId: string) => void>(() => {});
+  const handleSendRef = useRef<(text: string) => void>(() => {});
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -1673,6 +1704,12 @@ export default function CoachScreen() {
     },
     [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, isGated, setIsGated]
   );
+
+  // Keep ref in sync so the premium-upgrade effect can call handleSend without
+  // being listed as a dependency (avoids circular dep / stale closure issues).
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  }, [handleSend]);
 
   const handleSuggestedPrompt = useCallback(
     (prompt: string) => {
