@@ -11,8 +11,6 @@ import {
   Modal,
   Animated,
   Alert,
-  KeyboardAvoidingView,
-  TextInput,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,7 +48,6 @@ import ChallengeCompleteModal from '@/components/xp/SevenDayChallenge/ChallengeC
 import { getChallenge } from '@/utils/sevenDayChallengeApi';
 import FlashChallengesCard from '@/components/FlashChallengesCard';
 import { useWidget } from '@/contexts/WidgetContext';
-import { applyReferralCode } from '@/utils/referralApi';
 
 const CHALLENGE_SHOWN_KEY = 'seven_day_challenge_shown';
 
@@ -133,8 +130,6 @@ export default function DashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const referralChecked = useRef(false);
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -144,11 +139,6 @@ export default function DashboardScreen() {
 
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
-
-  // ─── Referral modal ─────────────────────────────────────────────────────────
-  const [showReferralModal, setShowReferralModal] = useState(false);
-  const [referralInput, setReferralInput] = useState('');
-  const [referralSubmitting, setReferralSubmitting] = useState(false);
 
   // ─── 7-Day Challenge ────────────────────────────────────────────────────────
   const [showChallengePopup, setShowChallengePopup] = useState(false);
@@ -341,24 +331,6 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('[Dashboard] Screen focused, loading data and reporting health metrics');
-      if (!referralChecked.current) {
-        referralChecked.current = true;
-        console.log('[Dashboard] Checking referral prompt');
-        (async () => {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
-          const { data } = await supabase
-            .from('users')
-            .select('referral_prompt_shown')
-            .eq('id', user.id)
-            .single();
-          if (data && !data.referral_prompt_shown) {
-            console.log('[Dashboard] Showing referral code modal inline');
-            await supabase.from('users').update({ referral_prompt_shown: true }).eq('id', user.id);
-            setShowReferralModal(true);
-          }
-        })();
-      }
       loadData();
       reportDailyHealthMetrics().then((result) => {
         console.log('[Dashboard] focus health metrics report:', result.eventsPosted);
@@ -403,37 +375,6 @@ export default function DashboardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loadData])
   );
-
-  const handleSubmitReferralCode = async () => {
-    const trimmed = referralInput.trim().toUpperCase();
-    console.log('[Dashboard] Submit referral code pressed, code:', trimmed);
-    if (!trimmed) return;
-    setReferralSubmitting(true);
-    try {
-      const result = await applyReferralCode(trimmed);
-      if (!result.success) {
-        if (result.error === 'You have already used a referral code') {
-          Alert.alert('Already Used', 'You have already entered a referral code.');
-        } else if (result.error === 'Invalid referral code' || (result.error ?? '').includes('Invalid')) {
-          Alert.alert('Invalid Code', 'That referral code was not found. Please check and try again.');
-        } else if (result.error === "You can't use your own referral code") {
-          Alert.alert('Invalid Code', 'You cannot use your own referral code.');
-        } else {
-          Alert.alert('Error', 'Could not apply the referral code. Please try again.');
-        }
-        return;
-      }
-      console.log('[Dashboard] Referral code applied successfully');
-      setShowReferralModal(false);
-      setReferralInput('');
-      Alert.alert('Success! 🎉', 'Referral code applied. You both earned 1,000 XP!');
-    } catch (e) {
-      console.error('[Dashboard] handleSubmitReferralCode error:', e);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-    } finally {
-      setReferralSubmitting(false);
-    }
-  };
 
   const onRefresh = useCallback(async () => {
     console.log('[Dashboard] Pull-to-refresh triggered');
@@ -819,63 +760,6 @@ export default function DashboardScreen() {
         xpConfig={xp.status?.xp_config}
       />
 
-      {/* ── Referral Code Modal ── */}
-      <Modal
-        visible={showReferralModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowReferralModal(false)}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <View style={styles.referralOverlay}>
-            <View style={[styles.referralCard, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF' }]}>
-              <Text style={[styles.referralTitle, { color: isDark ? '#FFFFFF' : '#000000' }]}>
-                Have a referral code?
-              </Text>
-              <Text style={[styles.referralSubtitle, { color: isDark ? '#AEAEB2' : '#6B7280' }]}>
-                Enter a friend's code to earn 1,000 XP each!
-              </Text>
-              <TextInput
-                style={[styles.referralInput, {
-                  backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6',
-                  color: isDark ? '#FFFFFF' : '#000000',
-                  borderColor: isDark ? '#3A3A3C' : '#E5E7EB',
-                }]}
-                placeholder="Enter code"
-                placeholderTextColor={isDark ? '#636366' : '#9CA3AF'}
-                value={referralInput}
-                onChangeText={(t) => setReferralInput(t.toUpperCase())}
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                style={[styles.referralSubmitBtn, { opacity: referralSubmitting ? 0.7 : 1 }]}
-                onPress={() => {
-                  console.log('[Dashboard] Referral submit button pressed');
-                  handleSubmitReferralCode();
-                }}
-                disabled={referralSubmitting}
-              >
-                <Text style={styles.referralSubmitText}>
-                  {referralSubmitting ? 'Applying...' : 'Apply Code'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.referralSkipBtn}
-                onPress={() => {
-                  console.log('[Dashboard] Referral modal skipped');
-                  setShowReferralModal(false);
-                }}
-              >
-                <Text style={[styles.referralSkipText, { color: isDark ? '#AEAEB2' : '#6B7280' }]}>
-                  Skip
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
     </SafeAreaView>
   );
 }
@@ -1004,63 +888,5 @@ const styles = StyleSheet.create({
   },
   modalCancelText: {
     ...typography.bodyBold,
-  },
-  // ── Referral Modal ────────────────────────────────────────────────────────
-  referralOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  referralCard: {
-    width: '100%',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-  },
-  referralTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  referralSubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  referralInput: {
-    width: '100%',
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 2,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  referralSubmitBtn: {
-    width: '100%',
-    height: 48,
-    backgroundColor: '#14B8A6',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  referralSubmitText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  referralSkipBtn: {
-    paddingVertical: 8,
-  },
-  referralSkipText: {
-    fontSize: 14,
   },
 });
