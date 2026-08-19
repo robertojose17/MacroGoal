@@ -826,6 +826,10 @@ export default function CoachScreen() {
   // ── Premium gate ──────────────────────────────────────────────────────────
   const [isGated, setIsGated] = useState(false);
 
+  // Tracks how many real (non-sentinel) messages the free user has sent.
+  // __FIRST_INTERACTION__ does NOT count. Gate fires when >= 1.
+  const freeMessageCountRef = useRef<number>(0);
+
   const { isPremium, loading: premiumLoading } = usePremium();
 
   const {
@@ -1377,7 +1381,48 @@ export default function CoachScreen() {
         setIsGated(false);
       }
 
-
+      // ── Free-user message gate (skip sentinel) ────────────────────────────
+      const isSentinel = trimmed === '__FIRST_INTERACTION__';
+      if (!isSentinel && !isPremium && !premiumLoading) {
+        if (freeMessageCountRef.current >= 1) {
+          // Already used the 1 free message — show gate immediately
+          console.log('[AICoach] Free message limit reached (count:', freeMessageCountRef.current, ') — showing premium gate');
+          const teaserLine = "You've used your free message. Upgrade to Premium to keep chatting with your AI coach.";
+          const gateCard: MessageWithId = {
+            id: genId(),
+            role: 'assistant',
+            content: teaserLine,
+            timestamp: Date.now(),
+            showUpgradeButton: true,
+            isPremiumGate: true,
+          };
+          // Add the user message first so it's visible, then the gate card
+          const userMsgGated: MessageWithId = {
+            id: genId(),
+            role: 'user',
+            content: trimmed,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, userMsgGated, gateCard]);
+          setInputText('');
+          setIsGated(true);
+          (async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
+                console.log('[AICoach] Gate persisted to AsyncStorage (send gate) for user:', user.id);
+              }
+            } catch (e: any) {
+              console.warn('[AICoach] Error persisting gate to AsyncStorage:', e?.message);
+            }
+          })();
+          return;
+        }
+        // First real message — let it through and increment counter
+        freeMessageCountRef.current += 1;
+        console.log('[AICoach] Free message count incremented to', freeMessageCountRef.current);
+      }
 
       const userMsg: MessageWithId = {
         id: genId(),
@@ -1450,9 +1495,9 @@ export default function CoachScreen() {
   useEffect(() => {
     if (!pendingAction) return;
 
-    // ── Premium gate: fire when action_proposal arrives for free users ────────
-    if (!isPremium && !premiumLoading) {
-      console.log('[AICoach] pendingAction arrived for free user — showing premium gate instead of action proposal, action_id:', pendingAction.action_id);
+    // ── Premium gate: fire when action_proposal arrives for free users who have used their 1 free message ──
+    if (!isPremium && !premiumLoading && freeMessageCountRef.current >= 1) {
+      console.log('[AICoach] pendingAction arrived for free user (freeCount:', freeMessageCountRef.current, ') — showing premium gate instead of action proposal, action_id:', pendingAction.action_id);
       setMessages((prev) => {
         const reversedIdx = [...prev].reverse().findIndex((m) => m.role === 'assistant' && !m.isPremiumGate);
         const teaserLine = "I've put together a plan built around your exact goals. Unlock it with Premium.";
