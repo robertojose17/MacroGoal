@@ -36,21 +36,27 @@ const genId = () => {
 type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean; suggestions?: string[] };
 
 const QUICK_ACTION_CARDS = [
-  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm starving", subtitle: 'Need to eat now', message: "I'm starving right now, what can I eat?" },
-  { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I need something sweet', subtitle: 'Craving hitting hard', message: "I need something sweet right now, what are my options without ruining my progress?" },
-  { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I messed up today', subtitle: 'Already went off plan', message: "I messed up today, I ate things I shouldn't have. What do I do now?" },
-  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: "Is this even working?", subtitle: "Not seeing results", message: "I don't see results, is this even working? I feel like I'm doing everything right." },
-  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: 'I want junk food', subtitle: 'Cravings hitting hard', message: "I really want junk food right now, help me." },
-  { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Build my meal plan', subtitle: 'Plan the week', message: "Build me a meal plan for this week based on my goals." },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: "I'm starving", subtitle: 'Need food now', message: "I'm starving, what can I eat right now?" },
+  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I messed up today", subtitle: 'Went off plan', message: "I messed up today, what do I do now?" },
+  { iosIcon: 'cart.fill', androidIcon: 'shopping_cart', title: "I'm eating out tonight", subtitle: 'Need guidance', message: "I'm eating out tonight, how do I stay on track?" },
+  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: "Is this even working?", subtitle: 'Need motivation', message: "I'm not seeing results, is this even working?" },
+  { iosIcon: 'moon.fill', androidIcon: 'nightlight', title: "I can't stop eating", subtitle: 'Late night cravings', message: "I can't stop eating, I keep snacking at night" },
+  { iosIcon: 'bolt.fill', androidIcon: 'bolt', title: "Give me something quick", subtitle: 'Fast meal idea', message: "Give me something quick to eat, I only have 10 minutes" },
 ];
 
 const CRAVING_CHIPS = [
-  { label: "I want pizza", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I want pizza right now, what do I do?" },
-  { label: "I want chocolate", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I want chocolate, what can I have?" },
-  { label: "I can't stop eating", iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', message: "I can't stop eating today, I keep snacking. Help." },
-  { label: "I don't feel like cooking", iosIcon: 'house.fill', androidIcon: 'home', message: "I don't feel like cooking tonight, what are my options?" },
-  { label: "I want to quit", iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', message: "I feel like giving up, I don't see results and I want to quit." },
-  { label: "I'm eating out tonight", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "I'm eating out tonight, help me order something that fits my goals." },
+  { label: "I'm starving", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I'm starving, what can I eat right now?" },
+  { label: "I need something sweet", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I need something sweet, what are my options?" },
+  { label: "I want pizza", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "I want pizza, can I fit it in my macros?" },
+  { label: "I'm eating out", iosIcon: 'building.2.fill', androidIcon: 'store', message: "I'm eating out, what should I order?" },
+  { label: "I have nothing at home", iosIcon: 'house.fill', androidIcon: 'home', message: "I have nothing at home, what can I make?" },
+  { label: "I messed up today", iosIcon: 'arrow.uturn.backward', androidIcon: 'undo', message: "I messed up today, what do I do now?" },
+  { label: "I can't stop eating", iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', message: "I can't stop eating, I keep snacking" },
+  { label: "Give me something quick", iosIcon: 'bolt.fill', androidIcon: 'bolt', message: "Give me something quick to eat" },
+  { label: "I want chips or candy", iosIcon: 'star.fill', androidIcon: 'star', message: "I want chips or something crunchy, what can I have?" },
+  { label: "Help me with dinner", iosIcon: 'moon.fill', androidIcon: 'nightlight', message: "Help me figure out what to have for dinner" },
+  { label: "I went off plan", iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', message: "I went off plan today, how do I recover?" },
+  { label: "I'm hungry at night", iosIcon: 'moon.stars.fill', androidIcon: 'bedtime', message: "I'm hungry at night, what can I eat without ruining my macros?" },
 ];
 
 
@@ -2087,45 +2093,10 @@ export default function CoachScreen() {
   const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !effectivelyGated;
   const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !effectivelyGated;
 
-  // ── Contextual quick actions by time of day ───────────────────────────────
-  const hour = new Date().getHours();
-  const contextualQuickActions = (() => {
-    if (hour >= 5 && hour < 11) {
-      return [
-        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm hungry", subtitle: 'Need breakfast', message: "I'm hungry, what should I eat for breakfast?" },
-        { iosIcon: 'bolt.fill', androidIcon: 'bolt', title: 'Give me something quick', subtitle: 'No time to cook', message: "I have no time this morning, give me something quick I can eat." },
-        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want something sweet', subtitle: 'Morning craving', message: "I want something sweet for breakfast, what can I have?" },
-      ];
-    } else if (hour >= 11 && hour < 15) {
-      return [
-        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: "I'm eating out", subtitle: 'What do I order?', message: "I'm eating out for lunch, what should I order?" },
-        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I'm starving", subtitle: 'Need lunch now', message: "I'm starving, what can I eat for lunch right now?" },
-        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I need something sweet', subtitle: 'After lunch craving', message: "I need something sweet after lunch, what are my options?" },
-      ];
-    } else if (hour >= 15 && hour < 19) {
-      return [
-        { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I need a snack", subtitle: 'Afternoon hunger', message: "I need a snack right now, what fits my goals?" },
-        { iosIcon: 'heart.fill', androidIcon: 'favorite', title: 'I want chips or candy', subtitle: 'Craving junk', message: "I want chips or something crunchy, what can I have?" },
-        { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: "Help me with dinner", subtitle: "What to eat tonight", message: "Help me figure out what to eat for dinner tonight." },
-      ];
-    } else {
-      return [
-        { iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', title: 'I went off plan', subtitle: 'Had a rough day', message: "I went off plan today, I ate way more than I should have. What do I do?" },
-        { iosIcon: 'moon.fill', androidIcon: 'nightlight', title: "I'm hungry at night", subtitle: 'Late night craving', message: "I'm hungry and it's late, what can I eat without ruining everything?" },
-        { iosIcon: 'calendar', androidIcon: 'calendar_month', title: 'Prep for tomorrow', subtitle: 'Plan ahead', message: "Help me plan what to eat tomorrow so I stay on track." },
-      ];
-    }
-  })();
-
-  const quickActionsLabel = (() => {
-    if (hour >= 5 && hour < 11) return "What do you need this morning?";
-    if (hour >= 11 && hour < 15) return "What's going on right now?";
-    if (hour >= 15 && hour < 19) return "What do you need?";
-    return "How did today go?";
-  })();
+  const quickActionsLabel = "What do you need?";
 
   // After first message arrives, show quick actions for returning users
-  const quickActionsToShow = contextualQuickActions;
+  const quickActionsToShow = QUICK_ACTION_CARDS;
 
   // Find the last streaming message (for cursor)
   const lastStreamingMsgId = (() => {
