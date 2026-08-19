@@ -26,6 +26,24 @@ import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
 
 
+// Quick action cards shown in the welcome/empty state
+const QUICK_ACTION_CARDS = [
+  "What did I eat today?",
+  "Help me hit my protein goal",
+  "Suggest a healthy snack",
+  "What's a good post-workout meal?",
+  "How many calories in my last meal?",
+];
+
+// Craving chips shown above the input bar
+const CRAVING_CHIPS = [
+  "I'm craving something sweet",
+  "I'm really hungry",
+  "I want something quick",
+  "Low calorie options",
+  "High protein meal",
+];
+
 // Generate a unique ID for each message
 let messageIdCounter = 0;
 const generateMessageId = () => {
@@ -253,6 +271,77 @@ export default function ChatbotScreen() {
   const handleRemovePhoto = useCallback(() => {
     setSelectedImage(null);
   }, []);
+
+  // Send a quick action or craving chip as a message
+  const handleQuickSend = useCallback(
+    (text: string) => {
+      console.log('[Chatbot] Quick chip tapped:', text);
+      setInputText(text);
+      // Use a small timeout so inputText state is set before handleSend reads it
+      setTimeout(() => {
+        setInputText('');
+        if (loading) return;
+
+        if (!isPremium && !premiumLoading) {
+          console.log('[Chatbot] Premium gate triggered via quick chip');
+          const userMsg: MessageWithId = {
+            id: generateMessageId(),
+            role: 'user',
+            content: text,
+            timestamp: Date.now(),
+          };
+          const gateMsg: MessageWithId = {
+            id: generateMessageId(),
+            role: 'assistant',
+            content:
+              'The AI Coach is a Premium feature.\n\nUpgrade to Premium to unlock unlimited coaching, personalized advice, and more.',
+            timestamp: Date.now(),
+            showUpgradeButton: true,
+          };
+          setMessages((prev) => [...prev, userMsg, gateMsg]);
+          return;
+        }
+
+        const userMessage: MessageWithId = {
+          id: generateMessageId(),
+          role: 'user',
+          content: text,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, userMessage]);
+        setLastUserMessage(text);
+
+        // Fire the actual AI request
+        const systemMessage: ChatMessage = {
+          role: 'system',
+          content: `You are a nutrition expert. Answer the user's question concisely and helpfully.`,
+        };
+        sendMessage({
+          messages: [
+            systemMessage,
+            { role: 'user', content: text, timestamp: Date.now() },
+          ],
+          images: [],
+        }).then((result) => {
+          if (!isMountedRef.current) return;
+          if (result && result.message) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: generateMessageId(),
+                role: 'assistant',
+                content: result.message,
+                timestamp: Date.now(),
+              },
+            ]);
+          }
+        }).catch((err) => {
+          console.error('[Chatbot] Quick chip send error:', err);
+        });
+      }, 0);
+    },
+    [loading, isPremium, premiumLoading, sendMessage]
+  );
 
   /**
    * Parse meal data from the Edge Function response
@@ -965,6 +1054,9 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
   // CRITICAL: Determine button text based on context
   const buttonText = context === 'my_meals_builder' ? 'Add to My Meal' : 'Log this meal';
 
+  // Show quick action cards only in the welcome/empty state (just the initial greeting)
+  const isWelcomeState = validMessages.length === 1 && validMessages[0].role === 'assistant';
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
@@ -1071,6 +1163,29 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 No messages yet
               </Text>
+            </View>
+          )}
+
+          {/* Quick action cards — welcome state only */}
+          {isWelcomeState && !loading && (
+            <View style={styles.quickActionsContainer}>
+              <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Try asking...
+              </Text>
+              <View style={styles.quickActionsGrid}>
+                {QUICK_ACTION_CARDS.map((card) => (
+                  <TouchableOpacity
+                    key={card}
+                    style={[styles.quickActionChip, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}
+                    onPress={() => handleQuickSend(card)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.quickActionChipText, { color: isDark ? colors.textDark : colors.text }]}>
+                      {card}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1258,6 +1373,27 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               </TouchableOpacity>
             </View>
           )}
+        </ScrollView>
+
+        {/* Craving chips — always visible above input */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.cravingChipsScroll, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+          contentContainerStyle={styles.cravingChipsContent}
+        >
+          {CRAVING_CHIPS.map((chip) => (
+            <TouchableOpacity
+              key={chip}
+              style={[styles.cravingChip, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}
+              onPress={() => handleQuickSend(chip)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
+                {chip}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
 
         <View style={[styles.inputContainer, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
@@ -1583,5 +1719,49 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: '#FFFFFF',
     fontSize: 14,
+  },
+  quickActionsContainer: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xs,
+  },
+  quickActionsLabel: {
+    ...typography.caption,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  quickActionChip: {
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  quickActionChipText: {
+    ...typography.body,
+    fontSize: 14,
+  },
+  cravingChipsScroll: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  cravingChipsContent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  cravingChip: {
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+  },
+  cravingChipText: {
+    ...typography.caption,
+    fontSize: 13,
   },
 });
