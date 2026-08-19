@@ -919,7 +919,9 @@ export default function CoachScreen() {
           const { data: { user } } = await supabase.auth.getUser();
           if (user && isPremium) {
             await AsyncStorage.removeItem('coach_gate_active_' + user.id);
-            console.log('[AICoach] loadConversation — user is premium, gate key cleared');
+            await AsyncStorage.removeItem('coach_free_msg_count_' + user.id);
+            freeMessageCountRef.current = 0;
+            console.log('[AICoach] loadConversation — user is premium, gate key and free message count cleared');
           }
         } catch (e: any) {
           console.warn('[AICoach] Error clearing gate key in loadConversation:', e?.message);
@@ -1098,6 +1100,13 @@ export default function CoachScreen() {
             if (isMountedRef.current) setIsFirstEverSession(true);
           } else {
             console.log('[AICoach] Returning user — welcome chips suppressed');
+          }
+
+          // ── Restore persisted free message count ──────────────────────────
+          const savedCount = await AsyncStorage.getItem('coach_free_msg_count_' + userForFlag.id);
+          if (savedCount) {
+            freeMessageCountRef.current = parseInt(savedCount, 10) || 0;
+            console.log('[AICoach] Restored free message count from AsyncStorage:', freeMessageCountRef.current);
           }
         }
 
@@ -1297,7 +1306,9 @@ export default function CoachScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           await AsyncStorage.removeItem('coach_gate_active_' + user.id);
-          console.log('[AICoach] Premium upgrade detected — gate key cleared from AsyncStorage');
+          await AsyncStorage.removeItem('coach_free_msg_count_' + user.id);
+          freeMessageCountRef.current = 0;
+          console.log('[AICoach] Premium upgrade detected — gate key and free message count cleared from AsyncStorage');
         }
       } catch (e: any) {
         console.warn('[AICoach] Error clearing gate key on premium upgrade:', e?.message);
@@ -1425,6 +1436,18 @@ export default function CoachScreen() {
         // First real message — let it through and increment counter
         freeMessageCountRef.current += 1;
         console.log('[AICoach] Free message count incremented to', freeMessageCountRef.current);
+        // Persist count so it survives remounts and tab navigation
+        (async () => {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await AsyncStorage.setItem('coach_free_msg_count_' + user.id, String(freeMessageCountRef.current));
+              console.log('[AICoach] Free message count persisted to AsyncStorage:', freeMessageCountRef.current);
+            }
+          } catch (e: any) {
+            console.warn('[AICoach] Error persisting free message count:', e?.message);
+          }
+        })();
       }
 
       const userMsg: MessageWithId = {
