@@ -569,7 +569,7 @@ export function mapOpenFoodFactsToFood(product: OpenFoodFactsProduct): any {
   const serving = extractServingSize(product);
 
   return {
-    name: product.product_name || 'Unknown Product',
+    name: product.product_name || product.generic_name || '',
     brand: product.brands || undefined,
     serving_amount: 100, // OpenFoodFacts uses per 100g for calculations
     serving_unit: 'g',

@@ -67,6 +67,7 @@ export function mergeProducts(
   const supabaseOrder: string[] = [];
 
   for (const product of incoming) {
+    if (!product.product_name && !product.generic_name) continue; // skip nameless products
     const key = product.code || `${product.product_name || ''}-${product.brands || ''}`;
     if (!key) continue;
     const existing_ = existing.get(key);

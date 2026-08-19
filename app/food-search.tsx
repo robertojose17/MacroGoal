@@ -43,7 +43,7 @@ const ResultRow = React.memo(
     isDark: boolean;
     onPress: (item: SearchResultItem) => void;
   }) => {
-    const productName = item.product.product_name || item.product.generic_name || 'Unknown Product';
+    const productName = item.product.product_name || item.product.generic_name || '';
     const brand = item.product.brands || '';
     const badge = SOURCE_BADGE[item.source];
     const isVerified = item.source === 'supabase';
@@ -52,6 +52,8 @@ const ResultRow = React.memo(
       console.log('[FoodSearch] Product tapped:', productName, '| source:', item.source);
       onPress(item);
     }, [item, onPress, productName]);
+
+    if (!productName) return null;
 
     const caloriesDisplay = Math.round(item.displayCalories);
     const proteinDisplay = Math.round(isFinite(item.displayProtein) ? item.displayProtein : 0);
