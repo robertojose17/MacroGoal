@@ -829,6 +829,7 @@ export default function CoachScreen() {
   // Tracks how many real (non-sentinel) messages the free user has sent.
   // __FIRST_INTERACTION__ does NOT count. Gate fires when >= 1.
   const freeMessageCountRef = useRef<number>(0);
+  const savedActionProposalRef = useRef<any>(null);
 
   const { isPremium, loading: premiumLoading } = usePremium();
 
@@ -1289,6 +1290,8 @@ export default function CoachScreen() {
   // ── Fix 3: Clear AsyncStorage gate when user upgrades to Premium ──────────
   useEffect(() => {
     if (!isPremium) return;
+
+    // Clear AsyncStorage gate key
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -1301,33 +1304,33 @@ export default function CoachScreen() {
       }
     })();
 
-    // Find the blocked user message (the one just before the gate card)
-    const currentMessages = messagesRef.current;
-    const gateIdx = currentMessages.findIndex((m: any) => m.isPremiumGate === true);
-    let blockedMsg: string | null = null;
-    if (gateIdx !== -1) {
-      for (let i = gateIdx - 1; i >= 0; i--) {
-        if (currentMessages[i].role === 'user') {
-          blockedMsg = currentMessages[i].content;
-          break;
-        }
-      }
-    }
+    const savedProposal = savedActionProposalRef.current;
+    console.log('[AICoach] Premium upgrade — savedProposal:', savedProposal ? savedProposal.action_id : 'none');
 
-    console.log('[AICoach] Premium upgrade — gate card found:', gateIdx !== -1, '| blocked message:', blockedMsg ? blockedMsg.slice(0, 60) : 'none');
-
-    // Remove the gate card from the message list
-    setMessages((prev: any[]) => prev.filter((m: any) => !m.isPremiumGate));
-
-    // Reset gate state
-    setIsGated(false);
-
-    // Re-send the blocked message after state settles
-    if (blockedMsg) {
-      setTimeout(() => {
-        console.log('[AICoach] Re-sending blocked message after premium upgrade:', blockedMsg!.slice(0, 60));
-        handleSendRef.current(blockedMsg!);
-      }, 300);
+    if (savedProposal) {
+      // Restore the saved action proposal into the gate message (replace it seamlessly)
+      setMessages((prev: any[]) =>
+        prev.map((m: any) =>
+          m.isPremiumGate
+            ? {
+                ...m,
+                content: '',
+                showUpgradeButton: false,
+                isPremiumGate: false,
+                actionProposal: savedProposal,
+                actionStatus: 'pending' as const,
+              }
+            : m
+        )
+      );
+      savedActionProposalRef.current = null;
+      setIsGated(false);
+      console.log('[AICoach] Action proposal restored seamlessly after premium upgrade');
+    } else {
+      // No saved proposal — just remove the gate card and reset
+      setMessages((prev: any[]) => prev.filter((m: any) => !m.isPremiumGate));
+      setIsGated(false);
+      console.log('[AICoach] No saved proposal — gate card removed after premium upgrade');
     }
   }, [isPremium]);
 
@@ -1534,6 +1537,8 @@ export default function CoachScreen() {
           console.warn('[AICoach] Error persisting gate to AsyncStorage:', e?.message);
         }
       })();
+      savedActionProposalRef.current = pendingAction;
+      console.log('[AICoach] Saved action proposal for post-upgrade restore, action_id:', pendingAction.action_id);
       clearPendingAction();
       return;
     }
