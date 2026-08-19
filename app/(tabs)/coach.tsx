@@ -33,7 +33,7 @@ const genId = () => {
   return `coach-${Date.now()}-${msgCounter}`;
 };
 
-type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean; suggestions?: string[] };
+type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean };
 
 const QUICK_ACTION_CARDS = [
   { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: "I'm starving", subtitle: 'Need food now', message: "I'm starving, what can I eat right now?" },
@@ -1718,14 +1718,6 @@ export default function CoachScreen() {
     handleSendRef.current = handleSend;
   }, [handleSend]);
 
-  const handleSuggestedPrompt = useCallback(
-    (prompt: string) => {
-      console.log('[AICoach] Suggested prompt tapped:', prompt);
-      handleSend(prompt);
-    },
-    [handleSend]
-  );
-
   const handleQuickAction = useCallback(
     (card: typeof QUICK_ACTION_CARDS[number]) => {
       console.log('[AICoach] Quick action card tapped:', card.title, '→', card.message);
@@ -2398,38 +2390,6 @@ export default function CoachScreen() {
             );
           })}
 
-          {/* ── Dynamic suggested reply chips — last assistant message only ── */}
-          {(() => {
-            const lastAssistantIdx = visibleMessages.map((m, i) => ({ m, i })).reverse().find(({ m }) => m.role === 'assistant' && !m.isTyping && !m.isPremiumGate);
-            if (!lastAssistantIdx) return null;
-            const { m: lastAssistantMsg, i: lastAssistantMsgIdx } = lastAssistantIdx;
-            const lastMsgIsUser = visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1].role === 'user';
-            if (!lastAssistantMsg.suggestions || lastAssistantMsg.suggestions.length === 0) return null;
-            if (lastMsgIsUser) return null;
-            if (loading) return null;
-            const isLastOverall = lastAssistantMsgIdx === visibleMessages.length - 1;
-            if (!isLastOverall) return null;
-            return (
-              <View style={styles.suggestionsRow}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
-                  {lastAssistantMsg.suggestions.map((suggestion, i) => (
-                    <TouchableOpacity
-                      key={i}
-                      style={[styles.suggestionChip, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7', borderColor: isDark ? '#3A3A3C' : '#E5E5EA' }]}
-                      onPress={() => {
-                        console.log('[AICoach] Suggestion chip tapped:', suggestion);
-                        handleSuggestedPrompt(suggestion);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.suggestionChipText, { color: isDark ? colors.textDark : colors.text }]}>{suggestion}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            );
-          })()}
-
           {/* ── Craving chips hub — welcome state only ── */}
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>
@@ -2969,27 +2929,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   suggestedInlineChipText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  // ── Dynamic suggested reply chips ────────────────────────────────────────
-  suggestionsRow: {
-    marginTop: 8,
-    marginBottom: 4,
-    paddingLeft: 44,
-  },
-  suggestionsScroll: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
-  },
-  suggestionChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  suggestionChipText: {
     fontSize: 13,
     fontWeight: '500',
   },
