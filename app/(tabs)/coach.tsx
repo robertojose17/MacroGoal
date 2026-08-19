@@ -1596,6 +1596,37 @@ export default function CoachScreen() {
     async (messageId: string) => {
       console.log('[AICoach] handleConfirmInline called, messageId:', messageId);
 
+      // ── Premium gate: block free users from executing inline action proposals ──
+      if (!isPremium && !premiumLoading) {
+        console.log('[AICoach] handleConfirmInline: free user attempted to confirm action — showing premium gate, messageId:', messageId);
+        const targetMsgForGate = messages.find((m) => m.id === messageId);
+        if (targetMsgForGate?.actionProposal) {
+          savedActionProposalRef.current = targetMsgForGate.actionProposal;
+          console.log('[AICoach] Saved action proposal for post-upgrade restore (inline gate), action_id:', targetMsgForGate.actionProposal.action_id);
+        }
+        const teaserLine = "Your plan is ready to execute. Upgrade to Premium to apply it.";
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, content: teaserLine, showUpgradeButton: true, isPremiumGate: true, actionStatus: 'pending' as const }
+              : m
+          )
+        );
+        setIsGated(true);
+        (async () => {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await AsyncStorage.setItem('coach_gate_active_' + user.id, 'true');
+              console.log('[AICoach] Gate persisted to AsyncStorage (inline confirm gate) for user:', user.id);
+            }
+          } catch (e: any) {
+            console.warn('[AICoach] Error persisting inline gate to AsyncStorage:', e?.message);
+          }
+        })();
+        return;
+      }
+
       // Find the message to get its actionProposal
       const targetMsg = messages.find((m) => m.id === messageId);
       const actionProposal = targetMsg?.actionProposal;
