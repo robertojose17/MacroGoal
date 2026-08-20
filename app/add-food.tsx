@@ -1345,26 +1345,8 @@ export default function AddFoodScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { Alert.alert('Error', 'You must be logged in to add food'); return; }
 
-      const grams = item.quantity;
-      const macroResult = calcMacros(
-        {
-          calories: item.calories_per_100,
-          protein: item.protein_per_100,
-          carbs: item.carbs_per_100,
-          fat: item.fat_per_100,
-          fiber: item.fiber_per_100,
-          serving_size: item.serving_size ?? 100,
-          macros_per: item.macros_per,
-        },
-        grams
-      );
-      const calories = safeNum(macroResult.calories);
-      const protein = safeNum(macroResult.protein);
-      const carbs = safeNum(macroResult.carbs);
-      const fat = safeNum(macroResult.fat);
-      const fiber = safeNum(macroResult.fiber);
-
-      console.log('[AddFood] Logging recent food via RPC:', item.food_name, 'grams=', grams, 'calories=', calories);
+      const gramsLogged = item.grams_logged ?? item.serving_size ?? 100;
+      console.log('[AddFood] Logging recent food via RPC (pre-calculated):', item.food_name, 'grams=', gramsLogged, 'calories=', item.calories_logged, 'protein=', item.protein_logged, 'carbs=', item.carbs_logged, 'fat=', item.fat_logged);
 
       const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
         p_user_id: user.id,
@@ -1372,14 +1354,14 @@ export default function AddFoodScreen() {
         p_meal_type: mealType,
         p_food_id: null,
         p_food_item_id: item.food_item_id,
-        p_quantity: 1,
-        p_calories: calories,
-        p_protein: protein,
-        p_carbs: carbs,
-        p_fats: fat,
-        p_fiber: fiber,
-        p_serving_description: item.serving_description || `${Math.round(grams)}g`,
-        p_grams: grams,
+        p_quantity: item.quantity_logged,
+        p_calories: item.calories_logged,
+        p_protein: item.protein_logged,
+        p_carbs: item.carbs_logged,
+        p_fats: item.fat_logged,
+        p_fiber: item.fiber_logged,
+        p_serving_description: item.serving_description_logged || item.serving_description || `${Math.round(gramsLogged)}g`,
+        p_grams: gramsLogged,
         p_logged_at: new Date().toISOString(),
       });
 
@@ -1441,24 +1423,13 @@ export default function AddFoodScreen() {
   const renderRecentFoodItem = useCallback((item: RecentFoodItem, index: number) => {
     if (hiddenRecentIds.has(item.food_item_id)) return null;
 
-    const servingGrams = item.serving_size ?? 100;
-    const macroResult = calcMacros(
-      {
-        calories: item.calories_per_100,
-        protein: item.protein_per_100,
-        carbs: item.carbs_per_100,
-        fat: item.fat_per_100,
-        fiber: item.fiber_per_100,
-        serving_size: item.serving_size ?? 100,
-        macros_per: item.macros_per,
-      },
-      servingGrams
-    );
-    const calories = Math.round(macroResult.calories);
-    const protein = Math.round(macroResult.protein);
-    const carbs = Math.round(macroResult.carbs);
-    const fat = Math.round(macroResult.fat);
-    const servingText = formatFoodRowServing(item.serving_description, 1, servingGrams);
+    const calories = Math.round(item.calories_logged);
+    const protein = Math.round(item.protein_logged);
+    const carbs = Math.round(item.carbs_logged);
+    const fat = Math.round(item.fat_logged);
+    const displayGrams = item.grams_logged ?? item.serving_size ?? 100;
+    const displayDesc = item.serving_description_logged || item.serving_description;
+    const servingText = formatFoodRowServing(displayDesc, 1, displayGrams);
 
     return (
       <React.Fragment key={item.food_item_id}>

@@ -399,6 +399,15 @@ export interface RecentFoodItem {
   macros_per: string | null;
   quantity: number; // grams logged last time
   off_data: any;
+  // Pre-calculated values read directly from the meal_item row
+  calories_logged: number;
+  protein_logged: number;
+  carbs_logged: number;
+  fat_logged: number;
+  fiber_logged: number;
+  grams_logged: number | null;
+  quantity_logged: number;
+  serving_description_logged: string | null;
 }
 
 export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> {
@@ -424,6 +433,15 @@ export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> 
         quantity,
         created_at,
         meal_id,
+        calories,
+        protein,
+        carbs,
+        fats,
+        fiber,
+        grams,
+        serving_description,
+        food_name,
+        food_brand,
         food_items (
           id,
           name,
@@ -489,8 +507,8 @@ export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> 
       result.push({
         meal_item_id: item.id,
         food_item_id: item.food_item_id,
-        food_name: fi.name,
-        food_brand: fi.brand ?? null,
+        food_name: item.food_name ?? fi.name,
+        food_brand: item.food_brand ?? fi.brand ?? null,
         serving_description: servingDesc,
         serving_size: fi.serving_size ?? 100,
         serving_count: fi.serving_count ?? null,
@@ -502,7 +520,17 @@ export async function getRecentFoods(userId: string): Promise<RecentFoodItem[]> 
         macros_per: fi.macros_per ?? null,
         quantity: item.quantity ?? fi.serving_size ?? 100,
         off_data: fi.off_data ?? null,
+        // Pre-calculated values read directly from the meal_item row
+        calories_logged: item.calories ?? 0,
+        protein_logged: item.protein ?? 0,
+        carbs_logged: item.carbs ?? 0,
+        fat_logged: item.fats ?? 0,
+        fiber_logged: item.fiber ?? 0,
+        grams_logged: item.grams ?? item.quantity ?? fi.serving_size ?? 100,
+        quantity_logged: item.quantity ?? 1,
+        serving_description_logged: item.serving_description ?? null,
       });
+      console.log('[FoodDB] Recent food item:', item.food_name ?? fi.name, '| calories_logged:', item.calories, '| grams_logged:', item.grams ?? item.quantity ?? fi.serving_size ?? 100);
 
       if (result.length >= 50) break;
     }
