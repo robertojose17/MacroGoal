@@ -665,6 +665,7 @@ export default function AddFoodScreen() {
         returnTo: returnTo,
         mode: mode || '',
         planId: planId || '',
+        source: 'meal-estimator',
       },
     });
   }, [router, mealType, date, context, returnTo, isPremium, mode, planId]);

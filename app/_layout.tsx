@@ -514,10 +514,6 @@ export default function RootLayout() {
                   options={{ headerShown: false, presentation: "modal" }}
                 />
                 <Stack.Screen
-                  name="ai-meal-estimator"
-                  options={{ headerShown: false, presentation: "modal" }}
-                />
-                <Stack.Screen
                   name="my-foods-edit"
                   options={{ headerShown: false, presentation: "modal" }}
                 />

@@ -99,6 +99,7 @@ export default function ChatbotScreen() {
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
   const returnTo = (params.returnTo as string) || undefined;
+  const isMealEstimator = (params.source as string) === 'meal-estimator';
 
   console.log('[Chatbot] ========== SCREEN LOADED ==========');
   console.log('[Chatbot] Context:', context);
@@ -1167,7 +1168,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           )}
 
           {/* Quick action cards — welcome state only */}
-          {isWelcomeState && !loading && (
+          {isWelcomeState && !loading && !isMealEstimator && (
             <View style={styles.quickActionsContainer}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Try asking...
@@ -1375,26 +1376,28 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           )}
         </ScrollView>
 
-        {/* Craving chips — always visible above input */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[styles.cravingChipsScroll, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
-          contentContainerStyle={styles.cravingChipsContent}
-        >
-          {CRAVING_CHIPS.map((chip) => (
-            <TouchableOpacity
-              key={chip}
-              style={[styles.cravingChip, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}
-              onPress={() => handleQuickSend(chip)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
-                {chip}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Craving chips — always visible above input, hidden in meal estimator mode */}
+        {!isMealEstimator && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[styles.cravingChipsScroll, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+            contentContainerStyle={styles.cravingChipsContent}
+          >
+            {CRAVING_CHIPS.map((chip) => (
+              <TouchableOpacity
+                key={chip}
+                style={[styles.cravingChip, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}
+                onPress={() => handleQuickSend(chip)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.cravingChipText, { color: isDark ? colors.textDark : colors.text }]}>
+                  {chip}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         <View style={[styles.inputContainer, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           {/* Image preview */}
