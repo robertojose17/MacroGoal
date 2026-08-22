@@ -104,6 +104,12 @@ export function formatFoodRowServing(
   // Check if the raw serving_description itself is a pure unit word (e.g. "g", "ml", "oz", "cup")
   const rawDesc = servingDescription ? servingDescription.trim() : '';
   if (rawDesc && isPureUnit(rawDesc)) {
+    const isWeightUnit = /^(g|ml)$/i.test(rawDesc);
+    if (isWeightUnit && fallbackGrams != null && fallbackGrams > 0) {
+      const actualGrams = Math.round(fallbackGrams);
+      console.log('[servingDisplay] formatFoodRowServing (pure unit, using fallbackGrams)', { servingDescription, quantity: qty, unit: rawDesc, actualGrams });
+      return `${actualGrams} ${rawDesc}`;
+    }
     console.log('[servingDisplay] formatFoodRowServing (pure unit)', { servingDescription, quantity: qty, unit: rawDesc });
     return `${qty} ${rawDesc}`;
   }
@@ -113,6 +119,14 @@ export function formatFoodRowServing(
   const numericUnitMatch = rawDesc.match(/^(\d+(?:\.\d+)?)\s*(g|ml|oz|cups?|tbsp|tsp|lbs?|kg|fl\s*oz|floz)$/i);
   if (numericUnitMatch) {
     const unit = numericUnitMatch[2].trim();
+    // For gram/ml units, the embedded number is a serving-count artifact (always "1").
+    // Use fallbackGrams (the actual logged grams) when available.
+    const isWeightUnit = /^(g|ml)$/i.test(unit);
+    if (isWeightUnit && fallbackGrams != null && fallbackGrams > 0) {
+      const actualGrams = unit === 'g' ? Math.round(fallbackGrams) : parseFloat(fallbackGrams.toFixed(1));
+      console.log('[servingDisplay] formatFoodRowServing (numeric+unit pattern, using fallbackGrams)', { servingDescription, quantity: qty, unit, actualGrams });
+      return `${actualGrams} ${unit}`;
+    }
     console.log('[servingDisplay] formatFoodRowServing (numeric+unit pattern)', { servingDescription, quantity: qty, unit });
     return `${qty} ${unit}`;
   }
