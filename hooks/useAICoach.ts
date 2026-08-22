@@ -589,7 +589,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         throw e;
       }
     },
-    [weightUnit]
+    [weightUnit, conversationId]
   );
 
   const loading = state.status === 'loading';

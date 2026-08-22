@@ -640,7 +640,7 @@ export default function HomeScreen() {
       });
       loadData();
       loadPlans();
-    }, [loadData, loadPlans])
+    }, [loadData, loadPlans, router])
   );
 
   // Switch to planning tab when navigated with ?tab=planning

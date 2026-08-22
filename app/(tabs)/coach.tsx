@@ -130,7 +130,19 @@ function renderStructuredText(
   // Strip ACTION_PROPOSAL block from displayed text
   const actionProposalIndex = content.indexOf('ACTION_PROPOSAL:');
   const cleanContent = actionProposalIndex !== -1 ? content.slice(0, actionProposalIndex).trimEnd() : content;
-  const lines = cleanContent.split('\n');
+  // Strip any raw JSON lines the AI accidentally emits (defensive fallback)
+  const strippedContent = cleanContent
+    .split('\n')
+    .filter(line => {
+      const t = line.trim();
+      // Remove lines that are raw JSON objects/arrays or comma-prefixed JSON (e.g. ,{"meal_type":...)
+      if (/^,?\s*[[{]/.test(t) && (t.includes('"meal_type"') || t.includes('"food_name"') || t.includes('"action_type"') || t.includes('"calories"'))) return false;
+      return true;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n') // collapse multiple blank lines left by removed JSON
+    .trimEnd();
+  const lines = strippedContent.split('\n');
   const nodes: React.ReactNode[] = [];
 
   const productLineCount = countProductLines(lines);
@@ -943,7 +955,7 @@ export default function CoachScreen() {
     } catch (e: any) {
       console.warn('[AICoach] Error loading conversation:', e?.message);
     }
-  }, [setMessages, setConversationId, setIsGated, isPremium]);
+  }, [setMessages, setConversationId, isPremium]);
 
   const messagesRef = useRef(messages);
   useEffect(() => {
@@ -1343,6 +1355,7 @@ export default function CoachScreen() {
       setIsGated(false);
       console.log('[AICoach] No saved proposal — gate card removed after premium upgrade');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPremium]);
 
   const scrollToBottom = useCallback(() => {
@@ -1487,7 +1500,7 @@ export default function CoachScreen() {
         }
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, isGated, setIsGated]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading]
   );
 
   // Keep ref in sync so the premium-upgrade effect can call handleSend without
@@ -1896,7 +1909,7 @@ export default function CoachScreen() {
       // ── Default: unrecognized action_type — mark confirmed silently ──────────
       return;
     },
-    [messages, router, setMessages]
+    [messages, router, setMessages, isPremium, premiumLoading]
   );
 
   // Keep ref in sync so handleSend can call handleConfirmInline without a circular dep
