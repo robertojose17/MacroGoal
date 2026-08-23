@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,10 +16,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { getReferralStats, submitAffiliateApplication } from '@/utils/referralApi';
 import { supabase } from '@/lib/supabase/client';
+import { checkCodeAvailability, submitAffiliateApplication } from '@/utils/affiliateApi';
 
-const TEAL = '#14B8A6';
+const BLUE = '#3b82f6';
 
 export default function AffiliateApplyScreen() {
   const router = useRouter();
@@ -28,54 +28,67 @@ export default function AffiliateApplyScreen() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [instagram, setInstagram] = useState('');
-  const [tiktok, setTiktok] = useState('');
-  const [youtube, setYoutube] = useState('');
-  const [howToPromote, setHowToPromote] = useState('');
+  const [socialHandle, setSocialHandle] = useState('');
+  const [desiredCode, setDesiredCode] = useState('');
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [termsChecked, setTermsChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const [totalReferrals, setTotalReferrals] = useState(0);
-  const [premiumConverts, setPremiumConverts] = useState(0);
-  const [xpEarned, setXpEarned] = useState(0);
-  const [referralCodeId, setReferralCodeId] = useState('');
+  // Code availability state
+  const [codeStatus, setCodeStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
+  const [codeError, setCodeError] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const loadData = async () => {
-      console.log('[AffiliateApply] Loading stats and pre-filling user data');
+    const loadUserData = async () => {
+      console.log('[AffiliateApply] Loading user data for pre-fill');
       try {
-        const [stats, { data: { user } }] = await Promise.all([
-          getReferralStats(),
-          supabase.auth.getUser(),
-        ]);
-
-        setTotalReferrals(stats.totalReferrals);
-        setPremiumConverts(stats.premiumConverts);
-        setXpEarned(stats.xpEarned);
-
-        if (user) {
-          setEmail(user.email || '');
-
-          const { data: rc } = await supabase
-            .from('referral_codes')
-            .select('id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          if (rc?.id) setReferralCodeId(rc.id);
-
-          const { data: profile } = await supabase
-            .from('users')
-            .select('name')
-            .eq('id', user.id)
-            .maybeSingle();
-          if (profile?.name) setFullName(profile.name);
-        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        setEmail(user.email || '');
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (profile?.name) setFullName(profile.name);
       } catch (e) {
-        console.error('[AffiliateApply] Failed to load data:', e);
+        console.error('[AffiliateApply] Failed to load user data:', e);
       }
     };
-    loadData();
+    loadUserData();
   }, []);
+
+  const handleCodeChange = (text: string) => {
+    const normalized = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    setDesiredCode(normalized);
+    setCodeStatus('idle');
+    setCodeError('');
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (normalized.length < 3) {
+      if (normalized.length > 0) {
+        setCodeStatus('error');
+        setCodeError('Code must be at least 3 characters');
+      }
+      return;
+    }
+
+    setCodeStatus('checking');
+    debounceRef.current = setTimeout(async () => {
+      console.log('[AffiliateApply] Checking code availability:', normalized);
+      const result = await checkCodeAvailability(normalized);
+      if (result.error && !result.available) {
+        setCodeStatus('error');
+        setCodeError(result.error);
+      } else if (result.available) {
+        setCodeStatus('available');
+      } else {
+        setCodeStatus('taken');
+      }
+    }, 600);
+  };
 
   const handleSubmit = async () => {
     console.log('[AffiliateApply] Submit button pressed');
@@ -88,16 +101,28 @@ export default function AffiliateApplyScreen() {
       Alert.alert('Required', 'Please enter your email.');
       return;
     }
-    if (!phone.trim()) {
-      Alert.alert('Required', 'Please enter your phone number.');
+    if (!socialHandle.trim()) {
+      Alert.alert('Required', 'Please enter your social media username or URL.');
       return;
     }
-    if (!howToPromote.trim()) {
-      Alert.alert('Required', 'Please describe how you plan to promote Macro Goal.');
+    if (!desiredCode || desiredCode.length < 3) {
+      Alert.alert('Required', 'Please enter a desired affiliate code (min 3 characters).');
       return;
     }
-    if (howToPromote.trim().length < 50) {
-      Alert.alert('Too Short', `Please write at least 50 characters (currently ${howToPromote.trim().length}).`);
+    if (codeStatus === 'taken') {
+      Alert.alert('Code Taken', 'That code is already taken. Please choose another.');
+      return;
+    }
+    if (codeStatus === 'checking') {
+      Alert.alert('Please Wait', 'Still checking code availability. Please wait a moment.');
+      return;
+    }
+    if (!paypalEmail.trim()) {
+      Alert.alert('Required', 'Please enter your PayPal email for payouts.');
+      return;
+    }
+    if (!termsChecked) {
+      Alert.alert('Required', 'Please accept the Creator Program Terms to continue.');
       return;
     }
 
@@ -106,21 +131,17 @@ export default function AffiliateApplyScreen() {
       const result = await submitAffiliateApplication({
         fullName: fullName.trim(),
         email: email.trim(),
-        phone: phone.trim(),
-        instagram: instagram.trim() || undefined,
-        tiktok: tiktok.trim() || undefined,
-        youtube: youtube.trim() || undefined,
-        howTheyPlanToPromote: howToPromote.trim(),
-        totalReferrals,
-        totalPremium: premiumConverts,
-        referralCodeId,
+        socialHandle: socialHandle.trim(),
+        desiredCode: desiredCode.trim(),
+        paypalEmail: paypalEmail.trim(),
+        termsAccepted: termsChecked,
       });
 
       if (result.success) {
         console.log('[AffiliateApply] Application submitted successfully');
         Alert.alert(
           'Application Submitted!',
-          "We'll review it within 2-3 business days.",
+          "We'll review your application within 2-3 business days.",
           [{ text: 'OK', onPress: () => router.back() }]
         );
       } else {
@@ -135,16 +156,30 @@ export default function AffiliateApplyScreen() {
     }
   };
 
-  const bg = isDark ? colors.backgroundDark : colors.primaryBackground;
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const bg = isDark ? '#0d0d0d' : colors.primaryBackground;
+  const cardBg = isDark ? '#1a1a1a' : colors.card;
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const inputBg = isDark ? '#1A1C2E' : '#F0F2F7';
+  const inputBg = isDark ? '#111' : '#F0F2F7';
   const inputBorder = isDark ? colors.borderDark : colors.border;
 
-  const charCount = howToPromote.trim().length;
-  const charCountColor = charCount < 50 ? colors.error : TEAL;
+  const codeStatusColor =
+    codeStatus === 'available' ? '#22c55e' :
+    codeStatus === 'taken' || codeStatus === 'error' ? colors.error :
+    mutedColor;
+
+  const codeStatusText =
+    codeStatus === 'available' ? '✓ Available' :
+    codeStatus === 'taken' ? '✗ Already taken' :
+    codeStatus === 'checking' ? 'Checking...' :
+    codeStatus === 'error' ? codeError :
+    '';
+
+  const codeBorderColor =
+    codeStatus === 'available' ? '#22c55e' :
+    codeStatus === 'taken' || codeStatus === 'error' ? colors.error :
+    inputBorder;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['bottom']}>
@@ -191,114 +226,114 @@ export default function AffiliateApplyScreen() {
               autoCapitalize="none"
               returnKeyType="next"
             />
-
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Phone *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="+1 (555) 000-0000"
-              placeholderTextColor={mutedColor}
-              keyboardType="phone-pad"
-              returnKeyType="next"
-            />
           </View>
 
-          {/* Social Media */}
+          {/* Social & Code */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Social Media (Optional)</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Affiliate Details</Text>
 
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Instagram Handle</Text>
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Social Media Username or URL *</Text>
             <TextInput
               style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-              value={instagram}
-              onChangeText={setInstagram}
-              placeholder="@yourhandle"
+              value={socialHandle}
+              onChangeText={setSocialHandle}
+              placeholder="@yourhandle or https://instagram.com/you"
               placeholderTextColor={mutedColor}
               autoCapitalize="none"
               returnKeyType="next"
             />
 
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>TikTok Handle</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-              value={tiktok}
-              onChangeText={setTiktok}
-              placeholder="@yourhandle"
-              placeholderTextColor={mutedColor}
-              autoCapitalize="none"
-              returnKeyType="next"
-            />
-
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>YouTube Channel</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-              value={youtube}
-              onChangeText={setYoutube}
-              placeholder="youtube.com/yourchannel"
-              placeholderTextColor={mutedColor}
-              autoCapitalize="none"
-              returnKeyType="next"
-            />
-          </View>
-
-          {/* Promotion Plan */}
-          <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Promotion Plan</Text>
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>
-              How do you plan to promote Macro Goal? *
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Desired Affiliate Code *</Text>
+            <Text style={[styles.fieldHint, { color: mutedColor }]}>
+              Letters and numbers only, 3-20 characters. This is the code your followers will use.
             </Text>
-            <TextInput
-              style={[
-                styles.input,
-                styles.textArea,
-                { backgroundColor: inputBg, borderColor: inputBorder, color: textColor },
-              ]}
-              value={howToPromote}
-              onChangeText={setHowToPromote}
-              placeholder="Describe your audience, platforms, and promotion strategy... (min 50 characters)"
-              placeholderTextColor={mutedColor}
-              multiline
-              numberOfLines={5}
-              textAlignVertical="top"
-            />
-            <Text style={[styles.charCount, { color: charCountColor }]}>
-              {charCount}
-              {' / 50 min'}
-            </Text>
-          </View>
-
-          {/* Stats */}
-          <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Your Stats at Application</Text>
-            <View style={styles.statsList}>
-              <View style={styles.statsListRow}>
-                <Ionicons name="people-outline" size={16} color={TEAL} />
-                <Text style={[styles.statsListText, { color: textColor }]}>
-                  {totalReferrals}
-                  {' friends referred'}
-                </Text>
-              </View>
-              <View style={styles.statsListRow}>
-                <Ionicons name="star-outline" size={16} color={TEAL} />
-                <Text style={[styles.statsListText, { color: textColor }]}>
-                  {premiumConverts}
-                  {' converted to premium'}
-                </Text>
-              </View>
-              <View style={styles.statsListRow}>
-                <Ionicons name="flash-outline" size={16} color={TEAL} />
-                <Text style={[styles.statsListText, { color: textColor }]}>
-                  {xpEarned.toLocaleString()}
-                  {' XP earned'}
-                </Text>
-              </View>
+            <View style={styles.codeInputRow}>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.codeInput,
+                  { backgroundColor: inputBg, borderColor: codeBorderColor, color: textColor },
+                ]}
+                value={desiredCode}
+                onChangeText={handleCodeChange}
+                placeholder="e.g. MARIAFIT"
+                placeholderTextColor={mutedColor}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={20}
+                returnKeyType="next"
+              />
+              {codeStatus === 'checking' && (
+                <ActivityIndicator size="small" color={BLUE} style={styles.codeSpinner} />
+              )}
             </View>
+            {codeStatusText !== '' && (
+              <Text style={[styles.codeStatusText, { color: codeStatusColor }]}>
+                {codeStatusText}
+              </Text>
+            )}
+          </View>
+
+          {/* PayPal */}
+          <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Payout Information</Text>
+
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>PayPal Email *</Text>
+            <Text style={[styles.fieldHint, { color: mutedColor }]}>
+              Commissions are paid via PayPal. Minimum payout is $25.
+            </Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+              value={paypalEmail}
+              onChangeText={setPaypalEmail}
+              placeholder="your@paypal.com"
+              placeholderTextColor={mutedColor}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              returnKeyType="done"
+            />
+          </View>
+
+          {/* Terms */}
+          <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Terms & Conditions</Text>
+            <Text style={[styles.termsBody, { color: mutedColor }]}>
+              By applying, you agree to the Macro Goal Creator Program Terms including:
+              {'\n\n'}• 50% commission on first qualifying purchase (net of app store fees)
+              {'\n'}• 35-day hold period before commissions become available
+              {'\n'}• Minimum $25 balance required for payout
+              {'\n'}• Payouts processed manually via PayPal
+              {'\n'}• No self-referrals or fraudulent activity
+              {'\n'}• Program terms may change at any time
+            </Text>
+
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={() => {
+                const next = !termsChecked;
+                console.log('[AffiliateApply] Terms checkbox toggled:', next);
+                setTermsChecked(next);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.checkbox,
+                { borderColor: termsChecked ? BLUE : mutedColor },
+                termsChecked && { backgroundColor: BLUE },
+              ]}>
+                {termsChecked && (
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={[styles.checkboxLabel, { color: textColor }]}>
+                I have read and agree to the Macro Goal Creator Program Terms
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Submit */}
           <TouchableOpacity
-            style={[styles.submitButton, { backgroundColor: TEAL, opacity: submitting ? 0.7 : 1 }]}
+            style={[styles.submitButton, { backgroundColor: BLUE, opacity: submitting ? 0.7 : 1 }]}
             onPress={handleSubmit}
             disabled={submitting}
             activeOpacity={0.85}
@@ -349,6 +384,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     marginTop: spacing.sm,
   },
+  fieldHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: spacing.xs,
+  },
   input: {
     borderWidth: 1,
     borderRadius: borderRadius.md,
@@ -356,26 +396,49 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     fontSize: 15,
   },
-  textArea: {
-    minHeight: 120,
-    paddingTop: spacing.sm,
+  codeInputRow: {
+    position: 'relative',
   },
-  charCount: {
-    ...typography.small,
-    textAlign: 'right',
-    marginTop: spacing.xs,
+  codeInput: {
+    fontWeight: '700',
+    letterSpacing: 2,
+    fontSize: 16,
+  },
+  codeSpinner: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  codeStatusText: {
+    fontSize: 13,
     fontWeight: '600',
+    marginTop: 4,
   },
-  statsList: {
-    gap: spacing.sm,
+  termsBody: {
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: spacing.md,
   },
-  statsListRow: {
+  checkboxRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  statsListText: {
-    ...typography.caption,
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '500',
   },
   submitButton: {
     borderRadius: borderRadius.md,

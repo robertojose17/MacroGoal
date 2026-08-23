@@ -12,6 +12,8 @@ import {
   ImageBackground,
   ScrollView,
   Image,
+  TextInput,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -26,6 +28,7 @@ import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
 import Constants from 'expo-constants';
 import Purchases, { LOG_LEVEL, isPurchasesAvailable } from '@/utils/purchases';
+import { validateAndAttributeCode } from '@/utils/affiliateApi';
 
 function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
   if (!isPurchasesAvailable) return { Purchases: null, LOG_LEVEL: null };
@@ -117,6 +120,12 @@ export default function SubscriptionScreen() {
   const [showAllFeatures, setShowAllFeatures] = useState(false);
   const { autoStart } = useLocalSearchParams<{ autoStart?: string }>();
   const autoStartFiredRef = React.useRef(false);
+
+  // Affiliate code state
+  const [affiliateCodeInput, setAffiliateCodeInput] = useState('');
+  const [affiliateCodeStatus, setAffiliateCodeStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [affiliateCodeApplied, setAffiliateCodeApplied] = useState('');
+  const [redemptionUrl, setRedemptionUrl] = useState<string | null>(null);
 
   // Initialize RevenueCat and fetch offerings
   const initializeRevenueCat = async () => {
@@ -762,10 +771,54 @@ export default function SubscriptionScreen() {
 
   const selectedPkg = activePlan === 'yearly' ? resolvedYearlyPkg : resolvedMonthlyPkg;
 
+  const handleApplyAffiliateCode = async () => {
+    const code = affiliateCodeInput.trim().toUpperCase();
+    if (!code) return;
+    console.log('[Subscription] Apply affiliate code pressed:', code);
+    setAffiliateCodeStatus('checking');
+    try {
+      const result = await validateAndAttributeCode(code);
+      if (result.valid) {
+        console.log('[Subscription] Affiliate code valid:', code, 'redemption_url:', result.redemption_url);
+        setAffiliateCodeStatus('valid');
+        setAffiliateCodeApplied(code);
+        setRedemptionUrl(result.redemption_url ?? null);
+      } else {
+        console.log('[Subscription] Affiliate code invalid:', code, 'error:', result.error);
+        setAffiliateCodeStatus('invalid');
+      }
+    } catch (e) {
+      console.error('[Subscription] Error applying affiliate code:', e);
+      setAffiliateCodeStatus('invalid');
+    }
+  };
+
   const handleSubscribe = () => {
-    console.log('[Subscription] Subscribe button pressed, plan:', activePlan, selectedPkg?.identifier);
+    console.log('[Subscription] Subscribe button pressed, plan:', activePlan, selectedPkg?.identifier, 'redemptionUrl:', redemptionUrl);
     if (!selectedPkg) return;
     trackEvent('trial_clicked', { plan: selectedPkg.identifier });
+
+    if (redemptionUrl) {
+      Alert.alert(
+        'Opening Discount Page',
+        "Opening Apple's subscription page with your discount code applied. Complete your purchase there.",
+        [
+          {
+            text: 'Open',
+            onPress: () => {
+              console.log('[Subscription] Opening redemption URL:', redemptionUrl);
+              Linking.openURL(redemptionUrl);
+            },
+          },
+          {
+            text: 'Subscribe Normally',
+            onPress: () => handlePurchase(selectedPkg),
+          },
+        ]
+      );
+      return;
+    }
+
     handlePurchase(selectedPkg);
   };
 
@@ -944,6 +997,59 @@ export default function SubscriptionScreen() {
             )}
 
             <Text style={styles.darkCancelText}>Cancel anytime during trial</Text>
+          </View>
+
+          {/* ── 3.5. AFFILIATE CODE ── */}
+          <View style={styles.affiliateCodeSection}>
+            <Text style={styles.affiliateCodeLabel}>Have an affiliate or offer code?</Text>
+            <View style={styles.affiliateCodeRow}>
+              <TextInput
+                style={[
+                  styles.affiliateCodeInput,
+                  affiliateCodeStatus === 'valid' && { borderColor: '#22c55e' },
+                  affiliateCodeStatus === 'invalid' && { borderColor: '#ef4444' },
+                ]}
+                placeholder="Enter code..."
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                value={affiliateCodeInput}
+                onChangeText={text => {
+                  setAffiliateCodeInput(text.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+                  if (affiliateCodeStatus !== 'idle') {
+                    setAffiliateCodeStatus('idle');
+                    setAffiliateCodeApplied('');
+                    setRedemptionUrl(null);
+                  }
+                }}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={20}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.affiliateCodeApplyBtn,
+                  affiliateCodeStatus === 'checking' && { opacity: 0.6 },
+                ]}
+                onPress={handleApplyAffiliateCode}
+                disabled={affiliateCodeStatus === 'checking' || !affiliateCodeInput.trim()}
+                activeOpacity={0.85}
+              >
+                {affiliateCodeStatus === 'checking' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.affiliateCodeApplyText}>Apply</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            {affiliateCodeStatus === 'valid' && (
+              <Text style={styles.affiliateCodeSuccess}>
+                {'✓ Code '}
+                {affiliateCodeApplied}
+                {' applied!'}
+              </Text>
+            )}
+            {affiliateCodeStatus === 'invalid' && (
+              <Text style={styles.affiliateCodeError}>Invalid or expired code. Please try again.</Text>
+            )}
           </View>
 
           {/* ── 4. CTA BUTTON ── */}
@@ -1699,6 +1805,64 @@ const styles = StyleSheet.create({
   premiumSecureFooterText: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
+  },
+
+  // ── Affiliate code section ─────────────────────────────────────────────────
+  affiliateCodeSection: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 14,
+  },
+  affiliateCodeLabel: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  affiliateCodeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  affiliateCodeInput: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  affiliateCodeApplyBtn: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+  },
+  affiliateCodeApplyText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  affiliateCodeSuccess: {
+    color: '#22c55e',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  affiliateCodeError: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 6,
   },
 
 });

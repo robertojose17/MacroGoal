@@ -77,6 +77,9 @@ export default function ProfileScreen() {
   });
   const [savingFoodPrefs, setSavingFoodPrefs] = useState(false);
 
+  // Admin state
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const loadUserData = async () => {
     try {
       setLoading(true);
@@ -94,6 +97,11 @@ export default function ProfileScreen() {
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).order('start_date', { ascending: false }).limit(1),
         supabase.from('coach_actions').select('id, action_type, summary, previous_value, new_value, created_at').eq('user_id', authUser.id).order('created_at', { ascending: false }).limit(20),
       ]);
+
+      // Check admin status
+      const adminVal = userResult.data?.is_admin === true;
+      console.log('[Profile] is_admin:', adminVal);
+      setIsAdmin(adminVal);
 
       if (coachActionsResult.error) {
         console.error('[Profile] Error loading coach actions:', coachActionsResult.error);
@@ -1417,8 +1425,12 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.accordionHeader}
             onPress={() => {
-              console.log('[Profile] Refer & Earn pressed');
-              router.push('/affiliate-welcome');
+              console.log('[Profile] Refer & Earn pressed, isAdmin:', isAdmin);
+              if (isAdmin) {
+                router.push('/affiliate-admin');
+              } else {
+                router.push('/affiliate-welcome');
+              }
             }}
             activeOpacity={0.7}
           >
