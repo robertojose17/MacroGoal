@@ -94,6 +94,11 @@ export default function AffiliateAdminScreen() {
   const [paypalTxnId, setPaypalTxnId] = useState('');
   const [paypalNote, setPaypalNote] = useState('');
 
+  // Plan selection modal (for approve flow)
+  const [planModalVisible, setPlanModalVisible] = useState(false);
+  const [pendingApproveId, setPendingApproveId] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'monthly' | 'both'>('both');
+
   // Transaction filter
   const [txFilter, setTxFilter] = useState<string>('all');
 
@@ -124,8 +129,20 @@ export default function AffiliateAdminScreen() {
     setActionLoading(prev => ({ ...prev, [id]: val }));
   };
 
-  const handleApprove = async (applicationId: string) => {
-    console.log('[AffiliateAdmin] Approve application pressed:', applicationId);
+  const handleApprove = (applicationId: string) => {
+    console.log('[AffiliateAdmin] Approve button pressed:', applicationId);
+    setPendingApproveId(applicationId);
+    setSelectedPlan('both');
+    setPlanModalVisible(true);
+  };
+
+  const handleApproveConfirm = async () => {
+    if (!pendingApproveId) return;
+    const applicationId = pendingApproveId;
+    const plan = selectedPlan;
+    console.log('[AffiliateAdmin] Approve confirmed:', { applicationId, plan });
+    setPlanModalVisible(false);
+    setPendingApproveId(null);
     setLoaderFor(applicationId, true);
     try {
       const result = await adminApproveApplication(applicationId);
@@ -133,10 +150,35 @@ export default function AffiliateAdminScreen() {
         Alert.alert('Error', result.error || 'Failed to approve application.');
         return;
       }
-      console.log('[AffiliateAdmin] Application approved, triggering Apple code creation');
+      console.log('[AffiliateAdmin] Application approved, triggering Apple code creation with plan:', plan);
       if (result.profile?.id) {
-        const codeResult = await adminCreateAppleCode(result.profile.id);
+        const codeResult = await adminCreateAppleCode(result.profile.id, false, plan);
         console.log('[AffiliateAdmin] Apple code creation result:', codeResult);
+        if (codeResult.status === 'partial_failed') {
+          const annualOk = codeResult.annual?.success;
+          const monthlyOk = codeResult.monthly?.success;
+          const msg = !annualOk
+            ? 'Monthly code created but annual failed.'
+            : 'Annual code created but monthly failed.';
+          const failedPlan: 'annual' | 'monthly' = !annualOk ? 'annual' : 'monthly';
+          const profileId = result.profile.id;
+          Alert.alert(
+            'Partial Success',
+            msg + ' You can retry the failed plan from the Affiliates tab.',
+            [
+              { text: 'OK' },
+              {
+                text: 'Retry Now',
+                onPress: () => {
+                  console.log('[AffiliateAdmin] Retry partial failure pressed, plan:', failedPlan);
+                  handleRetryApple(profileId, failedPlan);
+                },
+              },
+            ],
+          );
+          loadDashboard();
+          return;
+        }
       }
       Alert.alert('Approved!', 'Application approved and Apple code creation triggered.');
       loadDashboard();
@@ -169,11 +211,11 @@ export default function AffiliateAdminScreen() {
     }
   };
 
-  const handleRetryApple = async (profileId: string) => {
-    console.log('[AffiliateAdmin] Retry Apple code pressed for profile:', profileId);
+  const handleRetryApple = async (profileId: string, plan: 'annual' | 'monthly' | 'both' = 'both') => {
+    console.log('[AffiliateAdmin] Retry Apple code pressed for profile:', profileId, 'plan:', plan);
     setLoaderFor('apple_' + profileId, true);
     try {
-      const result = await adminCreateAppleCode(profileId, true);
+      const result = await adminCreateAppleCode(profileId, true, plan);
       if (!result.success) {
         Alert.alert('Error', result.error || 'Failed to retry Apple code creation.');
         return;
@@ -387,6 +429,12 @@ export default function AffiliateAdminScreen() {
                 const asc = statusColor(appleStatus);
                 const asl = statusLabel(appleStatus);
                 const isRetrying = actionLoading['apple_' + aff.id];
+                const planType: string = aff.plan_type ?? 'both';
+                const planLabel = planType === 'annual' ? 'Annual' : planType === 'monthly' ? 'Monthly' : 'Both';
+                const planColor = planType === 'annual' ? BLUE : planType === 'monthly' ? GREEN : GOLD;
+                // Detect per-plan partial failures
+                const annualFailed = aff.annual_code_status === 'failed';
+                const monthlyFailed = aff.monthly_code_status === 'failed';
                 return (
                   <View key={aff.id} style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                     <View style={styles.affHeader}>
@@ -395,6 +443,9 @@ export default function AffiliateAdminScreen() {
                           <Text style={[styles.affCode, { color: BLUE }]}>{aff.affiliate_code}</Text>
                           <View style={[styles.statusBadge, { backgroundColor: asc + '22' }]}>
                             <Text style={[styles.statusBadgeText, { color: asc }]}>{asl}</Text>
+                          </View>
+                          <View style={[styles.statusBadge, { backgroundColor: planColor + '22' }]}>
+                            <Text style={[styles.statusBadgeText, { color: planColor }]}>{planLabel}</Text>
                           </View>
                         </View>
                         <Text style={[styles.affEmail, { color: mutedColor }]}>{aff.email}</Text>
@@ -421,7 +472,7 @@ export default function AffiliateAdminScreen() {
                       </View>
                     </View>
 
-                    {appleStatus === 'failed' && (
+                    {appleStatus === 'failed' && !annualFailed && !monthlyFailed && (
                       <TouchableOpacity
                         style={[styles.retryBtn, { backgroundColor: GOLD + '22', borderColor: GOLD, opacity: isRetrying ? 0.6 : 1 }]}
                         onPress={() => handleRetryApple(aff.id)}
@@ -432,6 +483,40 @@ export default function AffiliateAdminScreen() {
                           <ActivityIndicator size="small" color={GOLD} />
                         ) : (
                           <Text style={[styles.retryBtnText, { color: GOLD }]}>Retry Apple Code</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {annualFailed && (
+                      <TouchableOpacity
+                        style={[styles.retryBtn, { backgroundColor: RED + '22', borderColor: RED, opacity: isRetrying ? 0.6 : 1, marginBottom: 6 }]}
+                        onPress={() => {
+                          console.log('[AffiliateAdmin] Retry annual code pressed for profile:', aff.id);
+                          handleRetryApple(aff.id, 'annual');
+                        }}
+                        disabled={isRetrying}
+                        activeOpacity={0.85}
+                      >
+                        {isRetrying ? (
+                          <ActivityIndicator size="small" color={RED} />
+                        ) : (
+                          <Text style={[styles.retryBtnText, { color: RED }]}>Retry Annual Code</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {monthlyFailed && (
+                      <TouchableOpacity
+                        style={[styles.retryBtn, { backgroundColor: RED + '22', borderColor: RED, opacity: isRetrying ? 0.6 : 1 }]}
+                        onPress={() => {
+                          console.log('[AffiliateAdmin] Retry monthly code pressed for profile:', aff.id);
+                          handleRetryApple(aff.id, 'monthly');
+                        }}
+                        disabled={isRetrying}
+                        activeOpacity={0.85}
+                      >
+                        {isRetrying ? (
+                          <ActivityIndicator size="small" color={RED} />
+                        ) : (
+                          <Text style={[styles.retryBtnText, { color: RED }]}>Retry Monthly Code</Text>
                         )}
                       </TouchableOpacity>
                     )}
@@ -652,6 +737,75 @@ export default function AffiliateAdminScreen() {
                 activeOpacity={0.85}
               >
                 <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Plan Selection Modal */}
+      <Modal
+        visible={planModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlanModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: textColor }]}>Select Plan</Text>
+            <Text style={[styles.modalSubtitle, { color: mutedColor }]}>
+              Which plan should this affiliate's code apply to?
+            </Text>
+            {(['both', 'annual', 'monthly'] as const).map(plan => {
+              const labels: Record<string, string> = {
+                both: 'Both (Annual + Monthly)',
+                annual: 'Annual only',
+                monthly: 'Monthly only',
+              };
+              const isSelected = selectedPlan === plan;
+              return (
+                <TouchableOpacity
+                  key={plan}
+                  style={[
+                    styles.planOption,
+                    {
+                      borderColor: isSelected ? BLUE : cardBorder,
+                      backgroundColor: isSelected ? BLUE + '18' : 'transparent',
+                    },
+                  ]}
+                  onPress={() => {
+                    console.log('[AffiliateAdmin] Plan option selected:', plan);
+                    setSelectedPlan(plan);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.planRadio, { borderColor: isSelected ? BLUE : mutedColor }]}>
+                    {isSelected && <View style={[styles.planRadioInner, { backgroundColor: BLUE }]} />}
+                  </View>
+                  <Text style={[styles.planOptionText, { color: isSelected ? BLUE : textColor }]}>
+                    {labels[plan]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { borderColor: cardBorder, borderWidth: 1 }]}
+                onPress={() => {
+                  console.log('[AffiliateAdmin] Plan modal cancelled');
+                  setPlanModalVisible(false);
+                  setPendingApproveId(null);
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.modalBtnText, { color: mutedColor }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: GREEN }]}
+                onPress={handleApproveConfirm}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Approve</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1042,4 +1196,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   bottomSpacer: { height: 20 },
+  // Plan selection
+  planOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  planRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  planOptionText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
 });

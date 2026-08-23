@@ -144,17 +144,24 @@ export async function adminRejectApplication(applicationId: string, adminNotes?:
 }
 
 // Admin: trigger Apple code creation
-export async function adminCreateAppleCode(affiliateProfileId: string, retry = false): Promise<{ success: boolean; error?: string; status?: string }> {
+export async function adminCreateAppleCode(
+  affiliateProfileId: string,
+  retry = false,
+  plan: 'annual' | 'monthly' | 'both' = 'both',
+): Promise<{ success: boolean; error?: string; status?: string; annual?: any; monthly?: any }> {
   try {
+    console.log('[affiliateApi] adminCreateAppleCode called:', { affiliateProfileId, retry, plan });
     const headers = await getAuthHeaders();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-affiliate-code`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ affiliate_profile_id: affiliateProfileId, retry }),
+      body: JSON.stringify({ affiliate_profile_id: affiliateProfileId, retry, plan }),
     });
     const data = await res.json();
-    return { success: data.success, error: data.error, status: data.status };
+    console.log('[affiliateApi] adminCreateAppleCode response:', data);
+    return { success: data.success, error: data.error, status: data.status, annual: data.annual, monthly: data.monthly };
   } catch (e: any) {
+    console.error('[affiliateApi] adminCreateAppleCode error:', e);
     return { success: false, error: e.message };
   }
 }
