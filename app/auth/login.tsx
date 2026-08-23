@@ -20,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { trackOnboardingEvent } from '@/utils/onboardingAnalytics';
 
-const BG_IMAGE = require('../../assets/images/73291328-4520-475d-9d5f-c23a5206eb1d.jpeg');
+const BG_IMAGE = require('../../assets/images/23f6da81-f1f7-422e-89ef-d520d6510c09.jpeg');
 
 
 export default function LoginScreen() {
