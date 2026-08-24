@@ -80,7 +80,7 @@ export default function ReferralsScreen() {
     try {
       const data = await getAffiliateStats();
       setStats(data);
-      if (data?.paypal_email) setPaypalInput(data.paypal_email);
+      if (data?.profile?.paypal_email) setPaypalInput(data.profile.paypal_email);
     } catch (e) {
       console.error('[Referrals] Failed to load stats:', e);
     } finally {
@@ -100,7 +100,7 @@ export default function ReferralsScreen() {
   };
 
   const handleCopy = () => {
-    const code = stats?.affiliate_code;
+    const code = stats?.profile?.affiliate_code;
     if (!code) return;
     console.log('[Referrals] Copy code pressed:', code);
     Clipboard.setString(code);
@@ -109,7 +109,7 @@ export default function ReferralsScreen() {
   };
 
   const handleShare = async () => {
-    const code = stats?.affiliate_code;
+    const code = stats?.profile?.affiliate_code;
     const redemptionUrl = stats?.redemption_url;
     if (!code) return;
     console.log('[Referrals] Share Link pressed, code:', code);
@@ -139,7 +139,7 @@ export default function ReferralsScreen() {
         return;
       }
       console.log('[Referrals] PayPal email saved successfully');
-      setStats((prev: any) => prev ? { ...prev, paypal_email: email } : prev);
+      setStats((prev: any) => prev ? { ...prev, profile: { ...prev.profile, paypal_email: email } } : prev);
       setEditingPaypal(false);
       Alert.alert('Saved!', 'Your PayPal email has been updated.');
     } catch (e) {
@@ -166,18 +166,19 @@ export default function ReferralsScreen() {
     );
   }
 
-  const affiliateCode = stats?.affiliate_code ?? '';
-  const appleStatus = stats?.apple_code_status ?? 'unknown';
-  const commissionRate = stats?.commission_rate ?? 50;
-  const commissionRateChangeDate = stats?.commission_rate_change_date ?? null;
+  const profile = stats?.profile ?? {};
+  const affiliateCode = profile?.affiliate_code ?? '';
+  const appleStatus = profile?.apple_code_status ?? 'unknown';
+  const commissionRate = profile?.commission_rate ?? 50;
+  const commissionRateChangeDate = profile?.commission_rate_change_date ?? null;
   const redemptionUrl = stats?.redemption_url ?? null;
-  const paypalEmail = stats?.paypal_email ?? null;
+  const paypalEmail = profile?.paypal_email ?? null;
   const showPaypalInput = !paypalEmail || editingPaypal;
 
-  const earningsPending = stats?.earnings_pending ?? 0;
-  const earningsAvailable = stats?.earnings_available ?? 0;
-  const earningsPaid = stats?.earnings_paid ?? 0;
-  const earningsReversed = stats?.earnings_reversed ?? 0;
+  const earningsPending = stats?.earnings?.pending ?? 0;
+  const earningsAvailable = stats?.earnings?.available ?? 0;
+  const earningsPaid = stats?.earnings?.paid ?? 0;
+  const earningsReversed = stats?.earnings?.reversed ?? 0;
 
   const commissions: any[] = stats?.commissions ?? [];
   const payouts: any[] = stats?.payouts ?? [];
