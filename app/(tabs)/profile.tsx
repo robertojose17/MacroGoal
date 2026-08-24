@@ -95,7 +95,7 @@ export default function ProfileScreen() {
       const [userResult, goalResult, coachActionsResult] = await Promise.all([
         supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).order('start_date', { ascending: false }).limit(1),
-        supabase.from('coach_actions').select('id, action_type, summary, previous_value, new_value, created_at').eq('user_id', authUser.id).order('created_at', { ascending: false }).limit(20),
+        supabase.from('coach_action_log').select('id, action_type, summary, previous_value, new_value, created_at').eq('user_id', authUser.id).order('created_at', { ascending: false }).limit(20),
       ]);
 
       // Check admin status
