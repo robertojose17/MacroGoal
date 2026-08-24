@@ -97,11 +97,13 @@ export default function AffiliateWelcomeScreen() {
         // Check affiliate profile for apple code status
         console.log('[AffiliateWelcome] Fetching affiliate stats for approved user');
         const stats = await getAffiliateStats();
-        console.log('[AffiliateWelcome] Stats response:', JSON.stringify(stats));
-        if (stats?.affiliate_code) setAffiliateCode(stats.affiliate_code);
+        console.log('[AffiliateWelcome] Full stats response:', JSON.stringify(stats, null, 2));
+        console.log('[AffiliateWelcome] stats.has_profile:', stats?.has_profile);
+        console.log('[AffiliateWelcome] stats.profile:', JSON.stringify(stats?.profile));
+        if (stats?.profile?.affiliate_code) setAffiliateCode(stats.profile.affiliate_code);
 
-        const appleStatus = stats?.profile?.apple_code_status ?? stats?.apple_code_status;
-        console.log('[AffiliateWelcome] apple_code_status:', appleStatus);
+        const appleStatus = stats?.profile?.apple_code_status;
+        console.log('[AffiliateWelcome] apple_code_status (from stats.profile):', appleStatus);
 
         if (appleStatus === 'active') {
           console.log('[AffiliateWelcome] Apple code active — redirecting to /referrals');
