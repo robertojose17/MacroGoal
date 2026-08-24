@@ -170,7 +170,7 @@ export default function ReferralsScreen() {
   const affiliateCode = profile?.affiliate_code ?? '';
   const appleStatus = profile?.apple_code_status ?? 'unknown';
   const commissionRate = profile?.commission_rate ?? 50;
-  const commissionRateChangeDate = profile?.commission_rate_change_date ?? null;
+
   const redemptionUrl = stats?.redemption_url ?? null;
   const paypalEmail = profile?.paypal_email ?? null;
   const showPaypalInput = !paypalEmail || editingPaypal;
@@ -191,8 +191,6 @@ export default function ReferralsScreen() {
     appleStatus === 'active' ? 'Active' :
     appleStatus === 'failed' ? 'Failed' :
     'Activating';
-
-  const commissionRateChangeDateFormatted = commissionRateChangeDate ? formatDate(commissionRateChangeDate) : null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['bottom']}>
@@ -253,12 +251,6 @@ export default function ReferralsScreen() {
             {commissionRate}
             {'% commission'}
           </Text>
-          {commissionRateChangeDateFormatted ? (
-            <Text style={[styles.commissionRateNote, { color: mutedColor }]}>
-              {'Changes to 20% on '}
-              {commissionRateChangeDateFormatted}
-            </Text>
-          ) : null}
           <Text style={[styles.commissionRateNote, { color: mutedColor }]}>35-day pending period</Text>
         </View>
 
