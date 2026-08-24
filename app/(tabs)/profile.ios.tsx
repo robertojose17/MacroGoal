@@ -38,6 +38,7 @@ export default function ProfileScreen() {
   const { isPremium, loading: premiumLoading, refreshPremiumStatus } = usePremium();
 
   const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [goal, setGoal] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,6 +96,7 @@ export default function ProfileScreen() {
       } else if (userResult.data) {
         console.log('[Profile iOS] User data loaded:', userResult.data);
         setUser({ ...authUser, ...userResult.data });
+        setIsAdmin(!!userResult.data.is_admin);
         if (userResult.data.onboarding_completed && !userResult.data.goal_weight) {
           console.log('[Profile iOS] Goal weight is missing, showing prompt');
           setShowGoalWeightPrompt(true);
@@ -1330,7 +1332,11 @@ export default function ProfileScreen() {
             style={styles.accordionHeader}
             onPress={() => {
               console.log('[Profile iOS] Invite Friends & Earn XP pressed');
-              router.push('/affiliate-welcome');
+              if (isAdmin) {
+                router.push('/affiliate-admin');
+              } else {
+                router.push('/affiliate-welcome');
+              }
             }}
             activeOpacity={0.7}
           >
