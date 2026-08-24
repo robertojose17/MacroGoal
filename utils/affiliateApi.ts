@@ -1,6 +1,30 @@
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase/client';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+
+/** AsyncStorage key used to persist the validated affiliate code across sessions. */
+export const AFFILIATE_CODE_STORAGE_KEY = 'affiliate_code_attributed';
+
+/**
+ * Set the $affiliate_code subscriber attribute on RevenueCat (native only).
+ * Safe to call after RC is configured — no-op on web.
+ */
+export async function setRevenueCatAffiliateCode(code: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    // Dynamic import so this file stays web-safe (purchases.native.ts is native-only)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Purchases = require('react-native-purchases').default;
+    const upper = code.toUpperCase();
+    console.log('[affiliateApi] Setting RC subscriber attribute $affiliate_code:', upper);
+    await Purchases.setAttributes({ '$affiliate_code': upper });
+    console.log('[affiliateApi] RC $affiliate_code attribute set successfully');
+  } catch (e) {
+    console.warn('[affiliateApi] Failed to set RC $affiliate_code attribute (non-fatal):', e);
+  }
+}
 
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -81,15 +105,35 @@ export async function getAffiliateStats() {
 export async function validateAndAttributeCode(code: string): Promise<{ valid: boolean; redemption_url?: string; error?: string }> {
   try {
     const headers = await getAuthHeaders();
+    console.log('[affiliateApi] validateAndAttributeCode — validating code:', code.toUpperCase());
     const res = await fetch(`${SUPABASE_URL}/functions/v1/affiliate-admin/attribution`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ code }),
     });
     const data = await res.json();
-    if (!res.ok) return { valid: false, error: data.error || 'Invalid code' };
+    if (!res.ok) {
+      console.log('[affiliateApi] validateAndAttributeCode — invalid code:', code, 'error:', data.error);
+      return { valid: false, error: data.error || 'Invalid code' };
+    }
+
+    const upperCode = code.toUpperCase();
+    console.log('[affiliateApi] validateAndAttributeCode — code valid:', upperCode, 'redemption_url:', data.redemption_url);
+
+    // Persist the validated code so it can be re-applied to RC on future app launches
+    try {
+      await AsyncStorage.setItem(AFFILIATE_CODE_STORAGE_KEY, upperCode);
+      console.log('[affiliateApi] Affiliate code persisted to AsyncStorage:', upperCode);
+    } catch (storageErr) {
+      console.warn('[affiliateApi] Failed to persist affiliate code to AsyncStorage (non-fatal):', storageErr);
+    }
+
+    // Set the RC subscriber attribute immediately so it appears in the next webhook event
+    await setRevenueCatAffiliateCode(upperCode);
+
     return { valid: true, redemption_url: data.redemption_url };
   } catch (e: any) {
+    console.error('[affiliateApi] validateAndAttributeCode error:', e);
     return { valid: false, error: e.message };
   }
 }

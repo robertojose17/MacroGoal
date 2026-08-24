@@ -29,6 +29,7 @@ import GoPremiumFloatingBadge from "@/components/GoPremiumFloatingBadge";
 import Constants from "expo-constants";
 import { trackOnboardingEvent } from "@/utils/onboardingAnalytics";
 import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
+import { AFFILIATE_CODE_STORAGE_KEY, setRevenueCatAffiliateCode } from "@/utils/affiliateApi";
 import mobileAds from "@/utils/mobileAds";
 
 // GestureHandlerRootView — native only
@@ -115,7 +116,16 @@ export default function RootLayout() {
           if (resolvedSession?.user?.id) {
             // Configure AND identify atomically — no anonymous window.
             loginRevenueCat(resolvedSession.user.id, apiKey, { email: resolvedSession.user.email ?? undefined })
-              .catch((e) => console.warn("[App] loginRevenueCat failed:", e));
+              .then(() => {
+                // Re-apply any previously validated affiliate code as an RC subscriber attribute
+                return AsyncStorage.getItem(AFFILIATE_CODE_STORAGE_KEY).then((savedCode) => {
+                  if (savedCode) {
+                    console.log("[App] Restoring RC $affiliate_code attribute from storage:", savedCode);
+                    return setRevenueCatAffiliateCode(savedCode);
+                  }
+                });
+              })
+              .catch((e) => console.warn("[App] loginRevenueCat / affiliate attribute restore failed:", e));
           } else {
             // No session yet — INITIAL_SESSION listener below will handle it.
             console.log("[App] No session at cold start — deferring RC login to auth listener");
