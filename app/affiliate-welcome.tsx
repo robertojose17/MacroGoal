@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Animated,
   ActivityIndicator,
   ScrollView,
+  RefreshControl,
   Alert,
   Linking,
 } from 'react-native';
@@ -28,6 +29,7 @@ type AffiliateStatus =
   | 'activating'
   | 'active'
   | 'failed'
+  | 'partial_failed'
   | 'rejected'
   | 'suspended';
 
@@ -40,83 +42,102 @@ export default function AffiliateWelcomeScreen() {
   const [status, setStatus] = useState<AffiliateStatus>('loading');
   const [desiredCode, setDesiredCode] = useState<string | null>(null);
   const [affiliateCode, setAffiliateCode] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Terms gate state (shown when status === 'none')
   const [termsChecked, setTermsChecked] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    const loadStatus = async () => {
-      console.log('[AffiliateWelcome] Loading affiliate status');
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setStatus('none');
-          setTermsAccepted(false);
-          return;
-        }
-
-        // Check terms acceptance
-        const { data: appData } = await supabase
-          .from('affiliate_applications')
-          .select('terms_accepted, desired_code, status')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        setTermsAccepted(appData?.terms_accepted === true);
-        if (appData?.desired_code) setDesiredCode(appData.desired_code);
-
-        // Determine status from application
-        if (!appData) {
-          setStatus('none');
-          return;
-        }
-
-        const appStatus = appData.status;
-
-        if (appStatus === 'pending') {
-          setStatus('pending');
-          return;
-        }
-
-        if (appStatus === 'rejected') {
-          setStatus('rejected');
-          return;
-        }
-
-        if (appStatus === 'suspended') {
-          setStatus('suspended');
-          return;
-        }
-
-        if (appStatus === 'approved') {
-          // Check affiliate profile for apple code status
-          const stats = await getAffiliateStats();
-          if (stats?.affiliate_code) setAffiliateCode(stats.affiliate_code);
-
-          const appleStatus = stats?.apple_code_status;
-          if (appleStatus === 'active') {
-            console.log('[AffiliateWelcome] Apple code active — redirecting to /referrals');
-            router.replace('/referrals');
-            return;
-          } else if (appleStatus === 'failed') {
-            setStatus('failed');
-          } else {
-            setStatus('activating');
-          }
-          return;
-        }
-
-        setStatus('none');
-      } catch (e) {
-        console.error('[AffiliateWelcome] Error loading status:', e);
+  const loadStatus = useCallback(async (isRefresh = false) => {
+    console.log('[AffiliateWelcome] Loading affiliate status', isRefresh ? '(refresh)' : '');
+    if (!isRefresh) setStatus('loading');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         setStatus('none');
         setTermsAccepted(false);
+        return;
       }
-    };
+
+      // Check terms acceptance
+      const { data: appData } = await supabase
+        .from('affiliate_applications')
+        .select('terms_accepted, desired_code, status')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      setTermsAccepted(appData?.terms_accepted === true);
+      if (appData?.desired_code) setDesiredCode(appData.desired_code);
+
+      // Determine status from application
+      if (!appData) {
+        setStatus('none');
+        return;
+      }
+
+      const appStatus = appData.status;
+
+      if (appStatus === 'pending') {
+        setStatus('pending');
+        return;
+      }
+
+      if (appStatus === 'rejected') {
+        setStatus('rejected');
+        return;
+      }
+
+      if (appStatus === 'suspended') {
+        setStatus('suspended');
+        return;
+      }
+
+      if (appStatus === 'approved') {
+        // Check affiliate profile for apple code status
+        console.log('[AffiliateWelcome] Fetching affiliate stats for approved user');
+        const stats = await getAffiliateStats();
+        console.log('[AffiliateWelcome] Stats response:', JSON.stringify(stats));
+        if (stats?.affiliate_code) setAffiliateCode(stats.affiliate_code);
+
+        const appleStatus = stats?.profile?.apple_code_status ?? stats?.apple_code_status;
+        console.log('[AffiliateWelcome] apple_code_status:', appleStatus);
+
+        if (appleStatus === 'active') {
+          console.log('[AffiliateWelcome] Apple code active — redirecting to /referrals');
+          router.replace('/referrals');
+          return;
+        } else if (appleStatus === 'failed') {
+          setStatus('failed');
+        } else if (appleStatus === 'partial_failed') {
+          setStatus('partial_failed');
+        } else if (appleStatus === 'pending' || appleStatus === 'activating') {
+          // Both 'pending' and 'activating' show the same "being activated" UI
+          setStatus('activating');
+        } else {
+          setStatus('activating');
+        }
+        return;
+      }
+
+      setStatus('none');
+    } catch (e) {
+      console.error('[AffiliateWelcome] Error loading status:', e);
+      setStatus('none');
+      setTermsAccepted(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
     loadStatus();
-  }, []);
+  }, [loadStatus]);
+
+  const handleRefresh = useCallback(async () => {
+    console.log('[AffiliateWelcome] Pull-to-refresh triggered');
+    setRefreshing(true);
+    await loadStatus(true);
+    setRefreshing(false);
+  }, [loadStatus]);
 
   useEffect(() => {
     if (status === 'none' && termsAccepted === true) {
@@ -222,23 +243,34 @@ export default function AffiliateWelcomeScreen() {
     );
   }
 
-  // ── Activating ───────────────────────────────────────────────────────────
+  // ── Activating (covers both 'pending' and 'activating' apple_code_status) ─
   if (status === 'activating') {
     const displayCode = affiliateCode || desiredCode;
+    const codeText = displayCode ?? '';
     return (
       <LinearGradient colors={['#0F0F0F', '#1A1A2E']} style={styles.gradient}>
         <SafeAreaView style={styles.safeArea}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <View style={styles.container}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={BLUE}
+                colors={[BLUE]}
+              />
+            }
+          >
             <View style={styles.topSection}>
               <ActivityIndicator size="large" color={BLUE} style={{ marginBottom: 16 }} />
               <Text style={styles.headline}>Your Code is Being Activated</Text>
               {displayCode ? (
                 <Text style={styles.subheadline}>
                   {'Your affiliate code '}
-                  <Text style={{ color: BLUE, fontWeight: '700' }}>{displayCode}</Text>
+                  <Text style={{ color: BLUE, fontWeight: '700' }}>{codeText}</Text>
                   {' is being set up with Apple. This can take up to 24 hours.'}
                 </Text>
               ) : (
@@ -246,8 +278,15 @@ export default function AffiliateWelcomeScreen() {
                   Your affiliate code is being set up with Apple. This can take up to 24 hours.
                 </Text>
               )}
+              <Text style={styles.supportHint}>
+                If your code has not activated after 24 hours, please{' '}
+                <Text style={styles.supportLink} onPress={handleContactSupport}>
+                  contact support
+                </Text>
+                .
+              </Text>
             </View>
-          </View>
+          </ScrollView>
         </SafeAreaView>
       </LinearGradient>
     );
@@ -261,7 +300,17 @@ export default function AffiliateWelcomeScreen() {
           <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <View style={styles.container}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={BLUE}
+                colors={[BLUE]}
+              />
+            }
+          >
             <View style={styles.topSection}>
               <Ionicons name="alert-circle-outline" size={72} color={colors.error} />
               <Text style={styles.headline}>Code Activation Failed</Text>
@@ -274,7 +323,44 @@ export default function AffiliateWelcomeScreen() {
                 <Text style={styles.primaryButtonText}>Contact Support</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // ── Partial Failed ───────────────────────────────────────────────────────
+  if (status === 'partial_failed') {
+    return (
+      <LinearGradient colors={['#0F0F0F', '#1A1A2E']} style={styles.gradient}>
+        <SafeAreaView style={styles.safeArea}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={BLUE}
+                colors={[BLUE]}
+              />
+            }
+          >
+            <View style={styles.topSection}>
+              <Ionicons name="warning-outline" size={72} color={GOLD} />
+              <Text style={styles.headline}>Partial Activation Issue</Text>
+              <Text style={styles.subheadline}>
+                One of your codes failed to activate. Please contact support.
+              </Text>
+            </View>
+            <View style={styles.buttonsSection}>
+              <TouchableOpacity style={[styles.primaryButton, { backgroundColor: BLUE }]} onPress={handleContactSupport} activeOpacity={0.85}>
+                <Text style={styles.primaryButtonText}>Contact Support</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </SafeAreaView>
       </LinearGradient>
     );
@@ -527,9 +613,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingHorizontal: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
   topSection: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  supportHint: {
+    marginTop: 24,
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  supportLink: {
+    color: BLUE,
+    fontWeight: '600',
   },
   headline: {
     fontSize: 28,
