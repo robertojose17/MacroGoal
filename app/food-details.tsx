@@ -21,6 +21,7 @@ export default function FoodDetailsScreen() {
   const itemId = (params.itemId as string) || undefined;
   const planId = (params.planId as string) || undefined;
   const source = (params.source as FoodLogSource) || 'search';
+  const food_item_id = (params.food_item_id as string) || undefined;
 
   console.log('[FoodDetails] Screen mounted, layoutMode:', layoutMode, 'isMealPlanMode:', isMealPlanMode, 'mealType:', mealType, 'date:', date, 'context:', context, 'planId:', planId, 'source:', source);
 
@@ -77,6 +78,7 @@ export default function FoodDetailsScreen() {
         itemId={itemId}
         planId={planId}
         source={source}
+        food_item_id={food_item_id}
         onMealPlanSave={handleMealPlanSave}
       />
     );
@@ -92,6 +94,7 @@ export default function FoodDetailsScreen() {
       returnTo={returnTo}
       itemId={itemId}
       source={source}
+      food_item_id={food_item_id}
     />
   );
 }

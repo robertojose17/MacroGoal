@@ -323,6 +323,7 @@ interface FoodDetailsLayoutProps {
   itemTable?: 'meal_items' | 'saved_meal_items';
   planId?: string;
   source?: FoodLogSource;
+  food_item_id?: string;
   onSaveComplete?: () => void;
   onMealPlanSave?: (foodData: {
     food_name: string;
@@ -612,6 +613,7 @@ export default function FoodDetailsLayout({
   itemTable,
   planId,
   source = 'search',
+  food_item_id,
   onSaveComplete,
   onMealPlanSave,
 }: FoodDetailsLayoutProps) {
@@ -2321,6 +2323,41 @@ export default function FoodDetailsLayout({
         >
           <Text style={styles.saveButtonText}>{mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Save Changes' : 'Add to Meal'}</Text>
         </TouchableOpacity>
+
+        {source === 'barcode' && food_item_id && (() => {
+          const barcodeFromOffData = (() => {
+            try {
+              const parsed = offData ? JSON.parse(offData) : null;
+              return (parsed?.code as string | undefined) || (parsed?.barcode as string | undefined) || '';
+            } catch {
+              return '';
+            }
+          })();
+          return (
+            <View style={{ marginTop: spacing.sm, marginBottom: spacing.xl, alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[FoodDetails] "Report incorrect data" link pressed, food_item_id=', food_item_id, 'barcode=', barcodeFromOffData);
+                  router.push({
+                    pathname: '/food-photo-capture',
+                    params: {
+                      barcode: barcodeFromOffData,
+                      type: 'correction',
+                      food_item_id,
+                      meal: mealType,
+                      date: date || '',
+                      mode: 'diary',
+                    },
+                  });
+                }}
+              >
+                <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>
+                  Incorrect nutrition data? Report it
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
       </ScrollView>
     </SafeAreaView>
   );

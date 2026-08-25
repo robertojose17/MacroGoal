@@ -347,7 +347,7 @@ export default function BarcodeLookupScreen() {
             Product Not Found
           </Text>
           <Text style={[styles.notFoundText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This barcode is not in the OpenFoodFacts database yet.
+            This product isn't in our database yet. Help us add it!
           </Text>
           <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             Barcode: {barcode}
@@ -357,7 +357,48 @@ export default function BarcodeLookupScreen() {
             <Text style={[styles.optionsTitle, { color: isDark ? colors.textDark : colors.text }]}>
               What would you like to do?
             </Text>
-            
+
+            <TouchableOpacity
+              style={[styles.optionButton, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+              onPress={() => {
+                console.log('[BarcodeLookup] Add This Product button pressed, barcode:', barcode);
+                router.push({
+                  pathname: '/food-photo-capture',
+                  params: {
+                    barcode,
+                    type: 'new_product',
+                    meal: mealType,
+                    date,
+                    mode,
+                    context,
+                    returnTo,
+                    mealId: myMealId || '',
+                  },
+                });
+              }}
+            >
+              <IconSymbol
+                ios_icon_name="camera.fill"
+                android_material_icon_name="camera_alt"
+                size={24}
+                color={colors.primary}
+              />
+              <View style={styles.optionTextContainer}>
+                <Text style={[styles.optionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  Add This Product
+                </Text>
+                <Text style={[styles.optionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  Take photos to add it to our database
+                </Text>
+              </View>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron_right"
+                size={20}
+                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+              />
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
               onPress={handleManualSearch}
