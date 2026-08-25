@@ -822,7 +822,7 @@ export default function SubscriptionScreen() {
     handlePurchase(selectedPkg);
   };
 
-  const ctaLabel = activePlan === 'yearly' ? 'Start Free Trial' : 'Subscribe Monthly';
+  const ctaLabel = 'Get Started';
 
   const ALL_FEATURES = [
     'AI photo calorie estimator',
@@ -959,11 +959,10 @@ export default function SubscriptionScreen() {
                     {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.darkPlanCardTitle}>Free Trial</Text>
-                    <Text style={styles.darkPlanCardPrice}>{yearlyPrice}/year</Text>
                     {yearlyMonthlyEquiv && (
-                      <Text style={styles.darkPlanCardSub}>Only {yearlyMonthlyEquiv}</Text>
+                      <Text style={styles.darkPlanCardTitle}>{yearlyMonthlyEquiv}</Text>
                     )}
+                    <Text style={styles.darkPlanCardSub}>{yearlyPrice} billed annually</Text>
                     <Text style={[styles.planCardTag, { color: '#5B9AA8' }]}>
                       Most users choose this
                     </Text>
