@@ -593,9 +593,10 @@ function Step0({ onNext }: { onNext: () => void }) {
       <LinearGradient
         colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.95)', '#000000']}
         locations={[0, 0.35, 0.55, 0.75, 1]}
-        style={styles.fullScreen}
-      >
-        <SafeAreaView style={styles.step0Safe} edges={['bottom']}>
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+        <SafeAreaView style={styles.step0Safe} edges={['top', 'bottom']}>
           <View style={styles.step0Content}>
             <Text style={styles.step0Headline}>{'Transform Your Body.'}</Text>
             <Text style={styles.step0Sub}>
@@ -612,7 +613,6 @@ function Step0({ onNext }: { onNext: () => void }) {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
-      </LinearGradient>
     </ImageBackground>
   );
 }

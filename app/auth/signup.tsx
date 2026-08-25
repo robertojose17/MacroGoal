@@ -341,8 +341,6 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   bg: {
     flex: 1,
-    width: '100%',
-    height: '100%',
   },
   safeArea: {
     flex: 1,
