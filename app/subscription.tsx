@@ -995,7 +995,6 @@ export default function SubscriptionScreen() {
               </TouchableOpacity>
             )}
 
-            <Text style={styles.darkCancelText}>Cancel anytime during trial</Text>
           </View>
 
           {/* ── 3.5. AFFILIATE CODE ── */}
