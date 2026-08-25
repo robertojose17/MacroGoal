@@ -23,6 +23,7 @@ import {
   adminCreateAppleCode,
   adminCreatePayout,
   adminMarkPayoutPaid,
+  adminRemoveAffiliate,
 } from '@/utils/affiliateApi';
 
 const BLUE = '#3b82f6';
@@ -91,6 +92,7 @@ export default function AffiliateAdminScreen() {
   // Mark paid modal
   const [markPaidModalVisible, setMarkPaidModalVisible] = useState(false);
   const [markPaidPayoutId, setMarkPaidPayoutId] = useState<string | null>(null);
+  const [markPaidPaypalEmail, setMarkPaidPaypalEmail] = useState('');
   const [paypalTxnId, setPaypalTxnId] = useState('');
   const [paypalNote, setPaypalNote] = useState('');
 
@@ -247,12 +249,44 @@ export default function AffiliateAdminScreen() {
     }
   };
 
+  const handleRemoveAffiliate = (profileId: string, affiliateCode: string) => {
+    console.log('[AffiliateAdmin] Remove affiliate button pressed:', profileId, affiliateCode);
+    Alert.alert(
+      'Remove Affiliate',
+      `Are you sure you want to remove ${affiliateCode} from the program? Their code will be deactivated.`,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[AffiliateAdmin] Remove affiliate cancelled') },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('[AffiliateAdmin] Remove affiliate confirmed:', profileId);
+            setLoaderFor('remove_' + profileId, true);
+            try {
+              const result = await adminRemoveAffiliate(profileId);
+              if (!result.success) {
+                Alert.alert('Error', result.error || 'Failed to remove affiliate.');
+                return;
+              }
+              Alert.alert('Removed', 'Affiliate has been removed from the program.');
+              loadDashboard();
+            } catch (e) {
+              Alert.alert('Error', 'Something went wrong.');
+            } finally {
+              setLoaderFor('remove_' + profileId, false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleMarkPaidConfirm = async () => {
     if (!markPaidPayoutId || !paypalTxnId.trim()) {
       Alert.alert('Required', 'Please enter the PayPal transaction ID.');
       return;
     }
-    console.log('[AffiliateAdmin] Mark payout paid confirmed:', markPaidPayoutId, 'txn:', paypalTxnId);
+    console.log('[AffiliateAdmin] Mark payout paid confirmed:', markPaidPayoutId, 'txn:', paypalTxnId, 'paypal:', markPaidPaypalEmail);
     setMarkPaidModalVisible(false);
     setLoaderFor('markpaid_' + markPaidPayoutId, true);
     try {
@@ -268,6 +302,7 @@ export default function AffiliateAdminScreen() {
     } finally {
       setLoaderFor('markpaid_' + markPaidPayoutId, false);
       setMarkPaidPayoutId(null);
+      setMarkPaidPaypalEmail('');
       setPaypalTxnId('');
       setPaypalNote('');
     }
@@ -429,12 +464,18 @@ export default function AffiliateAdminScreen() {
                 const asc = statusColor(appleStatus);
                 const asl = statusLabel(appleStatus);
                 const isRetrying = actionLoading['apple_' + aff.id];
+                const isRemoving = actionLoading['remove_' + aff.id];
                 const planType: string = aff.plan_type ?? 'both';
                 const planLabel = planType === 'annual' ? 'Annual' : planType === 'monthly' ? 'Monthly' : 'Both';
                 const planColor = planType === 'annual' ? BLUE : planType === 'monthly' ? GREEN : GOLD;
                 // Detect per-plan partial failures
                 const annualFailed = aff.annual_code_status === 'failed';
                 const monthlyFailed = aff.monthly_code_status === 'failed';
+                // Available commissions for this affiliate
+                const availableCommissions = (aff.commissions ?? []).filter((c: any) => c.status === 'available');
+                const availableCommissionIds = availableCommissions.map((c: any) => c.id);
+                const hasAvailable = (aff.earnings_available ?? 0) > 0;
+                const isCreatingPayout = actionLoading['payout_' + aff.id];
                 return (
                   <View key={aff.id} style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                     <View style={styles.affHeader}>
@@ -455,6 +496,18 @@ export default function AffiliateAdminScreen() {
                           {'%'}
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        style={[styles.removeBtn, { opacity: isRemoving ? 0.6 : 1 }]}
+                        onPress={() => handleRemoveAffiliate(aff.id, aff.affiliate_code)}
+                        disabled={isRemoving}
+                        activeOpacity={0.85}
+                      >
+                        {isRemoving ? (
+                          <ActivityIndicator size="small" color={RED} />
+                        ) : (
+                          <Text style={styles.removeBtnText}>Remove</Text>
+                        )}
+                      </TouchableOpacity>
                     </View>
 
                     <View style={styles.affEarningsRow}>
@@ -471,6 +524,43 @@ export default function AffiliateAdminScreen() {
                         <Text style={[styles.affEarningsValue, { color: BLUE }]}>{formatMoney(aff.earnings_paid)}</Text>
                       </View>
                     </View>
+
+                    {/* Ready to Pay section */}
+                    {hasAvailable && (
+                      <View style={[styles.readyToPayBox, { backgroundColor: GREEN + '12', borderColor: GREEN + '44' }]}>
+                        <View style={styles.readyToPayHeader}>
+                          <Ionicons name="cash-outline" size={15} color={GREEN} />
+                          <Text style={[styles.readyToPayTitle, { color: GREEN }]}>Ready to Pay</Text>
+                          <Text style={[styles.readyToPayAmount, { color: GREEN }]}>{formatMoney(aff.earnings_available)}</Text>
+                        </View>
+                        <View style={styles.readyToPayPaypalRow}>
+                          <Ionicons name="logo-paypal" size={14} color={mutedColor} />
+                          <Text style={[styles.readyToPayPaypal, { color: textColor }]} selectable>
+                            {aff.paypal_email || 'No PayPal email on file'}
+                          </Text>
+                        </View>
+                        <Text style={[styles.readyToPayCount, { color: mutedColor }]}>
+                          {availableCommissionIds.length}
+                          {' available commission'}
+                          {availableCommissionIds.length !== 1 ? 's' : ''}
+                        </Text>
+                        <TouchableOpacity
+                          style={[styles.createPayoutBtnInline, { backgroundColor: GREEN, opacity: isCreatingPayout ? 0.6 : 1 }]}
+                          onPress={() => {
+                            console.log('[AffiliateAdmin] Create payout pressed from affiliates tab for:', aff.id);
+                            handleCreatePayout(aff.id, availableCommissionIds);
+                          }}
+                          disabled={isCreatingPayout || availableCommissionIds.length === 0}
+                          activeOpacity={0.85}
+                        >
+                          {isCreatingPayout ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                          ) : (
+                            <Text style={styles.createPayoutBtnText}>Create Payout</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
 
                     {appleStatus === 'failed' && !annualFailed && !monthlyFailed && (
                       <TouchableOpacity
@@ -589,12 +679,21 @@ export default function AffiliateAdminScreen() {
                   const sc = statusColor(payout.status);
                   const sl = statusLabel(payout.status);
                   const isMarkingPaid = actionLoading['markpaid_' + payout.id];
+                  const canMarkPaid = payout.status !== 'paid';
                   return (
                     <View key={payout.id} style={[styles.payoutRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.payoutCode, { color: BLUE }]}>{payout.affiliate_code}</Text>
                         <Text style={[styles.payoutDate, { color: mutedColor }]}>{formatDate(payout.created_at)}</Text>
                         <Text style={[styles.payoutAmount, { color: textColor }]}>{formatMoney(payout.amount)}</Text>
+                        {payout.paypal_email ? (
+                          <View style={styles.payoutPaypalRow}>
+                            <Ionicons name="logo-paypal" size={12} color={mutedColor} />
+                            <Text style={[styles.payoutPaypalEmail, { color: mutedColor }]} selectable>
+                              {payout.paypal_email}
+                            </Text>
+                          </View>
+                        ) : null}
                         {payout.paypal_transaction_id ? (
                           <Text style={[styles.payoutTxn, { color: mutedColor }]}>
                             {'Txn: '}
@@ -606,12 +705,13 @@ export default function AffiliateAdminScreen() {
                         <View style={[styles.statusBadge, { backgroundColor: sc + '22' }]}>
                           <Text style={[styles.statusBadgeText, { color: sc }]}>{sl}</Text>
                         </View>
-                        {payout.status === 'processing' && (
+                        {canMarkPaid && (
                           <TouchableOpacity
                             style={[styles.markPaidBtn, { backgroundColor: BLUE, opacity: isMarkingPaid ? 0.6 : 1 }]}
                             onPress={() => {
-                              console.log('[AffiliateAdmin] Mark Paid pressed for payout:', payout.id);
+                              console.log('[AffiliateAdmin] Mark Paid pressed for payout:', payout.id, 'paypal:', payout.paypal_email);
                               setMarkPaidPayoutId(payout.id);
+                              setMarkPaidPaypalEmail(payout.paypal_email || '');
                               setPaypalTxnId('');
                               setPaypalNote('');
                               setMarkPaidModalVisible(true);
@@ -622,7 +722,7 @@ export default function AffiliateAdminScreen() {
                             {isMarkingPaid ? (
                               <ActivityIndicator size="small" color="#FFF" />
                             ) : (
-                              <Text style={styles.markPaidBtnText}>Mark Paid</Text>
+                              <Text style={styles.markPaidBtnText}>Mark as Paid</Text>
                             )}
                           </TouchableOpacity>
                         )}
@@ -821,9 +921,20 @@ export default function AffiliateAdminScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.modalTitle, { color: textColor }]}>Mark Payout as Paid</Text>
+            <Text style={[styles.modalTitle, { color: textColor }]}>Confirm PayPal Payment</Text>
+            {markPaidPaypalEmail ? (
+              <View style={[styles.modalPaypalBox, { backgroundColor: BLUE + '12', borderColor: BLUE + '44' }]}>
+                <Ionicons name="logo-paypal" size={16} color={BLUE} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.modalPaypalLabel, { color: mutedColor }]}>Send payment to</Text>
+                  <Text style={[styles.modalPaypalEmail, { color: BLUE }]} selectable>{markPaidPaypalEmail}</Text>
+                </View>
+              </View>
+            ) : null}
             <Text style={[styles.modalSubtitle, { color: mutedColor }]}>
-              Enter the PayPal transaction ID to confirm payment.
+              {markPaidPaypalEmail
+                ? `Enter the PayPal Transaction ID after sending the payment to ${markPaidPaypalEmail}.`
+                : 'Enter the PayPal Transaction ID after sending the payment.'}
             </Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: inputBg, borderColor: cardBorder, color: textColor }]}
@@ -857,7 +968,7 @@ export default function AffiliateAdminScreen() {
                 onPress={handleMarkPaidConfirm}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Confirm</Text>
+                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Confirm Paid</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1223,5 +1334,93 @@ const styles = StyleSheet.create({
   planOptionText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  // Remove button
+  removeBtn: {
+    borderWidth: 1,
+    borderColor: RED,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+    minWidth: 64,
+  },
+  removeBtnText: {
+    color: RED,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  // Ready to Pay box (in affiliates tab)
+  readyToPayBox: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  readyToPayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  readyToPayTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+  },
+  readyToPayAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  readyToPayPaypalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 4,
+  },
+  readyToPayPaypal: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  readyToPayCount: {
+    fontSize: 11,
+    marginBottom: spacing.sm,
+  },
+  createPayoutBtnInline: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Payout row paypal email
+  payoutPaypalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  payoutPaypalEmail: {
+    fontSize: 12,
+  },
+  // Mark paid modal paypal box
+  modalPaypalBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  modalPaypalLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 1,
+  },
+  modalPaypalEmail: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

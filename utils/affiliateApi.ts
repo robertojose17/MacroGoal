@@ -242,6 +242,25 @@ export async function adminMarkPayoutPaid(payoutId: string, paypalTransactionId:
   }
 }
 
+// Admin: remove affiliate from program
+export async function adminRemoveAffiliate(affiliateProfileId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('[affiliateApi] adminRemoveAffiliate called:', affiliateProfileId);
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/affiliate-admin`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'remove_affiliate', affiliate_profile_id: affiliateProfileId }),
+    });
+    const data = await res.json();
+    console.log('[affiliateApi] adminRemoveAffiliate response:', data);
+    return { success: data.success, error: data.error };
+  } catch (e: any) {
+    console.error('[affiliateApi] adminRemoveAffiliate error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
 // Update PayPal email (affiliate self-service)
 export async function updatePaypalEmail(paypalEmail: string): Promise<{ success: boolean; error?: string }> {
   try {
