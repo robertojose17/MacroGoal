@@ -11,7 +11,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  ImageBackground,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -119,7 +119,12 @@ export default function LoginScreen() {
   };
 
   return (
-    <ImageBackground source={BG_IMAGE} style={styles.bg} resizeMode="cover">
+    <View style={styles.bg}>
+      <Image
+        source={BG_IMAGE}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+      />
       {/* Gradient overlay: transparent at top, solid black at bottom */}
       <LinearGradient
         colors={['transparent', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.95)', '#000000']}
@@ -196,7 +201,7 @@ export default function LoginScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </ImageBackground>
+    </View>
   );
 }
 
