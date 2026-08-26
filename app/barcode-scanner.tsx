@@ -125,6 +125,7 @@ export default function BarcodeScannerScreen() {
             mealId: myMealId || '',
             planId: planId || '',
             source: 'barcode',
+            food_item_id: result.item?.id || '',
           },
         });
       } else {

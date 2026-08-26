@@ -739,8 +739,9 @@ export default function FoodDetailsLayout({
   const bannerOpacity = useRef(new Animated.Value(0)).current;
   const [showMicroDetails, setShowMicroDetails] = useState(false);
 
-  const [fixItState, setFixItState] = useState<'idle' | 'loading' | 'retry' | 'success' | 'failed'>('idle');
+  const [fixItState, setFixItState] = useState<'idle' | 'loading' | 'retry' | 'success' | 'failed' | 'need_front_photo'>('idle');
   const [fixItMessage, setFixItMessage] = useState<string>('');
+  const labelBase64Ref = useRef<string | null>(null);
 
   const backgroundColor = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -1513,34 +1514,36 @@ export default function FoodDetailsLayout({
     return inserted.id;
   };
 
-  const handleFixNutrition = async () => {
-    console.log('[FoodDetails] "Not accurate? Fix it" tapped, fixItState=', fixItState);
-    Alert.alert(
-      'Take a photo of the Nutrition Facts label',
-      'Point your camera at the full nutrition facts table. Make sure it\'s well-lit and all values are visible.',
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[FoodDetails] handleFixNutrition: alert cancelled') },
-        {
-          text: 'Take Photo',
-          onPress: async () => {
-            console.log('[FoodDetails] handleFixNutrition: "Take Photo" confirmed, launching camera');
-    try {
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
-        base64: true,
-      });
-      if (result.canceled || !result.assets?.[0]?.base64) {
-        console.log('[FoodDetails] handleFixNutrition: camera cancelled or no base64');
-        return;
-      }
+  const handleFixNutrition = async (frontPhotoBase64?: string) => {
+    console.log('[FoodDetails] handleFixNutrition called, frontPhotoBase64 present=', !!frontPhotoBase64, 'fixItState=', fixItState);
 
+    // Extract barcode from offData
+    const barcodeFromOffData = (() => {
+      try {
+        const parsed = offData ? JSON.parse(offData) : null;
+        return (parsed?.code as string | undefined) || (parsed?.barcode as string | undefined) || '';
+      } catch {
+        return '';
+      }
+    })();
+    const productName = product?.product_name || product?.generic_name || '';
+
+    const sendRequest = async (labelBase64: string, frontBase64?: string) => {
       setFixItState('loading');
-      const base64 = result.assets[0].base64;
-      console.log('[FoodDetails] handleFixNutrition: photo captured, sending to fix-nutrition-photo, barcode=', product?.code);
+      console.log('[FoodDetails] handleFixNutrition: sending to fix-nutrition-photo, barcode=', barcodeFromOffData, 'food_item_id=', food_item_id, 'product_name=', productName, 'withFront=', !!frontBase64);
 
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
+
+      const body: Record<string, string | undefined> = {
+        barcode: barcodeFromOffData || undefined,
+        food_item_id: food_item_id || undefined,
+        product_name: productName || undefined,
+        imageBase64Label: labelBase64,
+      };
+      if (frontBase64) {
+        body.imageBase64Front = frontBase64;
+      }
 
       const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/fix-nutrition-photo`, {
         method: 'POST',
@@ -1548,7 +1551,7 @@ export default function FoodDetailsLayout({
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ barcode: product?.code, imageBase64: base64 }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -1589,6 +1592,9 @@ export default function FoodDetailsLayout({
             : prev
         );
         setFixItState('success');
+      } else if (data.status === 'need_front_photo') {
+        setFixItState('need_front_photo');
+        setFixItMessage(data.message || 'We need to verify the product. Please take a photo of the front of the package.');
       } else if (data.status === 'retry') {
         setFixItState('retry');
         setFixItMessage(data.message || 'Please retake the photo more clearly.');
@@ -1596,15 +1602,74 @@ export default function FoodDetailsLayout({
         setFixItState('failed');
         setFixItMessage(data.message || 'Could not read the label.');
       }
-    } catch (err) {
-      console.warn('[FoodDetails] handleFixNutrition: error:', err);
-      setFixItState('failed');
-      setFixItMessage('Something went wrong. Please try again.');
+    };
+
+    // Second call: front photo already provided — skip alert, send immediately
+    if (frontPhotoBase64) {
+      const labelBase64 = labelBase64Ref.current;
+      if (!labelBase64) {
+        console.warn('[FoodDetails] handleFixNutrition: frontPhotoBase64 provided but no labelBase64Ref stored');
+        setFixItState('failed');
+        setFixItMessage('Something went wrong. Please try again.');
+        return;
+      }
+      try {
+        await sendRequest(labelBase64, frontPhotoBase64);
+      } catch (err) {
+        console.warn('[FoodDetails] handleFixNutrition: error (front photo call):', err);
+        setFixItState('failed');
+        setFixItMessage('Something went wrong. Please try again.');
+      }
+      return;
     }
+
+    // First call: show alert then launch camera for label photo
+    Alert.alert(
+      'Take a photo of the Nutrition Facts label',
+      'Point your camera at the full nutrition facts table. Make sure it\'s well-lit and all values are visible.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[FoodDetails] handleFixNutrition: alert cancelled') },
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            console.log('[FoodDetails] handleFixNutrition: "Take Photo" confirmed, launching camera');
+            try {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.8,
+                base64: true,
+              });
+              if (result.canceled || !result.assets?.[0]?.base64) {
+                console.log('[FoodDetails] handleFixNutrition: camera cancelled or no base64');
+                return;
+              }
+              const base64 = result.assets[0].base64;
+              labelBase64Ref.current = base64;
+              await sendRequest(base64);
+            } catch (err) {
+              console.warn('[FoodDetails] handleFixNutrition: error:', err);
+              setFixItState('failed');
+              setFixItMessage('Something went wrong. Please try again.');
+            }
           },
         },
       ]
     );
+  };
+
+  const handleTakeFrontPhoto = async () => {
+    console.log('[FoodDetails] handleTakeFrontPhoto: launching camera for front of package');
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) {
+      console.log('[FoodDetails] handleTakeFrontPhoto: camera cancelled or no base64');
+      return;
+    }
+    console.log('[FoodDetails] handleTakeFrontPhoto: front photo captured, calling handleFixNutrition with front photo');
+    await handleFixNutrition(result.assets[0].base64);
   };
 
   const handleSave = async () => {
@@ -2265,31 +2330,50 @@ export default function FoodDetailsLayout({
           );
         })()}
 
-        {source === 'barcode' && fixItState !== 'success' && (
+        {source === 'barcode' && (
           <View style={{ marginTop: 8, marginBottom: 16, alignItems: 'center' }}>
             {fixItState === 'idle' && (
               <TouchableOpacity onPress={() => {
-                console.log('[FoodDetails] "Not accurate? Fix it" link pressed');
+                console.log('[FoodDetails] "Report incorrect data" link pressed');
                 handleFixNutrition();
               }}>
                 <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>
-                  Not accurate? Fix it →
+                  Report incorrect data →
                 </Text>
               </TouchableOpacity>
             )}
             {fixItState === 'loading' && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <ActivityIndicator size="small" color={colors.accent} />
-                <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>Analyzing nutrition label...</Text>
+                <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>
+                  Analyzing nutrition label...
+                </Text>
+              </View>
+            )}
+            {fixItState === 'need_front_photo' && (
+              <View style={{ alignItems: 'center', gap: 8 }}>
+                <Text style={{ color: '#F59E0B', fontSize: 13, textAlign: 'center' }}>{fixItMessage}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[FoodDetails] "Take Front Photo" button pressed');
+                    handleTakeFrontPhoto();
+                  }}
+                  style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F59E0B22', borderRadius: 8 }}
+                >
+                  <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600' }}>Take Front Photo</Text>
+                </TouchableOpacity>
               </View>
             )}
             {fixItState === 'retry' && (
               <View style={{ alignItems: 'center', gap: 8 }}>
                 <Text style={{ color: '#F59E0B', fontSize: 13, textAlign: 'center' }}>{fixItMessage}</Text>
-                <TouchableOpacity onPress={() => {
-                  console.log('[FoodDetails] "Retake Photo" button pressed');
-                  handleFixNutrition();
-                }} style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F59E0B22', borderRadius: 8 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[FoodDetails] "Retake Photo" button pressed');
+                    handleFixNutrition();
+                  }}
+                  style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F59E0B22', borderRadius: 8 }}
+                >
                   <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '600' }}>Retake Photo</Text>
                 </TouchableOpacity>
               </View>
@@ -2305,12 +2389,9 @@ export default function FoodDetailsLayout({
                 </TouchableOpacity>
               </View>
             )}
-          </View>
-        )}
-
-        {source === 'barcode' && fixItState === 'success' && (
-          <View style={{ marginTop: 8, marginBottom: 16, alignItems: 'center' }}>
-            <Text style={{ color: '#22C55E', fontSize: 13, fontWeight: '600' }}>✓ Nutrition updated!</Text>
+            {fixItState === 'success' && (
+              <Text style={{ color: '#22C55E', fontSize: 13, fontWeight: '600' }}>✓ Nutrition updated!</Text>
+            )}
           </View>
         )}
 
@@ -2323,41 +2404,6 @@ export default function FoodDetailsLayout({
         >
           <Text style={styles.saveButtonText}>{mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Save Changes' : 'Add to Meal'}</Text>
         </TouchableOpacity>
-
-        {source === 'barcode' && food_item_id && (() => {
-          const barcodeFromOffData = (() => {
-            try {
-              const parsed = offData ? JSON.parse(offData) : null;
-              return (parsed?.code as string | undefined) || (parsed?.barcode as string | undefined) || '';
-            } catch {
-              return '';
-            }
-          })();
-          return (
-            <View style={{ marginTop: spacing.sm, marginBottom: spacing.xl, alignItems: 'center' }}>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[FoodDetails] "Report incorrect data" link pressed, food_item_id=', food_item_id, 'barcode=', barcodeFromOffData);
-                  router.push({
-                    pathname: '/food-photo-capture',
-                    params: {
-                      barcode: barcodeFromOffData,
-                      type: 'correction',
-                      food_item_id,
-                      meal: mealType,
-                      date: date || '',
-                      mode: 'diary',
-                    },
-                  });
-                }}
-              >
-                <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>
-                  Incorrect nutrition data? Report it
-                </Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })()}
       </ScrollView>
     </SafeAreaView>
   );

@@ -164,6 +164,7 @@ export default function BarcodeLookupScreen() {
             returnTo: returnTo,
             mealId: myMealId || '',
             food_item_id: result.item?.id || '',
+            source: 'barcode',
           },
         });
       } else {
