@@ -200,8 +200,18 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
       _data_quality_score: (fi as any).data_quality_score,
       ingredients_text: (fi as any).ingredients_text,
       allergens_tags: (fi as any).allergens,
+      // Always override the 5 main macros with top-level DB columns — these are the
+      // master values and may have been edited by the user after the off_data snapshot.
+      nutriments: {
+        ...((base.nutriments as Record<string, number>) ?? {}),
+        'energy-kcal_100g': Number(fi.calories) || 0,
+        'proteins_100g': Number(fi.protein) || 0,
+        'carbohydrates_100g': Number(fi.carbs) || 0,
+        'fat_100g': Number(fi.fat) || 0,
+        'fiber_100g': Number(fi.fiber) || 0,
+      },
     };
-    console.log('[buildOffProductFromFoodItemId] off_data path | serving_size=', enriched.serving_size, '| serving_quantity=', enriched.serving_quantity);
+    console.log('[buildOffProductFromFoodItemId] off_data path | serving_size=', enriched.serving_size, '| serving_quantity=', enriched.serving_quantity, '| macros from DB columns: kcal=', Number(fi.calories), 'protein=', Number(fi.protein), 'carbs=', Number(fi.carbs), 'fat=', Number(fi.fat));
     return enriched;
   }
 
