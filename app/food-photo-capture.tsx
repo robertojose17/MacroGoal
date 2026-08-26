@@ -74,7 +74,7 @@ export default function FoodPhotoCaptureScreen() {
       };
       console.log('[FoodPhotoCapture] callEdgeFunction: POST verify-food-submission body:', JSON.stringify(requestBody));
 
-      const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/verify-food-submission`, {
+      const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/vision-nutrition-extract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
