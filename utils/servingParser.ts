@@ -140,6 +140,11 @@ export function buildSyntheticOffData(item: {
   const multiplier = macrosPer === '100g' ? 1 : (totalGrams > 0 ? 100 / totalGrams : 1);
 
   const nutriments: Record<string, number | undefined> = {
+    // Spread JSONB nutriments first (lowest priority — explicit columns override)
+    ...Object.fromEntries(
+      Object.entries(n).filter(([k]) => k.endsWith('_100g'))
+    ),
+    // Explicit columns always win
     'energy-kcal_100g': (Number(item.calories) || 0) * multiplier,
     'proteins_100g': (Number(item.protein) || 0) * multiplier,
     'carbohydrates_100g': (Number(item.carbs) || 0) * multiplier,
@@ -171,10 +176,6 @@ export function buildSyntheticOffData(item: {
     'zinc_100g': item.zinc_mg != null ? Number(item.zinc_mg) / 1000 : undefined,
     'manganese_100g': item.manganese_mg != null ? Number(item.manganese_mg) / 1000 : undefined,
     'selenium_100g': item.selenium_mcg != null ? Number(item.selenium_mcg) / 1000000 : undefined,
-    // Spread any additional per-100g nutriments from the nutriments JSONB column
-    ...Object.fromEntries(
-      Object.entries(n).filter(([k]) => k.endsWith('_100g'))
-    ),
   };
 
   return {
