@@ -154,8 +154,8 @@ export default function FoodPhotoCaptureScreen() {
         const uploadedUrl = await uploadPhoto(photo.uri, 'label');
         setLabelPhotoUrl(uploadedUrl);
 
-        if (type === 'new_product') {
-          console.log('[FoodPhotoCapture] capturePhoto: new_product — moving to front photo step');
+        if (type === 'new_product' || type === 'correction') {
+          console.log('[FoodPhotoCapture] capturePhoto: type=', type, '— moving to front photo step');
           setStep('front');
           isCapturingRef.current = false;
           return;
@@ -342,8 +342,8 @@ export default function FoodPhotoCaptureScreen() {
             <View style={{ width: 44 }} />
           </View>
 
-          {/* Step indicator for new_product */}
-          {type === 'new_product' && (
+          {/* Step indicator for new_product and correction */}
+          {(type === 'new_product' || type === 'correction') && (
             <View style={styles.stepIndicator}>
               <View style={[styles.stepDot, isLabelStep ? styles.stepDotActive : styles.stepDotDone]} />
               <View style={styles.stepLine} />
