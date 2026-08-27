@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { encodeBase64 } from "jsr:@std/encoding/base64";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -23,9 +24,19 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
+async function urlToDataUri(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${url}`);
+  const contentType = res.headers.get("content-type") || "image/jpeg";
+  const mimeType = contentType.split(";")[0].trim();
+  const arrayBuffer = await res.arrayBuffer();
+  const base64 = encodeBase64(new Uint8Array(arrayBuffer));
+  return `data:${mimeType};base64,${base64}`;
+}
+
 async function callVision(
-  labelUrl: string,
-  frontUrl: string,
+  labelDataUri: string,
+  frontDataUri: string,
   knownProductName: string | null
 ): Promise<string> {
   const prompt = `You are a nutrition data validator.
@@ -73,8 +84,8 @@ If either image is unreadable or not a food product, return:
         {
           role: "user",
           content: [
-            { type: "image_url", image_url: { url: labelUrl } },
-            { type: "image_url", image_url: { url: frontUrl } },
+            { type: "image_url", image_url: { url: labelDataUri } },
+            { type: "image_url", image_url: { url: frontDataUri } },
             { type: "text", text: prompt },
           ],
         },
@@ -148,11 +159,32 @@ Deno.serve(async (req) => {
     }
 
     console.log("[VisionNutrition] Known product name:", knownProductName);
-    console.log("[VisionNutrition] Calling OpenRouter vision model:", VISION_MODEL);
+
+    // Download images and convert to base64 data URIs
+    let labelDataUri: string;
+    let frontDataUri: string;
+
+    try {
+      labelDataUri = await urlToDataUri(photo_label_url);
+      console.log("[VisionNutrition] Label image downloaded, size:", labelDataUri.length);
+    } catch (e) {
+      console.error("[VisionNutrition] Failed to download label photo:", e);
+      return jsonResponse({ status: "error", message: "Could not download the label photo. Please try again." });
+    }
+
+    try {
+      frontDataUri = await urlToDataUri(photo_front_url);
+      console.log("[VisionNutrition] Front image downloaded, size:", frontDataUri.length);
+    } catch (e) {
+      console.error("[VisionNutrition] Failed to download front photo:", e);
+      return jsonResponse({ status: "error", message: "Could not download the front photo. Please try again." });
+    }
+
+    console.log("[VisionNutrition] Calling OpenRouter model:", VISION_MODEL);
 
     let aiResult: Record<string, unknown>;
     try {
-      const rawText = await callVision(photo_label_url, photo_front_url, knownProductName);
+      const rawText = await callVision(labelDataUri, frontDataUri, knownProductName);
       console.log("[VisionNutrition] AI response:", rawText.slice(0, 800));
       aiResult = extractJSON(rawText) as Record<string, unknown>;
     } catch (e) {
