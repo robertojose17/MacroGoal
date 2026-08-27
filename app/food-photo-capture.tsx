@@ -7,6 +7,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -41,13 +42,24 @@ export default function FoodPhotoCaptureScreen() {
 
   const uploadPhoto = async (uri: string, filename: string): Promise<string> => {
     console.log('[FoodPhotoCapture] uploadPhoto: uploading', filename, 'from uri:', uri);
-    const response = await fetch(uri);
-    const blob = await response.blob();
+
+    // Read file as base64 using expo-file-system (fetch(uri) produces empty blobs on RN)
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Convert base64 to Uint8Array for Supabase Storage upload
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
     const path = `submissions/${Date.now()}_${filename}.jpg`;
 
     const { error } = await supabase.storage
       .from('food-photos')
-      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
 
     if (error) {
       console.error('[FoodPhotoCapture] uploadPhoto: storage error:', error.message);

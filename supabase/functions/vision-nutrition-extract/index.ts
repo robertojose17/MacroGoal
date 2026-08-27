@@ -30,6 +30,9 @@ async function urlToDataUri(url: string): Promise<string> {
   const contentType = res.headers.get("content-type") || "image/jpeg";
   const mimeType = contentType.split(";")[0].trim();
   const arrayBuffer = await res.arrayBuffer();
+  if (arrayBuffer.byteLength < 1000) {
+    throw new Error(`Downloaded image is too small (${arrayBuffer.byteLength} bytes) — likely a storage error`);
+  }
   const base64 = encodeBase64(new Uint8Array(arrayBuffer));
   return `data:${mimeType};base64,${base64}`;
 }
