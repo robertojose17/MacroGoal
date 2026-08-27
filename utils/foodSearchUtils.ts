@@ -147,7 +147,7 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
              phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg,
              vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg,
              vitamin_b12_mcg, folate_mcg, choline_mg, pantothenic_acid_mg, selenium_mcg,
-             source, usda_fdc_id, data_quality_score, ingredients_text, allergens, off_data`)
+             source, usda_fdc_id, data_quality_score, ingredients_text, allergens`)
     .eq('id', foodItemId)
     .maybeSingle();
 
@@ -156,64 +156,7 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
     return null;
   }
 
-  console.log('[buildOffProductFromFoodItemId] ✅ Fetched:', fi.name, '| off_data present:', !!fi.off_data);
-
-  // If legacy off_data exists, use it as base but enrich with serving_description
-  if (fi.off_data && typeof fi.off_data === 'object') {
-    const base = fi.off_data as OpenFoodFactsProduct;
-    const servingDesc = (fi as any).serving_description as string | null | undefined;
-    const servingCount = Number((fi as any).serving_count) || 1;
-    const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-
-    // Resolve serving_quantity with strict priority — never blindly fall back to 100
-    const dbServingSize = Number((fi as any).serving_size);
-    const dbServingQty  = Number((fi as any).serving_quantity);
-    const baseServingQty = base.serving_quantity != null ? parseFloat(String(base.serving_quantity)) : NaN;
-    // Try to parse from base.serving_size string e.g. "3 slices (84 g)" → 84
-    let parsedFromStr = NaN;
-    if (base.serving_size && typeof base.serving_size === 'string') {
-      const m = base.serving_size.match(/\((\d+\.?\d*)\s*g\)/i);
-      if (m) parsedFromStr = parseFloat(m[1]);
-    }
-    const totalGrams =
-      (dbServingSize > 0 ? dbServingSize : null) ??
-      (dbServingQty  > 0 ? dbServingQty  : null) ??
-      (isFinite(baseServingQty) && baseServingQty > 0 ? baseServingQty : null) ??
-      (isFinite(parsedFromStr)  && parsedFromStr  > 0 ? parsedFromStr  : null) ??
-      100;
-
-    // Preserve original serving_size string — only reconstruct if missing/empty
-    const originalServingSize = base.serving_size && String(base.serving_size).trim() ? base.serving_size : null;
-
-    // Same guard for the off_data path
-    const isJustGramsOff = /^\d+(\.\d+)?\s*(g|ml)$/i.test(servingDesc?.trim() ?? '');
-    const cleanServingDescOff = (servingDesc && !isJustGramsOff) ? servingDesc : null;
-
-    const enriched: OpenFoodFactsProduct = {
-      ...base,
-      serving_size: originalServingSize ?? (cleanServingDescOff
-        ? `${countLabel}${cleanServingDescOff} (${totalGrams} g)`
-        : `1 serving (${totalGrams} g)`),
-      serving_quantity: totalGrams,
-      _source: (fi as any).source,
-      _usda_fdc_id: (fi as any).usda_fdc_id,
-      _data_quality_score: (fi as any).data_quality_score,
-      ingredients_text: (fi as any).ingredients_text,
-      allergens_tags: (fi as any).allergens,
-      // Always override the 5 main macros with top-level DB columns — these are the
-      // master values and may have been edited by the user after the off_data snapshot.
-      nutriments: {
-        ...((base.nutriments as Record<string, number>) ?? {}),
-        'energy-kcal_100g': Number(fi.calories) || 0,
-        'proteins_100g': Number(fi.protein) || 0,
-        'carbohydrates_100g': Number(fi.carbs) || 0,
-        'fat_100g': Number(fi.fat) || 0,
-        'fiber_100g': Number(fi.fiber) || 0,
-      },
-    };
-    console.log('[buildOffProductFromFoodItemId] off_data path | serving_size=', enriched.serving_size, '| serving_quantity=', enriched.serving_quantity, '| macros from DB columns: kcal=', Number(fi.calories), 'protein=', Number(fi.protein), 'carbs=', Number(fi.carbs), 'fat=', Number(fi.fat));
-    return enriched;
-  }
+  console.log('[buildOffProductFromFoodItemId] ✅ Fetched:', fi.name);
 
   // Modern path — build from columns
   const n = fi as any;
