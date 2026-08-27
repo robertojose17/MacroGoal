@@ -118,24 +118,32 @@ export default function FoodPhotoCaptureScreen() {
           macros_per: '100g',
         });
 
-        console.log('[FoodPhotoCapture] callEdgeFunction: approved, navigating to food-details, food_item id=', result.food_item.id);
+        console.log('[FoodPhotoCapture] callEdgeFunction: approved, type=', type, 'food_item id=', result.food_item.id);
         setStep('success');
 
         setTimeout(() => {
-          router.replace({
-            pathname: '/food-details',
-            params: {
-              offData: JSON.stringify(offData),
-              meal: mealType,
-              date: date,
-              mode: mode,
-              context: context,
-              returnTo: returnTo,
-              mealId: mealId || '',
-              food_item_id: result.food_item.id,
-              source: 'barcode',
-            },
-          });
+          if (type === 'correction') {
+            // Go back to the existing food-details screen — it will re-fetch fresh data on focus
+            console.log('[FoodPhotoCapture] correction approved — calling router.back() to return to food-details');
+            router.back();
+          } else {
+            // new_product: no existing food-details screen, push a new one
+            console.log('[FoodPhotoCapture] new_product approved — navigating to food-details');
+            router.replace({
+              pathname: '/food-details',
+              params: {
+                offData: JSON.stringify(offData),
+                meal: mealType,
+                date: date,
+                mode: mode,
+                context: context,
+                returnTo: returnTo,
+                mealId: mealId || '',
+                food_item_id: result.food_item.id,
+                source: 'barcode',
+              },
+            });
+          }
         }, 1500);
       } else {
         const msg = result.message || 'Could not verify this product. Please try again with a clearer photo.';

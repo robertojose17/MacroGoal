@@ -19,6 +19,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platfo
 
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 // ─── Micronutrient helpers ────────────────────────────────────────────────────
@@ -1237,6 +1238,117 @@ export default function FoodDetailsLayout({
       });
     }
   }, [bannerQueue, bannerOpacity]);
+
+  // Re-fetch food item data from DB when screen regains focus (e.g. after returning from
+  // the correction flow in food-photo-capture). Only runs in view mode with a food_item_id.
+  const isMountedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isMountedRef.current) {
+        // Skip the initial mount — data is already loaded by the useEffect above
+        isMountedRef.current = true;
+        return;
+      }
+      if (!food_item_id || mode !== 'view') return;
+
+      console.log('[FoodDetailsLayout] useFocusEffect: re-fetching food_item id=', food_item_id);
+      (async () => {
+        try {
+          const { data: fi } = await supabase
+            .from('food_items')
+            .select('id, name, brand, barcode, calories, protein, carbs, fat, fiber, serving_size, serving_unit, serving_quantity, serving_description, serving_count, macros_per, nutriments, sugar_g, saturated_fat_g, trans_fat_g, cholesterol_mg, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg, vitamin_b12_mcg, folate_mcg, off_data, source, usda_fdc_id, data_quality_score, ingredients_text, allergens')
+            .eq('id', food_item_id)
+            .single();
+
+          if (!fi) {
+            console.warn('[FoodDetailsLayout] useFocusEffect: food_item not found for id=', food_item_id);
+            return;
+          }
+
+          console.log('[FoodDetailsLayout] useFocusEffect: refreshed food_item name=', fi.name, 'calories=', fi.calories);
+
+          const n = fi as any;
+          const totalGrams = Number(n.serving_size) || 100;
+          const servingSize = (n.serving_description && n.serving_size)
+            ? (() => {
+                const sc = Number(n.serving_count) || 1;
+                return `${sc} ${n.serving_description} (${totalGrams} g)`;
+              })()
+            : n.off_data?.serving_size
+              ? String(n.off_data.serving_size)
+              : n.serving_size ? `${n.serving_size} g` : undefined;
+
+          const refreshedProduct: OpenFoodFactsProduct = {
+            code: n.barcode || undefined,
+            product_name: n.name,
+            brands: n.brand || undefined,
+            serving_size: servingSize,
+            serving_quantity: n.serving_size,
+            _source: n.source,
+            _usda_fdc_id: n.usda_fdc_id,
+            _data_quality_score: n.data_quality_score,
+            ingredients_text: n.ingredients_text,
+            allergens_tags: n.allergens,
+            nutriments: {
+              'energy-kcal_100g': n.macros_per === '100g' ? n.calories : (totalGrams ? (n.calories / totalGrams) * 100 : n.calories),
+              'proteins_100g': n.macros_per === '100g' ? n.protein : (totalGrams ? (n.protein / totalGrams) * 100 : n.protein),
+              'carbohydrates_100g': n.macros_per === '100g' ? n.carbs : (totalGrams ? (n.carbs / totalGrams) * 100 : n.carbs),
+              'fat_100g': n.macros_per === '100g' ? n.fat : (totalGrams ? (n.fat / totalGrams) * 100 : n.fat),
+              'fiber_100g': n.macros_per === '100g' ? n.fiber : (totalGrams ? ((n.fiber ?? 0) / totalGrams) * 100 : n.fiber),
+              'sugars_100g': n.sugar_g != null ? (n.macros_per === '100g' ? n.sugar_g : (totalGrams ? (n.sugar_g / totalGrams) * 100 : n.sugar_g)) : undefined,
+              'saturated-fat_100g': n.saturated_fat_g != null ? (n.macros_per === '100g' ? n.saturated_fat_g : (totalGrams ? (n.saturated_fat_g / totalGrams) * 100 : n.saturated_fat_g)) : undefined,
+              'sodium_100g': n.sodium_mg != null ? n.sodium_mg / 1000 : undefined,
+              'potassium_100g': n.potassium_mg != null ? n.potassium_mg / 1000 : undefined,
+              'calcium_100g': n.calcium_mg != null ? n.calcium_mg / 1000 : undefined,
+              'iron_100g': n.iron_mg != null ? n.iron_mg / 1000 : undefined,
+              'vitamin-c_100g': n.vitamin_c_mg != null ? n.vitamin_c_mg / 1000 : undefined,
+              'vitamin-a_100g': n.vitamin_a_mcg != null ? n.vitamin_a_mcg / 1000000 : undefined,
+              'vitamin-d_100g': n.vitamin_d_mcg != null ? n.vitamin_d_mcg / 1000000 : undefined,
+              'vitamin-e_100g': n.vitamin_e_mg != null ? n.vitamin_e_mg / 1000 : undefined,
+              'vitamin-k_100g': n.vitamin_k_mcg != null ? n.vitamin_k_mcg / 1000000 : undefined,
+              'vitamin-b6_100g': n.vitamin_b6_mg != null ? n.vitamin_b6_mg / 1000 : undefined,
+              'vitamin-b12_100g': n.vitamin_b12_mcg != null ? n.vitamin_b12_mcg / 1000000 : undefined,
+              'folate_100g': n.folate_mcg != null ? n.folate_mcg / 1000000 : undefined,
+              'magnesium_100g': n.magnesium_mg != null ? n.magnesium_mg / 1000 : undefined,
+              'phosphorus_100g': n.phosphorus_mg != null ? n.phosphorus_mg / 1000 : undefined,
+              'zinc_100g': n.zinc_mg != null ? n.zinc_mg / 1000 : undefined,
+              'cholesterol_100g': n.cholesterol_mg != null ? n.cholesterol_mg / 1000 : undefined,
+            },
+          };
+
+          setProduct(refreshedProduct);
+
+          const nm = refreshedProduct.nutriments as Record<string, number | undefined>;
+          setPer100Macros({
+            calories: safeNum(nm['energy-kcal_100g']),
+            protein: safeNum(nm['proteins_100g']),
+            carbs: safeNum(nm['carbohydrates_100g']),
+            fats: safeNum(nm['fat_100g']),
+            fiber: safeNum(nm['fiber_100g']),
+          });
+          setFoodItemRef({
+            serving_size: safeNum(n.serving_size, 100),
+            macros_per: n.macros_per ?? '100g',
+          });
+
+          // Reset serving selection to default based on refreshed data
+          const { unitName, unitCount } = extractUnitFromString(servingSize ?? '');
+          if (unitName && totalGrams > 0) {
+            const gramsPerUnit = unitCount > 1 ? totalGrams / unitCount : totalGrams;
+            setServingAmount(gramsPerUnit);
+            setNumberOfServings(unitCount > 1 ? String(unitCount) : '1');
+            setSelectedServingOptionKey('natural_unit');
+          } else {
+            setServingAmount(totalGrams);
+            setNumberOfServings('1');
+            setSelectedServingOptionKey('default');
+          }
+        } catch (err) {
+          console.warn('[FoodDetailsLayout] useFocusEffect: refresh error (silenced):', err);
+        }
+      })();
+    }, [food_item_id, mode])
+  );
 
   const checkFavoriteStatus = async (prod: OpenFoodFactsProduct) => {
     try {
