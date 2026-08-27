@@ -148,19 +148,23 @@ export default function FoodPhotoCaptureScreen() {
       console.log('[FoodPhotoCapture] capturePhoto: photo taken, uri=', photo.uri);
 
       if (step === 'label') {
-        setStep('processing');
-        setProcessingMessage('Analyzing nutrition label...');
-
-        const uploadedUrl = await uploadPhoto(photo.uri, 'label');
-        setLabelPhotoUrl(uploadedUrl);
-
+        // For correction/new_product: upload silently without showing processing spinner
+        // so the camera stays available for the front photo step
         if (type === 'new_product' || type === 'correction') {
+          setStep('processing');
+          setProcessingMessage('Uploading label photo...');
+          const uploadedUrl = await uploadPhoto(photo.uri, 'label');
+          setLabelPhotoUrl(uploadedUrl);
           console.log('[FoodPhotoCapture] capturePhoto: type=', type, '— moving to front photo step');
           setStep('front');
           isCapturingRef.current = false;
           return;
         }
 
+        setStep('processing');
+        setProcessingMessage('Analyzing nutrition label...');
+        const uploadedUrl = await uploadPhoto(photo.uri, 'label');
+        setLabelPhotoUrl(uploadedUrl);
         await callEdgeFunction(uploadedUrl, null);
 
       } else if (step === 'front') {
