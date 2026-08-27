@@ -30,6 +30,7 @@ export default function BarcodeScannerScreen() {
   // One-scan lock using ref (doesn't cause re-renders)
   const hasScannedRef = useRef(false);
   const isMountedRef = useRef(true);
+  const isClosingRef = useRef(false);
 
   useEffect(() => {
     console.log('[BarcodeScanner] ========== COMPONENT MOUNTED ==========');
@@ -47,6 +48,7 @@ export default function BarcodeScannerScreen() {
     useCallback(() => {
       console.log('[BarcodeScanner] Screen focused → reset scan state');
       hasScannedRef.current = false;
+      isClosingRef.current = false;
 
       return () => {
         console.log('[BarcodeScanner] Screen unfocused');
@@ -113,6 +115,7 @@ export default function BarcodeScannerScreen() {
         console.log('[BarcodeScanner] Context:', context);
         console.log('[BarcodeScanner] ReturnTo:', returnTo);
 
+        if (!isMountedRef.current || isClosingRef.current) return;
         router.push({
           pathname: '/food-details',
           params: {
@@ -131,6 +134,7 @@ export default function BarcodeScannerScreen() {
       } else {
         console.log('[BarcodeScanner] ❌ PRODUCT NOT FOUND, navigating to barcode-lookup');
 
+        if (!isMountedRef.current || isClosingRef.current) return;
         router.push({
           pathname: '/barcode-lookup',
           params: {
@@ -148,6 +152,7 @@ export default function BarcodeScannerScreen() {
     } catch (error: any) {
       console.error('[BarcodeScanner] ❌ LOOKUP ERROR:', error);
 
+      if (!isMountedRef.current || isClosingRef.current) return;
       router.push({
         pathname: '/barcode-lookup',
         params: {
@@ -318,6 +323,7 @@ export default function BarcodeScannerScreen() {
               style={styles.closeButton}
               onPress={() => {
                 console.log('[BarcodeScanner] Close button pressed');
+                isClosingRef.current = true;
                 hasScannedRef.current = false;
                 router.back();
               }}
