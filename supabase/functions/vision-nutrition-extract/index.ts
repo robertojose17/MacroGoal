@@ -5,7 +5,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const VISION_MODEL = "google/gemini-2.0-flash-001";
+const VISION_MODEL = "google/gemini-2.5-flash";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
@@ -23,21 +23,9 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
-async function urlToBase64(url: string): Promise<{ base64: string; mimeType: string }> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${url}`);
-  const contentType = res.headers.get("content-type") || "image/jpeg";
-  const mimeType = contentType.split(";")[0].trim();
-  const arrayBuffer = await res.arrayBuffer();
-  const uint8 = new Uint8Array(arrayBuffer);
-  let binary = "";
-  for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
-  return { base64: btoa(binary), mimeType };
-}
-
-async function callVisionWithWebSearch(
-  labelImage: { base64: string; mimeType: string },
-  frontImage: { base64: string; mimeType: string },
+async function callVision(
+  labelUrl: string,
+  frontUrl: string,
   knownProductName: string | null
 ): Promise<string> {
   const prompt = `You are a nutrition data validator.
@@ -49,7 +37,7 @@ You have two images:
 Your job:
 1. Read the product name and brand from Image 2 (the front)
 2. Read the nutrition values per 100g from Image 1 (the label): calories, protein, carbs, fat, fiber
-3. Based on your knowledge of this product, verify the nutrition values are reasonable and consistent with this type of product
+3. Based on your knowledge of this product type, verify the nutrition values are reasonable and consistent with this type of product
 ${knownProductName ? `4. Also verify that the product in Image 2 matches the known product name: "${knownProductName}"` : ""}
 
 Return ONLY valid JSON with no markdown fences:
@@ -85,8 +73,8 @@ If either image is unreadable or not a food product, return:
         {
           role: "user",
           content: [
-            { type: "image_url", image_url: { url: `data:${labelImage.mimeType};base64,${labelImage.base64}` } },
-            { type: "image_url", image_url: { url: `data:${frontImage.mimeType};base64,${frontImage.base64}` } },
+            { type: "image_url", image_url: { url: labelUrl } },
+            { type: "image_url", image_url: { url: frontUrl } },
             { type: "text", text: prompt },
           ],
         },
@@ -159,26 +147,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    let labelImage: { base64: string; mimeType: string };
-    let frontImage: { base64: string; mimeType: string };
-
-    try {
-      labelImage = await urlToBase64(photo_label_url);
-    } catch (e) {
-      console.error("[VisionNutrition] Failed to download label photo:", e);
-      return jsonResponse({ status: "error", message: "Could not download the label photo. Please try again." });
-    }
-
-    try {
-      frontImage = await urlToBase64(photo_front_url);
-    } catch (e) {
-      console.error("[VisionNutrition] Failed to download front photo:", e);
-      return jsonResponse({ status: "error", message: "Could not download the front photo. Please try again." });
-    }
+    console.log("[VisionNutrition] Known product name:", knownProductName);
+    console.log("[VisionNutrition] Calling OpenRouter vision model:", VISION_MODEL);
 
     let aiResult: Record<string, unknown>;
     try {
-      const rawText = await callVisionWithWebSearch(labelImage, frontImage, knownProductName);
+      const rawText = await callVision(photo_label_url, photo_front_url, knownProductName);
       console.log("[VisionNutrition] AI response:", rawText.slice(0, 800));
       aiResult = extractJSON(rawText) as Record<string, unknown>;
     } catch (e) {
@@ -188,6 +162,8 @@ Deno.serve(async (req) => {
 
     const confidence = aiResult.confidence as string;
     const match = aiResult.match as boolean;
+
+    console.log("[VisionNutrition] confidence:", confidence, "match:", match);
 
     if (confidence === "unreadable") {
       return jsonResponse({
