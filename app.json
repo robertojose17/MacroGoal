@@ -97,7 +97,8 @@
           "devTeam": "RQ6JHH38HA"
         }
       ],
-      "./plugins/withFollyCoroutineFix"
+      "./plugins/withFollyCoroutineFix",
+      "expo-localization"
     ],
     "scheme": "macrogoal",
     "experiments": {

@@ -2,6 +2,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
@@ -11,6 +12,7 @@ import { AdBannerFooter } from '@/components/AdBannerFooter';
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const tabBarInactiveTintColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const tabBarBackgroundColor = isDark ? colors.cardDark : colors.card;
@@ -34,7 +36,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="dashboard"
           options={{
-            title: 'Dashboard',
+            title: t('tabs.dashboard'),
             tabBarIcon: ({ color, focused }) => (
               <IconSymbol
                 ios_icon_name={focused ? 'chart.bar.fill' : 'chart.bar'}
@@ -48,7 +50,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="(home)"
           options={{
-            title: 'Food',
+            title: t('tabs.food'),
             tabBarIcon: ({ color, focused }) => (
               <IconSymbol
                 ios_icon_name={focused ? 'fork.knife.circle.fill' : 'fork.knife.circle'}
@@ -62,7 +64,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="coach"
           options={{
-            title: 'Coach',
+            title: t('tabs.coach'),
             tabBarIcon: ({ color, focused }) => (
               <IconSymbol
                 ios_icon_name={focused ? 'brain.head.profile.fill' : 'brain.head.profile'}
@@ -76,7 +78,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="check-ins"
           options={{
-            title: 'Check-Ins',
+            title: t('tabs.checkIns'),
             tabBarIcon: ({ color, focused }) => (
               <IconSymbol
                 ios_icon_name={focused ? 'checkmark.circle.fill' : 'checkmark.circle'}
@@ -90,7 +92,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="profile"
           options={{
-            title: 'Profile',
+            title: t('tabs.profile'),
             tabBarIcon: ({ color, focused }) => {
               console.log('[Tab Layout] Rendering Profile tab icon, focused:', focused);
               return (
