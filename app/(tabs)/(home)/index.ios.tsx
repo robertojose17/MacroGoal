@@ -5,6 +5,7 @@ import {
   RefreshControl, Alert, ActivityIndicator, ScrollView, ActionSheetIOS,
   Modal, TextInput, KeyboardAvoidingView, Animated, Dimensions,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -93,6 +94,7 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
   const { isPremium } = usePremium();
   const { syncWidget } = useWidget();
+  const { t } = useTranslation();
 
   // Navigation readiness guard — prevents 'Cannot read property route of null'
   // on the first render cycle before the navigation context is initialized.
@@ -124,7 +126,7 @@ export default function HomeScreen() {
     { type: 'breakfast', label: 'Breakfast', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
     { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
     { type: 'dinner', label: 'Dinner', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
-    { type: 'snack', label: 'Snacks', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
+    { type: 'snack', label: 'Snack', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
   ]);
   const [allFoodItems, setAllFoodItems] = useState<(FoodItem & { meal_type: string })[]>([]);
   const [totalCalories, setTotalCalories] = useState(0);
@@ -297,7 +299,7 @@ export default function HomeScreen() {
           buildMeal('breakfast', 'Breakfast'),
           buildMeal('lunch', 'Lunch'),
           buildMeal('dinner', 'Dinner'),
-          buildMeal('snack', 'Snacks'),
+          buildMeal('snack', 'Snack'),
         ]);
         setTotalCalories(totalCals);
         setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
@@ -550,7 +552,7 @@ export default function HomeScreen() {
       setNewPlanName('');
       router.push({ pathname: '/meal-plan-detail', params: { planId: newPlan.id } });
     } catch {
-      Alert.alert('Error', 'Failed to create plan. Please try again.');
+      Alert.alert(t('common.error'), t('errors.failedToSave'));
     } finally {
       setNewPlanSaving(false);
     }
@@ -743,7 +745,7 @@ export default function HomeScreen() {
 
       console.log('[Home iOS] handleSchedulePlan complete, refreshing data');
       await loadData();
-      Alert.alert('Done!', 'Your meals have been scheduled. Check them off as you eat them!');
+      Alert.alert(t('home.scheduleDoneTitle'), t('home.scheduleDoneMessage'));
     } catch (err: any) {
       console.error('[Home iOS] handleSchedulePlan error:', err);
       Alert.alert('Error', 'Failed to schedule plan. Please try again.');
@@ -781,7 +783,7 @@ export default function HomeScreen() {
   // ── Derived values ──
   const leftArrowDisabled = false;
   const rightArrowDisabled = isTodayOrFuture();
-  const todayLabel = isToday() ? 'Today' : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const todayLabel = isToday() ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
   const dateDisplay = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   // ── Render helpers ──
@@ -792,7 +794,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>Loading...</Text>
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>{t('common.loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -805,7 +807,7 @@ export default function HomeScreen() {
           <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={48} color={colors.error} />
           <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>{error}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadData}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -922,7 +924,7 @@ export default function HomeScreen() {
     const textSec = isDark ? colors.textSecondaryDark : colors.textSecondary;
     const dividerColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
     const itemCount = allFoodItems.length;
-    const itemCountLabel = itemCount === 1 ? 'item' : 'items';
+    const itemCountLabel = itemCount === 1 ? t('home.item') : t('home.items');
     const sessions = groupIntoSessions(allFoodItems);
 
     return (
@@ -939,10 +941,10 @@ export default function HomeScreen() {
               label="kcal"
             />
             <View style={styles.macroSummaryCompact}>
-              <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-              <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-              <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-              <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
             </View>
           </View>
         </View>
@@ -952,7 +954,7 @@ export default function HomeScreen() {
           {/* Header */}
           <View style={styles.mealHeader}>
             <View style={styles.mealHeaderLeft}>
-              <Text style={[styles.mealTitle, { color: textPrimary }]}>Today's Food</Text>
+              <Text style={[styles.mealTitle, { color: textPrimary }]}>{t('home.todaysFood')}</Text>
               {itemCount > 0 && (
                 <Text style={[styles.mealCalories, { color: textSec }]}>
                   {itemCount}
@@ -986,7 +988,7 @@ export default function HomeScreen() {
                 handleAddFood('breakfast');
               }}
             >
-              <Text style={[styles.emptyMealText, { color: textSec }]}>Tap to add food</Text>
+              <Text style={[styles.emptyMealText, { color: textSec }]}>{t('home.tapToAddFood')}</Text>
             </TouchableOpacity>
           ) : (
             <View>
@@ -1185,11 +1187,11 @@ export default function HomeScreen() {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     const weekLabel = weekOffset === 0
-      ? 'This Week'
+      ? t('home.thisWeek')
       : weekOffset === 1
-      ? 'Next Week'
+      ? t('home.nextWeek')
       : weekOffset === -1
-      ? 'Last Week'
+      ? t('home.lastWeek')
       : `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     const weekDateRange = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
@@ -1267,7 +1269,7 @@ export default function HomeScreen() {
           <View style={{ borderRadius: 12, overflow: 'hidden', marginTop: 4 }}>
             {/* Goal row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, flexWrap: 'nowrap' }}>
-              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>Goal</Text>
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>{t('home.goal')}</Text>
               <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{goal?.daily_calories || 2000}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
               </View>
@@ -1287,9 +1289,9 @@ export default function HomeScreen() {
 
             {/* Wk Avg row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, flexWrap: 'nowrap' }}>
-              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>Wk Avg</Text>
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>{t('home.wkAvg')}</Text>
               {avgMacros == null ? (
-                <Text style={{ fontSize: 13, color: textSecondary }}>No plans assigned</Text>
+                <Text style={{ fontSize: 13, color: textSecondary }}>{t('home.noPlansAssigned')}</Text>
               ) : (
                 <>
                   <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
@@ -1330,7 +1332,7 @@ export default function HomeScreen() {
               }}
             >
               <Text style={{ fontSize: 16 }}>🛒</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Grocery List</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>{t('home.groceryList')}</Text>
             </TouchableOpacity>
           )}
 
@@ -1340,11 +1342,11 @@ export default function HomeScreen() {
               onPress={() => {
                 console.log('[Home iOS] Schedule This Plan button pressed');
                 Alert.alert(
-                  'Schedule This Plan',
-                  "This will add all planned meals for this week to Today's Food. You can check them off as you eat them.",
+                  t('home.schedulePlanTitle'),
+                  t('home.schedulePlanMessage'),
                   [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Schedule', onPress: handleSchedulePlan },
+                    { text: t('common.cancel'), style: 'cancel' },
+                    { text: t('home.schedule'), onPress: handleSchedulePlan },
                   ]
                 );
               }}
@@ -1369,7 +1371,7 @@ export default function HomeScreen() {
               ) : (
                 <Text style={{ fontSize: 16 }}>📅</Text>
               )}
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#14B8A6' }}>Schedule This Plan</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#14B8A6' }}>{t('home.scheduleThisPlan')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1378,7 +1380,7 @@ export default function HomeScreen() {
         {templatePlans.length > 0 && (
           <View>
             <View style={styles.templateSectionHeader}>
-              <Text style={styles.templateSectionTitle}>{'✦ AVAILABLE PLANS'}</Text>
+              <Text style={styles.templateSectionTitle}>{t('home.availablePlans')}</Text>
             </View>
             {templatePlans.map((tplan) => {
               return (
@@ -1409,11 +1411,11 @@ export default function HomeScreen() {
         )}
 
         {/* My Plans section */}
-        <Text style={{ fontSize: 13, fontWeight: '700', color: textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 }}>My Plans</Text>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 }}>{t('home.myPlans')}</Text>
         {plans.length === 0 ? (
           <View style={{ backgroundColor: cardBg, borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: textPrimary, marginBottom: 8 }}>No meal plans yet</Text>
-            <Text style={{ fontSize: 14, color: textSecondary, textAlign: 'center' }}>Create your first plan to start planning your week.</Text>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: textPrimary, marginBottom: 8 }}>{t('home.noMealPlansYet')}</Text>
+            <Text style={{ fontSize: 14, color: textSecondary, textAlign: 'center' }}>{t('home.createFirstPlan')}</Text>
           </View>
         ) : (
           plans.map((plan, idx) => {
@@ -1423,10 +1425,10 @@ export default function HomeScreen() {
                 key={plan.id}
                 onDelete={() => {
                   console.log('[Home iOS] Delete plan swiped, plan:', plan.id);
-                  Alert.alert('Delete Plan', 'Are you sure?', [
-                    { text: 'Cancel', style: 'cancel' },
+                  Alert.alert(t('home.deletePlan'), t('home.deletePlanConfirm'), [
+                    { text: t('common.cancel'), style: 'cancel' },
                     {
-                      text: 'Delete', style: 'destructive', onPress: async () => {
+                      text: t('common.delete'), style: 'destructive', onPress: async () => {
                         console.log('[Home iOS] Confirming delete for plan:', plan.id);
                         try {
                           await deleteMealPlan(plan.id);
@@ -1440,7 +1442,7 @@ export default function HomeScreen() {
                             return next;
                           });
                         } catch {
-                          Alert.alert('Error', 'Failed to delete plan.');
+                          Alert.alert(t('common.error'), t('errors.failedToDelete'));
                         }
                       },
                     },
@@ -1478,7 +1480,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color="#14B8A6" />
-          <Text style={{ color: '#14B8A6', fontSize: 16, fontWeight: '600' }}>Generate Plan with AI</Text>
+          <Text style={{ color: '#14B8A6', fontSize: 16, fontWeight: '600' }}>{t('home.generateWithAI')}</Text>
         </TouchableOpacity>
 
         {/* Create plan button */}
@@ -1492,7 +1494,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={20} color="#fff" />
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Create New Plan</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>{t('home.createNewPlan')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1509,7 +1511,7 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.segmentButtonText, { color: activeTab === 'tracking' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Tracking
+              {t('home.tracking')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1518,7 +1520,7 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Planning
+              {t('home.planning')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1652,11 +1654,11 @@ export default function HomeScreen() {
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? '#3C3C3E' : '#D1D5DB', alignSelf: 'center', marginBottom: 20 }} />
 
             <Text style={{ fontSize: 20, fontWeight: '700', color: isDark ? '#FFFFFF' : '#000000', marginBottom: 20 }}>
-              New Plan
+              {t('home.newPlan')}
             </Text>
 
             <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#8E8E93' : '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-              PLAN NAME
+              {t('home.planName')}
             </Text>
             <TextInput
               style={{
@@ -1670,7 +1672,7 @@ export default function HomeScreen() {
               }}
               value={newPlanName}
               onChangeText={setNewPlanName}
-              placeholder="e.g. Week 1 Bulk"
+              placeholder={t('home.planNamePlaceholder')}
               placeholderTextColor={isDark ? '#8E8E93' : '#9CA3AF'}
               returnKeyType="done"
               onSubmitEditing={handleCreateNewPlan}
@@ -1691,7 +1693,7 @@ export default function HomeScreen() {
             >
               {newPlanSaving
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={{ fontSize: 17, fontWeight: '600', color: '#fff' }}>Save</Text>
+                : <Text style={{ fontSize: 17, fontWeight: '600', color: '#fff' }}>{t('common.save')}</Text>
               }
             </TouchableOpacity>
           </View>

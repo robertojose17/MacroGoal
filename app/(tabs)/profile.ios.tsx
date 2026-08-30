@@ -14,6 +14,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import { Sex, ActivityLevel, GoalType } from '@/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import i18n, { supportedLanguages, setStoredLanguage } from '@/lib/i18n';
+import { useTranslation } from 'react-i18next';
 
 const PROTEIN_OPTIONS = ['Chicken', 'Turkey', 'Beef', 'Pork', 'Salmon', 'Tuna', 'Shrimp', 'Cod', 'Tilapia', 'Eggs', 'Greek Yogurt', 'Cottage Cheese', 'Whey Protein', 'Tofu', 'Tempeh', 'Edamame', 'Lentils', 'Chickpeas', 'Black Beans'];
 
@@ -35,6 +36,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t, i18n: i18nInstance } = useTranslation();
 
   const { isPremium, loading: premiumLoading, refreshPremiumStatus } = usePremium();
 
@@ -177,7 +179,7 @@ export default function ProfileScreen() {
       await loadUserData();
     } catch (error: any) {
       console.error('[Profile iOS] Error saving food preferences:', error);
-      Alert.alert('Error', error.message || 'Failed to save food preferences');
+      Alert.alert(t('common.error'), error.message || t('profile.failedToSavePreferences'));
     } finally {
       setSavingFoodPrefs(false);
     }
@@ -219,12 +221,12 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     console.log('[Profile iOS] Log Out button pressed');
     Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
+      t('profile.logOut'),
+      t('profile.logOutConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Log Out',
+          text: t('profile.logOut'),
           style: 'destructive',
           onPress: async () => {
             console.log('[Profile iOS] Logging out user');
@@ -436,7 +438,7 @@ export default function ProfileScreen() {
       }
     } catch (error: any) {
       console.error('[Profile iOS] Error in saveFieldDirectly:', error);
-      Alert.alert('Error', error.message || 'Failed to save changes');
+      Alert.alert(t('common.error'), error.message || t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
     }
@@ -556,7 +558,7 @@ export default function ProfileScreen() {
       closeEditModal();
     } catch (error: any) {
       console.error('[Profile iOS] Error saving field:', error);
-      Alert.alert('Error', error.message || 'Failed to save changes');
+      Alert.alert(t('common.error'), error.message || t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
     }
@@ -600,10 +602,10 @@ export default function ProfileScreen() {
         setShowDatePicker(false);
       }
 
-      Alert.alert('Success', 'Journey Start Date updated successfully');
+      Alert.alert(t('common.success'), t('profile.journeyStartUpdated'));
     } catch (error: any) {
       console.error('[Profile iOS] Error saving start date:', error);
-      Alert.alert('Error', error.message || 'Failed to save start date');
+      Alert.alert(t('common.error'), error.message || t('profile.failedToSaveStartDate'));
     } finally {
       setSaving(false);
     }
@@ -612,7 +614,7 @@ export default function ProfileScreen() {
   const openStartDatePicker = () => {
     console.log('[Profile iOS] Journey Start Date picker opened');
     if (!goal) {
-      Alert.alert('No Goal', 'Please set up your goals first');
+      Alert.alert(t('profile.noGoalAlert'), t('profile.noGoalAlertMessage'));
       return;
     }
 
@@ -631,7 +633,7 @@ export default function ProfileScreen() {
 
   const handleGoalWeightPromptSave = async () => {
     if (!editValue) {
-      Alert.alert('Required', 'Please enter your goal weight');
+      Alert.alert(t('profile.required'), t('profile.pleaseEnterGoalWeight'));
       return;
     }
     await saveEditedField();
@@ -662,7 +664,7 @@ export default function ProfileScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading profile...
+            {t('profile.loadingProfile')}
           </Text>
         </View>
       </SafeAreaView>
@@ -674,13 +676,13 @@ export default function ProfileScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            No user data available
+            {t('profile.noUserData')}
           </Text>
           <TouchableOpacity
             style={[styles.button, { backgroundColor: colors.primary }]}
             onPress={() => router.replace('/auth/welcome')}
           >
-            <Text style={styles.buttonText}>Go to Login</Text>
+            <Text style={styles.buttonText}>{t('profile.goToLogin')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -690,7 +692,7 @@ export default function ProfileScreen() {
   const units = user.preferred_units || 'metric';
   const age = calculateAge(user.date_of_birth);
 
-  const subscriptionStatusText = isPremium ? 'Premium' : 'Free';
+  const subscriptionStatusText = isPremium ? t('profile.premium') : t('profile.free');
   console.log('[Profile iOS] Displaying subscription status:', subscriptionStatusText, '(isPremium:', isPremium, ')');
 
   const DIETARY_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free'];
@@ -700,18 +702,21 @@ export default function ProfileScreen() {
   const hasAnyPrefs = proteinCount > 0 || recipeStyleCount > 0;
   const foodPrefsSummaryParts: string[] = [];
   if (hasAnyPrefs) {
-    if (proteinCount > 0) foodPrefsSummaryParts.push(`🥩 ${proteinCount} protein${proteinCount !== 1 ? 's' : ''}`);
-    if (recipeStyleCount > 0) foodPrefsSummaryParts.push(`🍳 ${recipeStyleCount} style${recipeStyleCount !== 1 ? 's' : ''}`);
+    if (proteinCount > 0) foodPrefsSummaryParts.push(`🥩 ${proteinCount} ${proteinCount !== 1 ? t('profile.proteins_other', { count: proteinCount }).replace(`${proteinCount} `, '') : t('profile.proteins_one', { count: proteinCount }).replace(`${proteinCount} `, '')}`);
+    if (recipeStyleCount > 0) foodPrefsSummaryParts.push(`🍳 ${recipeStyleCount} ${recipeStyleCount !== 1 ? t('profile.styles_other', { count: recipeStyleCount }).replace(`${recipeStyleCount} `, '') : t('profile.styles_one', { count: recipeStyleCount }).replace(`${recipeStyleCount} `, '')}`);
   }
-  const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : 'No preferences set';
+  const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : t('profile.noPreferencesSet');
 
-  const sexDisplayValue = user.sex === 'male' ? 'Male' : user.sex === 'female' ? 'Female' : user.sex ? 'Other' : 'Tap to set';
-  const activityDisplayValue = user.activity_level
-    ? user.activity_level.charAt(0).toUpperCase() + user.activity_level.slice(1).replace('_', ' ')
-    : 'Tap to set';
-  const unitsDisplayValue = units === 'imperial' ? 'Imperial' : 'Metric';
-  const goalTypeDisplayValue = goal?.goal_type === 'lose' ? '📉 Lose Weight' : goal?.goal_type === 'gain' ? '📈 Gain Weight' : goal?.goal_type === 'maintain' ? '⚖️ Maintain' : 'Tap to set';
-  const journeyStartDisplay = goal ? formatJourneyStartDate(goal.start_date, user.created_at) : 'No goal set';
+  const sexDisplayValue = user.sex === 'male' ? t('profile.male') : user.sex === 'female' ? t('profile.female') : user.sex ? t('profile.other') : t('profile.tapToSet');
+  const activityDisplayValue = user.activity_level === 'sedentary' ? t('profile.sedentary')
+    : user.activity_level === 'light' ? t('profile.light')
+    : user.activity_level === 'moderate' ? t('profile.moderate')
+    : user.activity_level === 'very_active' ? t('profile.veryActive')
+    : user.activity_level ? user.activity_level
+    : t('profile.tapToSet');
+  const unitsDisplayValue = units === 'imperial' ? t('profile.imperial') : t('profile.metric');
+  const goalTypeDisplayValue = goal?.goal_type === 'lose' ? t('profile.loseWeight') : goal?.goal_type === 'gain' ? t('profile.gainWeight') : goal?.goal_type === 'maintain' ? t('profile.maintain') : t('profile.tapToSet');
+  const journeyStartDisplay = goal ? formatJourneyStartDate(goal.start_date, user.created_at) : t('profile.noGoalSet');
 
   type MacroPreset = 'balanced' | 'high_protein' | 'low_carb' | 'lean_body' | 'custom';
 
@@ -729,11 +734,11 @@ export default function ProfileScreen() {
   };
 
   const currentMacroPreset = detectMacroPreset(goal);
-  const macroPresetDisplayValue = currentMacroPreset === 'lean_body' ? 'Lean Body Formula'
-    : currentMacroPreset === 'balanced' ? 'Balanced'
-    : currentMacroPreset === 'high_protein' ? 'High Protein'
-    : currentMacroPreset === 'low_carb' ? 'Low Carb'
-    : 'Custom';
+  const macroPresetDisplayValue = currentMacroPreset === 'lean_body' ? t('profile.leanBodyFormula')
+    : currentMacroPreset === 'balanced' ? t('profile.balanced')
+    : currentMacroPreset === 'high_protein' ? t('profile.highProtein')
+    : currentMacroPreset === 'low_carb' ? t('profile.lowCarb')
+    : t('profile.custom');
 
   const isProfileOpen = openSection === 'profile';
   const isGoalOpen = openSection === 'goal';
@@ -742,7 +747,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          Profile
+          {t('profile.title')}
         </Text>
       </View>
 
@@ -786,7 +791,7 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
               <Text style={styles.setUsernameText}>
-                Set @username
+                {t('profile.setUsername')}
               </Text>
             </TouchableOpacity>
           )}
@@ -803,7 +808,7 @@ export default function ProfileScreen() {
             <View style={styles.badgeRow}>
               <View style={styles.challengerBadgePill}>
                 <Text style={styles.badgeIcon}>{'🏅'}</Text>
-                <Text style={styles.badgeLabel}>{'Challenger'}</Text>
+                <Text style={styles.badgeLabel}>{t('profile.challenger')}</Text>
               </View>
             </View>
           )}
@@ -830,14 +835,14 @@ export default function ProfileScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={11} color="#5B9AA8" />
               <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: '#5B9AA8', textTransform: 'uppercase' }}>
-                Premium
+                {t('profile.premium')}
               </Text>
             </View>
             <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? '#F1F5F9' : '#2B2D42', marginBottom: 4 }}>
-              Unlock your full potential
+              {t('profile.unlockPotential')}
             </Text>
             <Text style={{ fontSize: 13, color: isDark ? '#A0A2B8' : '#6B7280', marginBottom: 14, lineHeight: 18 }}>
-              AI meal planning, advanced analytics, unlimited tracking & more
+              {t('profile.premiumDescription')}
             </Text>
             <View style={{
               alignSelf: 'flex-start',
@@ -847,7 +852,7 @@ export default function ProfileScreen() {
               paddingVertical: 9,
             }}>
               <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff', letterSpacing: 0.3 }}>
-                Upgrade Now
+                {t('profile.upgradeNow')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -866,7 +871,7 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <IconSymbol ios_icon_name="person" android_material_icon_name="person" size={18} color={isDark ? '#aaa' : '#666'} />
                 <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  My Profile
+                  {t('profile.myProfile')}
                 </Text>
               </View>
             </View>
@@ -883,15 +888,15 @@ export default function ProfileScreen() {
               <View style={[styles.accordionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
               <View style={styles.accordionContent}>
                 <EditableSettingItem
-                  label="Name"
-                  value={user.name || 'Tap to set your name'}
+                  label={t('profile.name')}
+                  value={user.name || t('profile.tapToSetName')}
                   onPress={() => openEditModal('name')}
                   isDark={isDark}
                   highlight={!user.name}
                 />
                 <EditableSettingItem
-                  label="Username"
-                  value={user.username ? `@${user.username}` : 'Set username'}
+                  label={t('profile.username')}
+                  value={user.username ? `@${user.username}` : t('profile.setUsernameShort')}
                   onPress={() => {
                     console.log('[Profile iOS] Username row tapped');
                     router.push('/choose-username');
@@ -900,36 +905,36 @@ export default function ProfileScreen() {
                   highlight={!user.username}
                 />
                 <EditableSettingItem
-                  label="Age"
-                  value={age ? `${age} years` : 'Tap to set'}
+                  label={t('profile.age')}
+                  value={age ? t('profile.years', { age }) : t('profile.tapToSet')}
                   onPress={() => openEditModal('age')}
                   isDark={isDark}
                   highlight={!age}
                 />
                 <EditableSettingItem
-                  label="Sex"
+                  label={t('profile.sex')}
                   value={sexDisplayValue}
                   onPress={() => {
                     console.log('[Profile iOS] Sex field tapped');
                     Alert.alert(
-                      'Select Sex',
+                      t('profile.selectSex'),
                       '',
                       [
                         {
-                          text: 'Male',
+                          text: t('profile.male'),
                           onPress: () => {
                             console.log('[Profile iOS] Sex changed to male');
                             saveFieldDirectly('sex', 'male');
                           },
                         },
                         {
-                          text: 'Female',
+                          text: t('profile.female'),
                           onPress: () => {
                             console.log('[Profile iOS] Sex changed to female');
                             saveFieldDirectly('sex', 'female');
                           },
                         },
-                        { text: 'Cancel', style: 'cancel' },
+                        { text: t('common.cancel'), style: 'cancel' },
                       ]
                     );
                   }}
@@ -937,37 +942,37 @@ export default function ProfileScreen() {
                   highlight={!user.sex}
                 />
                 <EditableSettingItem
-                  label="Height"
-                  value={user.height ? formatHeight(user.height, units) : 'Tap to set'}
+                  label={t('profile.height')}
+                  value={user.height ? formatHeight(user.height, units) : t('profile.tapToSet')}
                   onPress={() => openEditModal('height')}
                   isDark={isDark}
                   highlight={!user.height}
                 />
                 <EditableSettingItem
-                  label="Weight"
-                  value={user.current_weight ? formatWeight(user.current_weight, units) : 'Tap to set'}
+                  label={t('profile.weight')}
+                  value={user.current_weight ? formatWeight(user.current_weight, units) : t('profile.tapToSet')}
                   onPress={() => openEditModal('weight')}
                   isDark={isDark}
                   highlight={!user.current_weight}
                 />
                 <EditableSettingItem
-                  label="Goal Weight"
-                  value={user.goal_weight ? formatWeight(user.goal_weight, units) : 'Tap to set goal weight'}
+                  label={t('profile.goalWeight')}
+                  value={user.goal_weight ? formatWeight(user.goal_weight, units) : t('profile.tapToSetGoalWeight')}
                   onPress={() => openEditModal('goalWeight')}
                   isDark={isDark}
                   highlight={!user.goal_weight}
                 />
                 <EditableSettingItem
-                  label="Units"
+                  label={t('profile.units')}
                   value={unitsDisplayValue}
                   onPress={() => {
                     console.log('[Profile iOS] Units field tapped');
                     Alert.alert(
-                      'Select Units',
+                      t('profile.selectUnits'),
                       '',
                       [
                         {
-                          text: 'Metric (kg, cm)',
+                          text: t('profile.metricLabel'),
                           onPress: async () => {
                             console.log('[Profile iOS] Units changed to metric');
                             try {
@@ -979,12 +984,12 @@ export default function ProfileScreen() {
                               await loadUserData();
                             } catch (err: any) {
                               console.error('[Profile iOS] Error saving units:', err);
-                              Alert.alert('Error', err.message || 'Failed to save units');
+                              Alert.alert(t('common.error'), err.message || t('profile.failedToSaveUnits'));
                             }
                           },
                         },
                         {
-                          text: 'Imperial (lbs, ft/in)',
+                          text: t('profile.imperialLabel'),
                           onPress: async () => {
                             console.log('[Profile iOS] Units changed to imperial');
                             try {
@@ -996,54 +1001,54 @@ export default function ProfileScreen() {
                               await loadUserData();
                             } catch (err: any) {
                               console.error('[Profile iOS] Error saving units:', err);
-                              Alert.alert('Error', err.message || 'Failed to save units');
+                              Alert.alert(t('common.error'), err.message || t('profile.failedToSaveUnits'));
                             }
                           },
                         },
-                        { text: 'Cancel', style: 'cancel' },
+                        { text: t('common.cancel'), style: 'cancel' },
                       ]
                     );
                   }}
                   isDark={isDark}
                 />
                 <EditableSettingItem
-                  label="Activity Level"
+                  label={t('profile.activityLevel')}
                   value={activityDisplayValue}
                   onPress={() => {
                     console.log('[Profile iOS] Activity level field tapped');
                     Alert.alert(
-                      'Select Activity Level',
+                      t('profile.selectActivityLevel'),
                       '',
                       [
                         {
-                          text: 'Sedentary',
+                          text: t('profile.sedentary'),
                           onPress: () => {
                             console.log('[Profile iOS] Activity level changed to sedentary');
                             saveFieldDirectly('activity', 'sedentary');
                           },
                         },
                         {
-                          text: 'Light',
+                          text: t('profile.light'),
                           onPress: () => {
                             console.log('[Profile iOS] Activity level changed to light');
                             saveFieldDirectly('activity', 'light');
                           },
                         },
                         {
-                          text: 'Moderate',
+                          text: t('profile.moderate'),
                           onPress: () => {
                             console.log('[Profile iOS] Activity level changed to moderate');
                             saveFieldDirectly('activity', 'moderate');
                           },
                         },
                         {
-                          text: 'Very Active',
+                          text: t('profile.veryActive'),
                           onPress: () => {
                             console.log('[Profile iOS] Activity level changed to very_active');
                             saveFieldDirectly('activity', 'very_active');
                           },
                         },
-                        { text: 'Cancel', style: 'cancel' },
+                        { text: t('common.cancel'), style: 'cancel' },
                       ]
                     );
                   }}
@@ -1067,7 +1072,7 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <IconSymbol ios_icon_name="target" android_material_icon_name="flag" size={18} color={isDark ? '#aaa' : '#666'} />
                 <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  My Goal
+                  {t('profile.myGoal')}
                 </Text>
               </View>
             </View>
@@ -1087,16 +1092,16 @@ export default function ProfileScreen() {
                   <>
                     {/* Goal Type */}
                     <EditableSettingItem
-                      label="Goal"
+                      label={t('profile.goal')}
                       value={goalTypeDisplayValue}
                       onPress={() => {
                         console.log('[Profile iOS] Goal type field tapped');
                         Alert.alert(
-                          'Select Goal',
+                          t('profile.selectGoal'),
                           '',
                           [
                             {
-                              text: '📉 Lose Weight',
+                              text: t('profile.loseWeight'),
                               onPress: () => {
                                 console.log('[Profile iOS] Goal type changed to lose');
                                 if (goal) {
@@ -1105,7 +1110,7 @@ export default function ProfileScreen() {
                               },
                             },
                             {
-                              text: '⚖️ Maintain',
+                              text: t('profile.maintain'),
                               onPress: () => {
                                 console.log('[Profile iOS] Goal type changed to maintain');
                                 if (goal) {
@@ -1114,7 +1119,7 @@ export default function ProfileScreen() {
                               },
                             },
                             {
-                              text: '📈 Gain Weight',
+                              text: t('profile.gainWeight'),
                               onPress: () => {
                                 console.log('[Profile iOS] Goal type changed to gain');
                                 if (goal) {
@@ -1122,7 +1127,7 @@ export default function ProfileScreen() {
                                 }
                               },
                             },
-                            { text: 'Cancel', style: 'cancel' },
+                            { text: t('common.cancel'), style: 'cancel' },
                           ]
                         );
                       }}
@@ -1133,8 +1138,8 @@ export default function ProfileScreen() {
                     {/* Loss Rate — only if goal_type === 'lose' */}
                     {goal?.goal_type === 'lose' && (
                       <EditableSettingItem
-                        label="Loss Rate"
-                        value={goal?.loss_rate_lbs_per_week ? getLossRateDisplayText(goal.loss_rate_lbs_per_week, units) : 'Tap to set'}
+                        label={t('profile.lossRate')}
+                        value={goal?.loss_rate_lbs_per_week ? getLossRateDisplayText(goal.loss_rate_lbs_per_week, units) : t('profile.tapToSet')}
                         onPress={() => openEditModal('lossRate')}
                         isDark={isDark}
                       />
@@ -1142,7 +1147,7 @@ export default function ProfileScreen() {
 
                     {/* Journey Start */}
                     <EditableSettingItem
-                      label="Journey Start"
+                      label={t('profile.journeyStart')}
                       value={journeyStartDisplay}
                       onPress={() => {
                         console.log('[Profile iOS] Journey Start Date row tapped');
@@ -1153,50 +1158,50 @@ export default function ProfileScreen() {
 
                     {/* Macro Split */}
                     <EditableSettingItem
-                      label="Macro Split"
+                      label={t('profile.macroSplit')}
                       value={macroPresetDisplayValue}
                       onPress={() => {
                         console.log('[Profile iOS] Macro Split row tapped, current preset:', currentMacroPreset);
                         Alert.alert(
-                          'Select Macro Split',
+                          t('profile.selectMacroSplit'),
                           '',
                           [
                             {
-                              text: 'Lean Body Formula',
+                              text: t('profile.leanBodyFormula'),
                               onPress: () => {
                                 console.log('[Profile iOS] Macro preset changed to lean_body');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'lean_body' });
                               },
                             },
                             {
-                              text: 'Balanced (30/40/30)',
+                              text: t('profile.balanced'),
                               onPress: () => {
                                 console.log('[Profile iOS] Macro preset changed to balanced');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'balanced' });
                               },
                             },
                             {
-                              text: 'High Protein (40/35/25)',
+                              text: t('profile.highProtein'),
                               onPress: () => {
                                 console.log('[Profile iOS] Macro preset changed to high_protein');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'high_protein' });
                               },
                             },
                             {
-                              text: 'Low Carb (35/25/40)',
+                              text: t('profile.lowCarb'),
                               onPress: () => {
                                 console.log('[Profile iOS] Macro preset changed to low_carb');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'low_carb' });
                               },
                             },
                             {
-                              text: 'Custom',
+                              text: t('profile.custom'),
                               onPress: () => {
                                 console.log('[Profile iOS] Macro preset: navigating to custom-macros screen');
                                 router.push('/custom-macros');
                               },
                             },
-                            { text: 'Cancel', style: 'cancel' },
+                            { text: t('common.cancel'), style: 'cancel' },
                           ]
                         );
                       }}
@@ -1207,12 +1212,12 @@ export default function ProfileScreen() {
                     {goal && (
                       <View style={styles.dailyTargetsSection}>
                         <Text style={[styles.dailyTargetsTitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                          Daily Targets
+                          {t('profile.dailyTargets')}
                         </Text>
                         <View style={styles.goalsRow}>
                           <View style={styles.goalItemCompact}>
                             <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                              Calories
+                              {t('common.calories')}
                             </Text>
                             <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
                               {goal.daily_calories}
@@ -1220,7 +1225,7 @@ export default function ProfileScreen() {
                           </View>
                           <View style={styles.goalItemCompact}>
                             <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                              Protein
+                              {t('common.protein')}
                             </Text>
                             <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
                               {goal.protein_g}
@@ -1229,7 +1234,7 @@ export default function ProfileScreen() {
                           </View>
                           <View style={styles.goalItemCompact}>
                             <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                              Carbs
+                              {t('common.carbs')}
                             </Text>
                             <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
                               {goal.carbs_g}
@@ -1238,7 +1243,7 @@ export default function ProfileScreen() {
                           </View>
                           <View style={styles.goalItemCompact}>
                             <Text style={[styles.goalLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                              Fats
+                              {t('common.fats')}
                             </Text>
                             <Text style={[styles.goalValueCompact, { color: isDark ? colors.textDark : colors.text }]}>
                               {goal.fats_g}
@@ -1258,9 +1263,9 @@ export default function ProfileScreen() {
                         setSaving(true);
                         try {
                           await recalculateGoals(user, goal);
-                          Alert.alert('Goals Updated!', 'Your goals have been recalculated based on your current data.');
+                          Alert.alert(t('profile.goalsUpdated'), t('profile.goalsRecalculated'));
                         } catch (e: any) {
-                          Alert.alert('Error', e.message || 'Failed to recalculate goals');
+                          Alert.alert(t('common.error'), e.message || t('errors.failedToSave'));
                         } finally {
                           setSaving(false);
                         }
@@ -1273,20 +1278,20 @@ export default function ProfileScreen() {
                         color={colors.primary}
                       />
                       <Text style={[styles.recalculateButtonText, { color: colors.primary }]}>
-                        Recalculate Goals
+                        {t('profile.recalculateGoals')}
                       </Text>
                     </TouchableOpacity>
                   </>
                 ) : (
                   <View style={styles.noGoalContainer}>
                     <Text style={[styles.noGoalText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Complete onboarding to set your nutrition goals
+                      {t('profile.completeOnboarding')}
                     </Text>
                     <TouchableOpacity
                       style={[styles.editButton, { backgroundColor: colors.primary }]}
                       onPress={handleEditGoals}
                     >
-                      <Text style={styles.editButtonText}>Set Up Goals</Text>
+                      <Text style={styles.editButtonText}>{t('profile.setUpGoals')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1310,7 +1315,7 @@ export default function ProfileScreen() {
               <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={18} color={isDark ? '#aaa' : '#666'} />
               <View style={styles.accordionHeaderTextStack}>
                 <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Food Preferences
+                  {t('profile.foodPreferences')}
                 </Text>
                 <Text style={[styles.accordionHeaderSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                   {foodPrefsSummary}
@@ -1345,7 +1350,7 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <IconSymbol ios_icon_name="person.2" android_material_icon_name="group" size={18} color={isDark ? '#aaa' : '#666'} />
                 <Text style={[styles.accordionHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Earn Money · Refer Friends 💸
+                  {t('profile.earnMoney')}
                 </Text>
               </View>
             </View>
@@ -1369,7 +1374,7 @@ export default function ProfileScreen() {
               const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
               Linking.openURL(mailtoUrl).catch((err) => {
                 console.error('[Profile iOS] Failed to open mail app:', err);
-                Alert.alert('Error', 'Could not open the mail app. Please email us at macrogoalapp@gmail.com');
+                Alert.alert(t('common.error'), t('errors.couldNotOpenMail'));
               });
             }}
             activeOpacity={0.7}
@@ -1382,7 +1387,7 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Send Feedback
+                {t('profile.sendFeedback')}
               </Text>
             </View>
             <IconSymbol
@@ -1403,11 +1408,11 @@ export default function ProfileScreen() {
                 text: lang.nativeLabel,
                 onPress: async () => {
                   console.log('[Profile iOS] Language changed to:', lang.code);
-                  await i18n.changeLanguage(lang.code);
+                  await i18nInstance.changeLanguage(lang.code);
                   await setStoredLanguage(lang.code);
                 },
               }));
-              Alert.alert(i18n.language?.startsWith('es') ? 'Seleccionar idioma' : 'Select Language', '', [...options, { text: i18n.language?.startsWith('es') ? 'Cancelar' : 'Cancel', style: 'cancel' as const }]);
+              Alert.alert(t('profile.selectLanguage'), '', [...options, { text: t('common.cancel'), style: 'cancel' as const }]);
             }}
             activeOpacity={0.7}
           >
@@ -1419,12 +1424,12 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                {i18n.language?.startsWith('es') ? 'Idioma' : 'Language'}
+                {t('profile.language')}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={{ fontSize: 13, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                {i18n.language?.startsWith('es') ? 'Español' : 'English'}
+                {i18nInstance.language?.startsWith('es') ? t('profile.spanish') : t('profile.english')}
               </Text>
               <IconSymbol
                 ios_icon_name="chevron.right"
@@ -1442,7 +1447,7 @@ export default function ProfileScreen() {
           onPress={handleLogout}
         >
           <Text style={[styles.logoutText, { color: colors.error }]}>
-            Log Out
+            {t('profile.logOut')}
           </Text>
         </TouchableOpacity>
 
@@ -1454,7 +1459,7 @@ export default function ProfileScreen() {
               router.push('/privacy-policy');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Privacy Policy
+                {t('profile.privacyPolicy')}
               </Text>
             </TouchableOpacity>
             <Text style={[styles.footerSeparator, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1465,7 +1470,7 @@ export default function ProfileScreen() {
               router.push('/terms-of-service');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Terms of Service
+                {t('profile.termsOfService')}
               </Text>
             </TouchableOpacity>
             <Text style={[styles.footerSeparator, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1476,7 +1481,7 @@ export default function ProfileScreen() {
               router.push('/terms-of-use-eula');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Terms of Use (EULA)
+                {t('profile.termsOfUse')}
               </Text>
             </TouchableOpacity>
             <Text style={[styles.footerSeparator, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1487,7 +1492,7 @@ export default function ProfileScreen() {
               router.push('/delete-account');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Delete Account
+                {t('profile.deleteAccount')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1511,19 +1516,19 @@ export default function ProfileScreen() {
             activeOpacity={1}
           >
             <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              {editingField === 'name' && 'Edit Name'}
-              {editingField === 'height' && 'Edit Height'}
-              {editingField === 'weight' && 'Edit Current Weight'}
-              {editingField === 'goalWeight' && 'Edit Goal Weight'}
-              {editingField === 'age' && 'Edit Age'}
-              {editingField === 'lossRate' && 'Edit Weight Loss Rate'}
+              {editingField === 'name' && t('profile.editName')}
+              {editingField === 'height' && t('profile.editHeight')}
+              {editingField === 'weight' && t('profile.editWeight')}
+              {editingField === 'goalWeight' && t('profile.editGoalWeight')}
+              {editingField === 'age' && t('profile.editAge')}
+              {editingField === 'lossRate' && t('profile.editLossRate')}
             </Text>
 
             {editingField === 'height' && units === 'imperial' ? (
               <View style={styles.dualInputRow}>
                 <View style={styles.dualInputContainer}>
                   <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Feet
+                    {t('profile.feet')}
                   </Text>
                   <TextInput
                     style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, color: isDark ? colors.textDark : colors.text }]}
@@ -1535,7 +1540,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.dualInputContainer}>
                   <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Inches
+                    {t('profile.inches')}
                   </Text>
                   <TextInput
                     style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, color: isDark ? colors.textDark : colors.text }]}
@@ -1552,11 +1557,11 @@ export default function ProfileScreen() {
                 onChangeText={setEditValue}
                 keyboardType={editingField === 'name' ? 'default' : 'decimal-pad'}
                 placeholder={
-                  editingField === 'name' ? 'Your first name' :
-                  editingField === 'height' ? (units === 'imperial' ? 'inches' : 'cm') :
+                  editingField === 'name' ? t('profile.yourFirstName') :
+                  editingField === 'height' ? (units === 'imperial' ? t('profile.inches') : 'cm') :
                   editingField === 'weight' || editingField === 'goalWeight' ? (units === 'imperial' ? 'lbs' : 'kg') :
-                  editingField === 'age' ? 'years' :
-                  editingField === 'lossRate' ? (units === 'metric' ? 'kg per week' : 'lbs per week') : ''
+                  editingField === 'age' ? t('profile.years', { age: '' }).trim() :
+                  editingField === 'lossRate' ? (units === 'metric' ? t('profile.kgPerWeek') : t('profile.lbsPerWeek')) : ''
                 }
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 autoFocus
@@ -1570,7 +1575,7 @@ export default function ProfileScreen() {
                 onPress={closeEditModal}
               >
                 <Text style={[styles.modalButtonText, { color: isDark ? colors.textDark : colors.text }]}>
-                  Cancel
+                  {t('common.cancel')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1582,7 +1587,7 @@ export default function ProfileScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
-                    Save
+                    {t('common.save')}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1615,10 +1620,10 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.promptTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                What is your goal weight?
+                {t('profile.whatIsGoalWeight')}
               </Text>
               <Text style={[styles.promptSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Setting a goal weight helps track your progress
+                {t('profile.goalWeightHelp')}
               </Text>
             </View>
 
@@ -1638,7 +1643,7 @@ export default function ProfileScreen() {
                 onPress={handleGoalWeightPromptSkip}
               >
                 <Text style={[styles.modalButtonText, { color: isDark ? colors.textDark : colors.text }]}>
-                  Skip for now
+                  {t('profile.skipForNow')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1650,7 +1655,7 @@ export default function ProfileScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
-                    Save
+                    {t('common.save')}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1678,7 +1683,7 @@ export default function ProfileScreen() {
             {/* Header */}
             <View style={styles.foodPrefsHeader}>
               <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                Food Preferences
+                {t('profile.foodPreferences')}
               </Text>
               <TouchableOpacity onPress={() => setShowFoodPrefsModal(false)}>
                 <IconSymbol
@@ -1693,7 +1698,7 @@ export default function ProfileScreen() {
             <ScrollView showsVerticalScrollIndicator={false} style={styles.foodPrefsScroll}>
               {/* Dietary Restrictions */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Dietary Restrictions
+                {t('profile.dietaryRestrictions')}
               </Text>
               <View style={styles.chipsRow}>
                 {DIETARY_OPTIONS.map((item) => {
@@ -1719,7 +1724,7 @@ export default function ProfileScreen() {
 
               {/* Protein Preferences */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                🥩 Protein Preferences
+                {t('profile.proteinPreferences')}
               </Text>
               <View style={styles.chipsRow}>
                 {PROTEIN_OPTIONS.map((item) => {
@@ -1745,7 +1750,7 @@ export default function ProfileScreen() {
 
               {/* Disliked Foods */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                Disliked Foods
+                {t('profile.dislikedFoods')}
               </Text>
               <TextInput
                 style={[
@@ -1761,14 +1766,14 @@ export default function ProfileScreen() {
                   console.log('[Profile iOS] Disliked foods text changed');
                   setFoodPrefs((prev) => ({ ...prev, disliked_foods: text }));
                 }}
-                placeholder="e.g. mushrooms, cilantro"
+                placeholder={t('profile.dislikedFoodsPlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 multiline
               />
 
               {/* Recipe Style */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                What type of recipe fits your lifestyle best?
+                {t('profile.recipeStyle')}
               </Text>
               <View style={styles.chipsRow}>
                 {RECIPE_STYLE_OPTIONS.map((opt) => {
@@ -1802,7 +1807,7 @@ export default function ProfileScreen() {
               {savingFoodPrefs ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.foodPrefsSaveButtonText}>Save Preferences</Text>
+                <Text style={styles.foodPrefsSaveButtonText}>{t('profile.savePreferences')}</Text>
               )}
             </TouchableOpacity>
           </TouchableOpacity>
@@ -1830,18 +1835,18 @@ export default function ProfileScreen() {
                 <View style={styles.datePickerHeader}>
                   <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                     <Text style={[styles.datePickerButton, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Cancel
+                      {t('common.cancel')}
                     </Text>
                   </TouchableOpacity>
                   <Text style={[styles.datePickerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                    Select Start Date
+                    {t('profile.selectStartDate')}
                   </Text>
                   <TouchableOpacity onPress={() => saveStartDate(selectedDate)} disabled={saving}>
                     {saving ? (
                       <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
                       <Text style={[styles.datePickerButton, { color: colors.primary }]}>
-                        Done
+                        {t('common.done')}
                       </Text>
                     )}
                   </TouchableOpacity>
