@@ -54,6 +54,7 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { useTranslation } from 'react-i18next';
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -185,6 +186,7 @@ function DailyGoalSection({
   isDark: boolean;
   onGoalSaved: (newGoal: number) => void;
 }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customMode, setCustomMode] = useState(false);
@@ -197,12 +199,14 @@ function DailyGoalSection({
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const inputBg = isDark ? '#2A2C40' : '#F1F3F8';
 
-  const goalDisplay = currentGoal ? currentGoal.toLocaleString('en-US') + ' steps' : 'Not set';
+  const goalDisplay = currentGoal
+    ? currentGoal.toLocaleString('en-US') + ' ' + t('tracker.stepsUnit')
+    : t('tracker.notSet');
 
   const saveGoal = async (value: number) => {
     console.log('[TrackerDetail] saveGoal called with value:', value, 'for tracker:', trackerId);
     if (value < 1000 || value > 50000) {
-      Alert.alert('Invalid goal', 'Please enter a goal between 1,000 and 50,000 steps.');
+      Alert.alert(t('tracker.invalidGoal'), t('tracker.invalidGoalMsg'));
       return;
     }
     setSaving(true);
@@ -216,9 +220,9 @@ function DailyGoalSection({
       setCustomInput('');
       setSelectedPreset(null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to save goal';
+      const msg = err instanceof Error ? err.message : t('tracker.failedToUpdateGoal');
       console.error('[TrackerDetail] saveGoal error:', msg);
-      Alert.alert('Error', msg);
+      Alert.alert(t('common.error'), msg);
     } finally {
       setSaving(false);
     }
@@ -234,7 +238,7 @@ function DailyGoalSection({
     const parsed = parseInt(customInput.replace(/,/g, ''), 10);
     console.log('[TrackerDetail] Custom goal save tapped, input:', customInput, 'parsed:', parsed);
     if (isNaN(parsed)) {
-      Alert.alert('Invalid goal', 'Please enter a valid number.');
+      Alert.alert(t('tracker.invalidGoal'), t('tracker.invalidNumber'));
       return;
     }
     await saveGoal(parsed);
@@ -244,7 +248,7 @@ function DailyGoalSection({
     <View style={[styles.goalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
       {/* Header row */}
       <View style={styles.goalHeaderRow}>
-        <Text style={[styles.goalSectionTitle, { color: textColor }]}>Daily Goal</Text>
+        <Text style={[styles.goalSectionTitle, { color: textColor }]}>{t('tracker.dailyGoalSection')}</Text>
         {!editing ? (
           <AnimatedPressable
             onPress={() => {
@@ -255,7 +259,7 @@ function DailyGoalSection({
             scaleValue={0.92}
           >
             <Pencil size={13} color={colors.primary} strokeWidth={2.5} />
-            <Text style={[styles.editGoalBtnText, { color: colors.primary }]}>Edit</Text>
+            <Text style={[styles.editGoalBtnText, { color: colors.primary }]}>{t('common.edit')}</Text>
           </AnimatedPressable>
         ) : (
           <Pressable
@@ -267,7 +271,7 @@ function DailyGoalSection({
               setSelectedPreset(null);
             }}
           >
-            <Text style={[styles.cancelGoalText, { color: subColor }]}>Cancel</Text>
+            <Text style={[styles.cancelGoalText, { color: subColor }]}>{t('common.cancel')}</Text>
           </Pressable>
         )}
       </View>
@@ -311,7 +315,7 @@ function DailyGoalSection({
               style={[styles.presetChip, { backgroundColor: isDark ? '#2A2C40' : '#F1F3F8' }]}
               scaleValue={0.93}
             >
-              <Text style={[styles.presetChipText, { color: textColor }]}>Custom</Text>
+              <Text style={[styles.presetChipText, { color: textColor }]}>{t('tracker.custom')}</Text>
             </AnimatedPressable>
           ) : (
             <View style={styles.customInputRow}>
@@ -335,7 +339,7 @@ function DailyGoalSection({
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.customSaveBtnText}>Save</Text>
+                  <Text style={styles.customSaveBtnText}>{t('common.save')}</Text>
                 )}
               </AnimatedPressable>
             </View>
@@ -359,6 +363,7 @@ function GymEntryActions({
   isDark: boolean;
   onReload: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const btnBg = isDark ? '#2A2C40' : '#F1F3F8';
   const iconColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
@@ -461,10 +466,10 @@ function GymEntryActions({
   const handleCamera = () => {
     console.log('[TrackerDetail][Gym] Camera button tapped — entry date:', entry.date);
     const dateLabel = formatDate(entry.date);
-    Alert.alert(`Add a photo for ${dateLabel}`, undefined, [
-      { text: 'Take Photo', onPress: () => pickAndUpload('camera') },
-      { text: 'Choose from Library', onPress: () => pickAndUpload('library') },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('tracker.addPhotoFor', { date: dateLabel }), undefined, [
+      { text: t('tracker.takePhoto'), onPress: () => pickAndUpload('camera') },
+      { text: t('tracker.chooseFromLibrary'), onPress: () => pickAndUpload('library') },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
 
@@ -475,7 +480,7 @@ function GymEntryActions({
       if (source === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          Alert.alert(t('tracker.permissionRequired'), t('tracker.cameraAccess'));
           return;
         }
         result = await ImagePicker.launchCameraAsync({
@@ -486,7 +491,7 @@ function GymEntryActions({
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Photo library access is needed to select a photo.');
+          Alert.alert(t('tracker.permissionRequired'), t('tracker.libraryAccess'));
           return;
         }
         result = await ImagePicker.launchImageLibraryAsync({
@@ -514,9 +519,9 @@ function GymEntryActions({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       console.log('[TrackerDetail][Gym] Photo upload complete for entry:', entry.id);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to upload photo';
+      const msg = err instanceof Error ? err.message : t('tracker.failedToAddPhoto');
       console.error('[TrackerDetail][Gym] pickAndUpload error:', msg);
-      Alert.alert('Error', msg);
+      Alert.alert(t('common.error'), msg);
     } finally {
       setUploadingPhoto(false);
     }
@@ -554,7 +559,7 @@ function GymEntryActions({
         .maybeSingle();
 
       if (conflict) {
-        Alert.alert('Date conflict', 'An entry already exists for that date.');
+        Alert.alert(t('tracker.dateConflict'), t('tracker.dateConflictMsg'));
         setSavingDate(false);
         return;
       }
@@ -604,9 +609,9 @@ function GymEntryActions({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       console.log('[TrackerDetail][Gym] Date change saved and entries reloaded');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to update date';
+      const msg = err instanceof Error ? err.message : t('tracker.failedToUpdateDate');
       console.error('[TrackerDetail][Gym] handleSaveDate error:', msg);
-      Alert.alert('Error', msg);
+      Alert.alert(t('common.error'), msg);
     } finally {
       setSavingDate(false);
     }
@@ -677,6 +682,7 @@ function WeightEntryActions({
   isDark: boolean;
   onReload: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const btnBg = isDark ? '#2A2C40' : '#F1F3F8';
   const iconColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
@@ -788,16 +794,16 @@ function WeightEntryActions({
   const handleCamera = () => {
     console.log('[TrackerDetail] Camera button tapped — entry date:', entry.date);
     const dateLabel = formatDate(entry.date);
-    Alert.alert(`Add a photo for ${dateLabel}`, undefined, [
+    Alert.alert(t('tracker.addPhotoFor', { date: dateLabel }), undefined, [
       {
-        text: 'Take Photo',
+        text: t('tracker.takePhoto'),
         onPress: () => pickAndUpload('camera'),
       },
       {
-        text: 'Choose from Library',
+        text: t('tracker.chooseFromLibrary'),
         onPress: () => pickAndUpload('library'),
       },
-      { text: 'Cancel', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
 
@@ -808,7 +814,7 @@ function WeightEntryActions({
       if (source === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          Alert.alert(t('tracker.permissionRequired'), t('tracker.cameraAccess'));
           return;
         }
         result = await ImagePicker.launchCameraAsync({
@@ -819,7 +825,7 @@ function WeightEntryActions({
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Photo library access is needed to select a photo.');
+          Alert.alert(t('tracker.permissionRequired'), t('tracker.libraryAccess'));
           return;
         }
         result = await ImagePicker.launchImageLibraryAsync({
@@ -847,9 +853,9 @@ function WeightEntryActions({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       console.log('[TrackerDetail] Photo upload complete for entry:', entry.id);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to upload photo';
+      const msg = err instanceof Error ? err.message : t('tracker.failedToAddPhoto');
       console.error('[TrackerDetail] pickAndUpload error:', msg);
-      Alert.alert('Error', msg);
+      Alert.alert(t('common.error'), msg);
     } finally {
       setUploadingPhoto(false);
     }
@@ -868,7 +874,7 @@ function WeightEntryActions({
     const parsed = parseFloat(editValue);
     console.log('[TrackerDetail] Save edit value — raw:', editValue, 'parsed:', parsed);
     if (isNaN(parsed) || parsed <= 0) {
-      Alert.alert('Invalid value', 'Please enter a valid weight greater than 0.');
+      Alert.alert(t('tracker.invalidValue'), t('tracker.invalidValueMsg'));
       return;
     }
     setSavingEdit(true);
@@ -902,9 +908,9 @@ function WeightEntryActions({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       console.log('[TrackerDetail] Edit value saved and entries reloaded');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to update entry';
+      const msg = err instanceof Error ? err.message : t('tracker.failedToSaveEntry');
       console.error('[TrackerDetail] handleSaveEdit error:', msg);
-      Alert.alert('Error', msg);
+      Alert.alert(t('common.error'), msg);
     } finally {
       setSavingEdit(false);
     }
@@ -942,7 +948,7 @@ function WeightEntryActions({
         .maybeSingle();
 
       if (conflict) {
-        Alert.alert('Date conflict', 'An entry already exists for that date.');
+        Alert.alert(t('tracker.dateConflict'), t('tracker.dateConflictMsg'));
         setSavingDate(false);
         return;
       }
@@ -993,9 +999,9 @@ function WeightEntryActions({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       console.log('[TrackerDetail] Date change saved and entries reloaded');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to update date';
+      const msg = err instanceof Error ? err.message : t('tracker.failedToUpdateDate');
       console.error('[TrackerDetail] handleSaveDate error:', msg);
-      Alert.alert('Error', msg);
+      Alert.alert(t('common.error'), msg);
     } finally {
       setSavingDate(false);
     }
@@ -1099,6 +1105,7 @@ function WeightEditModal({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const { t } = useTranslation();
   const cardBg = isDark ? colors.cardDark : colors.card;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -1107,13 +1114,13 @@ function WeightEditModal({
   return (
     <View style={styles.modalBackdrop}>
       <View style={[styles.modalCard, { backgroundColor: cardBg }]}>
-        <Text style={[styles.modalTitle, { color: textColor }]}>Edit weight</Text>
+        <Text style={[styles.modalTitle, { color: textColor }]}>{t('tracker.editWeight')}</Text>
         <TextInput
           style={[styles.modalInput, { backgroundColor: inputBg, color: textColor }]}
           value={editValue}
           onChangeText={setEditValue}
           keyboardType="decimal-pad"
-          placeholder="Weight in lbs"
+          placeholder={t('tracker.weightInLbs')}
           placeholderTextColor={subColor}
           autoFocus
           selectTextOnFocus
@@ -1123,7 +1130,7 @@ function WeightEditModal({
             onPress={onCancel}
             style={[styles.modalBtn, { backgroundColor: isDark ? '#2A2C40' : '#F1F3F8' }]}
           >
-            <Text style={[styles.modalBtnText, { color: subColor }]}>Cancel</Text>
+            <Text style={[styles.modalBtnText, { color: subColor }]}>{t('common.cancel')}</Text>
           </Pressable>
           <Pressable
             onPress={onSave}
@@ -1133,7 +1140,7 @@ function WeightEditModal({
             {saving ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={[styles.modalBtnText, { color: '#fff' }]}>Save</Text>
+              <Text style={[styles.modalBtnText, { color: '#fff' }]}>{t('common.save')}</Text>
             )}
           </Pressable>
         </View>
@@ -1158,6 +1165,7 @@ function WeightDateModal({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const { t } = useTranslation();
   const cardBg = isDark ? colors.cardDark : colors.card;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -1165,7 +1173,7 @@ function WeightDateModal({
   return (
     <View style={styles.modalBackdrop}>
       <View style={[styles.modalCard, { backgroundColor: cardBg }]}>
-        <Text style={[styles.modalTitle, { color: textColor }]}>Edit date</Text>
+        <Text style={[styles.modalTitle, { color: textColor }]}>{t('tracker.editDate')}</Text>
         <DateTimePicker
           value={pickedDate}
           mode="date"
@@ -1185,7 +1193,7 @@ function WeightDateModal({
             onPress={onCancel}
             style={[styles.modalBtn, { backgroundColor: isDark ? '#2A2C40' : '#F1F3F8' }]}
           >
-            <Text style={[styles.modalBtnText, { color: subColor }]}>Cancel</Text>
+            <Text style={[styles.modalBtnText, { color: subColor }]}>{t('common.cancel')}</Text>
           </Pressable>
           <Pressable
             onPress={onSave}
@@ -1195,7 +1203,7 @@ function WeightDateModal({
             {saving ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={[styles.modalBtnText, { color: '#fff' }]}>Confirm</Text>
+              <Text style={[styles.modalBtnText, { color: '#fff' }]}>{t('common.confirm')}</Text>
             )}
           </Pressable>
         </View>
@@ -1206,6 +1214,7 @@ function WeightDateModal({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TrackerDetailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colorScheme = useColorScheme();
@@ -1244,14 +1253,14 @@ export default function TrackerDetailScreen() {
       setEntries(entriesData);
       console.log('[TrackerDetail] Loaded tracker:', found?.name, 'entries:', entriesData.length);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load tracker';
+      const msg = e instanceof Error ? e.message : t('tracker.failedToLoad');
       console.error('[TrackerDetail] Error:', msg);
       setError(msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   // Lightweight reload (no skeleton flash) used by WeightEntryActions after edits
   const reloadEntries = useCallback(async () => {
@@ -1290,7 +1299,7 @@ export default function TrackerDetailScreen() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Cancel', 'Delete tracker'],
+          options: [t('common.cancel'), t('tracker.deleteTrackerOption')],
           destructiveButtonIndex: 1,
           cancelButtonIndex: 0,
           title: tracker.name,
@@ -1300,19 +1309,19 @@ export default function TrackerDetailScreen() {
         }
       );
     } else {
-      Alert.alert(tracker.name, 'What would you like to do?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete tracker', style: 'destructive', onPress: confirmDelete },
+      Alert.alert(tracker.name, t('tracker.moreOptions'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('tracker.deleteTrackerOption'), style: 'destructive', onPress: confirmDelete },
       ]);
     }
   };
 
   const confirmDelete = () => {
     console.log('[TrackerDetail] Confirm delete tracker:', id);
-    Alert.alert('Delete tracker?', 'This will permanently delete this tracker and all its entries.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('tracker.deleteTracker'), t('tracker.deleteTrackerBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete tracker',
+        text: t('tracker.deleteTrackerOption'),
         style: 'destructive',
         onPress: async () => {
           try {
@@ -1320,8 +1329,8 @@ export default function TrackerDetailScreen() {
             console.log('[TrackerDetail] Tracker deleted, navigating back');
             router.back();
           } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : 'Failed to delete';
-            Alert.alert('Error', msg);
+            const msg = e instanceof Error ? e.message : t('tracker.failedToDelete');
+            Alert.alert(t('common.error'), msg);
           }
         },
       },
@@ -1335,8 +1344,8 @@ export default function TrackerDetailScreen() {
       await deleteEntry(id!, entry.id, isWeightTracker ? { syncCheckIns: true, date: entry.date } : undefined);
       setEntries(prev => prev.filter(e => e.id !== entry.id));
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to delete entry';
-      Alert.alert('Error', msg);
+      const msg = e instanceof Error ? e.message : t('tracker.failedToDeleteEntry');
+      Alert.alert(t('common.error'), msg);
     }
   };
 
@@ -1367,7 +1376,7 @@ export default function TrackerDetailScreen() {
         setEntries(newEntries);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to refresh steps';
+      const msg = err instanceof Error ? err.message : t('tracker.failedToLoad');
       console.error('[TrackerDetail] Steps refresh error:', msg);
     } finally {
       setStepsRefreshing(false);
@@ -1394,14 +1403,20 @@ export default function TrackerDetailScreen() {
   const avgDisplay = stats && tracker
     ? formatValue(Number(stats.avg_value), tracker.tracker_type, tracker.unit)
     : '—';
+
   const statusLabel =
-    stats?.status === 'on_track' ? 'On Track 🟢' :
-    stats?.status === 'improving' ? 'Improving 📈' :
-    'Behind 🔴';
+    stats?.status === 'on_track' ? t('tracker.onTrack') :
+    stats?.status === 'improving' ? t('tracker.improving') :
+    t('tracker.behind');
   const statusColor =
     stats?.status === 'on_track' ? colors.success :
     stats?.status === 'improving' ? colors.primary :
     colors.warning;
+
+  const daysHitGoalText = stats
+    ? t('tracker.daysHitGoal', { done: stats.days_goal_met, total: stats.days_tracked })
+    : '';
+  const avgText = t('tracker.avgLabel', { value: avgDisplay });
 
   return (
     <>
@@ -1436,10 +1451,10 @@ export default function TrackerDetailScreen() {
           </>
         ) : error ? (
           <View style={[styles.errorCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.errorTitle, { color: textColor }]}>Couldn't load tracker</Text>
+            <Text style={[styles.errorTitle, { color: textColor }]}>{t('tracker.couldntLoad')}</Text>
             <Text style={[styles.errorSub, { color: subColor }]}>{error}</Text>
             <AnimatedPressable onPress={() => { setLoading(true); loadData(); }} style={[styles.retryBtn, { backgroundColor: colors.primary }]}>
-              <Text style={styles.retryBtnText}>Try again</Text>
+              <Text style={styles.retryBtnText}>{t('common.tryAgain')}</Text>
             </AnimatedPressable>
           </View>
         ) : (
@@ -1447,17 +1462,17 @@ export default function TrackerDetailScreen() {
             {/* Row 1: Streak + Best Streak */}
             <View style={styles.statsGrid}>
               <StatCard
-                label="day streak"
+                label={t('tracker.dayStreak')}
                 value={String(stats?.current_streak ?? 0)}
-                sub="current"
+                sub={t('tracker.current')}
                 icon={<Flame size={20} color="#FF8A5B" strokeWidth={2} />}
                 iconColor="#FF8A5B"
                 isDark={isDark}
               />
               <StatCard
-                label="best ever"
+                label={t('tracker.bestEver')}
                 value={String(stats?.best_streak ?? 0)}
-                sub="all time"
+                sub={t('tracker.allTime')}
                 icon={<Trophy size={20} color="#F59E0B" strokeWidth={2} />}
                 iconColor="#F59E0B"
                 isDark={isDark}
@@ -1467,14 +1482,14 @@ export default function TrackerDetailScreen() {
             {/* Row 2: Completion + Days Tracked */}
             <View style={styles.statsGrid}>
               <StatCard
-                label="of days logged"
+                label={t('tracker.ofDaysLogged')}
                 value={`${completionPct}%`}
                 icon={<CheckCircle2 size={20} color={colors.success} strokeWidth={2} />}
                 iconColor={colors.success}
                 isDark={isDark}
               />
               <StatCard
-                label="total entries"
+                label={t('tracker.totalEntries')}
                 value={String(stats?.days_tracked ?? 0)}
                 icon={<Calendar size={20} color={colors.primary} strokeWidth={2} />}
                 iconColor={colors.primary}
@@ -1485,14 +1500,14 @@ export default function TrackerDetailScreen() {
             {/* Row 3: This Week + Last Week */}
             <View style={styles.statsGrid}>
               <StatCard
-                label="this week"
+                label={t('tracker.thisWeek')}
                 value={String(stats?.this_week_count ?? 0)}
                 icon={<TrendingUp size={20} color="#8B5CF6" strokeWidth={2} />}
                 iconColor="#8B5CF6"
                 isDark={isDark}
               />
               <StatCard
-                label="last week"
+                label={t('tracker.lastWeek')}
                 value={String(stats?.last_week_count ?? 0)}
                 icon={<BarChart3 size={20} color="#6B7280" strokeWidth={2} />}
                 iconColor="#6B7280"
@@ -1508,7 +1523,7 @@ export default function TrackerDetailScreen() {
                 </View>
                 {tracker?.goal_value && stats ? (
                   <Text style={[styles.statusMeta, { color: subColor }]}>
-                    {stats.days_goal_met} / {stats.days_tracked} days hit goal
+                    {daysHitGoalText}
                   </Text>
                 ) : null}
               </View>
@@ -1516,7 +1531,7 @@ export default function TrackerDetailScreen() {
                 <View style={styles.avgRow}>
                   <Target size={14} color={subColor} strokeWidth={2} />
                   <Text style={[styles.avgText, { color: subColor }]}>
-                    Avg: {avgDisplay}
+                    {avgText}
                   </Text>
                 </View>
               ) : null}
@@ -1534,7 +1549,7 @@ export default function TrackerDetailScreen() {
 
             {/* Row 5: Recent Entries */}
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: textColor }]}>Recent Entries</Text>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>{t('tracker.recentEntries')}</Text>
               {isStepsTracker ? (
                 /* Steps: Refresh from Health instead of manual log */
                 <AnimatedPressable
@@ -1548,7 +1563,7 @@ export default function TrackerDetailScreen() {
                   ) : (
                     <>
                       <RotateCw size={14} color="#fff" strokeWidth={2.5} />
-                      <Text style={styles.logEntryBtnText}>Refresh</Text>
+                      <Text style={styles.logEntryBtnText}>{t('common.refresh')}</Text>
                     </>
                   )}
                 </AnimatedPressable>
@@ -1561,22 +1576,22 @@ export default function TrackerDetailScreen() {
               ) : (
                 <AnimatedPressable onPress={handleLogEntry} style={[styles.logEntryBtn, { backgroundColor: colors.primary }]} scaleValue={0.94}>
                   <Plus size={14} color="#fff" strokeWidth={2.5} />
-                  <Text style={styles.logEntryBtnText}>Log entry</Text>
+                  <Text style={styles.logEntryBtnText}>{t('tracker.logEntry')}</Text>
                 </AnimatedPressable>
               )}
             </View>
 
             {entries.length === 0 ? (
               <View style={[styles.emptyEntries, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Text style={[styles.emptyEntriesTitle, { color: textColor }]}>No entries yet</Text>
+                <Text style={[styles.emptyEntriesTitle, { color: textColor }]}>{t('tracker.noEntriesYet')}</Text>
                 <Text style={[styles.emptyEntriesSub, { color: subColor }]}>
                   {isStepsTracker
-                    ? 'Tap Refresh to sync your steps from Apple Health'
+                    ? t('tracker.emptySteps')
                     : isWeightTracker
-                    ? 'Log your weight from the Check-ins tab'
+                    ? t('tracker.emptyWeight')
                     : isGymTracker
-                    ? 'Log your gym sessions from the Check-ins tab'
-                    : 'Log your first entry to start tracking progress'}
+                    ? t('tracker.emptyGym')
+                    : t('tracker.emptyDefault')}
                 </Text>
               </View>
             ) : (

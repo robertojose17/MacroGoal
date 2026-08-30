@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -102,6 +103,7 @@ const ICON_GRID_ITEMS: FeatureItem[] = [
 
 export default function SubscriptionScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { width: screenWidth } = useWindowDimensions();
@@ -354,8 +356,8 @@ export default function SubscriptionScreen() {
   const handlePurchase = async (pkg: PurchasesPackage) => {
     if (Platform.OS === 'web') {
       Alert.alert(
-        'Not Available on Web',
-        'In-app purchases are only available on iOS and Android. Please use the mobile app to subscribe.'
+        t('subscription.notAvailableWeb'),
+        t('subscription.notAvailableWebMsg')
       );
       return;
     }
@@ -399,8 +401,8 @@ export default function SubscriptionScreen() {
       } else {
         console.warn('[Subscription] ⚠️ Purchase completed but premium not active');
         Alert.alert(
-          'Purchase Completed',
-          'Your purchase was successful. Premium access will be activated shortly.'
+          t('subscription.purchaseCompleted'),
+          t('subscription.purchaseCompletedMsg')
         );
       }
 
@@ -418,18 +420,18 @@ export default function SubscriptionScreen() {
         // Don't show alert for user cancellation
       } else if (error.code === 'PRODUCT_ALREADY_PURCHASED') {
         Alert.alert(
-          'Already Subscribed',
-          'You already have an active subscription. Use "Restore Purchases" if you don\'t see your premium features.'
+          t('subscription.alreadySubscribed'),
+          t('subscription.alreadySubscribedMsg')
         );
       } else if (error.code === 'NETWORK_ERROR') {
         Alert.alert(
-          'Network Error',
-          'Unable to connect to the store. Please check your internet connection and try again.'
+          t('subscription.networkError'),
+          t('subscription.networkErrorMsg')
         );
       } else {
         Alert.alert(
-          'Purchase Failed',
-          error.message || 'Unable to complete purchase. Please try again.'
+          t('subscription.purchaseFailed'),
+          error.message || t('subscription.purchaseFailedMsg')
         );
       }
     } finally {
@@ -443,8 +445,8 @@ export default function SubscriptionScreen() {
   const handleRestore = async () => {
     if (Platform.OS === 'web') {
       Alert.alert(
-        'Not Available on Web',
-        'Purchase restoration is only available on iOS and Android. Please use the mobile app.'
+        t('subscription.notAvailableWeb'),
+        t('subscription.restoreNotAvailableWebMsg')
       );
       return;
     }
@@ -470,21 +472,21 @@ export default function SubscriptionScreen() {
 
       if (hasActiveEntitlement) {
         Alert.alert(
-          'Success',
-          'Your purchases have been restored! You now have access to all premium features.'
+          t('common.success'),
+          t('subscription.restoreSuccess')
         );
       } else {
         Alert.alert(
-          'No Active Subscriptions',
-          'No active subscriptions were found for this Apple/Google account. If you purchased a subscription with a different app account, you\'ll need to log in to that account to access premium features.'
+          t('subscription.noActiveSubscriptions'),
+          t('subscription.noActiveSubscriptionsMsg')
         );
       }
 
     } catch (error: any) {
       console.error('[Subscription] ❌ Restore error:', error);
       Alert.alert(
-        'Restore Failed',
-        error.message || 'Failed to restore purchases. Please try again.'
+        t('subscription.restoreFailed'),
+        error.message || t('subscription.restoreFailedMsg')
       );
     } finally {
       setLoading(false);
@@ -505,7 +507,7 @@ export default function SubscriptionScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Go Premium
+            {t('subscription.title')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -520,13 +522,13 @@ export default function SubscriptionScreen() {
             />
           </View>
           <Text style={[styles.webMessageTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Premium Subscriptions
+            {t('subscription.webTitle')}
           </Text>
           <Text style={[styles.webMessageText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            In-app purchases are only available on iOS and Android devices.
+            {t('subscription.webMobileOnly')}
           </Text>
           <Text style={[styles.webMessageText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Please download the mobile app to subscribe to Premium and unlock:
+            {t('subscription.webDownloadPrompt')}
           </Text>
 
           <View style={styles.featuresList}>
@@ -549,7 +551,7 @@ export default function SubscriptionScreen() {
             style={[styles.button, { backgroundColor: colors.primary }]}
             onPress={() => router.back()}
           >
-            <Text style={styles.buttonText}>Go Back</Text>
+            <Text style={styles.buttonText}>{t('subscription.goBack')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -562,7 +564,7 @@ export default function SubscriptionScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: '#fff' }]}>
-            Loading subscription options...
+            {t('subscription.loadingText')}
           </Text>
         </View>
       </SafeAreaView>
@@ -583,7 +585,7 @@ export default function SubscriptionScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: '#fff' }]}>
-            Go Premium
+            {t('subscription.title')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -598,7 +600,7 @@ export default function SubscriptionScreen() {
             />
           </View>
           <Text style={[styles.errorTitle, { color: '#fff' }]}>
-            Unable to Load Subscriptions
+            {t('subscription.errorTitle')}
           </Text>
           <Text style={[styles.errorMessage, { color: 'rgba(255,255,255,0.6)' }]}>
             {errorMessage}
@@ -611,14 +613,14 @@ export default function SubscriptionScreen() {
               initializeRevenueCat();
             }}
           >
-            <Text style={styles.buttonText}>Try Again</Text>
+            <Text style={styles.buttonText}>{t('subscription.tryAgain')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, { backgroundColor: DARK_CARD, marginTop: spacing.md }]}
             onPress={() => router.back()}
           >
             <Text style={[styles.buttonText, { color: '#fff' }]}>
-              Go Back
+              {t('subscription.goBack')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -669,18 +671,18 @@ export default function SubscriptionScreen() {
                   size={14}
                   color={colors.primary}
                 />
-                <Text style={styles.premiumPillText}>PREMIUM</Text>
+                <Text style={styles.premiumPillText}>{t('subscription.premiumPill')}</Text>
               </View>
 
               {/* Headline */}
               <View>
-                <Text style={styles.heroHeadline}>{"You're"}</Text>
-                <Text style={styles.heroHeadlineAccent}>{"Premium."}</Text>
+                <Text style={styles.heroHeadline}>{t('subscription.youre')}</Text>
+                <Text style={styles.heroHeadlineAccent}>{t('subscription.premiumHeadline')}</Text>
               </View>
 
               {/* Subtitle */}
               <Text style={styles.heroSubtitle}>
-                Enjoy unlimited access to all premium features.
+                {t('subscription.enjoyAccess')}
               </Text>
             </View>
           </ImageBackground>
@@ -720,7 +722,7 @@ export default function SubscriptionScreen() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={styles.premiumCtaText}>Continue</Text>
+              <Text style={styles.premiumCtaText}>{t('subscription.continueButton')}</Text>
               <IconSymbol
                 ios_icon_name="chevron.right"
                 android_material_icon_name="chevron-right"
@@ -737,7 +739,7 @@ export default function SubscriptionScreen() {
                 color="rgba(255,255,255,0.5)"
               />
               <Text style={styles.premiumSecureFooterText}>
-                Secure &amp; private. Your data is always protected.
+                {t('subscription.securePrivate')}
               </Text>
             </View>
           </SafeAreaView>
@@ -800,18 +802,18 @@ export default function SubscriptionScreen() {
 
     if (redemptionUrl) {
       Alert.alert(
-        'Opening Discount Page',
-        "Opening Apple's subscription page with your discount code applied. Complete your purchase there.",
+        t('subscription.openingDiscount'),
+        t('subscription.openingDiscountMsg'),
         [
           {
-            text: 'Open',
+            text: t('subscription.openDiscountBtn'),
             onPress: () => {
               console.log('[Subscription] Opening redemption URL:', redemptionUrl);
               Linking.openURL(redemptionUrl);
             },
           },
           {
-            text: 'Subscribe Normally',
+            text: t('subscription.subscribeNormally'),
             onPress: () => handlePurchase(selectedPkg),
           },
         ]
@@ -822,7 +824,7 @@ export default function SubscriptionScreen() {
     handlePurchase(selectedPkg);
   };
 
-  const ctaLabel = 'Get Started';
+  const ctaLabel = t('subscription.getStarted');
 
   const ALL_FEATURES = [
     'AI photo calorie estimator',
@@ -869,10 +871,10 @@ export default function SubscriptionScreen() {
 
             {/* LEFT 60% — text block */}
             <View style={{ width: '55%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 8, paddingTop: 72, paddingBottom: 20 }}>
-              <Text style={styles.newHeroLine1}>Unlock Your</Text>
-              <Text style={styles.newHeroLine2}>Personal Coach.</Text>
+              <Text style={styles.newHeroLine1}>{t('subscription.heroLine1')}</Text>
+              <Text style={styles.newHeroLine2}>{t('subscription.heroLine2')}</Text>
               <Text style={styles.newHeroSubtitle}>
-                {'Everything you need to transform your body—guided by a coach that adapts to you every day.'}
+                {t('subscription.heroSubtitle')}
               </Text>
             </View>
 
@@ -917,7 +919,7 @@ export default function SubscriptionScreen() {
             activeOpacity={0.7}
           >
             <Text style={{ color: '#5B9AA8', fontSize: 14, fontWeight: '500' }}>
-              See everything that's included
+              {t('subscription.seeEverything')}
             </Text>
             <Text style={{ color: '#5B9AA8', fontSize: 12 }}>
               {showAllFeatures ? '▲' : '▼'}
@@ -962,9 +964,9 @@ export default function SubscriptionScreen() {
                     {yearlyMonthlyEquiv && (
                       <Text style={styles.darkPlanCardTitle}>{yearlyMonthlyEquiv}</Text>
                     )}
-                    <Text style={styles.darkPlanCardSub}>{yearlyPrice} billed annually</Text>
+                    <Text style={styles.darkPlanCardSub}>{yearlyPrice} {t('subscription.billedAnnually')}</Text>
                     <Text style={[styles.planCardTag, { color: '#5B9AA8' }]}>
-                      Most users choose this
+                      {t('subscription.mostUsersChoose')}
                     </Text>
                   </View>
                 </View>
@@ -989,7 +991,7 @@ export default function SubscriptionScreen() {
                     {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.darkPlanCardPrice}>{monthlyPrice} monthly</Text>
+                    <Text style={styles.darkPlanCardPrice}>{monthlyPrice} {t('subscription.monthlyLabel')}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -999,7 +1001,7 @@ export default function SubscriptionScreen() {
 
           {/* ── 3.5. AFFILIATE CODE ── */}
           <View style={styles.affiliateCodeSection}>
-            <Text style={styles.affiliateCodeLabel}>Have an affiliate or offer code?</Text>
+            <Text style={styles.affiliateCodeLabel}>{t('subscription.affiliateLabel')}</Text>
             <View style={styles.affiliateCodeRow}>
               <TextInput
                 style={[
@@ -1007,7 +1009,7 @@ export default function SubscriptionScreen() {
                   affiliateCodeStatus === 'valid' && { borderColor: '#22c55e' },
                   affiliateCodeStatus === 'invalid' && { borderColor: '#ef4444' },
                 ]}
-                placeholder="Enter code..."
+                placeholder={t('subscription.affiliatePlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.3)"
                 value={affiliateCodeInput}
                 onChangeText={text => {
@@ -1034,19 +1036,18 @@ export default function SubscriptionScreen() {
                 {affiliateCodeStatus === 'checking' ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.affiliateCodeApplyText}>Apply</Text>
+                  <Text style={styles.affiliateCodeApplyText}>{t('subscription.affiliateApply')}</Text>
                 )}
               </TouchableOpacity>
             </View>
             {affiliateCodeStatus === 'valid' && (
               <Text style={styles.affiliateCodeSuccess}>
-                {'✓ Code '}
-                {affiliateCodeApplied}
-                {' applied!'}
+                {'✓ '}
+                {t('subscription.affiliateCodeApplied', { code: affiliateCodeApplied })}
               </Text>
             )}
             {affiliateCodeStatus === 'invalid' && (
-              <Text style={styles.affiliateCodeError}>Invalid or expired code. Please try again.</Text>
+              <Text style={styles.affiliateCodeError}>{t('subscription.affiliateInvalid')}</Text>
             )}
           </View>
 
@@ -1075,13 +1076,12 @@ export default function SubscriptionScreen() {
               }}
               disabled={loading}
             >
-              <Text style={styles.darkRestoreText}>Restore Purchases</Text>
+              <Text style={styles.darkRestoreText}>{t('subscription.restorePurchases')}</Text>
             </TouchableOpacity>
 
             <View style={styles.disclaimerContainer}>
               <Text style={styles.darkDisclaimerText}>
-                Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
-                You can manage your subscription in your App Store account settings.
+                {t('subscription.disclaimer')}
               </Text>
             </View>
           </View>
@@ -1110,10 +1110,10 @@ export default function SubscriptionScreen() {
               />
             </View>
             <Text style={[styles.modalTitle, { color: '#fff' }]}>
-              Welcome to Premium! 🎉
+              {t('subscription.welcomePremium')}
             </Text>
             <Text style={[styles.modalMessage, { color: 'rgba(255,255,255,0.6)' }]}>
-              You now have access to all premium features. Enjoy your enhanced experience!
+              {t('subscription.welcomePremiumMessage')}
             </Text>
             <TouchableOpacity
               style={[styles.modalButton, { backgroundColor: colors.primary }]}
@@ -1125,7 +1125,7 @@ export default function SubscriptionScreen() {
                 router.replace('/(tabs)/coach');
               }}
             >
-              <Text style={styles.modalButtonText}>Get Started</Text>
+              <Text style={styles.modalButtonText}>{t('subscription.getStarted')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -19,6 +19,7 @@ import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { listTrackers, listEntries, logEntry, updateEntry, Tracker, TrackerEntry } from '@/utils/trackersApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import CalendarDatePicker from '@/components/CalendarDatePicker';
+import { useTranslation } from 'react-i18next';
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -53,6 +54,7 @@ function todayStr(): string {
 }
 
 export default function LogEntryScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { trackerId, entryId } = useLocalSearchParams<{ trackerId: string; entryId?: string }>();
   const colorScheme = useColorScheme();
@@ -114,7 +116,7 @@ export default function LogEntryScreen() {
     } else {
       const parsed = parseFloat(value);
       if (isNaN(parsed)) {
-        setError('Please enter a valid number');
+        setError(t('tracker.pleaseEnterNumber'));
         return;
       }
       numValue = parsed;
@@ -133,7 +135,7 @@ export default function LogEntryScreen() {
       console.log('[LogEntry] Entry saved successfully');
       router.back();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to save entry';
+      const msg = e instanceof Error ? e.message : t('tracker.failedToSaveEntry');
       console.error('[LogEntry] Save error:', msg);
       setError(msg);
     } finally {
@@ -150,7 +152,18 @@ export default function LogEntryScreen() {
   const focusBorder = colors.primary;
 
   const isEditing = !!existingEntry;
-  const screenTitle = isEditing ? 'Edit Entry' : 'Log Entry';
+  const screenTitle = isEditing ? t('tracker.editEntry') : t('tracker.logEntry');
+  const saveButtonText = isEditing ? t('tracker.saveChanges') : t('tracker.saveEntry');
+
+  const valueLabelText = tracker?.tracker_type === 'binary'
+    ? t('tracker.completed')
+    : tracker?.unit
+    ? t('tracker.valueWithUnit', { unit: tracker.unit })
+    : t('tracker.value');
+
+  const binaryStatusText = binaryDone ? t('tracker.doneToday') : t('tracker.notDone');
+
+  const durationPlaceholder = t('tracker.minutesPlaceholder');
 
   if (loading) {
     return (
@@ -182,7 +195,7 @@ export default function LogEntryScreen() {
 
           {/* Date picker */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: textColor }]}>Date</Text>
+            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('common.date')}</Text>
             <Pressable onPress={() => setShowDatePicker(true)} style={[styles.datePickerWrapper, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               <Text style={[styles.dateButtonText, { color: textColor }]}>{date}</Text>
             </Pressable>
@@ -202,13 +215,13 @@ export default function LogEntryScreen() {
           {/* Value input */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.fieldLabel, { color: textColor }]}>
-              {tracker?.tracker_type === 'binary' ? 'Completed?' : `Value${tracker?.unit ? ` (${tracker.unit})` : ''}`}
+              {valueLabelText}
             </Text>
 
             {tracker?.tracker_type === 'binary' ? (
               <View style={[styles.binaryRow, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 <Text style={[styles.binaryLabel, { color: textColor }]}>
-                  {binaryDone ? 'Done today ✓' : 'Not done'}
+                  {binaryStatusText}
                 </Text>
                 <Switch
                   value={binaryDone}
@@ -229,7 +242,7 @@ export default function LogEntryScreen() {
                   style={[styles.input, { color: textColor }]}
                   value={value}
                   onChangeText={setValue}
-                  placeholder={tracker?.tracker_type === 'duration' ? 'Minutes' : '0'}
+                  placeholder={tracker?.tracker_type === 'duration' ? durationPlaceholder : '0'}
                   placeholderTextColor={subColor}
                   keyboardType="decimal-pad"
                   onFocus={() => setFocusedField('value')}
@@ -245,7 +258,7 @@ export default function LogEntryScreen() {
 
           {/* Notes */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: textColor }]}>Notes (optional)</Text>
+            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('tracker.notesOptional')}</Text>
             <TextInput
               style={[
                 styles.notesInput,
@@ -257,7 +270,7 @@ export default function LogEntryScreen() {
               ]}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Add a note..."
+              placeholder={t('tracker.addNote')}
               placeholderTextColor={subColor}
               multiline
               numberOfLines={3}
@@ -281,13 +294,13 @@ export default function LogEntryScreen() {
             {saving ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.saveButtonText}>{isEditing ? 'Save changes' : 'Save entry'}</Text>
+              <Text style={styles.saveButtonText}>{saveButtonText}</Text>
             )}
           </AnimatedPressable>
 
           {/* Cancel */}
           <AnimatedPressable onPress={() => { console.log('[LogEntry] Cancel tapped'); router.back(); }} style={styles.cancelButton}>
-            <Text style={[styles.cancelButtonText, { color: subColor }]}>Cancel</Text>
+            <Text style={[styles.cancelButtonText, { color: subColor }]}>{t('common.cancel')}</Text>
           </AnimatedPressable>
         </ScrollView>
       </KeyboardAvoidingView>

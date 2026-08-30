@@ -3,12 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase/client';
 import ConsistencyScore from '@/components/ConsistencyScore';
 
 export default function ConsistencyDetailScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [userId, setUserId] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export default function ConsistencyDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Consistency Score',
+          title: t('consistencyDetail.title'),
           headerShown: true,
           headerBackButtonDisplayMode: 'minimal',
           headerStyle: { backgroundColor: bg },

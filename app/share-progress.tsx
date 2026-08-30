@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -71,6 +72,7 @@ interface CardData {
 }
 
 export default function ShareProgressScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -603,7 +605,7 @@ export default function ShareProgressScreen() {
 
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        Alert.alert('Sharing not available', 'Sharing is not available on this device');
+        Alert.alert(t('shareProgress.sharingNotAvailable'), t('shareProgress.sharingNotAvailableMessage'));
         setSharing(false);
         return;
       }
@@ -612,14 +614,14 @@ export default function ShareProgressScreen() {
 
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
-        dialogTitle: 'Share your progress',
+        dialogTitle: t('shareProgress.shareYourProgress'),
       });
 
       console.log('[ShareProgress] Card shared successfully');
       setSharing(false);
     } catch (error) {
       console.error('[ShareProgress] Error sharing card:', error);
-      Alert.alert('Error', 'Failed to share progress card');
+      Alert.alert(t('common.error'), t('shareProgress.failedToShare'));
       setSharing(false);
     }
   };
@@ -643,13 +645,13 @@ export default function ShareProgressScreen() {
               color={textColor}
             />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: textColor }]}>Share Progress</Text>
+          <Text style={[styles.title, { color: textColor }]}>{t('shareProgress.title')}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: textColor }]}>
-            Preparing your progress card...
+            {t('shareProgress.preparingCard')}
           </Text>
         </View>
       </SafeAreaView>
@@ -671,12 +673,12 @@ export default function ShareProgressScreen() {
               color={textColor}
             />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: textColor }]}>Share Progress</Text>
+          <Text style={[styles.title, { color: textColor }]}>{t('shareProgress.title')}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: textColor }]}>
-            Unable to load progress data
+            {t('shareProgress.failedToLoadData')}
           </Text>
         </View>
       </SafeAreaView>
@@ -698,7 +700,7 @@ export default function ShareProgressScreen() {
             color={textColor}
           />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: textColor }]}>Share Progress</Text>
+        <Text style={[styles.title, { color: textColor }]}>{t('shareProgress.title')}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -756,7 +758,7 @@ export default function ShareProgressScreen() {
         {!username && (
           <View style={[styles.usernameBanner, { backgroundColor: isDark ? 'rgba(91,154,168,0.15)' : 'rgba(91,154,168,0.1)', borderColor: colors.primary }]}>
             <Text style={[styles.usernameBannerText, { color: isDark ? colors.textDark : colors.text }]}>
-              Pick your @username to make this card yours
+              {t('shareProgress.pickUsername')}
             </Text>
             <TouchableOpacity
               onPress={() => {
@@ -765,7 +767,7 @@ export default function ShareProgressScreen() {
               }}
             >
               <Text style={[styles.usernameBannerLink, { color: colors.primary }]}>
-                Set username
+                {t('shareProgress.setUsername')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -788,14 +790,14 @@ export default function ShareProgressScreen() {
                 size={22}
                 color="#FFFFFF"
               />
-              <Text style={styles.shareButtonText}>Share Your Progress</Text>
+              <Text style={styles.shareButtonText}>{t('shareProgress.shareYourProgress')}</Text>
             </React.Fragment>
           )}
         </TouchableOpacity>
 
         {/* ── Helper text ── */}
         <Text style={[styles.helperText, { color: textSecColor }]}>
-          Share to Instagram, WhatsApp, Messages, and more
+          {t('shareProgress.helperText')}
         </Text>
 
         <View style={styles.bottomSpacer} />

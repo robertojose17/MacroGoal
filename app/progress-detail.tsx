@@ -3,12 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase/client';
 import ProgressCard from '@/components/ProgressCard';
 
 export default function ProgressDetailScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [userId, setUserId] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export default function ProgressDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Weight Progress',
+          title: t('progressDetail.title'),
           headerShown: true,
           headerBackButtonDisplayMode: 'minimal',
           headerStyle: { backgroundColor: bg },

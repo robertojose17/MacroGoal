@@ -17,6 +17,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { createTracker, updateTracker, Tracker } from '@/utils/trackersApi';
 import { supabase } from '@/lib/supabase/client';
+import { useTranslation } from 'react-i18next';
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 function AnimatedPressable({
@@ -56,20 +57,21 @@ const PRESET_EMOJIS = [
 type TrackerType = 'binary' | 'count' | 'numeric' | 'duration';
 type Frequency = 'daily' | 'weekly';
 
-const TYPE_OPTIONS: { value: TrackerType; label: string; desc: string }[] = [
-  { value: 'binary', label: 'Binary', desc: 'Done / not done' },
-  { value: 'count', label: 'Count', desc: 'Whole numbers' },
-  { value: 'numeric', label: 'Numeric', desc: 'Decimal numbers' },
-  { value: 'duration', label: 'Duration', desc: 'Time in minutes' },
-];
-
 export default function CreateTrackerScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { trackerId } = useLocalSearchParams<{ trackerId?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const isEditing = !!trackerId;
+
+  const TYPE_OPTIONS: { value: TrackerType; label: string; desc: string }[] = [
+    { value: 'binary', label: t('tracker.binary'), desc: t('tracker.binaryDesc') },
+    { value: 'count', label: t('tracker.count'), desc: t('tracker.countDesc') },
+    { value: 'numeric', label: t('tracker.numeric'), desc: t('tracker.numericDesc') },
+    { value: 'duration', label: t('tracker.duration'), desc: t('tracker.durationDesc') },
+  ];
 
   const [emoji, setEmoji] = useState('🎯');
   const [name, setName] = useState('');
@@ -118,13 +120,13 @@ export default function CreateTrackerScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      setError('Please enter a tracker name');
+      setError(t('tracker.enterTrackerName'));
       return;
     }
 
     const goalNum = goalValue.trim() ? parseFloat(goalValue) : null;
     if (goalValue.trim() && isNaN(goalNum!)) {
-      setError('Goal value must be a number');
+      setError(t('tracker.goalMustBeNumber'));
       return;
     }
 
@@ -150,7 +152,7 @@ export default function CreateTrackerScreen() {
       }
       router.back();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to save tracker';
+      const msg = e instanceof Error ? e.message : t('tracker.failedToSave');
       console.error('[CreateTracker] Save error:', msg);
       setError(msg);
     } finally {
@@ -166,6 +168,9 @@ export default function CreateTrackerScreen() {
   const inputBg = isDark ? '#2A2C40' : '#F0F2F7';
   const focusBorder = colors.primary;
 
+  const screenTitle = isEditing ? t('tracker.editTracker') : t('tracker.newTracker');
+  const saveButtonText = isEditing ? t('tracker.saveChanges') : t('tracker.createTracker');
+
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: bg }]}>
@@ -176,7 +181,7 @@ export default function CreateTrackerScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: isEditing ? 'Edit Tracker' : 'New Tracker' }} />
+      <Stack.Screen options={{ title: screenTitle }} />
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -188,7 +193,7 @@ export default function CreateTrackerScreen() {
         >
           {/* Emoji picker */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: textColor }]}>Icon</Text>
+            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('tracker.icon')}</Text>
             <View style={[styles.emojiPreview, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               <Text style={styles.emojiPreviewText}>{emoji}</Text>
             </View>
@@ -221,7 +226,7 @@ export default function CreateTrackerScreen() {
 
           {/* Name */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: textColor }]}>Name *</Text>
+            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('tracker.nameRequired')}</Text>
             <TextInput
               style={[
                 styles.input,
@@ -233,7 +238,7 @@ export default function CreateTrackerScreen() {
               ]}
               value={name}
               onChangeText={setName}
-              placeholder="e.g. Morning run, Water intake"
+              placeholder={t('tracker.placeholderName')}
               placeholderTextColor={subColor}
               onFocus={() => setFocusedField('name')}
               onBlur={() => setFocusedField(null)}
@@ -244,7 +249,7 @@ export default function CreateTrackerScreen() {
 
           {/* Tracker type */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: textColor }]}>Type</Text>
+            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('tracker.trackerType')}</Text>
             <View style={styles.pillRow}>
               {TYPE_OPTIONS.map(opt => {
                 const isSelected = trackerType === opt.value;
@@ -280,7 +285,7 @@ export default function CreateTrackerScreen() {
           {/* Unit (hidden for binary) */}
           {trackerType !== 'binary' ? (
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: textColor }]}>Unit (optional)</Text>
+              <Text style={[styles.fieldLabel, { color: textColor }]}>{t('tracker.unitOptional')}</Text>
               <TextInput
                 style={[
                   styles.input,
@@ -293,9 +298,9 @@ export default function CreateTrackerScreen() {
                 value={unit}
                 onChangeText={setUnit}
                 placeholder={
-                  trackerType === 'count' ? 'e.g. glasses, reps' :
-                  trackerType === 'numeric' ? 'e.g. lb, miles' :
-                  'e.g. minutes, hours'
+                  trackerType === 'count' ? t('tracker.placeholderUnit_count') :
+                  trackerType === 'numeric' ? t('tracker.placeholderUnit_numeric') :
+                  t('tracker.placeholderUnit_duration')
                 }
                 placeholderTextColor={subColor}
                 onFocus={() => setFocusedField('unit')}
@@ -307,7 +312,7 @@ export default function CreateTrackerScreen() {
 
           {/* Goal value */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: textColor }]}>Daily goal (optional)</Text>
+            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('tracker.dailyGoalOptional')}</Text>
             <TextInput
               style={[
                 styles.input,
@@ -329,7 +334,7 @@ export default function CreateTrackerScreen() {
 
           {/* Frequency */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: textColor }]}>Frequency</Text>
+            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('tracker.frequency')}</Text>
             <View style={styles.freqRow}>
               {(['daily', 'weekly'] as Frequency[]).map(f => {
                 const isSelected = frequency === f;
@@ -350,7 +355,7 @@ export default function CreateTrackerScreen() {
                     scaleValue={0.95}
                   >
                     <Text style={[styles.freqPillText, { color: isSelected ? '#fff' : textColor }]}>
-                      {f === 'daily' ? 'Daily' : 'Weekly'}
+                      {f === 'daily' ? t('tracker.daily') : t('tracker.weekly')}
                     </Text>
                   </AnimatedPressable>
                 );
@@ -374,7 +379,7 @@ export default function CreateTrackerScreen() {
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={styles.saveButtonText}>
-                {isEditing ? 'Save changes' : 'Create tracker'}
+                {saveButtonText}
               </Text>
             )}
           </AnimatedPressable>
@@ -384,7 +389,7 @@ export default function CreateTrackerScreen() {
             onPress={() => { console.log('[CreateTracker] Cancel tapped'); router.back(); }}
             style={styles.cancelButton}
           >
-            <Text style={[styles.cancelButtonText, { color: subColor }]}>Cancel</Text>
+            <Text style={[styles.cancelButtonText, { color: subColor }]}>{t('common.cancel')}</Text>
           </AnimatedPressable>
         </ScrollView>
       </KeyboardAvoidingView>

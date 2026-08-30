@@ -16,6 +16,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { getAffiliateStats, updatePaypalEmail } from '@/utils/affiliateApi';
@@ -60,6 +61,7 @@ function statusLabel(status: string): string {
 }
 
 export default function ReferralsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -127,7 +129,7 @@ export default function ReferralsScreen() {
   const handleSavePaypal = async () => {
     const email = paypalInput.trim();
     if (!isValidEmail(email)) {
-      Alert.alert('Invalid Email', 'Please enter a valid PayPal email address.');
+      Alert.alert(t('referrals.invalidEmailTitle'), t('referrals.invalidEmailMessage'));
       return;
     }
     console.log('[Referrals] Save PayPal email pressed:', email);
@@ -135,15 +137,15 @@ export default function ReferralsScreen() {
     try {
       const result = await updatePaypalEmail(email);
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to save PayPal email.');
+        Alert.alert(t('common.error'), result.error || t('referrals.failedToSavePaypal'));
         return;
       }
       console.log('[Referrals] PayPal email saved successfully');
       setStats((prev: any) => prev ? { ...prev, profile: { ...prev.profile, paypal_email: email } } : prev);
       setEditingPaypal(false);
-      Alert.alert('Saved!', 'Your PayPal email has been updated.');
+      Alert.alert(t('referrals.savedTitle'), t('referrals.paypalSaved'));
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       setSavingPaypal(false);
     }
@@ -188,9 +190,9 @@ export default function ReferralsScreen() {
     appleStatus === 'failed' ? '#ef4444' :
     GOLD;
   const appleStatusLabel =
-    appleStatus === 'active' ? 'Active' :
-    appleStatus === 'failed' ? 'Failed' :
-    'Activating';
+    appleStatus === 'active' ? t('referrals.statusActive') :
+    appleStatus === 'failed' ? t('referrals.statusFailed') :
+    t('referrals.statusActivating');
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['bottom']}>
@@ -204,7 +206,7 @@ export default function ReferralsScreen() {
 
         {/* ── Header ── */}
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <Text style={[styles.dashboardTitle, { color: textColor }]}>Affiliate Dashboard</Text>
+          <Text style={[styles.dashboardTitle, { color: textColor }]}>{t('referrals.affiliateDashboard')}</Text>
 
           {/* Code badge */}
           <View style={styles.codeBadgeRow}>
@@ -226,7 +228,7 @@ export default function ReferralsScreen() {
             >
               <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={copied ? '#22c55e' : mutedColor} />
               <Text style={[styles.actionBtnText, { color: copied ? '#22c55e' : textColor }]}>
-                {copied ? 'Copied!' : 'Copy Code'}
+                {copied ? t('referrals.codeCopied') : t('referrals.copyCode')}
               </Text>
             </TouchableOpacity>
 
@@ -236,7 +238,7 @@ export default function ReferralsScreen() {
               activeOpacity={0.8}
             >
               <Ionicons name="share-outline" size={16} color="#FFFFFF" />
-              <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>Share Link</Text>
+              <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>{t('referrals.shareLink')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -245,36 +247,36 @@ export default function ReferralsScreen() {
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={styles.cardHeaderRow}>
             <Ionicons name="trending-up-outline" size={18} color={BLUE} />
-            <Text style={[styles.cardTitle, { color: textColor }]}>Commission Rate</Text>
+            <Text style={[styles.cardTitle, { color: textColor }]}>{t('referrals.commissionRate')}</Text>
           </View>
           <Text style={[styles.commissionRateValue, { color: BLUE }]}>
             {commissionRate}
-            {'% commission'}
+            {t('referrals.commissionSuffix')}
           </Text>
-          <Text style={[styles.commissionRateNote, { color: mutedColor }]}>35-day pending period</Text>
+          <Text style={[styles.commissionRateNote, { color: mutedColor }]}>{t('referrals.pendingPeriod')}</Text>
         </View>
 
         {/* ── Earnings Grid ── */}
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={styles.cardHeaderRow}>
             <Ionicons name="wallet-outline" size={18} color={BLUE} />
-            <Text style={[styles.cardTitle, { color: textColor }]}>Earnings</Text>
+            <Text style={[styles.cardTitle, { color: textColor }]}>{t('referrals.earnings')}</Text>
           </View>
           <View style={styles.earningsGrid}>
             <View style={[styles.earningsCell, { backgroundColor: GOLD + '18', borderColor: GOLD + '44' }]}>
-              <Text style={[styles.earningsCellLabel, { color: GOLD }]}>Pending</Text>
+              <Text style={[styles.earningsCellLabel, { color: GOLD }]}>{t('referrals.pending')}</Text>
               <Text style={[styles.earningsCellValue, { color: GOLD }]}>{formatMoney(earningsPending)}</Text>
             </View>
             <View style={[styles.earningsCell, { backgroundColor: '#22c55e18', borderColor: '#22c55e44' }]}>
-              <Text style={[styles.earningsCellLabel, { color: '#22c55e' }]}>Available</Text>
+              <Text style={[styles.earningsCellLabel, { color: '#22c55e' }]}>{t('referrals.available')}</Text>
               <Text style={[styles.earningsCellValue, { color: '#22c55e' }]}>{formatMoney(earningsAvailable)}</Text>
             </View>
             <View style={[styles.earningsCell, { backgroundColor: BLUE + '18', borderColor: BLUE + '44' }]}>
-              <Text style={[styles.earningsCellLabel, { color: BLUE }]}>Paid</Text>
+              <Text style={[styles.earningsCellLabel, { color: BLUE }]}>{t('referrals.paid')}</Text>
               <Text style={[styles.earningsCellValue, { color: BLUE }]}>{formatMoney(earningsPaid)}</Text>
             </View>
             <View style={[styles.earningsCell, { backgroundColor: '#ef444418', borderColor: '#ef444444' }]}>
-              <Text style={[styles.earningsCellLabel, { color: '#ef4444' }]}>Reversed</Text>
+              <Text style={[styles.earningsCellLabel, { color: '#ef4444' }]}>{t('referrals.reversed')}</Text>
               <Text style={[styles.earningsCellValue, { color: '#ef4444' }]}>{formatMoney(earningsReversed)}</Text>
             </View>
           </View>
@@ -284,7 +286,7 @@ export default function ReferralsScreen() {
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={styles.cardHeaderRow}>
             <Text style={{ fontSize: 18 }}>{'💳'}</Text>
-            <Text style={[styles.cardTitle, { color: textColor }]}>PayPal Payout Account</Text>
+            <Text style={[styles.cardTitle, { color: textColor }]}>{t('referrals.paypalPayoutAccount')}</Text>
           </View>
           {showPaypalInput ? (
             <>
@@ -309,7 +311,7 @@ export default function ReferralsScreen() {
                     }}
                     activeOpacity={0.75}
                   >
-                    <Text style={[styles.paypalCancelText, { color: mutedColor }]}>Cancel</Text>
+                    <Text style={[styles.paypalCancelText, { color: mutedColor }]}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -320,7 +322,7 @@ export default function ReferralsScreen() {
                 >
                   {savingPaypal
                     ? <ActivityIndicator size="small" color="#FFF" />
-                    : <Text style={styles.paypalSaveText}>Save PayPal Email</Text>
+                    : <Text style={styles.paypalSaveText}>{t('referrals.savePaypalEmail')}</Text>
                   }
                 </TouchableOpacity>
               </View>
@@ -337,21 +339,21 @@ export default function ReferralsScreen() {
                 }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.paypalEditLink, { color: BLUE }]}>Edit</Text>
+                <Text style={[styles.paypalEditLink, { color: BLUE }]}>{t('common.edit')}</Text>
               </TouchableOpacity>
             </View>
           )}
-          <Text style={[styles.paypalNote, { color: mutedColor }]}>Required to receive payouts</Text>
+          <Text style={[styles.paypalNote, { color: mutedColor }]}>{t('referrals.requiredForPayouts')}</Text>
         </View>
 
         {/* ── Transaction History ── */}
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={styles.cardHeaderRow}>
             <Ionicons name="receipt-outline" size={18} color={mutedColor} />
-            <Text style={[styles.cardTitle, { color: textColor }]}>Transaction History</Text>
+            <Text style={[styles.cardTitle, { color: textColor }]}>{t('referrals.transactionHistory')}</Text>
           </View>
           {commissions.length === 0 ? (
-            <Text style={[styles.emptyText, { color: mutedColor }]}>No transactions yet</Text>
+            <Text style={[styles.emptyText, { color: mutedColor }]}>{t('referrals.noTransactions')}</Text>
           ) : (
             commissions.map((item: any, i: number) => {
               const sc = statusColor(item.status);
@@ -387,10 +389,10 @@ export default function ReferralsScreen() {
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={styles.cardHeaderRow}>
             <Ionicons name="cash-outline" size={18} color={BLUE} />
-            <Text style={[styles.cardTitle, { color: textColor }]}>Payout History</Text>
+            <Text style={[styles.cardTitle, { color: textColor }]}>{t('referrals.payoutHistory')}</Text>
           </View>
           {payouts.length === 0 ? (
-            <Text style={[styles.emptyText, { color: mutedColor }]}>No payouts yet</Text>
+            <Text style={[styles.emptyText, { color: mutedColor }]}>{t('referrals.noPayouts')}</Text>
           ) : (
             payouts.map((payout: any, i: number) => {
               const sc = statusColor(payout.status);

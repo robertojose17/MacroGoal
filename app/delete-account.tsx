@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -12,6 +13,7 @@ import { clearOnboardingSession } from '@/utils/onboardingAnalytics';
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [deleting, setDeleting] = useState(false);
@@ -20,12 +22,12 @@ export default function DeleteAccountScreen() {
 
   const handleDeleteAccount = async () => {
     Alert.alert(
-      'Delete Account',
-      'Are you absolutely sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.',
+      t('deleteAccount.confirmTitle'),
+      t('deleteAccount.confirmBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('deleteAccount.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('deleteAccount.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -34,7 +36,7 @@ export default function DeleteAccountScreen() {
 
               const { data: { user } } = await supabase.auth.getUser();
               if (!user) {
-                Alert.alert('Error', 'No user found');
+                Alert.alert(t('common.error'), t('deleteAccount.noUserFound'));
                 return;
               }
 
@@ -56,18 +58,18 @@ export default function DeleteAccountScreen() {
               await supabase.auth.signOut();
 
               Alert.alert(
-                'Account Deleted',
-                'Your account and all associated data have been permanently deleted.',
+                t('deleteAccount.accountDeleted'),
+                t('deleteAccount.accountDeletedMessage'),
                 [
                   {
-                    text: 'OK',
+                    text: t('common.ok'),
                     onPress: () => router.replace('/auth/welcome'),
                   },
                 ]
               );
             } catch (error: any) {
               console.error('[DeleteAccount] Error deleting account:', error);
-              Alert.alert('Error', error.message || 'Failed to delete account. Please try again or contact support.');
+              Alert.alert(t('common.error'), error.message || t('deleteAccount.failedToDelete'));
             } finally {
               setDeleting(false);
             }
@@ -89,7 +91,7 @@ export default function DeleteAccountScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          Delete Account
+          {t('deleteAccount.title')}
         </Text>
         <View style={styles.placeholder} />
       </View>
@@ -106,39 +108,39 @@ export default function DeleteAccountScreen() {
             color={colors.error}
           />
           <Text style={[styles.warningTitle, { color: colors.error }]}>
-            Warning: This Action is Permanent
+            {t('deleteAccount.warningTitle')}
           </Text>
           <Text style={[styles.warningText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Deleting your account will permanently remove all of your data, including:
+            {t('deleteAccount.warningIntro')}
           </Text>
           <View style={styles.listContainer}>
             <Text style={[styles.listItem, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              • Your profile and account information
+              {t('deleteAccount.listProfile')}
             </Text>
             <Text style={[styles.listItem, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              • All food logs and nutrition data
+              {t('deleteAccount.listFoodLogs')}
             </Text>
             <Text style={[styles.listItem, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              • Weight tracking and progress photos
+              {t('deleteAccount.listWeight')}
             </Text>
             <Text style={[styles.listItem, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              • Goals and daily targets
+              {t('deleteAccount.listGoals')}
             </Text>
             <Text style={[styles.listItem, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              • Subscription information
+              {t('deleteAccount.listSubscription')}
             </Text>
           </View>
           <Text style={[styles.warningText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This action cannot be undone. If you have an active subscription, please cancel it before deleting your account.
+            {t('deleteAccount.warningFooter')}
           </Text>
         </View>
 
         <View style={[styles.infoCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.infoTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Need Help?
+            {t('deleteAccount.needHelp')}
           </Text>
           <Text style={[styles.infoText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            If you&apos;re experiencing issues with the app or have concerns about your data, please contact our support team before deleting your account. We&apos;re here to help!
+            {t('deleteAccount.needHelpText')}
           </Text>
         </View>
 
@@ -157,7 +159,7 @@ export default function DeleteAccountScreen() {
                 size={20}
                 color="#FFFFFF"
               />
-              <Text style={styles.deleteButtonText}>Delete My Account</Text>
+              <Text style={styles.deleteButtonText}>{t('deleteAccount.deleteMyAccount')}</Text>
             </React.Fragment>
           )}
         </TouchableOpacity>

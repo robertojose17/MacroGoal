@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -25,6 +26,7 @@ type CheckState = 'idle' | 'too_short' | 'invalid' | 'checking' | 'available' | 
 
 export default function ChooseUsernameScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -105,12 +107,12 @@ export default function ChooseUsernameScreen() {
   // Pre-compute status message
   const statusMessage = (() => {
     switch (checkState) {
-      case 'too_short': return 'Must be 3-20 characters.';
-      case 'invalid': return 'Only lowercase letters, numbers, underscores, and periods.';
-      case 'checking': return 'Checking...';
-      case 'available': return `@${value} is available!`;
-      case 'taken': return 'This username is already taken.';
-      case 'reserved': return "This username isn't available.";
+      case 'too_short': return t('chooseUsername.statusTooShort');
+      case 'invalid': return t('chooseUsername.statusInvalid');
+      case 'checking': return t('chooseUsername.statusChecking');
+      case 'available': return t('chooseUsername.statusAvailable', { value });
+      case 'taken': return t('chooseUsername.statusTaken');
+      case 'reserved': return t('chooseUsername.statusReserved');
       default: return '';
     }
   })();
@@ -149,7 +151,7 @@ export default function ChooseUsernameScreen() {
               color={textColor}
             />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: textColor }]}>Choose Your Username</Text>
+          <Text style={[styles.title, { color: textColor }]}>{t('chooseUsername.screenTitle')}</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -160,19 +162,19 @@ export default function ChooseUsernameScreen() {
         >
           {/* Subtitle */}
           <Text style={[styles.subtitle, { color: textSecColor }]}>
-            This is how friends will find you on Macro Goal. You can change it later in settings.
+            {t('chooseUsername.screenSubtitle')}
           </Text>
 
           {/* Input card */}
           <View style={[styles.inputCard, { backgroundColor: cardColor, borderColor }]}>
-            <Text style={[styles.inputLabel, { color: textSecColor }]}>USERNAME</Text>
+            <Text style={[styles.inputLabel, { color: textSecColor }]}>{t('chooseUsername.inputLabel')}</Text>
             <View style={[styles.inputRow, { backgroundColor: inputBg, borderColor }]}>
               <Text style={[styles.atSymbol, { color: textSecColor }]}>@</Text>
               <TextInput
                 style={[styles.textInput, { color: textColor }]}
                 value={value}
                 onChangeText={handleChangeText}
-                placeholder="yourname"
+                placeholder={t('chooseUsername.inputPlaceholder')}
                 placeholderTextColor={textSecColor}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -202,7 +204,7 @@ export default function ChooseUsernameScreen() {
 
           {/* Rules hint */}
           <Text style={[styles.rulesText, { color: textSecColor }]}>
-            3-20 characters. Letters, numbers, underscores, and periods only.
+            {t('chooseUsername.rulesHint')}
           </Text>
         </ScrollView>
 
@@ -221,7 +223,7 @@ export default function ChooseUsernameScreen() {
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={[styles.continueButtonText, { color: isButtonEnabled ? '#FFFFFF' : textSecColor }]}>
-                Continue
+                {t('chooseUsername.continueButton')}
               </Text>
             )}
           </TouchableOpacity>
