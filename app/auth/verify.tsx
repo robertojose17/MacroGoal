@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from '@/styles/commonStyles';
@@ -12,8 +13,14 @@ export default function VerifyScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
-  const [message, setMessage] = useState('Verifying your email...');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    setMessage(t('auth.verifying'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     console.log('[Verify] Screen mounted, setting up deep link listener...');
@@ -39,7 +46,7 @@ export default function VerifyScreen() {
         if (errorDescription) {
           console.error('[Verify] Error in verification link:', errorDescription);
           setStatus('error');
-          setMessage('Verification failed: ' + errorDescription);
+          setMessage(t('auth.verificationFailed', { error: errorDescription }));
           setTimeout(() => {
             router.replace('/auth/login');
           }, 3000);
@@ -49,7 +56,7 @@ export default function VerifyScreen() {
         // Check if we have the required tokens
         if (accessToken && refreshToken) {
           console.log('[Verify] Tokens found, setting session...');
-          setMessage('Setting up your account...');
+          setMessage(t('auth.settingUpAccount'));
 
           // Set the session using the tokens from the email link
           const { data, error } = await supabase.auth.setSession({
@@ -60,7 +67,7 @@ export default function VerifyScreen() {
           if (error) {
             console.error('[Verify] Error setting session:', error);
             setStatus('error');
-            setMessage('Failed to verify email. Please try logging in.');
+            setMessage(t('auth.failedToVerify'));
             setTimeout(() => {
               router.replace('/auth/login');
             }, 3000);
@@ -89,14 +96,14 @@ export default function VerifyScreen() {
             if (userData?.onboarding_completed) {
               console.log('[Verify] User has completed onboarding, redirecting to home...');
               setStatus('success');
-              setMessage('Email verified! Redirecting to home...');
+              setMessage(t('auth.emailVerifiedRedirectingHome'));
               setTimeout(() => {
                 router.replace('/(tabs)/(home)');
               }, 1500);
             } else {
               console.log('[Verify] User needs to complete onboarding...');
               setStatus('success');
-              setMessage('Email verified! Let\'s complete your profile...');
+              setMessage(t('auth.emailVerifiedCompleteProfile'));
               setTimeout(() => {
                 router.replace('/onboarding/complete');
               }, 1500);
@@ -104,7 +111,7 @@ export default function VerifyScreen() {
           } else {
             console.error('[Verify] No user ID in session');
             setStatus('error');
-            setMessage('Verification failed. Please try logging in.');
+            setMessage(t('auth.failedToVerify'));
             setTimeout(() => {
               router.replace('/auth/login');
             }, 3000);
@@ -112,7 +119,7 @@ export default function VerifyScreen() {
         } else {
           console.warn('[Verify] No tokens found in URL');
           setStatus('error');
-          setMessage('Invalid verification link. Please try signing up again.');
+          setMessage(t('auth.invalidVerificationLink'));
           setTimeout(() => {
             router.replace('/auth/signup');
           }, 3000);
@@ -120,7 +127,7 @@ export default function VerifyScreen() {
       } catch (error) {
         console.error('[Verify] Error processing deep link:', error);
         setStatus('error');
-        setMessage('An error occurred during verification.');
+        setMessage(t('auth.verificationError2'));
         setTimeout(() => {
           router.replace('/auth/login');
         }, 3000);

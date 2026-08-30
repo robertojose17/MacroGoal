@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Platform,
   RefreshControl, Alert, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -269,6 +270,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const referralChecked = useRef(false);
 
@@ -339,13 +341,13 @@ export default function HomeScreen() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
         console.error('[Home] Error getting user:', userError);
-        setError('Failed to authenticate. Please try logging in again.');
+        setError(t('home.failedToAuthenticate'));
         setLoading(false);
         return;
       }
       if (!user) {
         console.log('[Home] No user found');
-        setError('No user session found. Please log in.');
+        setError(t('home.noUserSession'));
         setLoading(false);
         return;
       }
@@ -412,7 +414,7 @@ export default function HomeScreen() {
 
       if (mealsError) {
         console.error('[Home] Error loading meals:', mealsError);
-        setError('Failed to load meals. Please try refreshing.');
+        setError(t('home.failedToLoadMeals'));
       } else {
         console.log('[Home] Meals loaded for', dateString, ':', mealsData?.length || 0, 'meals');
 
@@ -474,7 +476,7 @@ export default function HomeScreen() {
       }
     } catch (err: any) {
       console.error('[Home] Error in loadData:', err);
-      setError(err?.message || 'An unexpected error occurred. Please try again.');
+      setError(err?.message || t('home.unexpectedError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -512,7 +514,7 @@ export default function HomeScreen() {
       setTemplatePlans(Array.isArray(templatesData) ? templatesData : []);
     } catch (err: any) {
       console.error('[Home] Error loading meal plans:', err);
-      setPlansError('Failed to load meal plans.');
+      setPlansError(t('home.failedToLoadPlans'));
     } finally {
       setPlansLoading(false);
     }
@@ -739,7 +741,7 @@ export default function HomeScreen() {
       console.log('[Home] Successfully deleted from database');
     } catch (err: any) {
       console.error('[Home] Error in handleDeleteFood:', err);
-      Alert.alert('Delete Failed', err?.message || 'Failed to delete food entry. Please try again.', [{ text: 'OK' }]);
+      Alert.alert(t('home.deleteFailed'), err?.message || t('home.failedToDeleteFood'), [{ text: t('common.ok') }]);
       loadData();
     }
   }, [loadData]);
@@ -826,7 +828,7 @@ export default function HomeScreen() {
       await loadRangeData(rangeStart, rangeEnd);
     } catch (err: any) {
       console.error('[Home] Error assigning plan:', err);
-      Alert.alert('Error', err?.message || 'Failed to assign plan.');
+      Alert.alert(t('common.error'), err?.message || t('home.failedToAssignPlan'));
     } finally {
       setDayAssigning(false);
     }
@@ -843,7 +845,7 @@ export default function HomeScreen() {
       await loadRangeData(rangeStart, rangeEnd);
     } catch (err: any) {
       console.error('[Home] Error removing assignment:', err);
-      Alert.alert('Error', err?.message || 'Failed to remove assignment.');
+      Alert.alert(t('common.error'), err?.message || t('home.failedToRemoveAssignment'));
     } finally {
       setDayAssigning(false);
     }
@@ -869,7 +871,7 @@ export default function HomeScreen() {
   const daySheetTitle = selectedDayStr ? formatDayHeader(selectedDayStr) : '';
   const leftArrowDisabled = false;
   const rightArrowDisabled = isTodayOrFuture();
-  const todayLabel = isToday() ? 'Today' : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const todayLabel = isToday() ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
   const dateDisplay = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   // ── Render helpers ──
@@ -878,7 +880,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>Loading...</Text>
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>{t('common.loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -891,7 +893,7 @@ export default function HomeScreen() {
           <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={48} color={colors.error} />
           <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>{error}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadData}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -967,10 +969,10 @@ export default function HomeScreen() {
             label="kcal"
           />
           <View style={styles.macroSummaryCompact}>
-            <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-            <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-            <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-            <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
           </View>
         </View>
       </View>
@@ -979,7 +981,7 @@ export default function HomeScreen() {
         <View key={meal.type} style={[styles.mealCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <View style={styles.mealHeader}>
             <View style={styles.mealHeaderLeft}>
-              <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{meal.label}</Text>
+              <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{t(`home.${meal.type === 'snack' ? 'snacks' : meal.type}`)}</Text>
               <View style={styles.mealMacroRow}>
                 <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                   {Math.round(meal.totalCalories)} kcal
@@ -1003,7 +1005,7 @@ export default function HomeScreen() {
 
           {meal.items.length === 0 ? (
             <TouchableOpacity style={styles.emptyMeal} onPress={() => handleAddFood(meal.type)}>
-              <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Tap to add food</Text>
+              <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.tapToAddFood')}</Text>
             </TouchableOpacity>
           ) : (
             <FlatList
@@ -1035,7 +1037,7 @@ export default function HomeScreen() {
             {plansError}
           </Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -1075,7 +1077,7 @@ export default function HomeScreen() {
         {/* ── Date range selector ── */}
         <View style={[styles.rangeCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.rangeSectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Date Range
+            {t('home.dateRange')}
           </Text>
           <View style={styles.rangeRow}>
             <TouchableOpacity
@@ -1087,7 +1089,7 @@ export default function HomeScreen() {
               }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.rangeBtnLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Start</Text>
+              <Text style={[styles.rangeBtnLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.start')}</Text>
               <Text style={[styles.rangeBtnDate, { color: isDark ? colors.textDark : colors.text }]}>{rangeStartLabel}</Text>
             </TouchableOpacity>
 
@@ -1102,7 +1104,7 @@ export default function HomeScreen() {
               }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.rangeBtnLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>End</Text>
+              <Text style={[styles.rangeBtnLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.end')}</Text>
               <Text style={[styles.rangeBtnDate, { color: isDark ? colors.textDark : colors.text }]}>{rangeEndLabel}</Text>
             </TouchableOpacity>
           </View>
@@ -1114,13 +1116,13 @@ export default function HomeScreen() {
             <View style={styles.pickerModalOverlay}>
               <View style={[styles.pickerModalContent, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
                 <View style={styles.pickerModalHeader}>
-                  <Text style={[styles.pickerModalTitle, { color: isDark ? colors.textDark : colors.text }]}>Start Date</Text>
+                  <Text style={[styles.pickerModalTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('home.startDate')}</Text>
                   <TouchableOpacity onPress={() => {
                     console.log('[Home] Start date confirmed:', iosStartTemp);
                     setRangeStart(iosStartTemp);
                     setShowStartPicker(false);
                   }}>
-                    <Text style={[styles.pickerDoneText, { color: colors.primary }]}>Done</Text>
+                    <Text style={[styles.pickerDoneText, { color: colors.primary }]}>{t('common.done')}</Text>
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
@@ -1139,13 +1141,13 @@ export default function HomeScreen() {
             <View style={styles.pickerModalOverlay}>
               <View style={[styles.pickerModalContent, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
                 <View style={styles.pickerModalHeader}>
-                  <Text style={[styles.pickerModalTitle, { color: isDark ? colors.textDark : colors.text }]}>End Date</Text>
+                  <Text style={[styles.pickerModalTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('home.endDate')}</Text>
                   <TouchableOpacity onPress={() => {
                     console.log('[Home] End date confirmed:', iosEndTemp);
                     setRangeEnd(iosEndTemp);
                     setShowEndPicker(false);
                   }}>
-                    <Text style={[styles.pickerDoneText, { color: colors.primary }]}>Done</Text>
+                    <Text style={[styles.pickerDoneText, { color: colors.primary }]}>{t('common.done')}</Text>
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
@@ -1195,7 +1197,7 @@ export default function HomeScreen() {
           {/* Goal row */}
           <View style={styles.weekAvgRow}>
             <Text numberOfLines={1} style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Goal
+              {t('home.goal')}
             </Text>
             <View style={styles.weekAvgPills}>
               <WeekAvgPill value={goal?.daily_calories || 2000} unit="kcal" color={colors.calories} isDark={isDark} />
@@ -1211,7 +1213,7 @@ export default function HomeScreen() {
           {/* Wk Avg row */}
           <View style={styles.weekAvgRow}>
             <Text numberOfLines={1} style={[styles.weekAvgLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Wk Avg
+              {t('home.wkAvg')}
             </Text>
             {avgLoading ? (
               <ActivityIndicator size="small" color={colors.primary} />
@@ -1224,7 +1226,7 @@ export default function HomeScreen() {
               </View>
             ) : (
               <Text style={[styles.weekAvgEmpty, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                No plans assigned
+                {t('home.noPlansAssigned')}
               </Text>
             )}
           </View>
@@ -1239,7 +1241,7 @@ export default function HomeScreen() {
           >
             <IconSymbol ios_icon_name="cart.fill" android_material_icon_name="shopping-cart" size={18} color="#fff" />
             <Text style={styles.groceryBtnText}>
-              View Grocery List ({assignedDaysCount} day{assignedDaysCount !== 1 ? 's' : ''})
+              {t('home.viewGroceryList', { count: assignedDaysCount, days: assignedDaysCount !== 1 ? t('common.days') : t('common.day') })}
             </Text>
           </TouchableOpacity>
         )}
@@ -1255,16 +1257,16 @@ export default function HomeScreen() {
             </View>
             <View style={styles.aiCardText}>
               <Text style={[styles.aiCardTitle, { color: isDark ? '#E9D5FF' : '#4C1D95' }]}>
-                Generate with AI
+                {t('home.generateWithAI')}
               </Text>
               <Text style={[styles.aiCardSubtitle, { color: isDark ? '#A78BFA' : '#7C3AED' }]}>
-                Tell us your preferences and we'll build your meal plan automatically
+                {t('home.generateWithAISubtitle')}
               </Text>
             </View>
           </View>
           <View style={[styles.aiComingSoonBadge, { backgroundColor: isDark ? '#2D1F5E' : '#DDD6FE' }]}>
             <Text style={[styles.aiComingSoonText, { color: isDark ? '#C4B5FD' : '#5B21B6' }]}>
-              Coming Soon
+              {t('home.comingSoon')}
             </Text>
           </View>
         </View>
@@ -1273,7 +1275,7 @@ export default function HomeScreen() {
         {templatePlans.length > 0 && (
           <View>
             <View style={styles.templateSectionHeader}>
-              <Text style={styles.templateSectionTitle}>{'✦ AVAILABLE PLANS'}</Text>
+              <Text style={styles.templateSectionTitle}>{t('home.availablePlans')}</Text>
             </View>
             {templatePlans.map((tplan) => {
               return (
@@ -1308,10 +1310,10 @@ export default function HomeScreen() {
           <View style={[styles.plansEmptyCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={40} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
             <Text style={[styles.plansEmptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              No meal plans yet
+              {t('home.noMealPlansYet')}
             </Text>
             <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Create your first plan to get started.
+              {t('home.createFirstPlanShort')}
             </Text>
           </View>
         ) : (
@@ -1326,12 +1328,12 @@ export default function HomeScreen() {
                 onLongPress={() => {
                   console.log('[Home] Plan long-pressed for delete:', plan.id, plan.name);
                   Alert.alert(
-                    'Delete Plan',
-                    `Delete "${plan.name}"?`,
+                    t('home.deletePlan'),
+                    `${t('home.deletePlanConfirmName')} "${plan.name}"?`,
                     [
-                      { text: 'Cancel', style: 'cancel' },
+                      { text: t('common.cancel'), style: 'cancel' },
                       {
-                        text: 'Delete',
+                        text: t('common.delete'),
                         style: 'destructive',
                         onPress: async () => {
                           console.log('[Home] Confirming delete for plan:', plan.id);
@@ -1341,7 +1343,7 @@ export default function HomeScreen() {
                             setPlans(prev => prev.filter(p => p.id !== plan.id));
                           } catch (err: any) {
                             console.error('[Home] Error deleting plan:', err);
-                            Alert.alert('Error', 'Failed to delete meal plan. Please try again.');
+                            Alert.alert(t('common.error'), t('home.failedToDeletePlan'));
                           }
                         },
                       },
@@ -1373,7 +1375,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={20} color="#fff" />
-          <Text style={styles.createPlanButtonText}>Create New Plan</Text>
+          <Text style={styles.createPlanButtonText}>{t('home.createNewPlan')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1391,7 +1393,7 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               <Text style={[styles.segmentButtonText, { color: activeTab === 'tracking' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                Tracking
+                {t('home.tracking')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1400,7 +1402,7 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                Planning
+                {t('home.planning')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1416,7 +1418,7 @@ export default function HomeScreen() {
             activeOpacity={0.7}
           >
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="chevron-left" size={16} color={colors.primary} />
-            <Text style={[styles.planningBackText, { color: colors.primary }]}>Tracking</Text>
+            <Text style={[styles.planningBackText, { color: colors.primary }]}>{t('home.tracking')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1532,19 +1534,19 @@ export default function HomeScreen() {
               <View style={[styles.sheetCurrentBadge, { backgroundColor: isDark ? '#1A2A2A' : '#E6FAF8' }]}>
                 <View style={[styles.sheetCurrentDot, { backgroundColor: planColorMap[currentDayAssignment.meal_plan_id] || colors.primary }]} />
                 <Text style={[styles.sheetCurrentText, { color: isDark ? colors.textDark : colors.text }]}>
-                  Currently: {currentDayAssignment.plan_name || 'Assigned'}
+                  {t('home.currently')}: {currentDayAssignment.plan_name || t('home.assigned')}
                 </Text>
               </View>
             )}
 
             <Text style={[styles.sheetSectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Assign a plan
+              {t('home.assignPlanToDay')}
             </Text>
 
             <ScrollView style={styles.sheetPlanList} showsVerticalScrollIndicator={false}>
               {plans.length === 0 ? (
                 <Text style={[styles.sheetEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  No plans available. Create one first.
+                  {t('home.noPlansAvailableCreate')}
                 </Text>
               ) : (
                 plans.map((plan, idx) => {
@@ -1588,7 +1590,7 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
                 disabled={dayAssigning}
               >
-                <Text style={[styles.sheetRemoveText, { color: colors.error }]}>Remove assignment</Text>
+                <Text style={[styles.sheetRemoveText, { color: colors.error }]}>{t('home.removeAssignment')}</Text>
               </TouchableOpacity>
             )}
 
@@ -1600,7 +1602,7 @@ export default function HomeScreen() {
               }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.sheetCancelText, { color: isDark ? colors.textDark : colors.text }]}>Cancel</Text>
+              <Text style={[styles.sheetCancelText, { color: isDark ? colors.textDark : colors.text }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
 
             {dayAssigning && (

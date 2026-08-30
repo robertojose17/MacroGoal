@@ -2,6 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -65,6 +66,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [goal, setGoal] = useState<any>(null);
   const [meals, setMeals] = useState<MealData[]>([
@@ -73,6 +75,7 @@ export default function HomeScreen() {
     { type: 'dinner', label: 'Dinner', items: [], totalCalories: 0 },
     { type: 'snack', label: 'Snacks', items: [], totalCalories: 0 },
   ]);
+  // Note: meal labels are set from static initializer; they are overridden in JSX via t()
   const [totalCalories, setTotalCalories] = useState(0);
   const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
   const [loading, setLoading] = useState(true);
@@ -234,6 +237,7 @@ export default function HomeScreen() {
             totalCalories: mealsByType.snack.reduce((sum, item) => sum + (item.calories || 0), 0),
           },
         ];
+        // meal labels are translated in JSX
 
         setMeals(updatedMeals);
         setTotalCalories(totalCals);
@@ -354,7 +358,7 @@ export default function HomeScreen() {
   const leftArrowDisabled = false;
   const rightArrowDisabled = isTodayOrFutureBool;
 
-  const todayLabel = isTodayBool ? 'Today' : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const todayLabel = isTodayBool ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
   const dateLabel = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   if (loading) {
@@ -362,7 +366,7 @@ export default function HomeScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading...
+            {t('common.loading')}
           </Text>
         </View>
       </SafeAreaView>
@@ -386,7 +390,7 @@ export default function HomeScreen() {
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
             onPress={() => { console.log('[Home Web] Retry pressed'); loadData(); }}
           >
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -449,14 +453,14 @@ export default function HomeScreen() {
             style={[styles.todayButton, { backgroundColor: colors.primary }]}
             onPress={goToToday}
           >
-            <Text style={styles.todayButtonText}>Go to Today</Text>
+            <Text style={styles.todayButtonText}>{t('home.goToToday')}</Text>
           </TouchableOpacity>
         )}
 
         {/* Calories Card */}
         <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Calories
+            {t('common.calories')}
           </Text>
 
           <View style={styles.caloriesContent}>
@@ -471,28 +475,28 @@ export default function HomeScreen() {
 
             <View style={styles.macroSummaryCompact}>
               <MacroSummaryRowCompact
-                label="Protein"
+                label={t('common.protein')}
                 eaten={Math.round(totalMacros.protein)}
                 goal={goal?.protein_g || 150}
                 color={colors.protein}
                 isDark={isDark}
               />
               <MacroSummaryRowCompact
-                label="Carbs"
+                label={t('common.carbs')}
                 eaten={Math.round(totalMacros.carbs)}
                 goal={goal?.carbs_g || 200}
                 color={colors.carbs}
                 isDark={isDark}
               />
               <MacroSummaryRowCompact
-                label="Fats"
+                label={t('common.fats')}
                 eaten={Math.round(totalMacros.fats)}
                 goal={goal?.fats_g || 65}
                 color={colors.fats}
                 isDark={isDark}
               />
               <MacroSummaryRowCompact
-                label="Fiber"
+                label={t('common.fiber')}
                 eaten={Math.round(totalMacros.fiber)}
                 goal={goal?.fiber_g || 30}
                 color={colors.fiber}
@@ -511,7 +515,7 @@ export default function HomeScreen() {
             <View style={styles.mealHeader}>
               <View>
                 <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  {meal.label}
+                  {meal.type === 'breakfast' ? t('home.breakfast') : meal.type === 'lunch' ? t('home.lunch') : meal.type === 'dinner' ? t('home.dinner') : t('home.snacks')}
                 </Text>
                 <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                   {Math.round(meal.totalCalories)} kcal
@@ -536,7 +540,7 @@ export default function HomeScreen() {
                 onPress={() => handleAddFood(meal.type)}
               >
                 <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Tap to add food
+                  {t('home.tapToAddFood')}
                 </Text>
               </TouchableOpacity>
             ) : (

@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, Animated, Dimensions, ScrollView } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -77,6 +78,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -99,7 +101,7 @@ export default function HomeScreen() {
     { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0 },
     { type: 'dinner', label: 'Dinner', items: [], totalCalories: 0 },
     { type: 'snack', label: 'Snacks', items: [], totalCalories: 0 },
-  ]);
+  ]); // labels are overridden in render via t()
   const [totalCalories, setTotalCalories] = useState(0);
   const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
   const [loading, setLoading] = useState(true);
@@ -118,13 +120,13 @@ export default function HomeScreen() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
         console.error('[Home Android] Error getting user:', userError);
-        setError('Failed to authenticate. Please try logging in again.');
+        setError(t('home.failedToAuthenticate'));
         setLoading(false);
         return;
       }
       if (!user) {
         console.log('[Home Android] No user found');
-        setError('No user session found. Please log in.');
+        setError(t('home.noUserSession'));
         setLoading(false);
         return;
       }
@@ -242,7 +244,7 @@ export default function HomeScreen() {
       }
     } catch (err: any) {
       console.error('[Home Android] Error in loadData:', err);
-      setError(err?.message || 'An unexpected error occurred. Please try again.');
+      setError(err?.message || t('home.unexpectedError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -259,7 +261,7 @@ export default function HomeScreen() {
       setPlans(data.plans || []);
     } catch (err: any) {
       console.error('[Home Android] Error loading meal plans:', err);
-      setPlansError('Failed to load meal plans.');
+      setPlansError(t('home.failedToLoadPlans'));
     } finally {
       setPlansLoading(false);
     }
@@ -339,7 +341,7 @@ export default function HomeScreen() {
       console.log('[Home Android] Successfully deleted from database');
     } catch (error: any) {
       console.error('[Home Android] Error in handleDeleteFood:', error);
-      Alert.alert('Delete Failed', error?.message || 'Failed to delete food entry. Please try again.', [{ text: 'OK' }]);
+      Alert.alert(t('home.deleteFailed'), error?.message || t('home.failedToDeleteFood'), [{ text: t('common.ok') }]);
       loadData();
     }
   }, [loadData]);
@@ -399,7 +401,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>Loading...</Text>
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>{t('common.loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -412,7 +414,7 @@ export default function HomeScreen() {
           <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={48} color={colors.error} />
           <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>{error}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadData}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -488,7 +490,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
         <View style={styles.dateCenter}>
           <Text style={[styles.dateLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {isToday() ? 'Today' : selectedDate.toLocaleDateString('en-US', { weekday: 'short' })}
+            {isToday() ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' })}
           </Text>
           <Text style={[styles.dateText, { color: isDark ? colors.textDark : colors.text }]}>
             {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -501,24 +503,24 @@ export default function HomeScreen() {
 
       {!isToday() && (
         <TouchableOpacity style={[styles.todayButton, { backgroundColor: colors.primary }]} onPress={goToToday}>
-          <Text style={styles.todayButtonText}>Go to Today</Text>
+          <Text style={styles.todayButtonText}>{t('home.goToToday')}</Text>
         </TouchableOpacity>
       )}
 
       <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Goal</Text>
+            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.goal')}</Text>
             <Text style={[styles.summaryValue, { color: isDark ? colors.textDark : colors.text }]}>{goal?.daily_calories || 2000}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Eaten</Text>
+            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.eaten')}</Text>
             <Text style={[styles.summaryValue, { color: colors.calories }]}>{Math.round(totalCalories)}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Remaining</Text>
+            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.remaining')}</Text>
             <Text style={[styles.summaryValue, { color: caloriesRemaining >= 0 ? colors.success : colors.error }]}>{Math.round(caloriesRemaining)}</Text>
           </View>
         </View>
@@ -528,19 +530,19 @@ export default function HomeScreen() {
         <View style={styles.macrosSummary}>
           <View style={styles.macroItem}>
             <Text style={[styles.macroValue, { color: colors.protein }]}>{Math.round(totalMacros.protein)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Protein</Text>
+            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.protein')}</Text>
           </View>
           <View style={styles.macroItem}>
             <Text style={[styles.macroValue, { color: colors.carbs }]}>{Math.round(totalMacros.carbs)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Carbs</Text>
+            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.carbs')}</Text>
           </View>
           <View style={styles.macroItem}>
             <Text style={[styles.macroValue, { color: colors.fats }]}>{Math.round(totalMacros.fats)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Fats</Text>
+            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.fats')}</Text>
           </View>
           <View style={styles.macroItem}>
             <Text style={[styles.macroValue, { color: colors.fiber }]}>{Math.round(totalMacros.fiber)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Fiber</Text>
+            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.fiber')}</Text>
           </View>
         </View>
       </View>
@@ -549,7 +551,7 @@ export default function HomeScreen() {
         <View key={meal.type} style={[styles.mealCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <View style={styles.mealHeader}>
             <View>
-              <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{meal.label}</Text>
+              <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{t(`home.${meal.type === 'snack' ? 'snacks' : meal.type}`)}</Text>
               <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{Math.round(meal.totalCalories)} kcal</Text>
             </View>
             <TouchableOpacity style={styles.addMealButton} onPress={() => handleAddFood(meal.type)}>
@@ -559,7 +561,7 @@ export default function HomeScreen() {
 
           {meal.items.length === 0 ? (
             <TouchableOpacity style={styles.emptyMeal} onPress={() => handleAddFood(meal.type)}>
-              <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Tap to add food</Text>
+              <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.tapToAddFood')}</Text>
             </TouchableOpacity>
           ) : (
             <FlatList
@@ -591,7 +593,7 @@ export default function HomeScreen() {
             {plansError}
           </Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -602,9 +604,9 @@ export default function HomeScreen() {
         {plans.length === 0 ? (
           <View style={[styles.plansEmptyCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={40} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
-            <Text style={[styles.plansEmptyTitle, { color: isDark ? colors.textDark : colors.text }]}>No meal plans yet</Text>
+            <Text style={[styles.plansEmptyTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('home.noMealPlansYet')}</Text>
             <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Create your first plan to get started.
+              {t('home.createFirstPlanShort')}
             </Text>
           </View>
         ) : (
@@ -635,7 +637,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={20} color="#fff" />
-          <Text style={styles.createPlanButtonText}>Create New Plan</Text>
+          <Text style={styles.createPlanButtonText}>{t('home.createNewPlan')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -652,7 +654,7 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.segmentButtonText, { color: activeTab === 'tracking' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Tracking
+              {t('home.tracking')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -661,7 +663,7 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Planning
+              {t('home.planning')}
             </Text>
           </TouchableOpacity>
         </View>

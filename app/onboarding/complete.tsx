@@ -16,6 +16,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -78,6 +79,7 @@ const RECIPE_STYLE_OPTIONS = [
 
 export default function CompleteOnboardingScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { width } = Dimensions.get('window');
 
   const [step, setStep] = useState(0);
@@ -441,12 +443,12 @@ export default function CompleteOnboardingScreen() {
 
   const goalProjectionText = (() => {
     if (goalType === 'maintain') {
-      return "You're already at your goal weight. Let's keep you there.";
+      return t('onboarding.projectionMaintain');
     }
     if (calcWeeks === 0) {
-      return "You're already at your goal weight!";
+      return t('onboarding.projectionAtGoal');
     }
-    return `You could reach your goal of ${goalWeight}${weightUnit} in ~${calcWeeks} weeks.`;
+    return t('onboarding.projectionWeeks', { goalWeight, unit: weightUnit, weeks: calcWeeks });
   })();
 
   // ─── Progress bar ──────────────────────────────────────────────────────────
@@ -588,6 +590,7 @@ export default function CompleteOnboardingScreen() {
 // ─── STEP 0 — EMOTION ────────────────────────────────────────────────────────
 
 function Step0({ onNext }: { onNext: () => void }) {
+  const { t } = useTranslation();
   return (
     <ImageBackground source={BG_IMAGE} style={styles.fullScreen} resizeMode="cover">
       <LinearGradient
@@ -598,9 +601,9 @@ function Step0({ onNext }: { onNext: () => void }) {
       />
         <SafeAreaView style={styles.step0Safe} edges={['top', 'bottom']}>
           <View style={styles.step0Content}>
-            <Text style={styles.step0Headline}>{'Transform Your Body.'}</Text>
+            <Text style={styles.step0Headline}>{t('onboarding.step0Headline')}</Text>
             <Text style={styles.step0Sub}>
-              {'With Coaching That Never Stops.'}
+              {t('onboarding.step0Sub')}
             </Text>
             <TouchableOpacity
               style={styles.primaryBtn}
@@ -609,7 +612,7 @@ function Step0({ onNext }: { onNext: () => void }) {
                 onNext();
               }}
             >
-              <Text style={styles.primaryBtnText}>Build My Plan</Text>
+              <Text style={styles.primaryBtnText}>{t('onboarding.buildMyPlan')}</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -646,7 +649,25 @@ function Step1({
   setPainPoint: (v: number) => void;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
   const ctaDisabled = painPoint === null;
+  const painCards = [
+    {
+      emoji: '😩',
+      title: t('onboarding.pain0Title'),
+      subtitle: t('onboarding.pain0Sub'),
+    },
+    {
+      emoji: '📊',
+      title: t('onboarding.pain1Title'),
+      subtitle: t('onboarding.pain1Sub'),
+    },
+    {
+      emoji: '🔄',
+      title: t('onboarding.pain2Title'),
+      subtitle: t('onboarding.pain2Sub'),
+    },
+  ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -655,11 +676,11 @@ function Step1({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{"What's been holding you back?"}</Text>
-        <Text style={styles.stepSubtitle}>{'Pick the one that hits closest.'}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step1Title')}</Text>
+        <Text style={styles.stepSubtitle}>{t('onboarding.step1Sub')}</Text>
 
         <View style={styles.cardList}>
-          {PAIN_CARDS.map((card, idx) => {
+          {painCards.map((card, idx) => {
             const selected = painPoint === idx;
             return (
               <TouchableOpacity
@@ -688,7 +709,7 @@ function Step1({
           }}
           disabled={ctaDisabled}
         >
-          <Text style={styles.primaryBtnText}>This is me →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.thisIsMe')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -720,7 +741,15 @@ function Step2({
   bullet5Anim: Animated.Value;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
   const anims = [bullet1Anim, bullet2Anim, bullet3Anim, bullet4Anim, bullet5Anim];
+  const hopeBullets = [
+    { icon: '😍', title: t('onboarding.hope0') },
+    { icon: '👕', title: t('onboarding.hope1') },
+    { icon: '⚡', title: t('onboarding.hope2') },
+    { icon: '🧒', title: t('onboarding.hope3') },
+    { icon: '❤️', title: t('onboarding.hope4') },
+  ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -729,11 +758,11 @@ function Step2({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{"This isn't just about losing weight"}</Text>
-        <Text style={styles.stepSubtitle}>{"It's about what changes when you finally take control:"}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step2Title')}</Text>
+        <Text style={styles.stepSubtitle}>{t('onboarding.step2Sub')}</Text>
 
         <View style={styles.cardList}>
-          {HOPE_BULLETS.map((bullet, idx) => {
+          {hopeBullets.map((bullet, idx) => {
             const anim = anims[idx];
             const opacity = anim;
             const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
@@ -745,7 +774,6 @@ function Step2({
                 <Text style={styles.hopeBulletIcon}>{bullet.icon}</Text>
                 <View style={styles.hopeBulletText}>
                   <Text style={styles.hopeBulletTitle}>{bullet.title}</Text>
-                  <Text style={styles.hopeBulletBody}>{bullet.body}</Text>
                 </View>
               </Animated.View>
             );
@@ -759,7 +787,7 @@ function Step2({
             onNext();
           }}
         >
-          <Text style={styles.primaryBtnText}>I want this →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.iWantThis')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -785,6 +813,7 @@ function Step3({
   setUnits: (v: 'metric' | 'imperial') => void;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
   const ctaDisabled = age === '';
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
@@ -794,13 +823,13 @@ function Step3({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{"Let's build your system"}</Text>
-        <Text style={styles.stepSubtitle}>{'A few quick questions about your body.'}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step3Title')}</Text>
+        <Text style={styles.stepSubtitle}>{t('onboarding.step3Sub')}</Text>
 
         {/* Sex */}
-        <Text style={styles.fieldLabel}>{'Biological sex'}</Text>
+        <Text style={styles.fieldLabel}>{t('onboarding.biologicalSex')}</Text>
         <View style={styles.twoCardRow}>
-          {([['male', '👨', 'Male'], ['female', '👩', 'Female']] as const).map(([val, emoji, label]) => {
+          {([['male', '👨', t('onboarding.male')], ['female', '👩', t('onboarding.female')]] as const).map(([val, emoji, label]) => {
             const selected = sex === val;
             return (
               <TouchableOpacity
@@ -819,7 +848,7 @@ function Step3({
         </View>
 
         {/* Age */}
-        <Text style={styles.fieldLabel}>{'How old are you?'}</Text>
+        <Text style={styles.fieldLabel}>{t('onboarding.howOldAreYou')}</Text>
         <TextInput
           style={styles.bigInput}
           placeholder="e.g. 28"
@@ -831,9 +860,9 @@ function Step3({
         />
 
         {/* Units */}
-        <Text style={styles.fieldLabel}>{'Preferred units'}</Text>
+        <Text style={styles.fieldLabel}>{t('onboarding.preferredUnits')}</Text>
         <View style={styles.twoCardRow}>
-          {([['metric', 'Metric', 'kg / cm'], ['imperial', 'Imperial', 'lbs / ft']] as const).map(([val, label, sub]) => {
+          {([['metric', t('onboarding.metric'), 'kg / cm'], ['imperial', t('onboarding.imperial'), 'lbs / ft']] as const).map(([val, label, sub]) => {
             const selected = units === val;
             return (
               <TouchableOpacity
@@ -859,7 +888,7 @@ function Step3({
           }}
           disabled={ctaDisabled}
         >
-          <Text style={styles.primaryBtnText}>Continue →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -899,6 +928,7 @@ function Step4({
   isValid: boolean;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -907,11 +937,11 @@ function Step4({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{'Almost there'}</Text>
-        <Text style={styles.stepSubtitle}>{'Your measurements help us calculate your exact targets.'}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step4Title')}</Text>
+        <Text style={styles.stepSubtitle}>{t('onboarding.step4Sub')}</Text>
 
         {/* Height */}
-        <Text style={styles.fieldLabel}>{'Your height'}</Text>
+        <Text style={styles.fieldLabel}>{t('onboarding.yourHeight')}</Text>
         {units === 'imperial' ? (
           <View style={styles.twoInputRow}>
             <View style={styles.twoInputItem}>
@@ -955,7 +985,7 @@ function Step4({
         )}
 
         {/* Current Weight */}
-        <Text style={styles.fieldLabel}>{'Current weight'}</Text>
+        <Text style={styles.fieldLabel}>{t('onboarding.currentWeight')}</Text>
         <View style={styles.inputWithSuffix}>
           <TextInput
             style={[styles.bigInput, styles.flex1]}
@@ -970,8 +1000,8 @@ function Step4({
         </View>
 
         {/* Goal Weight */}
-        <Text style={styles.fieldLabel}>{'Goal weight'}</Text>
-        <Text style={styles.fieldHelper}>{'The weight you want to reach'}</Text>
+        <Text style={styles.fieldLabel}>{t('onboarding.goalWeight')}</Text>
+        <Text style={styles.fieldHelper}>{t('onboarding.goalWeightHelper')}</Text>
         <View style={styles.inputWithSuffix}>
           <TextInput
             style={[styles.bigInput, styles.flex1]}
@@ -993,7 +1023,7 @@ function Step4({
           }}
           disabled={!isValid}
         >
-          <Text style={styles.primaryBtnText}>Continue →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -1040,6 +1070,25 @@ function Step5({
   units: 'metric' | 'imperial';
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
+  const goalCards = [
+    { value: 'lose' as GoalType, emoji: '📉', title: t('onboarding.loseWeight'), subtitle: t('onboarding.loseWeightSub') },
+    { value: 'maintain' as GoalType, emoji: '⚖️', title: t('onboarding.maintain'), subtitle: t('onboarding.maintainSub') },
+    { value: 'gain' as GoalType, emoji: '📈', title: t('onboarding.gainWeight'), subtitle: t('onboarding.gainWeightSub') },
+  ];
+  const speedOptions = units === 'metric'
+    ? [
+        { value: 0.5, label: '0.25 kg/week', sub: t('onboarding.speedSlow') },
+        { value: 1.0, label: '0.5 kg/week', sub: t('onboarding.speedModerate') },
+        { value: 1.5, label: '0.75 kg/week', sub: t('onboarding.speedFast') },
+        { value: 2.0, label: '1.0 kg/week', sub: t('onboarding.speedAggressive') },
+      ]
+    : [
+        { value: 0.5, label: '0.5 lb/week', sub: t('onboarding.speedSlow') },
+        { value: 1.0, label: '1.0 lb/week', sub: t('onboarding.speedModerate') },
+        { value: 1.5, label: '1.5 lb/week', sub: t('onboarding.speedFast') },
+        { value: 2.0, label: '2.0 lb/week', sub: t('onboarding.speedAggressive') },
+      ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -1048,10 +1097,10 @@ function Step5({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{"What's your goal?"}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step5Title')}</Text>
 
         <View style={styles.cardList}>
-          {GOAL_CARDS.map((card) => {
+          {goalCards.map((card) => {
             const selected = goalType === card.value;
             return (
               <TouchableOpacity
@@ -1074,9 +1123,9 @@ function Step5({
 
         {goalType === 'lose' && (
           <View style={styles.speedSection}>
-            <Text style={styles.fieldLabel}>{'How fast?'}</Text>
+            <Text style={styles.fieldLabel}>{t('onboarding.howFast')}</Text>
             <View style={styles.speedGrid}>
-              {getSpeedOptions(units).map((opt) => {
+              {speedOptions.map((opt) => {
                 const selected = lossRateLbsPerWeek === opt.value;
                 return (
                   <TouchableOpacity
@@ -1103,7 +1152,7 @@ function Step5({
             onNext();
           }}
         >
-          <Text style={styles.primaryBtnText}>Continue →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -1128,6 +1177,13 @@ function Step6({
   setActivityLevel: (v: ActivityLevel) => void;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
+  const activityCards = [
+    { value: 'sedentary' as ActivityLevel, emoji: '🪑', title: t('onboarding.sedentary'), subtitle: t('onboarding.sedentarySub') },
+    { value: 'light' as ActivityLevel, emoji: '🚶', title: t('onboarding.lightlyActive'), subtitle: t('onboarding.lightlyActiveSub') },
+    { value: 'moderate' as ActivityLevel, emoji: '🏃', title: t('onboarding.moderatelyActive'), subtitle: t('onboarding.moderatelyActiveSub') },
+    { value: 'very_active' as ActivityLevel, emoji: '💪', title: t('onboarding.veryActive'), subtitle: t('onboarding.veryActiveSub') },
+  ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -1136,11 +1192,11 @@ function Step6({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{'How active are you?'}</Text>
-        <Text style={styles.stepSubtitle}>{'Be honest — this affects your calorie target.'}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step6Title')}</Text>
+        <Text style={styles.stepSubtitle}>{t('onboarding.step6Sub')}</Text>
 
         <View style={styles.cardList}>
-          {ACTIVITY_CARDS.map((card) => {
+          {activityCards.map((card) => {
             const selected = activityLevel === card.value;
             return (
               <TouchableOpacity
@@ -1168,7 +1224,7 @@ function Step6({
             onNext();
           }}
         >
-          <Text style={styles.primaryBtnText}>Continue →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -1190,6 +1246,36 @@ function Step7({
   toggleProtein: (item: string) => void;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
+  const dietaryOptions = [
+    { label: t('onboarding.vegetarian'), value: 'vegetarian' },
+    { label: t('onboarding.vegan'), value: 'vegan' },
+    { label: t('onboarding.glutenFree'), value: 'gluten-free' },
+    { label: t('onboarding.dairyFree'), value: 'dairy-free' },
+    { label: t('onboarding.halal'), value: 'halal' },
+    { label: t('onboarding.nutFree'), value: 'nut-free' },
+  ];
+  const proteinOptions = [
+    { label: t('onboarding.chicken'), value: 'chicken' },
+    { label: t('onboarding.turkey'), value: 'turkey' },
+    { label: t('onboarding.beef'), value: 'beef' },
+    { label: t('onboarding.pork'), value: 'pork' },
+    { label: t('onboarding.salmon'), value: 'salmon' },
+    { label: t('onboarding.tuna'), value: 'tuna' },
+    { label: t('onboarding.shrimp'), value: 'shrimp' },
+    { label: t('onboarding.cod'), value: 'cod' },
+    { label: t('onboarding.tilapia'), value: 'tilapia' },
+    { label: t('onboarding.eggs'), value: 'eggs' },
+    { label: t('onboarding.greekYogurt'), value: 'greek-yogurt' },
+    { label: t('onboarding.cottageCheese'), value: 'cottage-cheese' },
+    { label: t('onboarding.wheyProtein'), value: 'whey-protein' },
+    { label: t('onboarding.tofu'), value: 'tofu' },
+    { label: t('onboarding.tempeh'), value: 'tempeh' },
+    { label: t('onboarding.edamame'), value: 'edamame' },
+    { label: t('onboarding.lentils'), value: 'lentils' },
+    { label: t('onboarding.chickpeas'), value: 'chickpeas' },
+    { label: t('onboarding.blackBeans'), value: 'black-beans' },
+  ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -1198,11 +1284,11 @@ function Step7({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{'What are your dietary restrictions?'}</Text>
-        <Text style={styles.stepSubtitle}>{"Select all that apply. We'll make sure your plan respects these."}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step7Title')}</Text>
+        <Text style={styles.stepSubtitle}>{t('onboarding.step7Sub')}</Text>
 
         <View style={styles.chipWrap}>
-          {DIETARY_OPTIONS.map((opt) => {
+          {dietaryOptions.map((opt) => {
             const selected = dietaryRestrictions.includes(opt.value);
             return (
               <TouchableOpacity
@@ -1219,10 +1305,10 @@ function Step7({
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>{'Choose proteins you actually enjoy eating.'}</Text>
+        <Text style={styles.sectionTitle}>{t('onboarding.chooseProteins')}</Text>
 
         <View style={styles.chipWrap}>
-          {PROTEIN_OPTIONS.map((opt) => {
+          {proteinOptions.map((opt) => {
             const selected = proteinPreferences.includes(opt.value);
             return (
               <TouchableOpacity
@@ -1246,7 +1332,7 @@ function Step7({
             onNext();
           }}
         >
-          <Text style={styles.primaryBtnText}>Continue →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -1268,6 +1354,17 @@ function Step8({
   setDislikedFoods: (v: string) => void;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
+  const recipeStyleOptions = [
+    { label: t('onboarding.airFryer'), value: 'air-fryer' },
+    { label: t('onboarding.mealPrep'), value: 'meal-prep' },
+    { label: t('onboarding.under30Minutes'), value: 'under-30-minutes' },
+    { label: t('onboarding.onePanMeals'), value: 'one-pan-meals' },
+    { label: t('onboarding.slowCooker'), value: 'slow-cooker' },
+    { label: t('onboarding.instantPot'), value: 'instant-pot' },
+    { label: t('onboarding.easyRecipes'), value: 'easy-recipes' },
+    { label: t('onboarding.freezerFriendly'), value: 'freezer-friendly' },
+  ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <ScrollView
@@ -1276,10 +1373,10 @@ function Step8({
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={['top']} style={styles.safeTop} />
-        <Text style={styles.stepTitle}>{'What kind of meals fit your lifestyle?'}</Text>
+        <Text style={styles.stepTitle}>{t('onboarding.step8Title')}</Text>
 
         <View style={styles.chipWrap}>
-          {RECIPE_STYLE_OPTIONS.map((opt) => {
+          {recipeStyleOptions.map((opt) => {
             const selected = recipeStyles.includes(opt.value);
             return (
               <TouchableOpacity
@@ -1296,10 +1393,10 @@ function Step8({
           })}
         </View>
 
-        <Text style={styles.fieldLabel}>{'Anything you never want to see in your plan?'}</Text>
+        <Text style={styles.fieldLabel}>{t('onboarding.neverWantInPlan')}</Text>
         <TextInput
           style={styles.multilineInput}
-          placeholder="e.g. cilantro, mushrooms, shellfish..."
+          placeholder={t('onboarding.dislikedFoodsPlaceholder')}
           placeholderTextColor="rgba(255,255,255,0.3)"
           multiline
           value={dislikedFoods}
@@ -1313,7 +1410,7 @@ function Step8({
             onNext();
           }}
         >
-          <Text style={styles.primaryBtnText}>Build My Plan →</Text>
+          <Text style={styles.primaryBtnText}>{t('onboarding.buildMyPlanArrow')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -1343,6 +1440,7 @@ function Step9({
   onRetry: () => void;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={[styles.fullScreen, { backgroundColor: '#000000' }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
@@ -1356,18 +1454,18 @@ function Step9({
           {saving ? (
             <View style={styles.s9LoadingBlock}>
               <ActivityIndicator size="large" color={PRIMARY} />
-              <Text style={styles.s9LoadingText}>Building your plan…</Text>
+              <Text style={styles.s9LoadingText}>{t('onboarding.buildingPlan')}</Text>
             </View>
           ) : saveError ? (
             <View style={styles.s9ErrorBlock}>
               <Text style={styles.s9ErrorText}>{saveError}</Text>
               <TouchableOpacity style={styles.primaryBtn} onPress={onRetry}>
-                <Text style={styles.primaryBtnText}>Try Again</Text>
+                <Text style={styles.primaryBtnText}>{t('onboarding.tryAgain')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <>
-              <Text style={styles.stepTitle}>Your plan is ready 🎯</Text>
+              <Text style={styles.stepTitle}>{t('onboarding.planReady')}</Text>
               <Text style={styles.stepSubtitle}>{goalProjectionText}</Text>
 
               <View style={styles.s9Grid}>
@@ -1375,25 +1473,25 @@ function Step9({
                   <Text style={styles.s9StatEmoji}>🔥</Text>
                   <Text style={styles.s9StatValue}>{calories.toLocaleString()}</Text>
                   <Text style={styles.s9StatUnit}>kcal</Text>
-                  <Text style={styles.s9StatLabel}>Daily Calories</Text>
+                  <Text style={styles.s9StatLabel}>{t('onboarding.dailyCalories')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
                   <Text style={styles.s9StatEmoji}>🥩</Text>
                   <Text style={styles.s9StatValue}>{protein}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
-                  <Text style={styles.s9StatLabel}>Protein</Text>
+                  <Text style={styles.s9StatLabel}>{t('common.protein')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
                   <Text style={styles.s9StatEmoji}>🍚</Text>
                   <Text style={styles.s9StatValue}>{carbs}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
-                  <Text style={styles.s9StatLabel}>Carbs</Text>
+                  <Text style={styles.s9StatLabel}>{t('common.carbs')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
                   <Text style={styles.s9StatEmoji}>🥑</Text>
                   <Text style={styles.s9StatValue}>{fats}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
-                  <Text style={styles.s9StatLabel}>Fat</Text>
+                  <Text style={styles.s9StatLabel}>{t('onboarding.fat')}</Text>
                 </View>
               </View>
 
@@ -1401,7 +1499,7 @@ function Step9({
                 style={styles.primaryBtn}
                 onPress={onNext}
               >
-                <Text style={styles.primaryBtnText}>Show Me My Roadmap →</Text>
+                <Text style={styles.primaryBtnText}>{t('onboarding.showRoadmap')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1454,6 +1552,8 @@ function Step10({
 }) {
   const milestoneWeeks = totalWeeks > 0 ? computeMilestoneWeeks(totalWeeks) : [];
 
+  const { t } = useTranslation();
+
   useEffect(() => {
     console.log('[Onboarding] Step 10: timeline rendered with weeks', milestoneWeeks);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1487,11 +1587,11 @@ function Step10({
 
   const TIMELINE_NODES = [
     {
-      weekLabel: 'Today',
-      title: `Your Personalized Path to ${goalWeightInt} ${weightUnit} Is Ready 🎯`,
+      weekLabel: t('common.today'),
+      title: t('onboarding.timelineNode0Title', { goalWeight: goalWeightInt, unit: weightUnit }),
       lines: [
-        'Personalized meal plan',
-        'Custom grocery list',
+        t('onboarding.timelineNode0Line0'),
+        t('onboarding.timelineNode0Line1'),
       ],
       isToday: true,
       isFinal: false,
@@ -1499,10 +1599,10 @@ function Step10({
     },
     {
       weekLabel: '',
-      title: "It's Finally Working 📉",
+      title: t('onboarding.timelineNode1Title'),
       lines: [
-        `Estimated Weight: ${estimatedWeights[0]} ${weightUnit}`,
-        "The scale is moving down & you're building real momentum",
+        t('onboarding.estimatedWeight', { weight: estimatedWeights[0], unit: weightUnit }),
+        t('onboarding.timelineNode1Line1'),
       ],
       isToday: false,
       isFinal: false,
@@ -1510,10 +1610,10 @@ function Step10({
     },
     {
       weekLabel: '',
-      title: 'People Are Starting to Notice 👀',
+      title: t('onboarding.timelineNode2Title'),
       lines: [
-        `Estimated Weight: ${estimatedWeights[1]} ${weightUnit}`,
-        'Your clothes are fitting better & the compliments are starting',
+        t('onboarding.estimatedWeight', { weight: estimatedWeights[1], unit: weightUnit }),
+        t('onboarding.timelineNode2Line1'),
       ],
       isToday: false,
       isFinal: false,
@@ -1521,10 +1621,10 @@ function Step10({
     },
     {
       weekLabel: '',
-      title: "You're Becoming a New You 🔥",
+      title: t('onboarding.timelineNode3Title'),
       lines: [
-        `Estimated Weight: ${estimatedWeights[2]} ${weightUnit}`,
-        'The mirror reflects your progress & healthy habits feel natural',
+        t('onboarding.estimatedWeight', { weight: estimatedWeights[2], unit: weightUnit }),
+        t('onboarding.timelineNode3Line1'),
       ],
       isToday: false,
       isFinal: false,
@@ -1532,10 +1632,10 @@ function Step10({
     },
     {
       weekLabel: '',
-      title: 'You Finally Did It !!',
+      title: t('onboarding.timelineNode4Title'),
       lines: [
-        `Reached ${goalWeightInt} ${weightUnit}`,
-        'You love what you see in the mirror',
+        t('onboarding.reached', { goalWeight: goalWeightInt, unit: weightUnit }),
+        t('onboarding.timelineNode4Line1'),
       ],
       isToday: false,
       isFinal: true,
@@ -1551,16 +1651,16 @@ function Step10({
             showsVerticalScrollIndicator={false}
           >
             {/* Header */}
-            <Text style={styles.step10Title}>{'Your transformation\nstarts today.'}</Text>
+            <Text style={styles.step10Title}>{t('onboarding.step10Title')}</Text>
             <Text style={styles.step10Sub}>
-              {"Here's what your journey will look like."}
+              {t('onboarding.step10Sub')}
             </Text>
 
             {/* Timeline or fallback */}
             {totalWeeks <= 0 ? (
               <View style={styles.timelineFallback}>
-                <Text style={styles.timelineFallbackTitle}>{"You're already where you want to be."}</Text>
-                <Text style={styles.timelineFallbackSub}>{"Let's keep you there with a system built for consistency."}</Text>
+                <Text style={styles.timelineFallbackTitle}>{t('onboarding.alreadyAtGoal')}</Text>
+                <Text style={styles.timelineFallbackSub}>{t('onboarding.keepYouThere')}</Text>
               </View>
             ) : (
               <View style={styles.timelineContainer}>
@@ -1571,9 +1671,9 @@ function Step10({
                   const isToday = node.isToday;
                   const isFinal = node.isFinal;
                   const weekLabel = isToday
-                    ? 'Today'
+                    ? t('common.today')
                     : node.pctIndex >= 0 && milestoneWeeks[node.pctIndex] !== undefined
-                      ? `Week ${milestoneWeeks[node.pctIndex]}`
+                      ? t('onboarding.weekNum', { num: milestoneWeeks[node.pctIndex] })
                       : '';
                   const weekLabelColor = isToday || isFinal
                     ? PRIMARY
@@ -1603,7 +1703,7 @@ function Step10({
                           </Text>
                           {isFinal && (
                             <View style={styles.timelineGoalPill}>
-                              <Text style={styles.timelineGoalPillText}>{'GOAL'}</Text>
+                              <Text style={styles.timelineGoalPillText}>{t('onboarding.goalPill')}</Text>
                             </View>
                           )}
                         </View>
@@ -1626,7 +1726,7 @@ function Step10({
                 onStartTrial();
               }}
             >
-              <Text style={styles.purchaseBtnText}>{'Start My Personalized Plan'}</Text>
+              <Text style={styles.purchaseBtnText}>{t('onboarding.startPersonalizedPlan')}</Text>
             </TouchableOpacity>
 
             {/* Skip */}
@@ -1637,7 +1737,7 @@ function Step10({
               }}
               style={styles.skipLink}
             >
-              <Text style={styles.skipLinkText}>{"I'll do everything manually"}</Text>
+              <Text style={styles.skipLinkText}>{t('onboarding.doEverythingManually')}</Text>
             </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
