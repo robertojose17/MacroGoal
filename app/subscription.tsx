@@ -63,40 +63,40 @@ interface FeatureItem {
   description: string;
 }
 
-const ICON_GRID_ITEMS: FeatureItem[] = [
+const ICON_GRID_ITEM_KEYS: { key: string; icon_ios: string; icon_android: string; labelKey: string; description: string }[] = [
   {
     key: 'snap',
     icon_ios: 'camera.fill',
     icon_android: 'camera-alt',
-    label: 'Snap & Track',
+    labelKey: 'subscription.feature_snapTrack',
     description: 'Snap a photo to estimate calories & macros instantly.',
   },
   {
     key: 'mealplans',
     icon_ios: 'calendar',
     icon_android: 'calendar-today',
-    label: 'Meal Plans',
+    labelKey: 'subscription.feature_mealPlans',
     description: 'Get personalized meal plans tailored to your goals.',
   },
   {
     key: 'progress',
     icon_ios: 'chart.line.uptrend.xyaxis',
     icon_android: 'trending-up',
-    label: 'Progress',
+    labelKey: 'subscription.feature_progress',
     description: 'Track your progress with detailed charts and insights.',
   },
   {
     key: 'noads',
     icon_ios: 'sparkles',
     icon_android: 'auto-awesome',
-    label: 'No Ads',
+    labelKey: 'subscription.feature_noAds',
     description: 'Enjoy a clean, ad-free experience.',
   },
   {
     key: 'grocery',
     icon_ios: 'cart.fill',
     icon_android: 'shopping-cart',
-    label: 'Grocery List',
+    labelKey: 'subscription.feature_groceryList',
     description: 'Auto-generate grocery lists from your meal plans.',
   },
 ];
@@ -843,20 +843,20 @@ export default function SubscriptionScreen() {
     {
       ios: 'brain.head.profile',
       android: 'psychology' as const,
-      title: 'Your Personal AI Coach',
-      desc: 'Get answers, guidance and adjustments whenever you need them.',
+      title: t('subscription.sellingPoint1Title'),
+      desc: t('subscription.sellingPoint1Desc'),
     },
     {
       ios: 'fork.knife.circle.fill',
       android: 'set-meal' as const,
-      title: 'Never Wonder What To Eat',
-      desc: 'Personalized meal plans, recipes and grocery lists built around you.',
+      title: t('subscription.sellingPoint2Title'),
+      desc: t('subscription.sellingPoint2Desc'),
     },
     {
       ios: 'arrow.triangle.2.circlepath',
       android: 'autorenew' as const,
       title: t('subscription.stayOnTrack'),
-      desc: 'Your plan evolves as your body and progress change.',
+      desc: t('subscription.sellingPoint3Desc'),
     },
   ];
 

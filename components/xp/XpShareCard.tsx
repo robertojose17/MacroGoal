@@ -7,6 +7,7 @@
  */
 
 import React, { useRef, forwardRef, useImperativeHandle } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getXpRank, formatRankFullLabel } from '@/utils/xpRanks';
 import {
   View,
@@ -76,6 +77,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
     { level, totalXp, currentStreak, consistencyScore, percentile, calorieDeficit, username },
     ref
   ) {
+    const { t } = useTranslation();
     const viewShotRef = useRef<any>(null);
 
     useImperativeHandle(ref, () => ({
@@ -103,7 +105,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
     // Pre-compute display values (no logic in JSX)
     const rank = getXpRank(level);
     const rankNameDisplay = formatRankFullLabel(rank);
-    const levelTextDisplay = 'Level ' + String(level);
+    const levelTextDisplay = t('xp.shareCard_levelPrefix') + ' ' + String(level);
     const streakDisplay = String(currentStreak);
     const consistencyDisplay = String(Math.round(consistencyScore));
     const topPercentDisplay = topPercent(percentile);
@@ -111,6 +113,15 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
     const showDeficit = (calorieDeficit ?? 0) > 0;
     const deficitDisplay = showDeficit ? Number(calorieDeficit).toLocaleString() : '';
     const footerHandle = username ? '@' + username : '@you';
+    const appTaglineDisplay = t('xp.shareCard_appTagline');
+    const dayStreakLabelDisplay = t('xp.shareCard_dayStreak');
+    const dayStreakStatDisplay = t('xp.shareCard_dayStreakStat');
+    const consistencyStatDisplay = t('xp.shareCard_consistency');
+    const topDisplay = t('xp.shareCard_top');
+    const ofAllUsersDisplay = t('xp.shareCard_ofAllUsers');
+    const xpEarnedDisplay = t('xp.shareCard_xpEarned');
+    const calDeficitDisplay = t('xp.shareCard_calDeficit');
+    const madeWithDisplay = t('xp.shareCard_madeWith');
 
     return (
       <CaptureWrapper
@@ -130,7 +141,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
             <View style={styles.headerTextColumn}>
               <Text style={styles.appName}>Macro Goal</Text>
               <Text style={styles.appTagline}>
-                Track. Improve. Transform.
+                {appTaglineDisplay}
               </Text>
             </View>
           </View>
@@ -177,7 +188,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
                 {streakDisplay}
               </Text>
               <Text style={styles.streakLabel}>
-                Day Streak
+                {dayStreakLabelDisplay}
               </Text>
             </View>
 
@@ -192,7 +203,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
                 <Text style={[styles.statValue, { color: CARD_ACCENT_TEXT }]}>
                   {streakDisplay}
                 </Text>
-                <Text style={styles.statLabel}>DAY STREAK</Text>
+                <Text style={styles.statLabel}>{dayStreakStatDisplay}</Text>
               </View>
 
               {/* Divider */}
@@ -205,34 +216,34 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
                   {consistencyDisplay}
                   <Text style={styles.statUnit}>%</Text>
                 </Text>
-                <Text style={styles.statLabel}>CONSISTENCY</Text>
+                <Text style={styles.statLabel}>{consistencyStatDisplay}</Text>
               </View>
             </View>
 
             {/* Top X% badge */}
             <View style={[styles.topBadge, { borderColor: CARD_ACCENT_TEXT }]}>
               <Text style={[styles.topBadgeText, { color: CARD_ACCENT_TEXT }]}>
-                TOP
+                {topDisplay}
               </Text>
               <Text style={[styles.topBadgePercent, { color: CARD_ACCENT_TEXT }]}>
                 {topPercentDisplay}%
               </Text>
               <Text style={[styles.topBadgeText, { color: CARD_ACCENT_TEXT }]}>
-                OF ALL USERS
+                {ofAllUsersDisplay}
               </Text>
             </View>
 
             {/* XP total */}
             <View style={styles.xpRow}>
               <Text style={styles.xpValue}>{xpDisplay}</Text>
-              <Text style={styles.xpLabel}> XP EARNED</Text>
+              <Text style={styles.xpLabel}> {xpEarnedDisplay}</Text>
             </View>
 
             {/* Calorie Deficit (7d) — only shown when provided */}
             {showDeficit && (
               <View style={styles.deficitRow}>
                 <Text style={styles.deficitValue}>{deficitDisplay}</Text>
-                <Text style={styles.deficitLabel}> CAL DEFICIT (7D)</Text>
+                <Text style={styles.deficitLabel}> {calDeficitDisplay}</Text>
               </View>
             )}
 
@@ -248,7 +259,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
                 style={styles.footerIcon}
                 resizeMode="cover"
               />
-              <Text style={styles.footerBrand}>Made with Macro Goal</Text>
+              <Text style={styles.footerBrand}>{madeWithDisplay}</Text>
             </View>
           </View>
 

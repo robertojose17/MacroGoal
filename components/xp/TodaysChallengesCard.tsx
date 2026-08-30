@@ -26,6 +26,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { borderRadius, colors, spacing } from '@/styles/commonStyles';
@@ -59,13 +60,17 @@ const FALLBACK_TYPES: ChallengeCard['challenge_type'][] = [
   'workout',
 ];
 
-const FALLBACK_LABELS: Record<ChallengeCard['challenge_type'], string> = {
-  weight_checkin: 'Weight',
-  protein_goal: 'Protein',
-  calorie_goal: 'Calories',
-  steps: 'Steps',
-  workout: 'Workout',
+const FALLBACK_LABEL_KEYS: Record<ChallengeCard['challenge_type'], string> = {
+  weight_checkin: 'xp.tileLabel_Weight',
+  protein_goal: 'xp.tileLabel_Protein',
+  calorie_goal: 'xp.tileLabel_Calories',
+  steps: 'xp.tileLabel_Steps',
+  workout: 'xp.tileLabel_Workout',
 };
+
+function getFallbackLabel(type: ChallengeCard['challenge_type']): string {
+  return i18n.t(FALLBACK_LABEL_KEYS[type] ?? 'xp.tileLabel_Weight');
+}
 
 const FALLBACK_ICONS: Record<ChallengeCard['challenge_type'], IoniconsName> = {
   weight_checkin: 'scale-outline',
@@ -114,7 +119,7 @@ const FALLBACK_TIERS: Record<ChallengeCard['challenge_type'], ChallengeTier[]> =
 function buildFallbackCards(xpConfig?: Record<string, number>): ChallengeCard[] {
   return FALLBACK_TYPES.map((t) => ({
     challenge_type: t,
-    label: FALLBACK_LABELS[t],
+    label: getFallbackLabel(t),
     icon: FALLBACK_ICONS[t],
     current_value: 0,
     goal_value: 0,
@@ -237,7 +242,7 @@ function CompactTile({
     ? colors.textSecondaryDark
     : colors.textSecondary;
 
-  const shortLabel = FALLBACK_LABELS[card.challenge_type] ?? card.label;
+  const shortLabel = getFallbackLabel(card.challenge_type) || card.label;
 
   return (
     <TouchableOpacity
@@ -489,7 +494,7 @@ function DetailSheet({
     ? t('xp.allTiersComplete')
     : '';
 
-  const shortLabel = FALLBACK_LABELS[card.challenge_type] ?? card.label;
+  const shortLabel = getFallbackLabel(card.challenge_type) || card.label;
 
   return (
     <Modal

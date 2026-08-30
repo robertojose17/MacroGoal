@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { colors } from '@/styles/commonStyles';
 import { ZoomablePhoto } from '@/components/ZoomablePhoto';
 
@@ -79,6 +80,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     },
     ref
   ) {
+    const { t } = useTranslation();
     const viewShotRef = useRef<any>(null);
 
     // useState for visual placeholder re-renders
@@ -106,7 +108,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const showWeightUnit = weightLostValue > 0;
 
     const beforeDateDisplay = beforeDate || '';
-    const afterDateDisplay = afterDate || 'Today';
+    const afterDateDisplay = afterDate || t('common.today');
 
     const showBeforeWeight = typeof beforeWeight === 'number' && isFinite(beforeWeight) && beforeWeight > 0;
     const showAfterWeight = typeof afterWeight === 'number' && isFinite(afterWeight) && afterWeight > 0;
@@ -180,7 +182,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
             />
             <View style={styles.headerTextColumn}>
               <Text style={styles.appName}>Macro Goal</Text>
-              <Text style={styles.appTagline}>Track. Improve. Transform.</Text>
+              <Text style={styles.appTagline}>{t('share.appTagline')}</Text>
             </View>
           </View>
           <View style={styles.headerDivider} />
@@ -295,7 +297,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
           <View style={styles.statsRow}>
             {/* Left card — Consistency Score */}
             <View style={styles.statCard}>
-              <Text style={styles.statEyebrow}>CONSISTENCY</Text>
+              <Text style={styles.statEyebrow}>{t('share.consistency')}</Text>
               <View style={styles.statValueRow}>
                 <Text style={styles.statValue}>{consistencyScoreValue}</Text>
                 <Text style={styles.statUnit}>/100</Text>
@@ -307,7 +309,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 
             {/* Right card — Weight Lost */}
             <View style={styles.statCard}>
-              <Text style={styles.statEyebrow}>WEIGHT LOST</Text>
+              <Text style={styles.statEyebrow}>{t('share.weightLost')}</Text>
               <View style={styles.statValueRow}>
                 <Text style={styles.statValue}>{weightLostDisplay}</Text>
                 {showWeightUnit && <Text style={styles.statUnit}> lbs</Text>}
@@ -325,7 +327,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 style={styles.footerIcon}
                 resizeMode="cover"
               />
-              <Text style={styles.footerBrand}>Made with Macro Goal</Text>
+              <Text style={styles.footerBrand}>{t('share.madeWith')}</Text>
             </View>
           </View>
 

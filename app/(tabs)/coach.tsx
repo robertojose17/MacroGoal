@@ -38,12 +38,12 @@ const genId = () => {
 type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean };
 
 const QUICK_ACTION_CARDS = [
-  { iosIcon: 'fork.knife', androidIcon: 'restaurant', title: "I'm starving", subtitle: 'Need food now', message: "I'm starving, what can I eat right now?" },
-  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', title: "I messed up today", subtitle: 'Went off plan', message: "I messed up today, what do I do now?" },
-  { iosIcon: 'cart.fill', androidIcon: 'shopping_cart', title: "I'm eating out tonight", subtitle: 'Need guidance', message: "I'm eating out tonight, how do I stay on track?" },
-  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', title: "Is this even working?", subtitle: 'Need motivation', message: "I'm not seeing results, is this even working?" },
-  { iosIcon: 'moon.fill', androidIcon: 'nightlight', title: "I can't stop eating", subtitle: 'Late night cravings', message: "I can't stop eating, I keep snacking at night" },
-  { iosIcon: 'bolt.fill', androidIcon: 'bolt', title: "Give me something quick", subtitle: 'Fast meal idea', message: "Give me something quick to eat, I only have 10 minutes" },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', titleKey: 'coach.prompt_1_title', subtitleKey: 'coach.prompt_1_sub', message: "I'm starving, what can I eat right now?" },
+  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', titleKey: 'coach.prompt_2_title', subtitleKey: 'coach.prompt_2_sub', message: "I messed up today, what do I do now?" },
+  { iosIcon: 'cart.fill', androidIcon: 'shopping_cart', titleKey: 'coach.prompt_3_title', subtitleKey: 'coach.prompt_3_sub', message: "I'm eating out tonight, how do I stay on track?" },
+  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', titleKey: 'coach.prompt_4_title', subtitleKey: 'coach.prompt_4_sub', message: "I'm not seeing results, is this even working?" },
+  { iosIcon: 'moon.fill', androidIcon: 'nightlight', titleKey: 'coach.prompt_5_title', subtitleKey: 'coach.prompt_5_sub', message: "I can't stop eating, I keep snacking at night" },
+  { iosIcon: 'bolt.fill', androidIcon: 'bolt', titleKey: 'coach.prompt_6_title', subtitleKey: 'coach.prompt_6_sub', message: "Give me something quick to eat, I only have 10 minutes" },
 ];
 
 const CRAVING_CHIPS = [
@@ -110,16 +110,19 @@ function countProductLines(lines: string[]): number {
 
 // ── Action type formatting ───────────────────────────────────────────────────
 function formatActionType(actionType: string): { label: string; color: string } {
-  const map: Record<string, { label: string; color: string }> = {
-    update_goal: { label: 'Goal Change', color: '#3B82F6' },
-    add_food_to_diary: { label: 'Add Food', color: '#10B981' },
-    create_meal: { label: 'Create Meal', color: '#8B5CF6' },
-    create_meal_plan: { label: 'Meal Plan', color: '#F59E0B' },
-    schedule_reminder: { label: 'Reminder', color: '#EC4899' },
-    update_preferences: { label: 'Preferences', color: '#6B7280' },
+  const map: Record<string, { labelKey: string; color: string }> = {
+    update_goal: { labelKey: 'coach.action_update_goal', color: '#3B82F6' },
+    add_food_to_diary: { labelKey: 'coach.action_add_food_to_diary', color: '#10B981' },
+    create_meal: { labelKey: 'coach.action_create_meal', color: '#8B5CF6' },
+    create_meal_plan: { labelKey: 'coach.action_create_meal_plan', color: '#F59E0B' },
+    schedule_reminder: { labelKey: 'coach.action_schedule_reminder', color: '#EC4899' },
+    update_preferences: { labelKey: 'coach.action_update_preferences', color: '#6B7280' },
   };
   const key = (actionType || '').toLowerCase().replace(/\s+/g, '_');
-  return map[key] || { label: actionType || 'Action', color: colors.primary };
+  const entry = map[key];
+  return entry
+    ? { label: i18n.t(entry.labelKey), color: entry.color }
+    : { label: actionType || i18n.t('coach.action_update_goal'), color: colors.primary };
 }
 
 // ── Markdown-like inline parser ──────────────────────────────────────────────
@@ -732,13 +735,16 @@ function getStatusInfo(userStatus: string): { icon: string; label: string } {
 }
 
 function getEvidenceBadge(strength: string): { label: string; color: string; bg: string } {
-  const map: Record<string, { label: string; color: string; bg: string }> = {
-    strong: { label: 'Strong data', color: '#059669', bg: '#D1FAE5' },
-    moderate: { label: 'Moderate data', color: '#D97706', bg: '#FEF3C7' },
-    limited: { label: 'Limited data', color: '#EA580C', bg: '#FFEDD5' },
-    insufficient: { label: 'Insufficient data', color: '#DC2626', bg: '#FEE2E2' },
+  const map: Record<string, { labelKey: string; color: string; bg: string }> = {
+    strong: { labelKey: 'coach.dataStrength_strong', color: '#059669', bg: '#D1FAE5' },
+    moderate: { labelKey: 'coach.dataStrength_moderate', color: '#D97706', bg: '#FEF3C7' },
+    limited: { labelKey: 'coach.dataStrength_limited', color: '#EA580C', bg: '#FFEDD5' },
+    insufficient: { labelKey: 'coach.dataStrength_insufficient', color: '#DC2626', bg: '#FEE2E2' },
   };
-  return map[(strength ?? '').toLowerCase()] ?? { label: 'Moderate data', color: '#D97706', bg: '#FEF3C7' };
+  const entry = map[(strength ?? '').toLowerCase()];
+  return entry
+    ? { label: i18n.t(entry.labelKey), color: entry.color, bg: entry.bg }
+    : { label: i18n.t('coach.dataStrength_moderate'), color: '#D97706', bg: '#FEF3C7' };
 }
 
 function getRelativeTime(isoDate: string): string {
@@ -1173,7 +1179,7 @@ export default function CoachScreen() {
             console.log('[AICoach] Proactive insight: great consistency,', daysLogged, 'days logged');
             if (isMountedRef.current) {
               setProactiveInsight({
-                text: `You've logged ${daysLogged} days this week. Great consistency!`,
+                text: i18n.t('coach.loggedDaysInsight', { days: daysLogged }),
                 cta: 'See my weekly review',
                 ctaMessage: 'Give me my weekly progress review',
               });
@@ -1515,7 +1521,7 @@ export default function CoachScreen() {
 
   const handleQuickAction = useCallback(
     (card: typeof QUICK_ACTION_CARDS[number]) => {
-      console.log('[AICoach] Quick action card tapped:', card.title, '→', card.message);
+      console.log('[AICoach] Quick action card tapped:', card.titleKey, '→', card.message);
       handleSend(card.message);
     },
     [handleSend]
@@ -2063,7 +2069,7 @@ export default function CoachScreen() {
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && proactiveInsight && (
             <View style={[styles.insightCard, { backgroundColor: isDark ? '#1A1D35' : '#F0F4FF', borderLeftColor: colors.primary }]}>
               <Text style={[styles.insightCardLabel, { color: colors.primary }]}>
-                {'COACH INSIGHT'}
+                {t('coach.coachInsightLabel')}
               </Text>
               <View style={styles.insightCardRow}>
                 <Text style={styles.insightCardEmoji}>
