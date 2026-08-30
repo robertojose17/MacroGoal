@@ -19,12 +19,14 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { trackOnboardingEvent } from '@/utils/onboardingAnalytics';
+import { useTranslation } from 'react-i18next';
 
 const BG_IMAGE = require('../../assets/images/23f6da81-f1f7-422e-89ef-d520d6510c09.jpeg');
 
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,7 +45,7 @@ export default function LoginScreen() {
     trackOnboardingEvent('auth_login_attempted');
 
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('common.error'), t('auth.fillAllFields'));
       return;
     }
 
@@ -65,21 +67,19 @@ export default function LoginScreen() {
 
         let errorMessage = error.message;
         if (error.message.includes('Invalid login credentials')) {
-          errorMessage =
-            'Invalid email or password. Please check your credentials and try again.\n\nIf you just signed up, make sure you confirmed your email first.';
+          errorMessage = t('auth.invalidCredentials');
         } else if (error.message.includes('Email not confirmed')) {
-          errorMessage =
-            "Please check your email and click the confirmation link before logging in. Check your spam folder if you don't see it.";
+          errorMessage = t('auth.checkEmailConfirmation');
         }
 
-        Alert.alert('Login Failed', errorMessage);
+        Alert.alert(t('auth.loginFailed'), errorMessage);
         setLoading(false);
         return;
       }
 
       if (!data.user) {
         console.error('[Login] No user returned from login');
-        Alert.alert('Login Failed', 'Failed to log in. Please try again.');
+        Alert.alert(t('auth.loginFailed'), t('errors.generic'));
         setLoading(false);
         return;
       }
@@ -89,7 +89,7 @@ export default function LoginScreen() {
       console.log('[Login] Auth state change will handle navigation via _layout.tsx');
     } catch (error: any) {
       console.error('[Login] Unexpected error:', error);
-      Alert.alert('Error', error.message || 'An unexpected error occurred during login');
+      Alert.alert(t('common.error'), error.message || t('common.unexpectedError'));
     } finally {
       setLoading(false);
     }
@@ -98,16 +98,16 @@ export default function LoginScreen() {
   const handleForgotPassword = () => {
     console.log('[Login] Forgot password tapped');
     if (!email) {
-      Alert.alert('Reset Password', 'Enter your email address above, then tap Forgot Password.');
+      Alert.alert(t('auth.forgotPassword'), 'Enter your email address above, then tap Forgot Password.');
       return;
     }
     supabase.auth
       .resetPasswordForEmail(email.trim().toLowerCase())
       .then(({ error }) => {
         if (error) {
-          Alert.alert('Error', error.message);
+          Alert.alert(t('common.error'), error.message);
         } else {
-          Alert.alert('Check Your Email', 'A password reset link has been sent to your email.');
+          Alert.alert(t('auth.checkYourEmail'), 'A password reset link has been sent to your email.');
         }
       });
   };
@@ -148,11 +148,11 @@ export default function LoginScreen() {
             <View style={styles.cardWrapper}>
               <BlurView intensity={20} tint="dark" style={styles.blurCard}>
                 <View style={styles.cardInner}>
-                  <Text style={styles.cardTitle}>Welcome Back</Text>
+                  <Text style={styles.cardTitle}>{t('auth.loginToAccount')}</Text>
 
                   <TextInput
                     style={styles.input}
-                    placeholder="Email address"
+                    placeholder={t('auth.email')}
                     placeholderTextColor="rgba(255,255,255,0.5)"
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -163,7 +163,7 @@ export default function LoginScreen() {
 
                   <TextInput
                     style={styles.input}
-                    placeholder="Password"
+                    placeholder={t('auth.password')}
                     placeholderTextColor="rgba(255,255,255,0.5)"
                     secureTextEntry
                     autoCapitalize="none"
@@ -173,7 +173,7 @@ export default function LoginScreen() {
                   />
 
                   <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotWrapper}>
-                    <Text style={styles.forgotText}>Forgot Password?</Text>
+                    <Text style={styles.forgotText}>{t('auth.forgotPassword')}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -185,14 +185,14 @@ export default function LoginScreen() {
                     {loading ? (
                       <ActivityIndicator color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.ctaButtonText}>Log In</Text>
+                      <Text style={styles.ctaButtonText}>{t('auth.signIn')}</Text>
                     )}
                   </TouchableOpacity>
 
                   <TouchableOpacity onPress={handleGoToSignUp} style={styles.secondaryWrapper}>
                     <Text style={styles.secondaryText}>
-                      Don&apos;t have an account?{' '}
-                      <Text style={styles.secondaryLink}>Sign Up</Text>
+                      {t('auth.dontHaveAccount')}{' '}
+                      <Text style={styles.secondaryLink}>{t('auth.signUp')}</Text>
                     </Text>
                   </TouchableOpacity>
                 </View>

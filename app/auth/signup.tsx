@@ -21,12 +21,14 @@ import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
 import { trackOnboardingEvent } from '@/utils/onboardingAnalytics';
 import * as Linking from 'expo-linking';
+import { useTranslation } from 'react-i18next';
 
 const BG_IMAGE = require('../../assets/images/23f6da81-f1f7-422e-89ef-d520d6510c09.jpeg');
 
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
