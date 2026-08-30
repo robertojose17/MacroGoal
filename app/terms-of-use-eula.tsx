@@ -7,11 +7,13 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 export default function TermsOfUseEULAScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   console.log('[TermsOfUseEULA] Screen loaded');
 
@@ -35,7 +37,7 @@ export default function TermsOfUseEULAScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          Terms of Use (EULA)
+          {t('termsEula.title')}
         </Text>
         <View style={styles.placeholder} />
       </View>
@@ -46,68 +48,63 @@ export default function TermsOfUseEULAScreen() {
       >
         <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            End User License Agreement
+            {t('termsEula.endUserLicenseAgreement')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This End User License Agreement ("EULA") governs your use of this mobile application and any related services provided by us.
+            {t('termsEula.eulaDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            License Grant
+            {t('termsEula.licenseGrant')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            We grant you a revocable, non-exclusive, non-transferable, limited license to download, install, and use the app strictly in accordance with the terms of this EULA.
+            {t('termsEula.licenseGrantDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Restrictions
+            {t('termsEula.restrictions')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            You agree not to:{'\n'}
-            - Copy, modify, or distribute the app{'\n'}
-            - Reverse engineer or attempt to extract the source code{'\n'}
-            - Remove any copyright or proprietary notices{'\n'}
-            - Use the app for any unlawful purpose{'\n'}
-            - Attempt to gain unauthorized access to any part of the app
+            {t('termsEula.restrictionsDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Intellectual Property
+            {t('termsEula.intellectualProperty')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            The app and all its content, features, and functionality are owned by us and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.
+            {t('termsEula.intellectualPropertyDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Termination
+            {t('termsEula.termination')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This EULA is effective until terminated. Your rights under this EULA will terminate automatically without notice if you fail to comply with any of its terms. Upon termination, you must cease all use of the app and delete all copies from your devices.
+            {t('termsEula.terminationDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Disclaimer of Warranties
+            {t('termsEula.disclaimerOfWarranties')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            The app is provided "as is" without warranty of any kind. We do not warrant that the app will be uninterrupted, error-free, or free of viruses or other harmful components.
+            {t('termsEula.disclaimerDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Limitation of Liability
+            {t('termsEula.limitationOfLiability')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            To the maximum extent permitted by law, we shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly.
+            {t('termsEula.limitationDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Apple App Store EULA
+            {t('termsEula.appleAppStoreEula')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            If you downloaded this app from the Apple App Store, you acknowledge and agree that Apple's standard End User License Agreement also applies to your use of this app.
+            {t('termsEula.appleAppStoreDesc')}
           </Text>
           <TouchableOpacity onPress={handleOpenAppleEULA} style={styles.linkButton}>
             <Text style={[styles.linkText, { color: colors.primary }]}>
-              View Apple's Standard EULA
+              {t('termsEula.viewAppleEula')}
             </Text>
             <IconSymbol
               ios_icon_name="arrow.up.right"
@@ -118,28 +115,28 @@ export default function TermsOfUseEULAScreen() {
           </TouchableOpacity>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Governing Law
+            {t('termsEula.governingLaw')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This EULA shall be governed by and construed in accordance with the laws of the jurisdiction in which we operate, without regard to its conflict of law provisions.
+            {t('termsEula.governingLawDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Changes to This EULA
+            {t('termsEula.changesToEula')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            We reserve the right to modify this EULA at any time. We will notify you of any changes by posting the new EULA on this page and updating the "Last updated" date.
+            {t('termsEula.changesToEulaDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Contact Us
+            {t('termsEula.contactUs')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            If you have any questions about this EULA, please contact us through the app's support section.
+            {t('termsEula.contactUsDesc')}
           </Text>
 
           <Text style={[styles.lastUpdated, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Last updated: {new Date().toLocaleDateString()}
+            {t('termsEula.lastUpdated', { date: new Date().toLocaleDateString() })}
           </Text>
         </View>
       </ScrollView>

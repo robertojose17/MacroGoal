@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -9,6 +10,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { TouchableOpacity } from 'react-native';
 
 export default function TermsOfServiceScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -27,7 +29,7 @@ export default function TermsOfServiceScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          Terms of Service
+          {t('termsOfService.title')}
         </Text>
         <View style={styles.placeholder} />
       </View>
@@ -38,56 +40,56 @@ export default function TermsOfServiceScreen() {
       >
         <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Agreement to Terms
+            {t('termsOfService.agreementToTerms')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            By accessing and using this app, you accept and agree to be bound by the terms and provisions of this agreement.
+            {t('termsOfService.agreementDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Use of Service
+            {t('termsOfService.useOfService')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This app is provided for personal, non-commercial use. You agree to use the service only for lawful purposes and in accordance with these Terms of Service.
+            {t('termsOfService.useOfServiceDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            User Accounts
+            {t('termsOfService.userAccounts')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use of your account.
+            {t('termsOfService.userAccountsDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Health Disclaimer
+            {t('termsOfService.healthDisclaimer')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This app provides nutritional tracking and information for general purposes only. It is not intended as medical advice. Always consult with a qualified healthcare professional before making any changes to your diet or exercise routine.
+            {t('termsOfService.healthDisclaimerDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Subscription Terms
+            {t('termsOfService.subscriptionTerms')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Premium subscriptions are billed on a recurring basis. You may cancel your subscription at any time, and you will continue to have access to premium features until the end of your current billing period.
+            {t('termsOfService.subscriptionTermsDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Limitation of Liability
+            {t('termsOfService.limitationOfLiability')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            We shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the service.
+            {t('termsOfService.limitationDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Changes to Terms
+            {t('termsOfService.changesToTerms')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            We reserve the right to modify these terms at any time. We will notify users of any material changes via email or in-app notification.
+            {t('termsOfService.changesToTermsDesc')}
           </Text>
 
           <Text style={[styles.lastUpdated, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Last updated: {new Date().toLocaleDateString()}
+            {t('termsOfService.lastUpdated', { date: new Date().toLocaleDateString() })}
           </Text>
         </View>
       </ScrollView>

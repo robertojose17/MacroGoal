@@ -6,6 +6,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
+import { useTranslation } from 'react-i18next';
 
 interface PremiumFeatureGateProps {
   children: React.ReactNode;
@@ -27,13 +28,14 @@ interface PremiumFeatureGateProps {
  */
 export function PremiumFeatureGate({ 
   children, 
-  featureName = 'This feature',
+  featureName,
   fallbackMessage,
 }: PremiumFeatureGateProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isPremium, loading } = usePremium();
+  const { t } = useTranslation();
 
   if (loading) {
     return (
@@ -47,7 +49,8 @@ export function PremiumFeatureGate({
     return <>{children}</>;
   }
 
-  const defaultMessage = `${featureName} is a premium feature. Upgrade to unlock advanced analytics, custom recipes, and more!`;
+  const resolvedFeatureName = featureName ?? t('premium.thisFeature');
+  const defaultMessage = t('premium.featureGateMessage', { featureName: resolvedFeatureName });
   const message = fallbackMessage || defaultMessage;
 
   return (
@@ -62,7 +65,7 @@ export function PremiumFeatureGate({
       </View>
       
       <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-        Premium Feature
+        {t('premium.premiumFeature')}
       </Text>
       
       <Text style={[styles.message, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -79,7 +82,7 @@ export function PremiumFeatureGate({
           size={20}
           color="#FFFFFF"
         />
-        <Text style={styles.upgradeButtonText}>Upgrade to Premium</Text>
+        <Text style={styles.upgradeButtonText}>{t('premium.upgradeToPremium')}</Text>
       </TouchableOpacity>
     </View>
   );

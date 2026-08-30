@@ -18,6 +18,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { supabase } from '@/lib/supabase/client';
 import { checkCodeAvailability, submitAffiliateApplication } from '@/utils/affiliateApi';
+import { useTranslation } from 'react-i18next';
 
 const BLUE = '#3b82f6';
 
@@ -25,6 +26,7 @@ export default function AffiliateApplyScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -70,7 +72,7 @@ export default function AffiliateApplyScreen() {
     if (normalized.length < 3) {
       if (normalized.length > 0) {
         setCodeStatus('error');
-        setCodeError('Code must be at least 3 characters');
+        setCodeError(t('affiliateApply.codeMinLength'));
       }
       return;
     }
@@ -94,35 +96,35 @@ export default function AffiliateApplyScreen() {
     console.log('[AffiliateApply] Submit button pressed');
 
     if (!fullName.trim()) {
-      Alert.alert('Required', 'Please enter your full name.');
+      Alert.alert(t('affiliateApply.requiredTitle'), t('affiliateApply.enterFullName'));
       return;
     }
     if (!email.trim()) {
-      Alert.alert('Required', 'Please enter your email.');
+      Alert.alert(t('affiliateApply.requiredTitle'), t('affiliateApply.enterEmail'));
       return;
     }
     if (!socialHandle.trim()) {
-      Alert.alert('Required', 'Please enter your social media username or URL.');
+      Alert.alert(t('affiliateApply.requiredTitle'), t('affiliateApply.enterSocialHandle'));
       return;
     }
     if (!desiredCode || desiredCode.length < 3) {
-      Alert.alert('Required', 'Please enter a desired affiliate code (min 3 characters).');
+      Alert.alert(t('affiliateApply.requiredTitle'), t('affiliateApply.enterAffiliateCode'));
       return;
     }
     if (codeStatus === 'taken') {
-      Alert.alert('Code Taken', 'That code is already taken. Please choose another.');
+      Alert.alert(t('affiliateApply.codeTakenTitle'), t('affiliateApply.codeTakenMessage'));
       return;
     }
     if (codeStatus === 'checking') {
-      Alert.alert('Please Wait', 'Still checking code availability. Please wait a moment.');
+      Alert.alert(t('affiliateApply.pleaseWaitTitle'), t('affiliateApply.checkingCodeMessage'));
       return;
     }
     if (!paypalEmail.trim()) {
-      Alert.alert('Required', 'Please enter your PayPal email for payouts.');
+      Alert.alert(t('affiliateApply.requiredTitle'), t('affiliateApply.enterPaypalEmail'));
       return;
     }
     if (!termsChecked) {
-      Alert.alert('Required', 'Please accept the Creator Program Terms to continue.');
+      Alert.alert(t('affiliateApply.requiredTitle'), t('affiliateApply.acceptTerms'));
       return;
     }
 
@@ -140,17 +142,17 @@ export default function AffiliateApplyScreen() {
       if (result.success) {
         console.log('[AffiliateApply] Application submitted successfully');
         Alert.alert(
-          'Application Submitted!',
-          "We'll review your application within 2-3 business days.",
-          [{ text: 'OK', onPress: () => router.back() }]
+          t('affiliateApply.submittedTitle'),
+          t('affiliateApply.submittedMessage'),
+          [{ text: t('affiliateApply.ok'), onPress: () => router.back() }]
         );
       } else {
         console.error('[AffiliateApply] Submission failed:', result.error);
-        Alert.alert('Error', result.error || 'Failed to submit application. Please try again.');
+        Alert.alert(t('affiliateApply.errorTitle'), result.error || t('affiliateApply.failedToSubmit'));
       }
     } catch (e) {
       console.error('[AffiliateApply] Unexpected error:', e);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert(t('affiliateApply.errorTitle'), t('affiliateApply.somethingWentWrong'));
     } finally {
       setSubmitting(false);
     }
@@ -170,9 +172,9 @@ export default function AffiliateApplyScreen() {
     mutedColor;
 
   const codeStatusText =
-    codeStatus === 'available' ? '✓ Available' :
-    codeStatus === 'taken' ? '✗ Already taken' :
-    codeStatus === 'checking' ? 'Checking...' :
+    codeStatus === 'available' ? t('affiliateApply.codeAvailable') :
+    codeStatus === 'taken' ? t('affiliateApply.codeTaken') :
+    codeStatus === 'checking' ? t('affiliateApply.codeChecking') :
     codeStatus === 'error' ? codeError :
     '';
 
@@ -193,29 +195,29 @@ export default function AffiliateApplyScreen() {
           {/* Intro */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <Text style={[styles.introTitle, { color: textColor }]}>
-              {'🌟 Affiliate Program Application'}
+              {t('affiliateApply.introTitle')}
             </Text>
             <Text style={[styles.introBody, { color: mutedColor }]}>
-              Fill out the form below and our team will review your application within 2-3 business days.
+              {t('affiliateApply.introBody')}
             </Text>
           </View>
 
           {/* Contact Info */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Contact Information</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('affiliateApply.contactInfoTitle')}</Text>
 
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Full Name *</Text>
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>{t('affiliateApply.fullNameLabel')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
               value={fullName}
               onChangeText={setFullName}
-              placeholder="Your full name"
+              placeholder={t('affiliateApply.fullNamePlaceholder')}
               placeholderTextColor={mutedColor}
               autoCapitalize="words"
               returnKeyType="next"
             />
 
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Email *</Text>
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>{t('affiliateApply.emailLabel')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
               value={email}
@@ -230,22 +232,22 @@ export default function AffiliateApplyScreen() {
 
           {/* Social & Code */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Affiliate Details</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('affiliateApply.affiliateDetailsTitle')}</Text>
 
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Social Media Username or URL *</Text>
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>{t('affiliateApply.socialHandleLabel')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
               value={socialHandle}
               onChangeText={setSocialHandle}
-              placeholder="@yourhandle or https://instagram.com/you"
+              placeholder={t('affiliateApply.socialHandlePlaceholder')}
               placeholderTextColor={mutedColor}
               autoCapitalize="none"
               returnKeyType="next"
             />
 
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>Desired Affiliate Code *</Text>
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>{t('affiliateApply.desiredCodeLabel')}</Text>
             <Text style={[styles.fieldHint, { color: mutedColor }]}>
-              Letters and numbers only, 3-20 characters. This is the code your followers will use.
+              {t('affiliateApply.desiredCodeHint')}
             </Text>
             <View style={styles.codeInputRow}>
               <TextInput
@@ -276,11 +278,11 @@ export default function AffiliateApplyScreen() {
 
           {/* PayPal */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Payout Information</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('affiliateApply.payoutInfoTitle')}</Text>
 
-            <Text style={[styles.fieldLabel, { color: mutedColor }]}>PayPal Email *</Text>
+            <Text style={[styles.fieldLabel, { color: mutedColor }]}>{t('affiliateApply.paypalEmailLabel')}</Text>
             <Text style={[styles.fieldHint, { color: mutedColor }]}>
-              Commissions are paid via PayPal. Minimum payout is $25.
+              {t('affiliateApply.paypalEmailHint')}
             </Text>
             <TextInput
               style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
@@ -296,15 +298,9 @@ export default function AffiliateApplyScreen() {
 
           {/* Terms */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Terms & Conditions</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('affiliateApply.termsTitle')}</Text>
             <Text style={[styles.termsBody, { color: mutedColor }]}>
-              By applying, you agree to the Macro Goal Creator Program Terms including:
-              {'\n\n'}• 50% commission on first qualifying purchase (net of app store fees)
-              {'\n'}• 35-day hold period before commissions become available
-              {'\n'}• Minimum $25 balance required for payout
-              {'\n'}• Payouts processed manually via PayPal
-              {'\n'}• No self-referrals or fraudulent activity
-              {'\n'}• Program terms may change at any time
+              {t('affiliateApply.termsSummary')}
             </Text>
 
             <TouchableOpacity
@@ -326,7 +322,7 @@ export default function AffiliateApplyScreen() {
                 )}
               </View>
               <Text style={[styles.checkboxLabel, { color: textColor }]}>
-                I have read and agree to the Macro Goal Creator Program Terms
+                {t('affiliateApply.termsCheckboxLabel')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -341,7 +337,7 @@ export default function AffiliateApplyScreen() {
             {submitting ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.submitButtonText}>Submit Application</Text>
+              <Text style={styles.submitButtonText}>{t('affiliateApply.submitButton')}</Text>
             )}
           </TouchableOpacity>
 

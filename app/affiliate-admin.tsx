@@ -12,6 +12,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -75,6 +76,7 @@ export default function AffiliateAdminScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<TabKey>('applications');
   const [loading, setLoading] = useState(true);
@@ -149,7 +151,7 @@ export default function AffiliateAdminScreen() {
     try {
       const result = await adminApproveApplication(applicationId);
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to approve application.');
+        Alert.alert(t('affiliateAdmin.errorTitle'), result.error || t('affiliateAdmin.failedToApprove'));
         return;
       }
       console.log('[AffiliateAdmin] Application approved, triggering Apple code creation with plan:', plan);
@@ -165,12 +167,12 @@ export default function AffiliateAdminScreen() {
           const failedPlan: 'annual' | 'monthly' = !annualOk ? 'annual' : 'monthly';
           const profileId = result.profile.id;
           Alert.alert(
-            'Partial Success',
-            msg + ' You can retry the failed plan from the Affiliates tab.',
+            t('affiliateAdmin.partialSuccess'),
+            msg + ' ' + t('affiliateAdmin.retryFromAffiliatesTab'),
             [
-              { text: 'OK' },
+              { text: t('affiliateAdmin.ok') },
               {
-                text: 'Retry Now',
+                text: t('affiliateAdmin.retryNow'),
                 onPress: () => {
                   console.log('[AffiliateAdmin] Retry partial failure pressed, plan:', failedPlan);
                   handleRetryApple(profileId, failedPlan);
@@ -182,10 +184,10 @@ export default function AffiliateAdminScreen() {
           return;
         }
       }
-      Alert.alert('Approved!', 'Application approved and Apple code creation triggered.');
+      Alert.alert(t('affiliateAdmin.approvedTitle'), t('affiliateAdmin.approvedMessage'));
       loadDashboard();
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong.');
+      Alert.alert(t('affiliateAdmin.errorTitle'), t('affiliateAdmin.somethingWentWrong'));
     } finally {
       setLoaderFor(applicationId, false);
     }
@@ -199,13 +201,13 @@ export default function AffiliateAdminScreen() {
     try {
       const result = await adminRejectApplication(rejectingId, rejectNotes.trim() || undefined);
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to reject application.');
+        Alert.alert(t('affiliateAdmin.errorTitle'), result.error || t('affiliateAdmin.failedToReject'));
         return;
       }
-      Alert.alert('Rejected', 'Application has been rejected.');
+      Alert.alert(t('affiliateAdmin.rejectedTitle'), t('affiliateAdmin.rejectedMessage'));
       loadDashboard();
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong.');
+      Alert.alert(t('affiliateAdmin.errorTitle'), t('affiliateAdmin.somethingWentWrong'));
     } finally {
       setLoaderFor(rejectingId, false);
       setRejectingId(null);
@@ -219,13 +221,13 @@ export default function AffiliateAdminScreen() {
     try {
       const result = await adminCreateAppleCode(profileId, true, plan);
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to retry Apple code creation.');
+        Alert.alert(t('affiliateAdmin.errorTitle'), result.error || t('affiliateAdmin.failedToRetryApple'));
         return;
       }
-      Alert.alert('Retried', 'Apple code creation has been retried.');
+      Alert.alert(t('affiliateAdmin.retriedTitle'), t('affiliateAdmin.retriedMessage'));
       loadDashboard();
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong.');
+      Alert.alert(t('affiliateAdmin.errorTitle'), t('affiliateAdmin.somethingWentWrong'));
     } finally {
       setLoaderFor('apple_' + profileId, false);
     }
@@ -237,13 +239,13 @@ export default function AffiliateAdminScreen() {
     try {
       const result = await adminCreatePayout(profileId, commissionIds);
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to create payout.');
+        Alert.alert(t('affiliateAdmin.errorTitle'), result.error || t('affiliateAdmin.failedToCreatePayout'));
         return;
       }
-      Alert.alert('Payout Created', 'Payout has been created successfully.');
+      Alert.alert(t('affiliateAdmin.payoutCreatedTitle'), t('affiliateAdmin.payoutCreatedMessage'));
       loadDashboard();
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong.');
+      Alert.alert(t('affiliateAdmin.errorTitle'), t('affiliateAdmin.somethingWentWrong'));
     } finally {
       setLoaderFor('payout_' + profileId, false);
     }
@@ -252,12 +254,12 @@ export default function AffiliateAdminScreen() {
   const handleRemoveAffiliate = (profileId: string, affiliateCode: string) => {
     console.log('[AffiliateAdmin] Remove affiliate button pressed:', profileId, affiliateCode);
     Alert.alert(
-      'Remove Affiliate',
-      `Are you sure you want to remove ${affiliateCode} from the program? Their code will be deactivated.`,
+      t('affiliateAdmin.removeAffiliateTitle'),
+      t('affiliateAdmin.removeAffiliateConfirm', { code: affiliateCode }),
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[AffiliateAdmin] Remove affiliate cancelled') },
+        { text: t('affiliateAdmin.cancel'), style: 'cancel', onPress: () => console.log('[AffiliateAdmin] Remove affiliate cancelled') },
         {
-          text: 'Remove',
+          text: t('affiliateAdmin.remove'),
           style: 'destructive',
           onPress: async () => {
             console.log('[AffiliateAdmin] Remove affiliate confirmed:', profileId);
@@ -265,13 +267,13 @@ export default function AffiliateAdminScreen() {
             try {
               const result = await adminRemoveAffiliate(profileId);
               if (!result.success) {
-                Alert.alert('Error', result.error || 'Failed to remove affiliate.');
+                Alert.alert(t('affiliateAdmin.errorTitle'), result.error || t('affiliateAdmin.failedToRemove'));
                 return;
               }
-              Alert.alert('Removed', 'Affiliate has been removed from the program.');
+              Alert.alert(t('affiliateAdmin.removedTitle'), t('affiliateAdmin.removedMessage'));
               loadDashboard();
             } catch (e) {
-              Alert.alert('Error', 'Something went wrong.');
+              Alert.alert(t('affiliateAdmin.errorTitle'), t('affiliateAdmin.somethingWentWrong'));
             } finally {
               setLoaderFor('remove_' + profileId, false);
             }
@@ -283,7 +285,7 @@ export default function AffiliateAdminScreen() {
 
   const handleMarkPaidConfirm = async () => {
     if (!markPaidPayoutId || !paypalTxnId.trim()) {
-      Alert.alert('Required', 'Please enter the PayPal transaction ID.');
+      Alert.alert(t('affiliateAdmin.requiredTitle'), t('affiliateAdmin.enterPaypalTxnId'));
       return;
     }
     console.log('[AffiliateAdmin] Mark payout paid confirmed:', markPaidPayoutId, 'txn:', paypalTxnId, 'paypal:', markPaidPaypalEmail);
@@ -292,13 +294,13 @@ export default function AffiliateAdminScreen() {
     try {
       const result = await adminMarkPayoutPaid(markPaidPayoutId, paypalTxnId.trim(), paypalNote.trim() || undefined);
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to mark payout as paid.');
+        Alert.alert(t('affiliateAdmin.errorTitle'), result.error || t('affiliateAdmin.failedToMarkPaid'));
         return;
       }
-      Alert.alert('Marked Paid', 'Payout has been marked as paid.');
+      Alert.alert(t('affiliateAdmin.markedPaidTitle'), t('affiliateAdmin.markedPaidMessage'));
       loadDashboard();
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong.');
+      Alert.alert(t('affiliateAdmin.errorTitle'), t('affiliateAdmin.somethingWentWrong'));
     } finally {
       setLoaderFor('markpaid_' + markPaidPayoutId, false);
       setMarkPaidPayoutId(null);
@@ -316,10 +318,10 @@ export default function AffiliateAdminScreen() {
   const inputBg = isDark ? '#111' : '#F0F2F7';
 
   const TABS: { key: TabKey; label: string }[] = [
-    { key: 'applications', label: 'Applications' },
-    { key: 'affiliates', label: 'Affiliates' },
-    { key: 'payouts', label: 'Payouts' },
-    { key: 'transactions', label: 'Transactions' },
+    { key: 'applications', label: t('affiliateAdmin.tabApplications') },
+    { key: 'affiliates', label: t('affiliateAdmin.tabAffiliates') },
+    { key: 'payouts', label: t('affiliateAdmin.tabPayouts') },
+    { key: 'transactions', label: t('affiliateAdmin.tabTransactions') },
   ];
 
   const applications: any[] = dashboard?.applications ?? [];
@@ -386,7 +388,7 @@ export default function AffiliateAdminScreen() {
           <>
             {applications.length === 0 ? (
               <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Text style={[styles.emptyText, { color: mutedColor }]}>No applications yet</Text>
+                <Text style={[styles.emptyText, { color: mutedColor }]}>{t('affiliateAdmin.noApplicationsYet')}</Text>
               </View>
             ) : (
               applications.map((app: any) => {
@@ -404,7 +406,7 @@ export default function AffiliateAdminScreen() {
                         ) : null}
                         {app.desired_code ? (
                           <Text style={[styles.appCode, { color: BLUE }]}>
-                            {'Code: '}
+                            {t('affiliateAdmin.code')}
                             {app.desired_code}
                           </Text>
                         ) : null}
@@ -426,7 +428,7 @@ export default function AffiliateAdminScreen() {
                           {isLoading ? (
                             <ActivityIndicator size="small" color="#FFF" />
                           ) : (
-                            <Text style={styles.actionBtnText}>Approve</Text>
+                            <Text style={styles.actionBtnText}>{t('affiliateAdmin.approve')}</Text>
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -440,7 +442,7 @@ export default function AffiliateAdminScreen() {
                           disabled={isLoading}
                           activeOpacity={0.85}
                         >
-                          <Text style={styles.actionBtnText}>Reject</Text>
+                          <Text style={styles.actionBtnText}>{t('affiliateAdmin.reject')}</Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -456,7 +458,7 @@ export default function AffiliateAdminScreen() {
           <>
             {affiliates.length === 0 ? (
               <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Text style={[styles.emptyText, { color: mutedColor }]}>No approved affiliates yet</Text>
+                <Text style={[styles.emptyText, { color: mutedColor }]}>{t('affiliateAdmin.noApprovedAffiliatesYet')}</Text>
               </View>
             ) : (
               affiliates.map((aff: any) => {
@@ -466,7 +468,7 @@ export default function AffiliateAdminScreen() {
                 const isRetrying = actionLoading['apple_' + aff.id];
                 const isRemoving = actionLoading['remove_' + aff.id];
                 const planType: string = aff.plan_type ?? 'both';
-                const planLabel = planType === 'annual' ? 'Annual' : planType === 'monthly' ? 'Monthly' : 'Both';
+                const planLabel = planType === 'annual' ? t('affiliateAdmin.planAnnualShort') : planType === 'monthly' ? t('affiliateAdmin.planMonthlyShort') : t('affiliateAdmin.planBothShort');
                 const planColor = planType === 'annual' ? BLUE : planType === 'monthly' ? GREEN : GOLD;
                 // Detect per-plan partial failures
                 const annualFailed = aff.annual_code_status === 'failed';
@@ -491,7 +493,7 @@ export default function AffiliateAdminScreen() {
                         </View>
                         <Text style={[styles.affEmail, { color: mutedColor }]}>{aff.email}</Text>
                         <Text style={[styles.affRate, { color: mutedColor }]}>
-                          {'Commission: '}
+                          {t('affiliateAdmin.commission')}
                           {aff.commission_rate ?? 50}
                           {'%'}
                         </Text>
@@ -505,22 +507,22 @@ export default function AffiliateAdminScreen() {
                         {isRemoving ? (
                           <ActivityIndicator size="small" color={RED} />
                         ) : (
-                          <Text style={styles.removeBtnText}>Remove</Text>
+                          <Text style={styles.removeBtnText}>{t('affiliateAdmin.remove')}</Text>
                         )}
                       </TouchableOpacity>
                     </View>
 
                     <View style={styles.affEarningsRow}>
                       <View style={styles.affEarningsCell}>
-                        <Text style={[styles.affEarningsLabel, { color: mutedColor }]}>Pending</Text>
+                        <Text style={[styles.affEarningsLabel, { color: mutedColor }]}>{t('affiliateAdmin.pending')}</Text>
                         <Text style={[styles.affEarningsValue, { color: GOLD }]}>{formatMoney(aff.earnings_pending)}</Text>
                       </View>
                       <View style={styles.affEarningsCell}>
-                        <Text style={[styles.affEarningsLabel, { color: mutedColor }]}>Available</Text>
+                        <Text style={[styles.affEarningsLabel, { color: mutedColor }]}>{t('affiliateAdmin.available')}</Text>
                         <Text style={[styles.affEarningsValue, { color: GREEN }]}>{formatMoney(aff.earnings_available)}</Text>
                       </View>
                       <View style={styles.affEarningsCell}>
-                        <Text style={[styles.affEarningsLabel, { color: mutedColor }]}>Paid</Text>
+                        <Text style={[styles.affEarningsLabel, { color: mutedColor }]}>{t('affiliateAdmin.paid')}</Text>
                         <Text style={[styles.affEarningsValue, { color: BLUE }]}>{formatMoney(aff.earnings_paid)}</Text>
                       </View>
                     </View>
@@ -530,19 +532,18 @@ export default function AffiliateAdminScreen() {
                       <View style={[styles.readyToPayBox, { backgroundColor: GREEN + '12', borderColor: GREEN + '44' }]}>
                         <View style={styles.readyToPayHeader}>
                           <Ionicons name="cash-outline" size={15} color={GREEN} />
-                          <Text style={[styles.readyToPayTitle, { color: GREEN }]}>Ready to Pay</Text>
+                          <Text style={[styles.readyToPayTitle, { color: GREEN }]}>{t('affiliateAdmin.readyToPay')}</Text>
                           <Text style={[styles.readyToPayAmount, { color: GREEN }]}>{formatMoney(aff.earnings_available)}</Text>
                         </View>
                         <View style={styles.readyToPayPaypalRow}>
                           <Ionicons name="logo-paypal" size={14} color={mutedColor} />
                           <Text style={[styles.readyToPayPaypal, { color: textColor }]} selectable>
-                            {aff.paypal_email || 'No PayPal email on file'}
+                            {aff.paypal_email || t('affiliateAdmin.noPaypalEmailOnFile')}
                           </Text>
                         </View>
                         <Text style={[styles.readyToPayCount, { color: mutedColor }]}>
                           {availableCommissionIds.length}
-                          {' available commission'}
-                          {availableCommissionIds.length !== 1 ? 's' : ''}
+                          {' '}{t('affiliateAdmin.availableCommissionsCount', { count: availableCommissionIds.length })}
                         </Text>
                         <TouchableOpacity
                           style={[styles.createPayoutBtnInline, { backgroundColor: GREEN, opacity: isCreatingPayout ? 0.6 : 1 }]}
@@ -556,7 +557,7 @@ export default function AffiliateAdminScreen() {
                           {isCreatingPayout ? (
                             <ActivityIndicator size="small" color="#FFF" />
                           ) : (
-                            <Text style={styles.createPayoutBtnText}>Create Payout</Text>
+                            <Text style={styles.createPayoutBtnText}>{t('affiliateAdmin.createPayout')}</Text>
                           )}
                         </TouchableOpacity>
                       </View>
@@ -572,7 +573,7 @@ export default function AffiliateAdminScreen() {
                         {isRetrying ? (
                           <ActivityIndicator size="small" color={GOLD} />
                         ) : (
-                          <Text style={[styles.retryBtnText, { color: GOLD }]}>Retry Apple Code</Text>
+                          <Text style={[styles.retryBtnText, { color: GOLD }]}>{t('affiliateAdmin.retryAppleCode')}</Text>
                         )}
                       </TouchableOpacity>
                     )}
@@ -589,7 +590,7 @@ export default function AffiliateAdminScreen() {
                         {isRetrying ? (
                           <ActivityIndicator size="small" color={RED} />
                         ) : (
-                          <Text style={[styles.retryBtnText, { color: RED }]}>Retry Annual Code</Text>
+                          <Text style={[styles.retryBtnText, { color: RED }]}>{t('affiliateAdmin.retryAnnualCode')}</Text>
                         )}
                       </TouchableOpacity>
                     )}
@@ -606,14 +607,14 @@ export default function AffiliateAdminScreen() {
                         {isRetrying ? (
                           <ActivityIndicator size="small" color={RED} />
                         ) : (
-                          <Text style={[styles.retryBtnText, { color: RED }]}>Retry Monthly Code</Text>
+                          <Text style={[styles.retryBtnText, { color: RED }]}>{t('affiliateAdmin.retryMonthlyCode')}</Text>
                         )}
                       </TouchableOpacity>
                     )}
                     {appleStatus === 'activating' && (
                       <View style={styles.activatingRow}>
                         <ActivityIndicator size="small" color={BLUE} />
-                        <Text style={[styles.activatingText, { color: BLUE }]}>Activating with Apple...</Text>
+                        <Text style={[styles.activatingText, { color: BLUE }]}>{t('affiliateAdmin.activatingWithApple')}</Text>
                       </View>
                     )}
                   </View>
@@ -631,7 +632,7 @@ export default function AffiliateAdminScreen() {
               <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 <View style={styles.cardHeaderRow}>
                   <Ionicons name="cash-outline" size={18} color={GREEN} />
-                  <Text style={[styles.cardTitle, { color: textColor }]}>Ready to Pay Out</Text>
+                  <Text style={[styles.cardTitle, { color: textColor }]}>{t('affiliateAdmin.readyToPayOut')}</Text>
                 </View>
                 {affiliatesWithAvailableBalance.map((aff: any) => {
                   const availableCommissions = (aff.commissions ?? []).filter((c: any) => c.status === 'available');
@@ -641,11 +642,11 @@ export default function AffiliateAdminScreen() {
                     <View key={aff.id} style={[styles.payoutAffRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.payoutAffCode, { color: BLUE }]}>{aff.affiliate_code}</Text>
-                        <Text style={[styles.payoutAffPaypal, { color: mutedColor }]}>{aff.paypal_email || 'No PayPal email'}</Text>
+                        <Text style={[styles.payoutAffPaypal, { color: mutedColor }]}>{aff.paypal_email || t('affiliateAdmin.noPaypalEmail')}</Text>
                         <Text style={[styles.payoutAffAmount, { color: GREEN }]}>{formatMoney(aff.earnings_available)}</Text>
                         <Text style={[styles.payoutAffCommCount, { color: mutedColor }]}>
                           {commissionIds.length}
-                          {' available commissions'}
+                          {' '}{t('affiliateAdmin.availableCommissions')}
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -657,7 +658,7 @@ export default function AffiliateAdminScreen() {
                         {isCreating ? (
                           <ActivityIndicator size="small" color="#FFF" />
                         ) : (
-                          <Text style={styles.createPayoutBtnText}>Create Payout</Text>
+                          <Text style={styles.createPayoutBtnText}>{t('affiliateAdmin.createPayout')}</Text>
                         )}
                       </TouchableOpacity>
                     </View>
@@ -670,10 +671,10 @@ export default function AffiliateAdminScreen() {
             <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               <View style={styles.cardHeaderRow}>
                 <Ionicons name="list-outline" size={18} color={mutedColor} />
-                <Text style={[styles.cardTitle, { color: textColor }]}>All Payouts</Text>
+                <Text style={[styles.cardTitle, { color: textColor }]}>{t('affiliateAdmin.allPayouts')}</Text>
               </View>
               {payouts.length === 0 ? (
-                <Text style={[styles.emptyText, { color: mutedColor }]}>No payouts yet</Text>
+                <Text style={[styles.emptyText, { color: mutedColor }]}>{t('affiliateAdmin.noPayoutsYet')}</Text>
               ) : (
                 payouts.map((payout: any) => {
                   const sc = statusColor(payout.status);
@@ -696,7 +697,7 @@ export default function AffiliateAdminScreen() {
                         ) : null}
                         {payout.paypal_transaction_id ? (
                           <Text style={[styles.payoutTxn, { color: mutedColor }]}>
-                            {'Txn: '}
+                            {t('affiliateAdmin.txn')}
                             {payout.paypal_transaction_id}
                           </Text>
                         ) : null}
@@ -722,7 +723,7 @@ export default function AffiliateAdminScreen() {
                             {isMarkingPaid ? (
                               <ActivityIndicator size="small" color="#FFF" />
                             ) : (
-                              <Text style={styles.markPaidBtnText}>Mark as Paid</Text>
+                              <Text style={styles.markPaidBtnText}>{t('affiliateAdmin.markAsPaid')}</Text>
                             )}
                           </TouchableOpacity>
                         )}
@@ -758,7 +759,7 @@ export default function AffiliateAdminScreen() {
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.filterChipText, { color: isActive ? '#FFF' : mutedColor }]}>
-                      {f === 'all' ? 'All' : statusLabel(f)}
+                      {f === 'all' ? t('affiliateAdmin.all') : statusLabel(f)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -767,7 +768,7 @@ export default function AffiliateAdminScreen() {
 
             <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               {filteredTransactions.length === 0 ? (
-                <Text style={[styles.emptyText, { color: mutedColor }]}>No transactions</Text>
+                <Text style={[styles.emptyText, { color: mutedColor }]}>{t('affiliateAdmin.noTransactions')}</Text>
               ) : (
                 filteredTransactions.map((tx: any, i: number) => {
                   const sc = statusColor(tx.status);
@@ -806,13 +807,13 @@ export default function AffiliateAdminScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.modalTitle, { color: textColor }]}>Reject Application</Text>
+            <Text style={[styles.modalTitle, { color: textColor }]}>{t('affiliateAdmin.rejectApplicationTitle')}</Text>
             <Text style={[styles.modalSubtitle, { color: mutedColor }]}>
-              Optionally add notes for the applicant.
+              {t('affiliateAdmin.rejectApplicationSubtitle')}
             </Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: inputBg, borderColor: cardBorder, color: textColor }]}
-              placeholder="Admin notes (optional)"
+              placeholder={t('affiliateAdmin.adminNotesPlaceholder')}
               placeholderTextColor={mutedColor}
               value={rejectNotes}
               onChangeText={setRejectNotes}
@@ -829,14 +830,14 @@ export default function AffiliateAdminScreen() {
                 }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.modalBtnText, { color: mutedColor }]}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: mutedColor }]}>{t('affiliateAdmin.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: RED }]}
                 onPress={handleRejectConfirm}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Reject</Text>
+                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>{t('affiliateAdmin.reject')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -852,15 +853,15 @@ export default function AffiliateAdminScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.modalTitle, { color: textColor }]}>Select Plan</Text>
+            <Text style={[styles.modalTitle, { color: textColor }]}>{t('affiliateAdmin.selectPlanTitle')}</Text>
             <Text style={[styles.modalSubtitle, { color: mutedColor }]}>
-              Which plan should this affiliate's code apply to?
+              {t('affiliateAdmin.selectPlanSubtitle')}
             </Text>
             {(['both', 'annual', 'monthly'] as const).map(plan => {
               const labels: Record<string, string> = {
-                both: 'Both (Annual + Monthly)',
-                annual: 'Annual only',
-                monthly: 'Monthly only',
+                both: t('affiliateAdmin.planBoth'),
+                annual: t('affiliateAdmin.planAnnual'),
+                monthly: t('affiliateAdmin.planMonthly'),
               };
               const isSelected = selectedPlan === plan;
               return (
@@ -898,14 +899,14 @@ export default function AffiliateAdminScreen() {
                 }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.modalBtnText, { color: mutedColor }]}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: mutedColor }]}>{t('affiliateAdmin.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: GREEN }]}
                 onPress={handleApproveConfirm}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Approve</Text>
+                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>{t('affiliateAdmin.approve')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -921,24 +922,24 @@ export default function AffiliateAdminScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[styles.modalTitle, { color: textColor }]}>Confirm PayPal Payment</Text>
+            <Text style={[styles.modalTitle, { color: textColor }]}>{t('affiliateAdmin.confirmPaypalPaymentTitle')}</Text>
             {markPaidPaypalEmail ? (
               <View style={[styles.modalPaypalBox, { backgroundColor: BLUE + '12', borderColor: BLUE + '44' }]}>
                 <Ionicons name="logo-paypal" size={16} color={BLUE} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.modalPaypalLabel, { color: mutedColor }]}>Send payment to</Text>
+                  <Text style={[styles.modalPaypalLabel, { color: mutedColor }]}>{t('affiliateAdmin.sendPaymentTo')}</Text>
                   <Text style={[styles.modalPaypalEmail, { color: BLUE }]} selectable>{markPaidPaypalEmail}</Text>
                 </View>
               </View>
             ) : null}
             <Text style={[styles.modalSubtitle, { color: mutedColor }]}>
               {markPaidPaypalEmail
-                ? `Enter the PayPal Transaction ID after sending the payment to ${markPaidPaypalEmail}.`
-                : 'Enter the PayPal Transaction ID after sending the payment.'}
+                ? t('affiliateAdmin.enterTxnIdWithEmail', { email: markPaidPaypalEmail })
+                : t('affiliateAdmin.enterTxnId')}
             </Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: inputBg, borderColor: cardBorder, color: textColor }]}
-              placeholder="PayPal Transaction ID *"
+              placeholder={t('affiliateAdmin.paypalTxnIdPlaceholder')}
               placeholderTextColor={mutedColor}
               value={paypalTxnId}
               onChangeText={setPaypalTxnId}
@@ -947,7 +948,7 @@ export default function AffiliateAdminScreen() {
             />
             <TextInput
               style={[styles.modalInput, { backgroundColor: inputBg, borderColor: cardBorder, color: textColor, marginTop: spacing.sm }]}
-              placeholder="Note (optional)"
+              placeholder={t('affiliateAdmin.notePlaceholder')}
               placeholderTextColor={mutedColor}
               value={paypalNote}
               onChangeText={setPaypalNote}
@@ -961,14 +962,14 @@ export default function AffiliateAdminScreen() {
                 }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.modalBtnText, { color: mutedColor }]}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: mutedColor }]}>{t('affiliateAdmin.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: BLUE }]}
                 onPress={handleMarkPaidConfirm}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Confirm Paid</Text>
+                <Text style={[styles.modalBtnText, { color: '#FFF' }]}>{t('affiliateAdmin.confirmPaid')}</Text>
               </TouchableOpacity>
             </View>
           </View>

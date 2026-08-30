@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -130,6 +131,7 @@ async function createMealPlanFromTemplate(
 }
 
 export default function TemplatePlanDetailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { templateId } = useLocalSearchParams<{ templateId: string }>();
   const colorScheme = useColorScheme();
@@ -169,7 +171,7 @@ export default function TemplatePlanDetailScreen() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[TemplatePlanDetail] Error loading plan:', msg);
-      setError('Failed to load plan. Please try again.');
+      setError(t('templatePlanDetail.failedToLoad'));
     } finally {
       setLoading(false);
       setProteinLoadingMeal(null);
@@ -227,14 +229,14 @@ export default function TemplatePlanDetailScreen() {
       await createMealPlanFromTemplate(plan, lunchProtein);
       console.log('[TemplatePlanDetail] Plan saved successfully');
       Alert.alert(
-        'Added to My Plans!',
-        'You can now assign it to days in your calendar.',
-        [{ text: 'OK', onPress: () => router.back() }]
+        t('templatePlanDetail.addedTitle'),
+        t('templatePlanDetail.addedMessage'),
+        [{ text: t('common.ok'), onPress: () => router.back() }]
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[TemplatePlanDetail] Save error:', msg);
-      Alert.alert('Error', 'Failed to save plan. Please try again.');
+      Alert.alert(t('common.error'), t('templatePlanDetail.failedToSave'));
     } finally {
       setSaving(false);
     }
@@ -257,7 +259,7 @@ export default function TemplatePlanDetailScreen() {
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Plan Details</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('templatePlanDetail.title')}</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.loadingContainer}>
@@ -274,11 +276,11 @@ export default function TemplatePlanDetailScreen() {
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Plan Details</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('templatePlanDetail.title')}</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: textColor }]}>{error ?? 'Plan not found.'}</Text>
+          <Text style={[styles.errorText, { color: textColor }]}>{error ?? t('templatePlanDetail.planNotFound')}</Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
             onPress={() => {
@@ -287,7 +289,7 @@ export default function TemplatePlanDetailScreen() {
               loadPlan(selectedProteins);
             }}
           >
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -332,14 +334,14 @@ export default function TemplatePlanDetailScreen() {
       >
         {/* Summary card */}
         <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-          <Text style={[styles.summaryCardTitle, { color: textColor }]}>Adjusted to your goals</Text>
+          <Text style={[styles.summaryCardTitle, { color: textColor }]}>{t('templatePlanDetail.adjustedToGoals')}</Text>
 
           {/* Divider */}
           <View style={[styles.summaryDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
           {/* Goal row */}
           <View style={styles.summaryTableRow}>
-            <Text style={[styles.summaryTableLabel, { color: secondaryColor }]}>Goal</Text>
+            <Text style={[styles.summaryTableLabel, { color: secondaryColor }]}>{t('templatePlanDetail.goal')}</Text>
             <View style={styles.summaryTablePills}>
               <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
                 <Text style={[styles.macroPillValue, { color: colors.calories }]}>{caloriesGoal}</Text>
@@ -362,7 +364,7 @@ export default function TemplatePlanDetailScreen() {
 
           {/* Plan Avg row */}
           <View style={[styles.summaryTableRow, styles.summaryTableRowLast]}>
-            <Text style={[styles.summaryTableLabel, { color: secondaryColor }]}>Plan Avg</Text>
+            <Text style={[styles.summaryTableLabel, { color: secondaryColor }]}>{t('templatePlanDetail.planAvg')}</Text>
             <View style={styles.summaryTablePills}>
               <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
                 <Text style={[styles.macroPillValue, { color: colors.calories }]}>{planAvgCalories}</Text>
@@ -479,7 +481,7 @@ export default function TemplatePlanDetailScreen() {
 
               {/* Items */}
               {items.length === 0 ? (
-                <Text style={[styles.emptyMealText, { color: secondaryColor }]}>No foods for this meal</Text>
+                <Text style={[styles.emptyMealText, { color: secondaryColor }]}>{t('templatePlanDetail.noFoods')}</Text>
               ) : (
                 items.map((item, idx) => {
                   const isLastItem = idx === items.length - 1;
@@ -570,7 +572,7 @@ export default function TemplatePlanDetailScreen() {
           {saving ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.addButtonText}>{'+ Add to My Plans'}</Text>
+            <Text style={styles.addButtonText}>{t('templatePlanDetail.addToMyPlans')}</Text>
           )}
         </TouchableOpacity>
       </View>

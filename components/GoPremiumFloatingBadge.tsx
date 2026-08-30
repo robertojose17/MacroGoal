@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePremium } from '@/hooks/usePremium';
+import { useTranslation } from 'react-i18next';
 
 export default function GoPremiumFloatingBadge() {
   const router = useRouter();
@@ -10,6 +11,7 @@ export default function GoPremiumFloatingBadge() {
   const insets = useSafeAreaInsets();
   const { isPremium } = usePremium();
   const [visible, setVisible] = useState(true);
+  const { t } = useTranslation();
 
   const handleDismiss = () => {
     console.log('[GoPremiumBadge] Dismissed by user');
@@ -44,7 +46,7 @@ export default function GoPremiumFloatingBadge() {
           activeOpacity={0.85}
         >
           <Text style={styles.crown}>👑</Text>
-          <Text style={styles.label}>Go Premium</Text>
+          <Text style={styles.label}>{t('premium.goPremium')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.closeBtn}

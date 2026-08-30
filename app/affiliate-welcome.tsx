@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { getAffiliateStats } from '@/utils/affiliateApi';
+import { useTranslation } from 'react-i18next';
 
 const TEAL = '#14B8A6';
 const GOLD = '#FFB547';
@@ -35,6 +36,7 @@ type AffiliateStatus =
 
 export default function AffiliateWelcomeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.4)).current;
@@ -165,7 +167,7 @@ export default function AffiliateWelcomeScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'Could not identify your account. Please try again.');
+        Alert.alert(t('affiliateWelcome.errorTitle'), t('affiliateWelcome.couldNotIdentifyAccount'));
         return;
       }
       const { error } = await supabase
@@ -182,13 +184,13 @@ export default function AffiliateWelcomeScreen() {
           { onConflict: 'user_id' }
         );
       if (error) {
-        Alert.alert('Error', 'Could not save your acceptance. Please try again.');
+        Alert.alert(t('affiliateWelcome.errorTitle'), t('affiliateWelcome.couldNotSaveAcceptance'));
         return;
       }
       console.log('[AffiliateWelcome] Terms accepted and saved');
       setTermsAccepted(true);
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert(t('affiliateWelcome.errorTitle'), t('affiliateWelcome.somethingWentWrong'));
     } finally {
       setSavingTerms(false);
     }
@@ -228,13 +230,13 @@ export default function AffiliateWelcomeScreen() {
           <View style={styles.container}>
             <View style={styles.topSection}>
               <Ionicons name="time-outline" size={72} color={GOLD} />
-              <Text style={styles.headline}>Application Under Review</Text>
+              <Text style={styles.headline}>{t('affiliateWelcome.pendingHeadline')}</Text>
               <Text style={styles.subheadline}>
-                {"We'll review your application within 2-3 business days."}
+                {t('affiliateWelcome.pendingSubheadline')}
               </Text>
               {desiredCode ? (
                 <View style={styles.codePill}>
-                  <Text style={styles.codePillLabel}>Requested Code</Text>
+                  <Text style={styles.codePillLabel}>{t('affiliateWelcome.requestedCode')}</Text>
                   <Text style={styles.codePillValue}>{desiredCode}</Text>
                 </View>
               ) : null}
@@ -268,24 +270,25 @@ export default function AffiliateWelcomeScreen() {
           >
             <View style={styles.topSection}>
               <ActivityIndicator size="large" color={BLUE} style={{ marginBottom: 16 }} />
-              <Text style={styles.headline}>Your Code is Being Activated</Text>
+              <Text style={styles.headline}>{t('affiliateWelcome.activatingHeadline')}</Text>
               {displayCode ? (
                 <Text style={styles.subheadline}>
-                  {'Your affiliate code '}
+                  {t('affiliateWelcome.activatingSubheadlineWithCode1')}
                   <Text style={{ color: BLUE, fontWeight: '700' }}>{codeText}</Text>
-                  {' is being set up with Apple. This can take up to 24 hours.'}
+                  {t('affiliateWelcome.activatingSubheadlineWithCode2')}
                 </Text>
               ) : (
                 <Text style={styles.subheadline}>
-                  Your affiliate code is being set up with Apple. This can take up to 24 hours.
+                  {t('affiliateWelcome.activatingSubheadline')}
                 </Text>
               )}
               <Text style={styles.supportHint}>
-                If your code has not activated after 24 hours, please{' '}
+                {t('affiliateWelcome.supportHintPrefix')}
+                {' '}
                 <Text style={styles.supportLink} onPress={handleContactSupport}>
-                  contact support
+                  {t('affiliateWelcome.contactSupport')}
                 </Text>
-                .
+                {t('affiliateWelcome.supportHintSuffix')}
               </Text>
             </View>
           </ScrollView>
@@ -315,14 +318,14 @@ export default function AffiliateWelcomeScreen() {
           >
             <View style={styles.topSection}>
               <Ionicons name="alert-circle-outline" size={72} color={colors.error} />
-              <Text style={styles.headline}>Code Activation Failed</Text>
+              <Text style={styles.headline}>{t('affiliateWelcome.failedHeadline')}</Text>
               <Text style={styles.subheadline}>
-                There was an issue activating your code with Apple. Please contact support.
+                {t('affiliateWelcome.failedSubheadline')}
               </Text>
             </View>
             <View style={styles.buttonsSection}>
               <TouchableOpacity style={[styles.primaryButton, { backgroundColor: BLUE }]} onPress={handleContactSupport} activeOpacity={0.85}>
-                <Text style={styles.primaryButtonText}>Contact Support</Text>
+                <Text style={styles.primaryButtonText}>{t('affiliateWelcome.contactSupport')}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -352,14 +355,14 @@ export default function AffiliateWelcomeScreen() {
           >
             <View style={styles.topSection}>
               <Ionicons name="warning-outline" size={72} color={GOLD} />
-              <Text style={styles.headline}>Partial Activation Issue</Text>
+              <Text style={styles.headline}>{t('affiliateWelcome.partialFailedHeadline')}</Text>
               <Text style={styles.subheadline}>
-                One of your codes failed to activate. Please contact support.
+                {t('affiliateWelcome.partialFailedSubheadline')}
               </Text>
             </View>
             <View style={styles.buttonsSection}>
               <TouchableOpacity style={[styles.primaryButton, { backgroundColor: BLUE }]} onPress={handleContactSupport} activeOpacity={0.85}>
-                <Text style={styles.primaryButtonText}>Contact Support</Text>
+                <Text style={styles.primaryButtonText}>{t('affiliateWelcome.contactSupport')}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -379,14 +382,14 @@ export default function AffiliateWelcomeScreen() {
           <View style={styles.container}>
             <View style={styles.topSection}>
               <Ionicons name="close-circle-outline" size={72} color={colors.error} />
-              <Text style={styles.headline}>Application Not Approved</Text>
+              <Text style={styles.headline}>{t('affiliateWelcome.rejectedHeadline')}</Text>
               <Text style={styles.subheadline}>
-                Unfortunately your application was not approved at this time.
+                {t('affiliateWelcome.rejectedSubheadline')}
               </Text>
             </View>
             <View style={styles.buttonsSection}>
               <TouchableOpacity style={[styles.primaryButton, { backgroundColor: BLUE }]} onPress={handleContactSupport} activeOpacity={0.85}>
-                <Text style={styles.primaryButtonText}>Contact Support</Text>
+                <Text style={styles.primaryButtonText}>{t('affiliateWelcome.contactSupport')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -406,14 +409,14 @@ export default function AffiliateWelcomeScreen() {
           <View style={styles.container}>
             <View style={styles.topSection}>
               <Ionicons name="ban-outline" size={72} color={colors.error} />
-              <Text style={styles.headline}>Account Suspended</Text>
+              <Text style={styles.headline}>{t('affiliateWelcome.suspendedHeadline')}</Text>
               <Text style={styles.subheadline}>
-                Your affiliate account has been suspended. Please contact support.
+                {t('affiliateWelcome.suspendedSubheadline')}
               </Text>
             </View>
             <View style={styles.buttonsSection}>
               <TouchableOpacity style={[styles.primaryButton, { backgroundColor: BLUE }]} onPress={handleContactSupport} activeOpacity={0.85}>
-                <Text style={styles.primaryButtonText}>Contact Support</Text>
+                <Text style={styles.primaryButtonText}>{t('affiliateWelcome.contactSupport')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -438,9 +441,9 @@ export default function AffiliateWelcomeScreen() {
             <TouchableOpacity onPress={handleBack} style={{ marginBottom: 8 }} activeOpacity={0.7}>
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={termsGateStyles.headerTitle}>Creator Program Terms</Text>
+            <Text style={termsGateStyles.headerTitle}>{t('affiliateWelcome.termsGateTitle')}</Text>
             <Text style={[termsGateStyles.headerSubtitle, { color: termsMutedColor }]}>
-              Please read and accept before continuing
+              {t('affiliateWelcome.termsGateSubtitle')}
             </Text>
           </View>
         </SafeAreaView>
@@ -451,58 +454,58 @@ export default function AffiliateWelcomeScreen() {
           showsVerticalScrollIndicator={true}
         >
           <Text style={[termsGateStyles.termsHeading, { color: termsTextColor }]}>
-            MACRO GOAL CREATOR PROGRAM TERMS
+            {t('affiliateWelcome.termsHeading')}
           </Text>
-          <Text style={[termsGateStyles.termsVersion, { color: termsMutedColor }]}>Version 1.0</Text>
+          <Text style={[termsGateStyles.termsVersion, { color: termsMutedColor }]}>{t('affiliateWelcome.termsVersion')}</Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>1. Program Eligibility & Approval</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms1Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Participation requires explicit written approval by Macro Goal. Approval may be revoked at any time, for any reason, at Macro Goal's sole discretion, including but not limited to violation of these terms, fraudulent activity, or discontinuation of the program.
-          </Text>
-
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>2. Commission Structure</Text>
-          <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Approved creators earn a one-time commission of 50% of eligible net proceeds on the first qualifying Premium subscription payment made by a referred user. "Eligible net proceeds" means the subscription price minus applicable app store fees. No commission is earned on renewals, upgrades, refunds, or any payment other than the initial qualifying purchase.
+            {t('affiliateWelcome.terms1Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>3. Commission Hold Period</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms2Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            All earned commissions are subject to a 35-day hold period before becoming available for payout. Commissions may be reversed at any time during the hold period if the underlying transaction is refunded, disputed, or reversed by the payment processor or app store.
+            {t('affiliateWelcome.terms2Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>4. Payout Terms</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms3Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Payouts are processed manually at Macro Goal's discretion. A minimum balance of $25.00 is required to request a payout. Macro Goal does not guarantee any specific payout schedule. Payouts are made via PayPal to the email address on file. Creator is responsible for providing accurate payment information and for any applicable taxes.
+            {t('affiliateWelcome.terms3Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>5. Program Modification & Termination</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms4Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Macro Goal reserves the right to modify, suspend, or permanently discontinue the Creator Program at any time, with or without notice, for any reason. Commission rates, eligibility requirements, payout thresholds, and program terms may change at any time. Changes apply to future earnings only; commissions already marked "available" at the time of program changes will be honored.
+            {t('affiliateWelcome.terms4Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>6. Removal from Program</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms5Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Macro Goal may remove any creator from the program immediately and without prior notice. Upon removal, pending commissions not yet marked "available" may be forfeited. Available balances at the time of removal will be paid out subject to the minimum threshold and standard hold periods.
+            {t('affiliateWelcome.terms5Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>7. Fraud & Abuse</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms6Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Self-referrals, fake accounts, incentivized signups that violate App Store guidelines, and any manipulation of the referral system are strictly prohibited and will result in immediate removal and forfeiture of all pending and available commissions.
+            {t('affiliateWelcome.terms6Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>8. No Guarantee of Earnings</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms7Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Participation in the Creator Program does not guarantee any specific level of earnings. Commission is only earned when a referred user completes a qualifying purchase.
+            {t('affiliateWelcome.terms7Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>9. Relationship</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms8Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            Creators are independent contractors, not employees, agents, or partners of Macro Goal. Nothing in these terms creates any employment, partnership, or agency relationship.
+            {t('affiliateWelcome.terms8Body')}
           </Text>
 
-          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>10. Governing Law</Text>
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms9Title')}</Text>
           <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
-            These terms are governed by applicable law. Any disputes shall be resolved in the applicable jurisdiction.
+            {t('affiliateWelcome.terms9Body')}
+          </Text>
+
+          <Text style={[termsGateStyles.sectionTitle, { color: termsTextColor }]}>{t('affiliateWelcome.terms10Title')}</Text>
+          <Text style={[termsGateStyles.sectionBody, { color: termsMutedColor }]}>
+            {t('affiliateWelcome.terms10Body')}
           </Text>
         </ScrollView>
 

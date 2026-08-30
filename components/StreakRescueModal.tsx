@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   visible: boolean;
@@ -26,11 +27,12 @@ export default function StreakRescueModal({
   onPurchase,
   onDismiss,
 }: Props) {
-  const titleText = `You lost your ${lostStreakValue}-day streak!`;
-  const subtitleText = "Don't let all that hard work disappear.";
-  const rescueLabel = 'Rescue my streak';
-  const dismissLabel = 'No, start over';
-  const priceLine = priceLabel ? `Only ${priceLabel}` : '';
+  const { t } = useTranslation();
+  const titleText = t('streakRescue.title', { days: lostStreakValue });
+  const subtitleText = t('streakRescue.subtitle');
+  const rescueLabel = t('streakRescue.rescueButton');
+  const dismissLabel = t('streakRescue.dismissButton');
+  const priceLine = priceLabel ? t('streakRescue.priceOnly', { price: priceLabel }) : '';
 
   return (
     <Modal

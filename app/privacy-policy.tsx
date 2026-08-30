@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -9,6 +10,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { TouchableOpacity } from 'react-native';
 
 export default function PrivacyPolicyScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -27,7 +29,7 @@ export default function PrivacyPolicyScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          Privacy Policy
+          {t('privacyPolicy.title')}
         </Text>
         <View style={styles.placeholder} />
       </View>
@@ -38,45 +40,42 @@ export default function PrivacyPolicyScreen() {
       >
         <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Your Privacy Matters
+            {t('privacyPolicy.yourPrivacyMatters')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            We are committed to protecting your privacy and ensuring the security of your personal information.
+            {t('privacyPolicy.commitment')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Information We Collect
+            {t('privacyPolicy.informationWeCollect')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            - Account information (email, name){'\n'}
-            - Health and fitness data (weight, height, goals){'\n'}
-            - Food and nutrition logs{'\n'}
-            - Usage data and analytics
+            {t('privacyPolicy.collectList')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            How We Use Your Information
+            {t('privacyPolicy.howWeUse')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Your data is used to provide personalized nutrition tracking, calculate your daily targets, and improve your experience with our app. We never sell your personal information to third parties.
+            {t('privacyPolicy.howWeUseDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Data Security
+            {t('privacyPolicy.dataSecurity')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            We use industry-standard encryption and security measures to protect your data. Your information is stored securely and accessed only when necessary to provide our services.
+            {t('privacyPolicy.dataSecurityDesc')}
           </Text>
 
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Your Rights
+            {t('privacyPolicy.yourRights')}
           </Text>
           <Text style={[styles.paragraph, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            You have the right to access, modify, or delete your personal data at any time. You can manage your data through your profile settings or contact us for assistance.
+            {t('privacyPolicy.yourRightsDesc')}
           </Text>
 
           <Text style={[styles.lastUpdated, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Last updated: {new Date().toLocaleDateString()}
+            {t('privacyPolicy.lastUpdated', { date: new Date().toLocaleDateString() })}
           </Text>
         </View>
       </ScrollView>

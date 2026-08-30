@@ -1819,7 +1819,22 @@
     "subscriptionTermsDesc": "Premium subscriptions are billed on a recurring basis. You may cancel your subscription at any time, and you will continue to have access to premium features until the end of your current billing period.",
     "limitationOfLiability": "Limitation of Liability",
     "limitationDesc": "We shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the service.",
+    "changesToTerms": "Changes to Terms",
+    "changesToTermsDesc": "We reserve the right to modify these terms at any time. We will notify users of any material changes via email or in-app notification.",
     "lastUpdated": "Last updated: {{date}}"
+  },
+  "templatePlanDetail": {
+    "title": "Plan Details",
+    "adjustedToGoals": "Adjusted to your goals",
+    "goal": "Goal",
+    "planAvg": "Plan Avg",
+    "noFoods": "No foods for this meal",
+    "addToMyPlans": "+ Add to My Plans",
+    "addedTitle": "Added to My Plans!",
+    "addedMessage": "You can now assign it to days in your calendar.",
+    "failedToLoad": "Failed to load plan. Please try again.",
+    "failedToSave": "Failed to save plan. Please try again.",
+    "planNotFound": "Plan not found."
   },
   "termsOfUseEula": {
     "title": "Terms of Use (EULA)",
@@ -1833,6 +1848,47 @@
     "intellectualPropertyDesc": "The app and all its content, features, and functionality are owned by us and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.",
     "viewAppleEula": "View Apple Standard EULA",
     "lastUpdated": "Last updated: {{date}}"
+  },
+  "termsEula": {
+    "title": "Terms of Use (EULA)",
+    "endUserLicenseAgreement": "End User License Agreement",
+    "eulaDesc": "This End User License Agreement (\"EULA\") governs your use of this mobile application and any related services provided by us.",
+    "licenseGrant": "License Grant",
+    "licenseGrantDesc": "We grant you a revocable, non-exclusive, non-transferable, limited license to download, install, and use the app strictly in accordance with the terms of this EULA.",
+    "restrictions": "Restrictions",
+    "restrictionsDesc": "You agree not to:\n- Copy, modify, or distribute the app\n- Reverse engineer or attempt to extract the source code\n- Remove any copyright or proprietary notices\n- Use the app for any unlawful purpose\n- Attempt to gain unauthorized access to any part of the app",
+    "intellectualProperty": "Intellectual Property",
+    "intellectualPropertyDesc": "The app and all its content, features, and functionality are owned by us and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.",
+    "termination": "Termination",
+    "terminationDesc": "This EULA is effective until terminated. Your rights under this EULA will terminate automatically without notice if you fail to comply with any of its terms. Upon termination, you must cease all use of the app and delete all copies from your devices.",
+    "disclaimerOfWarranties": "Disclaimer of Warranties",
+    "disclaimerDesc": "The app is provided \"as is\" without warranty of any kind. We do not warrant that the app will be uninterrupted, error-free, or free of viruses or other harmful components.",
+    "limitationOfLiability": "Limitation of Liability",
+    "limitationDesc": "To the maximum extent permitted by law, we shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly.",
+    "appleAppStoreEula": "Apple App Store EULA",
+    "appleAppStoreDesc": "If you downloaded this app from the Apple App Store, you acknowledge and agree that Apple's standard End User License Agreement also applies to your use of this app.",
+    "viewAppleEula": "View Apple's Standard EULA",
+    "governingLaw": "Governing Law",
+    "governingLawDesc": "This EULA shall be governed by and construed in accordance with the laws of the jurisdiction in which we operate, without regard to its conflict of law provisions.",
+    "changesToEula": "Changes to This EULA",
+    "changesToEulaDesc": "We reserve the right to modify this EULA at any time. We will notify you of any changes by posting the new EULA on this page and updating the \"Last updated\" date.",
+    "contactUs": "Contact Us",
+    "contactUsDesc": "If you have any questions about this EULA, please contact us through the app's support section.",
+    "lastUpdated": "Last updated: {{date}}"
+  },
+  "premium": {
+    "goPremium": "Go Premium",
+    "premiumFeature": "Premium Feature",
+    "thisFeature": "This feature",
+    "featureGateMessage": "{{featureName}} is a premium feature. Upgrade to unlock advanced analytics, custom recipes, and more!",
+    "upgradeToPremium": "Upgrade to Premium"
+  },
+  "streakRescue": {
+    "title": "You lost your {{days}}-day streak!",
+    "subtitle": "Don't let all that hard work disappear.",
+    "rescueButton": "Rescue my streak",
+    "dismissButton": "No, start over",
+    "priceOnly": "Only {{price}}"
   },
   "onboarding": {
     "welcome": "Welcome to Macro Goal",
