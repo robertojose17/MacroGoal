@@ -1562,12 +1562,12 @@ export default function ProfileScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                {t('profile.language')}
+                {i18n.language?.startsWith('es') ? 'Idioma' : 'Language'}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={{ fontSize: 13, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                {supportedLanguages.find(l => l.code === i18n.language)?.nativeLabel ?? 'English'}
+                {i18n.language?.startsWith('es') ? 'Español' : 'English'}
               </Text>
               <IconSymbol
                 ios_icon_name="chevron.right"

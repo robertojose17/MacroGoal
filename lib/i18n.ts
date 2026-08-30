@@ -6,26 +6,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import en from '@/locales/en.json';
 import es from '@/locales/es.json';
 
-const LANGUAGE_KEY = 'app_language';
+export const LANGUAGE_KEY = 'app_language';
 
 export const supportedLanguages = [
   { code: 'en', label: 'English', nativeLabel: 'English' },
   { code: 'es', label: 'Spanish', nativeLabel: 'Español' },
 ];
-
-export const getStoredLanguage = async (): Promise<string | null> => {
-  try {
-    return await AsyncStorage.getItem(LANGUAGE_KEY);
-  } catch {
-    return null;
-  }
-};
-
-export const setStoredLanguage = async (lang: string): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(LANGUAGE_KEY, lang);
-  } catch {}
-};
 
 export const getDeviceLanguage = (): string => {
   try {
@@ -36,24 +22,31 @@ export const getDeviceLanguage = (): string => {
   }
 };
 
-const initI18n = async () => {
-  const stored = await getStoredLanguage();
-  const language = stored ?? getDeviceLanguage();
-
-  await i18n
-    .use(initReactI18next)
-    .init({
-      resources: {
-        en: { translation: en },
-        es: { translation: es },
-      },
-      lng: language,
-      fallbackLng: 'en',
-      interpolation: { escapeValue: false },
-      compatibilityJSON: 'v4',
-    });
+export const setStoredLanguage = async (lang: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(LANGUAGE_KEY, lang);
+  } catch {}
 };
 
-initI18n();
+// Initialize synchronously with device language as default
+i18n
+  .use(initReactI18next)
+  .init({
+    resources: {
+      en: { translation: en },
+      es: { translation: es },
+    },
+    lng: getDeviceLanguage(),
+    fallbackLng: 'en',
+    interpolation: { escapeValue: false },
+    compatibilityJSON: 'v4',
+  });
+
+// Then async-override with stored preference if any
+AsyncStorage.getItem(LANGUAGE_KEY).then((stored) => {
+  if (stored && stored !== i18n.language) {
+    i18n.changeLanguage(stored);
+  }
+});
 
 export default i18n;
