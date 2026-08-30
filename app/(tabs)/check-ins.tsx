@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -806,6 +807,7 @@ export default function CheckInsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [statsMap, setStatsMap] = useState<Record<string, TrackerStats>>({});
