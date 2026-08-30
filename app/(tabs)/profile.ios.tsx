@@ -13,6 +13,7 @@ import { cmToFeetInches, kgToLbs, getLossRateDisplayText, feetInchesToCm, lbsToK
 import { toLocalDateString } from '@/utils/dateUtils';
 import { Sex, ActivityLevel, GoalType } from '@/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import i18n, { supportedLanguages, setStoredLanguage } from '@/lib/i18n';
 
 const PROTEIN_OPTIONS = ['Chicken', 'Turkey', 'Beef', 'Pork', 'Salmon', 'Tuna', 'Shrimp', 'Cod', 'Tilapia', 'Eggs', 'Greek Yogurt', 'Cottage Cheese', 'Whey Protein', 'Tofu', 'Tempeh', 'Edamame', 'Lentils', 'Chickpeas', 'Black Beans'];
 
@@ -1390,6 +1391,48 @@ export default function ProfileScreen() {
               size={16}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
+          </TouchableOpacity>
+
+          {/* Language */}
+          <View style={[styles.sectionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => {
+              console.log('[Profile iOS] Language selector pressed');
+              const options = supportedLanguages.map(lang => ({
+                text: lang.nativeLabel,
+                onPress: async () => {
+                  console.log('[Profile iOS] Language changed to:', lang.code);
+                  await i18n.changeLanguage(lang.code);
+                  await setStoredLanguage(lang.code);
+                },
+              }));
+              Alert.alert(i18n.language?.startsWith('es') ? 'Seleccionar idioma' : 'Select Language', '', [...options, { text: i18n.language?.startsWith('es') ? 'Cancelar' : 'Cancel', style: 'cancel' as const }]);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionRowLeft}>
+              <IconSymbol
+                ios_icon_name="globe"
+                android_material_icon_name="language"
+                size={18}
+                color={colors.primary}
+              />
+              <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                {i18n.language?.startsWith('es') ? 'Idioma' : 'Language'}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 13, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                {i18n.language?.startsWith('es') ? 'Español' : 'English'}
+              </Text>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="arrow-forward"
+                size={16}
+                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+              />
+            </View>
           </TouchableOpacity>
         </View>
 
