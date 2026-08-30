@@ -9,6 +9,7 @@ import { Sex, GoalType, ActivityLevel } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useTranslation } from 'react-i18next';
 
 type MacroPreset = 'balanced' | 'high_protein' | 'low_carb' | 'lean_body' | 'custom';
 
@@ -16,6 +17,7 @@ export default function EditGoalsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
