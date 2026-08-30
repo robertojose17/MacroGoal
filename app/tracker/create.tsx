@@ -147,8 +147,17 @@ export default function CreateTrackerScreen() {
         await updateTracker(trackerId!, payload);
         console.log('[CreateTracker] Tracker updated successfully');
       } else {
-        await createTracker(payload);
-        console.log('[CreateTracker] Tracker created successfully');
+        const newTracker = await createTracker(payload);
+        console.log('[CreateTracker] Tracker created successfully:', newTracker.id);
+        // Fire-and-forget: translate the new tracker name
+        supabase.functions.invoke('translate-record', {
+          body: {
+            table: 'trackers',
+            id: newTracker.id,
+            fields: { name: newTracker.name },
+            target_languages: ['es'],
+          },
+        }).catch(() => {});
       }
       router.back();
     } catch (e: unknown) {

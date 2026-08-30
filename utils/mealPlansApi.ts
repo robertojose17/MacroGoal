@@ -35,6 +35,7 @@ export interface MealPlanItem {
   recipe_url?: string;
   food_item_id?: string | null;
   food_id?: string | null;
+  translations?: Record<string, any>;
 }
 
 export interface MealPlanDetail extends MealPlan {
@@ -233,6 +234,15 @@ export async function addMealPlanItem(planId: string, body: AddMealPlanItemBody)
     console.error('[MealPlansApi] addMealPlanItem error:', error.message);
     throw new Error(error.message);
   }
+  // Fire-and-forget: translate the new meal plan item food name
+  supabase.functions.invoke('translate-record', {
+    body: {
+      table: 'meal_plan_items',
+      id: data.id,
+      fields: { name: data.food_name },
+      target_languages: ['es'],
+    },
+  }).catch(() => {});
   return data;
 }
 

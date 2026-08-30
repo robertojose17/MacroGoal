@@ -13,6 +13,7 @@ export interface Tracker {
   is_default: boolean;
   sort_order: number;
   created_at: string;
+  translations?: Record<string, any>;
 }
 
 export interface TrackerEntry {

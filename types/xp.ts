@@ -63,6 +63,7 @@ export type DailyMission = {
   current_value: number;
   completed: boolean;
   completed_at: string | null;
+  translations?: Record<string, any>;
 };
 
 export type LevelProgress = {

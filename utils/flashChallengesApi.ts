@@ -25,6 +25,7 @@ export interface FlashChallenge {
   baseline_value: number | null;
   duration_hours: number;
   challenge_status: 'available' | 'accepted' | 'completed' | 'expired';
+  translations?: Record<string, any>;
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {

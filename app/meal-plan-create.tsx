@@ -107,6 +107,15 @@ export default function MealPlanCreateScreen() {
         setSaving(false);
         return;
       }
+      // Fire-and-forget: translate the new meal plan name
+      supabase.functions.invoke('translate-record', {
+        body: {
+          table: 'meal_plans',
+          id: data.id,
+          fields: { name: data.name },
+          target_languages: ['es'],
+        },
+      }).catch(() => {});
       router.replace({ pathname: '/meal-plan-detail', params: { planId: data.id } });
     } catch (err: any) {
       Alert.alert(t('common.error'), err?.message || t('common.unexpectedError'));

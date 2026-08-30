@@ -39,6 +39,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSteps } from '@/hooks/useSteps';
+import { getTranslated } from '@/utils/getTranslated';
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
@@ -719,7 +720,7 @@ function TrackerCard({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.trackerName, { color: textColor }]} numberOfLines={1}>
-            {tracker.name}
+            {getTranslated(tracker.translations, tracker.name)}
           </Text>
           {tracker.unit && !tracker.is_default ? (
             <Text style={[styles.trackerUnit, { color: subColor }]}>{tracker.unit}</Text>

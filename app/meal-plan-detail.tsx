@@ -21,6 +21,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { getMealPlan, deleteMealPlanItem, updateMealPlanItem, updateMealPlan, type MealPlanDetail, type MealPlanItem } from '@/utils/mealPlansApi';
 import { supabase } from '@/lib/supabase/client';
+import { getTranslated } from '@/utils/getTranslated';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -665,7 +666,7 @@ export default function MealPlanDetailScreen() {
                     >
                       <View style={styles.foodItemInfo}>
                         <Text style={[styles.foodItemName, { color: textColor }]} numberOfLines={1}>
-                          {item.food_name}
+                          {getTranslated(item.translations, item.food_name)}
                         </Text>
                         {!!item.brand && (
                           <Text style={[styles.foodItemMeta, { color: secondaryColor }]}>{item.brand}</Text>

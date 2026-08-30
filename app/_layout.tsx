@@ -157,6 +157,19 @@ export default function RootLayout() {
         trackOnboardingEvent('app_opened');
       }
       runPostInitSideEffects(resolvedSession);
+
+      // One-time backfill: populate translations column for existing records
+      if (resolvedSession) {
+        AsyncStorage.getItem('backfill_translations_done').then((done) => {
+          if (!done) {
+            console.log('[App] Triggering backfill-translations edge function');
+            supabase.functions.invoke('backfill-translations').then(() => {
+              AsyncStorage.setItem('backfill_translations_done', '1');
+              console.log('[App] backfill-translations complete');
+            }).catch((e) => console.warn('[App] backfill-translations failed (non-fatal):', e));
+          }
+        }).catch(() => {});
+      }
     };
 
     // Hard timeout — 800ms max wait regardless of what else resolves.

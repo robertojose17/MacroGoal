@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { translateDynamic } from '@/utils/translateDynamic';
+import { getTranslated } from '@/utils/getTranslated';
 import type { DailyMission } from '@/types/xp';
 
 interface DailyMissionsCardProps {
@@ -110,7 +111,7 @@ export default function DailyMissionsCard({ missions, isDark }: DailyMissionsCar
       keep_streak_alive: t('xp.mission_keep_streak_alive'),
       log_weight: t('xp.mission_log_weight'),
     };
-    return keyMap[mission.mission_type] ?? translateDynamic(mission.title) ?? mission.mission_type;
+    return keyMap[mission.mission_type] ?? getTranslated(mission.translations, translateDynamic(mission.title) ?? mission.title, 'title');
   }
 
   return (

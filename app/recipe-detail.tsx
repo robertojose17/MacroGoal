@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase/client';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
+import { getTranslated } from '@/utils/getTranslated';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ interface RecipeDetail {
   ingredients: any;
   instructions: string | null;
   created_by: string | null;
+  translations?: Record<string, any>;
 }
 
 interface RecipeReview {
@@ -291,6 +293,8 @@ export default function RecipeDetailScreen() {
   const cuisineLabel = recipe.cuisine || t('recipeDetail.unknown');
   const mealTypeLabel = recipe.meal_type ? recipe.meal_type.charAt(0).toUpperCase() + recipe.meal_type.slice(1) : '';
   const subtitleLabel = [cuisineLabel, mealTypeLabel].filter(Boolean).join(' · ');
+  const recipeNameDisplay = getTranslated(recipe.translations, recipe.name, 'name');
+  const recipeDescDisplay = recipe.description ? getTranslated(recipe.translations, recipe.description, 'description') : null;
   const avgRating = recipe.average_rating != null ? Number(recipe.average_rating) : 0;
   const avgRatingDisplay = recipe.average_rating != null ? Number(recipe.average_rating).toFixed(1) : '—';
   const reviewCountDisplay = recipe.review_count != null ? String(recipe.review_count) : '0';
@@ -395,7 +399,7 @@ export default function RecipeDetailScreen() {
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Stack.Screen
         options={{
-          title: recipe.name,
+          title: recipeNameDisplay,
           headerBackTitle: t('recipeDetail.back'),
           headerStyle: { backgroundColor: isDark ? colors.backgroundDark : colors.background },
           headerTintColor: textColor,
@@ -454,12 +458,12 @@ export default function RecipeDetailScreen() {
 
         <View style={styles.contentPadding}>
           {/* Title + subtitle */}
-          <Text style={[styles.title, { color: textColor }]}>{recipe.name}</Text>
+          <Text style={[styles.title, { color: textColor }]}>{recipeNameDisplay}</Text>
           <Text style={[styles.subtitle, { color: secondaryColor }]}>{subtitleLabel}</Text>
 
           {/* Description */}
-          {recipe.description ? (
-            <Text style={[styles.description, { color: secondaryColor }]}>{recipe.description}</Text>
+          {recipeDescDisplay ? (
+            <Text style={[styles.description, { color: secondaryColor }]}>{recipeDescDisplay}</Text>
           ) : null}
 
           {/* Macro pills */}
