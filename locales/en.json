@@ -2773,5 +2773,48 @@
     "emptyAllTitle": "No recipes found",
     "emptyAllSubtitle": "Be the first to add a recipe!",
     "emptySearchSubtitle": "Try a different search term"
+  },
+  "progressCard": {
+    "title": "Progress",
+    "weightProgress": "Weight Progress",
+    "swipeToSeeStats": "Swipe to see stats",
+    "setWeightGoal": "Set your weight goal in Profile to see progress.",
+    "setStartingWeight": "Set your starting weight in Profile to see progress.",
+    "failedToLoad": "Failed to load progress data",
+    "statusOnTrack": "● On track",
+    "statusAhead": "↑ Ahead of plan",
+    "statusBehind": "↓ Behind plan",
+    "legendPlanned": "Planned",
+    "legendCalories": "Calories",
+    "legendActual": "Actual",
+    "legendTrend": "Trend",
+    "weightLbs": "Weight (lbs)",
+    "statProgress": "PROGRESS",
+    "statProgressExplanation": "The total weight you have lost (or gained) since your starting weight. A downward arrow means you are losing weight; an upward arrow means you have gained since the start.",
+    "statMomentum": "MOMENTUM",
+    "statMomentumExplanation": "Your current rate of weight change based on the last 14 days of logged check-ins, expressed in pounds per week. The subtitle shows how closely your calorie intake has matched your daily goal.",
+    "statTimeline": "TIMELINE",
+    "statTimelineExplanation": "How many days ahead of or behind your original plan you are, calculated from your cumulative calorie surplus or deficit. Being ahead means your eating habits are putting you on track to reach your goal sooner.",
+    "statTarget": "TARGET",
+    "statTargetExplanation": "Your starting weight versus your current weight, and the projected date you will reach your goal weight based on your recent calorie tracking and pace.",
+    "sinceStart": "since start · {{days}} days",
+    "onPlan": "{{pct}}% on plan",
+    "ahead": "ahead",
+    "behind": "behind",
+    "onTrack": "On track",
+    "fromCalorieDeficit": "from calorie deficit",
+    "mostlyOnPlan": "mostly on plan",
+    "surplusSlowed": "recent surplus slowed progress"
+  },
+  "notifications": {
+    "disabledTitle": "Notifications Disabled",
+    "disabledMessage": "To receive notifications, please enable them in your device settings.",
+    "openSettings": "Open Settings"
+  },
+  "league": {
+    "movingUp": "↑ You're moving up",
+    "dropZone": "⚠ Drop zone",
+    "topPromoted": "↑ Top {{count}} promoted",
+    "xpThisWeek": "{{xp}} XP this week"
   }
 }

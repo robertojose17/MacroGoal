@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -221,6 +222,7 @@ function PremiumStatCard({ title, value, subtitle, explanation, accent, isDark }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ProgressCard({ userId, isDark, layout = 'carousel' }: ProgressCardProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -320,7 +322,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
       if (!userData) {
         console.log('[ProgressCard] No user data found');
-        setError('Set your weight goal in Profile to see progress.');
+        setError(t('progressCard.setWeightGoal'));
         setLoading(false);
         return;
       }
@@ -336,14 +338,14 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
       if (!rawGoalWeight || isNaN(parsedGoalWeight) || parsedGoalWeight <= 0) {
         console.log('[ProgressCard] Goal weight is missing or invalid:', rawGoalWeight);
-        setError('Set your weight goal in Profile to see progress.');
+        setError(t('progressCard.setWeightGoal'));
         setLoading(false);
         return;
       }
 
       if (!rawStartingWeight || isNaN(parsedStartingWeight) || parsedStartingWeight <= 0) {
         console.log('[ProgressCard] Starting weight is missing or invalid:', rawStartingWeight);
-        setError('Set your starting weight in Profile to see progress.');
+        setError(t('progressCard.setStartingWeight'));
         setLoading(false);
         return;
       }
@@ -381,7 +383,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
       if (!hasValidData) {
         console.log('[ProgressCard] Invalid weight data after kg→lbs conversion');
-        setError('Set your weight goal in Profile to see progress.');
+        setError(t('progressCard.setWeightGoal'));
         setLoading(false);
         return;
       }
@@ -406,7 +408,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       setLoading(false);
     } catch (err: any) {
       console.error('[ProgressCard] Error loading profile data:', err);
-      setError('Failed to load progress data');
+      setError(t('progressCard.failedToLoad'));
       setLoading(false);
     }
   }, [userId]);
@@ -817,7 +819,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
   if (loading) {
     return (
       <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Progress</Text>
+        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('progressCard.title')}</Text>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -828,7 +830,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
   if (error) {
     return (
       <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Progress</Text>
+        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('progressCard.title')}</Text>
         <View style={styles.errorContainer}>
           <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={48} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
           <Text style={[styles.errorText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{error}</Text>
@@ -840,9 +842,9 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
   if (!chartConfig) {
     return (
       <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>Progress</Text>
+        <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('progressCard.title')}</Text>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>Set your weight goal in Profile to see progress.</Text>
+          <Text style={[styles.errorText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('progressCard.setWeightGoal')}</Text>
         </View>
       </View>
     );
@@ -856,9 +858,9 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
   // ── Graph status pill config ─────────────────────────────────────────────
   const graphStatusConfig = stats ? {
-    'on_track': { label: '● On track', pillFill: '#3B82F6', textFill: '#FFFFFF' },
-    'ahead': { label: '↑ Ahead of plan', pillFill: '#22C55E', textFill: '#FFFFFF' },
-    'behind': { label: '↓ Behind plan', pillFill: '#F97316', textFill: '#FFFFFF' },
+    'on_track': { label: t('progressCard.statusOnTrack'), pillFill: '#3B82F6', textFill: '#FFFFFF' },
+    'ahead': { label: t('progressCard.statusAhead'), pillFill: '#22C55E', textFill: '#FFFFFF' },
+    'behind': { label: t('progressCard.statusBehind'), pillFill: '#F97316', textFill: '#FFFFFF' },
   }[stats.graphStatus] : null;
 
   // ── Stats view computed values ───────────────────────────────────────────
@@ -871,30 +873,30 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
         ? `↓ ${stats.weightLost.toFixed(1)} lb`
         : `↑ ${Math.abs(stats.weightLost).toFixed(1)} lb`)
     : '--';
-  const card1Subtitle = stats ? `since start · ${stats.daysSinceStart} days` : '--';
+  const card1Subtitle = stats ? t('progressCard.sinceStart', { days: stats.daysSinceStart }) : '--';
   const card1Accent = stats && stats.weightLost !== null
     ? (stats.weightLost >= 0 ? '#22C55E' : '#EF4444')
     : undefined;
 
   const card2Value = stats && stats.currentPaceLbsPerWeek !== null
     ? `${stats.currentPaceLbsPerWeek >= 0 ? '-' : '+'}${Math.abs(stats.currentPaceLbsPerWeek).toFixed(1)} lb/wk`
-    : 'No data';
-  const card2Subtitle = stats && stats.adherencePct !== null ? `${stats.adherencePct}% on plan` : '--';
+    : t('common.noData');
+  const card2Subtitle = stats && stats.adherencePct !== null ? t('progressCard.onPlan', { pct: stats.adherencePct }) : '--';
 
   const card3RawDaysAhead = stats ? stats.daysAhead : 0;
   const card3Value = stats
     ? (card3RawDaysAhead > 0
-        ? `↑ ${Math.round(card3RawDaysAhead)}d ahead`
+        ? `↑ ${Math.round(card3RawDaysAhead)}d ${t('progressCard.ahead')}`
         : card3RawDaysAhead < 0
-          ? `↓ ${Math.abs(Math.round(card3RawDaysAhead))}d behind`
-          : 'On track')
+          ? `↓ ${Math.abs(Math.round(card3RawDaysAhead))}d ${t('progressCard.behind')}`
+          : t('progressCard.onTrack'))
     : '--';
   const card3Subtitle = stats && stats.adherencePct !== null
     ? (stats.adherencePct >= 90
-        ? 'from calorie deficit'
+        ? t('progressCard.fromCalorieDeficit')
         : stats.adherencePct >= 70
-          ? 'mostly on plan'
-          : 'recent surplus slowed progress')
+          ? t('progressCard.mostlyOnPlan')
+          : t('progressCard.surplusSlowed'))
     : '--';
   const card3Accent = stats
     ? (card3RawDaysAhead > 0 ? '#22C55E' : card3RawDaysAhead < 0 ? '#EF4444' : '#3B82F6')
@@ -914,10 +916,10 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
   // ── Legend items ─────────────────────────────────────────────────────────
   const legendItems = [
-    { color: lineColor, label: 'Planned' },
-    { color: projectionColor, label: 'Calories' },
-    ...(chartConfig.actualWeightCircles.length > 0 ? [{ color: actualWeightColor, label: 'Actual' }] : []),
-    ...(chartConfig.trendPathData ? [{ color: '#8B5CF6', label: 'Trend' }] : []),
+    { color: lineColor, label: t('progressCard.legendPlanned') },
+    { color: projectionColor, label: t('progressCard.legendCalories') },
+    ...(chartConfig.actualWeightCircles.length > 0 ? [{ color: actualWeightColor, label: t('progressCard.legendActual') }] : []),
+    ...(chartConfig.trendPathData ? [{ color: '#8B5CF6', label: t('progressCard.legendTrend') }] : []),
   ];
 
   // ── Shared chart page JSX ────────────────────────────────────────────────
@@ -1016,7 +1018,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
       {/* Y-axis label */}
       <Text style={[styles.yAxisLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-        Weight (lbs)
+        {t('progressCard.weightLbs')}
       </Text>
     </View>
   );
@@ -1026,38 +1028,38 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     <View style={layout === 'stacked' ? undefined : { width, paddingTop: 4 }}>
       <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
         <PremiumStatCard
-          title="PROGRESS"
+          title={t('progressCard.statProgress')}
           value={card1Value}
           subtitle={card1Subtitle}
           accent={card1Accent}
           isDark={isDark}
-          explanation="The total weight you have lost (or gained) since your starting weight. A downward arrow means you are losing weight; an upward arrow means you have gained since the start."
+          explanation={t('progressCard.statProgressExplanation')}
         />
         <PremiumStatCard
-          title="MOMENTUM"
+          title={t('progressCard.statMomentum')}
           value={card2Value}
           subtitle={card2Subtitle}
           accent={isDark ? '#FFFFFF' : '#111111'}
           isDark={isDark}
-          explanation="Your current rate of weight change based on the last 14 days of logged check-ins, expressed in pounds per week. The subtitle shows how closely your calorie intake has matched your daily goal."
+          explanation={t('progressCard.statMomentumExplanation')}
         />
       </View>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <PremiumStatCard
-          title="TIMELINE"
+          title={t('progressCard.statTimeline')}
           value={card3Value}
           subtitle={card3Subtitle}
           accent={card3Accent}
           isDark={isDark}
-          explanation="How many days ahead of or behind your original plan you are, calculated from your cumulative calorie surplus or deficit. Being ahead means your eating habits are putting you on track to reach your goal sooner."
+          explanation={t('progressCard.statTimelineExplanation')}
         />
         <PremiumStatCard
-          title="TARGET"
+          title={t('progressCard.statTarget')}
           value={card4Value}
           subtitle={card4Subtitle}
           accent={isDark ? '#FFFFFF' : '#111111'}
           isDark={isDark}
-          explanation="Your starting weight versus your current weight, and the projected date you will reach your goal weight based on your recent calorie tracking and pace."
+          explanation={t('progressCard.statTargetExplanation')}
         />
       </View>
     </View>
@@ -1081,11 +1083,11 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       <View style={styles.cardHeader}>
         <View>
           <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Weight Progress
+            {t('progressCard.weightProgress')}
           </Text>
           {layout === 'carousel' && (
             <Text style={[styles.cardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Swipe to see stats
+              {t('progressCard.swipeToSeeStats')}
             </Text>
           )}
         </View>

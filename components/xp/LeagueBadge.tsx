@@ -11,6 +11,7 @@
  */
 
 import React, { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -43,6 +44,7 @@ function formatTimeRemaining(weekEndIso: string): string {
 }
 
 export default function LeagueBadge({ status, isDark, onPress, flat }: LeagueBadgeProps) {
+  const { t } = useTranslation();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   if (!status) return null;
@@ -62,11 +64,11 @@ export default function LeagueBadge({ status, isDark, onPress, flat }: LeagueBad
   // Microcopy
   let microCopy: string;
   if (isPromotion) {
-    microCopy = '↑ You\'re moving up';
+    microCopy = t('league.movingUp');
   } else if (isDemotion) {
-    microCopy = '⚠ Drop zone';
+    microCopy = t('league.dropZone');
   } else {
-    microCopy = `↑ Top ${status.promotion_zone_size} promoted`;
+    microCopy = t('league.topPromoted', { count: status.promotion_zone_size });
   }
 
   // Glow color
@@ -84,7 +86,7 @@ export default function LeagueBadge({ status, isDark, onPress, flat }: LeagueBad
   const positionText = `#${status.user_position}/${status.member_count}`;
 
   // XP display
-  const xpText = `${status.user_xp_this_week.toLocaleString()} XP this week`;
+  const xpText = t('league.xpThisWeek', { xp: status.user_xp_this_week.toLocaleString() });
 
   const animIn = () =>
     Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 4 }).start();

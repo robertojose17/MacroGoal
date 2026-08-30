@@ -2773,5 +2773,48 @@
     "emptyAllTitle": "No se encontraron recetas",
     "emptyAllSubtitle": "¡Sé el primero en agregar una receta!",
     "emptySearchSubtitle": "Intenta con un término de búsqueda diferente"
+  },
+  "progressCard": {
+    "title": "Progreso",
+    "weightProgress": "Progreso de Peso",
+    "swipeToSeeStats": "Desliza para ver estadísticas",
+    "setWeightGoal": "Establece tu peso objetivo en Perfil para ver el progreso.",
+    "setStartingWeight": "Establece tu peso inicial en Perfil para ver el progreso.",
+    "failedToLoad": "Error al cargar datos de progreso",
+    "statusOnTrack": "● En camino",
+    "statusAhead": "↑ Adelantado al plan",
+    "statusBehind": "↓ Atrasado al plan",
+    "legendPlanned": "Planificado",
+    "legendCalories": "Calorías",
+    "legendActual": "Real",
+    "legendTrend": "Tendencia",
+    "weightLbs": "Peso (lbs)",
+    "statProgress": "PROGRESO",
+    "statProgressExplanation": "El peso total que has perdido (o ganado) desde tu peso inicial. Una flecha hacia abajo significa que estás perdiendo peso; una flecha hacia arriba significa que has ganado desde el inicio.",
+    "statMomentum": "IMPULSO",
+    "statMomentumExplanation": "Tu tasa actual de cambio de peso basada en los últimos 14 días de registros, expresada en libras por semana. El subtítulo muestra qué tan bien tu ingesta calórica ha coincidido con tu objetivo diario.",
+    "statTimeline": "CRONOGRAMA",
+    "statTimelineExplanation": "Cuántos días por delante o por detrás de tu plan original estás, calculado a partir de tu superávit o déficit calórico acumulado. Estar adelantado significa que tus hábitos alimenticios te encaminan a alcanzar tu objetivo antes.",
+    "statTarget": "OBJETIVO",
+    "statTargetExplanation": "Tu peso inicial versus tu peso actual, y la fecha proyectada en que alcanzarás tu peso objetivo según tu seguimiento calórico reciente y tu ritmo.",
+    "sinceStart": "desde el inicio · {{days}} días",
+    "onPlan": "{{pct}}% en el plan",
+    "ahead": "adelantado",
+    "behind": "atrasado",
+    "onTrack": "En camino",
+    "fromCalorieDeficit": "por déficit calórico",
+    "mostlyOnPlan": "mayormente en el plan",
+    "surplusSlowed": "superávit reciente ralentizó el progreso"
+  },
+  "notifications": {
+    "disabledTitle": "Notificaciones Desactivadas",
+    "disabledMessage": "Para recibir notificaciones, por favor actívalas en la configuración de tu dispositivo.",
+    "openSettings": "Abrir Configuración"
+  },
+  "league": {
+    "movingUp": "↑ Estás subiendo",
+    "dropZone": "⚠ Zona de descenso",
+    "topPromoted": "↑ Top {{count}} ascienden",
+    "xpThisWeek": "{{xp}} XP esta semana"
   }
 }

@@ -15,6 +15,7 @@
  */
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
   TouchableOpacity,
   Text,
@@ -37,6 +38,7 @@ export function NotificationBell({
   variant = "default",
   size = 24,
 }: NotificationBellProps) {
+  const { t } = useTranslation();
   const { hasPermission, permissionDenied, loading, isWeb, requestPermission } =
     useNotifications();
 
@@ -51,12 +53,12 @@ export function NotificationBell({
     if (permissionDenied) {
       // Permission was denied - direct to settings
       Alert.alert(
-        "Notifications Disabled",
-        "To receive notifications, please enable them in your device settings.",
+        t('notifications.disabledTitle'),
+        t('notifications.disabledMessage'),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t('common.cancel'), style: "cancel" },
           {
-            text: "Open Settings",
+            text: t('notifications.openSettings'),
             onPress: () => {
               if (Platform.OS === "ios") {
                 Linking.openURL("app-settings:");
