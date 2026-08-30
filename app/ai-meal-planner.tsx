@@ -24,6 +24,7 @@ import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
+import { useTranslation } from 'react-i18next';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -94,14 +95,7 @@ const RECIPE_STYLE_OPTIONS = [
   { label: 'Easy Recipes', value: 'easy-recipes' },
   { label: 'Freezer Friendly', value: 'freezer-friendly' },
 ];
-const MEAL_SECTIONS: { key: MealType; label: string; emoji: string }[] = [
-  { key: 'breakfast', label: 'Breakfast', emoji: '🌅' },
-  { key: 'lunch', label: 'Lunch', emoji: '☀️' },
-  { key: 'dinner', label: 'Dinner', emoji: '🌙' },
-  { key: 'snack', label: 'Snack', emoji: '🍎' },
-];
-
-const REPLACE_SUGGESTIONS = ['Something lighter', 'More protein', 'Vegetarian', 'Mediterranean', 'High fiber', 'Low carb'];
+// MEAL_SECTIONS and REPLACE_SUGGESTIONS are defined inside the component to use t()
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -423,6 +417,7 @@ interface ActivePreferencesSummaryProps {
 }
 
 function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isDark, onGoToProfile }: ActivePreferencesSummaryProps) {
+  const { t } = useTranslation();
   const hasRestrictions = userPreferences?.dietary_restrictions && userPreferences.dietary_restrictions.length > 0;
   const hasProteins = userPreferences?.protein_preferences && userPreferences.protein_preferences.length > 0;
   const hasRecipeStyles = userPreferences?.recipe_styles && userPreferences.recipe_styles.length > 0;
@@ -442,10 +437,11 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
     return (
       <View style={[styles.prefsHintCard, { backgroundColor: cardBg }]}>
         <Text style={[styles.prefsHintText, { color: secondaryColor }]}>
-          No food preferences set.{' '}
+          {t('aiMealPlanner.noPreferencesSet')}
+          {' '}
         </Text>
         <TouchableOpacity onPress={onGoToProfile} activeOpacity={0.7}>
-          <Text style={styles.prefsHintLink}>Set food preferences in Profile →</Text>
+          <Text style={styles.prefsHintLink}>{t('aiMealPlanner.setPreferencesLink')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -484,9 +480,9 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
   return (
     <View style={[styles.prefsHintCard, { backgroundColor: cardBg }]}>
       <View style={styles.prefsHintHeader}>
-        <Text style={[styles.prefsHintLabel, { color: secondaryColor }]}>YOUR PREFERENCES APPLIED</Text>
+        <Text style={[styles.prefsHintLabel, { color: secondaryColor }]}>{t('aiMealPlanner.yourPreferencesApplied')}</Text>
         <TouchableOpacity onPress={onGoToProfile} activeOpacity={0.7}>
-          <Text style={styles.prefsHintLink}>Edit →</Text>
+          <Text style={styles.prefsHintLink}>{t('common.edit')} →</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.prefsChipsRow}>
@@ -498,7 +494,7 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
         {hasDisliked && (
           <View style={[styles.prefsChip, { backgroundColor: isDark ? '#2C2C2E' : '#F0F2F7' }]}>
             <Text style={[styles.prefsChipText, { color: secondaryColor }]}>
-              {'🚫 Dislikes: '}
+              {t('aiMealPlanner.dislikes')}
               <Text numberOfLines={1}>{userPreferences!.disliked_foods}</Text>
             </Text>
           </View>
@@ -516,6 +512,23 @@ export default function AIMealPlannerScreen() {
   const isDark = colorScheme === 'dark';
   const isMounted = useRef(true);
   const { isPremium, loading: premiumLoading } = usePremium();
+  const { t } = useTranslation();
+
+  const MEAL_SECTIONS: { key: MealType; label: string; emoji: string }[] = [
+    { key: 'breakfast', label: t('common.breakfast'), emoji: '🌅' },
+    { key: 'lunch', label: t('common.lunch'), emoji: '☀️' },
+    { key: 'dinner', label: t('common.dinner'), emoji: '🌙' },
+    { key: 'snack', label: t('common.snack'), emoji: '🍎' },
+  ];
+
+  const REPLACE_SUGGESTIONS = [
+    t('aiMealPlanner.replaceSomethingLighter'),
+    t('aiMealPlanner.replaceMoreProtein'),
+    t('aiMealPlanner.replaceVegetarian'),
+    t('aiMealPlanner.replaceMediterranean'),
+    t('aiMealPlanner.replaceHighFiber'),
+    t('aiMealPlanner.replaceLowCarb'),
+  ];
 
   // Theme
   const bgColor = isDark ? colors.backgroundDark : colors.background;
@@ -632,7 +645,7 @@ export default function AIMealPlannerScreen() {
 
   const handleGenerate = useCallback(async () => {
     if (!userGoals) {
-      Alert.alert('No Goals', 'Please set your macro goals first.');
+      Alert.alert(t('aiMealPlanner.noGoalSet'), t('aiMealPlanner.setGoalFirst'));
       return;
     }
     console.log('[AIMealPlanner] Generate My Plan pressed, foodPrefs:', foodPrefs, 'userPreferences:', userPreferences);
@@ -666,9 +679,9 @@ export default function AIMealPlannerScreen() {
       console.error('[AIMealPlanner] handleGenerate error:', e?.message || e);
       if (!isMounted.current) return;
       setStep('preferences');
-      Alert.alert('Error', e?.message || 'Failed to generate plan. Please try again.');
+      Alert.alert(t('common.error'), e?.message || t('aiMealPlanner.failedToGenerate'));
     }
-  }, [userGoals, foodPrefs, userPreferences]);
+  }, [userGoals, foodPrefs, userPreferences, t]);
 
   const handleRegenerate = useCallback(() => {
     console.log('[AIMealPlanner] Regenerate button pressed');
@@ -689,7 +702,7 @@ export default function AIMealPlannerScreen() {
     console.log('[AIMealPlanner] Add food pressed:', food.name, 'to', mealType);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Error', 'Not authenticated'); return; }
+      if (!user) { Alert.alert(t('common.error'), t('aiMealPlanner.notAuthenticated')); return; }
 
       const todayStr = getTodayStr();
       const servingGrams = food.serving_unit === 'g' && food.serving_size > 0 ? food.serving_size : 100;
@@ -752,12 +765,12 @@ export default function AIMealPlannerScreen() {
       // Notify challenge hook that a meal was logged
       emitMealLogged();
 
-      showToast(`Added to ${mealLabel} ✓`);
+      showToast(t('aiMealPlanner.addedToMealToast', { meal: mealLabel }));
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddFood error:', e?.message || e);
-      Alert.alert('Error', 'Failed to add food. Please try again.');
+      Alert.alert(t('common.error'), t('aiMealPlanner.failedToAddFood'));
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handleAddAllToMeal = useCallback(async (mealType: MealType) => {
     if (!generatedPlan) return;
@@ -765,7 +778,7 @@ export default function AIMealPlannerScreen() {
     console.log('[AIMealPlanner] Add all to meal pressed:', mealType, 'count:', foods.length);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Error', 'Not authenticated'); return; }
+      if (!user) { Alert.alert(t('common.error'), t('aiMealPlanner.notAuthenticated')); return; }
 
       const todayStr = getTodayStr();
 
@@ -840,12 +853,12 @@ export default function AIMealPlannerScreen() {
         emitMealLogged();
       }
 
-      showToast(`All added to ${mealLabel} ✓`);
+      showToast(t('aiMealPlanner.allAddedToMealToast', { meal: mealLabel }));
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddAllToMeal error:', e?.message || e);
-      Alert.alert('Error', 'Failed to add foods. Please try again.');
+      Alert.alert(t('common.error'), t('aiMealPlanner.failedToAddFoods'));
     }
-  }, [generatedPlan, showToast]);
+  }, [generatedPlan, showToast, t]);
 
   // ── Recipe modal ────────────────────────────────────────────────────────────
 
@@ -883,7 +896,7 @@ export default function AIMealPlannerScreen() {
       if (!response.ok) {
         const errText = await response.text();
         console.error('[AIMealPlanner] recipe-details error:', response.status, errText.slice(0, 200));
-        setRecipeInstructions(['Failed to generate recipe. Please try again.']);
+        setRecipeInstructions([t('aiMealPlanner.failedToGenerateRecipe')]);
         return;
       }
       const data = await response.json();
@@ -893,11 +906,11 @@ export default function AIMealPlannerScreen() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[AIMealPlanner] recipe-details fetch error:', msg);
-      setRecipeInstructions(['Failed to generate recipe. Please try again.']);
+      setRecipeInstructions([t('aiMealPlanner.failedToGenerateRecipe')]);
     } finally {
       setRecipeLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const handleCloseRecipe = useCallback(() => {
     console.log('[AIMealPlanner] recipe modal closed');
@@ -1030,17 +1043,17 @@ export default function AIMealPlannerScreen() {
           [mealType]: normalized[mealType],
         }));
         setReplaceSheetVisible(false);
-        showToast('Meal replaced ✓');
+        showToast(t('aiMealPlanner.mealReplaced'));
       } else {
-        throw new Error('Could not replace meal. Please try again.');
+        throw new Error(t('aiMealPlanner.couldNotReplaceMeal'));
       }
     } catch (e: any) {
       console.error('[AIMealPlanner] handleReplace error:', e?.message || e);
-      Alert.alert('Error', e?.message || 'Failed to replace meal.');
+      Alert.alert(t('common.error'), e?.message || t('aiMealPlanner.failedToReplaceMeal'));
     } finally {
       if (isMounted.current) setReplacing(false);
     }
-  }, [replaceTarget, replaceText, userGoals, showToast]);
+  }, [replaceTarget, replaceText, userGoals, showToast, t]);
 
   // ── Save plan ───────────────────────────────────────────────────────────────
 
@@ -1091,11 +1104,11 @@ export default function AIMealPlannerScreen() {
       router.replace({ pathname: '/meal-plan-detail', params: { planId: newPlan.id } });
     } catch (e: any) {
       console.error('[AIMealPlanner] handleSavePlan error:', e?.message || e);
-      Alert.alert('Error', 'Failed to save plan. Please try again.');
+      Alert.alert(t('common.error'), t('aiMealPlanner.failedToSave'));
     } finally {
       if (isMounted.current) setSaving(false);
     }
-  }, [generatedPlan, planName, router]);
+  }, [generatedPlan, planName, router, t]);
 
   // ── Derived values ──────────────────────────────────────────────────────────
 
@@ -1110,7 +1123,7 @@ export default function AIMealPlannerScreen() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const replaceTitleText = replaceTarget ? `Replace ${replaceTarget.mealLabel}` : 'Replace Meal';
+  const replaceTitleText = replaceTarget ? t('aiMealPlanner.replaceMealTitle', { meal: replaceTarget.mealLabel }) : t('aiMealPlanner.replaceMeal');
 
   // --- Premium gate ---
   if (premiumLoading) {
@@ -1138,7 +1151,7 @@ export default function AIMealPlannerScreen() {
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color={TEAL} />
-            <Text style={[styles.headerTitle, { color: textColor }]}>AI Meal Planner</Text>
+            <Text style={[styles.headerTitle, { color: textColor }]}>{t('aiMealPlanner.title')}</Text>
           </View>
           <View style={styles.headerRight} />
         </View>
@@ -1152,9 +1165,9 @@ export default function AIMealPlannerScreen() {
               color={TEAL}
             />
           </View>
-          <Text style={[styles.gateTitle, { color: textColor }]}>Premium Feature</Text>
+          <Text style={[styles.gateTitle, { color: textColor }]}>{t('aiMealPlanner.premiumFeatureTitle')}</Text>
           <Text style={[styles.gateMessage, { color: secondaryColor }]}>
-            AI Meal Planner is a premium feature. Generate complete personalized meal plans tailored to your goals, preferences, and dietary needs — with one tap.
+            {t('aiMealPlanner.premiumFeature')}
           </Text>
           <TouchableOpacity
             style={[styles.gateButton, { backgroundColor: TEAL }]}
@@ -1169,7 +1182,7 @@ export default function AIMealPlannerScreen() {
               size={18}
               color="#FFFFFF"
             />
-            <Text style={styles.gateButtonText}>Upgrade to Premium</Text>
+            <Text style={styles.gateButtonText}>{t('aiMealPlanner.upgradeToPremium')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.gateBackButton}
@@ -1178,7 +1191,7 @@ export default function AIMealPlannerScreen() {
               router.back();
             }}
           >
-            <Text style={[styles.gateBackText, { color: secondaryColor }]}>Go Back</Text>
+            <Text style={[styles.gateBackText, { color: secondaryColor }]}>{t('common.back')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -1201,7 +1214,7 @@ export default function AIMealPlannerScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color={TEAL} />
-          <Text style={[styles.headerTitle, { color: textColor }]}>AI Meal Planner</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('aiMealPlanner.title')}</Text>
         </View>
         <View style={styles.headerRight} />
       </View>
@@ -1224,9 +1237,9 @@ export default function AIMealPlannerScreen() {
           {!keyboardVisible && (
             <View style={styles.heroSection}>
               <Text style={styles.heroEmoji}>✨</Text>
-              <Text style={[styles.heroTitle, { color: textColor }]}>Let's build your meal plan</Text>
+              <Text style={[styles.heroTitle, { color: textColor }]}>{t('aiMealPlanner.heroTitle')}</Text>
               <Text style={[styles.heroSubtitle, { color: secondaryColor }]}>
-                Tell us a bit about your preferences so we can create something you'll actually enjoy.
+                {t('aiMealPlanner.heroSubtitle')}
               </Text>
             </View>
           )}
@@ -1234,7 +1247,7 @@ export default function AIMealPlannerScreen() {
           {/* Goals chips */}
           {userGoals && (
             <View style={[styles.goalsCard, { backgroundColor: cardBg }]}>
-              <Text style={[styles.goalsLabel, { color: secondaryColor }]}>YOUR DAILY GOALS</Text>
+              <Text style={[styles.goalsLabel, { color: secondaryColor }]}>{t('aiMealPlanner.yourDailyGoals')}</Text>
               <View style={styles.goalsRow}>
                 <View style={[styles.goalChip, { backgroundColor: isDark ? '#2C1F4A' : '#EDE9FE' }]}>
                   <Text style={[styles.goalChipText, { color: colors.calories }]}>{userGoals.daily_calories}</Text>
@@ -1242,15 +1255,15 @@ export default function AIMealPlannerScreen() {
                 </View>
                 <View style={[styles.goalChip, { backgroundColor: isDark ? '#3B1F1F' : '#FEE2E2' }]}>
                   <Text style={[styles.goalChipText, { color: colors.protein }]}>{userGoals.daily_protein}g</Text>
-                  <Text style={[styles.goalChipUnit, { color: colors.protein }]}>protein</Text>
+                  <Text style={[styles.goalChipUnit, { color: colors.protein }]}>{t('common.protein')}</Text>
                 </View>
                 <View style={[styles.goalChip, { backgroundColor: isDark ? '#1F2E4A' : '#DBEAFE' }]}>
                   <Text style={[styles.goalChipText, { color: colors.carbs }]}>{userGoals.daily_carbs}g</Text>
-                  <Text style={[styles.goalChipUnit, { color: colors.carbs }]}>carbs</Text>
+                  <Text style={[styles.goalChipUnit, { color: colors.carbs }]}>{t('common.carbs')}</Text>
                 </View>
                 <View style={[styles.goalChip, { backgroundColor: isDark ? '#3B2E1F' : '#FEF3C7' }]}>
                   <Text style={[styles.goalChipText, { color: colors.fats }]}>{userGoals.daily_fats}g</Text>
-                  <Text style={[styles.goalChipUnit, { color: colors.fats }]}>fats</Text>
+                  <Text style={[styles.goalChipUnit, { color: colors.fats }]}>{t('common.fats')}</Text>
                 </View>
               </View>
             </View>
@@ -1270,10 +1283,10 @@ export default function AIMealPlannerScreen() {
 
           {/* Inputs */}
           <View style={styles.inputsSection}>
-            <Text style={[styles.inputLabel, { color: secondaryColor }]}>ANYTHING SPECIAL TODAY?</Text>
+            <Text style={[styles.inputLabel, { color: secondaryColor }]}>{t('aiMealPlanner.anythingSpecial')}</Text>
             <TextInput
               style={[styles.prefInput, { backgroundColor: inputBg, color: textColor, borderColor }]}
-              placeholder="e.g. I want something spicy, extra protein"
+              placeholder={t('aiMealPlanner.anythingSpecialPlaceholder')}
               placeholderTextColor={secondaryColor}
               value={foodPrefs}
               onChangeText={setFoodPrefs}
@@ -1292,7 +1305,7 @@ export default function AIMealPlannerScreen() {
             activeOpacity={0.85}
           >
             <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color="#fff" />
-            <Text style={styles.generateBtnText}>Generate My Plan</Text>
+            <Text style={styles.generateBtnText}>{t('aiMealPlanner.generateMyPlan')}</Text>
           </TouchableOpacity>
         </ScrollView>
         </KeyboardAvoidingView>
@@ -1303,9 +1316,9 @@ export default function AIMealPlannerScreen() {
         <View style={styles.generatingContainer}>
           <View style={[styles.generatingCard, { backgroundColor: cardBg }]}>
             <Text style={styles.generatingEmoji}>🍽️</Text>
-            <Text style={[styles.generatingTitle, { color: textColor }]}>Creating your personalized plan...</Text>
+            <Text style={[styles.generatingTitle, { color: textColor }]}>{t('aiMealPlanner.generatingTitle')}</Text>
             <Text style={[styles.generatingSubtitle, { color: secondaryColor }]}>
-              Our AI is crafting meals tailored to your goals and preferences.
+              {t('aiMealPlanner.generatingSubtitle')}
             </Text>
             <LoadingDots color={TEAL} />
           </View>
@@ -1323,7 +1336,7 @@ export default function AIMealPlannerScreen() {
           >
             {/* Plan header */}
             <View style={styles.planHeader}>
-              <Text style={[styles.planTitle, { color: textColor }]}>Your Meal Plan</Text>
+              <Text style={[styles.planTitle, { color: textColor }]}>{t('aiMealPlanner.yourMealPlan')}</Text>
               {totalMacros && (
                 <View style={styles.totalMacrosRow}>
                   <MacroPill value={totalMacros.calories} unit="kcal" color={colors.calories} bg={isDark ? '#2C1F4A' : '#EDE9FE'} />
@@ -1373,7 +1386,7 @@ export default function AIMealPlannerScreen() {
               activeOpacity={0.8}
             >
               <IconSymbol ios_icon_name="arrow.clockwise" android_material_icon_name="refresh" size={16} color={textColor} />
-              <Text style={[styles.regenBtnText, { color: textColor }]}>Regenerate</Text>
+              <Text style={[styles.regenBtnText, { color: textColor }]}>{t('aiMealPlanner.regenerate')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.saveBtn}
@@ -1381,7 +1394,7 @@ export default function AIMealPlannerScreen() {
               activeOpacity={0.85}
             >
               <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check_circle" size={18} color="#fff" />
-              <Text style={styles.saveBtnText}>Save as Plan</Text>
+              <Text style={styles.saveBtnText}>{t('aiMealPlanner.saveAsPlan')}</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -1409,16 +1422,16 @@ export default function AIMealPlannerScreen() {
         >
           <View style={[styles.bottomSheet, { backgroundColor: isDark ? '#1C1C1E' : '#fff' }]}>
             <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: textColor }]}>Name Your Plan</Text>
+            <Text style={[styles.sheetTitle, { color: textColor }]}>{t('aiMealPlanner.namePlanTitle')}</Text>
             <Text style={[styles.sheetSubtitle, { color: secondaryColor }]}>
-              Give your meal plan a name so you can find it later.
+              {t('aiMealPlanner.namePlanSubtitle')}
             </Text>
-            <Text style={[styles.sheetLabel, { color: secondaryColor }]}>PLAN NAME</Text>
+            <Text style={[styles.sheetLabel, { color: secondaryColor }]}>{t('aiMealPlanner.planNameLabel')}</Text>
             <TextInput
               style={[styles.sheetInput, { backgroundColor: isDark ? '#2C2C2E' : '#F5F5F5', color: textColor }]}
               value={planName}
               onChangeText={setPlanName}
-              placeholder="e.g. Healthy Week 1"
+              placeholder={t('aiMealPlanner.planNamePlaceholder')}
               placeholderTextColor={secondaryColor}
               autoFocus
               returnKeyType="done"
@@ -1432,7 +1445,7 @@ export default function AIMealPlannerScreen() {
             >
               {saving
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.sheetPrimaryBtnText}>Save Plan</Text>
+                : <Text style={styles.sheetPrimaryBtnText}>{t('aiMealPlanner.savePlan')}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -1462,13 +1475,13 @@ export default function AIMealPlannerScreen() {
               {replaceTitleText}
             </Text>
             <Text style={[styles.sheetSubtitle, { color: secondaryColor }]}>
-              Describe what kind of meal you'd like instead
+              {t('aiMealPlanner.replaceSubtitle')}
             </Text>
             <TextInput
               style={[styles.sheetInput, { backgroundColor: isDark ? '#2C2C2E' : '#F5F5F5', color: textColor }]}
               value={replaceText}
               onChangeText={setReplaceText}
-              placeholder="e.g. something lighter, more protein, Mediterranean style"
+              placeholder={t('aiMealPlanner.replacePlaceholder')}
               placeholderTextColor={secondaryColor}
               autoFocus
               returnKeyType="done"
@@ -1499,7 +1512,7 @@ export default function AIMealPlannerScreen() {
             >
               {replacing
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.sheetPrimaryBtnText}>Replace</Text>
+                : <Text style={styles.sheetPrimaryBtnText}>{t('aiMealPlanner.replace')}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -1512,7 +1525,7 @@ export default function AIMealPlannerScreen() {
           <View style={styles.recipeModalSheet}>
             <View style={styles.recipeModalHeader}>
               <Text style={[styles.recipeModalTitle, { color: isDark ? '#fff' : '#000' }]} numberOfLines={2}>
-                {recipeModalTitle || 'Recipe'}
+                {recipeModalTitle || t('aiMealPlanner.recipe')}
               </Text>
               <TouchableOpacity onPress={handleCloseRecipe} style={styles.recipeModalCloseBtn} activeOpacity={0.7}>
                 <Text style={{ fontSize: 22, color: isDark ? '#aaa' : '#666' }}>✕</Text>
@@ -1522,14 +1535,14 @@ export default function AIMealPlannerScreen() {
               <View style={styles.recipeLoadingContainer}>
                 <ActivityIndicator size="large" color={TEAL} />
                 <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666', marginTop: 12 }]}>
-                  Generating recipe...
+                  {t('aiMealPlanner.generatingRecipe')}
                 </Text>
               </View>
             ) : (
               <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
                 {recipeIngredients.length > 0 && (
                   <View style={styles.recipeSection}>
-                    <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Ingredients</Text>
+                    <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>{t('aiMealPlanner.recipeIngredients')}</Text>
                     {recipeIngredients.map((ing, i) => (
                       <View key={i} style={styles.recipeIngredientRow}>
                         <Text style={[styles.recipeBullet, { color: TEAL }]}>•</Text>
@@ -1540,7 +1553,7 @@ export default function AIMealPlannerScreen() {
                 )}
                 {recipeInstructions.length > 0 && (
                   <View style={styles.recipeSection}>
-                    <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>Instructions</Text>
+                    <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>{t('aiMealPlanner.recipeInstructions')}</Text>
                     {recipeInstructions.map((step, i) => {
                       const stepNum = i + 1;
                       return (
@@ -1554,7 +1567,7 @@ export default function AIMealPlannerScreen() {
                 )}
                 {recipeIngredients.length === 0 && recipeInstructions.length === 0 && (
                   <Text style={[styles.recipeNoContent, { color: isDark ? '#aaa' : '#666' }]}>
-                    No recipe available.
+                    {t('aiMealPlanner.noRecipeAvailable')}
                   </Text>
                 )}
                 <View style={{ height: 40 }} />
@@ -1631,7 +1644,7 @@ function MealSectionCard({
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.replaceMealBtnText}>↺ Replace</Text>
+            <Text style={styles.replaceMealBtnText}>↺ {t('aiMealPlanner.replace')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1696,6 +1709,7 @@ interface FoodRowProps {
 }
 
 function FoodRow({ food, isDark, textColor, secondaryColor, borderColor, inputBg, isLast, onServingChange }: FoodRowProps) {
+  const { t } = useTranslation();
   const [localSize, setLocalSize] = useState(String(food.serving_size ?? 1));
   const [unitPickerVisible, setUnitPickerVisible] = useState(false);
   const [noteModalVisible, setNoteModalVisible] = useState(false);
@@ -1820,7 +1834,7 @@ function FoodRow({ food, isDark, textColor, secondaryColor, borderColor, inputBg
                     <Text style={[styles.noteModalTitle, { color: textColor }]}>{food.name}</Text>
                     <Text style={[styles.noteModalBody, { color: secondaryColor }]}>{servingDesc}</Text>
                     <TouchableOpacity onPress={() => { console.log('[AIMealPlanner] Note modal closed for', food.name); setNoteModalVisible(false); }} style={styles.noteModalClose}>
-                      <Text style={{ color: TEAL, fontWeight: '600', fontSize: 15 }}>Close</Text>
+                      <Text style={{ color: TEAL, fontWeight: '600', fontSize: 15 }}>{t('common.close')}</Text>
                     </TouchableOpacity>
                   </View>
                 </TouchableOpacity>

@@ -24,25 +24,10 @@ import { useChatbot, ChatMessage } from '@/hooks/useChatbot';
 import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
+import { useTranslation } from 'react-i18next';
 
 
-// Quick action cards shown in the welcome/empty state
-const QUICK_ACTION_CARDS = [
-  "What did I eat today?",
-  "Help me hit my protein goal",
-  "Suggest a healthy snack",
-  "What's a good post-workout meal?",
-  "How many calories in my last meal?",
-];
-
-// Craving chips shown above the input bar
-const CRAVING_CHIPS = [
-  "I'm craving something sweet",
-  "I'm really hungry",
-  "I want something quick",
-  "Low calorie options",
-  "High protein meal",
-];
+// Quick action cards and craving chips are defined inside the component so they can use t()
 
 // Generate a unique ID for each message
 let messageIdCounter = 0;
@@ -90,6 +75,23 @@ export default function ChatbotScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
+
+  const QUICK_ACTION_CARDS = [
+    t('chatbot.whatDidYouEat'),
+    t('chatbot.helpProtein'),
+    t('chatbot.suggestSnack'),
+    t('chatbot.postWorkout'),
+    t('chatbot.lastMealCalories'),
+  ];
+
+  const CRAVING_CHIPS = [
+    t('chatbot.cravingSweet'),
+    t('chatbot.reallyHungry'),
+    t('chatbot.wantQuick'),
+    t('chatbot.lowCalorie'),
+    t('chatbot.highProtein'),
+  ];
   const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -111,8 +113,7 @@ export default function ChatbotScreen() {
     {
       id: generateMessageId(),
       role: 'assistant',
-      content:
-        'Describe your meal or take a photo! You can use text or a photo for the most accurate estimate.',
+      content: t('chatbot.welcomeMessage'),
       timestamp: Date.now(),
     },
   ]);
@@ -165,9 +166,9 @@ export default function ChatbotScreen() {
   const requestCameraPermission = useCallback(async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'We need camera access to use this function', [
-        { text: 'Close', style: 'cancel', onPress: () => {} },
-        { text: 'Continue', onPress: () => ImagePicker.requestCameraPermissionsAsync() }
+      Alert.alert(t('chatbot.permissionRequired'), t('chatbot.cameraPermissionMessage'), [
+        { text: t('common.close'), style: 'cancel', onPress: () => {} },
+        { text: t('common.connect'), onPress: () => ImagePicker.requestCameraPermissionsAsync() }
       ]);
       return false;
     }
@@ -178,7 +179,7 @@ export default function ChatbotScreen() {
   const requestMediaLibraryPermission = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Media library permission is required to select photos.');
+      Alert.alert(t('chatbot.permissionRequired'), t('chatbot.libraryPermissionMessage'));
       return false;
     }
     return true;
@@ -223,7 +224,7 @@ export default function ChatbotScreen() {
       }
     } catch (error) {
       console.error('[Chatbot] Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo');
+      Alert.alert(t('common.error'), t('chatbot.failedToTakePhoto'));
     }
   }, [requestCameraPermission, convertImageToBase64]);
 
@@ -246,23 +247,23 @@ export default function ChatbotScreen() {
       }
     } catch (error) {
       console.error('[Chatbot] Error choosing photo:', error);
-      Alert.alert('Error', 'Failed to choose photo');
+      Alert.alert(t('common.error'), t('chatbot.failedToChoosePhoto'));
     }
   }, [requestMediaLibraryPermission, convertImageToBase64]);
 
   // Handle photo selection
   const handleAddPhoto = useCallback(() => {
-    Alert.alert('Add Photo', 'Choose how to add a photo of your meal', [
+    Alert.alert(t('chatbot.addPhoto'), t('chatbot.choosePhotoSource'), [
       {
-        text: 'Take Photo',
+        text: t('chatbot.takePhoto'),
         onPress: handleTakePhoto,
       },
       {
-        text: 'Choose from Gallery',
+        text: t('chatbot.chooseFromGallery'),
         onPress: handleChooseFromGallery,
       },
       {
-        text: 'Cancel',
+        text: t('chatbot.cancel'),
         style: 'cancel',
       },
     ]);
@@ -294,8 +295,7 @@ export default function ChatbotScreen() {
           const gateMsg: MessageWithId = {
             id: generateMessageId(),
             role: 'assistant',
-            content:
-              'The AI Coach is a Premium feature.\n\nUpgrade to Premium to unlock unlimited coaching, personalized advice, and more.',
+            content: t('chatbot.premiumGateMessage'),
             timestamp: Date.now(),
             showUpgradeButton: true,
           };
@@ -424,7 +424,7 @@ export default function ChatbotScreen() {
 
     // Check if we have either text or image
     if (!trimmedInput && !selectedImage) {
-      Alert.alert('Input Required', 'Please provide a description or photo.');
+      Alert.alert(t('chatbot.inputRequired'), t('chatbot.inputRequiredMessage'));
       return;
     }
 
@@ -433,9 +433,9 @@ export default function ChatbotScreen() {
     // Determine the display message
     let displayMessage = trimmedInput;
     if (!displayMessage && selectedImage) {
-      displayMessage = '[Photo of meal]';
+      displayMessage = t('chatbot.photoOfMeal');
     } else if (displayMessage && selectedImage) {
-      displayMessage = `${displayMessage} [with photo]`;
+      displayMessage = `${displayMessage} ${t('chatbot.withPhoto')}`;
     }
 
     // Premium gate — check on every message send
@@ -450,7 +450,7 @@ export default function ChatbotScreen() {
       const gateMsg: MessageWithId = {
         id: generateMessageId(),
         role: 'assistant',
-        content: "The AI Coach is a Premium feature.\n\nUpgrade to Premium to unlock unlimited coaching, personalized advice, and more.",
+        content: t('chatbot.premiumGateMessage'),
         timestamp: Date.now(),
         showUpgradeButton: true,
       };
@@ -468,7 +468,7 @@ export default function ChatbotScreen() {
       timestamp: Date.now(),
     };
 
-    setLastUserMessage(trimmedInput || 'Photo of meal');
+    setLastUserMessage(trimmedInput || t('chatbot.photoOfMeal'));
 
     if (isMountedRef.current) {
       setMessages((prev) => [...prev, userMessage]);
@@ -580,7 +580,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         const errorMessage: MessageWithId = {
           id: generateMessageId(),
           role: 'assistant',
-          content: 'Sorry, I encountered an error. Please try again.',
+          content: t('chatbot.errorMessage'),
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, errorMessage]);
@@ -592,7 +592,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       const errorMessage: MessageWithId = {
         id: generateMessageId(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: t('chatbot.errorMessage'),
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -717,7 +717,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
     // Check if at least one ingredient is included
     const includedIngredients = latestEstimate.ingredients.filter((ing) => ing.included);
     if (includedIngredients.length === 0) {
-      Alert.alert('No Ingredients', 'Please include at least one ingredient to log this meal.');
+      Alert.alert(t('chatbot.noIngredients'), t('chatbot.noIngredientsMessage'));
       return;
     }
 
@@ -733,7 +733,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         } = await supabase.auth.getUser();
         if (!user) {
           console.error('[Chatbot] No user found');
-          Alert.alert('Error', 'You must be logged in to add food');
+          Alert.alert(t('common.error'), t('common.loggedIn'));
           return;
         }
 
@@ -825,11 +825,11 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         if (successCount === includedIngredients.length) {
           console.log('[Chatbot] ✅ All ingredients added to My Meal draft successfully!');
           Alert.alert(
-            'Success',
-            `Added ${successCount} ingredient${successCount > 1 ? 's' : ''} to your meal`,
+            t('common.success'),
+            t('chatbot.addedIngredientsToMeal', { count: successCount }),
             [
               {
-                text: 'OK',
+                text: t('common.ok'),
                 onPress: () => {
                   console.log('[Chatbot] Navigating back to Create Meal screen');
                   router.back();
@@ -840,11 +840,11 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         } else if (successCount > 0) {
           console.log(`[Chatbot] ⚠️ Partial success: ${successCount}/${includedIngredients.length} ingredients added`);
           Alert.alert(
-            'Partial Success',
-            `Added ${successCount} of ${includedIngredients.length} ingredients. Failed: ${failedIngredients.join(', ')}`,
+            t('chatbot.partialSuccess'),
+            t('chatbot.partialSuccessAddMessage', { count: successCount, total: includedIngredients.length, failed: failedIngredients.join(', ') }),
             [
               {
-                text: 'OK',
+                text: t('common.ok'),
                 onPress: () => {
                   console.log('[Chatbot] Navigating back to Create Meal screen');
                   router.back();
@@ -854,11 +854,11 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           );
         } else {
           console.error('[Chatbot] ❌ Failed to add any ingredients');
-          Alert.alert('Error', 'Failed to add ingredients. Please try again.', [{ text: 'OK' }]);
+          Alert.alert(t('common.error'), t('chatbot.failedToAddIngredients'), [{ text: t('common.ok') }]);
         }
       } catch (error) {
         console.error('[Chatbot] Error adding ingredients to My Meal draft:', error);
-        Alert.alert('Error', 'Failed to add ingredients. Please try again.');
+        Alert.alert(t('common.error'), t('chatbot.failedToAddIngredients'));
       }
     } else {
       // MEAL LOG CONTEXT (default)
@@ -872,7 +872,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         } = await supabase.auth.getUser();
         if (!user) {
           console.error('[Chatbot] No user found');
-          Alert.alert('Error', 'You must be logged in to add food');
+          Alert.alert(t('common.error'), t('common.loggedIn'));
           return;
         }
 
@@ -881,7 +881,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         // CRITICAL: Validate mealType - if missing, throw error
         if (!mealType) {
           console.error('[Chatbot] ❌ CRITICAL ERROR: mealType is missing!');
-          Alert.alert('Error', 'Meal type is missing. Please try again from the meal log screen.');
+          Alert.alert(t('common.error'), t('chatbot.mealTypeMissing'));
           return;
         }
 
@@ -985,18 +985,18 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           console.log('[Chatbot] ✅ All ingredients logged successfully!');
           
           const mealLabels: Record<string, string> = {
-            breakfast: 'Breakfast',
-            lunch: 'Lunch',
-            dinner: 'Dinner',
-            snack: 'Snacks',
+            breakfast: t('common.breakfast'),
+            lunch: t('common.lunch'),
+            dinner: t('common.dinner'),
+            snack: t('common.snack'),
           };
           
           Alert.alert(
-            'Success',
-            `Added ${successCount} ingredient${successCount > 1 ? 's' : ''} to ${mealLabels[mealType] || mealType}`,
+            t('common.success'),
+            t('chatbot.addedIngredientsToLog', { count: successCount, meal: mealLabels[mealType] || mealType }),
             [
               {
-                text: 'OK',
+                text: t('common.ok'),
                 onPress: () => {
                   console.log('[Chatbot] ✅ CRITICAL FIX: Navigating back to close AI Meal Estimator');
                   router.back();
@@ -1007,11 +1007,11 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         } else if (successCount > 0) {
           console.log(`[Chatbot] ⚠️ Partial success: ${successCount}/${includedIngredients.length} ingredients logged`);
           Alert.alert(
-            'Partial Success',
-            `Added ${successCount} of ${includedIngredients.length} ingredients. Failed: ${failedIngredients.join(', ')}`,
+            t('chatbot.partialSuccess'),
+            t('chatbot.partialSuccessAddMessage', { count: successCount, total: includedIngredients.length, failed: failedIngredients.join(', ') }),
             [
               {
-                text: 'OK',
+                text: t('common.ok'),
                 onPress: () => {
                   console.log('[Chatbot] ✅ CRITICAL FIX: Navigating back to close AI Meal Estimator');
                   router.back();
@@ -1021,13 +1021,13 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           );
         } else {
           console.error('[Chatbot] ❌ Failed to log any ingredients');
-          Alert.alert('Error', 'Failed to log ingredients. Please try again or use Quick Add manually.', [
-            { text: 'OK' },
+          Alert.alert(t('common.error'), t('chatbot.failedToLogIngredients'), [
+            { text: t('common.ok') },
           ]);
         }
       } catch (error) {
         console.error('[Chatbot] Error logging meal:', error);
-        Alert.alert('Error', 'Failed to log meal. Please try again.');
+        Alert.alert(t('common.error'), t('chatbot.failedToLogMeal'));
       }
     }
   }, [latestEstimate, context, mealType, date, router]);
@@ -1053,7 +1053,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
   });
 
   // CRITICAL: Determine button text based on context
-  const buttonText = context === 'my_meals_builder' ? 'Add to My Meal' : 'Log this meal';
+  const buttonText = context === 'my_meals_builder' ? t('chatbot.addToMyMeal') : t('chatbot.logThisMeal');
 
   // Show quick action cards only in the welcome/empty state (just the initial greeting)
   const isWelcomeState = validMessages.length === 1 && validMessages[0].role === 'assistant';
@@ -1080,7 +1080,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
             color={colors.primary}
           />
           <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            AI Meal Estimator
+            {t('chatbot.title')}
           </Text>
         </View>
         <View style={{ width: 24 }} />
@@ -1152,7 +1152,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                         }}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.goPremiumButtonText}>Go Premium</Text>
+                        <Text style={styles.goPremiumButtonText}>{t('chatbot.upgrade')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1162,7 +1162,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           ) : (
             <View style={styles.emptyContainer}>
               <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                No messages yet
+                {t('chatbot.noMessages')}
               </Text>
             </View>
           )}
@@ -1171,7 +1171,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           {isWelcomeState && !loading && !isMealEstimator && (
             <View style={styles.quickActionsContainer}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Try asking...
+                {t('chatbot.tryAsking')}
               </Text>
               <View style={styles.quickActionsGrid}>
                 {QUICK_ACTION_CARDS.map((card) => (
@@ -1197,7 +1197,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                 <Text
                   style={[styles.loadingText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                 >
-                  Analyzing meal...
+                  {t('chatbot.analyzingMeal')}
                 </Text>
               </View>
             </View>
@@ -1209,7 +1209,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               {/* Totals Card */}
               <View style={[styles.totalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
                 <Text style={[styles.totalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Meal Totals
+                  {t('chatbot.mealTotals')}
                 </Text>
                 <View style={styles.totalsGrid}>
                   <View style={styles.totalItem}>
@@ -1229,7 +1229,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                     <Text
                       style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                     >
-                      Protein
+                      {t('common.protein')}
                     </Text>
                   </View>
                   <View style={styles.totalItem}>
@@ -1239,7 +1239,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                     <Text
                       style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                     >
-                      Carbs
+                      {t('common.carbs')}
                     </Text>
                   </View>
                   <View style={styles.totalItem}>
@@ -1249,7 +1249,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                     <Text
                       style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                     >
-                      Fats
+                      {t('common.fats')}
                     </Text>
                   </View>
                 </View>
@@ -1258,12 +1258,12 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               {/* Ingredients List */}
               <View style={[styles.ingredientsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
                 <Text style={[styles.ingredientsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Ingredients
+                  {t('chatbot.ingredients')}
                 </Text>
                 <Text
                   style={[styles.ingredientsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                 >
-                  Adjust quantities or remove items before logging
+                  {t('chatbot.adjustQuantities')}
                 </Text>
 
                 {latestEstimate.ingredients.map((ingredient, index) => (
@@ -1440,7 +1440,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   color: isDark ? colors.textDark : colors.text,
                 },
               ]}
-              placeholder="Describe your meal..."
+              placeholder={t('chatbot.placeholder')}
               placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
               value={inputText}
               onChangeText={setInputText}

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase/client';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateAge } from '@/utils/calculations';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -22,6 +23,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 export default function CustomMacrosScreen() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,7 +92,7 @@ export default function CustomMacrosScreen() {
     console.log('[CustomMacros] Save button pressed — protein:', protein, 'carbs:', carbs, 'fats:', fats);
 
     if (!isValid) {
-      Alert.alert('Invalid Split', `Percentages must sum to 100%. Current total: ${totalDisplay}%`);
+      Alert.alert(t('customMacros.invalidSplit'), t('customMacros.invalidSplitMessage', { total: totalDisplay }));
       return;
     }
 
@@ -172,12 +174,12 @@ export default function CustomMacrosScreen() {
       if (insertError) throw insertError;
 
       console.log('[CustomMacros] Goal saved successfully');
-      Alert.alert('Saved!', 'Your custom macro split has been applied.', [
-        { text: 'OK', onPress: () => router.back() },
+      Alert.alert(t('customMacros.saved'), t('customMacros.savedMessage'), [
+        { text: t('common.ok'), onPress: () => router.back() },
       ]);
     } catch (err: any) {
       console.error('[CustomMacros] Error saving custom macros:', err);
-      Alert.alert('Error', err.message || 'Failed to save custom macro split');
+      Alert.alert(t('common.error'), err.message || t('customMacros.failedToSave'));
     } finally {
       setSaving(false);
     }
@@ -216,9 +218,9 @@ export default function CustomMacrosScreen() {
           }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={[styles.backText, { color: colors.accent }]}>Cancel</Text>
+          <Text style={[styles.backText, { color: colors.accent }]}>{t('common.cancel')}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: textPrimary }]}>Custom Macro Split</Text>
+        <Text style={[styles.headerTitle, { color: textPrimary }]}>{t('customMacros.title')}</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -227,13 +229,13 @@ export default function CustomMacrosScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[styles.subtitle, { color: textSecondary }]}>
-          Set the percentage of calories from each macronutrient. They must add up to 100%.
+          {t('customMacros.subtitle')}
         </Text>
 
         {/* Macro Inputs Card */}
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <MacroRow
-            label="Protein"
+            label={t('customMacros.protein')}
             color={colors.protein}
             value={protein}
             onChangeText={(v) => {
@@ -248,7 +250,7 @@ export default function CustomMacrosScreen() {
           />
           <View style={[styles.divider, { backgroundColor: cardBorder }]} />
           <MacroRow
-            label="Carbs"
+            label={t('customMacros.carbs')}
             color={colors.carbs}
             value={carbs}
             onChangeText={(v) => {
@@ -263,7 +265,7 @@ export default function CustomMacrosScreen() {
           />
           <View style={[styles.divider, { backgroundColor: cardBorder }]} />
           <MacroRow
-            label="Fats"
+            label={t('customMacros.fats')}
             color={colors.fats}
             value={fats}
             onChangeText={(v) => {
@@ -280,7 +282,7 @@ export default function CustomMacrosScreen() {
 
         {/* Total indicator */}
         <View style={[styles.totalRow, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <Text style={[styles.totalLabel, { color: textSecondary }]}>Total</Text>
+          <Text style={[styles.totalLabel, { color: textSecondary }]}>{t('customMacros.total')}</Text>
           <Text style={[styles.totalValue, { color: totalColor }]}>
             {totalDisplay}%
           </Text>
@@ -306,7 +308,7 @@ export default function CustomMacrosScreen() {
           {saving ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>{t('common.save')}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>

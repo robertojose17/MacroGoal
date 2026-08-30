@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -34,6 +35,7 @@ export default function CheckInDetailsScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const checkInId = params.checkInId as string;
 
@@ -52,7 +54,7 @@ export default function CheckInDetailsScreen() {
 
       if (checkInResult.error) {
         console.error('[CheckInDetails] Error loading check-in:', checkInResult.error);
-        Alert.alert('Error', 'Failed to load check-in data');
+        Alert.alert(t('common.error'), t('checkInDetails.failedToLoad'));
         router.back();
         return;
       }
@@ -73,7 +75,7 @@ export default function CheckInDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [checkInId, router]);
+  }, [checkInId, router, t]);
 
   useEffect(() => {
     loadData();
@@ -81,6 +83,7 @@ export default function CheckInDetailsScreen() {
 
   const handleEdit = () => {
     if (!checkIn) return;
+    console.log('[CheckInDetails] Edit button pressed for check-in:', checkIn.id);
     
     // Determine check-in type — check gym FIRST before steps
     let type: 'weight' | 'steps' | 'gym' = 'weight';
@@ -127,12 +130,14 @@ export default function CheckInDetailsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading...
+            {t('common.loading')}
           </Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  const stepsGoalText = checkIn.steps_goal ? t('checkInDetails.stepsGoal', { goal: checkIn.steps_goal.toLocaleString() }) : null;
 
   return (
     <SafeAreaView
@@ -141,7 +146,13 @@ export default function CheckInDetailsScreen() {
     >
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[CheckInDetails] Back button pressed');
+            router.back();
+          }}
+          style={styles.backButton}
+        >
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -150,7 +161,7 @@ export default function CheckInDetailsScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Check-In Details
+          {t('checkInDetails.title')}
         </Text>
         <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
           <IconSymbol
@@ -192,7 +203,7 @@ export default function CheckInDetailsScreen() {
               </View>
               <View style={styles.statContent}>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Weight
+                  {t('checkInDetails.weight')}
                 </Text>
                 <Text style={[styles.statValue, { color: isDark ? colors.textDark : colors.text }]}>
                   {formatWeight(checkIn.weight)}
@@ -216,16 +227,16 @@ export default function CheckInDetailsScreen() {
               </View>
               <View style={styles.statContent}>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Steps
+                  {t('checkInDetails.steps')}
                 </Text>
                 <Text style={[styles.statValue, { color: isDark ? colors.textDark : colors.text }]}>
                   {checkIn.steps.toLocaleString()}
                 </Text>
-                {checkIn.steps_goal && (
+                {stepsGoalText ? (
                   <Text style={[styles.statSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Goal: {checkIn.steps_goal.toLocaleString()}
+                    {stepsGoalText}
                   </Text>
-                )}
+                ) : null}
               </View>
             </View>
           </View>
@@ -245,10 +256,10 @@ export default function CheckInDetailsScreen() {
               </View>
               <View style={styles.statContent}>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Workout
+                  {t('checkInDetails.workout')}
                 </Text>
                 <Text style={[styles.statValue, { color: colors.success }]}>
-                  Completed
+                  {t('checkInDetails.completed')}
                 </Text>
               </View>
             </View>
@@ -259,7 +270,7 @@ export default function CheckInDetailsScreen() {
         {checkIn.photo_url && (
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Progress Photo
+              {t('checkInDetails.photo')}
             </Text>
             <Image
               source={{ uri: checkIn.photo_url }}
@@ -273,7 +284,7 @@ export default function CheckInDetailsScreen() {
         {checkIn.notes && (
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Notes
+              {t('checkInDetails.notes')}
             </Text>
             <Text style={[styles.notesText, { color: isDark ? colors.textDark : colors.text }]}>
               {checkIn.notes}
@@ -290,7 +301,7 @@ export default function CheckInDetailsScreen() {
             color={colors.info}
           />
           <Text style={[styles.infoText, { color: isDark ? colors.textDark : colors.text }]}>
-            To delete this check-in, swipe left on it in the Check-Ins list
+            {t('checkInDetails.deleteInfo')}
           </Text>
         </View>
 

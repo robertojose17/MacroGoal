@@ -26,6 +26,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { tryAwardWorkout, tryAwardWeightCheckin, tryAwardProgressPhoto } from '@/utils/xpAwarder';
 import { emitXpRefresh } from '@/utils/xpEvents';
+import { useTranslation } from 'react-i18next';
 
 type CheckInType = 'weight' | 'steps' | 'gym';
 
@@ -34,6 +35,7 @@ export default function CheckInFormScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const checkInType = (params.type as CheckInType) || 'weight';
   const checkInId = params.checkInId as string | undefined;
@@ -81,7 +83,7 @@ export default function CheckInFormScreen() {
 
       if (error) {
         console.error('[CheckInForm] Error loading check-in:', error);
-        Alert.alert('Error', 'Failed to load check-in data');
+        Alert.alert(t('common.error'), t('checkInForm.failedToLoad'));
         router.back();
         return;
       }

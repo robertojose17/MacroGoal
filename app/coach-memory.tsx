@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -71,14 +72,14 @@ function formatKey(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function getSourceBadge(source: string, isConfirmed: boolean): { label: string; color: string; bg: string } {
+function getSourceBadge(source: string, isConfirmed: boolean, t: (key: string) => string): { label: string; color: string; bg: string } {
   if (source === 'user_confirmed' || (source !== 'inferred' && isConfirmed)) {
-    return { label: 'You entered', color: '#2563EB', bg: '#DBEAFE' };
+    return { label: t('coachMemory.youEntered'), color: '#2563EB', bg: '#DBEAFE' };
   }
   if (isConfirmed) {
-    return { label: 'Confirmed', color: '#059669', bg: '#D1FAE5' };
+    return { label: t('coachMemory.confirmed'), color: '#059669', bg: '#D1FAE5' };
   }
-  return { label: 'AI Inferred', color: '#6B7280', bg: '#F3F4F6' };
+  return { label: t('coachMemory.inferred'), color: '#6B7280', bg: '#F3F4F6' };
 }
 
 function getConfidenceColor(confidence: number): string {
@@ -94,12 +95,14 @@ function MemoryItem({
   onDelete,
   onUpdate,
   onConfirm,
+  t,
 }: {
   memory: CoachMemory;
   isDark: boolean;
   onDelete: (id: string) => void;
   onUpdate: (id: string, value: string) => void;
   onConfirm: (id: string) => void;
+  t: (key: string) => string;
 }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(memory.value);
@@ -109,7 +112,7 @@ function MemoryItem({
   const cardBg = isDark ? '#2A2C40' : '#FFFFFF';
   const borderColor = isDark ? colors.borderDark : colors.border;
 
-  const sourceBadge = getSourceBadge(memory.source, memory.is_confirmed);
+  const sourceBadge = getSourceBadge(memory.source, memory.is_confirmed, t);
   const confidenceColor = getConfidenceColor(memory.confidence);
   const confidencePct = Math.round((memory.confidence ?? 0) * 100);
   const keyLabel = formatKey(memory.key);
@@ -123,12 +126,12 @@ function MemoryItem({
   const handleDeletePress = () => {
     console.log('[CoachMemory] Delete memory pressed, id:', memory.id, 'key:', memory.key);
     Alert.alert(
-      'Delete Memory',
-      `Remove "${keyLabel}" from coach memory?`,
+      t('coachMemory.deleteMemory'),
+      t('coachMemory.confirmDelete'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             console.log('[CoachMemory] Delete confirmed, id:', memory.id);
@@ -171,7 +174,7 @@ function MemoryItem({
               style={[styles.editSaveBtn, { backgroundColor: colors.primary }]}
               onPress={handleSave}
             >
-              <Text style={styles.editSaveBtnText}>Save</Text>
+              <Text style={styles.editSaveBtnText}>{t('common.save')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.editCancelBtn, { borderColor }]}
@@ -181,7 +184,7 @@ function MemoryItem({
                 setEditValue(memory.value);
               }}
             >
-              <Text style={[styles.editCancelBtnText, { color: secondaryColor }]}>Cancel</Text>
+              <Text style={[styles.editCancelBtnText, { color: secondaryColor }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -210,14 +213,14 @@ function MemoryItem({
               onConfirm(memory.id);
             }}
           >
-            <Text style={[styles.confirmBtnText, { color: colors.success }]}>Confirm?</Text>
+            <Text style={[styles.confirmBtnText, { color: colors.success }]}>{t('coachMemory.confirmQuestion')}</Text>
           </TouchableOpacity>
         )}
       </View>
 
       <View style={styles.confidenceRow}>
         <Text style={[styles.confidenceLabel, { color: secondaryColor }]}>
-          Confidence
+          {t('coachMemory.confidence')}
         </Text>
         <View style={[styles.confidenceBarBg, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
           <View
@@ -238,6 +241,7 @@ export default function CoachMemoryScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [memories, setMemories] = useState<CoachMemory[]>([]);
   const [settings, setSettings] = useState<CoachMemorySettings | null>(null);
@@ -405,13 +409,13 @@ export default function CoachMemoryScreen() {
     const blocked = settings?.blocked_categories ?? [];
     const available = ALL_CATEGORIES.filter((c) => !blocked.includes(c));
     if (available.length === 0) {
-      Alert.alert('All categories are already blocked.');
+      Alert.alert(t('coachMemory.allCategoriesBlocked'));
       return;
     }
     const options = available.map((c) => CATEGORY_LABELS[c] ?? c);
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: [...options, 'Cancel'], cancelButtonIndex: options.length, title: 'Block a Category' },
+        { options: [...options, t('common.cancel')], cancelButtonIndex: options.length, title: t('coachMemory.blockCategoryTitle') },
         (idx) => {
           if (idx < options.length) {
             handleBlockCategory(available[idx]);
@@ -420,18 +424,18 @@ export default function CoachMemoryScreen() {
       );
     } else {
       Alert.alert(
-        'Block a Category',
-        'Select a category to block:',
+        t('coachMemory.blockCategoryTitle'),
+        t('coachMemory.blockCategoryMessage'),
         [
           ...available.map((c) => ({
             text: CATEGORY_LABELS[c] ?? c,
             onPress: () => handleBlockCategory(c),
           })),
-          { text: 'Cancel', style: 'cancel' as const },
+          { text: t('common.cancel'), style: 'cancel' as const },
         ]
       );
     }
-  }, [settings, handleBlockCategory]);
+  }, [settings, handleBlockCategory, t]);
 
   // ── Group memories by category ──────────────────────────────────────────────
   const grouped = React.useMemo(() => {
@@ -454,7 +458,7 @@ export default function CoachMemoryScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={textColor} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Coach Memory</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('coachMemory.title')}</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.loadingContainer}>
@@ -477,7 +481,7 @@ export default function CoachMemoryScreen() {
         >
           <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={textColor} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: textColor }]}>Coach Memory</Text>
+        <Text style={[styles.headerTitle, { color: textColor }]}>{t('coachMemory.title')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -490,9 +494,9 @@ export default function CoachMemoryScreen() {
         <View style={[styles.toggleCard, { backgroundColor: cardBg, borderColor }]}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleTextCol}>
-              <Text style={[styles.toggleTitle, { color: textColor }]}>Memory</Text>
+              <Text style={[styles.toggleTitle, { color: textColor }]}>{t('coachMemory.memoryEnabled')}</Text>
               <Text style={[styles.toggleSubtitle, { color: secondaryColor }]}>
-                Coach remembers your preferences to improve recommendations
+                {t('coachMemory.memoryToggleDesc')}
               </Text>
             </View>
             <Switch
@@ -505,7 +509,7 @@ export default function CoachMemoryScreen() {
           {!memoryEnabled && (
             <View style={[styles.disabledBanner, { backgroundColor: colors.warning + '18', borderColor: colors.warning + '40' }]}>
               <Text style={[styles.disabledBannerText, { color: colors.warning }]}>
-                Memory is disabled. The coach will not remember new preferences.
+                {t('coachMemory.memoryDisabled')}
               </Text>
             </View>
           )}
@@ -515,9 +519,9 @@ export default function CoachMemoryScreen() {
         {categoryKeys.length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: cardBg, borderColor }]}>
             <Text style={styles.emptyStateEmoji}>🧠</Text>
-            <Text style={[styles.emptyStateTitle, { color: textColor }]}>No memories yet</Text>
+            <Text style={[styles.emptyStateTitle, { color: textColor }]}>{t('coachMemory.noMemoriesYet')}</Text>
             <Text style={[styles.emptyStateSubtitle, { color: secondaryColor }]}>
-              The coach hasn't learned anything about you yet. Start chatting to build your profile.
+              {t('coachMemory.startChatting')}
             </Text>
           </View>
         ) : (
@@ -536,6 +540,7 @@ export default function CoachMemoryScreen() {
                     onDelete={handleDelete}
                     onUpdate={handleUpdate}
                     onConfirm={handleConfirm}
+                    t={t}
                   />
                 ))}
               </View>
@@ -545,11 +550,11 @@ export default function CoachMemoryScreen() {
 
         {/* ── Blocked Categories ── */}
         <View style={styles.categorySection}>
-          <Text style={[styles.categoryLabel, { color: secondaryColor }]}>Blocked Categories</Text>
+          <Text style={[styles.categoryLabel, { color: secondaryColor }]}>{t('coachMemory.blockedCategories')}</Text>
           <View style={[styles.blockedCard, { backgroundColor: cardBg, borderColor }]}>
             {blockedCategories.length === 0 ? (
               <Text style={[styles.blockedEmpty, { color: secondaryColor }]}>
-                No blocked categories. The coach can learn from all areas.
+                {t('coachMemory.noBlockedCategories')}
               </Text>
             ) : (
               blockedCategories.map((cat) => {
@@ -564,7 +569,7 @@ export default function CoachMemoryScreen() {
                         handleUnblockCategory(cat);
                       }}
                     >
-                      <Text style={[styles.unblockBtnText, { color: colors.primary }]}>Unblock</Text>
+                      <Text style={[styles.unblockBtnText, { color: colors.primary }]}>{t('coachMemory.unblock')}</Text>
                     </TouchableOpacity>
                   </View>
                 );
@@ -575,7 +580,7 @@ export default function CoachMemoryScreen() {
               onPress={handleShowBlockPicker}
             >
               <IconSymbol ios_icon_name="minus.circle" android_material_icon_name="block" size={15} color={colors.error} />
-              <Text style={[styles.blockCategoryBtnText, { color: colors.error }]}>Block a category</Text>
+              <Text style={[styles.blockCategoryBtnText, { color: colors.error }]}>{t('coachMemory.blockCategory')}</Text>
             </TouchableOpacity>
           </View>
         </View>

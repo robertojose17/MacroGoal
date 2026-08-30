@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -45,72 +46,35 @@ const DEFAULT_PERMISSIONS: CoachPermissions = {
   max_calorie_adjustment: 100,
 };
 
-const PERMISSION_LEVELS: { level: PermissionLevel; title: string; description: string }[] = [
-  {
-    level: 1,
-    title: 'Recommend Only',
-    description: 'AI suggests but never acts',
-  },
-  {
-    level: 2,
-    title: 'Confirm Each Action',
-    description: 'AI asks before every change',
-  },
-  {
-    level: 3,
-    title: 'Limited Authorization',
-    description: 'AI can act in approved categories',
-  },
-  {
-    level: 4,
-    title: 'Auto Coaching',
-    description: 'AI acts within set limits',
-  },
+type PermissionLevelDef = { level: PermissionLevel; titleKey: string; descKey: string };
+
+const PERMISSION_LEVELS: PermissionLevelDef[] = [
+  { level: 1, titleKey: 'coachPermissions.recommendOnly', descKey: 'coachPermissions.recommendOnlyDesc' },
+  { level: 2, titleKey: 'coachPermissions.confirmEachAction', descKey: 'coachPermissions.confirmEachActionDesc' },
+  { level: 3, titleKey: 'coachPermissions.limitedAuthorization', descKey: 'coachPermissions.limitedAuthorizationDesc' },
+  { level: 4, titleKey: 'coachPermissions.autoCoaching', descKey: 'coachPermissions.autoCoachingDesc' },
 ];
 
 type ToggleRow = {
   key: keyof CoachPermissions;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
 };
 
 const TOGGLE_ROWS: ToggleRow[] = [
-  {
-    key: 'can_update_goals',
-    label: 'Update Goals',
-    description: 'Calorie, macro, and step targets',
-  },
-  {
-    key: 'can_add_food',
-    label: 'Add Food to Diary',
-    description: 'Log food entries on your behalf',
-  },
-  {
-    key: 'can_create_meals',
-    label: 'Create Saved Meals',
-    description: 'Save new meal combinations',
-  },
-  {
-    key: 'can_create_meal_plans',
-    label: 'Create Meal Plans',
-    description: 'Build weekly meal plans',
-  },
-  {
-    key: 'can_schedule_reminders',
-    label: 'Schedule Reminders',
-    description: 'Set meal and activity reminders',
-  },
-  {
-    key: 'can_update_preferences',
-    label: 'Update Preferences',
-    description: 'Adjust app settings and preferences',
-  },
+  { key: 'can_update_goals', labelKey: 'coachPermissions.updateGoals', descKey: 'coachPermissions.updateGoalsDesc' },
+  { key: 'can_add_food', labelKey: 'coachPermissions.addFoodToDiary', descKey: 'coachPermissions.addFoodToDiaryDesc' },
+  { key: 'can_create_meals', labelKey: 'coachPermissions.createMeals', descKey: 'coachPermissions.createMealsDesc' },
+  { key: 'can_create_meal_plans', labelKey: 'coachPermissions.createMealPlans', descKey: 'coachPermissions.createMealPlansDesc' },
+  { key: 'can_schedule_reminders', labelKey: 'coachPermissions.scheduleReminders', descKey: 'coachPermissions.scheduleRemindersDesc' },
+  { key: 'can_update_preferences', labelKey: 'coachPermissions.updatePreferences', descKey: 'coachPermissions.updatePreferencesDesc' },
 ];
 
 export default function CoachPermissionsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [permissions, setPermissions] = useState<CoachPermissions>(DEFAULT_PERMISSIONS);
   const [loading, setLoading] = useState(true);
@@ -177,7 +141,7 @@ export default function CoachPermissionsScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in to save permissions.');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -195,14 +159,14 @@ export default function CoachPermissionsScreen() {
 
       if (error) {
         console.error('[CoachPermissions] Save error:', error.message);
-        Alert.alert('Error', 'Failed to save permissions. Please try again.');
+        Alert.alert(t('common.error'), t('coachPermissions.failedToSave'));
       } else {
         console.log('[CoachPermissions] Permissions saved successfully');
-        Alert.alert('Saved', 'Your AI Coach permissions have been updated.');
+        Alert.alert(t('common.success'), t('coachPermissions.permissionsSaved'));
       }
     } catch (e: any) {
       console.error('[CoachPermissions] Save unexpected error:', e?.message);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       setSaving(false);
     }
@@ -211,12 +175,12 @@ export default function CoachPermissionsScreen() {
   const handleRevokeAll = useCallback(() => {
     console.log('[CoachPermissions] Revoke all permissions button pressed');
     Alert.alert(
-      'Revoke All Permissions',
-      'This will reset the AI Coach to Recommend Only mode and disable all actions. Continue?',
+      t('coachPermissions.revokeAllTitle'),
+      t('coachPermissions.revokeAllMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Revoke All',
+          text: t('coachPermissions.revokeAll'),
           style: 'destructive',
           onPress: async () => {
             console.log('[CoachPermissions] Revoking all permissions confirmed');
@@ -238,10 +202,10 @@ export default function CoachPermissionsScreen() {
 
               if (error) {
                 console.error('[CoachPermissions] Revoke error:', error.message);
-                Alert.alert('Error', 'Failed to revoke permissions.');
+                Alert.alert(t('common.error'), t('coachPermissions.failedToRevoke'));
               } else {
                 console.log('[CoachPermissions] All permissions revoked');
-                Alert.alert('Done', 'All AI Coach permissions have been revoked.');
+                Alert.alert(t('common.done'), t('coachPermissions.allRevoked'));
               }
             } catch (e: any) {
               console.error('[CoachPermissions] Revoke unexpected error:', e?.message);
@@ -269,7 +233,7 @@ export default function CoachPermissionsScreen() {
               color={textColor}
             />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>AI Coach Permissions</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('coachPermissions.title')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
@@ -298,7 +262,7 @@ export default function CoachPermissionsScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor }]}>
-          AI Coach Permissions
+          {t('coachPermissions.title')}
         </Text>
         <View style={{ width: 40 }} />
       </View>
@@ -310,7 +274,7 @@ export default function CoachPermissionsScreen() {
       >
         {/* Permission Level */}
         <Text style={[styles.sectionLabel, { color: secondaryText }]}>
-          PERMISSION LEVEL
+          {t('coachPermissions.permissionLevel').toUpperCase()}
         </Text>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
           {PERMISSION_LEVELS.map((item, idx) => {
@@ -336,16 +300,16 @@ export default function CoachPermissionsScreen() {
                 </View>
                 <View style={styles.levelTextWrap}>
                   <Text style={[styles.levelTitle, { color: textColor }]}>
-                    {item.title}
+                    {t(item.titleKey)}
                   </Text>
                   <Text style={[styles.levelDesc, { color: secondaryText }]}>
-                    {item.description}
+                    {t(item.descKey)}
                   </Text>
                 </View>
                 {isSelected && (
                   <View style={[styles.levelBadge, { backgroundColor: colors.primary + '20' }]}>
                     <Text style={[styles.levelBadgeText, { color: colors.primary }]}>
-                      Active
+                      {t('coachPermissions.active')}
                     </Text>
                   </View>
                 )}
@@ -358,7 +322,7 @@ export default function CoachPermissionsScreen() {
         {showToggles && (
           <>
             <Text style={[styles.sectionLabel, { color: secondaryText }]}>
-              ALLOWED ACTIONS
+              {t('coachPermissions.allowedActions').toUpperCase()}
             </Text>
             <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
               {TOGGLE_ROWS.map((row, idx) => {
@@ -374,10 +338,10 @@ export default function CoachPermissionsScreen() {
                   >
                     <View style={styles.toggleTextWrap}>
                       <Text style={[styles.toggleLabel, { color: textColor }]}>
-                        {row.label}
+                        {t(row.labelKey)}
                       </Text>
                       <Text style={[styles.toggleDesc, { color: secondaryText }]}>
-                        {row.description}
+                        {t(row.descKey)}
                       </Text>
                     </View>
                     <Switch
@@ -397,16 +361,16 @@ export default function CoachPermissionsScreen() {
         {showMaxCal && (
           <>
             <Text style={[styles.sectionLabel, { color: secondaryText }]}>
-              AUTO-COACHING LIMITS
+              {t('coachPermissions.autoCoachingLimits').toUpperCase()}
             </Text>
             <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
               <View style={styles.maxCalRow}>
                 <View style={styles.maxCalTextWrap}>
                   <Text style={[styles.toggleLabel, { color: textColor }]}>
-                    Max calorie adjustment
+                    {t('coachPermissions.maxCalorieAdjustment')}
                   </Text>
                   <Text style={[styles.toggleDesc, { color: secondaryText }]}>
-                    Without requiring confirmation
+                    {t('coachPermissions.maxCalorieAdjustmentDesc')}
                   </Text>
                 </View>
                 <View style={[styles.maxCalInputWrap, { borderColor, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
@@ -422,7 +386,7 @@ export default function CoachPermissionsScreen() {
                     selectTextOnFocus
                   />
                   <Text style={[styles.maxCalUnit, { color: secondaryText }]}>
-                    cal
+                    {t('coachPermissions.calUnit')}
                   </Text>
                 </View>
               </View>
@@ -441,14 +405,14 @@ export default function CoachPermissionsScreen() {
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <Text style={styles.saveBtnText}>
-              Save Permissions
+              {t('coachPermissions.savePermissions')}
             </Text>
           )}
         </TouchableOpacity>
 
         {/* Danger zone */}
         <Text style={[styles.sectionLabel, { color: secondaryText }]}>
-          DANGER ZONE
+          {t('coachPermissions.dangerZone').toUpperCase()}
         </Text>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
           <TouchableOpacity
@@ -466,10 +430,10 @@ export default function CoachPermissionsScreen() {
             </View>
             <View style={styles.revokeTextWrap}>
               <Text style={[styles.revokeTitle, { color: colors.error }]}>
-                Revoke all permissions
+                {t('coachPermissions.revokeAllPermissions')}
               </Text>
               <Text style={[styles.revokeDesc, { color: secondaryText }]}>
-                Reset to Recommend Only, disable all actions
+                {t('coachPermissions.revokeAllDesc')}
               </Text>
             </View>
           </TouchableOpacity>

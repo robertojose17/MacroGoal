@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -38,14 +39,14 @@ type ActionLog = {
   authorized_by: string | null;
 };
 
-function formatActionType(actionType: string): string {
+function formatActionType(actionType: string, t: (key: string) => string): string {
   const map: Record<string, string> = {
-    update_goal: 'Goal Update',
-    add_food_to_diary: 'Added Food',
-    create_meal: 'Created Meal',
-    create_meal_plan: 'Meal Plan Created',
-    schedule_reminder: 'Reminder Set',
-    update_preferences: 'Preferences Updated',
+    update_goal: t('coachHistory.goalUpdate'),
+    add_food_to_diary: t('coachHistory.addedFood'),
+    create_meal: t('coachHistory.createdMeal'),
+    create_meal_plan: t('coachHistory.mealPlanCreated'),
+    schedule_reminder: t('coachHistory.reminderSet'),
+    update_preferences: t('coachHistory.preferencesUpdated'),
   };
   const key = (actionType || '').toLowerCase().replace(/\s+/g, '_');
   if (map[key]) return map[key];
@@ -77,17 +78,17 @@ type StatusConfig = {
   label: string;
 };
 
-function getStatusConfig(status: string): StatusConfig {
+function getStatusConfig(status: string, t: (key: string) => string): StatusConfig {
   switch (status) {
     case 'confirmed':
-      return { icon: '✓', color: '#10B981', label: 'Confirmed' };
+      return { icon: '✓', color: '#10B981', label: t('coachHistory.confirmed') };
     case 'rejected':
-      return { icon: '✗', color: colors.error, label: 'Rejected' };
+      return { icon: '✗', color: colors.error, label: t('coachHistory.rejected') };
     case 'undone':
-      return { icon: '↩', color: colors.textSecondary, label: 'Undone' };
+      return { icon: '↩', color: colors.textSecondary, label: t('coachHistory.undoneStatus') };
     case 'proposed':
     default:
-      return { icon: '⏳', color: '#F59E0B', label: 'Pending' };
+      return { icon: '⏳', color: '#F59E0B', label: t('coachHistory.proposed') };
   }
 }
 
@@ -95,13 +96,15 @@ function ActionLogItem({
   item,
   isDark,
   onUndo,
+  t,
 }: {
   item: ActionLog;
   isDark: boolean;
   onUndo: (id: string) => void;
+  t: (key: string) => string;
 }) {
-  const statusConfig = getStatusConfig(item.status);
-  const actionLabel = formatActionType(item.action_type);
+  const statusConfig = getStatusConfig(item.status, t);
+  const actionLabel = formatActionType(item.action_type, t);
   const dateText = formatDateTime(item.proposed_at);
   const canUndo = item.status === 'confirmed' && item.is_reversible;
 
@@ -153,7 +156,7 @@ function ActionLogItem({
           activeOpacity={0.75}
         >
           <Text style={[styles.undoBtnText, { color: colors.primary }]}>
-            Undo
+            {t('coachHistory.undo')}
           </Text>
         </TouchableOpacity>
       )}
@@ -165,6 +168,7 @@ export default function CoachActionHistoryScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [actions, setActions] = useState<ActionLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,7 +186,7 @@ export default function CoachActionHistoryScreen() {
 
       if (error) {
         console.error('[CoachActionHistory] Supabase error:', error.message);
-        Alert.alert('Error', 'Failed to load action history.');
+        Alert.alert(t('common.error'), t('coachHistory.failedToLoad'));
       } else {
         console.log('[CoachActionHistory] Loaded', data?.length ?? 0, 'actions');
         setActions((data as ActionLog[]) || []);
@@ -192,7 +196,7 @@ export default function CoachActionHistoryScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchActions();
@@ -217,20 +221,20 @@ export default function CoachActionHistoryScreen() {
 
         if (error) {
           console.error('[CoachActionHistory] Undo error:', error.message);
-          Alert.alert('Error', 'Failed to undo action. Please try again.');
+          Alert.alert(t('common.error'), t('coachHistory.failedToUndo'));
         } else {
           console.log('[CoachActionHistory] Undo request sent for action:', actionId);
-          Alert.alert('Undo Requested', 'The AI Coach will process the undo request.');
+          Alert.alert(t('coachHistory.undoing'), t('coachHistory.undoRequested'));
           fetchActions();
         }
       } catch (e: any) {
         console.error('[CoachActionHistory] Undo unexpected error:', e?.message);
-        Alert.alert('Error', 'Something went wrong. Please try again.');
+        Alert.alert(t('common.error'), t('common.unexpectedError'));
       } finally {
         setUndoingId(null);
       }
     },
-    [fetchActions]
+    [fetchActions, t]
   );
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
@@ -257,7 +261,7 @@ export default function CoachActionHistoryScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor }]}>
-          Action History
+          {t('coachHistory.title')}
         </Text>
         <TouchableOpacity
           onPress={() => {
@@ -280,17 +284,17 @@ export default function CoachActionHistoryScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: secondaryText }]}>
-            Loading history...
+            {t('coachHistory.loadingHistory')}
           </Text>
         </View>
       ) : actions.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🤖</Text>
           <Text style={[styles.emptyTitle, { color: textColor }]}>
-            No actions yet
+            {t('coachHistory.noHistory')}
           </Text>
           <Text style={[styles.emptySubtitle, { color: secondaryText }]}>
-            The AI Coach will log all changes here.
+            {t('coachHistory.coachHasntActed')}
           </Text>
         </View>
       ) : (
@@ -304,6 +308,7 @@ export default function CoachActionHistoryScreen() {
               item={item}
               isDark={isDark}
               onUndo={undoingId === item.id ? () => {} : handleUndo}
+              t={t}
             />
           )}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}

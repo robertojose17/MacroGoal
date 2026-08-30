@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -106,6 +107,7 @@ export default function CopyFromPreviousScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const targetDate = (params.date as string) || toLocalDateString();
   const targetMealType = params.meal as MealType;
@@ -122,7 +124,7 @@ export default function CopyFromPreviousScreen() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         router.back();
         return;
       }
@@ -149,7 +151,7 @@ export default function CopyFromPreviousScreen() {
 
       if (error) {
         console.error('[CopyFromPrevious] Error loading dates:', error);
-        Alert.alert('Error', 'Failed to load previous dates');
+        Alert.alert(t('common.error'), t('copyFromPrevious.failedToLoadDates'));
         return;
       }
 
@@ -204,7 +206,7 @@ export default function CopyFromPreviousScreen() {
       console.log('[CopyFromPrevious] Loaded', dates.length, 'dates with data');
     } catch (error) {
       console.error('[CopyFromPrevious] Error in loadDatesWithData:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       setLoading(false);
     }
@@ -260,7 +262,7 @@ export default function CopyFromPreviousScreen() {
 
       if (error) {
         console.error('[CopyFromPrevious] Error loading meals:', error);
-        Alert.alert('Error', 'Failed to load meals for this date');
+        Alert.alert(t('common.error'), t('copyFromPrevious.failedToLoadMeals'));
         return;
       }
 
@@ -283,7 +285,7 @@ export default function CopyFromPreviousScreen() {
       console.log('[CopyFromPrevious] Loaded hour groups:', groups.map(g => `${g.label}: ${g.entries.length}`));
     } catch (error) {
       console.error('[CopyFromPrevious] Error in loadMealsForDate:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
   }, []);
 
@@ -330,7 +332,7 @@ export default function CopyFromPreviousScreen() {
 
   const handleCopy = async () => {
     if (selectedEntries.size === 0) {
-      Alert.alert('No Selection', 'Please select at least one food item to copy');
+      Alert.alert(t('copyFromPrevious.noSelection'), t('copyFromPrevious.noSelectionMessage'));
       return;
     }
 
@@ -338,7 +340,7 @@ export default function CopyFromPreviousScreen() {
       setCopying(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -398,12 +400,15 @@ export default function CopyFromPreviousScreen() {
       }
 
       console.log('[CopyFromPrevious] Copy completed successfully!');
+      const itemCount = selectedEntries.size;
+      const itemWord = itemCount === 1 ? t('home.item') : t('home.items');
+      const destLabel = targetDate === toLocalDateString() ? t('common.today') : targetDate;
       Alert.alert(
-        'Success',
-        `Copied ${selectedEntries.size} food ${selectedEntries.size === 1 ? 'item' : 'items'} to ${targetDate === toLocalDateString() ? 'today' : targetDate}`,
+        t('common.success'),
+        t('copyFromPrevious.copiedMessage', { count: itemCount, item: itemWord, date: destLabel }),
         [
           {
-            text: 'OK',
+            text: t('common.ok'),
             onPress: () => {
               // Navigate back to diary
               router.dismissTo('/(tabs)/(home)/');
@@ -413,7 +418,7 @@ export default function CopyFromPreviousScreen() {
       );
     } catch (error) {
       console.error('[CopyFromPrevious] Error copying entries:', error);
-      Alert.alert('Error', 'Failed to copy food items. Please try again.');
+      Alert.alert(t('common.error'), t('copyFromPrevious.failedToCopy'));
     } finally {
       setCopying(false);
     }
@@ -440,7 +445,7 @@ export default function CopyFromPreviousScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading previous dates...
+            {t('copyFromPrevious.loadingDates')}
           </Text>
         </View>
       </SafeAreaView>
@@ -460,7 +465,7 @@ export default function CopyFromPreviousScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Copy from Previous
+          {t('copyFromPrevious.screenTitle')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -473,10 +478,10 @@ export default function CopyFromPreviousScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Select a Date
+            {t('copyFromPrevious.selectADate')}
           </Text>
           <Text style={[styles.sectionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Choose a previous date to copy meals from
+            {t('copyFromPrevious.selectDateSubtitle')}
           </Text>
 
           {datesWithData.length === 0 ? (
@@ -488,10 +493,10 @@ export default function CopyFromPreviousScreen() {
                 color={isDark ? colors.textSecondaryDark : colors.textSecondary}
               />
               <Text style={[styles.emptyText, { color: isDark ? colors.textDark : colors.text }]}>
-                No previous dates with food logs
+                {t('copyFromPrevious.noPreviousDates')}
               </Text>
               <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Start logging your meals to use this feature
+                {t('copyFromPrevious.startLoggingToUse')}
               </Text>
             </View>
           ) : (
@@ -544,7 +549,7 @@ export default function CopyFromPreviousScreen() {
             >
               <View style={styles.selectedDateLeft}>
                 <Text style={[styles.selectedDateLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Copying from
+                  {t('copyFromPrevious.copyingFrom')}
                 </Text>
                 <Text style={[styles.selectedDateTitle, { color: isDark ? colors.textDark : colors.text }]}>
                   {datesWithData.find(d => d.date === selectedDate)?.displayDate}
@@ -552,7 +557,7 @@ export default function CopyFromPreviousScreen() {
               </View>
               <View style={styles.selectedDateRight}>
                 <Text style={[styles.changeText, { color: colors.primary }]}>
-                  Change
+                  {t('copyFromPrevious.change')}
                 </Text>
                 <IconSymbol
                   ios_icon_name="chevron.right"
@@ -564,16 +569,16 @@ export default function CopyFromPreviousScreen() {
             </TouchableOpacity>
 
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Select Foods to Copy
+              {t('copyFromPrevious.selectFoodsToCopy')}
             </Text>
             <Text style={[styles.sectionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Choose entire meals or individual items
+              {t('copyFromPrevious.selectFoodsSubtitle')}
             </Text>
 
             {hourGroups.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyText, { color: isDark ? colors.textDark : colors.text }]}>
-                  No foods logged on this date
+                  {t('copyFromPrevious.noPreviousData')}
                 </Text>
               </View>
             ) : (
@@ -626,7 +631,7 @@ export default function CopyFromPreviousScreen() {
                         </View>
                       </View>
                       <Text style={[styles.selectAllText, { color: colors.primary }]}>
-                        {fullySelected ? 'Deselect All' : 'Select All'}
+                        {fullySelected ? t('copyFromPrevious.deselectAll') : t('copyFromPrevious.selectAll')}
                       </Text>
                     </TouchableOpacity>
 
@@ -717,10 +722,10 @@ export default function CopyFromPreviousScreen() {
                 ) : (
                   <React.Fragment>
                     <Text style={styles.copyButtonText}>
-                      Copy {getSelectedCount()} {getSelectedCount() === 1 ? 'Item' : 'Items'}
+                      {t('copyFromPrevious.copyCount', { count: getSelectedCount(), item: getSelectedCount() === 1 ? t('home.item') : t('home.items') })}
                     </Text>
                     <Text style={styles.copyButtonSubtext}>
-                      to {targetDate === toLocalDateString() ? 'Today' : targetDate}
+                      {t('copyFromPrevious.copyTo', { date: targetDate === toLocalDateString() ? t('common.today') : targetDate })}
                     </Text>
                   </React.Fragment>
                 )}

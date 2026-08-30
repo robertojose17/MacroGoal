@@ -55,7 +55,7 @@ export default function EditGoalsScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         router.back();
         return;
       }
@@ -150,7 +150,7 @@ export default function EditGoalsScreen() {
       }
     } catch (error: any) {
       console.error('[EditGoals] Error loading data:', error);
-      Alert.alert('Error', 'Failed to load your current goals');
+      Alert.alert(t('common.error'), t('editGoals.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -169,7 +169,7 @@ export default function EditGoalsScreen() {
     const total = protein + carbs + fats;
 
     if (Math.abs(total - 100) > 0.5) {
-      setMacroError(`Macros must total 100% (currently ${total.toFixed(1)}%)`);
+      setMacroError(t('editGoals.macrosTotalError', { total: total.toFixed(1) }));
       return false;
     }
 
@@ -179,7 +179,7 @@ export default function EditGoalsScreen() {
 
   const handleSave = async () => {
     if (!validateMacros()) {
-      Alert.alert('Invalid Macros', macroError);
+      Alert.alert(t('editGoals.invalidMacros'), macroError);
       return;
     }
 
@@ -269,18 +269,18 @@ export default function EditGoalsScreen() {
 
       // Show success message
       Alert.alert(
-        'Goals Updated!',
-        `Your new daily calorie target is ${targetCalories} kcal`,
+        t('editGoals.goalsUpdated'),
+        t('editGoals.goalsUpdatedMessage', { calories: targetCalories }),
         [
           {
-            text: 'OK',
+            text: t('common.ok'),
             onPress: () => router.back(),
           },
         ]
       );
     } catch (error: any) {
       console.error('[EditGoals] Error:', error);
-      Alert.alert('Error', error.message || 'Failed to update your goals. Please try again.');
+      Alert.alert(t('common.error'), error.message || t('editGoals.failedToSave'));
     } finally {
       setSaving(false);
     }
@@ -292,7 +292,7 @@ export default function EditGoalsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading your goals...
+            {t('editGoals.loadingGoals')}
           </Text>
         </View>
       </SafeAreaView>
@@ -317,7 +317,7 @@ export default function EditGoalsScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Edit Goals
+            {t('editGoals.title')}
           </Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -341,7 +341,7 @@ export default function EditGoalsScreen() {
 
           {/* Goal Type */}
           <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Goal *</Text>
+            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>{t('editGoals.goalLabel')}</Text>
             <View style={styles.goalOptions}>
               <TouchableOpacity
                 style={[
@@ -353,7 +353,7 @@ export default function EditGoalsScreen() {
               >
                 <Text style={styles.goalIcon}>📉</Text>
                 <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'lose' && { color: '#FFFFFF' }]}>
-                  Lose Weight
+                  {t('editGoals.loseWeight')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -366,7 +366,7 @@ export default function EditGoalsScreen() {
               >
                 <Text style={styles.goalIcon}>⚖️</Text>
                 <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'maintain' && { color: '#FFFFFF' }]}>
-                  Maintain
+                  {t('editGoals.maintain')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -379,7 +379,7 @@ export default function EditGoalsScreen() {
               >
                 <Text style={styles.goalIcon}>📈</Text>
                 <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'gain' && { color: '#FFFFFF' }]}>
-                  Gain Weight
+                  {t('editGoals.gainWeight')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -389,36 +389,36 @@ export default function EditGoalsScreen() {
           {goalType === 'lose' && (
             <View style={styles.section}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Weight Loss Rate *
+                {t('editGoals.weightLossRate')}
               </Text>
               <View style={styles.activityOptions}>
                 <LossRateOption
-                  label="0.5 lb per week"
-                  description="Slow and steady"
+                  label={t('editGoals.lossRate05')}
+                  description={t('editGoals.lossRateSlow')}
                   value={0.5}
                   selected={lossRateLbsPerWeek === 0.5}
                   onPress={() => setLossRateLbsPerWeek(0.5)}
                   isDark={isDark}
                 />
                 <LossRateOption
-                  label="1.0 lb per week"
-                  description="Moderate"
+                  label={t('editGoals.lossRate10')}
+                  description={t('editGoals.lossRateModerate')}
                   value={1.0}
                   selected={lossRateLbsPerWeek === 1.0}
                   onPress={() => setLossRateLbsPerWeek(1.0)}
                   isDark={isDark}
                 />
                 <LossRateOption
-                  label="1.5 lb per week"
-                  description="Fast"
+                  label={t('editGoals.lossRate15')}
+                  description={t('editGoals.lossRateFast')}
                   value={1.5}
                   selected={lossRateLbsPerWeek === 1.5}
                   onPress={() => setLossRateLbsPerWeek(1.5)}
                   isDark={isDark}
                 />
                 <LossRateOption
-                  label="2.0 lb per week"
-                  description="Very aggressive"
+                  label={t('editGoals.lossRate20')}
+                  description={t('editGoals.lossRateAggressive')}
                   value={2.0}
                   selected={lossRateLbsPerWeek === 2.0}
                   onPress={() => setLossRateLbsPerWeek(2.0)}
@@ -430,32 +430,32 @@ export default function EditGoalsScreen() {
 
           {/* Activity Level */}
           <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Activity Level *</Text>
+            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>{t('editGoals.activityLevel')}</Text>
             <View style={styles.activityOptions}>
               <ActivityOption
-                label="Sedentary"
-                description="Little or no exercise"
+                label={t('editGoals.sedentary')}
+                description={t('editGoals.sedentaryDesc')}
                 selected={activityLevel === 'sedentary'}
                 onPress={() => setActivityLevel('sedentary')}
                 isDark={isDark}
               />
               <ActivityOption
-                label="Light"
-                description="Exercise 1-3 days/week"
+                label={t('editGoals.light')}
+                description={t('editGoals.lightDesc')}
                 selected={activityLevel === 'light'}
                 onPress={() => setActivityLevel('light')}
                 isDark={isDark}
               />
               <ActivityOption
-                label="Moderate"
-                description="Exercise 3-5 days/week"
+                label={t('editGoals.moderate')}
+                description={t('editGoals.moderateDesc')}
                 selected={activityLevel === 'moderate'}
                 onPress={() => setActivityLevel('moderate')}
                 isDark={isDark}
               />
               <ActivityOption
-                label="Very Active"
-                description="Exercise 6-7 days/week"
+                label={t('editGoals.veryActive')}
+                description={t('editGoals.veryActiveDesc')}
                 selected={activityLevel === 'very_active'}
                 onPress={() => setActivityLevel('very_active')}
                 isDark={isDark}
@@ -466,16 +466,16 @@ export default function EditGoalsScreen() {
           {/* Macro Presets */}
           <View style={styles.section}>
             <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Macro Split *
+              {t('editGoals.macroSplit')}
             </Text>
             <Text style={[styles.helperText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Choose a preset or customize your macro percentages
+              {t('editGoals.macroSplitHelper')}
             </Text>
             
             <View style={styles.presetOptions}>
               <MacroPresetOption
-                label="Lean Body Formula"
-                description="1g protein & 0.4g fat per lb of bodyweight · carbs fill the rest"
+                label={t('editGoals.leanBodyFormula')}
+                description={t('editGoals.leanBodyFormulaDesc')}
                 value="lean_body"
                 selected={macroPreset === 'lean_body'}
                 onPress={() => {
@@ -485,32 +485,32 @@ export default function EditGoalsScreen() {
                 isDark={isDark}
               />
               <MacroPresetOption
-                label="Balanced"
-                description="30% protein / 40% carbs / 30% fats"
+                label={t('editGoals.balanced')}
+                description={t('editGoals.balancedDesc')}
                 value="balanced"
                 selected={macroPreset === 'balanced'}
                 onPress={() => setMacroPreset('balanced')}
                 isDark={isDark}
               />
               <MacroPresetOption
-                label="High Protein"
-                description="40% protein / 35% carbs / 25% fats"
+                label={t('editGoals.highProtein')}
+                description={t('editGoals.highProteinDesc')}
                 value="high_protein"
                 selected={macroPreset === 'high_protein'}
                 onPress={() => setMacroPreset('high_protein')}
                 isDark={isDark}
               />
               <MacroPresetOption
-                label="Low Carb"
-                description="35% protein / 25% carbs / 40% fats"
+                label={t('editGoals.lowCarb')}
+                description={t('editGoals.lowCarbDesc')}
                 value="low_carb"
                 selected={macroPreset === 'low_carb'}
                 onPress={() => setMacroPreset('low_carb')}
                 isDark={isDark}
               />
               <MacroPresetOption
-                label="Custom"
-                description="Set your own percentages"
+                label={t('editGoals.custom')}
+                description={t('editGoals.customDesc')}
                 value="custom"
                 selected={macroPreset === 'custom'}
                 onPress={() => setMacroPreset('custom')}
@@ -524,7 +524,7 @@ export default function EditGoalsScreen() {
                 <View style={styles.macroInputRow}>
                   <View style={styles.macroInputContainer}>
                     <Text style={[styles.macroInputLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                      Protein %
+                      {t('editGoals.proteinPct')}
                     </Text>
                     <TextInput
                       style={[styles.macroInput, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -541,7 +541,7 @@ export default function EditGoalsScreen() {
                   </View>
                   <View style={styles.macroInputContainer}>
                     <Text style={[styles.macroInputLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                      Carbs %
+                      {t('editGoals.carbsPct')}
                     </Text>
                     <TextInput
                       style={[styles.macroInput, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -558,7 +558,7 @@ export default function EditGoalsScreen() {
                   </View>
                   <View style={styles.macroInputContainer}>
                     <Text style={[styles.macroInputLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                      Fats %
+                      {t('editGoals.fatsPct')}
                     </Text>
                     <TextInput
                       style={[styles.macroInput, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -591,7 +591,7 @@ export default function EditGoalsScreen() {
             {saving ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>Save Changes</Text>
+              <Text style={styles.buttonText}>{t('editGoals.saveChanges')}</Text>
             )}
           </TouchableOpacity>
           
