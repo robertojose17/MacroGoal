@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef, Component } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -88,11 +89,11 @@ interface DailySummary {
 
 // ─── Greeting helpers ─────────────────────────────────────────────────────────
 
-function getGreeting(): string {
+function getGreetingKey(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning,';
-  if (hour < 18) return 'Good afternoon,';
-  return 'Good evening,';
+  if (hour < 12) return 'dashboard.goodMorning';
+  if (hour < 18) return 'dashboard.goodAfternoon';
+  return 'dashboard.goodEvening';
 }
 
 
@@ -130,6 +131,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -402,20 +404,21 @@ export default function DashboardScreen() {
   }, [router]);
 
   // ─── Derived greeting values ─────────────────────────────────────────────
-  const greeting = getGreeting();
-  const firstName = user?.name?.split(' ')[0] || 'there';
+  const greetingKey = getGreetingKey();
+  const greeting = t(greetingKey);
+  const firstName = user?.name?.split(' ')[0] || t('dashboard.there');
 
   // ─── Smart insight text ───────────────────────────────────────────────────
   const KG_TO_LBS = 2.20462;
-  let insightText = "Let's make today count 💪";
+  let insightText = t('dashboard.makeItCount');
   if (goal?.goal_weight && todayCheckIn?.weight) {
     const diffLbs = Math.abs(
       Math.round((Number(todayCheckIn.weight) - Number(goal.goal_weight)) * KG_TO_LBS * 10) / 10
     );
-    insightText = `You're ${diffLbs} lbs from your goal 💙`;
+    insightText = t('dashboard.lbsFromGoal', { diffLbs });
   } else if ((xp.status?.current_streak ?? 0) > 0) {
     const streak = xp.status!.current_streak;
-    insightText = `🔥 ${streak}-day streak — keep it going!`;
+    insightText = t('dashboard.streakKeepGoing', { streak });
   }
 
   if (loading) {
@@ -538,9 +541,9 @@ export default function DashboardScreen() {
                 } else {
                   const dayNum = challenge.challenge?.current_day ?? 0;
                   Alert.alert(
-                    '🔥 Day ' + dayNum + ' Complete!',
-                    '+' + result.xpAwarded + ' XP earned. Keep it up!',
-                    [{ text: 'Let\'s go!' }]
+                    t('dashboard.dayComplete', { day: dayNum }),
+                    t('dashboard.xpEarned', { xp: result.xpAwarded }),
+                    [{ text: t('dashboard.letsGo') }]
                   );
                 }
               }}
@@ -607,7 +610,7 @@ export default function DashboardScreen() {
               { color: isDark ? '#F1F5F9' : '#2B2D42' },
             ]}
           >
-            Share My Progress
+            {t('dashboard.shareMyProgress')}
           </Text>
         </TouchableOpacity>
 
@@ -633,7 +636,7 @@ export default function DashboardScreen() {
             }
           ]}>
             <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Quick Check-In
+              {t('dashboard.quickCheckIn')}
             </Text>
             <TouchableOpacity
               style={styles.modalOption}
@@ -646,7 +649,7 @@ export default function DashboardScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.modalOptionText, { color: isDark ? colors.textDark : colors.text }]}>
-                Log Weight
+                {t('dashboard.logWeight')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -660,7 +663,7 @@ export default function DashboardScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.modalOptionText, { color: isDark ? colors.textDark : colors.text }]}>
-                Log Steps
+                {t('dashboard.logSteps')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -674,7 +677,7 @@ export default function DashboardScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.modalOptionText, { color: isDark ? colors.textDark : colors.text }]}>
-                Log Gym Session
+                {t('dashboard.logGymSession')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -685,7 +688,7 @@ export default function DashboardScreen() {
               }}
             >
               <Text style={[styles.modalCancelText, { color: isDark ? colors.textDark : colors.text }]}>
-                Cancel
+                {t('common.cancel')}
               </Text>
             </TouchableOpacity>
           </View>

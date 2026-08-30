@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -443,6 +444,7 @@ function InlineActionCard({
   onConfirm: (messageId: string) => void;
   onDecline: (messageId: string) => void;
 }) {
+  const { t } = useTranslation();
   const proposal = action.proposal;
   const actionTypeInfo = formatActionType(action.action_type || proposal.action_type || proposal.goal_type || '');
   const borderColor = isDark ? colors.borderDark : colors.border;
@@ -462,8 +464,8 @@ function InlineActionCard({
   const mealsPerDay = mealPlanDays.length > 0 ? Math.round(totalMealPlanMeals / mealPlanDays.length) : 0;
   const totalCalories = mealPlanDays.reduce((sum, d) => sum + d.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
   const avgCalPerDay = mealPlanDays.length > 0 ? Math.round(totalCalories / mealPlanDays.length) : 0;
-  const confirmBtnText = isAddFood ? 'Yes, add it' : isMealPlan ? 'Accept' : 'Confirm';
-  const declineBtnText = isAddFood ? 'No thanks' : 'Decline';
+  const confirmBtnText = isAddFood ? t('coach.yesAddIt') : isMealPlan ? t('coach.accept') : t('coach.confirm');
+  const declineBtnText = isAddFood ? t('coach.noThanks') : t('coach.decline');
 
   // ── add_food_to_diary: special compact card ──────────────────────────────
   if (isAddFood) {
@@ -482,7 +484,7 @@ function InlineActionCard({
       return (
         <View style={[styles.inlineActionStatusBadge]}>
           <Text style={[styles.inlineActionStatusText, { color: '#10B981' }]}>
-            {'✅ Added to your meals'}
+            {t('coach.addedToMeals')}
           </Text>
         </View>
       );
@@ -492,7 +494,7 @@ function InlineActionCard({
       return (
         <View style={[styles.inlineActionStatusBadge]}>
           <Text style={[styles.inlineActionStatusText, { color: secondaryText }]}>
-            {'❌ Not added'}
+            {t('coach.notAdded')}
           </Text>
         </View>
       );
@@ -501,7 +503,7 @@ function InlineActionCard({
     return (
       <View style={[styles.inlineActionCard, { backgroundColor: cardBg, borderColor }]}>
         <Text style={[styles.inlineAddFoodTitle, { color: textColor }]}>
-          {'🍽  Add to today\'s meals?'}
+          {t('coach.addToTodaysMeals')}
         </Text>
         {proposal.food_name ? (
           <Text style={[styles.inlineAddFoodName, { color: textColor }]}>
@@ -549,7 +551,7 @@ function InlineActionCard({
     return (
       <View style={[styles.inlineActionStatusBadge]}>
         <Text style={[styles.inlineActionStatusText, { color: '#10B981' }]}>
-          {'✅ Action confirmed'}
+          {t('coach.actionConfirmed')}
         </Text>
       </View>
     );
@@ -559,7 +561,7 @@ function InlineActionCard({
     return (
       <View style={[styles.inlineActionStatusBadge]}>
         <Text style={[styles.inlineActionStatusText, { color: secondaryText }]}>
-          {'❌ Declined'}
+          {t('coach.declined')}
         </Text>
       </View>
     );
@@ -596,7 +598,7 @@ function InlineActionCard({
                 {daysCount}
               </Text>
               <Text style={[styles.inlineActionStatLabel, { color: secondaryText }]}>
-                {'days'}
+                {t('coach.days')}
               </Text>
             </View>
             <View style={[styles.inlineActionStatBox, { backgroundColor: isDark ? '#252740' : '#F0F2F7' }]}>
@@ -604,7 +606,7 @@ function InlineActionCard({
                 {mealsPerDayStr}
               </Text>
               <Text style={[styles.inlineActionStatLabel, { color: secondaryText }]}>
-                {'meals/day'}
+                {t('coach.mealsPerDay')}
               </Text>
             </View>
             <View style={[styles.inlineActionStatBox, { backgroundColor: isDark ? '#252740' : '#F0F2F7' }]}>
@@ -612,7 +614,7 @@ function InlineActionCard({
                 {avgCalStr}
               </Text>
               <Text style={[styles.inlineActionStatLabel, { color: secondaryText }]}>
-                {'cal/day'}
+                {t('coach.calPerDay')}
               </Text>
             </View>
           </View>
@@ -802,7 +804,7 @@ function StatusCard({
         </View>
       </View>
       <Text style={[styles.statusCardHint, { color: secondaryColor }]}>
-        Tap for full assessment →
+        {t('coach.tapForAssessment')}
       </Text>
     </TouchableOpacity>
   );
@@ -813,6 +815,7 @@ export default function CoachScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
   const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1953,7 +1956,7 @@ export default function CoachScreen() {
   const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !effectivelyGated;
   const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !effectivelyGated;
 
-  const quickActionsLabel = "What do you need?";
+  const quickActionsLabel = t('coach.whatDoYouNeed');
 
   // After first message arrives, show quick actions for returning users
   const quickActionsToShow = QUICK_ACTION_CARDS;
@@ -1984,10 +1987,10 @@ export default function CoachScreen() {
           />
           <View>
             <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Coach
+              {t('coach.coach')}
             </Text>
             <Text style={[styles.headerSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Body Transformation Coach
+              {t('coach.bodyTransformationCoach')}
             </Text>
           </View>
         </View>
@@ -2144,7 +2147,7 @@ export default function CoachScreen() {
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && latestRecommendation && (
             <View style={styles.statusCardSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Current Status
+                {t('coach.tapForAssessment')}
               </Text>
               <StatusCard
                 recommendation={latestRecommendation}
@@ -2188,7 +2191,7 @@ export default function CoachScreen() {
                 />
                 <View style={styles.assistantBubbleColumn}>
                   <Text style={[styles.coachLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    Coach
+                    {t('coach.coach')}
                   </Text>
                   {isWaitingForFirstToken ? (
                     <TypingIndicator isDark={isDark} />
@@ -2211,10 +2214,10 @@ export default function CoachScreen() {
                           borderColor: isDark ? '#3A2E5A' : '#E5D9FF',
                         }}>
                           <Text style={{ color: isDark ? '#E2D9F3' : '#4B2D8A', fontWeight: '700', fontSize: 15, marginBottom: 4 }}>
-                            Your coach has your answer.
+                            {t('coach.premiumOnly')}
                           </Text>
                           <Text style={{ color: isDark ? '#A89BC2' : '#6B5B95', fontSize: 13, lineHeight: 19 }}>
-                            Every response is built around your specific goal — not generic advice.
+                            {t('coach.upgradeToPremium')}
                           </Text>
                         </View>
                         <TouchableOpacity
@@ -2231,7 +2234,7 @@ export default function CoachScreen() {
                           }}
                         >
                           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
-                            See What My Coach Found →
+                            {t('coach.upgrade')} →
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -2262,7 +2265,7 @@ export default function CoachScreen() {
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Quick questions
+                {t('coach.whatDoYouNeed')}
               </Text>
               <View style={styles.cravingHubRow}>
                 {CRAVING_CHIPS.map((chip) => (
@@ -2289,7 +2292,7 @@ export default function CoachScreen() {
         {isGated && !isPremium && (
           <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center' }}>
             <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 12, textAlign: 'center' }}>
-              Unlock Premium to continue the conversation
+              {t('coach.upgradeToPremium')}
             </Text>
           </View>
         )}
@@ -2312,7 +2315,7 @@ export default function CoachScreen() {
                 color: isDark ? colors.textDark : colors.text,
               },
             ]}
-            placeholder={premiumLoading ? "Loading..." : "Ask your coach anything..."}
+            placeholder={premiumLoading ? t('common.loading') : t('coach.askCoach')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={inputText}
             onChangeText={(t) => {
@@ -2353,7 +2356,7 @@ export default function CoachScreen() {
           {/* Header */}
           <View style={[styles.historyHeader, { borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
             <Text style={[styles.historyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Conversation History
+              {t('coach.conversationHistory')}
             </Text>
             <TouchableOpacity
               onPress={() => {
@@ -2375,11 +2378,11 @@ export default function CoachScreen() {
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }}>
             {loadingHistory ? (
               <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: 40 }}>
-                Loading...
+                {t('common.loading')}
               </Text>
             ) : historyConversations.length === 0 ? (
               <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: 40 }}>
-                No conversations yet
+                {t('coach.noConversations')}
               </Text>
             ) : (
               historyConversations.map((conv) => {
@@ -2417,7 +2420,7 @@ export default function CoachScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.historyActionLinkText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                View action history →
+                {t('coach.history')} →
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -2434,7 +2437,7 @@ export default function CoachScreen() {
               activeOpacity={0.85}
             >
               <Text style={styles.newConvBtnText}>
-                + New Conversation
+                {t('coach.startFirstConversation')}
               </Text>
             </TouchableOpacity>
           </View>
