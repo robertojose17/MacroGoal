@@ -71,7 +71,9 @@
     "minutes": "minutos",
     "hours": "horas",
     "noChange": "Sin cambio",
-    "optional2": "(opcional)"
+    "optional2": "(opcional)",
+    "notImplemented": "No Implementado",
+    "notImplementedDesc": "Esta función aún no está implementada"
   },
   "tabs": {
     "dashboard": "Panel",

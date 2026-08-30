@@ -1,5 +1,6 @@
 
 import '@/lib/i18n';
+import i18n from '@/lib/i18n';
 import React, { useEffect, useState } from "react";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -572,7 +573,7 @@ export default function RootLayout() {
                     sheetGrabberVisible: true,
                     sheetAllowedDetents: [0.5, 0.75],
                     headerShown: true,
-                    title: "Log Entry",
+                    title: i18n.t('tracker.logEntry'),
                   }}
                 />
                 <Stack.Screen
@@ -582,7 +583,7 @@ export default function RootLayout() {
                     sheetGrabberVisible: true,
                     sheetAllowedDetents: [0.75, 1.0],
                     headerShown: true,
-                    title: "New Tracker",
+                    title: i18n.t('tracker.newTracker'),
                   }}
                 />
                 <Stack.Screen

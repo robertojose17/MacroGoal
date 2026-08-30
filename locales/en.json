@@ -71,7 +71,9 @@
     "minutes": "minutes",
     "hours": "hours",
     "noChange": "No change",
-    "optional2": "(optional)"
+    "optional2": "(optional)",
+    "notImplemented": "Not Implemented",
+    "notImplementedDesc": "This feature is not implemented yet"
   },
   "tabs": {
     "dashboard": "Dashboard",
