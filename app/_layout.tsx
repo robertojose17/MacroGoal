@@ -604,7 +604,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: 'Consistency Score',
+                    title: i18n.t('nav.consistencyScore'),
                   }}
                 />
                 <Stack.Screen
@@ -612,7 +612,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: 'Weight Progress',
+                    title: i18n.t('nav.weightProgress'),
                   }}
                 />
                 <Stack.Screen
@@ -620,7 +620,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: 'Invite Friends',
+                    title: i18n.t('nav.inviteFriends'),
                   }}
                 />
                 <Stack.Screen
@@ -628,16 +628,16 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: 'Affiliate Application',
+                    title: i18n.t('nav.affiliateApplication'),
                   }}
                 />
                 <Stack.Screen
                   name="affiliate-welcome"
-                  options={{ title: 'Creator Program', headerShown: false }}
+                  options={{ title: i18n.t('nav.creatorProgram'), headerShown: false }}
                 />
                 <Stack.Screen
                   name="affiliate-admin"
-                  options={{ title: 'Affiliate Admin', headerShown: true }}
+                  options={{ title: i18n.t('nav.affiliateAdmin'), headerShown: true }}
                 />
               </Stack>
           </WidgetProvider>

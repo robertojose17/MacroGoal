@@ -2934,5 +2934,13 @@
     "log_your_weight": "Registra tu peso",
     "log_weight_with_photo": "Registra peso con foto",
     "complete_your_daily_missions": "Completa tus misiones diarias"
+  },
+  "nav": {
+    "consistencyScore": "Puntuación de Consistencia",
+    "weightProgress": "Progreso de Peso",
+    "inviteFriends": "Invitar Amigos",
+    "affiliateApplication": "Solicitud de Afiliado",
+    "creatorProgram": "Programa de Creadores",
+    "affiliateAdmin": "Admin de Afiliados"
   }
 }
