@@ -5,6 +5,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -21,6 +22,7 @@ export default function FoodPhotoCaptureScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const barcode = params.barcode as string;
   const type = (params.type as 'correction' | 'new_product') || 'correction';
@@ -35,7 +37,7 @@ export default function FoodPhotoCaptureScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [step, setStep] = useState<Step>('label');
   const [labelPhotoUrl, setLabelPhotoUrl] = useState<string | null>(null);
-  const [processingMessage, setProcessingMessage] = useState('Analyzing nutrition label...');
+  const [processingMessage, setProcessingMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const cameraRef = useRef<any>(null);
   const isCapturingRef = useRef(false);
@@ -98,7 +100,7 @@ export default function FoodPhotoCaptureScreen() {
       if (!response.ok) {
         const errText = await response.text();
         console.error('[FoodPhotoCapture] callEdgeFunction: HTTP error', response.status, errText.slice(0, 200));
-        setErrorMessage('Server error. Please try again later.');
+        setErrorMessage(t('foodPhotoCapture.serverError'));
         setStep('error');
         return;
       }
@@ -146,14 +148,14 @@ export default function FoodPhotoCaptureScreen() {
           }
         }, 1500);
       } else {
-        const msg = result.message || 'Could not verify this product. Please try again with a clearer photo.';
+        const msg = result.message || t('foodPhotoCapture.couldNotVerifyDefault');
         console.warn('[FoodPhotoCapture] callEdgeFunction: not approved, message=', msg);
         setErrorMessage(msg);
         setStep('error');
       }
     } catch (err: any) {
       console.error('[FoodPhotoCapture] callEdgeFunction: error:', err);
-      setErrorMessage('Connection error. Please check your internet and try again.');
+      setErrorMessage(t('foodPhotoCapture.connectionError'));
       setStep('error');
     }
   }, [barcode, type, food_item_id, mealType, date, mode, context, returnTo, mealId, router]);
@@ -172,7 +174,7 @@ export default function FoodPhotoCaptureScreen() {
         // so the camera stays available for the front photo step
         if (type === 'new_product' || type === 'correction') {
           setStep('processing');
-          setProcessingMessage('Uploading label photo...');
+          setProcessingMessage(t('foodPhotoCapture.uploadingLabel'));
           const uploadedUrl = await uploadPhoto(photo.uri, 'label');
           setLabelPhotoUrl(uploadedUrl);
           console.log('[FoodPhotoCapture] capturePhoto: type=', type, '— moving to front photo step');
@@ -182,21 +184,21 @@ export default function FoodPhotoCaptureScreen() {
         }
 
         setStep('processing');
-        setProcessingMessage('Analyzing nutrition label...');
+        setProcessingMessage(t('foodPhotoCapture.analyzingLabel'));
         const uploadedUrl = await uploadPhoto(photo.uri, 'label');
         setLabelPhotoUrl(uploadedUrl);
         await callEdgeFunction(uploadedUrl, null);
 
       } else if (step === 'front') {
         setStep('processing');
-        setProcessingMessage('Verifying product...');
+        setProcessingMessage(t('foodPhotoCapture.verifyingProduct'));
 
         const uploadedUrl = await uploadPhoto(photo.uri, 'front');
         await callEdgeFunction(labelPhotoUrl!, uploadedUrl);
       }
     } catch (err: any) {
       console.error('[FoodPhotoCapture] capturePhoto: error:', err);
-      setErrorMessage('Failed to capture or upload photo. Please try again.');
+      setErrorMessage(t('foodPhotoCapture.failedToCapture'));
       setStep('error');
     } finally {
       isCapturingRef.current = false;
@@ -231,14 +233,14 @@ export default function FoodPhotoCaptureScreen() {
           }}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={isDark ? colors.textDark : colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>Camera Access</Text>
+          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>{t('foodPhotoCapture.cameraAccess')}</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.centerContainer}>
           <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera_alt" size={64} color={colors.primary} />
-          <Text style={[styles.h2, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>Camera Required</Text>
+          <Text style={[styles.h2, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>{t('foodPhotoCapture.cameraRequired')}</Text>
           <Text style={[styles.body, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }]}>
-            Camera access is needed to take photos of nutrition labels.
+            {t('foodPhotoCapture.cameraRequiredDesc')}
           </Text>
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary, marginTop: spacing.xl }]}
@@ -247,7 +249,7 @@ export default function FoodPhotoCaptureScreen() {
               requestPermission();
             }}
           >
-            <Text style={styles.primaryButtonText}>Allow Camera</Text>
+            <Text style={styles.primaryButtonText}>{t('foodPhotoCapture.allowCamera')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -261,10 +263,10 @@ export default function FoodPhotoCaptureScreen() {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.h2, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-            {processingMessage}
+            {processingMessage || t('foodPhotoCapture.analyzingLabel')}
           </Text>
           <Text style={[styles.body, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }]}>
-            This usually takes a few seconds
+            {t('foodPhotoCapture.usuallyFewSeconds')}
           </Text>
         </View>
       </SafeAreaView>
@@ -273,10 +275,10 @@ export default function FoodPhotoCaptureScreen() {
 
   // Success state
   if (step === 'success') {
-    const successTitle = type === 'new_product' ? 'Product Added!' : 'Data Updated!';
+    const successTitle = type === 'new_product' ? t('foodPhotoCapture.productAdded') : t('foodPhotoCapture.dataUpdated');
     const successBody = type === 'new_product'
-      ? 'This product is now available for everyone.'
-      : 'Nutrition data has been updated for all users.';
+      ? t('foodPhotoCapture.productAvailableForAll')
+      : t('foodPhotoCapture.nutritionDataUpdated');
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.centerContainer}>
@@ -303,12 +305,12 @@ export default function FoodPhotoCaptureScreen() {
           }}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={isDark ? colors.textDark : colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>Verification Failed</Text>
+          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>{t('foodPhotoCapture.verificationFailed')}</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.centerContainer}>
           <IconSymbol ios_icon_name="exclamationmark.triangle.fill" android_material_icon_name="warning" size={64} color="#FF9500" />
-          <Text style={[styles.h2, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>Could Not Verify</Text>
+          <Text style={[styles.h2, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>{t('foodPhotoCapture.couldNotVerify')}</Text>
           <Text style={[styles.body, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.xl }]}>
             {errorMessage}
           </Text>
@@ -319,7 +321,7 @@ export default function FoodPhotoCaptureScreen() {
               handleRetry();
             }}
           >
-            <Text style={styles.primaryButtonText}>Try Again</Text>
+            <Text style={styles.primaryButtonText}>{t('foodPhotoCapture.tryAgain')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.secondaryButton, { marginTop: spacing.md }]}
@@ -328,7 +330,7 @@ export default function FoodPhotoCaptureScreen() {
               router.back();
             }}
           >
-            <Text style={[styles.secondaryButtonText, { color: isDark ? colors.textDark : colors.text }]}>Cancel</Text>
+            <Text style={[styles.secondaryButtonText, { color: isDark ? colors.textDark : colors.text }]}>{t('foodPhotoCapture.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -337,13 +339,13 @@ export default function FoodPhotoCaptureScreen() {
 
   // Camera view (label or front step)
   const isLabelStep = step === 'label';
-  const instructionTitle = isLabelStep ? 'Nutrition Label' : 'Product Front';
+  const instructionTitle = isLabelStep ? t('foodPhotoCapture.nutritionLabel') : t('foodPhotoCapture.productFront');
   const instructionText = isLabelStep
-    ? 'Point your camera at the nutrition facts label'
-    : 'Now take a photo of the front of the product';
+    ? t('foodPhotoCapture.pointCameraAtLabel')
+    : t('foodPhotoCapture.takePhotoOfFront');
   const instructionSubtext = isLabelStep
-    ? 'Make sure the entire label is visible and well-lit'
-    : 'Show the product name and brand clearly';
+    ? t('foodPhotoCapture.makeSureLabelVisible')
+    : t('foodPhotoCapture.showProductNameBrand');
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]} edges={['top']}>

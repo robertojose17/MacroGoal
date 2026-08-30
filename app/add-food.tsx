@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput, ActivityIndicator, Animated } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -57,6 +58,7 @@ interface SavedMeal {
 }
 
 export default function AddFoodScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<any>() || {};
 
@@ -111,10 +113,10 @@ export default function AddFoodScreen() {
   const isProcessingRef = useRef(false);
 
   const mealLabels: Record<string, string> = {
-    breakfast: 'Breakfast',
-    lunch: 'Lunch',
-    dinner: 'Dinner',
-    snack: 'Snacks',
+    breakfast: t('common.breakfast'),
+    lunch: t('common.lunch'),
+    dinner: t('common.dinner'),
+    snack: t('common.snack'),
   };
 
   const loadFavorites = useCallback(async () => {
@@ -530,10 +532,10 @@ export default function AddFoodScreen() {
         fats: safeNum(nutrition.fat),
         fiber: safeNum(nutrition.fiber),
       });
-      showSuccessBanner('Added to plan');
+      showSuccessBanner(t('addFood.addedToPlan'));
     } catch (err) {
       console.error('[AddFood] Error adding search result to plan:', err);
-      Alert.alert('Error', 'Failed to add food to plan');
+      Alert.alert(t('common.error'), t('addFood.failedToAddToPlan'));
     }
   }, [mode, planId, date, mealType, showSuccessBanner]);
 
@@ -599,7 +601,7 @@ export default function AddFoodScreen() {
 
         if (foodError) {
           console.error('[AddFood] Error creating food:', foodError);
-          Alert.alert('Error', 'Failed to add food');
+          Alert.alert(t('common.error'), t('addFood.failedToAdd'));
           return;
         }
 
@@ -622,12 +624,12 @@ export default function AddFoodScreen() {
       });
 
       console.log('[AddFood] ✅ Quick added to My Meal draft!');
-      showSuccessBanner('Added');
+      showSuccessBanner(t('addFood.added'));
     } catch (error) {
       console.error('[AddFood] Error quick adding search result:', error);
-      Alert.alert('Error', 'Failed to add food');
+      Alert.alert(t('common.error'), t('addFood.failedToAdd'));
     }
-  }, [context, showSuccessBanner]);
+  }, [context, showSuccessBanner, t]);
 
   const handleCopyFromPrevious = useCallback(() => {
     console.log('[AddFood] Navigating to copy-from-previous');
@@ -713,16 +715,16 @@ export default function AddFoodScreen() {
       if (error) {
         console.error('[AddFood] Error deleting meal:', error);
         setSavedMeals(previousMeals);
-        Alert.alert('Error', 'Failed to delete meal');
+        Alert.alert(t('common.error'), t('addFood.failedToDeleteMeal'));
       } else {
         console.log('[AddFood] Meal deleted successfully');
       }
     } catch (error) {
       console.error('[AddFood] Error in handleDeleteMeal:', error);
       setSavedMeals(previousMeals);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
-  }, [savedMeals]);
+  }, [savedMeals, t]);
 
   const handleBarcodeScanner = useCallback(() => {
     console.log('[AddFood] ========== NAVIGATING TO BARCODE SCANNER ==========');
@@ -818,9 +820,9 @@ export default function AddFoodScreen() {
       });
     } catch (error) {
       console.error('[AddFood] Error opening favorite details:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
-  }, [router, mealType, date, context, returnTo, mode, planId]);
+  }, [router, mealType, date, context, returnTo, mode, planId, t]);
 
   /**
    * FAST ADD: Add favorite directly to My Meal draft
@@ -891,7 +893,7 @@ export default function AddFoodScreen() {
 
         if (foodError) {
           console.error('[AddFood] Error creating food:', foodError);
-          Alert.alert('Error', 'Failed to add food');
+          Alert.alert(t('common.error'), t('addFood.failedToAdd'));
           return;
         }
 
@@ -915,12 +917,12 @@ export default function AddFoodScreen() {
       });
 
       console.log('[AddFood] ✅ Quick added favorite to My Meal draft!');
-      showSuccessBanner('Added');
+      showSuccessBanner(t('addFood.added'));
     } catch (error) {
       console.error('[AddFood] Error quick adding favorite:', error);
-      Alert.alert('Error', 'Failed to add food');
+      Alert.alert(t('common.error'), t('addFood.failedToAdd'));
     }
-  }, [context, showSuccessBanner]);
+  }, [context, showSuccessBanner, t]);
 
   /**
    * Handle adding favorite (for meal log context)
@@ -966,10 +968,10 @@ export default function AddFoodScreen() {
           fats: safeNum(fatPlan),
           fiber: safeNum(fibPlan),
         });
-        showSuccessBanner('Added to plan');
+        showSuccessBanner(t('addFood.addedToPlan'));
       } catch (err) {
         console.error('[AddFood] Error adding favorite to plan:', err);
-        Alert.alert('Error', 'Failed to add food to plan');
+        Alert.alert(t('common.error'), t('addFood.failedToAddToPlan'));
       }
       return;
     }
@@ -977,14 +979,14 @@ export default function AddFoodScreen() {
     // CRITICAL: If in my_meals_builder context, don't allow quick add
     if (context === 'my_meals_builder') {
       console.log('[AddFood] ❌ Cannot quick-add in my_meals_builder context');
-      Alert.alert('Not Available', 'Please tap the food to view details and add it to your meal.');
+      Alert.alert(t('addFood.notAvailable'), t('addFood.tapToViewDetails'));
       return;
     }
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in to add food');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -1042,7 +1044,7 @@ export default function AddFoodScreen() {
 
         if (foodError) {
           console.error('[AddFood] Error creating food:', foodError);
-          Alert.alert('Error', 'Failed to add food');
+          Alert.alert(t('common.error'), t('addFood.failedToAdd'));
           return;
         }
 
@@ -1070,7 +1072,7 @@ export default function AddFoodScreen() {
 
       if (rpcErrorFav) {
         console.error('[AddFood] log_food RPC error for favorite:', rpcErrorFav);
-        Alert.alert('Error', 'Failed to add food to meal');
+        Alert.alert(t('common.error'), t('addFood.failedToAddToMeal'));
         return;
       }
 
@@ -1112,9 +1114,9 @@ export default function AddFoodScreen() {
       console.log('[AddFood] Keeping modal open for multiple adds');
     } catch (error) {
       console.error('[AddFood] Error adding favorite:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
-  }, [context, mode, planId, date, mealType, showSuccessBanner]);
+  }, [context, mode, planId, date, mealType, showSuccessBanner, t]);
 
   /**
    * Remove a favorite from the list
@@ -1139,14 +1141,14 @@ export default function AddFoodScreen() {
       } else {
         console.error('[AddFood] ✗ removeFavoriteById returned false');
         setFavorites(previousFavorites);
-        Alert.alert('Error', 'Failed to remove favorite. Please try again.');
+        Alert.alert(t('common.error'), t('addFood.failedToRemoveFavorite'));
       }
     } catch (error: any) {
       console.error('[AddFood] ✗ Error removing favorite:', error);
       setFavorites(previousFavorites);
-      Alert.alert('Error', error.message || 'Failed to remove favorite. Please try again.');
+      Alert.alert(t('common.error'), error.message || t('addFood.failedToRemoveFavorite'));
     }
-  }, [favorites]);
+  }, [favorites, t]);
 
   const renderSearchResultItem = useCallback((item: SearchResultItem, index: number) => {
     const displayName = item.product.product_name || 'Unknown Product';
@@ -1339,12 +1341,12 @@ export default function AddFoodScreen() {
   const handleQuickAddRecentFood = useCallback(async (item: RecentFoodItem) => {
     console.log('[AddFood] Quick add recent food:', item.food_name);
     if (context === 'my_meals_builder') {
-      Alert.alert('Not Available', 'Please tap the food to view details and add it to your meal.');
+      Alert.alert(t('addFood.notAvailable'), t('addFood.tapToViewDetails'));
       return;
     }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Error', 'You must be logged in to add food'); return; }
+      if (!user) { Alert.alert(t('common.error'), t('common.loggedIn')); return; }
 
       const gramsLogged = item.grams_logged ?? item.serving_size ?? 100;
       console.log('[AddFood] Logging recent food via RPC (pre-calculated):', item.food_name, 'grams=', gramsLogged, 'calories=', item.calories_logged, 'protein=', item.protein_logged, 'carbs=', item.carbs_logged, 'fat=', item.fat_logged);
@@ -1368,7 +1370,7 @@ export default function AddFoodScreen() {
 
       if (rpcError) {
         console.error('[AddFood] RPC error logging recent food:', rpcError);
-        Alert.alert('Error', 'Failed to add food to meal');
+        Alert.alert(t('common.error'), t('addFood.failedToAddToMeal'));
         return;
       }
 
@@ -1381,9 +1383,9 @@ export default function AddFoodScreen() {
       showSuccessBanner();
     } catch (error) {
       console.error('[AddFood] Error quick adding recent food:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
-  }, [context, date, mealType, showSuccessBanner]);
+  }, [context, date, mealType, showSuccessBanner, t]);
 
   const handleOpenRecentFoodDetails = useCallback((item: RecentFoodItem) => {
     console.log('[AddFood] Opening recent food details:', item.food_name, 'off_data:', !!item.off_data);
@@ -1519,7 +1521,7 @@ export default function AddFoodScreen() {
     // CRITICAL: Only allow quick add in meal_log context
     if (context === 'my_meals_builder') {
       console.log('[AddFood] ❌ Cannot quick-add in my_meals_builder context');
-      Alert.alert('Not Available', 'Please tap the meal to view details and add it to your meal.');
+      Alert.alert(t('addFood.notAvailable'), t('addFood.tapToViewDetailsMeal'));
       return;
     }
 
@@ -1528,7 +1530,7 @@ export default function AddFoodScreen() {
       console.log('[AddFood] Meal plan mode — adding saved meal to plan:', planId);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { Alert.alert('Error', 'You must be logged in'); return; }
+        if (!user) { Alert.alert(t('common.error'), t('common.loggedIn')); return; }
 
         const { data: mealItems, error: itemsError } = await supabase
           .from('saved_meal_items')
@@ -1543,7 +1545,7 @@ export default function AddFoodScreen() {
           .eq('saved_meal_id', meal.id);
 
         if (itemsError || !mealItems || mealItems.length === 0) {
-          Alert.alert('Error', 'Failed to load meal items');
+          Alert.alert(t('common.error'), t('addFood.failedToLoadMealItems'));
           return;
         }
 
@@ -1585,10 +1587,10 @@ export default function AddFoodScreen() {
             fiber: safeNum(fiber),
           });
         }
-        showSuccessBanner('Added to plan');
+        showSuccessBanner(t('addFood.addedToPlan'));
       } catch (err) {
         console.error('[AddFood] Error adding saved meal to plan:', err);
-        Alert.alert('Error', 'Failed to add meal to plan');
+        Alert.alert(t('common.error'), t('addFood.failedToAddMealToPlan'));
       }
       return;
     }
@@ -1596,7 +1598,7 @@ export default function AddFoodScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in to add meal');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -1635,7 +1637,7 @@ export default function AddFoodScreen() {
 
       if (itemsError || !mealItems || mealItems.length === 0) {
         console.error('[AddFood] Error loading meal items:', itemsError);
-        Alert.alert('Error', 'Failed to load meal items');
+        Alert.alert(t('common.error'), t('addFood.failedToLoadMealItems'));
         return;
       }
 
@@ -1687,7 +1689,7 @@ export default function AddFoodScreen() {
 
         if (rpcError) {
           console.error('[AddFood] log_food RPC error for saved meal item:', itemName, rpcError);
-          Alert.alert('Error', 'Failed to add meal items');
+          Alert.alert(t('common.error'), t('addFood.failedToAddMealItems'));
           return;
         }
 
@@ -1710,14 +1712,14 @@ export default function AddFoodScreen() {
       trackFirstMealIfNeeded();
       
       // Show success banner
-      showSuccessBanner('Meal Added');
+      showSuccessBanner(t('addFood.mealAdded'));
       
       console.log('[AddFood] Keeping modal open for multiple adds');
     } catch (error) {
       console.error('[AddFood] Error quick adding saved meal:', error);
-      Alert.alert('Error', 'An unexpected error occurred while adding meal');
+      Alert.alert(t('common.error'), t('addFood.unexpectedErrorAddingMeal'));
     }
-  }, [context, date, mealType, showSuccessBanner, mode, planId]);
+  }, [context, date, mealType, showSuccessBanner, mode, planId, t]);
 
   const renderSavedMealItem = useCallback((meal: SavedMeal, index: number) => {
     const mealCalories = Math.round(meal.total_calories || 0);
@@ -1725,7 +1727,7 @@ export default function AddFoodScreen() {
     const mealCarbs = Math.round(meal.total_carbs || 0);
     const mealFats = Math.round(meal.total_fats || 0);
     const itemCount = meal.item_count || 0;
-    const itemLabel = itemCount === 1 ? 'item' : 'items';
+    const itemLabel = itemCount === 1 ? t('home.item') : t('home.items');
 
     return (
       <React.Fragment key={meal.id}>
@@ -1809,7 +1811,7 @@ export default function AddFoodScreen() {
         return (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Type at least 2 characters to search
+              {t('addFood.typeAtLeast2')}
             </Text>
           </View>
         );
@@ -1820,7 +1822,7 @@ export default function AddFoodScreen() {
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
-              Searching...
+              {t('addFood.searching')}
             </Text>
           </View>
         );
@@ -1843,7 +1845,7 @@ export default function AddFoodScreen() {
               onPress={handleRetrySearch}
               activeOpacity={0.7}
             >
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -1853,7 +1855,7 @@ export default function AddFoodScreen() {
         return (
           <React.Fragment>
             <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Search Results ({searchResults.length})
+              {t('addFood.searchResults', { count: searchResults.length })}
             </Text>
             {searchResults.map((item, index) => renderSearchResultItem(item, index))}
             {isSearching && (
@@ -1868,7 +1870,7 @@ export default function AddFoodScreen() {
       return (
         <View style={styles.emptyState}>
           <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            No foods found
+            {t('addFood.noFoodsFound')}
           </Text>
         </View>
       );
@@ -1877,11 +1879,11 @@ export default function AddFoodScreen() {
     return (
       <View style={styles.emptyState}>
         <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          Search for a food to get started
+          {t('addFood.searchToGetStarted')}
         </Text>
       </View>
     );
-  }, [searchQuery, isSearching, searchError, searchResults, isDark, handleRetrySearch, renderSearchResultItem]);
+  }, [searchQuery, isSearching, searchError, searchResults, isDark, handleRetrySearch, renderSearchResultItem, t]);
 
   return (
     <SafeAreaView 
@@ -1898,7 +1900,7 @@ export default function AddFoodScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          {'Add Food'}
+          {t('addFood.title')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -1924,7 +1926,7 @@ export default function AddFoodScreen() {
               styles.searchInput,
               { color: isDark ? colors.textDark : colors.text }
             ]}
-            placeholder="Search food..."
+            placeholder={t('addFood.searchPlaceholder')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={searchQuery}
             onChangeText={handleSearchChange}
@@ -1961,7 +1963,7 @@ export default function AddFoodScreen() {
               activeTab === 'all' && styles.tabTextActive,
               { color: activeTab === 'all' ? (isDark ? colors.textDark : colors.text) : (isDark ? colors.textSecondaryDark : colors.textSecondary) }
             ]}>
-              All
+              {t('foodSearch.allTab')}
             </Text>
             {activeTab === 'all' && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
@@ -1976,7 +1978,7 @@ export default function AddFoodScreen() {
               activeTab === 'favorites' && styles.tabTextActive,
               { color: activeTab === 'favorites' ? (isDark ? colors.textDark : colors.text) : (isDark ? colors.textSecondaryDark : colors.textSecondary) }
             ]}>
-              Favorites
+              {t('addFood.favorites')}
             </Text>
             {activeTab === 'favorites' && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
@@ -1991,7 +1993,7 @@ export default function AddFoodScreen() {
               activeTab === 'quick-add' && styles.tabTextActive,
               { color: activeTab === 'quick-add' ? (isDark ? colors.textDark : colors.text) : (isDark ? colors.textSecondaryDark : colors.textSecondary) }
             ]}>
-              Quick Add
+              {t('addFood.quickAdd')}
             </Text>
             {activeTab === 'quick-add' && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
@@ -2008,7 +2010,7 @@ export default function AddFoodScreen() {
                 activeTab === 'my-meals' && styles.tabTextActive,
                 { color: activeTab === 'my-meals' ? (isDark ? colors.textDark : colors.text) : (isDark ? colors.textSecondaryDark : colors.textSecondary) }
               ]}>
-                My Meals
+                {t('addFood.myMeals')}
               </Text>
               {activeTab === 'my-meals' && <View style={styles.tabIndicator} />}
             </TouchableOpacity>
@@ -2029,7 +2031,7 @@ export default function AddFoodScreen() {
             {activeTab === 'all' && (
               <React.Fragment>
                 <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Quick Actions
+                  {t('addFood.quickActions')}
                 </Text>
                 <View style={styles.quickActionsRowCompact}>
                   <TouchableOpacity
@@ -2044,7 +2046,7 @@ export default function AddFoodScreen() {
                       color="#F59E0B"
                     />
                     <Text style={styles.quickActionButtonTextCompact}>
-                      AI Meal{'\n'}Estimator
+                      {t('addFood.aiMealEstimator')}
                     </Text>
                   </TouchableOpacity>
 
@@ -2060,7 +2062,7 @@ export default function AddFoodScreen() {
                       color="#8B5CF6"
                     />
                     <Text style={styles.quickActionButtonTextCompact}>
-                      Barcode{'\n'}Scan
+                      {t('addFood.barcodeScan')}
                     </Text>
                   </TouchableOpacity>
 
@@ -2078,7 +2080,7 @@ export default function AddFoodScreen() {
                         color="#10B981"
                       />
                       <Text style={styles.quickActionButtonTextCompact}>
-                        Copy from{'\n'}Previous
+                        {t('addFood.copyFromPrevious')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -2089,7 +2091,7 @@ export default function AddFoodScreen() {
             {activeTab === 'all' && (
               <React.Fragment>
                 <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Recent Foods
+                  {t('addFood.recentFoods')}
                 </Text>
                 {loadingRecentFoods ? (
                   <View style={styles.emptyState}>
@@ -2100,7 +2102,7 @@ export default function AddFoodScreen() {
                 ) : (
                   <View style={[styles.emptyState, { paddingVertical: 16 }]}>
                     <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Foods you log will appear here
+                      {t('addFood.recentFoodsEmpty')}
                     </Text>
                   </View>
                 )}
@@ -2112,7 +2114,7 @@ export default function AddFoodScreen() {
             {activeTab === 'favorites' && (
               <React.Fragment>
                 <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Favorite Foods
+                  {t('addFood.favoriteFoods')}
                 </Text>
                 {favorites.length > 0 ? (
                   favorites.map((favorite, index) => renderFavoriteItem(favorite, index))
@@ -2125,10 +2127,10 @@ export default function AddFoodScreen() {
                       color={isDark ? colors.textSecondaryDark : colors.textSecondary}
                     />
                     <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
-                      No favorite foods yet
+                      {t('addFood.noFavoritesYet')}
                     </Text>
                     <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.xs }]}>
-                      Tap the star icon on any food to add it to your favorites
+                      {t('addFood.tapStarToFavorite')}
                     </Text>
                   </View>
                 )}
@@ -2162,19 +2164,19 @@ export default function AddFoodScreen() {
                     size={20}
                     color="#FFFFFF"
                   />
-                  <Text style={styles.createMealButtonText}>Create a New Meal</Text>
+                  <Text style={styles.createMealButtonText}>{t('addFood.createNewMeal')}</Text>
                 </TouchableOpacity>
 
                 {/* SAVED MEALS LIST */}
                 <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Saved Meals
+                  {t('addFood.savedMeals')}
                 </Text>
 
                 {loadingSavedMeals ? (
                   <View style={styles.emptyState}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
-                      Loading saved meals...
+                      {t('addFood.loadingSavedMeals')}
                     </Text>
                   </View>
                 ) : savedMeals.length > 0 ? (
@@ -2188,10 +2190,10 @@ export default function AddFoodScreen() {
                       color={isDark ? colors.textSecondaryDark : colors.textSecondary}
                     />
                     <Text style={[styles.emptyText, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.md }]}>
-                      No saved meals yet
+                      {t('addFood.noSavedMealsYet')}
                     </Text>
                     <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.xs }]}>
-                      Create your first saved meal to reuse it anytime
+                      {t('addFood.createFirstSavedMeal')}
                     </Text>
                   </View>
                 )}

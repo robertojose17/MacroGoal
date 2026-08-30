@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -19,6 +20,7 @@ export default function MyFoodsCreateScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const mode = (params.mode as string) || undefined;
   const mealType = (params.meal as string) || 'breakfast';
@@ -81,12 +83,12 @@ export default function MyFoodsCreateScreen() {
     console.log('[MyFoodsCreate] Meal:', mealType, 'Date:', date);
 
     if (!foodName.trim()) {
-      Alert.alert('Error', 'Please enter a food name');
+      Alert.alert(t('common.error'), t('myFoodsCreate.enterFoodName'));
       return;
     }
 
     if (!calories.trim()) {
-      Alert.alert('Error', 'Please enter calories');
+      Alert.alert(t('common.error'), t('myFoodsCreate.enterCalories'));
       return;
     }
 
@@ -96,7 +98,7 @@ export default function MyFoodsCreateScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.error('[MyFoodsCreate] No user found');
-        Alert.alert('Error', 'You must be logged in to create foods');
+        Alert.alert(t('common.error'), t('myFoodsCreate.mustBeLoggedIn'));
         setSaving(false);
         return;
       }
@@ -134,7 +136,7 @@ export default function MyFoodsCreateScreen() {
           hint: foodError.hint,
           code: foodError.code,
         });
-        Alert.alert('Error', `Failed to create food: ${foodError.message}`);
+        Alert.alert(t('common.error'), t('myFoodsCreate.failedToCreate', { message: foodError.message }));
         setSaving(false);
         return;
       }
@@ -192,7 +194,7 @@ export default function MyFoodsCreateScreen() {
 
         if (rpcError) {
           console.error('[MyFoodsCreate] log_food RPC error:', rpcError);
-          Alert.alert('Error', `Failed to add food to meal: ${rpcError.message}`);
+          Alert.alert(t('common.error'), t('myFoodsCreate.failedToAddToMeal', { message: rpcError.message }));
           setSaving(false);
           return;
         }
@@ -222,9 +224,9 @@ export default function MyFoodsCreateScreen() {
 
       // ── MODE: library (default — save to My Foods only) ───────────────────
       console.log('[MyFoodsCreate] Library mode — food saved to library only');
-      Alert.alert('Success', 'Custom food created!', [
+      Alert.alert(t('common.success'), t('myFoodsCreate.customFoodCreated'), [
         {
-          text: 'OK',
+          text: t('common.ok'),
           onPress: () => router.back(),
         },
       ]);
@@ -234,7 +236,7 @@ export default function MyFoodsCreateScreen() {
         console.error('[MyFoodsCreate] Error message:', error.message);
         console.error('[MyFoodsCreate] Error stack:', error.stack);
       }
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       setSaving(false);
     }
@@ -242,12 +244,12 @@ export default function MyFoodsCreateScreen() {
 
   const mealTypeCapitalized = mealType.charAt(0).toUpperCase() + mealType.slice(1);
   const buttonLabel = effectiveMode === 'mymeal'
-    ? 'Add to My Meal'
+    ? t('myFoodsCreate.addToMyMeal')
     : effectiveMode === 'diary'
-      ? `Add to ${mealTypeCapitalized}`
-      : 'Save Custom Food';
+      ? t('myFoodsCreate.addToMeal', { meal: mealTypeCapitalized })
+      : t('myFoodsCreate.saveCustomFood');
 
-  const screenTitle = effectiveMode === 'library' ? 'Create Custom Food' : 'Create Food';
+  const screenTitle = effectiveMode === 'library' ? t('myFoodsCreate.createCustomFood') : t('myFoodsCreate.createFood');
 
   const showServingFields = true;
 
@@ -283,16 +285,16 @@ export default function MyFoodsCreateScreen() {
         >
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Food Information
+              {t('myFoodsCreate.foodInformation')}
             </Text>
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Food Name *
+                {t('myFoodsCreate.foodNameRequired')}
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="e.g., Homemade Protein Shake"
+                placeholder={t('myFoodsCreate.foodNamePlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 value={foodName}
                 onChangeText={setFoodName}
@@ -302,11 +304,11 @@ export default function MyFoodsCreateScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Brand (Optional)
+                {t('myFoodsCreate.brandOptional')}
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="e.g., Homemade"
+                placeholder={t('myFoodsCreate.brandPlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 value={brand}
                 onChangeText={setBrand}
@@ -315,13 +317,13 @@ export default function MyFoodsCreateScreen() {
             </View>
 
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-              Serving Size
+              {t('myFoodsCreate.servingSize')}
             </Text>
 
             <View style={styles.servingRow}>
               <View style={styles.servingAmountInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Amount
+                  {t('myFoodsCreate.amount')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -336,7 +338,7 @@ export default function MyFoodsCreateScreen() {
 
               <View style={styles.servingUnitInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Unit
+                  {t('myFoodsCreate.unit')}
                 </Text>
                 <TouchableOpacity
                   style={[styles.unitButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border }]}
@@ -398,16 +400,16 @@ export default function MyFoodsCreateScreen() {
             )}
 
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-              Nutrition (per serving)
+              {t('myFoodsCreate.nutritionPerServing')}
             </Text>
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Calories *
+                {t('myFoodsCreate.caloriesRequired')}
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="e.g., 250"
+                placeholder={t('myFoodsCreate.caloriesPlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 keyboardType="decimal-pad"
                 value={calories}
@@ -417,13 +419,13 @@ export default function MyFoodsCreateScreen() {
             </View>
 
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-              Macros (Optional)
+              {t('myFoodsCreate.macrosOptional')}
             </Text>
 
             <View style={styles.macroRow}>
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Protein (g)
+                  {t('myFoodsCreate.proteinG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -438,7 +440,7 @@ export default function MyFoodsCreateScreen() {
 
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Carbs (g)
+                  {t('myFoodsCreate.carbsG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -455,7 +457,7 @@ export default function MyFoodsCreateScreen() {
             <View style={styles.macroRow}>
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Fats (g)
+                  {t('myFoodsCreate.fatsG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -470,7 +472,7 @@ export default function MyFoodsCreateScreen() {
 
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Fiber (g)
+                  {t('myFoodsCreate.fiberG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}

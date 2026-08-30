@@ -2,11 +2,13 @@
 import React from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import FoodDetailsLayout from '@/components/FoodDetailsLayout';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { addMealPlanItem } from '@/utils/mealPlansApi';
 import type { FoodLogSource } from '@/utils/logFoodUsage';
 export default function FoodDetailsScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams();
   const router = useRouter();
 
@@ -51,9 +53,9 @@ export default function FoodDetailsScreen() {
 
         const newItem = await addMealPlanItem(planId, body);
         console.log('[FoodDetails] Food added to meal plan successfully:', newItem.id);
-        Alert.alert('Added to meal plan', '', [
+        Alert.alert(t('foodDetails.addedToMealPlan'), '', [
           {
-            text: 'OK',
+            text: t('common.ok'),
             onPress: () => {
               console.log('[FoodDetails] Navigating back to meal plan detail');
               router.dismiss();
@@ -63,7 +65,7 @@ export default function FoodDetailsScreen() {
         ]);
       } catch (err: any) {
         console.error('[FoodDetails] Error adding to meal plan:', err);
-        Alert.alert('Error', 'Failed to add food to meal plan. Please try again.');
+        Alert.alert(t('common.error'), t('foodDetails.failedToAddToMealPlan'));
       }
     };
 

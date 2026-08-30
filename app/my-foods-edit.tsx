@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -13,6 +14,7 @@ export default function MyFoodsEditScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const foodId = params.foodId as string;
 
@@ -39,7 +41,7 @@ export default function MyFoodsEditScreen() {
 
       if (error) {
         console.error('[MyFoodsEdit] Error loading food:', error);
-        Alert.alert('Error', 'Failed to load food');
+        Alert.alert(t('common.error'), t('myFoodsEdit.failedToLoad'));
         router.back();
         return;
       }
@@ -57,7 +59,7 @@ export default function MyFoodsEditScreen() {
       setLoading(false);
     } catch (error) {
       console.error('[MyFoodsEdit] Error in loadFood:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
       router.back();
     }
   }, [foodId, router]);
@@ -72,12 +74,12 @@ export default function MyFoodsEditScreen() {
     console.log('[MyFoodsEdit] Food Name:', foodName);
     
     if (!foodName.trim()) {
-      Alert.alert('Error', 'Please enter a food name');
+      Alert.alert(t('common.error'), t('myFoodsEdit.enterFoodName'));
       return;
     }
 
     if (!calories.trim()) {
-      Alert.alert('Error', 'Please enter calories');
+      Alert.alert(t('common.error'), t('myFoodsEdit.enterCalories'));
       return;
     }
 
@@ -114,7 +116,7 @@ export default function MyFoodsEditScreen() {
           hint: error.hint,
           code: error.code,
         });
-        Alert.alert('Error', `Failed to update food: ${error.message}`);
+        Alert.alert(t('common.error'), t('myFoodsEdit.failedToUpdate', { message: error.message }));
         setSaving(false);
         return;
       }
@@ -122,9 +124,9 @@ export default function MyFoodsEditScreen() {
       console.log('[MyFoodsEdit] ✅ Food updated successfully!');
       console.log('[MyFoodsEdit] Updated data:', data);
 
-      Alert.alert('Success', 'Food updated!', [
+      Alert.alert(t('common.success'), t('myFoodsEdit.foodUpdated'), [
         {
-          text: 'OK',
+          text: t('common.ok'),
           onPress: () => router.back(),
         },
       ]);
@@ -134,7 +136,7 @@ export default function MyFoodsEditScreen() {
         console.error('[MyFoodsEdit] Error message:', error.message);
         console.error('[MyFoodsEdit] Error stack:', error.stack);
       }
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       setSaving(false);
     }
@@ -146,7 +148,7 @@ export default function MyFoodsEditScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading food...
+            {t('myFoodsEdit.loadingFood')}
           </Text>
         </View>
       </SafeAreaView>
@@ -170,7 +172,7 @@ export default function MyFoodsEditScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Edit Custom Food
+            {t('myFoodsEdit.title')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -182,16 +184,16 @@ export default function MyFoodsEditScreen() {
         >
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Food Information
+              {t('myFoodsEdit.foodInformation')}
             </Text>
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Food Name *
+                {t('myFoodsEdit.foodNameRequired')}
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="e.g., Homemade Protein Shake"
+                placeholder={t('myFoodsEdit.foodNamePlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 value={foodName}
                 onChangeText={setFoodName}
@@ -201,11 +203,11 @@ export default function MyFoodsEditScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Brand (Optional)
+                {t('myFoodsEdit.brandOptional')}
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="e.g., Homemade"
+                placeholder={t('myFoodsEdit.brandPlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 value={brand}
                 onChangeText={setBrand}
@@ -214,13 +216,13 @@ export default function MyFoodsEditScreen() {
             </View>
 
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-              Serving Size
+              {t('myFoodsEdit.servingSize')}
             </Text>
 
             <View style={styles.servingRow}>
               <View style={styles.servingAmountInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Amount
+                  {t('myFoodsEdit.amount')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -235,7 +237,7 @@ export default function MyFoodsEditScreen() {
 
               <View style={styles.servingUnitInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Unit
+                  {t('myFoodsEdit.unit')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -249,16 +251,16 @@ export default function MyFoodsEditScreen() {
             </View>
 
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
-              Nutrition (per serving)
+              {t('myFoodsEdit.nutritionPerServing')}
             </Text>
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Calories *
+                {t('myFoodsEdit.caloriesRequired')}
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="e.g., 250"
+                placeholder={t('myFoodsEdit.caloriesPlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 keyboardType="decimal-pad"
                 value={calories}
@@ -270,7 +272,7 @@ export default function MyFoodsEditScreen() {
             <View style={styles.macroRow}>
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Protein (g)
+                  {t('myFoodsEdit.proteinG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -285,7 +287,7 @@ export default function MyFoodsEditScreen() {
 
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Carbs (g)
+                  {t('myFoodsEdit.carbsG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -302,7 +304,7 @@ export default function MyFoodsEditScreen() {
             <View style={styles.macroRow}>
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Fats (g)
+                  {t('myFoodsEdit.fatsG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -317,7 +319,7 @@ export default function MyFoodsEditScreen() {
 
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  Fiber (g)
+                  {t('myFoodsEdit.fiberG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -340,7 +342,7 @@ export default function MyFoodsEditScreen() {
             {saving ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.saveButtonText}>Save Changes</Text>
+              <Text style={styles.saveButtonText}>{t('myFoodsEdit.saveChanges')}</Text>
             )}
           </TouchableOpacity>
 

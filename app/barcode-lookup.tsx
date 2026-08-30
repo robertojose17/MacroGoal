@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -23,6 +24,7 @@ const LOOKUP_TIMEOUT_MS = 10000; // 10 seconds
  * When product is found, scanner navigates DIRECTLY to food-details
  */
 export default function BarcodeLookupScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
@@ -59,9 +61,9 @@ export default function BarcodeLookupScreen() {
 
     if (!barcode || barcode.length === 0) {
       console.error('[BarcodeLookup] ❌ No barcode provided');
-      Alert.alert('Error', 'No barcode provided', [
+      Alert.alert(t('common.error'), t('barcodeLookup.noBarcodeProvided'), [
         {
-          text: 'OK',
+          text: t('common.ok'),
           onPress: () => router.back(),
         },
       ]);
@@ -190,10 +192,10 @@ export default function BarcodeLookupScreen() {
       
       if (error.message === 'Lookup timeout') {
         console.log('[BarcodeLookup] Error type: TIMEOUT');
-        setError('Lookup timed out. The product database might be slow or unavailable.');
+        setError(t('barcodeLookup.lookupTimeout'));
       } else {
         console.log('[BarcodeLookup] Error type: UNKNOWN');
-        setError('Failed to look up product. Please check your internet connection and try again.');
+        setError(t('barcodeLookup.lookupFailed'));
       }
     }
   };
@@ -249,17 +251,17 @@ export default function BarcodeLookupScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Looking Up Product
+            {t('barcodeLookup.lookingUpProduct')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Looking up product...
+            {t('barcodeLookup.lookingUpProductEllipsis')}
           </Text>
           <Text style={[styles.loadingSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Barcode: {barcode}
+            {t('barcodeLookup.barcodeLabel')}{barcode}
           </Text>
         </View>
       </SafeAreaView>
@@ -280,7 +282,7 @@ export default function BarcodeLookupScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Lookup Failed
+            {t('barcodeLookup.lookupFailed')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -292,26 +294,26 @@ export default function BarcodeLookupScreen() {
             color={colors.warning || '#FF9500'}
           />
           <Text style={[styles.errorTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Connection Issue
+            {t('barcodeLookup.connectionIssue')}
           </Text>
           <Text style={[styles.errorText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {error}
           </Text>
           <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Barcode: {barcode}
+            {t('barcodeLookup.barcodeLabel')}{barcode}
           </Text>
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary }]}
             onPress={handleRetry}
           >
-            <Text style={styles.primaryButtonText}>Try Again</Text>
+            <Text style={styles.primaryButtonText}>{t('common.tryAgain')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={handleManualSearch}
           >
             <Text style={[styles.secondaryButtonText, { color: isDark ? colors.textDark : colors.text }]}>
-              Search Manually
+              {t('barcodeLookup.searchManually')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -333,7 +335,7 @@ export default function BarcodeLookupScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Product Not Found
+            {t('barcodeLookup.productNotFound')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -345,18 +347,18 @@ export default function BarcodeLookupScreen() {
             color={isDark ? colors.textSecondaryDark : colors.textSecondary}
           />
           <Text style={[styles.notFoundTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Product Not Found
+            {t('barcodeLookup.productNotFound')}
           </Text>
           <Text style={[styles.notFoundText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This product isn't in our database yet. Help us add it!
+            {t('barcodeLookup.productNotInDatabase')}
           </Text>
           <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Barcode: {barcode}
+            {t('barcodeLookup.barcodeLabel')}{barcode}
           </Text>
           
           <View style={styles.optionsContainer}>
             <Text style={[styles.optionsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              What would you like to do?
+              {t('barcodeLookup.whatWouldYouLikeToDo')}
             </Text>
 
             <TouchableOpacity
@@ -386,10 +388,10 @@ export default function BarcodeLookupScreen() {
               />
               <View style={styles.optionTextContainer}>
                 <Text style={[styles.optionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Add This Product
+                  {t('barcodeLookup.addThisProduct')}
                 </Text>
                 <Text style={[styles.optionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Take photos to add it to our database
+                  {t('barcodeLookup.addThisProductSub')}
                 </Text>
               </View>
               <IconSymbol
@@ -412,10 +414,10 @@ export default function BarcodeLookupScreen() {
               />
               <View style={styles.optionTextContainer}>
                 <Text style={[styles.optionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Search Manually
+                  {t('barcodeLookup.searchManually')}
                 </Text>
                 <Text style={[styles.optionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Search by food name
+                  {t('barcodeLookup.searchByFoodName')}
                 </Text>
               </View>
               <IconSymbol
@@ -438,10 +440,10 @@ export default function BarcodeLookupScreen() {
               />
               <View style={styles.optionTextContainer}>
                 <Text style={[styles.optionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Add Manually
+                  {t('barcodeLookup.addManually')}
                 </Text>
                 <Text style={[styles.optionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Enter calories & macros
+                  {t('barcodeLookup.enterCaloriesMacros')}
                 </Text>
               </View>
               <IconSymbol
@@ -464,10 +466,10 @@ export default function BarcodeLookupScreen() {
               />
               <View style={styles.optionTextContainer}>
                 <Text style={[styles.optionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  Scan Again
+                  {t('barcodeLookup.scanAgain')}
                 </Text>
                 <Text style={[styles.optionSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Try scanning another barcode
+                  {t('barcodeLookup.tryScanningAnother')}
                 </Text>
               </View>
               <IconSymbol

@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -12,6 +13,7 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 
 export default function BarcodeScannerScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
@@ -215,7 +217,7 @@ export default function BarcodeScannerScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Checking camera permissions...
+            {t('barcodeScanner.checkingPermissions')}
           </Text>
         </View>
       </SafeAreaView>
@@ -234,10 +236,10 @@ export default function BarcodeScannerScreen() {
             color={colors.primary}
           />
           <Text style={[styles.permissionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Camera Access
+            {t('barcodeScanner.cameraAccess')}
           </Text>
           <Text style={[styles.permissionText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Macro Goal needs access to your camera to scan food barcodes and look up nutrition information.
+            {t('barcodeScanner.cameraAccessDesc')}
           </Text>
           <TouchableOpacity
             style={[styles.permissionButton, { backgroundColor: colors.primary }]}
@@ -246,7 +248,7 @@ export default function BarcodeScannerScreen() {
               requestPermission();
             }}
           >
-            <Text style={styles.permissionButtonText}>Continue</Text>
+            <Text style={styles.permissionButtonText}>{t('barcodeScanner.continue')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -270,7 +272,7 @@ export default function BarcodeScannerScreen() {
             />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Barcode Scanner
+            {t('barcodeScanner.title')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -283,10 +285,10 @@ export default function BarcodeScannerScreen() {
             color={isDark ? colors.textSecondaryDark : colors.textSecondary}
           />
           <Text style={[styles.permissionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Camera Access Required
+            {t('barcodeScanner.cameraAccessRequired')}
           </Text>
           <Text style={[styles.permissionText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Camera access has been denied. To scan barcodes, please enable camera access for Macro Goal in your device Settings.
+            {t('barcodeScanner.cameraAccessDeniedDesc')}
           </Text>
           <TouchableOpacity
             style={[styles.permissionButton, { backgroundColor: colors.primary }]}
@@ -295,7 +297,7 @@ export default function BarcodeScannerScreen() {
               Linking.openURL('app-settings:');
             }}
           >
-            <Text style={styles.permissionButtonText}>Open Settings</Text>
+            <Text style={styles.permissionButtonText}>{t('barcodeScanner.openSettings')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -353,10 +355,10 @@ export default function BarcodeScannerScreen() {
           <View style={styles.overlayBottom}>
             <View style={styles.instructionsContainer}>
               <Text style={styles.instructionsText}>
-                Align the barcode within the frame
+                {t('barcodeScanner.alignBarcode')}
               </Text>
               <Text style={styles.instructionsSubtext}>
-                The barcode will be scanned automatically
+                {t('barcodeScanner.autoScanned')}
               </Text>
             </View>
           </View>

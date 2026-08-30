@@ -2,6 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -31,6 +32,7 @@ export default function MyFoodsScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
@@ -65,7 +67,7 @@ export default function MyFoodsScreen() {
 
       if (error) {
         console.error('[MyFoods] Error loading foods:', error);
-        Alert.alert('Error', 'Failed to load your foods');
+        Alert.alert(t('common.error'), t('myFoods.failedToLoad'));
         setLoading(false);
         return;
       }
@@ -173,14 +175,14 @@ export default function MyFoodsScreen() {
       if (error) {
         console.error('[MyFoods] Error deleting food:', error);
         setMyFoods(previousFoods);
-        Alert.alert('Error', 'Failed to delete food');
+        Alert.alert(t('common.error'), t('myFoods.failedToDelete'));
       } else {
         console.log('[MyFoods] ✅ Food deleted successfully');
       }
     } catch (error) {
       console.error('[MyFoods] Error in handleDeleteFood:', error);
       setMyFoods(previousFoods);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
   }, [myFoods]);
 
@@ -245,7 +247,7 @@ export default function MyFoodsScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          My Foods
+          {t('myFoods.title')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -261,7 +263,7 @@ export default function MyFoodsScreen() {
           size={20}
           color="#FFFFFF"
         />
-        <Text style={styles.createButtonText}>Create New Food</Text>
+        <Text style={styles.createButtonText}>{t('myFoods.createNewFood')}</Text>
       </TouchableOpacity>
 
       <ScrollView
@@ -270,14 +272,14 @@ export default function MyFoodsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.sectionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          Your Custom Foods
+          {t('myFoods.yourCustomFoods')}
         </Text>
 
         {loading ? (
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.md }]}>
-              Loading your foods...
+              {t('myFoods.loadingFoods')}
             </Text>
           </View>
         ) : myFoods.length > 0 ? (
@@ -291,10 +293,10 @@ export default function MyFoodsScreen() {
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
             <Text style={[styles.emptyText, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.md }]}>
-              No custom foods yet
+              {t('myFoods.noFoods')}
             </Text>
             <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: spacing.xs }]}>
-              Create your first custom food to reuse it anytime
+              {t('myFoods.createFirstDesc')}
             </Text>
           </View>
         )}

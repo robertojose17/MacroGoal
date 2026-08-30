@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -43,6 +44,7 @@ const ResultRow = React.memo(
     isDark: boolean;
     onPress: (item: SearchResultItem) => void;
   }) => {
+    const { t } = useTranslation();
     const productName = item.product.product_name || item.product.generic_name || '';
     const brand = item.product.brands || '';
     const badge = SOURCE_BADGE[item.source];
@@ -99,7 +101,7 @@ const ResultRow = React.memo(
                     </Text>
                   )}
                   <Text style={[styles.noNutritionText, { color: colors.warning || '#FF9500' }]}>
-                    Nutrition not available
+                    {t('foodSearch.nutritionNotAvailable')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -126,6 +128,7 @@ ResultRow.displayName = 'ResultRow';
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function FoodSearchScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
@@ -212,7 +215,7 @@ export default function FoodSearchScreen() {
           // Only show error if we have no results at all
           setResults(prev => {
             if (prev.length === 0) {
-              setErrorMessage('Connection issue. Please check your internet and try again.');
+              setErrorMessage(t('foodSearch.connectionIssue'));
             }
             return prev;
           });
@@ -327,7 +330,7 @@ export default function FoodSearchScreen() {
       <View style={styles.loadingMoreContainer}>
         <ActivityIndicator size="small" color={colors.primary} />
         <Text style={[styles.loadingMoreText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          Loading more...
+          {t('foodSearch.loadingMore')}
         </Text>
       </View>
     );
@@ -339,7 +342,7 @@ export default function FoodSearchScreen() {
         <View style={styles.emptyState}>
           <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: spacing.lg }} />
           <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Searching...
+            {t('addFood.searching')}
           </Text>
         </View>
       );
@@ -350,7 +353,7 @@ export default function FoodSearchScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>⚠️</Text>
           <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Connection Issue
+            {t('foodSearch.connectionIssueTitle')}
           </Text>
           <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {errorMessage}
@@ -359,7 +362,7 @@ export default function FoodSearchScreen() {
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
             onPress={handleRetry}
           >
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -370,10 +373,10 @@ export default function FoodSearchScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🔍</Text>
           <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            No foods found
+            {t('foodSearch.noFoodsFound')}
           </Text>
           <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Try a different search term
+            {t('foodSearch.tryDifferent')}
           </Text>
         </View>
       );
@@ -384,10 +387,10 @@ export default function FoodSearchScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>✏️</Text>
           <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Keep typing...
+            {t('foodSearch.keepTyping')}
           </Text>
           <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Enter at least 2 characters to search
+            {t('foodSearch.enterAtLeast2')}
           </Text>
         </View>
       );
@@ -397,16 +400,16 @@ export default function FoodSearchScreen() {
       <View style={styles.emptyState}>
         <Text style={styles.emptyIcon}>🍎</Text>
         <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Search for foods
+          {t('foodSearch.searchForFoods')}
         </Text>
         <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          Start typing to search the food database
+          {t('foodSearch.startTyping')}
         </Text>
       </View>
     );
   };
 
-  const titleText = mode === 'ingredient' ? 'Add Ingredient' : 'Search Food Library';
+  const titleText = mode === 'ingredient' ? t('foodSearch.addIngredient') : t('foodSearch.searchFoodLibrary');
 
   return (
     <SafeAreaView
@@ -458,7 +461,7 @@ export default function FoodSearchScreen() {
             <TextInput
               ref={searchInputRef}
               style={[styles.searchInput, { color: isDark ? colors.textDark : colors.text }]}
-              placeholder="Search foods…"
+              placeholder={t('foodSearch.searchPlaceholder')}
               placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
               value={searchQuery}
               onChangeText={(text) => {
@@ -492,7 +495,7 @@ export default function FoodSearchScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={[styles.loadingText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Searching...
+                {t('addFood.searching')}
               </Text>
             </View>
           )}
