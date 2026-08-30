@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { SevenDayChallenge } from '@/types/challenge';
+import { translateDynamic } from '@/utils/translateDynamic';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -219,7 +220,9 @@ export default function ChallengeDashboardCard({
       daysLeftWeight = '500';
     }
   }
-  const missionTitle = mission?.title_en ?? t('sevenDayChallenge.completeTodaysMission');
+  const missionTitle = mission?.title_en
+    ? translateDynamic(mission.title_en)
+    : t('sevenDayChallenge.completeTodaysMission');
   const missionCurrent = mission?.current ?? 0;
   const missionTarget = mission?.target ?? 1;
   const missionUnit = mission?.unit ?? '';
