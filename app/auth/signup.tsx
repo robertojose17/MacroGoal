@@ -52,17 +52,17 @@ export default function SignUpScreen() {
     trackOnboardingEvent('auth_signup_attempted');
 
     if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('common.error'), t('auth.fillAllFields'));
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('common.error'), t('auth.passwordsDoNotMatch'));
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert(t('common.error'), t('auth.passwordTooShort'));
       return;
     }
 
@@ -85,14 +85,14 @@ export default function SignUpScreen() {
 
       if (authError) {
         console.error('[SignUp] Auth error:', authError);
-        Alert.alert('Sign Up Failed', authError.message);
+        Alert.alert(t('auth.signUpFailed'), authError.message);
         setLoading(false);
         return;
       }
 
       if (!authData.user) {
         console.error('[SignUp] No user returned from signup');
-        Alert.alert('Sign Up Failed', 'Failed to create account. Please try again.');
+        Alert.alert(t('auth.signUpFailed'), t('auth.failedToCreateAccount'));
         setLoading(false);
         return;
       }
@@ -106,11 +106,11 @@ export default function SignUpScreen() {
       if (emailConfirmationRequired) {
         console.log('[SignUp] ⚠️ Email confirmation required — no session returned');
         Alert.alert(
-          '✅ Check Your Email',
-          `We sent a confirmation email to ${email}.\n\nOpen the email on this device and tap the link to verify your account.\n\n⚠️ Check your junk/spam folder if you don't see it.`,
+          t('auth.checkYourEmailTitle'),
+          t('auth.checkYourEmailBody', { email }),
           [
             {
-              text: 'Got It',
+              text: t('auth.gotIt'),
               onPress: () => {
                 console.log('[SignUp] User acknowledged email verification message');
                 router.replace('/auth/login');
@@ -215,7 +215,7 @@ export default function SignUpScreen() {
       console.log('[SignUp] ✅ Signup complete — auth state change will handle navigation via _layout.tsx');
     } catch (error: any) {
       console.error('[SignUp] Unexpected error:', error);
-      Alert.alert('Error', error.message || 'An unexpected error occurred during sign up');
+      Alert.alert(t('common.error'), error.message || t('auth.unexpectedSignUpError'));
     } finally {
       setLoading(false);
     }
@@ -268,11 +268,11 @@ export default function SignUpScreen() {
             <View style={styles.cardWrapper}>
               <BlurView intensity={20} tint="dark" style={styles.blurCard}>
                 <View style={styles.cardInner}>
-                  <Text style={styles.cardTitle}>Create Account</Text>
+                  <Text style={styles.cardTitle}>{t('auth.createAccount')}</Text>
 
                   <TextInput
                     style={styles.input}
-                    placeholder="Your first name"
+                    placeholder={t('auth.firstNamePlaceholder')}
                     placeholderTextColor="rgba(255,255,255,0.5)"
                     autoCapitalize="words"
                     autoCorrect={false}
@@ -282,7 +282,7 @@ export default function SignUpScreen() {
 
                   <TextInput
                     style={styles.input}
-                    placeholder="Email address"
+                    placeholder={t('auth.emailAddress')}
                     placeholderTextColor="rgba(255,255,255,0.5)"
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -293,7 +293,7 @@ export default function SignUpScreen() {
 
                   <TextInput
                     style={styles.input}
-                    placeholder="Password (min. 6 characters)"
+                    placeholder={t('auth.passwordMinChars')}
                     placeholderTextColor="rgba(255,255,255,0.5)"
                     secureTextEntry
                     autoCapitalize="none"
@@ -305,7 +305,7 @@ export default function SignUpScreen() {
                   <View ref={confirmPasswordRef}>
                     <TextInput
                       style={styles.input}
-                      placeholder="Confirm password"
+                      placeholder={t('auth.confirmPasswordPlaceholder')}
                       placeholderTextColor="rgba(255,255,255,0.5)"
                       secureTextEntry
                       autoCapitalize="none"
@@ -325,14 +325,14 @@ export default function SignUpScreen() {
                     {loading ? (
                       <ActivityIndicator color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.ctaButtonText}>Get Started</Text>
+                      <Text style={styles.ctaButtonText}>{t('auth.getStarted')}</Text>
                     )}
                   </TouchableOpacity>
 
                   <TouchableOpacity onPress={handleGoToLogin} style={styles.secondaryWrapper}>
                     <Text style={styles.secondaryText}>
-                      Already have an account?{' '}
-                      <Text style={styles.secondaryLink}>Log In</Text>
+                      {t('auth.alreadyHaveAccount')}{' '}
+                      <Text style={styles.secondaryLink}>{t('auth.logIn')}</Text>
                     </Text>
                   </TouchableOpacity>
                 </View>

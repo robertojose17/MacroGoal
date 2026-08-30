@@ -244,20 +244,20 @@ export default function CheckInFormScreen() {
 
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) {
-        Alert.alert('Error', 'You must be logged in');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
       // Validate based on check-in type
       if (checkInType === 'weight' && !weight) {
-        Alert.alert('Missing Weight', 'Please enter your weight');
+        Alert.alert(t('checkInForm.missingWeight'), t('checkInForm.pleaseEnterWeight'));
         setSaving(false);
         return;
       }
       if (checkInType === 'steps' && liveSteps === null) {
         Alert.alert(
-          'Steps Not Available',
-          'Could not read your steps from Apple Health. Make sure Health permissions are enabled and try again.'
+          t('checkInForm.stepsNotAvailable'),
+          t('checkInForm.stepsNotAvailableMsg')
         );
         setSaving(false);
         return;
@@ -301,7 +301,7 @@ export default function CheckInFormScreen() {
 
         if (error) {
           console.error('[CheckInForm] Error updating check-in:', error);
-          Alert.alert('Error', 'Failed to update check-in');
+          Alert.alert(t('common.error'), t('checkInForm.failedToUpdate'));
           return;
         }
 
@@ -317,7 +317,7 @@ export default function CheckInFormScreen() {
 
         if (error) {
           console.error('[CheckInForm] Error creating check-in:', error);
-          Alert.alert('Error', 'Failed to create check-in');
+          Alert.alert(t('common.error'), t('checkInForm.failedToCreate'));
           return;
         }
 
@@ -351,13 +351,13 @@ export default function CheckInFormScreen() {
       }
 
       Alert.alert(
-        'Success',
-        isEditing ? 'Check-in updated successfully' : 'Check-in saved successfully',
-        [{ text: 'OK', onPress: () => router.back() }],
+        t('common.success'),
+        isEditing ? t('checkInForm.checkInUpdated') : t('checkInForm.checkInSaved'),
+        [{ text: t('common.ok'), onPress: () => router.back() }],
       );
     } catch (error) {
       console.error('[CheckInForm] Error in handleSave:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       setSaving(false);
     }
@@ -370,7 +370,7 @@ export default function CheckInFormScreen() {
       if (source === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          Alert.alert(t('checkInForm.permissionRequired'), t('checkInForm.cameraPermissionMessage'));
           return;
         }
         result = await ImagePicker.launchCameraAsync({
@@ -382,7 +382,7 @@ export default function CheckInFormScreen() {
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Photo library access is needed to select a photo.');
+          Alert.alert(t('checkInForm.permissionRequired'), t('checkInForm.libraryPermissionMessage'));
           return;
         }
         result = await ImagePicker.launchImageLibraryAsync({
@@ -400,16 +400,16 @@ export default function CheckInFormScreen() {
       }
     } catch (err) {
       console.error('[CheckInForm] Error picking photo:', err);
-      Alert.alert('Error', 'Failed to select photo');
+      Alert.alert(t('common.error'), t('checkInForm.failedToSelectPhoto'));
     }
   };
 
   const handleAddPhotoPress = () => {
     console.log('[CheckInForm] Add photo button pressed');
-    Alert.alert('Add Progress Photo', 'Choose a source', [
-      { text: 'Camera', onPress: () => handlePickPhoto('camera') },
-      { text: 'Photo Library', onPress: () => handlePickPhoto('library') },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('checkInForm.addProgressPhoto'), t('checkInForm.chooseSource'), [
+      { text: t('checkInForm.takePhoto'), onPress: () => handlePickPhoto('camera') },
+      { text: t('checkInForm.chooseFromLibrary'), onPress: () => handlePickPhoto('library') },
+      { text: t('checkInForm.cancel'), style: 'cancel' },
     ]);
   };
 
@@ -422,7 +422,7 @@ export default function CheckInFormScreen() {
     if (!pendingCheckInId) {
       console.warn('[CheckInForm] handleModalUploadAndFinish called without pendingCheckInId');
       setShowPhotoModal(false);
-      Alert.alert('Success', 'Check-in saved successfully', [{ text: 'OK', onPress: () => router.back() }]);
+      Alert.alert(t('common.success'), t('checkInForm.checkInSaved'), [{ text: t('common.ok'), onPress: () => router.back() }]);
       return;
     }
     console.log('[CheckInForm] Modal: uploading photo for check-in:', pendingCheckInId);
@@ -436,15 +436,15 @@ export default function CheckInFormScreen() {
       emitXpRefresh();
       setShowPhotoModal(false);
       setSelectedPhotoUri(null);
-      Alert.alert('Success', 'Check-in saved with photo!', [{ text: 'OK', onPress: () => router.back() }]);
+      Alert.alert(t('common.success'), t('checkInForm.checkInSavedWithPhoto'), [{ text: t('common.ok'), onPress: () => router.back() }]);
     } catch (err) {
       console.error('[CheckInForm] Modal photo upload failed:', err);
       setShowPhotoModal(false);
       setSelectedPhotoUri(null);
       Alert.alert(
-        'Photo Upload Failed',
-        'Your check-in was saved, but the photo could not be uploaded.',
-        [{ text: 'OK', onPress: () => router.back() }],
+        t('checkInForm.photoUploadFailed'),
+        t('checkInForm.photoUploadFailedMsg'),
+        [{ text: t('common.ok'), onPress: () => router.back() }],
       );
     } finally {
       setUploadingPhoto(false);
@@ -455,7 +455,7 @@ export default function CheckInFormScreen() {
     console.log('[CheckInForm] Photo modal skipped');
     setShowPhotoModal(false);
     setPendingCheckInId(null);
-    Alert.alert('Success', 'Check-in saved successfully', [{ text: 'OK', onPress: () => router.back() }]);
+    Alert.alert(t('common.success'), t('checkInForm.checkInSaved'), [{ text: t('common.ok'), onPress: () => router.back() }]);
   };
 
   // When the photo modal is open and a photo gets selected, auto-trigger upload
@@ -547,7 +547,7 @@ export default function CheckInFormScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading...
+            {t('common.loading')}
           </Text>
         </View>
       </SafeAreaView>
@@ -570,7 +570,7 @@ export default function CheckInFormScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          {isEditing ? 'Edit' : 'New'} {checkInType === 'weight' ? 'Weight' : checkInType === 'steps' ? 'Steps' : 'Gym'} Check-In
+          {isEditing ? t('checkInForm.editCheckIn') : t('checkInForm.newCheckIn')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -578,7 +578,7 @@ export default function CheckInFormScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Date - Using Calendar Date Picker */}
         <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Date</Text>
+          <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>{t('checkInForm.date')}</Text>
           <TouchableOpacity
             style={[
               styles.dateButton,
@@ -608,7 +608,7 @@ export default function CheckInFormScreen() {
         {checkInType === 'weight' && (
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Weight ({getWeightUnit()})
+              {t('checkInForm.weightLabel', { unit: getWeightUnit() })}
             </Text>
             <TextInput
               style={[
@@ -619,7 +619,7 @@ export default function CheckInFormScreen() {
                   color: isDark ? colors.textDark : colors.text,
                 },
               ]}
-              placeholder={`Enter weight in ${getWeightUnit()}`}
+              placeholder={t('checkInForm.enterWeightPlaceholder', { unit: getWeightUnit() })}
               placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
               value={weight}
               onChangeText={setWeight}
@@ -631,7 +631,7 @@ export default function CheckInFormScreen() {
         {/* Steps Fields */}
         {checkInType === 'steps' && (
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Steps Today</Text>
+            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>{t('checkInForm.stepsToday')}</Text>
             <View
               style={[
                 styles.stepsDisplayCard,
@@ -652,7 +652,7 @@ export default function CheckInFormScreen() {
               <View style={styles.stepsTextColumn}>
                 {stepsLoading && liveSteps === null ? (
                   <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
-                    Loading…
+                    {t('common.loading')}
                   </Text>
                 ) : liveSteps !== null ? (
                   <>
@@ -660,25 +660,25 @@ export default function CheckInFormScreen() {
                       {liveSteps.toLocaleString()}
                     </Text>
                     <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      {Platform.OS === 'ios' ? 'From Apple Health · auto-updates' : 'From Health Connect · auto-updates'}
+                      {Platform.OS === 'ios' ? t('checkInForm.fromAppleHealth') : t('checkInForm.fromHealthConnect')}
                     </Text>
                   </>
                 ) : stepsPermission === 'denied' ? (
                   <>
                     <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      Health access denied
+                      {t('checkInForm.healthAccessDenied')}
                     </Text>
                     <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Open Settings → Privacy → Health → Macro Goal to allow steps.
+                      {t('checkInForm.healthAccessDeniedMsg')}
                     </Text>
                   </>
                 ) : (
                   <>
                     <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      Connect Apple Health
+                      {t('checkInForm.connectAppleHealth')}
                     </Text>
                     <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      Tap below to share your daily step count
+                      {t('checkInForm.tapBelowToShare')}
                     </Text>
                     <TouchableOpacity
                       onPress={async () => {
@@ -688,7 +688,7 @@ export default function CheckInFormScreen() {
                       style={[styles.connectHealthButton, { backgroundColor: colors.primary }]}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.connectHealthButtonText}>Connect</Text>
+                      <Text style={styles.connectHealthButtonText}>{t('common.connect')}</Text>
                     </TouchableOpacity>
                   </>
                 )}
@@ -711,7 +711,7 @@ export default function CheckInFormScreen() {
             </View>
 
             <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.md }]}>
-              Steps Goal
+              {t('checkInForm.stepsGoal')}
             </Text>
             <TextInput
               style={[
@@ -722,7 +722,7 @@ export default function CheckInFormScreen() {
                   color: isDark ? colors.textDark : colors.text,
                 },
               ]}
-              placeholder="Enter steps goal"
+              placeholder={t('checkInForm.stepsGoalPlaceholder')}
               placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
               value={stepsGoal}
               onChangeText={setStepsGoal}
@@ -750,7 +750,7 @@ export default function CheckInFormScreen() {
                   color={wentToGym ? colors.success : (isDark ? colors.textSecondaryDark : colors.textSecondary)}
                 />
                 <Text style={[styles.toggleLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                  Went to gym today?
+                  {t('checkInForm.wentToGymToday')}
                 </Text>
               </View>
               <View
@@ -776,7 +776,7 @@ export default function CheckInFormScreen() {
 
         {/* Notes */}
         <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Notes (Optional)</Text>
+          <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>{t('checkInForm.notesOptional')}</Text>
           <TextInput
             style={[
               styles.textArea,
@@ -786,7 +786,7 @@ export default function CheckInFormScreen() {
                 color: isDark ? colors.textDark : colors.text,
               },
             ]}
-            placeholder="Add any notes..."
+            placeholder={t('checkInForm.notesPlaceholderAdd')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={notes}
             onChangeText={setNotes}
@@ -807,7 +807,7 @@ export default function CheckInFormScreen() {
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <Text style={styles.saveButtonText}>
-              {isEditing ? 'Update Check-In' : 'Save Check-In'}
+              {isEditing ? t('checkInForm.updateCheckIn') : t('checkInForm.saveCheckIn')}
             </Text>
           )}
         </TouchableOpacity>
@@ -822,7 +822,7 @@ export default function CheckInFormScreen() {
         onSelectDate={handleDateSelect}
         initialDate={date}
         maxDate={new Date()}
-        title="Select Date"
+        title={t('checkInForm.selectDate')}
       />
 
       {/* Post-Save Progress Photo Modal */}
@@ -847,10 +847,10 @@ export default function CheckInFormScreen() {
 
             {/* Title */}
             <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Add Progress Photo
+              {t('checkInForm.addProgressPhoto')}
             </Text>
             <Text style={[styles.modalSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Track your transformation visually
+              {t('checkInForm.trackTransformation')}
             </Text>
 
             {/* Buttons */}
@@ -875,7 +875,7 @@ export default function CheckInFormScreen() {
                   />
                 )}
                 <Text style={styles.modalActionButtonText}>
-                  Take a Photo
+                  {t('checkInForm.takePhoto')}
                 </Text>
               </TouchableOpacity>
 
@@ -899,7 +899,7 @@ export default function CheckInFormScreen() {
                   />
                 )}
                 <Text style={styles.modalActionButtonText}>
-                  Choose from Library
+                  {t('checkInForm.chooseFromLibrary')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -912,7 +912,7 @@ export default function CheckInFormScreen() {
               style={styles.modalSkipButton}
             >
               <Text style={[styles.modalSkipText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Skip for now
+                {t('checkInForm.skipForNow')}
               </Text>
             </TouchableOpacity>
           </View>

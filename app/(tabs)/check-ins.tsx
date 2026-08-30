@@ -191,6 +191,7 @@ function CommunityFooter({
   isDark: boolean;
   trackerType: 'steps' | 'gym' | 'weight' | null;
 }) {
+  const { t } = useTranslation();
   // Weight: no community footer
   if (trackerType === 'weight') return null;
 
@@ -225,10 +226,10 @@ function CommunityFooter({
     badgeText = colors.warning;
   }
 
-  const topLabel = `Top ${100 - pct}%`;
+  const topLabel = t('checkIns.topPercent', { pct: 100 - pct });
   const avgLabel = trackerType === 'steps'
-    ? `Community avg ${avg} steps this week`
-    : `Community avg ${avg} ${unit} this month`;
+    ? t('checkIns.communityAvgSteps', { avg })
+    : t('checkIns.communityAvgSessions', { avg, unit });
 
   return (
     <>
@@ -272,6 +273,7 @@ function StepsActionArea({
   onRefresh: () => void;
   onRequestPermission: () => void;
 }) {
+  const { t } = useTranslation();
   const spinAnim = useRef(new Animated.Value(0)).current;
   const spinRef = useRef<Animated.CompositeAnimation | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -311,7 +313,7 @@ function StepsActionArea({
         style={[styles.logButton, { backgroundColor: colors.primary }]}
         scaleValue={0.94}
       >
-        <Text style={styles.logButtonText}>Connect</Text>
+        <Text style={styles.logButtonText}>{t('checkIns.connect')}</Text>
       </AnimatedPressable>
     );
   }
@@ -334,7 +336,7 @@ function StepsActionArea({
         ) : (
           <View style={styles.stepsCountRow}>
             <Text style={[styles.stepsCount, { color: textColor }]}>{countFormatted}</Text>
-            <Text style={[styles.stepsUnit, { color: subColor }]}>{' steps'}</Text>
+            <Text style={[styles.stepsUnit, { color: subColor }]}>{' '}{t('common.steps')}</Text>
           </View>
         )}
         {goal > 0 ? (
@@ -368,6 +370,7 @@ function StepsActionArea({
 
 // ─── WeightTrend ──────────────────────────────────────────────────────────────
 function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean }) {
+  const { t } = useTranslation();
   const [delta, setDelta] = useState<number | null>(null);
   const [units, setUnits] = useState<'metric' | 'imperial'>('imperial');
   const [loaded, setLoaded] = useState(false);
@@ -433,10 +436,10 @@ function WeightTrend({ trackerId, isDark }: { trackerId: string; isDark: boolean
   const trendColor = isDown ? colors.success : isUp ? colors.warning : (isDark ? colors.textSecondaryDark : colors.textSecondary);
   const TrendIcon = isDown ? TrendingDown : isUp ? TrendingUp : Minus;
   const label = isDown
-    ? `↓ ${absDelta} ${unitLabel} total`
+    ? `↓ ${absDelta} ${unitLabel} ${t('checkIns.total')}`
     : isUp
-    ? `↑ ${absDelta} ${unitLabel} total`
-    : 'No change';
+    ? `↑ ${absDelta} ${unitLabel} ${t('checkIns.total')}`
+    : t('common.noChange');
 
   return (
     <View style={styles.trendRow}>
@@ -472,6 +475,7 @@ function TrackerCard({
   communityStats: LeaderboardStats | null;
   communityLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const [weightInput, setWeightInput] = useState('');
   const [weightEditing, setWeightEditing] = useState(false);
   const [logging, setLogging] = useState(false);
@@ -506,7 +510,7 @@ function TrackerCard({
     const parsed = parseFloat(weightInput);
     console.log('[CheckIns] Weight quick-log tapped, value:', weightInput, 'parsed:', parsed);
     if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
-      Alert.alert('Invalid weight', 'Please enter a weight between 0 and 1000 lbs.');
+      Alert.alert(t('checkIns.invalidWeight'), t('checkIns.enterValidWeight'));
       return;
     }
     if (logging) return;
@@ -523,7 +527,7 @@ function TrackerCard({
     const parsed = parseFloat(weightInput);
     console.log('[CheckIns] Weight save tapped, value:', weightInput, 'parsed:', parsed);
     if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
-      Alert.alert('Invalid weight', 'Please enter a weight between 0 and 1000 lbs.');
+      Alert.alert(t('checkIns.invalidWeight'), t('checkIns.enterValidWeight'));
       return;
     }
     if (logging) return;
@@ -580,7 +584,7 @@ function TrackerCard({
       actionArea = (
         <View style={styles.donePill}>
           <CheckCircle2 size={14} color={colors.success} strokeWidth={2.5} />
-          <Text style={[styles.donePillText, { color: colors.success }]}>Done</Text>
+          <Text style={[styles.donePillText, { color: colors.success }]}>{t('checkIns.done')}</Text>
         </View>
       );
     } else {
@@ -591,7 +595,7 @@ function TrackerCard({
           scaleValue={0.94}
         >
           <Plus size={14} color="#fff" strokeWidth={2.5} />
-          <Text style={styles.logButtonText}>Log</Text>
+          <Text style={styles.logButtonText}>{t('checkIns.log')}</Text>
         </AnimatedPressable>
       );
     }
@@ -613,7 +617,7 @@ function TrackerCard({
             value={weightInput}
             onChangeText={setWeightInput}
             keyboardType="decimal-pad"
-            placeholder="lbs"
+            placeholder={t('checkIns.lbsPlaceholder')}
             placeholderTextColor={subColor}
             returnKeyType="done"
             onSubmitEditing={handleWeightSave}
@@ -624,7 +628,7 @@ function TrackerCard({
             style={[styles.logButton, { backgroundColor: colors.primary, opacity: logging ? 0.6 : 1 }]}
             scaleValue={0.94}
           >
-            <Text style={styles.logButtonText}>Save</Text>
+            <Text style={styles.logButtonText}>{t('checkIns.save')}</Text>
           </AnimatedPressable>
         </View>
       );
@@ -636,7 +640,7 @@ function TrackerCard({
             value={weightInput}
             onChangeText={setWeightInput}
             keyboardType="decimal-pad"
-            placeholder="lbs"
+            placeholder={t('checkIns.lbsPlaceholder')}
             placeholderTextColor={subColor}
             returnKeyType="done"
             onSubmitEditing={handleWeightLog}
@@ -646,7 +650,7 @@ function TrackerCard({
             style={[styles.logButton, { backgroundColor: colors.primary, opacity: logging ? 0.6 : 1 }]}
             scaleValue={0.94}
           >
-            <Text style={styles.logButtonText}>Log</Text>
+            <Text style={styles.logButtonText}>{t('checkIns.log')}</Text>
           </AnimatedPressable>
         </View>
       );
@@ -655,7 +659,7 @@ function TrackerCard({
     actionArea = (
       <AnimatedPressable onPress={onLog} style={[styles.logButton, { backgroundColor: colors.primary }]} scaleValue={0.94}>
         <Plus size={14} color="#fff" strokeWidth={2.5} />
-        <Text style={styles.logButtonText}>Log</Text>
+        <Text style={styles.logButtonText}>{t('checkIns.log')}</Text>
       </AnimatedPressable>
     );
   }
@@ -682,14 +686,14 @@ function TrackerCard({
           <Flame size={13} color="#FF8A5B" strokeWidth={2} />
           <Text style={[styles.statChipText, { color: textColor }]}>
             {streak}
-            <Text style={[styles.statChipLabel, { color: subColor }]}> day streak</Text>
+            <Text style={[styles.statChipLabel, { color: subColor }]}> {t('checkIns.dayStreak')}</Text>
           </Text>
         </View>
         <View style={styles.statChip}>
           <CheckCircle2 size={13} color={colors.success} strokeWidth={2} />
           <Text style={[styles.statChipText, { color: textColor }]}>
             {completionPct}
-            <Text style={[styles.statChipLabel, { color: subColor }]}>% rate</Text>
+            <Text style={[styles.statChipLabel, { color: subColor }]}>{t('checkIns.completionRate')}</Text>
           </Text>
         </View>
       </View>
@@ -766,6 +770,7 @@ function TodaySummaryHeader({
   todayEntries: Record<string, { id: string; value: number } | null>;
   isDark: boolean;
 }) {
+  const { t } = useTranslation();
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -792,7 +797,7 @@ function TodaySummaryHeader({
   const monthDay = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
   const dateLabel = `${dayName} · ${monthDay}`;
 
-  const completionFraction = total > 0 ? `${done} of ${total} done today` : 'No trackers yet';
+  const completionFraction = total > 0 ? t('checkIns.doneOfTotal', { done, total }) : t('checkIns.noTrackersYet');
 
   return (
     <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -1055,8 +1060,8 @@ export default function CheckInsScreen() {
       console.error('[CheckIns] Quick log failed, rolling back:', err);
       setTodayEntries((prev) => ({ ...prev, [tracker.id]: prevEntry }));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      const msg = err instanceof Error ? err.message : 'Failed to log';
-      Alert.alert('Log failed', msg);
+      const msg = err instanceof Error ? err.message : t('checkIns.logFailed');
+      Alert.alert(t('checkIns.logFailed'), msg);
     }
   }, [todayEntries]);
 
@@ -1088,8 +1093,8 @@ export default function CheckInsScreen() {
           console.error('[CheckIns] Steps log failed, rolling back:', err);
           setTodayEntries((prev) => ({ ...prev, [tracker.id]: prevEntry }));
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-          const msg = err instanceof Error ? err.message : 'Failed to log steps';
-          Alert.alert('Steps log failed', msg);
+          const msg = err instanceof Error ? err.message : t('checkIns.stepsLogFailed');
+          Alert.alert(t('checkIns.stepsLogFailed'), msg);
         }
       }
     } catch (err) {
@@ -1152,7 +1157,7 @@ export default function CheckInsScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Check-Ins',
+          title: t('checkIns.title'),
           headerLargeTitle: true,
           headerTransparent: true,
           headerShadowVisible: false,
@@ -1177,10 +1182,10 @@ export default function CheckInsScreen() {
         {/* Error state */}
         {error && !loading ? (
           <View style={[styles.errorCard, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-            <Text style={[styles.errorTitle, { color: textColor }]}>Couldn't load trackers</Text>
-            <Text style={[styles.errorSub, { color: subColor }]}>Check your connection and try again</Text>
+            <Text style={[styles.errorTitle, { color: textColor }]}>{t('checkIns.couldNotLoadTrackers')}</Text>
+            <Text style={[styles.errorSub, { color: subColor }]}>{t('checkIns.checkConnectionRetry')}</Text>
             <AnimatedPressable onPress={() => { setLoading(true); loadData(); }} style={[styles.retryButton, { backgroundColor: colors.primary }]}>
-              <Text style={styles.retryButtonText}>Try again</Text>
+              <Text style={styles.retryButtonText}>{t('common.tryAgain')}</Text>
             </AnimatedPressable>
           </View>
         ) : loading ? (
@@ -1203,13 +1208,13 @@ export default function CheckInsScreen() {
             <View style={[styles.emptyIconCircle, { backgroundColor: colors.primary + '18' }]}>
               <Trophy size={32} color={colors.primary} strokeWidth={1.5} />
             </View>
-            <Text style={[styles.emptyTitle, { color: textColor }]}>No trackers yet</Text>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>{t('checkIns.noTrackers')}</Text>
             <Text style={[styles.emptySub, { color: subColor }]}>
-              Create your first tracker to start building healthy habits
+              {t('checkIns.createFirstTracker')}
             </Text>
             <AnimatedPressable onPress={handleCreateTracker} style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
               <Plus size={16} color="#fff" strokeWidth={2.5} />
-              <Text style={styles.emptyButtonText}>Create tracker</Text>
+              <Text style={styles.emptyButtonText}>{t('checkIns.createTracker')}</Text>
             </AnimatedPressable>
           </View>
         ) : (
