@@ -2343,7 +2343,36 @@
       "myFoods": "Mis Alimentos",
       "myMeals": "Mis Comidas",
       "recipes": "Recetas"
-    }
+    },
+    "favorites": "Favoritos",
+    "quickAdd": "Agregar Rápido",
+    "aiMealEstimator": "Estimador IA de Comidas",
+    "barcodeScan": "Escanear Código",
+    "copyFromPrevious": "Copiar del Día Anterior",
+    "quickActions": "Acciones Rápidas",
+    "favoriteFoods": "Comidas Favoritas",
+    "recentFoodsEmpty": "Sin comidas recientes",
+    "searchToGetStarted": "Busca para comenzar",
+    "added": "¡Comida agregada!",
+    "addedToPlan": "¡Agregado al plan!",
+    "failedToAddToPlan": "Error al agregar al plan",
+    "failedToDeleteMeal": "Error al eliminar comida",
+    "failedToAddToMeal": "Error al agregar a la comida",
+    "notAvailable": "No Disponible",
+    "tapToViewDetails": "Toca para ver detalles"
+  },
+  "goalWeightCard": {
+    "title": "Peso Meta",
+    "setGoalPrompt": "Establece tu peso meta en Perfil para rastrear el progreso aquí.",
+    "setGoalBtn": "Establecer Peso Meta",
+    "logCheckInPrompt": "Registra un check-in de peso para comenzar a rastrear el progreso",
+    "logCheckInBtn": "Registrar Check-in",
+    "onTrack": "✓ EN CAMINO",
+    "behind": "ATRASADO",
+    "goalReached": "¡Meta alcanzada! 🎉",
+    "lbsToGo": "{{lbs}} lbs restantes",
+    "estArrival": "LLEGADA EST.",
+    "calculating": "Calculando..."
   },
   "foodPhotoCapture": {
     "title": "Foto de Comida",
@@ -2886,9 +2915,22 @@
   },
   "league": {
     "movingUp": "↑ Estás subiendo",
-    "dropZone": "⚠ Zona de descenso",
+    "dropZone": "▲ ZONA DE DESCENSO",
     "topPromoted": "↑ Top {{count}} ascienden",
-    "xpThisWeek": "{{xp}} XP esta semana"
+    "xpThisWeek": "{{xp}} XP esta semana",
+    "bannerAtTop": "Estás en la cima — defiende tu posición",
+    "bannerDiamondSub": "Diamante es la liga más alta. Mantente en el top 5 para quedarte aquí.",
+    "bannerPromoTitle": "Los {{count}} primeros avanzan a {{nextLabel}}",
+    "bannerPromoCushion": "{{xp}} XP de ventaja sobre el corte.",
+    "bannerPromoCutoff": "¡Estás justo en el corte de promoción — sigue adelante!",
+    "bannerBronzeFloor": "Bronce es el piso — no puedes caer más bajo",
+    "bannerBronzeSub": "Sigue ganando XP para subir en el marcador.",
+    "bannerDropTitle": "Gana {{xp}} XP para escapar de la zona de descenso",
+    "bannerDropSub": "Los {{count}} últimos bajan a la liga inferior.",
+    "bannerNeutralTitle": "Gana {{xp}} XP para entrar al top {{count}}",
+    "bannerNeutralSub": "Los {{count}} primeros avanzan a {{nextLabel}}.",
+    "nextLeague": "la siguiente liga",
+    "promotionZone": "▼ ZONA DE PROMOCIÓN"
   },
   "dynamic": {
     "log_your_first_meal": "Registra tu primera comida",

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase/client';
 import { WeightProgressMiniChart } from '@/components/ProgressCard';
 import { colors, borderRadius as br, spacing } from '@/styles/commonStyles';
@@ -34,6 +35,7 @@ export default function GoalWeightCard({
   startWeightKg: propStart,
 }: GoalWeightCardProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   // We still need check-ins to derive currentKg fallback, weekNum, estText, and startKg
   const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
   const [trackerEntries, setTrackerEntries] = useState<{ date: string; value: number }[]>([]);
@@ -169,7 +171,7 @@ export default function GoalWeightCard({
     return (
       <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
+          <Text style={[styles.title, { color: textPrimary }]}>{t('goalWeightCard.title')}</Text>
         </View>
         <View style={[styles.skeletonChart, { backgroundColor: trackBg }]} />
         <View style={[styles.skeletonBar, { backgroundColor: trackBg }]} />
@@ -186,9 +188,9 @@ export default function GoalWeightCard({
   if (!goalWeightKgDirect && !propGoal) {
     return (
       <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
-        <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
+        <Text style={[styles.title, { color: textPrimary }]}>{t('goalWeightCard.title')}</Text>
         <Text style={[styles.noGoal, { color: textSecondary }]}>
-          Set your goal weight in Profile to track progress here.
+          {t('goalWeightCard.setGoalPrompt')}
         </Text>
         <TouchableOpacity
           style={styles.btn}
@@ -198,7 +200,7 @@ export default function GoalWeightCard({
           }}
           activeOpacity={0.75}
         >
-          <Text style={styles.btnText}>Set Goal Weight</Text>
+          <Text style={styles.btnText}>{t('goalWeightCard.setGoalBtn')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -212,11 +214,11 @@ export default function GoalWeightCard({
     return (
       <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
+          <Text style={[styles.title, { color: textPrimary }]}>{t('goalWeightCard.title')}</Text>
         </View>
         <View style={[styles.noDataArea, { height: CHART_HEIGHT }]}>
           <Text style={[styles.noDataText, { color: textSecondary }]}>
-            Log a weight check-in to start tracking progress
+            {t('goalWeightCard.logCheckInPrompt')}
           </Text>
         </View>
         <TouchableOpacity
@@ -227,7 +229,7 @@ export default function GoalWeightCard({
           }}
           activeOpacity={0.75}
         >
-          <Text style={styles.btnText}>Log Check-in</Text>
+          <Text style={styles.btnText}>{t('goalWeightCard.logCheckInBtn')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -261,7 +263,7 @@ export default function GoalWeightCard({
 
   const badgeBg = isOnTrack ? 'rgba(92,185,123,0.12)' : 'rgba(255,138,91,0.12)';
   const badgeColor = isOnTrack ? '#5CB97B' : '#FF8A5B';
-  const badgeLabel = isOnTrack ? '✓ ON TRACK' : 'BEHIND';
+  const badgeLabel = isOnTrack ? t('goalWeightCard.onTrack') : t('goalWeightCard.behind');
   const progressPct = Math.round(progress * 100);
 
   const startLbs = Math.round(startKg * KG_TO_LBS);
@@ -298,7 +300,7 @@ export default function GoalWeightCard({
     <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: textPrimary }]}>Goal Weight</Text>
+        <Text style={[styles.title, { color: textPrimary }]}>{t('goalWeightCard.title')}</Text>
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
           <Text style={[styles.badgeText, { color: badgeColor }]}>{badgeLabel}</Text>
         </View>
@@ -332,19 +334,19 @@ export default function GoalWeightCard({
               <Text style={styles.pctText}>{progressPct}%</Text>
             </View>
             {goalReached ? (
-              <Text style={[styles.lbsToGo, { color: '#5CB97B' }]}>Goal reached! 🎉</Text>
+              <Text style={[styles.lbsToGo, { color: '#5CB97B' }]}>{t('goalWeightCard.goalReached')}</Text>
             ) : (
-              <Text style={[styles.lbsToGo, { color: textSecondary }]}>{lbsToGo} lbs to go</Text>
+              <Text style={[styles.lbsToGo, { color: textSecondary }]}>{t('goalWeightCard.lbsToGo', { lbs: lbsToGo })}</Text>
             )}
           </View>
 
           {/* Estimated arrival */}
           <View style={styles.estSection}>
-            <Text style={[styles.estLabel, { color: textSecondary }]}>EST. ARRIVAL</Text>
+            <Text style={[styles.estLabel, { color: textSecondary }]}>{t('goalWeightCard.estArrival')}</Text>
             {estDateLabel ? (
               <Text style={[styles.estDate, { color: textPrimary }]}>{estDateLabel}</Text>
             ) : (
-              <Text style={[styles.estDate, { color: textSecondary }]}>Calculating...</Text>
+              <Text style={[styles.estDate, { color: textSecondary }]}>{t('goalWeightCard.calculating')}</Text>
             )}
           </View>
         </View>

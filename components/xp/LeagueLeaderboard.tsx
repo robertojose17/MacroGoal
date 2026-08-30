@@ -28,6 +28,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { useLeague } from '@/hooks/useLeague';
 import { TIER_METADATA, getNextTier, getPrevTier } from '@/types/leagues';
 import type { LeagueLeaderboardEntry, LeagueStatus } from '@/types/leagues';
+import i18n from '@/lib/i18n';
 
 interface LeagueLeaderboardProps {
   visible: boolean;
@@ -53,19 +54,19 @@ function buildBannerCopy(status: LeagueStatus): { title: string; subtitle: strin
 
   if (status.tier === 'diamond') {
     return {
-      title: 'You\'re at the top — defend your spot',
-      subtitle: 'Diamond is the highest league. Stay in the top 5 to remain here.',
+      title: i18n.t('league.bannerAtTop'),
+      subtitle: i18n.t('league.bannerDiamondSub'),
       color: TIER_METADATA.diamond.accent,
     };
   }
 
   if (status.is_in_promotion_zone) {
-    const nextLabel = nextMeta ? nextMeta.label : 'the next league';
+    const nextLabel = nextMeta ? nextMeta.label : i18n.t('league.nextLeague');
     const cushionText = status.xp_to_safety > 0
-      ? `${status.xp_to_safety.toLocaleString()} XP cushion above the cutoff.`
-      : 'You\'re right at the promotion cutoff — keep going!';
+      ? i18n.t('league.bannerPromoCushion', { xp: status.xp_to_safety.toLocaleString() })
+      : i18n.t('league.bannerPromoCutoff');
     return {
-      title: `Top ${status.promotion_zone_size} advance to ${nextLabel}`,
+      title: i18n.t('league.bannerPromoTitle', { count: status.promotion_zone_size, nextLabel }),
       subtitle: cushionText,
       color: '#50C878',
     };
@@ -74,22 +75,22 @@ function buildBannerCopy(status: LeagueStatus): { title: string; subtitle: strin
   if (status.is_in_demotion_zone) {
     if (status.tier === 'bronze') {
       return {
-        title: 'Bronze is the floor — you can\'t fall below',
-        subtitle: 'Keep earning XP to climb the leaderboard.',
+        title: i18n.t('league.bannerBronzeFloor'),
+        subtitle: i18n.t('league.bannerBronzeSub'),
         color: TIER_METADATA.bronze.accent,
       };
     }
     return {
-      title: `Earn ${status.xp_to_safety.toLocaleString()} XP to escape the drop zone`,
-      subtitle: `Bottom ${status.demotion_zone_size} players drop to the league below.`,
+      title: i18n.t('league.bannerDropTitle', { xp: status.xp_to_safety.toLocaleString() }),
+      subtitle: i18n.t('league.bannerDropSub', { count: status.demotion_zone_size }),
       color: '#EF4444',
     };
   }
 
   // Neutral zone
   return {
-    title: `Earn ${status.xp_to_promotion.toLocaleString()} XP to enter the top ${status.promotion_zone_size}`,
-    subtitle: `Top ${status.promotion_zone_size} advance to ${nextMeta ? nextMeta.label : 'the next league'}.`,
+    title: i18n.t('league.bannerNeutralTitle', { xp: status.xp_to_promotion.toLocaleString(), count: status.promotion_zone_size }),
+    subtitle: i18n.t('league.bannerNeutralSub', { count: status.promotion_zone_size, nextLabel: nextMeta ? nextMeta.label : i18n.t('league.nextLeague') }),
     color: colors.accent,
   };
 }
@@ -317,7 +318,7 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
                 <>
                   <View style={styles.zoneHeader}>
                     <Text style={[styles.zoneLabel, { color: '#50C878' }]}>
-                      {'▼ PROMOTION ZONE'}
+                      {i18n.t('league.promotionZone')}
                     </Text>
                     {nextMeta && (
                       <Text style={styles.zoneTierBadge}>
@@ -367,7 +368,7 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
                   <View style={[styles.divider, { backgroundColor: dividerColor }]} />
                   <View style={styles.zoneHeader}>
                     <Text style={[styles.zoneLabel, { color: '#EF4444' }]}>
-                      {'▲ DROP ZONE'}
+                      {i18n.t('league.dropZone')}
                     </Text>
                     {prevMeta && (
                       <Text style={styles.zoneTierBadge}>

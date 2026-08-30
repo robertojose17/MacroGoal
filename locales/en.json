@@ -2343,7 +2343,36 @@
       "myFoods": "My Foods",
       "myMeals": "My Meals",
       "recipes": "Recipes"
-    }
+    },
+    "favorites": "Favorites",
+    "quickAdd": "Quick Add",
+    "aiMealEstimator": "AI Meal Estimator",
+    "barcodeScan": "Barcode Scan",
+    "copyFromPrevious": "Copy from Previous",
+    "quickActions": "Quick Actions",
+    "favoriteFoods": "Favorite Foods",
+    "recentFoodsEmpty": "No recent foods yet",
+    "searchToGetStarted": "Search to get started",
+    "added": "Food added!",
+    "addedToPlan": "Added to plan!",
+    "failedToAddToPlan": "Failed to add to plan",
+    "failedToDeleteMeal": "Failed to delete meal",
+    "failedToAddToMeal": "Failed to add to meal",
+    "notAvailable": "Not Available",
+    "tapToViewDetails": "Tap to view details"
+  },
+  "goalWeightCard": {
+    "title": "Goal Weight",
+    "setGoalPrompt": "Set your goal weight in Profile to track progress here.",
+    "setGoalBtn": "Set Goal Weight",
+    "logCheckInPrompt": "Log a weight check-in to start tracking progress",
+    "logCheckInBtn": "Log Check-in",
+    "onTrack": "✓ ON TRACK",
+    "behind": "BEHIND",
+    "goalReached": "Goal reached! 🎉",
+    "lbsToGo": "{{lbs}} lbs to go",
+    "estArrival": "EST. ARRIVAL",
+    "calculating": "Calculating..."
   },
   "foodPhotoCapture": {
     "title": "Food Photo",
@@ -2886,9 +2915,22 @@
   },
   "league": {
     "movingUp": "↑ You're moving up",
-    "dropZone": "⚠ Drop zone",
+    "dropZone": "▲ DROP ZONE",
     "topPromoted": "↑ Top {{count}} promoted",
-    "xpThisWeek": "{{xp}} XP this week"
+    "xpThisWeek": "{{xp}} XP this week",
+    "bannerAtTop": "You're at the top — defend your spot",
+    "bannerDiamondSub": "Diamond is the highest league. Stay in the top 5 to remain here.",
+    "bannerPromoTitle": "Top {{count}} advance to {{nextLabel}}",
+    "bannerPromoCushion": "{{xp}} XP cushion above the cutoff.",
+    "bannerPromoCutoff": "You're right at the promotion cutoff — keep going!",
+    "bannerBronzeFloor": "Bronze is the floor — you can't fall below",
+    "bannerBronzeSub": "Keep earning XP to climb the leaderboard.",
+    "bannerDropTitle": "Earn {{xp}} XP to escape the drop zone",
+    "bannerDropSub": "Bottom {{count}} players drop to the league below.",
+    "bannerNeutralTitle": "Earn {{xp}} XP to enter the top {{count}}",
+    "bannerNeutralSub": "Top {{count}} advance to {{nextLabel}}.",
+    "nextLeague": "the next league",
+    "promotionZone": "▼ PROMOTION ZONE"
   },
   "dynamic": {
     "log_your_first_meal": "Log your first meal",
