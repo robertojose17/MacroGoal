@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -23,6 +24,7 @@ export default function MealPlanCreateScreen() {
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
+  const { t } = useTranslation();
 
   const today = new Date();
   const nextWeek = new Date(today);
@@ -74,11 +76,11 @@ export default function MealPlanCreateScreen() {
   const handleCreate = async () => {
     console.log('[MealPlanCreate] Create Plan button pressed, name:', planName);
     if (!planName.trim()) {
-      Alert.alert('Missing Name', 'Please enter a name for your meal plan.');
+      Alert.alert(t('mealPlanCreate.missingName'), t('mealPlanCreate.enterPlanName'));
       return;
     }
     if (endDate < startDate) {
-      Alert.alert('Invalid Dates', 'End date must be on or after start date.');
+      Alert.alert(t('mealPlanCreate.invalidDates'), t('mealPlanCreate.endBeforeStart'));
       return;
     }
     Keyboard.dismiss();
@@ -86,7 +88,7 @@ export default function MealPlanCreateScreen() {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        Alert.alert('Not Logged In', 'Please log in again to create a meal plan.');
+        Alert.alert(t('mealPlanCreate.notLoggedIn'), t('mealPlanCreate.pleaseLogIn'));
         setSaving(false);
         return;
       }
@@ -101,19 +103,23 @@ export default function MealPlanCreateScreen() {
         .select()
         .single();
       if (error) {
-        Alert.alert('Error', error.message || 'Failed to create meal plan.');
+        Alert.alert(t('common.error'), error.message || t('mealPlanCreate.failedToCreate'));
         setSaving(false);
         return;
       }
       router.replace({ pathname: '/meal-plan-detail', params: { planId: data.id } });
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Unexpected error. Please try again.');
+      Alert.alert(t('common.error'), err?.message || t('common.unexpectedError'));
       setSaving(false);
     }
   };
 
   // containerHeight shrinks when keyboard appears, pushing content up
   const containerHeight = screenHeight - kbHeight;
+  const startDateDisplay = formatDateDisplay(startDate);
+  const endDateDisplay = formatDateDisplay(endDate);
+  const pickerTitle = pickerMode === 'start' ? t('mealPlanCreate.startDate') : t('mealPlanCreate.endDate');
+  const durationText = t('mealPlanCreate.durationDays', { count: durationDays });
 
   return (
     <View style={{ height: containerHeight, backgroundColor: bgColor, paddingTop: insets.top }}>
@@ -122,7 +128,7 @@ export default function MealPlanCreateScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: textColor }]}>New Meal Plan</Text>
+        <Text style={[styles.headerTitle, { color: textColor }]}>{t('mealPlanCreate.title')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -132,12 +138,12 @@ export default function MealPlanCreateScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>PLAN NAME</Text>
+          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>{t('mealPlanCreate.planNameLabel')}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: cardBg, borderColor, color: textColor }]}
             value={planName}
             onChangeText={setPlanName}
-            placeholder="e.g. Week of Jun 2"
+            placeholder={t('mealPlanCreate.planNamePlaceholder')}
             placeholderTextColor={secondaryColor}
             returnKeyType="done"
             onSubmitEditing={Keyboard.dismiss}
@@ -145,33 +151,39 @@ export default function MealPlanCreateScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>START DATE</Text>
+          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>{t('mealPlanCreate.startDateLabel')}</Text>
           <TouchableOpacity
             style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
-            onPress={() => setPickerMode('start')}
+            onPress={() => {
+              console.log('[MealPlanCreate] Start date picker opened');
+              setPickerMode('start');
+            }}
             activeOpacity={0.7}
           >
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
-            <Text style={[styles.dateButtonText, { color: textColor }]}>{formatDateDisplay(startDate)}</Text>
+            <Text style={[styles.dateButtonText, { color: textColor }]}>{startDateDisplay}</Text>
             <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={secondaryColor} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>END DATE</Text>
+          <Text style={[styles.sectionLabel, { color: secondaryColor }]}>{t('mealPlanCreate.endDateLabel')}</Text>
           <TouchableOpacity
             style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
-            onPress={() => setPickerMode('end')}
+            onPress={() => {
+              console.log('[MealPlanCreate] End date picker opened');
+              setPickerMode('end');
+            }}
             activeOpacity={0.7}
           >
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
-            <Text style={[styles.dateButtonText, { color: textColor }]}>{formatDateDisplay(endDate)}</Text>
+            <Text style={[styles.dateButtonText, { color: textColor }]}>{endDateDisplay}</Text>
             <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={secondaryColor} />
           </TouchableOpacity>
         </View>
 
         <View style={[styles.hintCard, { backgroundColor: cardBg }]}>
-          <Text style={[styles.hintText, { color: secondaryColor }]}>{durationDays} day plan</Text>
+          <Text style={[styles.hintText, { color: secondaryColor }]}>{durationText}</Text>
         </View>
 
         <TouchableOpacity
@@ -180,7 +192,7 @@ export default function MealPlanCreateScreen() {
           disabled={saving}
           activeOpacity={0.8}
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.createButtonText}>Create Plan</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.createButtonText}>{t('mealPlanCreate.createPlan')}</Text>}
         </TouchableOpacity>
       </ScrollView>
 
@@ -194,10 +206,10 @@ export default function MealPlanCreateScreen() {
         <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.cardDark : '#fff' }]}>
           <View style={styles.modalSheetHeader}>
             <Text style={[styles.modalSheetTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              {pickerMode === 'start' ? 'Start Date' : 'End Date'}
+              {pickerTitle}
             </Text>
             <TouchableOpacity onPress={() => setPickerMode(null)} style={styles.modalDoneButton}>
-              <Text style={styles.modalDoneText}>Done</Text>
+              <Text style={styles.modalDoneText}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
           {pickerMode !== null && (

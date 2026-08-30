@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -18,6 +19,7 @@ export default function MyMealsCreateScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
@@ -41,9 +43,9 @@ export default function MyMealsCreateScreen() {
         if (!dbReady) {
           console.error('[MyMealsCreate] ❌ Database is not ready! Tables are missing.');
           Alert.alert(
-            'Database Error',
-            'The required database tables are missing. Please contact support or check the console logs for migration instructions.',
-            [{ text: 'OK' }]
+            t('myMeals.databaseError'),
+            t('myMeals.databaseMissingTables'),
+            [{ text: t('common.ok') }]
           );
         } else {
           console.log('[MyMealsCreate] ✅ Database is ready');
@@ -53,7 +55,7 @@ export default function MyMealsCreateScreen() {
       }
     };
     initializeScreen();
-  }, [isInitialized]);
+  }, [isInitialized, t]);
 
   // Load draft items from AsyncStorage when screen focuses
   useFocusEffect(
@@ -86,9 +88,7 @@ export default function MyMealsCreateScreen() {
   };
 
   const handleAddFood = () => {
-    console.log('[MyMealsCreate] ========== NAVIGATING TO ADD FOOD ==========');
-    console.log('[MyMealsCreate] Context: my_meals_builder');
-    console.log('[MyMealsCreate] This is CRITICAL - all add-food actions must respect this context');
+    console.log('[MyMealsCreate] Add food button pressed');
     
     // CRITICAL: Pass context = "my_meals_builder" to ensure all add-food actions add to draft
     router.push({
@@ -151,7 +151,7 @@ export default function MyMealsCreateScreen() {
   }, [router, mealType, date]);
 
   const handleSave = async () => {
-    console.log('[MyMealsCreate] ========== SAVE_MY_MEAL PRESSED ==========');
+    console.log('[MyMealsCreate] Save meal button pressed');
     
     // Get user first to log it
     const { data: { user } } = await supabase.auth.getUser();
@@ -162,14 +162,14 @@ export default function MyMealsCreateScreen() {
     // VALIDATION: Check meal name
     if (!mealName.trim()) {
       console.log('[MyMealsCreate] ❌ VALIDATION FAILED: Meal name is empty');
-      Alert.alert('Error', 'Please enter a meal name');
+      Alert.alert(t('common.error'), t('myMeals.enterMealName'));
       return;
     }
 
     // VALIDATION: Check items
     if (draftItems.length === 0) {
       console.log('[MyMealsCreate] ❌ VALIDATION FAILED: No items in meal');
-      Alert.alert('Error', 'Please add at least one food item');
+      Alert.alert(t('common.error'), t('myMeals.addAtLeastOneFood'));
       return;
     }
 
@@ -194,7 +194,7 @@ export default function MyMealsCreateScreen() {
       
       if (!user) {
         console.error('[MyMealsCreate] ❌ No user found');
-        Alert.alert('Error', 'You must be logged in to save meals');
+        Alert.alert(t('common.error'), t('myMealsCreate.mustBeLoggedIn'));
         setSaving(false);
         return;
       }
@@ -203,9 +203,6 @@ export default function MyMealsCreateScreen() {
 
       // STEP 3: Create saved meal
       console.log('[MyMealsCreate] STEP 3: Creating saved meal...');
-      console.log('[MyMealsCreate] Inserting into saved_meals table:');
-      console.log('[MyMealsCreate]   - user_id:', user.id);
-      console.log('[MyMealsCreate]   - name:', mealName.trim());
 
       const { data: savedMeal, error: mealError } = await supabase
         .from(TABLE_SAVED_MEALS)
@@ -218,18 +215,14 @@ export default function MyMealsCreateScreen() {
 
       if (mealError) {
         console.error('[MyMealsCreate] ❌ ERROR CREATING SAVED MEAL:', mealError);
-        console.error('[MyMealsCreate] Error code:', mealError.code);
-        console.error('[MyMealsCreate] Error message:', mealError.message);
-        console.error('[MyMealsCreate] Error details:', mealError.details);
-        console.error('[MyMealsCreate] Error hint:', mealError.hint);
         
         // Check for common errors
         if (mealError.code === '42501') {
-          Alert.alert('Error', 'Permission denied. RLS policy may be blocking the insert. Please check your database policies.');
+          Alert.alert(t('common.error'), t('myMealsCreate.permissionDenied'));
         } else if (mealError.code === '23505') {
-          Alert.alert('Error', 'A meal with this name already exists.');
+          Alert.alert(t('common.error'), t('myMealsCreate.duplicateName'));
         } else {
-          Alert.alert('Error', `Failed to save meal: ${mealError.message}`);
+          Alert.alert(t('common.error'), t('myMeals.failedToSave'));
         }
         
         setSaving(false);
@@ -238,27 +231,21 @@ export default function MyMealsCreateScreen() {
 
       if (!savedMeal) {
         console.error('[MyMealsCreate] ❌ No saved meal returned from insert');
-        Alert.alert('Error', 'Failed to save meal (no data returned)');
+        Alert.alert(t('common.error'), t('myMealsCreate.noDataReturned'));
         setSaving(false);
         return;
       }
 
       console.log('[MyMealsCreate] ✅ Saved meal created successfully!');
       console.log('[MyMealsCreate] Saved meal ID:', savedMeal.id);
-      console.log('[MyMealsCreate] Saved meal name:', savedMeal.name);
 
       // STEP 4: Create saved meal items
       console.log('[MyMealsCreate] STEP 4: Creating saved meal items...');
-      console.log('[MyMealsCreate] Number of items to insert:', draftItems.length);
 
       const itemsToInsert = draftItems.map((item, index) => {
         console.log(`[MyMealsCreate] ========== ITEM ${index + 1} ==========`);
         console.log('[MyMealsCreate] food_id:', item.food_id);
         console.log('[MyMealsCreate] food_name:', item.food_name);
-        console.log('[MyMealsCreate] food_brand:', item.food_brand);
-        console.log('[MyMealsCreate] serving_amount:', item.serving_amount);
-        console.log('[MyMealsCreate] serving_unit:', item.serving_unit);
-        console.log('[MyMealsCreate] servings_count:', item.servings_count);
 
         return {
           saved_meal_id: savedMeal.id,
@@ -277,9 +264,6 @@ export default function MyMealsCreateScreen() {
         };
       });
 
-      console.log('[MyMealsCreate] ========== INSERTING ITEMS ==========');
-      console.log('[MyMealsCreate] Items to insert:', JSON.stringify(itemsToInsert, null, 2));
-
       const { data: insertedItems, error: itemsError } = await supabase
         .from(TABLE_SAVED_MEAL_ITEMS)
         .insert(itemsToInsert)
@@ -287,34 +271,18 @@ export default function MyMealsCreateScreen() {
 
       if (itemsError) {
         console.error('[MyMealsCreate] ❌ ERROR CREATING SAVED MEAL ITEMS:', itemsError);
-        console.error('[MyMealsCreate] Error code:', itemsError.code);
-        console.error('[MyMealsCreate] Error message:', itemsError.message);
-        console.error('[MyMealsCreate] Error details:', itemsError.details);
-        console.error('[MyMealsCreate] Error hint:', itemsError.hint);
         
         // Rollback: delete the saved meal
         console.log('[MyMealsCreate] Rolling back: deleting saved meal', savedMeal.id);
         await supabase.from(TABLE_SAVED_MEALS).delete().eq('id', savedMeal.id);
         
-        Alert.alert('Error', `Failed to save meal items: ${itemsError.message}`);
+        Alert.alert(t('common.error'), t('myMealsCreate.failedToSaveItems', { message: itemsError.message }));
         setSaving(false);
         return;
       }
 
       console.log('[MyMealsCreate] ✅ Saved meal items created successfully!');
       console.log('[MyMealsCreate] Inserted items count:', insertedItems?.length || 0);
-      
-      // DEBUG: Log inserted items
-      insertedItems?.forEach((item: any, index: number) => {
-        console.log(`[MyMealsCreate] Inserted item ${index + 1}:`, {
-          id: item.id,
-          saved_meal_id: item.saved_meal_id,
-          food_id: item.food_id,
-          serving_amount: item.serving_amount,
-          serving_unit: item.serving_unit,
-          servings_count: item.servings_count,
-        });
-      });
 
       // STEP 5: Clear draft
       console.log('[MyMealsCreate] STEP 5: Clearing draft...');
@@ -323,14 +291,10 @@ export default function MyMealsCreateScreen() {
 
       // STEP 6: Show success and navigate back
       console.log('[MyMealsCreate] ========== SAVE COMPLETE ==========');
-      console.log('[MyMealsCreate] Meal saved successfully!');
-      console.log('[MyMealsCreate] Meal ID:', savedMeal.id);
-      console.log('[MyMealsCreate] Meal name:', savedMeal.name);
-      console.log('[MyMealsCreate] Items count:', insertedItems?.length || 0);
       
-      Alert.alert('Success', 'Meal saved successfully!', [
+      Alert.alert(t('common.success'), t('myMeals.mealSaved'), [
         {
-          text: 'OK',
+          text: t('common.ok'),
           onPress: () => {
             console.log('[MyMealsCreate] Navigating back to My Meals list...');
             router.back();
@@ -340,12 +304,7 @@ export default function MyMealsCreateScreen() {
       setSaving(false);
     } catch (error) {
       console.error('[MyMealsCreate] ❌ UNEXPECTED ERROR in handleSave:', error);
-      if (error instanceof Error) {
-        console.error('[MyMealsCreate] Error name:', error.name);
-        console.error('[MyMealsCreate] Error message:', error.message);
-        console.error('[MyMealsCreate] Error stack:', error.stack);
-      }
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
       setSaving(false);
     }
   };
@@ -397,6 +356,8 @@ export default function MyMealsCreateScreen() {
     );
   };
 
+  const foodsCount = draftItems.length;
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
@@ -412,7 +373,7 @@ export default function MyMealsCreateScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Create Meal
+          {t('myMealsCreate.title')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -425,7 +386,7 @@ export default function MyMealsCreateScreen() {
       >
         <View style={[styles.nameCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.nameLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Meal Name
+            {t('myMeals.mealName')}
           </Text>
           <TextInput
             style={[
@@ -436,7 +397,7 @@ export default function MyMealsCreateScreen() {
                 color: isDark ? colors.textDark : colors.text,
               }
             ]}
-            placeholder="e.g., Breakfast Bowl, Post-Workout Meal"
+            placeholder={t('myMeals.mealNamePlaceholder')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={mealName}
             onChangeText={setMealName}
@@ -446,7 +407,7 @@ export default function MyMealsCreateScreen() {
 
         <View style={[styles.totalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.totalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Total Nutrition
+            {t('myMeals.totalNutrition')}
           </Text>
           <View style={styles.totalsRow}>
             <View style={styles.totalItem}>
@@ -454,7 +415,7 @@ export default function MyMealsCreateScreen() {
                 {Math.round(totals.calories)}
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Calories
+                {t('common.calories')}
               </Text>
             </View>
             <View style={styles.totalItem}>
@@ -462,7 +423,7 @@ export default function MyMealsCreateScreen() {
                 {Math.round(totals.protein)}g
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Protein
+                {t('common.protein')}
               </Text>
             </View>
             <View style={styles.totalItem}>
@@ -470,7 +431,7 @@ export default function MyMealsCreateScreen() {
                 {Math.round(totals.carbs)}g
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Carbs
+                {t('common.carbs')}
               </Text>
             </View>
             <View style={styles.totalItem}>
@@ -478,7 +439,7 @@ export default function MyMealsCreateScreen() {
                 {Math.round(totals.fats)}g
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Fat
+                {t('myMealsCreate.fat')}
               </Text>
             </View>
           </View>
@@ -486,7 +447,7 @@ export default function MyMealsCreateScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Foods ({draftItems.length})
+            {t('myMealsCreate.foodsCount', { count: foodsCount })}
           </Text>
           <TouchableOpacity
             style={[styles.addFoodButton, { backgroundColor: colors.primary }]}
@@ -499,7 +460,7 @@ export default function MyMealsCreateScreen() {
               size={16}
               color="#FFFFFF"
             />
-            <Text style={styles.addFoodButtonText}>Add Food</Text>
+            <Text style={styles.addFoodButtonText}>{t('myMealsCreate.addFood')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -512,10 +473,10 @@ export default function MyMealsCreateScreen() {
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
             <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              No foods added yet
+              {t('myMealsCreate.noFoodsAdded')}
             </Text>
             <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Tap "Add Food" to start building your meal
+              {t('myMealsCreate.tapAddFood')}
             </Text>
           </View>
         ) : (
@@ -538,7 +499,7 @@ export default function MyMealsCreateScreen() {
             {saving ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.saveButtonText}>Save Meal</Text>
+              <Text style={styles.saveButtonText}>{t('myMeals.saveMeal')}</Text>
             )}
           </TouchableOpacity>
         </View>

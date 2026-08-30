@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase/client';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -124,6 +125,7 @@ export default function RecipeDetailScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +166,7 @@ export default function RecipeDetailScreen() {
 
       if (recipeResult.error) {
         console.error('[RecipeDetail] Error loading recipe:', recipeResult.error);
-        setError('Failed to load recipe.');
+        setError(t('recipeDetail.failedToLoad'));
         return;
       }
 
@@ -203,7 +205,7 @@ export default function RecipeDetailScreen() {
       }
     } catch (err: any) {
       console.error('[RecipeDetail] Unexpected error:', err);
-      setError(err?.message || 'An unexpected error occurred.');
+      setError(err?.message || t('recipeDetail.unexpectedError'));
     } finally {
       setLoading(false);
     }
@@ -215,7 +217,7 @@ export default function RecipeDetailScreen() {
 
   const handleSubmitRating = async () => {
     if (selectedRating === 0) {
-      Alert.alert('Rating required', 'Please select a star rating before submitting.');
+      Alert.alert(t('recipeDetail.ratingRequired'), t('recipeDetail.selectStarRating'));
       return;
     }
     console.log('[RecipeDetail] Submitting rating:', selectedRating, 'for recipe:', id);
@@ -223,7 +225,7 @@ export default function RecipeDetailScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Sign in required', 'Please sign in to rate recipes.');
+        Alert.alert(t('recipeDetail.signInRequired'), t('recipeDetail.signInToRate'));
         return;
       }
 
@@ -242,7 +244,7 @@ export default function RecipeDetailScreen() {
 
       if (upsertError) {
         console.error('[RecipeDetail] Error submitting rating:', upsertError);
-        Alert.alert('Error', 'Failed to submit rating. Please try again.');
+        Alert.alert(t('recipeDetail.errorTitle'), t('recipeDetail.failedToSubmitRating'));
         return;
       }
 
@@ -253,7 +255,7 @@ export default function RecipeDetailScreen() {
       loadRecipe();
     } catch (err: any) {
       console.error('[RecipeDetail] Unexpected error submitting rating:', err);
-      Alert.alert('Error', err?.message || 'Failed to submit rating.');
+      Alert.alert(t('recipeDetail.errorTitle'), err?.message || t('recipeDetail.failedToSubmitRating'));
     } finally {
       setSubmittingRating(false);
     }
@@ -262,7 +264,7 @@ export default function RecipeDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: bgColor }]}>
-        <Stack.Screen options={{ title: 'Recipe', headerBackTitle: 'Back' }} />
+        <Stack.Screen options={{ title: t('recipeDetail.recipe'), headerBackTitle: t('recipeDetail.back') }} />
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -271,8 +273,8 @@ export default function RecipeDetailScreen() {
   if (error || !recipe) {
     return (
       <View style={[styles.centered, { backgroundColor: bgColor }]}>
-        <Stack.Screen options={{ title: 'Recipe', headerBackTitle: 'Back' }} />
-        <Text style={[styles.errorText, { color: colors.error }]}>{error || 'Recipe not found.'}</Text>
+        <Stack.Screen options={{ title: t('recipeDetail.recipe'), headerBackTitle: t('recipeDetail.back') }} />
+        <Text style={[styles.errorText, { color: colors.error }]}>{error || t('recipeDetail.recipeNotFound')}</Text>
         <TouchableOpacity
           style={[styles.retryBtn, { backgroundColor: colors.primary }]}
           onPress={() => {
@@ -280,13 +282,13 @@ export default function RecipeDetailScreen() {
             loadRecipe();
           }}
         >
-          <Text style={styles.retryBtnText}>Retry</Text>
+          <Text style={styles.retryBtnText}>{t('recipeDetail.retry')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const cuisineLabel = recipe.cuisine || 'Unknown';
+  const cuisineLabel = recipe.cuisine || t('recipeDetail.unknown');
   const mealTypeLabel = recipe.meal_type ? recipe.meal_type.charAt(0).toUpperCase() + recipe.meal_type.slice(1) : '';
   const subtitleLabel = [cuisineLabel, mealTypeLabel].filter(Boolean).join(' · ');
   const avgRating = recipe.average_rating != null ? Number(recipe.average_rating) : 0;
@@ -297,7 +299,7 @@ export default function RecipeDetailScreen() {
   const ingredients: any[] = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const instructionsText = recipe.instructions || '';
 
-  const myRatingLabel = myReview ? `You rated this ${myReview.rating}/5` : null;
+  const myRatingLabel = myReview ? t('recipeDetail.youRated', { rating: myReview.rating }) : null;
 
   const isOwner = !!(currentUserId && recipe.created_by && currentUserId === recipe.created_by);
 
@@ -322,7 +324,7 @@ export default function RecipeDetailScreen() {
         if (deleteError) {
           console.error('[RecipeDetail] Error removing favorite:', deleteError);
           setIsSaved(previousState); // revert
-          Alert.alert('Error', 'Failed to remove from saved. Please try again.');
+          Alert.alert(t('recipeDetail.errorTitle'), t('recipeDetail.failedToRemoveSaved'));
         } else {
           console.log('[RecipeDetail] Recipe removed from favorites');
         }
@@ -335,7 +337,7 @@ export default function RecipeDetailScreen() {
         if (insertError) {
           console.error('[RecipeDetail] Error saving favorite:', insertError);
           setIsSaved(previousState); // revert
-          Alert.alert('Error', 'Failed to save recipe. Please try again.');
+          Alert.alert(t('recipeDetail.errorTitle'), t('recipeDetail.failedToSaveRecipe'));
         } else {
           console.log('[RecipeDetail] Recipe added to favorites');
         }
@@ -356,12 +358,12 @@ export default function RecipeDetailScreen() {
   const handleDelete = () => {
     console.log('[RecipeDetail] Delete button pressed for recipe:', recipe.id);
     Alert.alert(
-      'Delete Recipe',
-      'Are you sure you want to delete this recipe? This cannot be undone.',
+      t('recipeDetail.deleteRecipe'),
+      t('recipeDetail.deleteConfirmMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('recipeDetail.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('recipeDetail.delete'),
           style: 'destructive',
           onPress: async () => {
             console.log('[RecipeDetail] Confirming delete for recipe:', recipe.id);
@@ -372,14 +374,14 @@ export default function RecipeDetailScreen() {
                 .eq('id', recipe.id);
               if (deleteError) {
                 console.error('[RecipeDetail] Error deleting recipe:', deleteError);
-                Alert.alert('Error', 'Failed to delete recipe. Please try again.');
+                Alert.alert(t('recipeDetail.errorTitle'), t('recipeDetail.failedToDelete'));
                 return;
               }
               console.log('[RecipeDetail] Recipe deleted successfully');
               router.back();
             } catch (err: any) {
               console.error('[RecipeDetail] Unexpected error deleting:', err);
-              Alert.alert('Error', err?.message || 'Failed to delete recipe.');
+              Alert.alert(t('recipeDetail.errorTitle'), err?.message || t('recipeDetail.failedToDelete'));
             }
           },
         },
@@ -387,12 +389,14 @@ export default function RecipeDetailScreen() {
     );
   };
 
+  const rateBtnLabel = myReview ? t('recipeDetail.updateRating') : t('recipeDetail.rateThisRecipe');
+
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Stack.Screen
         options={{
           title: recipe.name,
-          headerBackTitle: 'Back',
+          headerBackTitle: t('recipeDetail.back'),
           headerStyle: { backgroundColor: isDark ? colors.backgroundDark : colors.background },
           headerTintColor: textColor,
         }}
@@ -460,10 +464,10 @@ export default function RecipeDetailScreen() {
 
           {/* Macro pills */}
           <View style={styles.macroRow}>
-            <MacroPill label="Calories" value={recipe.calories} unit="kcal" color={colors.calories} isDark={isDark} />
-            <MacroPill label="Protein" value={recipe.protein} unit="g" color={colors.protein} isDark={isDark} />
-            <MacroPill label="Carbs" value={recipe.carbs} unit="g" color={colors.carbs} isDark={isDark} />
-            <MacroPill label="Fat" value={recipe.fat} unit="g" color={colors.fats} isDark={isDark} />
+            <MacroPill label={t('recipeDetail.calories')} value={recipe.calories} unit="kcal" color={colors.calories} isDark={isDark} />
+            <MacroPill label={t('recipeDetail.protein')} value={recipe.protein} unit="g" color={colors.protein} isDark={isDark} />
+            <MacroPill label={t('recipeDetail.carbs')} value={recipe.carbs} unit="g" color={colors.carbs} isDark={isDark} />
+            <MacroPill label={t('recipeDetail.fat')} value={recipe.fat} unit="g" color={colors.fats} isDark={isDark} />
           </View>
 
           {/* Rating block */}
@@ -474,7 +478,9 @@ export default function RecipeDetailScreen() {
               <Text style={[styles.reviewCount, { color: secondaryColor }]}>
                 {'('}
                 {reviewCountDisplay}
-                {' ratings)'}
+                {' '}
+                {t('recipeDetail.ratings')}
+                {')'}
               </Text>
             </View>
 
@@ -490,14 +496,14 @@ export default function RecipeDetailScreen() {
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.rateBtnText}>{myReview ? 'Update Rating' : 'Rate this recipe'}</Text>
+              <Text style={styles.rateBtnText}>{rateBtnLabel}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Ingredients */}
           {ingredients.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: textColor }]}>Ingredients</Text>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>{t('recipeDetail.ingredients')}</Text>
               {ingredients.map((item, idx) => {
                 const ingredientText = parseIngredient(item);
                 return (
@@ -513,7 +519,7 @@ export default function RecipeDetailScreen() {
           {/* Instructions */}
           {instructionsText.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: textColor }]}>Instructions</Text>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>{t('recipeDetail.instructions')}</Text>
               <Text style={[styles.instructionsText, { color: textColor }]}>{instructionsText}</Text>
             </View>
           )}
@@ -530,7 +536,7 @@ export default function RecipeDetailScreen() {
               activeOpacity={0.85}
             >
               <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color="#fff" />
-              <Text style={styles.editBtnText}>Edit</Text>
+              <Text style={styles.editBtnText}>{t('recipeDetail.edit')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.deleteBtn, { borderColor: colors.error }]}
@@ -538,7 +544,7 @@ export default function RecipeDetailScreen() {
               activeOpacity={0.85}
             >
               <IconSymbol ios_icon_name="trash" android_material_icon_name="delete" size={18} color={colors.error} />
-              <Text style={[styles.deleteBtnText, { color: colors.error }]}>Delete</Text>
+              <Text style={[styles.deleteBtnText, { color: colors.error }]}>{t('recipeDetail.delete')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -546,12 +552,12 @@ export default function RecipeDetailScreen() {
             style={[styles.addToPlanBtn, { backgroundColor: colors.primary }]}
             onPress={() => {
               console.log('[RecipeDetail] Add to Meal Plan pressed for recipe:', recipe.id);
-              Alert.alert('Coming soon', 'We will wire this up to your meal plans next');
+              Alert.alert(t('recipeDetail.comingSoon'), t('recipeDetail.comingSoonMessage'));
             }}
             activeOpacity={0.85}
           >
             <IconSymbol ios_icon_name="calendar.badge.plus" android_material_icon_name="event" size={20} color="#fff" />
-            <Text style={styles.addToPlanBtnText}>Add to Meal Plan</Text>
+            <Text style={styles.addToPlanBtnText}>{t('recipeDetail.addToMealPlan')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -574,15 +580,15 @@ export default function RecipeDetailScreen() {
         >
           <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
             <View style={[styles.modalHandle, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-            <Text style={[styles.modalTitle, { color: textColor }]}>Rate this Recipe</Text>
+            <Text style={[styles.modalTitle, { color: textColor }]}>{t('recipeDetail.rateThisRecipeTitle')}</Text>
             <Text style={[styles.modalSubtitle, { color: secondaryColor }]}>{recipe.name}</Text>
 
             <StarPicker value={selectedRating} onChange={setSelectedRating} />
 
-            <Text style={[styles.commentLabel, { color: secondaryColor }]}>Comment (optional)</Text>
+            <Text style={[styles.commentLabel, { color: secondaryColor }]}>{t('recipeDetail.commentOptional')}</Text>
             <TextInput
               style={[styles.commentInput, { backgroundColor: isDark ? colors.backgroundDark : '#F3F4F6', color: textColor, borderColor: isDark ? colors.borderDark : colors.border }]}
-              placeholder="Share your thoughts..."
+              placeholder={t('recipeDetail.commentPlaceholder')}
               placeholderTextColor={secondaryColor}
               value={ratingComment}
               onChangeText={setRatingComment}
@@ -599,7 +605,7 @@ export default function RecipeDetailScreen() {
             >
               {submittingRating
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.submitBtnText}>Submit Rating</Text>
+                : <Text style={styles.submitBtnText}>{t('recipeDetail.submitRating')}</Text>
               }
             </TouchableOpacity>
 
@@ -610,7 +616,7 @@ export default function RecipeDetailScreen() {
                 setRatingModalVisible(false);
               }}
             >
-              <Text style={[styles.cancelBtnText, { color: textColor }]}>Cancel</Text>
+              <Text style={[styles.cancelBtnText, { color: textColor }]}>{t('recipeDetail.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

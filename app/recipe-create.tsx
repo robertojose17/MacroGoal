@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase/client';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -56,6 +57,7 @@ export default function RecipeCreateScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   // Form state
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export default function RecipeCreateScreen() {
     console.log('[RecipeCreate] Photo picker pressed');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Please allow access to your photo library.');
+      Alert.alert(t('recipeCreate.permissionRequired'), t('recipeCreate.permissionMessage'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -185,12 +187,12 @@ export default function RecipeCreateScreen() {
   const handleQuickAddSubmit = () => {
     const trimmedName = qaName.trim();
     if (!trimmedName) {
-      Alert.alert('Required', 'Please enter an ingredient name.');
+      Alert.alert(t('recipeCreate.required'), t('recipeCreate.enterIngredientName'));
       return;
     }
     const kcalNum = parseFloat(qaKcal);
     if (!qaKcal.trim() || isNaN(kcalNum) || kcalNum <= 0) {
-      Alert.alert('Required', 'Please enter calories.');
+      Alert.alert(t('recipeCreate.required'), t('recipeCreate.enterCalories'));
       return;
     }
     const ing: Ingredient = {
@@ -217,11 +219,11 @@ export default function RecipeCreateScreen() {
     console.log('[RecipeCreate] Publish Recipe pressed');
 
     if (!name.trim()) {
-      Alert.alert('Required', 'Please enter a recipe name.');
+      Alert.alert(t('recipeCreate.required'), t('recipeCreate.enterRecipeName'));
       return;
     }
     if (ingredients.length === 0) {
-      Alert.alert('Required', 'Please add at least one ingredient.');
+      Alert.alert(t('recipeCreate.required'), t('recipeCreate.addAtLeastOneIngredient'));
       return;
     }
 
@@ -229,7 +231,7 @@ export default function RecipeCreateScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Sign in required', 'Please sign in to publish recipes.');
+        Alert.alert(t('recipeCreate.signInRequired'), t('recipeCreate.signInToPublish'));
         return;
       }
 
@@ -270,7 +272,7 @@ export default function RecipeCreateScreen() {
 
       if (error) {
         console.error('[RecipeCreate] Error inserting recipe:', error);
-        Alert.alert('Error', 'Failed to publish recipe. Please try again.');
+        Alert.alert(t('recipeCreate.errorTitle'), t('recipeCreate.failedToPublish'));
         return;
       }
 
@@ -278,7 +280,7 @@ export default function RecipeCreateScreen() {
       router.back();
     } catch (err: any) {
       console.error('[RecipeCreate] Unexpected error:', err);
-      Alert.alert('Error', err?.message || 'Failed to publish recipe.');
+      Alert.alert(t('recipeCreate.errorTitle'), err?.message || t('recipeCreate.failedToPublish'));
     } finally {
       setSaving(false);
     }
@@ -288,8 +290,8 @@ export default function RecipeCreateScreen() {
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Stack.Screen
         options={{
-          title: 'New Recipe',
-          headerBackTitle: 'Back',
+          title: t('recipeCreate.title'),
+          headerBackTitle: t('recipeCreate.back'),
           headerStyle: { backgroundColor: isDark ? colors.backgroundDark : colors.background },
           headerTintColor: textColor,
         }}
@@ -316,17 +318,17 @@ export default function RecipeCreateScreen() {
             ) : (
               <View style={styles.photoPlaceholder}>
                 <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={32} color={secondaryColor} />
-                <Text style={[styles.photoPlaceholderText, { color: secondaryColor }]}>Add Photo (optional)</Text>
+                <Text style={[styles.photoPlaceholderText, { color: secondaryColor }]}>{t('recipeCreate.addPhotoOptional')}</Text>
               </View>
             )}
           </TouchableOpacity>
 
           {/* Name */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Recipe Name" required isDark={isDark} />
+            <FormLabel text={t('recipeCreate.recipeName')} required isDark={isDark} />
             <TextInput
               style={inputStyle}
-              placeholder="e.g. Grilled Chicken Salad"
+              placeholder={t('recipeCreate.recipeNamePlaceholder')}
               placeholderTextColor={secondaryColor}
               value={name}
               onChangeText={setName}
@@ -336,10 +338,10 @@ export default function RecipeCreateScreen() {
 
           {/* Description */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Description" isDark={isDark} />
+            <FormLabel text={t('recipeCreate.description')} isDark={isDark} />
             <TextInput
               style={[inputStyle, styles.textArea]}
-              placeholder="Brief description of the recipe..."
+              placeholder={t('recipeCreate.descriptionPlaceholder')}
               placeholderTextColor={secondaryColor}
               value={description}
               onChangeText={setDescription}
@@ -351,11 +353,11 @@ export default function RecipeCreateScreen() {
 
           {/* Meal type */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Meal Type" isDark={isDark} />
+            <FormLabel text={t('recipeCreate.mealType')} isDark={isDark} />
             <View style={styles.pillRow}>
               {MEAL_TYPE_OPTIONS.map((option) => {
                 const isActive = mealType === option;
-                const label = option.charAt(0).toUpperCase() + option.slice(1);
+                const label = t(`recipeCreate.mealType_${option}`);
                 return (
                   <TouchableOpacity
                     key={option}
@@ -383,10 +385,10 @@ export default function RecipeCreateScreen() {
 
           {/* Cuisine */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Cuisine" isDark={isDark} />
+            <FormLabel text={t('recipeCreate.cuisine')} isDark={isDark} />
             <TextInput
               style={inputStyle}
-              placeholder="e.g. Italian, Mexican, Other"
+              placeholder={t('recipeCreate.cuisinePlaceholder')}
               placeholderTextColor={secondaryColor}
               value={cuisine}
               onChangeText={setCuisine}
@@ -396,28 +398,28 @@ export default function RecipeCreateScreen() {
 
           {/* Ingredients section */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Ingredients" required isDark={isDark} />
+            <FormLabel text={t('recipeCreate.ingredients')} required isDark={isDark} />
 
             {/* Totals card — only shown when there are ingredients */}
             {ingredients.length > 0 && (
               <View style={[styles.totalsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Text style={[styles.totalsTitle, { color: textColor }]}>Totals</Text>
+                <Text style={[styles.totalsTitle, { color: textColor }]}>{t('recipeCreate.totals')}</Text>
                 <View style={styles.totalsRow}>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.calories }]}>{totalKcalDisplay}</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>kcal</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeCreate.kcal')}</Text>
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.protein }]}>{totalProteinDisplay}g</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>Protein</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeCreate.protein')}</Text>
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.carbs }]}>{totalCarbsDisplay}g</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>Carbs</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeCreate.carbs')}</Text>
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.fats }]}>{totalFatDisplay}g</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>Fat</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeCreate.fat')}</Text>
                   </View>
                 </View>
               </View>
@@ -465,7 +467,7 @@ export default function RecipeCreateScreen() {
                 activeOpacity={0.7}
               >
                 <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={16} color={colors.primary} />
-                <Text style={[styles.pickerBtnText, { color: colors.primary }]}>Library</Text>
+                <Text style={[styles.pickerBtnText, { color: colors.primary }]}>{t('recipeCreate.library')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.pickerBtn, { backgroundColor: colors.info + '18', borderColor: colors.info }]}
@@ -473,7 +475,7 @@ export default function RecipeCreateScreen() {
                 activeOpacity={0.7}
               >
                 <IconSymbol ios_icon_name="barcode.viewfinder" android_material_icon_name="qr-code-scanner" size={16} color={colors.info} />
-                <Text style={[styles.pickerBtnText, { color: colors.info }]}>Barcode</Text>
+                <Text style={[styles.pickerBtnText, { color: colors.info }]}>{t('recipeCreate.barcode')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.pickerBtn, { backgroundColor: colors.success + '18', borderColor: colors.success }]}
@@ -481,17 +483,17 @@ export default function RecipeCreateScreen() {
                 activeOpacity={0.7}
               >
                 <IconSymbol ios_icon_name="plus.circle" android_material_icon_name="add-circle-outline" size={16} color={colors.success} />
-                <Text style={[styles.pickerBtnText, { color: colors.success }]}>Quick Add</Text>
+                <Text style={[styles.pickerBtnText, { color: colors.success }]}>{t('recipeCreate.quickAdd')}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Instructions */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Instructions" isDark={isDark} />
+            <FormLabel text={t('recipeCreate.instructions')} isDark={isDark} />
             <TextInput
               style={[inputStyle, styles.instructionsArea]}
-              placeholder="Step-by-step instructions..."
+              placeholder={t('recipeCreate.instructionsPlaceholder')}
               placeholderTextColor={secondaryColor}
               value={instructions}
               onChangeText={setInstructions}
@@ -513,7 +515,7 @@ export default function RecipeCreateScreen() {
             ) : (
               <>
                 <IconSymbol ios_icon_name="paperplane.fill" android_material_icon_name="send" size={20} color="#fff" />
-                <Text style={styles.publishBtnText}>Publish Recipe</Text>
+                <Text style={styles.publishBtnText}>{t('recipeCreate.publishRecipe')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -533,13 +535,13 @@ export default function RecipeCreateScreen() {
             style={styles.modalKAV}
           >
             <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-              <Text style={[styles.modalTitle, { color: textColor }]}>Quick Add Ingredient</Text>
+              <Text style={[styles.modalTitle, { color: textColor }]}>{t('recipeCreate.quickAddTitle')}</Text>
 
               <View style={styles.modalField}>
-                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Name *</Text>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>{t('recipeCreate.nameRequired')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-                  placeholder="e.g. Olive oil"
+                  placeholder={t('recipeCreate.namePlaceholder')}
                   placeholderTextColor={secondaryColor}
                   value={qaName}
                   onChangeText={setQaName}
@@ -548,7 +550,7 @@ export default function RecipeCreateScreen() {
               </View>
 
               <View style={styles.modalField}>
-                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Grams (optional)</Text>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>{t('recipeCreate.gramsOptional')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                   placeholder="0"
@@ -561,7 +563,7 @@ export default function RecipeCreateScreen() {
               </View>
 
               <View style={styles.modalField}>
-                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Calories *</Text>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>{t('recipeCreate.caloriesRequired')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                   placeholder="0"
@@ -575,7 +577,7 @@ export default function RecipeCreateScreen() {
 
               <View style={styles.modalMacroRow}>
                 <View style={[styles.modalField, { flex: 1 }]}>
-                  <Text style={[styles.modalLabel, { color: colors.protein }]}>Protein (g)</Text>
+                  <Text style={[styles.modalLabel, { color: colors.protein }]}>{t('recipeCreate.proteinG')}</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                     placeholder="0"
@@ -587,7 +589,7 @@ export default function RecipeCreateScreen() {
                   />
                 </View>
                 <View style={[styles.modalField, { flex: 1 }]}>
-                  <Text style={[styles.modalLabel, { color: colors.carbs }]}>Carbs (g)</Text>
+                  <Text style={[styles.modalLabel, { color: colors.carbs }]}>{t('recipeCreate.carbsG')}</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                     placeholder="0"
@@ -599,7 +601,7 @@ export default function RecipeCreateScreen() {
                   />
                 </View>
                 <View style={[styles.modalField, { flex: 1 }]}>
-                  <Text style={[styles.modalLabel, { color: colors.fats }]}>Fat (g)</Text>
+                  <Text style={[styles.modalLabel, { color: colors.fats }]}>{t('recipeCreate.fatG')}</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                     placeholder="0"
@@ -619,14 +621,14 @@ export default function RecipeCreateScreen() {
                   onPress={handleQuickAddCancel}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.modalCancelBtnText, { color: secondaryColor }]}>Cancel</Text>
+                  <Text style={[styles.modalCancelBtnText, { color: secondaryColor }]}>{t('recipeCreate.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalAddBtn, { backgroundColor: colors.success }]}
                   onPress={handleQuickAddSubmit}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.modalAddBtnText}>Add Ingredient</Text>
+                  <Text style={styles.modalAddBtnText}>{t('recipeCreate.addIngredient')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

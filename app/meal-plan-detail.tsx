@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -23,11 +24,11 @@ import { supabase } from '@/lib/supabase/client';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
-const MEAL_TYPES: { type: MealType; label: string; emoji: string }[] = [
-  { type: 'breakfast', label: 'Breakfast', emoji: '🌅' },
-  { type: 'lunch', label: 'Lunch', emoji: '☀️' },
-  { type: 'dinner', label: 'Dinner', emoji: '🌙' },
-  { type: 'snack', label: 'Snack', emoji: '🍎' },
+const MEAL_TYPES_CONFIG: { type: MealType; labelKey: string; emoji: string }[] = [
+  { type: 'breakfast', labelKey: 'mealPlanDetail.breakfast', emoji: '🌅' },
+  { type: 'lunch', labelKey: 'mealPlanDetail.lunch', emoji: '☀️' },
+  { type: 'dinner', labelKey: 'mealPlanDetail.dinner', emoji: '🌙' },
+  { type: 'snack', labelKey: 'mealPlanDetail.snack', emoji: '🍎' },
 ];
 
 type ItemEditState = {
@@ -151,6 +152,7 @@ function computeLiveMacros(es: ItemEditState, servingsStr: string) {
 
 export default function MealPlanDetailScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { planId } = useLocalSearchParams<{ planId: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -203,7 +205,7 @@ export default function MealPlanDetailScreen() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[MealPlanDetail] Error loading plan:', msg);
-      setError('Failed to load meal plan.');
+      setError(t('mealPlanDetail.failedToLoad'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -225,10 +227,10 @@ export default function MealPlanDetailScreen() {
 
   const handleDeleteItem = (itemId: string) => {
     console.log('[MealPlanDetail] Delete item pressed:', itemId);
-    Alert.alert('Remove Item', 'Remove this food from the plan?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('mealPlanDetail.removeItemTitle'), t('mealPlanDetail.removeItemMessage'), [
+      { text: t('mealPlanDetail.cancel'), style: 'cancel' },
       {
-        text: 'Remove',
+        text: t('mealPlanDetail.remove'),
         style: 'destructive',
         onPress: async () => {
           setDeletingItemId(itemId);
@@ -247,7 +249,7 @@ export default function MealPlanDetailScreen() {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
             console.error('[MealPlanDetail] Error deleting item:', msg);
-            Alert.alert('Error', 'Failed to remove item. Please try again.');
+            Alert.alert(t('mealPlanDetail.error'), t('mealPlanDetail.failedToRemoveItem'));
           } finally {
             setDeletingItemId(null);
           }
@@ -261,7 +263,7 @@ export default function MealPlanDetailScreen() {
     if (!state) return;
     const servings = parseFloat(state.servings) || 0;
     if (servings <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid number greater than 0.');
+      Alert.alert(t('mealPlanDetail.invalidAmount'), t('mealPlanDetail.invalidAmountMessage'));
       return;
     }
     const m = computeLiveMacros(state, state.servings);
@@ -291,7 +293,7 @@ export default function MealPlanDetailScreen() {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      Alert.alert('Error', 'Failed to update quantity. Please try again.');
+      Alert.alert(t('mealPlanDetail.error'), t('mealPlanDetail.failedToUpdateItem'));
       console.error('[MealPlanDetail] Error updating item:', msg);
     }
   };
@@ -350,7 +352,7 @@ export default function MealPlanDetailScreen() {
       if (!response.ok) {
         const errText = await response.text();
         console.error('[MealPlanDetail] recipe-details error:', response.status, errText.slice(0, 200));
-        setRecipeInstructions(['Failed to generate recipe. Please try again.']);
+        setRecipeInstructions([t('mealPlanDetail.failedToGenerateRecipe')]);
         return;
       }
       const data = await response.json();
@@ -360,7 +362,7 @@ export default function MealPlanDetailScreen() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[MealPlanDetail] recipe-details fetch error:', msg);
-      setRecipeInstructions(['Failed to generate recipe. Please try again.']);
+      setRecipeInstructions([t('mealPlanDetail.failedToGenerateRecipe')]);
     } finally {
       setRecipeLoading(false);
     }
@@ -401,13 +403,13 @@ export default function MealPlanDetailScreen() {
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Meal Plan</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('mealPlanDetail.title')}</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: textColor }]}>{error ?? 'Plan not found.'}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadPlan}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('mealPlanDetail.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -482,7 +484,7 @@ export default function MealPlanDetailScreen() {
         <View style={[styles.macroCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
           {/* Goal row */}
           <View style={styles.macroRow}>
-            <Text style={[styles.macroRowLabel, { color: secondaryColor }]}>Goal</Text>
+            <Text style={[styles.macroRowLabel, { color: secondaryColor }]}>{t('mealPlanDetail.goal')}</Text>
             <View style={styles.macroPills}>
               <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
                 <Text style={[styles.macroPillValue, { color: colors.calories }]}>{goal?.daily_calories ?? 2000}</Text>
@@ -508,7 +510,7 @@ export default function MealPlanDetailScreen() {
 
           {/* Plan Avg row */}
           <View style={styles.macroRow}>
-            <Text style={[styles.macroRowLabel, { color: secondaryColor }]}>Plan Avg</Text>
+            <Text style={[styles.macroRowLabel, { color: secondaryColor }]}>{t('mealPlanDetail.planAvg')}</Text>
             <View style={styles.macroPills}>
               <View style={[styles.macroPill, { backgroundColor: colors.calories + '22' }]}>
                 <Text style={[styles.macroPillValue, { color: colors.calories }]}>{dayCaloriesDisplay}</Text>
@@ -531,9 +533,9 @@ export default function MealPlanDetailScreen() {
         </View>
 
         {/* Meal Sections */}
-        {MEAL_TYPES.map((mealDef, mealIdx) => {
+        {MEAL_TYPES_CONFIG.map((mealDef, mealIdx) => {
           const mealItems = dedupedItems.filter(i => i.meal_type === mealDef.type);
-          const isLast = mealIdx === MEAL_TYPES.length - 1;
+          const isLast = mealIdx === MEAL_TYPES_CONFIG.length - 1;
           const dishDescription = mealItems[0]?.dish_description ?? null;
 
           // Live meal totals
@@ -571,7 +573,7 @@ export default function MealPlanDetailScreen() {
               <View style={styles.mealHeader}>
                 <View style={styles.mealHeaderLeft}>
                   <Text style={styles.mealEmoji}>{mealDef.emoji}</Text>
-                  <Text style={[styles.mealTitle, { color: textColor }]}>{mealDef.label}</Text>
+                  <Text style={[styles.mealTitle, { color: textColor }]}>{t(mealDef.labelKey)}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.addFoodButton}
@@ -584,7 +586,7 @@ export default function MealPlanDetailScreen() {
                     size={20}
                     color={colors.primary}
                   />
-                  <Text style={[styles.addFoodText, { color: colors.primary }]}>Add food</Text>
+                  <Text style={[styles.addFoodText, { color: colors.primary }]}>{t('mealPlanDetail.addFood')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -628,7 +630,7 @@ export default function MealPlanDetailScreen() {
 
               {/* Items */}
               {mealItems.length === 0 ? (
-                <Text style={[styles.emptyMealText, { color: secondaryColor }]}>No foods added yet</Text>
+                <Text style={[styles.emptyMealText, { color: secondaryColor }]}>{t('mealPlanDetail.noFoodsAdded')}</Text>
               ) : (
                 mealItems.map((item, idx) => {
                   const isDeleting = deletingItemId === item.id;
@@ -808,10 +810,10 @@ export default function MealPlanDetailScreen() {
           {/* Modal header */}
           <View style={[styles.recipeModalHeader, { borderBottomColor: borderColor }]}>
             <Text style={[styles.recipeModalTitle, { color: textColor }]} numberOfLines={2}>
-              {recipeModalMeal ?? 'Recipe'}
+              {recipeModalMeal ?? t('mealPlanDetail.recipe')}
             </Text>
             <TouchableOpacity onPress={handleCloseRecipe} style={styles.recipeCloseBtn} activeOpacity={0.7}>
-              <Text style={[styles.recipeCloseBtnText, { color: colors.primary }]}>Close</Text>
+              <Text style={[styles.recipeCloseBtnText, { color: colors.primary }]}>{t('mealPlanDetail.close')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -819,7 +821,7 @@ export default function MealPlanDetailScreen() {
             {recipeLoading ? (
               <View style={styles.recipeLoadingContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>Generating recipe...</Text>
+                <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>{t('mealPlanDetail.generatingRecipe')}</Text>
               </View>
             ) : (
               <ScrollView
@@ -829,7 +831,7 @@ export default function MealPlanDetailScreen() {
               >
                 {recipeIngredients.length > 0 && (
                   <View style={styles.recipeSectionBlock}>
-                    <Text style={[styles.recipeSectionHeader, { color: textColor }]}>Ingredients</Text>
+                    <Text style={[styles.recipeSectionHeader, { color: textColor }]}>{t('mealPlanDetail.ingredients')}</Text>
                     {recipeIngredients.map((ing, i) => (
                       <View key={i} style={styles.recipeListItem}>
                         <Text style={[styles.recipeBullet, { color: colors.primary }]}>•</Text>
@@ -840,7 +842,7 @@ export default function MealPlanDetailScreen() {
                 )}
                 {recipeInstructions.length > 0 && (
                   <View style={styles.recipeSectionBlock}>
-                    <Text style={[styles.recipeSectionHeader, { color: textColor }]}>Instructions</Text>
+                    <Text style={[styles.recipeSectionHeader, { color: textColor }]}>{t('mealPlanDetail.instructions')}</Text>
                     {recipeInstructions.map((step, i) => {
                       const stepNum = i + 1;
                       return (
@@ -853,7 +855,7 @@ export default function MealPlanDetailScreen() {
                   </View>
                 )}
                 {recipeIngredients.length === 0 && recipeInstructions.length === 0 && (
-                  <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>No recipe available.</Text>
+                  <Text style={[styles.recipeLoadingText, { color: secondaryColor }]}>{t('mealPlanDetail.noRecipeAvailable')}</Text>
                 )}
               </ScrollView>
             )}

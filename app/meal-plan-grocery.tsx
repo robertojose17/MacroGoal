@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Share } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -10,6 +11,7 @@ import { getGroceryList, getMultiPlanGroceryList, type GroceryListResponse } fro
 
 export default function MealPlanGroceryScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { planId, planIds, rangeLabel } = useLocalSearchParams<{
     planId?: string;
     planIds?: string;
@@ -55,7 +57,7 @@ export default function MealPlanGroceryScreen() {
         setError(null);
       } catch (err: any) {
         console.error('[MealPlanGrocery] Error loading multi-plan grocery list:', err);
-        setError('Failed to load grocery list.');
+        setError(t('mealPlanGrocery.failedToLoad'));
       } finally {
         setLoading(false);
       }
@@ -69,7 +71,7 @@ export default function MealPlanGroceryScreen() {
         setError(null);
       } catch (err: any) {
         console.error('[MealPlanGrocery] Error loading grocery list:', err);
-        setError('Failed to load grocery list.');
+        setError(t('mealPlanGrocery.failedToLoad'));
       } finally {
         setLoading(false);
       }
@@ -138,7 +140,7 @@ export default function MealPlanGroceryScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Grocery List</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('mealPlanGrocery.title')}</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.loadingContainer}>
@@ -155,13 +157,13 @@ export default function MealPlanGroceryScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Grocery List</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('mealPlanGrocery.title')}</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: textColor }]}>{error || 'No data available.'}</Text>
+          <Text style={[styles.errorText, { color: textColor }]}>{error || t('mealPlanGrocery.noDataAvailable')}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadGroceryList}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('mealPlanGrocery.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -182,7 +184,7 @@ export default function MealPlanGroceryScreen() {
           <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Grocery List</Text>
+          <Text style={[styles.headerTitle, { color: textColor }]}>{t('mealPlanGrocery.title')}</Text>
           {headerSubtitle.length > 0 && (
             <Text style={[styles.headerSubtitle, { color: secondaryColor }]} numberOfLines={1}>
               {headerSubtitle}
@@ -199,7 +201,7 @@ export default function MealPlanGroceryScreen() {
         <View style={[styles.multiPlanBadge, { backgroundColor: isDark ? '#1A2A2A' : '#E6FAF8' }]}>
           <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={14} color={colors.primary} />
           <Text style={[styles.multiPlanBadgeText, { color: colors.primary }]}>
-            Combined list for {rangeLabel}
+            {t('mealPlanGrocery.combinedListFor', { rangeLabel })}
           </Text>
         </View>
       )}
@@ -208,7 +210,7 @@ export default function MealPlanGroceryScreen() {
       {totalItems > 0 && (
         <View style={[styles.progressBar, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.progressText, { color: secondaryColor }]}>
-            {checkedCount} of {totalItems} items checked
+            {t('mealPlanGrocery.itemsChecked', { checkedCount, totalItems })}
           </Text>
           <View style={[styles.progressTrack, { backgroundColor: borderColor }]}>
             <View style={[styles.progressFill, { width: `${(checkedCount / totalItems) * 100}%`, backgroundColor: colors.success }]} />
@@ -219,9 +221,9 @@ export default function MealPlanGroceryScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {groceryData.categories.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: cardBg }]}>
-            <Text style={[styles.emptyTitle, { color: textColor }]}>No items yet</Text>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>{t('mealPlanGrocery.noItemsYet')}</Text>
             <Text style={[styles.emptyText, { color: secondaryColor }]}>
-              Add foods to your meal plan to generate a grocery list.
+              {t('mealPlanGrocery.addFoodsToGenerate')}
             </Text>
           </View>
         ) : (

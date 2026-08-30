@@ -3,6 +3,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -79,6 +80,7 @@ export default function MyMealsEditScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const mealId = params.mealId as string;
 
@@ -135,7 +137,7 @@ export default function MyMealsEditScreen() {
 
       if (error) {
         console.error('[MyMealsEdit] Error loading saved meal:', error);
-        Alert.alert('Error', 'Failed to load meal');
+        Alert.alert(t('common.error'), t('myMealsEdit.failedToLoad'));
         router.back();
         return;
       }
@@ -146,10 +148,10 @@ export default function MyMealsEditScreen() {
       setLoading(false);
     } catch (error) {
       console.error('[MyMealsEdit] Error in loadSavedMeal:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
       router.back();
     }
-  }, [mealId, router]);
+  }, [mealId, router, t]);
 
   const flushDraftIntoMeal = useCallback(async () => {
     try {
@@ -183,7 +185,7 @@ export default function MyMealsEditScreen() {
 
       if (error) {
         console.error('[MyMealsEdit] Error inserting draft items into saved_meal_items:', error);
-        Alert.alert('Error', 'Failed to add the new food(s) to the meal');
+        Alert.alert(t('common.error'), t('myMealsEdit.failedToAddFoods'));
       } else {
         console.log('[MyMealsEdit] Draft items flushed successfully');
       }
@@ -193,7 +195,7 @@ export default function MyMealsEditScreen() {
       console.error('[MyMealsEdit] Unexpected error in flushDraftIntoMeal:', err);
       await clearDraft();
     }
-  }, [mealId]);
+  }, [mealId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -210,10 +212,10 @@ export default function MyMealsEditScreen() {
   );
 
   const handleSave = async () => {
-    console.log('[MyMealsEdit] Saving meal name');
+    console.log('[MyMealsEdit] Save changes button pressed');
 
     if (!mealName.trim()) {
-      Alert.alert('Error', 'Please enter a meal name');
+      Alert.alert(t('common.error'), t('myMeals.enterMealName'));
       return;
     }
 
@@ -227,21 +229,21 @@ export default function MyMealsEditScreen() {
 
       if (error) {
         console.error('[MyMealsEdit] Error updating meal name:', error);
-        Alert.alert('Error', 'Failed to update meal name');
+        Alert.alert(t('common.error'), t('myMealsEdit.failedToUpdateName'));
         setSaving(false);
         return;
       }
 
       console.log('[MyMealsEdit] Meal name updated successfully');
-      Alert.alert('Success', 'Meal updated!', [
+      Alert.alert(t('common.success'), t('myMeals.mealUpdated'), [
         {
-          text: 'OK',
+          text: t('common.ok'),
           onPress: () => router.back(),
         },
       ]);
     } catch (error) {
       console.error('[MyMealsEdit] Error in handleSave:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
       setSaving(false);
     }
   };
@@ -254,9 +256,9 @@ export default function MyMealsEditScreen() {
     // Check if this is the last item
     if (savedMeal.saved_meal_items.length === 1) {
       Alert.alert(
-        'Cannot Remove',
-        'A meal must have at least one food item. Delete the entire meal instead.',
-        [{ text: 'OK' }]
+        t('myMealsEdit.cannotRemoveTitle'),
+        t('myMealsEdit.cannotRemoveMessage'),
+        [{ text: t('common.ok') }]
       );
       return;
     }
@@ -277,19 +279,19 @@ export default function MyMealsEditScreen() {
       if (error) {
         console.error('[MyMealsEdit] Error deleting item:', error);
         setSavedMeal(previousMeal);
-        Alert.alert('Error', 'Failed to remove item');
+        Alert.alert(t('common.error'), t('myMealsEdit.failedToRemoveItem'));
       } else {
         console.log('[MyMealsEdit] Item removed successfully');
       }
     } catch (error) {
       console.error('[MyMealsEdit] Error in handleRemoveItem:', error);
       setSavedMeal(previousMeal);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
   };
 
   const handleAddFood = () => {
-    console.log('[MyMealsEdit] Add Food button pressed, navigating to add-food with my_meals_builder context');
+    console.log('[MyMealsEdit] Add Food button pressed');
     didNavigateToAddFood.current = true;
     router.push({
       pathname: '/add-food',
@@ -334,7 +336,7 @@ export default function MyMealsEditScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Loading meal...
+            {t('myMealsEdit.loadingMeal')}
           </Text>
         </View>
       </SafeAreaView>
@@ -343,6 +345,7 @@ export default function MyMealsEditScreen() {
 
   const totals = calculateTotals();
   const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.food_name);
+  const validItemsCount = validItems.length;
 
   return (
     <SafeAreaView
@@ -359,7 +362,7 @@ export default function MyMealsEditScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Edit Meal
+          {t('myMealsEdit.title')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -372,7 +375,7 @@ export default function MyMealsEditScreen() {
       >
         <View style={[styles.nameCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.nameLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Meal Name
+            {t('myMeals.mealName')}
           </Text>
           <TextInput
             style={[
@@ -383,7 +386,7 @@ export default function MyMealsEditScreen() {
                 color: isDark ? colors.textDark : colors.text,
               }
             ]}
-            placeholder="e.g., Breakfast Bowl, Post-Workout Meal"
+            placeholder={t('myMeals.mealNamePlaceholder')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={mealName}
             onChangeText={setMealName}
@@ -393,7 +396,7 @@ export default function MyMealsEditScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Foods ({validItems.length})
+            {t('myMealsEdit.foodsCount', { count: validItemsCount })}
           </Text>
           <TouchableOpacity
             style={[styles.addFoodButton, { backgroundColor: colors.primary }]}
@@ -406,14 +409,20 @@ export default function MyMealsEditScreen() {
               size={16}
               color="#FFFFFF"
             />
-            <Text style={styles.addFoodButtonText}>Add Food</Text>
+            <Text style={styles.addFoodButtonText}>{t('myMealsEdit.addFood')}</Text>
           </TouchableOpacity>
         </View>
 
         {validItems.map((item) => {
           const itemMacros = calcItemMacros(item, 1);
-          const itemName = item.food_items?.name ?? item.food_name ?? 'Unknown Food';
+          const itemName = item.food_items?.name ?? item.food_name ?? t('myMealsEdit.unknownFood');
           const itemBrand = item.food_items?.brand ?? item.food_brand;
+          const servingsRounded = Math.round(item.servings_count);
+          const amountRounded = Math.round(item.serving_amount);
+          const calsRounded = Math.round(itemMacros.calories);
+          const proteinRounded = Math.round(itemMacros.protein);
+          const carbsRounded = Math.round(itemMacros.carbs);
+          const fatsRounded = Math.round(itemMacros.fats);
 
           return (
             <React.Fragment key={item.id}>
@@ -429,22 +438,23 @@ export default function MyMealsEditScreen() {
                       </Text>
                     ) : null}
                     <Text style={[styles.itemServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                      {Math.round(item.servings_count)}
+                      {servingsRounded}
                       {' × '}
-                      {Math.round(item.serving_amount)}
+                      {amountRounded}
                       {' '}
                       {item.serving_unit}
                       {' • '}
-                      {Math.round(itemMacros.calories)}
-                      {' cal'}
+                      {calsRounded}
+                      {' '}
+                      {t('myMeals.cal')}
                     </Text>
                     <Text style={[styles.itemMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                       {'P: '}
-                      {Math.round(itemMacros.protein)}
+                      {proteinRounded}
                       {'g • C: '}
-                      {Math.round(itemMacros.carbs)}
+                      {carbsRounded}
                       {'g • F: '}
-                      {Math.round(itemMacros.fats)}
+                      {fatsRounded}
                       {'g'}
                     </Text>
                   </View>
@@ -456,7 +466,7 @@ export default function MyMealsEditScreen() {
 
         <View style={[styles.totalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.totalsTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Total Nutrition
+            {t('myMeals.totalNutrition')}
           </Text>
           <View style={styles.totalsRow}>
             <View style={styles.totalItem}>
@@ -464,7 +474,7 @@ export default function MyMealsEditScreen() {
                 {Math.round(totals.calories)}
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Calories
+                {t('common.calories')}
               </Text>
             </View>
             <View style={styles.totalItem}>
@@ -472,7 +482,7 @@ export default function MyMealsEditScreen() {
                 {Math.round(totals.protein)}g
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Protein
+                {t('common.protein')}
               </Text>
             </View>
             <View style={styles.totalItem}>
@@ -480,7 +490,7 @@ export default function MyMealsEditScreen() {
                 {Math.round(totals.carbs)}g
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Carbs
+                {t('common.carbs')}
               </Text>
             </View>
             <View style={styles.totalItem}>
@@ -488,7 +498,7 @@ export default function MyMealsEditScreen() {
                 {Math.round(totals.fats)}g
               </Text>
               <Text style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Fat
+                {t('myMealsEdit.fat')}
               </Text>
             </View>
           </View>
@@ -507,7 +517,7 @@ export default function MyMealsEditScreen() {
           {saving ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.saveButtonText}>Save Changes</Text>
+            <Text style={styles.saveButtonText}>{t('myMealsEdit.saveChanges')}</Text>
           )}
         </TouchableOpacity>
       </View>

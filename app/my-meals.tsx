@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -28,6 +29,7 @@ export default function MyMealsScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
@@ -80,7 +82,7 @@ export default function MyMealsScreen() {
         .order('updated_at', { ascending: false });
 
       if (error) {
-        Alert.alert('Error', 'Failed to load saved meals: ' + error.message);
+        Alert.alert(t('common.error'), t('myMeals.failedToLoad', { error: error.message }));
         setLoading(false);
         return;
       }
@@ -128,10 +130,10 @@ export default function MyMealsScreen() {
       setSavedMeals(mealsWithTotals);
       setLoading(false);
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -174,7 +176,7 @@ export default function MyMealsScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in to add meal');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -197,7 +199,7 @@ export default function MyMealsScreen() {
         .eq('saved_meal_id', meal.id);
 
       if (itemsError || !mealItems || mealItems.length === 0) {
-        Alert.alert('Error', 'Failed to load meal items');
+        Alert.alert(t('common.error'), t('myMeals.failedToLoadItems'));
         return;
       }
 
@@ -224,7 +226,7 @@ export default function MyMealsScreen() {
           .single();
 
         if (mealError) {
-          Alert.alert('Error', 'Failed to create meal');
+          Alert.alert(t('common.error'), t('myMeals.failedToCreateMeal'));
           return;
         }
 
@@ -234,7 +236,7 @@ export default function MyMealsScreen() {
       // Add each food item from the saved meal
       const itemsToInsert = mealItems.map((item: any) => {
         const fi = item.food_items;
-        const foodName = fi?.name ?? item.food_name ?? 'Unknown Food';
+        const foodName = fi?.name ?? item.food_name ?? t('myMeals.unknownFood');
         const foodBrand = fi?.brand ?? item.food_brand ?? null;
         const grams = item.serving_amount * item.servings_count;
         const macros = fi ? calcMacros(fi, grams) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
@@ -263,11 +265,11 @@ export default function MyMealsScreen() {
         .insert(itemsToInsert);
 
       if (insertError) {
-        Alert.alert('Error', 'Failed to add meal items');
+        Alert.alert(t('common.error'), t('myMeals.failedToAddItems'));
         return;
       }
 
-      Alert.alert('Success', `Added "${meal.name}" to ${mealType}`);
+      Alert.alert(t('common.success'), t('myMeals.addedTo', { name: meal.name, mealType }));
 
       if (returnTo) {
         router.push(returnTo as any);
@@ -275,9 +277,9 @@ export default function MyMealsScreen() {
         router.back();
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred while adding meal');
+      Alert.alert(t('common.error'), t('myMeals.failedToAddMeal'));
     }
-  }, [date, mealType, returnTo, router]);
+  }, [date, mealType, returnTo, router, t]);
 
   const handleDeleteMeal = async (mealId: string) => {
     console.log('[MyMeals] Delete meal pressed:', mealId);
@@ -293,11 +295,11 @@ export default function MyMealsScreen() {
 
       if (error) {
         setSavedMeals(previousMeals);
-        Alert.alert('Error', 'Failed to delete meal');
+        Alert.alert(t('common.error'), t('myMeals.failedToDelete'));
       }
     } catch (error) {
       setSavedMeals(previousMeals);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
   };
 
@@ -306,6 +308,13 @@ export default function MyMealsScreen() {
   );
 
   const renderMealItem = (meal: SavedMeal, index: number) => {
+    const itemCount = meal.item_count || 0;
+    const itemLabel = itemCount === 1 ? t('myMeals.item') : t('myMeals.items');
+    const calRounded = Math.round(meal.total_calories || 0);
+    const proteinRounded = Math.round(meal.total_protein || 0);
+    const carbsRounded = Math.round(meal.total_carbs || 0);
+    const fatsRounded = Math.round(meal.total_fats || 0);
+
     return (
       <React.Fragment key={meal.id}>
         <SwipeToDeleteRow onDelete={() => handleDeleteMeal(meal.id)}>
@@ -325,10 +334,22 @@ export default function MyMealsScreen() {
                   {meal.name}
                 </Text>
                 <Text style={[styles.mealMeta, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {meal.item_count || 0} {meal.item_count === 1 ? 'item' : 'items'} • {Math.round(meal.total_calories || 0)} cal
+                  {itemCount}
+                  {' '}
+                  {itemLabel}
+                  {' • '}
+                  {calRounded}
+                  {' '}
+                  {t('myMeals.cal')}
                 </Text>
                 <Text style={[styles.mealMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  P: {Math.round(meal.total_protein || 0)}g • C: {Math.round(meal.total_carbs || 0)}g • F: {Math.round(meal.total_fats || 0)}g
+                  {'P: '}
+                  {proteinRounded}
+                  {'g • C: '}
+                  {carbsRounded}
+                  {'g • F: '}
+                  {fatsRounded}
+                  {'g'}
                 </Text>
               </View>
               
@@ -358,6 +379,9 @@ export default function MyMealsScreen() {
     );
   };
 
+  const emptyTitle = searchQuery ? t('myMeals.noMealsFound') : t('myMeals.noMeals');
+  const emptyMessage = searchQuery ? t('myMeals.tryDifferentSearch') : t('myMeals.createFirst');
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
@@ -373,7 +397,7 @@ export default function MyMealsScreen() {
           />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          My Meals
+          {t('myMeals.title')}
         </Text>
         <TouchableOpacity onPress={handleCreateMeal} style={styles.addButton}>
           <IconSymbol
@@ -406,7 +430,7 @@ export default function MyMealsScreen() {
               styles.searchInput,
               { color: isDark ? colors.textDark : colors.text }
             ]}
-            placeholder="Search saved meals..."
+            placeholder={t('myMeals.searchMeals')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -434,7 +458,7 @@ export default function MyMealsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Loading saved meals...
+            {t('myMeals.loadingSavedMeals')}
           </Text>
         </View>
       ) : filteredMeals.length === 0 ? (
@@ -446,10 +470,10 @@ export default function MyMealsScreen() {
             color={isDark ? colors.textSecondaryDark : colors.textSecondary}
           />
           <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            {searchQuery ? 'No meals found' : 'No saved meals yet'}
+            {emptyTitle}
           </Text>
           <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {searchQuery ? 'Try a different search term' : 'Create a meal to save your favorite food combinations'}
+            {emptyMessage}
           </Text>
           {!searchQuery && (
             <TouchableOpacity
@@ -463,7 +487,7 @@ export default function MyMealsScreen() {
                 size={20}
                 color="#FFFFFF"
               />
-              <Text style={styles.createButtonText}>Create Meal</Text>
+              <Text style={styles.createButtonText}>{t('myMeals.createMeal')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -603,14 +627,5 @@ const styles = StyleSheet.create({
   mealMacros: {
     ...typography.caption,
     fontSize: 12,
-  },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
-    backgroundColor: '#0EA5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.md,
   },
 });

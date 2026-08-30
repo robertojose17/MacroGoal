@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase/client';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -55,6 +56,7 @@ export default function RecipeEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [loadingRecipe, setLoadingRecipe] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -109,7 +111,7 @@ export default function RecipeEditScreen() {
 
       if (recipeResult.error || !recipeResult.data) {
         console.error('[RecipeEdit] Error loading recipe:', recipeResult.error);
-        setLoadError('Failed to load recipe.');
+        setLoadError(t('recipeEdit.failedToLoad'));
         return;
       }
 
@@ -118,7 +120,7 @@ export default function RecipeEditScreen() {
 
       if (!user || recipe.created_by !== user.id) {
         console.warn('[RecipeEdit] User is not the owner of this recipe');
-        setLoadError('You can only edit your own recipes.');
+        setLoadError(t('recipeEdit.notOwner'));
         setIsOwner(false);
         return;
       }
@@ -147,7 +149,7 @@ export default function RecipeEditScreen() {
       console.log('[RecipeEdit] Recipe loaded:', recipe.name);
     } catch (err: any) {
       console.error('[RecipeEdit] Unexpected error:', err);
-      setLoadError(err?.message || 'An unexpected error occurred.');
+      setLoadError(err?.message || t('recipeEdit.unexpectedError'));
     } finally {
       setLoadingRecipe(false);
     }
@@ -185,7 +187,7 @@ export default function RecipeEditScreen() {
     console.log('[RecipeEdit] Photo picker pressed');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Please allow access to your photo library.');
+      Alert.alert(t('recipeEdit.permissionRequired'), t('recipeEdit.permissionMessage'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -244,12 +246,12 @@ export default function RecipeEditScreen() {
   const handleQuickAddSubmit = () => {
     const trimmedName = qaName.trim();
     if (!trimmedName) {
-      Alert.alert('Required', 'Please enter an ingredient name.');
+      Alert.alert(t('recipeEdit.required'), t('recipeEdit.enterIngredientName'));
       return;
     }
     const kcalNum = parseFloat(qaKcal);
     if (!qaKcal.trim() || isNaN(kcalNum) || kcalNum <= 0) {
-      Alert.alert('Required', 'Please enter calories.');
+      Alert.alert(t('recipeEdit.required'), t('recipeEdit.enterCalories'));
       return;
     }
     const ing: Ingredient = {
@@ -275,11 +277,11 @@ export default function RecipeEditScreen() {
   const handleSave = async () => {
     console.log('[RecipeEdit] Save Changes pressed');
     if (!name.trim()) {
-      Alert.alert('Required', 'Please enter a recipe name.');
+      Alert.alert(t('recipeEdit.required'), t('recipeEdit.enterRecipeName'));
       return;
     }
     if (ingredients.length === 0) {
-      Alert.alert('Required', 'Please add at least one ingredient.');
+      Alert.alert(t('recipeEdit.required'), t('recipeEdit.addAtLeastOneIngredient'));
       return;
     }
 
@@ -323,7 +325,7 @@ export default function RecipeEditScreen() {
 
       if (error) {
         console.error('[RecipeEdit] Error updating recipe:', error);
-        Alert.alert('Error', 'Failed to save changes. Please try again.');
+        Alert.alert(t('recipeEdit.errorTitle'), t('recipeEdit.failedToSave'));
         return;
       }
 
@@ -331,7 +333,7 @@ export default function RecipeEditScreen() {
       router.back();
     } catch (err: any) {
       console.error('[RecipeEdit] Unexpected error:', err);
-      Alert.alert('Error', err?.message || 'Failed to save changes.');
+      Alert.alert(t('recipeEdit.errorTitle'), err?.message || t('recipeEdit.failedToSave'));
     } finally {
       setSaving(false);
     }
@@ -341,12 +343,12 @@ export default function RecipeEditScreen() {
   const handleDelete = () => {
     console.log('[RecipeEdit] Delete Recipe pressed');
     Alert.alert(
-      'Delete Recipe',
-      'Are you sure you want to delete this recipe? This cannot be undone.',
+      t('recipeEdit.deleteRecipe'),
+      t('recipeEdit.deleteConfirmMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('recipeEdit.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('recipeEdit.delete'),
           style: 'destructive',
           onPress: async () => {
             console.log('[RecipeEdit] Confirming delete for recipe:', id);
@@ -359,7 +361,7 @@ export default function RecipeEditScreen() {
 
               if (error) {
                 console.error('[RecipeEdit] Error deleting recipe:', error);
-                Alert.alert('Error', 'Failed to delete recipe. Please try again.');
+                Alert.alert(t('recipeEdit.errorTitle'), t('recipeEdit.failedToDelete'));
                 return;
               }
 
@@ -368,7 +370,7 @@ export default function RecipeEditScreen() {
               router.dismiss();
             } catch (err: any) {
               console.error('[RecipeEdit] Unexpected error deleting:', err);
-              Alert.alert('Error', err?.message || 'Failed to delete recipe.');
+              Alert.alert(t('recipeEdit.errorTitle'), err?.message || t('recipeEdit.failedToDelete'));
             } finally {
               setDeleting(false);
             }
@@ -382,7 +384,7 @@ export default function RecipeEditScreen() {
   if (loadingRecipe) {
     return (
       <View style={[styles.centered, { backgroundColor: bgColor }]}>
-        <Stack.Screen options={{ title: 'Edit Recipe', headerBackTitle: 'Back' }} />
+        <Stack.Screen options={{ title: t('recipeEdit.title'), headerBackTitle: t('recipeEdit.back') }} />
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -391,13 +393,13 @@ export default function RecipeEditScreen() {
   if (loadError) {
     return (
       <View style={[styles.centered, { backgroundColor: bgColor }]}>
-        <Stack.Screen options={{ title: 'Edit Recipe', headerBackTitle: 'Back' }} />
+        <Stack.Screen options={{ title: t('recipeEdit.title'), headerBackTitle: t('recipeEdit.back') }} />
         <Text style={[styles.errorText, { color: colors.error }]}>{loadError}</Text>
         <TouchableOpacity
           style={[styles.retryBtn, { backgroundColor: colors.primary }]}
           onPress={() => router.back()}
         >
-          <Text style={styles.retryBtnText}>Go Back</Text>
+          <Text style={styles.retryBtnText}>{t('recipeEdit.goBack')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -409,8 +411,8 @@ export default function RecipeEditScreen() {
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <Stack.Screen
         options={{
-          title: 'Edit Recipe',
-          headerBackTitle: 'Back',
+          title: t('recipeEdit.title'),
+          headerBackTitle: t('recipeEdit.back'),
           headerStyle: { backgroundColor: isDark ? colors.backgroundDark : colors.background },
           headerTintColor: textColor,
         }}
@@ -437,17 +439,17 @@ export default function RecipeEditScreen() {
             ) : (
               <View style={styles.photoPlaceholder}>
                 <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={32} color={secondaryColor} />
-                <Text style={[styles.photoPlaceholderText, { color: secondaryColor }]}>Add Photo (optional)</Text>
+                <Text style={[styles.photoPlaceholderText, { color: secondaryColor }]}>{t('recipeEdit.addPhotoOptional')}</Text>
               </View>
             )}
           </TouchableOpacity>
 
           {/* Name */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Recipe Name" required isDark={isDark} />
+            <FormLabel text={t('recipeEdit.recipeName')} required isDark={isDark} />
             <TextInput
               style={inputStyle}
-              placeholder="e.g. Grilled Chicken Salad"
+              placeholder={t('recipeEdit.recipeNamePlaceholder')}
               placeholderTextColor={secondaryColor}
               value={name}
               onChangeText={setName}
@@ -457,10 +459,10 @@ export default function RecipeEditScreen() {
 
           {/* Description */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Description" isDark={isDark} />
+            <FormLabel text={t('recipeEdit.description')} isDark={isDark} />
             <TextInput
               style={[inputStyle, styles.textArea]}
-              placeholder="Brief description of the recipe..."
+              placeholder={t('recipeEdit.descriptionPlaceholder')}
               placeholderTextColor={secondaryColor}
               value={description}
               onChangeText={setDescription}
@@ -472,11 +474,11 @@ export default function RecipeEditScreen() {
 
           {/* Meal type */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Meal Type" isDark={isDark} />
+            <FormLabel text={t('recipeEdit.mealType')} isDark={isDark} />
             <View style={styles.pillRow}>
               {MEAL_TYPE_OPTIONS.map((option) => {
                 const isActive = mealType === option;
-                const label = option.charAt(0).toUpperCase() + option.slice(1);
+                const label = t(`recipeEdit.mealType_${option}`);
                 return (
                   <TouchableOpacity
                     key={option}
@@ -504,10 +506,10 @@ export default function RecipeEditScreen() {
 
           {/* Cuisine */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Cuisine" isDark={isDark} />
+            <FormLabel text={t('recipeEdit.cuisine')} isDark={isDark} />
             <TextInput
               style={inputStyle}
-              placeholder="e.g. Italian, Mexican, Other"
+              placeholder={t('recipeEdit.cuisinePlaceholder')}
               placeholderTextColor={secondaryColor}
               value={cuisine}
               onChangeText={setCuisine}
@@ -517,27 +519,27 @@ export default function RecipeEditScreen() {
 
           {/* Ingredients */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Ingredients" required isDark={isDark} />
+            <FormLabel text={t('recipeEdit.ingredients')} required isDark={isDark} />
 
             {ingredients.length > 0 && (
               <View style={[styles.totalsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Text style={[styles.totalsTitle, { color: textColor }]}>Totals</Text>
+                <Text style={[styles.totalsTitle, { color: textColor }]}>{t('recipeEdit.totals')}</Text>
                 <View style={styles.totalsRow}>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.calories }]}>{totalKcalDisplay}</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>kcal</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeEdit.kcal')}</Text>
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.protein }]}>{totalProteinDisplay}g</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>Protein</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeEdit.protein')}</Text>
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.carbs }]}>{totalCarbsDisplay}g</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>Carbs</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeEdit.carbs')}</Text>
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.fats }]}>{totalFatDisplay}g</Text>
-                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>Fat</Text>
+                    <Text style={[styles.totalLabel, { color: secondaryColor }]}>{t('recipeEdit.fat')}</Text>
                   </View>
                 </View>
               </View>
@@ -583,7 +585,7 @@ export default function RecipeEditScreen() {
                 activeOpacity={0.7}
               >
                 <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={16} color={colors.primary} />
-                <Text style={[styles.pickerBtnText, { color: colors.primary }]}>Library</Text>
+                <Text style={[styles.pickerBtnText, { color: colors.primary }]}>{t('recipeEdit.library')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.pickerBtn, { backgroundColor: colors.info + '18', borderColor: colors.info }]}
@@ -591,7 +593,7 @@ export default function RecipeEditScreen() {
                 activeOpacity={0.7}
               >
                 <IconSymbol ios_icon_name="barcode.viewfinder" android_material_icon_name="qr-code-scanner" size={16} color={colors.info} />
-                <Text style={[styles.pickerBtnText, { color: colors.info }]}>Barcode</Text>
+                <Text style={[styles.pickerBtnText, { color: colors.info }]}>{t('recipeEdit.barcode')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.pickerBtn, { backgroundColor: colors.success + '18', borderColor: colors.success }]}
@@ -599,17 +601,17 @@ export default function RecipeEditScreen() {
                 activeOpacity={0.7}
               >
                 <IconSymbol ios_icon_name="plus.circle" android_material_icon_name="add-circle-outline" size={16} color={colors.success} />
-                <Text style={[styles.pickerBtnText, { color: colors.success }]}>Quick Add</Text>
+                <Text style={[styles.pickerBtnText, { color: colors.success }]}>{t('recipeEdit.quickAdd')}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Instructions */}
           <View style={styles.fieldGroup}>
-            <FormLabel text="Instructions" isDark={isDark} />
+            <FormLabel text={t('recipeEdit.instructions')} isDark={isDark} />
             <TextInput
               style={[inputStyle, styles.instructionsArea]}
-              placeholder="Step-by-step instructions..."
+              placeholder={t('recipeEdit.instructionsPlaceholder')}
               placeholderTextColor={secondaryColor}
               value={instructions}
               onChangeText={setInstructions}
@@ -631,7 +633,7 @@ export default function RecipeEditScreen() {
             ) : (
               <>
                 <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={20} color="#fff" />
-                <Text style={styles.saveBtnText}>Save Changes</Text>
+                <Text style={styles.saveBtnText}>{t('recipeEdit.saveChanges')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -648,7 +650,7 @@ export default function RecipeEditScreen() {
             ) : (
               <>
                 <IconSymbol ios_icon_name="trash" android_material_icon_name="delete" size={20} color={colors.error} />
-                <Text style={[styles.deleteBtnText, { color: colors.error }]}>Delete Recipe</Text>
+                <Text style={[styles.deleteBtnText, { color: colors.error }]}>{t('recipeEdit.deleteRecipe')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -668,13 +670,13 @@ export default function RecipeEditScreen() {
             style={styles.modalKAV}
           >
             <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-              <Text style={[styles.modalTitle, { color: textColor }]}>Quick Add Ingredient</Text>
+              <Text style={[styles.modalTitle, { color: textColor }]}>{t('recipeEdit.quickAddTitle')}</Text>
 
               <View style={styles.modalField}>
-                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Name *</Text>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>{t('recipeEdit.nameRequired')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-                  placeholder="e.g. Olive oil"
+                  placeholder={t('recipeEdit.namePlaceholder')}
                   placeholderTextColor={secondaryColor}
                   value={qaName}
                   onChangeText={setQaName}
@@ -683,7 +685,7 @@ export default function RecipeEditScreen() {
               </View>
 
               <View style={styles.modalField}>
-                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Grams (optional)</Text>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>{t('recipeEdit.gramsOptional')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                   placeholder="0"
@@ -696,7 +698,7 @@ export default function RecipeEditScreen() {
               </View>
 
               <View style={styles.modalField}>
-                <Text style={[styles.modalLabel, { color: secondaryColor }]}>Calories *</Text>
+                <Text style={[styles.modalLabel, { color: secondaryColor }]}>{t('recipeEdit.caloriesRequired')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                   placeholder="0"
@@ -710,7 +712,7 @@ export default function RecipeEditScreen() {
 
               <View style={styles.modalMacroRow}>
                 <View style={[styles.modalField, { flex: 1 }]}>
-                  <Text style={[styles.modalLabel, { color: colors.protein }]}>Protein (g)</Text>
+                  <Text style={[styles.modalLabel, { color: colors.protein }]}>{t('recipeEdit.proteinG')}</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                     placeholder="0"
@@ -722,7 +724,7 @@ export default function RecipeEditScreen() {
                   />
                 </View>
                 <View style={[styles.modalField, { flex: 1 }]}>
-                  <Text style={[styles.modalLabel, { color: colors.carbs }]}>Carbs (g)</Text>
+                  <Text style={[styles.modalLabel, { color: colors.carbs }]}>{t('recipeEdit.carbsG')}</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                     placeholder="0"
@@ -734,7 +736,7 @@ export default function RecipeEditScreen() {
                   />
                 </View>
                 <View style={[styles.modalField, { flex: 1 }]}>
-                  <Text style={[styles.modalLabel, { color: colors.fats }]}>Fat (g)</Text>
+                  <Text style={[styles.modalLabel, { color: colors.fats }]}>{t('recipeEdit.fatG')}</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
                     placeholder="0"
@@ -754,14 +756,14 @@ export default function RecipeEditScreen() {
                   onPress={handleQuickAddCancel}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.modalCancelBtnText, { color: secondaryColor }]}>Cancel</Text>
+                  <Text style={[styles.modalCancelBtnText, { color: secondaryColor }]}>{t('recipeEdit.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalAddBtn, { backgroundColor: colors.success }]}
                   onPress={handleQuickAddSubmit}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.modalAddBtnText}>Add Ingredient</Text>
+                  <Text style={styles.modalAddBtnText}>{t('recipeEdit.addIngredient')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
