@@ -23,7 +23,7 @@ import {
   getFlightsClimbedForDate,
 } from '@/utils/healthKit';
 import { useTranslation } from 'react-i18next';
-import { translateDynamic } from '@/utils/translateDynamic';
+import { getFlashChallengeTitle, getFlashChallengeDescription } from '@/utils/flashChallengeTranslate';
 
 const GOLD = '#FFB547';
 const COMPLETE_GREEN = '#22C55E';
@@ -225,7 +225,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
         </View>
         <View style={styles.challengeCenter}>
           <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
-            {translateDynamic(challenge.title)}
+            {getFlashChallengeTitle(challenge.metric_type, challenge.difficulty)}
           </Text>
           <Text style={[styles.completedText, { color: COMPLETE_GREEN }]}>
             {t('flashChallenges.completed')}
@@ -250,7 +250,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
         </View>
         <View style={styles.challengeCenter}>
           <Text style={[styles.challengeTitle, { color: mutedColor }]} numberOfLines={1}>
-            {translateDynamic(challenge.title)}
+            {getFlashChallengeTitle(challenge.metric_type, challenge.difficulty)}
           </Text>
           <Text style={[styles.expiredLabel, { color: mutedColor }]}>
             {t('flashChallenges.timesUp')}
@@ -290,7 +290,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
         <View style={styles.challengeCenter}>
           <View style={styles.challengeTitleRow}>
             <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
-              {translateDynamic(challenge.title)}
+              {getFlashChallengeTitle(challenge.metric_type, challenge.difficulty)}
             </Text>
           </View>
           <View style={styles.timerProgressRow}>
@@ -339,14 +339,14 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
       <View style={styles.challengeCenter}>
         <View style={styles.challengeTitleRow}>
           <Text style={[styles.challengeTitle, { color: textColor }]} numberOfLines={1}>
-            {translateDynamic(challenge.title)}
+            {getFlashChallengeTitle(challenge.metric_type, challenge.difficulty)}
           </Text>
           <View style={[styles.durationPill, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
             <Text style={[styles.durationText, { color: mutedColor }]}>{durationPill}</Text>
           </View>
         </View>
         <Text style={[styles.challengeDesc, { color: mutedColor }]} numberOfLines={2}>
-          {translateDynamic(challenge.description)}
+          {getFlashChallengeDescription(challenge.metric_type, challenge.target_value, challenge.target_unit)}
         </Text>
         <TouchableOpacity
           style={[styles.acceptButton, accepting && styles.acceptButtonDisabled]}

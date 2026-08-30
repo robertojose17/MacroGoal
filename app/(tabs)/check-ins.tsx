@@ -210,7 +210,7 @@ function CommunityFooter({
 
   const pct = Math.round(stats.percentile);
   const avg = Math.round(stats.communityAvg).toLocaleString('en-US');
-  const unit = trackerType === 'steps' ? 'steps' : 'sessions';
+  const unit = t('checkIns.sessionsUnit');
 
   // Badge color: green top 25%, neutral middle, warm nudge bottom
   let badgeBg: string;
@@ -606,7 +606,7 @@ function TrackerCard({
         <Pressable onPress={handleWeightPillPress} style={styles.donePill}>
           <CheckCircle2 size={14} color={colors.success} strokeWidth={2.5} />
           <Text style={[styles.donePillText, { color: colors.success }]}>{displayValue}</Text>
-          <Text style={[styles.donePillUnit, { color: colors.success }]}>lb</Text>
+          <Text style={[styles.donePillUnit, { color: colors.success }]}>{t('checkIns.lbUnit')}</Text>
         </Pressable>
       );
     } else if (weightEditing) {
@@ -1098,7 +1098,7 @@ export default function CheckInsScreen() {
         }
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to refresh steps';
+      const msg = err instanceof Error ? err.message : t('checkIns.failedToRefreshSteps');
       console.error('[CheckIns] Steps refresh failed:', msg);
     }
   }, [stepsHook, todayEntries]);

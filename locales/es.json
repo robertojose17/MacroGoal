@@ -446,7 +446,10 @@
     "dayStreak": "días de racha",
     "completionRate": "% de tasa",
     "total": "total",
-    "lbsPlaceholder": "lbs"
+    "lbsPlaceholder": "lbs",
+    "lbUnit": "lb",
+    "sessionsUnit": "sesiones",
+    "failedToRefreshSteps": "Error al actualizar pasos"
   },
   "foodSearch": {
     "title": "Buscar Comida",
@@ -2769,6 +2772,26 @@
     "duration2h": "Sprint 2h",
     "duration4h": "Desafío 4h",
     "durationAllDay": "Todo el día"
+  },
+  "flashChallenge": {
+    "metric_steps": "Pasos",
+    "metric_active_calories": "Calorías Activas",
+    "metric_exercise_minutes": "Minutos de Ejercicio",
+    "metric_distance": "Distancia",
+    "metric_floors": "Pisos",
+    "metric_running_pace": "Ritmo de Carrera",
+    "metric_referral": "Referido",
+    "difficulty_medium": "Medio",
+    "difficulty_hard": "Difícil",
+    "title": "Desafío de {{metric}} {{difficulty}}",
+    "desc_steps": "Camina {{target}} pasos hoy",
+    "desc_active_calories": "Quema {{target}} calorías activas hoy",
+    "desc_exercise_minutes": "Ejercítate por {{target}} minutos hoy",
+    "desc_distance": "Recorre {{target}} {{unit}} hoy",
+    "desc_floors": "Sube {{target}} pisos hoy",
+    "desc_running_pace": "Mantén un ritmo de {{target}} {{unit}} corriendo",
+    "desc_referral": "Refiere {{target}} amigos hoy",
+    "desc_default": "Alcanza {{target}} {{unit}} hoy"
   },
   "consistency": {
     "title": "Puntuación de Consistencia",

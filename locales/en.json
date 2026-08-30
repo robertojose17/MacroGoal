@@ -446,7 +446,10 @@
     "dayStreak": "day streak",
     "completionRate": "% rate",
     "total": "total",
-    "lbsPlaceholder": "lbs"
+    "lbsPlaceholder": "lbs",
+    "lbUnit": "lb",
+    "sessionsUnit": "sessions",
+    "failedToRefreshSteps": "Failed to refresh steps"
   },
   "foodSearch": {
     "title": "Search Food",
@@ -2769,6 +2772,26 @@
     "duration2h": "2h sprint",
     "duration4h": "4h challenge",
     "durationAllDay": "All day"
+  },
+  "flashChallenge": {
+    "metric_steps": "Steps",
+    "metric_active_calories": "Active Calories",
+    "metric_exercise_minutes": "Exercise Minutes",
+    "metric_distance": "Distance",
+    "metric_floors": "Floors",
+    "metric_running_pace": "Running Pace",
+    "metric_referral": "Referral",
+    "difficulty_medium": "Medium",
+    "difficulty_hard": "Hard",
+    "title": "{{difficulty}} {{metric}} Challenge",
+    "desc_steps": "Walk {{target}} steps today",
+    "desc_active_calories": "Burn {{target}} active calories today",
+    "desc_exercise_minutes": "Exercise for {{target}} minutes today",
+    "desc_distance": "Cover {{target}} {{unit}} today",
+    "desc_floors": "Climb {{target}} floors today",
+    "desc_running_pace": "Maintain a {{target}} {{unit}} running pace",
+    "desc_referral": "Refer {{target}} friends today",
+    "desc_default": "Reach {{target}} {{unit}} today"
   },
   "consistency": {
     "title": "Consistency Score",
