@@ -411,7 +411,27 @@
     "upgradeToKeepChatting": "Has usado tu mensaje gratuito. Actualiza a Premium para seguir chateando con tu entrenador IA.",
     "planReadyToExecute": "Tu plan está listo para ejecutarse. Actualiza a Premium para aplicarlo.",
     "putTogetherPlan": "He preparado un plan basado en tus objetivos exactos. Desbloquéalo con Premium.",
-    "noProblem": "¡Sin problema! Avísame si quieres hacer otros cambios."
+    "noProblem": "¡Sin problema! Avísame si quieres hacer otros cambios.",
+    "statusOnTrack": "En Camino",
+    "statusFaster": "Adelantado",
+    "statusSlower": "Por Debajo del Objetivo",
+    "statusPlateau": "Posible Estancamiento",
+    "statusLowAdherence": "Baja Adherencia",
+    "statusIncompleteLogging": "Registro Incompleto",
+    "statusApproachingGoal": "Acercándose a la Meta",
+    "statusGoalAchieved": "Meta Alcanzada",
+    "statusGatheringData": "Recopilando Datos",
+    "statusGetBackOnTrack": "Volvamos al Camino"
+  },
+  "consistency": {
+    "insightStart": "Comienza a registrar comidas para construir tu puntuación de consistencia.",
+    "insightLockedIn": "Excelente — estás alcanzando tus objetivos de manera consistente.",
+    "insightMoreCalories": "Registra más calorías cada día para subir tu puntuación.",
+    "insightMoreProtein": "Aumenta tu ingesta de proteínas para entrar en territorio \"Bloqueado\".",
+    "insightTracked": "Registraste {{tracked}} de {{total}} días — sigue la racha.",
+    "insightMissingDays": "Registra comida todos los días — los días perdidos son el mayor enemigo de tu puntuación.",
+    "insightLowCalories": "Tu precisión calórica es baja — intenta acercarte más a tu objetivo diario.",
+    "insightStayConsistent": "Mantén la consistencia en el registro y en alcanzar tus objetivos de macros."
   },
   "checkIns": {
     "title": "Registros",
@@ -1762,7 +1782,8 @@
     "openingDiscount": "Abriendo Página de Descuento",
     "openingDiscountMsg": "Abriendo la página de suscripción de Apple con tu código de descuento aplicado. Completa tu compra allí.",
     "openDiscountBtn": "Abrir",
-    "subscribeNormally": "Suscribirse Normalmente"
+    "subscribeNormally": "Suscribirse Normalmente",
+    "stayOnTrack": "Mantente en Camino"
   },
   "coachHistory": {
     "title": "Historial de Acciones",

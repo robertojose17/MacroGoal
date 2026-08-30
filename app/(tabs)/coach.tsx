@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import i18n from '@/lib/i18n';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -716,16 +717,16 @@ type CoachRecommendation = {
 
 function getStatusInfo(userStatus: string): { icon: string; label: string } {
   const map: Record<string, { icon: string; label: string }> = {
-    on_track: { icon: '✅', label: 'On Track' },
-    faster_than_expected: { icon: '🚀', label: 'Ahead of Schedule' },
-    slower_than_expected: { icon: '📉', label: 'Below Target' },
-    possible_plateau: { icon: '⚠️', label: 'Possible Plateau' },
-    low_adherence: { icon: '📋', label: 'Low Adherence' },
-    incomplete_logging: { icon: '📝', label: 'Incomplete Logging' },
-    approaching_goal: { icon: '🎯', label: 'Approaching Goal' },
-    goal_achieved: { icon: '🏆', label: 'Goal Achieved' },
-    insufficient_data: { icon: '🔍', label: 'Gathering Data' },
-    at_risk_of_quitting: { icon: '💪', label: "Let's Get Back on Track" },
+    on_track: { icon: '✅', label: i18n.t('coach.statusOnTrack') },
+    faster_than_expected: { icon: '🚀', label: i18n.t('coach.statusFaster') },
+    slower_than_expected: { icon: '📉', label: i18n.t('coach.statusSlower') },
+    possible_plateau: { icon: '⚠️', label: i18n.t('coach.statusPlateau') },
+    low_adherence: { icon: '📋', label: i18n.t('coach.statusLowAdherence') },
+    incomplete_logging: { icon: '📝', label: i18n.t('coach.statusIncompleteLogging') },
+    approaching_goal: { icon: '🎯', label: i18n.t('coach.statusApproachingGoal') },
+    goal_achieved: { icon: '🏆', label: i18n.t('coach.statusGoalAchieved') },
+    insufficient_data: { icon: '🔍', label: i18n.t('coach.statusGatheringData') },
+    at_risk_of_quitting: { icon: '💪', label: i18n.t('coach.statusGetBackOnTrack') },
   };
   return map[userStatus] ?? { icon: '📊', label: 'Status Unknown' };
 }

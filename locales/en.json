@@ -411,7 +411,27 @@
     "upgradeToKeepChatting": "You've used your free message. Upgrade to Premium to keep chatting with your AI coach.",
     "planReadyToExecute": "Your plan is ready to execute. Upgrade to Premium to apply it.",
     "putTogetherPlan": "I've put together a plan built around your exact goals. Unlock it with Premium.",
-    "noProblem": "No problem! Let me know if you'd like to make any other changes."
+    "noProblem": "No problem! Let me know if you'd like to make any other changes.",
+    "statusOnTrack": "On Track",
+    "statusFaster": "Ahead of Schedule",
+    "statusSlower": "Below Target",
+    "statusPlateau": "Possible Plateau",
+    "statusLowAdherence": "Low Adherence",
+    "statusIncompleteLogging": "Incomplete Logging",
+    "statusApproachingGoal": "Approaching Goal",
+    "statusGoalAchieved": "Goal Achieved",
+    "statusGatheringData": "Gathering Data",
+    "statusGetBackOnTrack": "Let's Get Back on Track"
+  },
+  "consistency": {
+    "insightStart": "Start logging meals to build your consistency score.",
+    "insightLockedIn": "Outstanding — you're hitting your targets consistently.",
+    "insightMoreCalories": "Log more calories each day to push your score higher.",
+    "insightMoreProtein": "Boost your protein intake to move into \"Locked In\" territory.",
+    "insightTracked": "You tracked {{tracked}} of {{total}} days — keep the streak going.",
+    "insightMissingDays": "Log food every day — missing days are the biggest score killer.",
+    "insightLowCalories": "Your calorie accuracy is low — try to hit closer to your daily target.",
+    "insightStayConsistent": "Stay consistent with logging and hitting your macro targets."
   },
   "checkIns": {
     "title": "Check-Ins",
@@ -1762,7 +1782,8 @@
     "openingDiscount": "Opening Discount Page",
     "openingDiscountMsg": "Opening Apple's subscription page with your discount code applied. Complete your purchase there.",
     "openDiscountBtn": "Open",
-    "subscribeNormally": "Subscribe Normally"
+    "subscribeNormally": "Subscribe Normally",
+    "stayOnTrack": "Stay On Track"
   },
   "coachHistory": {
     "title": "Action History",

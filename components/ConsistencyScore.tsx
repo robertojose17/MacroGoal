@@ -22,6 +22,7 @@ import {
   type ScoreLabel,
 } from '@/utils/consistencyMath';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 
 interface ConsistencyScoreProps {
   userId: string;
@@ -47,16 +48,16 @@ function buildInsight(
   avgCalPct: number,
   avgProtPct: number,
 ): string {
-  if (trackedDays === 0) return 'Start logging meals to build your consistency score.';
-  if (label === 'Locked In') return 'Outstanding — you\'re hitting your targets consistently.';
+  if (trackedDays === 0) return i18n.t('consistency.insightStart');
+  if (label === 'Locked In') return i18n.t('consistency.insightLockedIn');
   if (label === 'On Track') {
-    if (avgCalPct < 70) return 'Log more calories each day to push your score higher.';
-    if (avgProtPct < 70) return 'Boost your protein intake to move into "Locked In" territory.';
-    return `You tracked ${trackedDays} of ${totalDays} days — keep the streak going.`;
+    if (avgCalPct < 70) return i18n.t('consistency.insightMoreCalories');
+    if (avgProtPct < 70) return i18n.t('consistency.insightMoreProtein');
+    return i18n.t('consistency.insightTracked', { tracked: trackedDays, total: totalDays });
   }
-  if (trackedDays < totalDays / 2) return 'Log food every day — missing days are the biggest score killer.';
-  if (avgCalPct < 50) return 'Your calorie accuracy is low — try to hit closer to your daily target.';
-  return 'Stay consistent with logging and hitting your macro targets.';
+  if (trackedDays < totalDays / 2) return i18n.t('consistency.insightMissingDays');
+  if (avgCalPct < 50) return i18n.t('consistency.insightLowCalories');
+  return i18n.t('consistency.insightStayConsistent');
 }
 
 // ─── Stat tooltip modal ───────────────────────────────────────────────────────

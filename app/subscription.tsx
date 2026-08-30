@@ -855,7 +855,7 @@ export default function SubscriptionScreen() {
     {
       ios: 'arrow.triangle.2.circlepath',
       android: 'autorenew' as const,
-      title: 'Stay On Track',
+      title: t('subscription.stayOnTrack'),
       desc: 'Your plan evolves as your body and progress change.',
     },
   ];
