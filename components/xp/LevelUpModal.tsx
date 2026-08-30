@@ -18,6 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { confirmLevelUpSeen } from '@/utils/xpApi';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -119,11 +120,12 @@ export default function LevelUpModal({
   level,
   onDismiss,
 }: LevelUpModalProps) {
+  const { t } = useTranslation();
   const particles = useRef<Particle[]>(createParticles()).current;
   const { scale, opacity } = usePulse();
 
-  const headlineText = 'LEVEL UP!';
-  const levelDisplay = 'Level ' + level;
+  const headlineText = t('xp.levelUp');
+  const levelDisplay = t('xp.levelNumber', { level });
 
   const handleDismiss = useCallback(async () => {
     console.log('[LevelUpModal] dismissed — confirming level up seen, level:', level);
@@ -226,7 +228,7 @@ export default function LevelUpModal({
 
             {/* Dismiss hint */}
             <Text style={styles.dismissHint}>
-              Tap anywhere to continue
+              {t('xp.tapToContinue')}
             </Text>
           </LinearGradient>
         </TouchableOpacity>

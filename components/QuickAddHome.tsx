@@ -2,6 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -43,6 +44,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
 
   const [myFoods, setMyFoods] = useState<MyFood[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,7 +73,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
 
       if (error) {
         console.error('[QuickAddHome] Error loading foods:', error);
-        Alert.alert('Error', 'Failed to load your foods');
+        Alert.alert(t('common.error'), t('myFoods.failedToLoad'));
         setLoading(false);
         return;
       }
@@ -183,14 +185,14 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
     // CRITICAL: Only allow quick add in meal_log context
     if (context === 'my_meals_builder') {
       console.log('[QuickAddHome] ❌ Cannot quick-add in my_meals_builder context');
-      Alert.alert('Not Available', 'Please tap the food to view details and add it to your meal.');
+      Alert.alert(t('quickAdd.notAvailable'), t('quickAdd.tapToViewDetails'));
       return;
     }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in to add food');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -264,7 +266,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
 
         if (mealError) {
           console.error('[QuickAddHome] Error creating meal:', mealError);
-          Alert.alert('Error', 'Failed to create meal');
+          Alert.alert(t('common.error'), t('quickAdd.failedToCreateMeal'));
           return;
         }
 
@@ -297,7 +299,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
 
       if (mealItemError) {
         console.error('[QuickAddHome] Error creating meal item:', mealItemError);
-        Alert.alert('Error', 'Failed to add food to meal');
+        Alert.alert(t('common.error'), t('quickAdd.failedToAddFood'));
         return;
       }
 
@@ -305,13 +307,13 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
       
       // Show success banner via callback
       if (onQuickAdd) {
-        onQuickAdd('Food Added');
+        onQuickAdd(t('quickAdd.foodAdded'));
       }
       
       console.log('[QuickAddHome] Keeping modal open for multiple adds');
     } catch (error) {
       console.error('[QuickAddHome] Error quick adding saved food:', error);
-      Alert.alert('Error', 'An unexpected error occurred while adding food');
+      Alert.alert(t('common.error'), t('quickAdd.unexpectedErrorAddingFood'));
     }
   }, [context, date, mealType, mode, planId, onQuickAdd]);
 
@@ -331,14 +333,14 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
       if (error) {
         console.error('[QuickAddHome] Error deleting food:', error);
         setMyFoods(previousFoods);
-        Alert.alert('Error', 'Failed to delete food');
+        Alert.alert(t('common.error'), t('myFoods.failedToDelete'));
       } else {
         console.log('[QuickAddHome] ✅ Food deleted successfully');
       }
     } catch (error) {
       console.error('[QuickAddHome] Error in handleDeleteFood:', error);
       setMyFoods(previousFoods);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
   }, [myFoods]);
 
@@ -446,14 +448,14 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
           color="#FFFFFF"
         />
         <Text style={styles.createNewFoodButtonText}>
-          Create New Food
+          {t('quickAdd.createNewFood')}
         </Text>
       </TouchableOpacity>
 
       {/* Saved Foods Section */}
       <View style={styles.savedFoodsSection}>
         <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-          Saved Foods
+          {t('quickAdd.savedFoods')}
         </Text>
 
         {/* Search Bar */}
@@ -477,7 +479,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
               styles.searchInput,
               { color: isDark ? colors.textDark : colors.text }
             ]}
-            placeholder="Search saved foods..."
+            placeholder={t('quickAdd.searchSavedFoods')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -505,7 +507,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Loading saved foods...
+              {t('quickAdd.loadingSavedFoods')}
             </Text>
           </View>
         ) : filteredFoods.length === 0 ? (
@@ -517,10 +519,10 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
             <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              {searchQuery ? 'No foods found' : 'No saved foods yet'}
+              {searchQuery ? t('quickAdd.noFoodsFound') : t('quickAdd.noSavedFoodsYet')}
             </Text>
             <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {searchQuery ? 'Try a different search term' : 'Create your first food to reuse it anytime'}
+              {searchQuery ? t('quickAdd.tryDifferentSearch') : t('quickAdd.createFirstFood')}
             </Text>
           </View>
         ) : (

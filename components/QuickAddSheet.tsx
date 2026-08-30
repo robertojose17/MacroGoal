@@ -13,17 +13,18 @@ import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useTranslation } from 'react-i18next';
 
 interface QuickAddSheetProps {
   visible: boolean;
   onClose: () => void;
 }
 
-const ACTIONS = [
-  { id: 'barcode', label: 'Scan Barcode', icon: '📷', route: '/barcode-scanner' },
-  { id: 'search', label: 'Search Food', icon: '🔍', route: '/food-search' },
-  { id: 'ai', label: 'AI Estimate', icon: '🤖', route: '/chatbot' },
-  { id: 'quick', label: 'Create Food', icon: '✏️', route: '/my-foods-create' },
+const ACTION_DEFS = [
+  { id: 'barcode', labelKey: 'quickAdd.scanBarcode', icon: '📷', route: '/barcode-scanner' },
+  { id: 'search', labelKey: 'quickAdd.searchFood', icon: '🔍', route: '/food-search' },
+  { id: 'ai', labelKey: 'quickAdd.aiEstimate', icon: '🤖', route: '/chatbot' },
+  { id: 'quick', labelKey: 'quickAdd.createFood', icon: '✏️', route: '/my-foods-create' },
 ];
 
 function getSmartMealType(): string {
@@ -40,6 +41,7 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { t } = useTranslation();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -126,8 +128,9 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
         <View style={[styles.handle, { backgroundColor: handleColor }]} />
 
         {/* Actions */}
-        {ACTIONS.map((action, index) => {
-          const isLast = index === ACTIONS.length - 1;
+        {ACTION_DEFS.map((action, index) => {
+          const isLast = index === ACTION_DEFS.length - 1;
+          const actionLabel = t(action.labelKey);
           return (
             <View key={action.id}>
               <TouchableOpacity
@@ -136,7 +139,7 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
                 activeOpacity={0.6}
               >
                 <Text style={[styles.rowLabel, { color: textPrimary }]}>
-                  {action.label}
+                  {actionLabel}
                 </Text>
                 <Text style={styles.rowIcon}>{action.icon}</Text>
               </TouchableOpacity>

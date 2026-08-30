@@ -24,6 +24,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useLeague } from '@/hooks/useLeague';
@@ -33,6 +34,7 @@ import LeagueLeaderboard from './LeagueLeaderboard';
 const WELCOME_SEEN_KEY = 'league_welcome_seen_v1';
 
 export default function LeagueWelcomeModal() {
+  const { t } = useTranslation();
   const isDark = useColorScheme() === 'dark';
   const { status } = useLeague();
   const [visible, setVisible] = useState(false);
@@ -87,10 +89,13 @@ export default function LeagueWelcomeModal() {
 
   const nextTierLabel = (() => {
     const nextMeta = TIER_METADATA['silver'];
-    return nextMeta ? nextMeta.label : 'the next league';
+    return nextMeta ? nextMeta.label : t('league.nextLeague');
   })();
 
-  const bodyText = `Compete this week — top ${status.promotion_zone_size} players advance to ${nextTierLabel}. Earn XP by logging meals, workouts, and hitting your goals.`;
+  const bodyText = t('league.welcomeBody', {
+    promotionZoneSize: status.promotion_zone_size,
+    nextTier: nextTierLabel,
+  });
 
   return (
     <>
@@ -115,7 +120,7 @@ export default function LeagueWelcomeModal() {
             {/* Content */}
             <View style={styles.content}>
               <Text style={[styles.title, { color: textPrimary }]}>
-                {'You entered '}
+                {t('league.youEntered')}
                 {meta.label}
                 {'!'}
               </Text>
@@ -130,7 +135,7 @@ export default function LeagueWelcomeModal() {
                 activeOpacity={0.85}
               >
                 <Text style={styles.primaryButtonText}>
-                  View my league
+                  {t('league.viewMyLeague')}
                 </Text>
               </TouchableOpacity>
 
@@ -140,7 +145,7 @@ export default function LeagueWelcomeModal() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.secondaryButtonText, { color: textSecondary }]}>
-                  Got it
+                  {t('league.gotIt')}
                 </Text>
               </TouchableOpacity>
             </View>

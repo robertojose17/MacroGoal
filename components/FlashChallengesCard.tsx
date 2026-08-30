@@ -22,6 +22,7 @@ import {
   getDistanceMilesForDate,
   getFlightsClimbedForDate,
 } from '@/utils/healthKit';
+import { useTranslation } from 'react-i18next';
 
 const GOLD = '#FFB547';
 const COMPLETE_GREEN = '#22C55E';
@@ -45,13 +46,6 @@ function metricIcon(metric: MetricType): keyof typeof Ionicons.glyphMap {
     case 'referral': return 'people-outline';
     default: return 'flash-outline';
   }
-}
-
-// Duration label from duration_hours
-function durationLabel(hours: number): string {
-  if (hours <= 2) return '2h sprint';
-  if (hours <= 4) return '4h challenge';
-  return 'All day';
 }
 
 // Format a progress value nicely
@@ -147,6 +141,7 @@ interface ChallengeRowProps {
 }
 
 function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRowProps) {
+  const { t } = useTranslation();
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const isReferral = challenge.metric_type === 'referral';
@@ -210,7 +205,15 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
 
   const status = challenge.challenge_status;
   const xpLabel = `${challenge.xp_reward} XP`;
-  const durationPill = durationLabel(challenge.duration_hours ?? 24);
+
+  // Duration label from duration_hours
+  const getDurationLabel = (hours: number): string => {
+    if (hours <= 2) return t('flashChallenges.duration2h');
+    if (hours <= 4) return t('flashChallenges.duration4h');
+    return t('flashChallenges.durationAllDay');
+  };
+
+  const durationPill = getDurationLabel(challenge.duration_hours ?? 24);
 
   // ── COMPLETED ──────────────────────────────────────────────────────────────
   if (status === 'completed' || challenge.completed) {
@@ -224,7 +227,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
             {challenge.title}
           </Text>
           <Text style={[styles.completedText, { color: COMPLETE_GREEN }]}>
-            Completed!
+            {t('flashChallenges.completed')}
           </Text>
           <ProgressBar pct={100} completed isDark={isDark} />
         </View>
@@ -249,7 +252,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
             {challenge.title}
           </Text>
           <Text style={[styles.expiredLabel, { color: mutedColor }]}>
-            Time's up
+            {t('flashChallenges.timesUp')}
           </Text>
         </View>
         <View style={styles.badgeColumn}>
@@ -271,7 +274,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
     const referralComplete = isReferral && weekReferrals >= 3;
     const displayPct = isReferral ? Math.min((weekReferrals / 3) * 100, 100) : challenge.progressPct;
     const progressText = isReferral
-      ? `${weekReferrals} / 3 friends`
+      ? t('flashChallenges.referralProgress', { count: weekReferrals })
       : `${progressDisplay} / ${targetDisplay} ${unitLabel}`;
 
     return (
@@ -313,7 +316,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
               activeOpacity={0.8}
             >
               <Ionicons name="share-outline" size={13} color="#14B8A6" />
-              <Text style={[styles.shareCodeText, { color: '#14B8A6' }]}>Share Code</Text>
+              <Text style={[styles.shareCodeText, { color: '#14B8A6' }]}>{t('flashChallenges.shareCode')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -355,7 +358,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
           ) : (
             <>
               <Ionicons name="flash" size={13} color="#FFFFFF" />
-              <Text style={styles.acceptButtonText}>Accept Challenge</Text>
+              <Text style={styles.acceptButtonText}>{t('flashChallenges.acceptChallenge')}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -401,6 +404,7 @@ function SkeletonRow({ isDark }: { isDark: boolean }) {
 // ─── Main card ────────────────────────────────────────────────────────────────
 
 export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
+  const { t } = useTranslation();
   const { challenges, loading, reload, acceptChallenge } = useFlashChallenges();
 
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
@@ -412,10 +416,10 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
   const allCompleted = challenges.length > 0 && challenges.every(c => c.challenge_status === 'completed' || c.completed);
   const anyAccepted = challenges.some(c => c.challenge_status === 'accepted');
   const subtitleText = allCompleted
-    ? 'All done for today! 🎉'
+    ? t('flashChallenges.allDone')
     : anyAccepted
-      ? 'Keep going! Complete before time runs out'
-      : 'Accept a challenge to start the clock';
+      ? t('flashChallenges.keepGoing')
+      : t('flashChallenges.acceptToStart');
 
   const handleAccept = async (id: string, baseline: number) => {
     console.log('[FlashChallengesCard] handleAccept called', { id, baseline });
@@ -438,14 +442,14 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
         <View style={styles.headerLeft}>
           <Ionicons name="flash" size={18} color={GOLD} />
           <Text style={[styles.headerTitle, { color: textColor }]}>
-            Flash Challenges
+            {t('flashChallenges.title')}
           </Text>
         </View>
       </View>
 
       {/* Subtitle */}
       <Text style={[styles.subtitle, { color: mutedColor }]}>
-        {loading ? 'Complete both for up to 1,250 bonus XP' : subtitleText}
+        {loading ? t('flashChallenges.loadingSubtitle') : subtitleText}
       </Text>
 
       {/* Content */}
@@ -458,7 +462,7 @@ export default function FlashChallengesCard({ isDark, onXpAwarded }: Props) {
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="small" color={GOLD} />
           <Text style={[styles.emptyText, { color: mutedColor }]}>
-            Syncing your activity data...
+            {t('flashChallenges.syncingActivity')}
           </Text>
         </View>
       ) : (

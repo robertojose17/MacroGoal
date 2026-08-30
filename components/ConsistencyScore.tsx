@@ -21,6 +21,7 @@ import {
   getLabelColor,
   type ScoreLabel,
 } from '@/utils/consistencyMath';
+import { useTranslation } from 'react-i18next';
 
 interface ConsistencyScoreProps {
   userId: string;
@@ -147,6 +148,8 @@ function StatTooltipModal({ visible, title, explanation, isDark, onClose }: Stat
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ConsistencyScore({ userId, isDark, initialExpanded = false }: ConsistencyScoreProps) {
+  const { t } = useTranslation();
+
   const [loading, setLoading] = useState(true);
   const [scoreData, setScoreData] = useState<ScoreBreakdown | null>(null);
   const [showDetails, setShowDetails] = useState(initialExpanded);
@@ -379,7 +382,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
   };
 
   const getDateRangeText = () => {
-    if (!rangeStartDate || !rangeEndDate) return 'Loading...';
+    if (!rangeStartDate || !rangeEndDate) return t('consistency.loading');
     const isDefault =
       rangeStartDate === journeyStartDate &&
       rangeEndDate === toLocalDateString();
@@ -388,7 +391,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
       day: 'numeric',
       year: 'numeric',
     });
-    if (isDefault) return `${start} - Today`;
+    if (isDefault) return `${start} - ${t('consistency.today')}`;
     const end = new Date(rangeEndDate + 'T00:00:00').toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -425,10 +428,10 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
   const labelColor = getLabelColor(scoreData.label);
   const dateRangeText = getDateRangeText();
   const customRange = isCustomRange();
-  const trackedText = `${scoreData.trackedDays} / ${scoreData.totalDays} days tracked`;
+  const trackedText = `${scoreData.trackedDays} / ${scoreData.totalDays} ${t('consistency.daysTracked')}`;
   const calAccText = `${scoreData.avgCalorieAccuracy}%`;
   const protAccText = `${scoreData.avgProteinAccuracy}%`;
-  const todayStatusText = scoreData.trackedToday ? '✓ Logged' : 'No tracking yet';
+  const todayStatusText = scoreData.trackedToday ? t('consistency.logged') : t('consistency.noTrackingYet');
   const todayStatusColor = scoreData.trackedToday
     ? colors.success
     : (isDark ? colors.textSecondaryDark : colors.textSecondary);
@@ -445,24 +448,24 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
 
   const tooltips: Record<string, { title: string; explanation: string }> = {
     score: {
-      title: 'Consistency Score',
-      explanation: 'A 0–100 score that measures how consistently you are hitting your daily nutrition targets. Each day earns up to 100 points: 50 for logging any food, up to 30 for calorie accuracy, and up to 20 for protein accuracy. Your final score is the average across all days in the selected range.',
+      title: t('consistency.tooltipScoreTitle'),
+      explanation: t('consistency.tooltipScoreExplanation'),
     },
     today: {
-      title: 'Today',
-      explanation: 'Whether you have logged any food today. Logging at least one meal earns you the base 50 tracking points for the day, which is the single biggest driver of your Consistency Score.',
+      title: t('consistency.tooltipTodayTitle'),
+      explanation: t('consistency.tooltipTodayExplanation'),
     },
     consistency: {
-      title: 'Consistency — Days Tracked',
-      explanation: 'The number of days in the selected range where you logged at least one meal. Missing days score zero and pull your overall Consistency Score down the most, so daily logging is the highest-impact habit to build.',
+      title: t('consistency.tooltipConsistencyTitle'),
+      explanation: t('consistency.tooltipConsistencyExplanation'),
     },
     calories: {
-      title: 'Calories on Target',
-      explanation: 'How many days your total calorie intake landed within 5% of your daily calorie goal (95–105%). Hitting this window earns the full 30 calorie points for that day. Days further from your target earn fewer points on a sliding scale.',
+      title: t('consistency.tooltipCaloriesTitle'),
+      explanation: t('consistency.tooltipCaloriesExplanation'),
     },
     protein: {
-      title: 'Protein on Target',
-      explanation: 'How many days your total protein intake landed within 5% of your daily protein goal (95–105%). Hitting this window earns the full 20 protein points for that day. Protein accuracy is weighted second after calorie accuracy in the scoring formula.',
+      title: t('consistency.tooltipProteinTitle'),
+      explanation: t('consistency.tooltipProteinExplanation'),
     },
   };
 
@@ -503,7 +506,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
           <View style={styles.titleContainer}>
             <View style={styles.titleRow}>
               <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                Consistency Score
+                {t('consistency.title')}
               </Text>
               <TouchableOpacity
                 onPress={(e) => { e.stopPropagation(); handleInfoPress('score'); }}
@@ -544,7 +547,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
                   <Text style={{ fontSize: 12, color: isDark ? '#555' : '#C0C0C0' }}>ⓘ</Text>
                 </View>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Today
+                  {t('consistency.today')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -554,15 +557,15 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               >
                 <View style={styles.statCellHeader}>
                   <Text style={[styles.statValue, { color: isDark ? colors.textDark : colors.text }]}>
-                    {`${scoreData.trackedDays} / ${scoreData.totalDays} days`}
+                    {`${scoreData.trackedDays} / ${scoreData.totalDays} ${t('consistency.days')}`}
                   </Text>
                   <Text style={{ fontSize: 12, color: isDark ? '#555' : '#C0C0C0' }}>ⓘ</Text>
                 </View>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Consistency
+                  {t('consistency.consistency')}
                 </Text>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  days completed
+                  {t('consistency.daysCompleted')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -572,15 +575,15 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               >
                 <View style={styles.statCellHeader}>
                   <Text style={[styles.statValue, { color: colors.calories }]}>
-                    {`${scoreData.trackedDays} / ${scoreData.totalDays} days`}
+                    {`${scoreData.trackedDays} / ${scoreData.totalDays} ${t('consistency.days')}`}
                   </Text>
                   <Text style={{ fontSize: 12, color: isDark ? '#555' : '#C0C0C0' }}>ⓘ</Text>
                 </View>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Calories
+                  {t('consistency.calories')}
                 </Text>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  on target
+                  {t('consistency.onTarget')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -590,15 +593,15 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               >
                 <View style={styles.statCellHeader}>
                   <Text style={[styles.statValue, { color: colors.protein }]}>
-                    {`${scoreData.trackedDays} / ${scoreData.totalDays} days`}
+                    {`${scoreData.trackedDays} / ${scoreData.totalDays} ${t('consistency.days')}`}
                   </Text>
                   <Text style={{ fontSize: 12, color: isDark ? '#555' : '#C0C0C0' }}>ⓘ</Text>
                 </View>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Protein
+                  {t('consistency.protein')}
                 </Text>
                 <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  on target
+                  {t('consistency.onTarget')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -607,7 +610,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
             <View style={[styles.dateRangeSection, { borderTopColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
               <View style={styles.dateRangeHeader}>
                 <Text style={[styles.dateRangeLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                  Date range
+                  {t('consistency.dateRange')}
                 </Text>
                 <TouchableOpacity
                   style={[
@@ -623,7 +626,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
                     color={colors.primary}
                   />
                   <Text style={[styles.changeDateButtonText, { color: colors.primary }]}>
-                    Change
+                    {t('consistency.change')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -633,7 +636,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               {customRange && (
                 <TouchableOpacity style={styles.resetButton} onPress={handleResetToJourneyStart}>
                   <Text style={[styles.resetButtonText, { color: colors.primary }]}>
-                    Reset to journey start
+                    {t('consistency.resetToJourneyStart')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -651,7 +654,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
           initialEndDate={new Date(rangeEndDate + 'T00:00:00')}
           maxDate={new Date()}
           minDate={new Date(journeyStartDate + 'T00:00:00')}
-          title="Select Date Range"
+          title={t('consistency.selectDateRange')}
         />
       )}
     </React.Fragment>

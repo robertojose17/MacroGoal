@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import type { XpStatus, XpBreakdownEntry } from '@/types/xp';
 
@@ -106,6 +107,7 @@ function XpTile({ label, icon, xp, isDark }: XpTileProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }: TodaysXpBreakdownProps) {
+  const { t } = useTranslation();
   const xpToday = status?.xp_today ?? 0;
   const xpTodayDisplay = '+' + xpToday.toLocaleString();
   const isEmpty = xpToday === 0;
@@ -133,7 +135,7 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.cardTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-          Today's XP
+          {t('xp.todaysXp')}
         </Text>
         <Text style={[styles.xpBig, { color: colors.primary }]}>
           {xpTodayDisplay}
@@ -144,10 +146,11 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
       <View style={styles.tileRow}>
         {FIXED_TILES.map((tile) => {
           const tileXp = xpByLabel[tile.label] ?? 0;
+          const tileDisplayLabel = t('xp.tileLabel_' + tile.label, { defaultValue: tile.label });
           return (
             <XpTile
               key={tile.label}
-              label={tile.label}
+              label={tileDisplayLabel}
               icon={tile.icon}
               xp={tileXp}
               isDark={isDark}
@@ -166,7 +169,7 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
           }}
         >
           <Text style={styles.ctaText}>
-            View Missions
+            {t('xp.viewMissions')}
           </Text>
         </TouchableOpacity>
       )}
@@ -180,7 +183,7 @@ export default function TodaysXpBreakdown({ status, isDark, onScrollToMissions }
       >
         <Ionicons name="flame" size={14} color="#34D399" style={styles.bannerIcon} />
         <Text style={[styles.bannerText, { color: '#34D399' }]}>
-          Keep going! 🔥
+          {t('xp.keepGoing')}
         </Text>
       </View>
     </View>

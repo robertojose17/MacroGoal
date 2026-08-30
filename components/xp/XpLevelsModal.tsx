@@ -19,6 +19,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -47,6 +48,7 @@ export default function XpLevelsModal({
   xpNeededForNextLevel,
   totalXp,
 }: XpLevelsModalProps) {
+  const { t } = useTranslation();
   const isDark = useColorScheme() === 'dark';
 
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -62,9 +64,9 @@ export default function XpLevelsModal({
   const nextLevel = currentLevel + 1;
 
   // Pre-compute display strings
-  const headerSubtitle = 'Level ' + String(currentLevel) + ' — ' + Number(totalXp).toLocaleString() + ' XP total';
+  const headerSubtitle = t('xp.levelNumber', { level: String(currentLevel) }) + ' — ' + Number(totalXp).toLocaleString() + ' XP ' + t('xp.totalSuffix');
   const currentProgressText = Number(xpInCurrentLevel).toLocaleString() + ' / ' + Number(xpNeededForNextLevel).toLocaleString() + ' XP';
-  const xpToGoText = Number(xpToNext).toLocaleString() + ' XP to go';
+  const xpToGoText = Number(xpToNext).toLocaleString() + ' ' + t('xp.xpToGo');
   const progressPercentText = String(progressPercent) + '%';
   const progressBarWidth = progressPercent + '%';
 
@@ -106,7 +108,7 @@ export default function XpLevelsModal({
   const collapsedCount = shouldCollapse ? collapseUpTo : 0;
   const collapsedLabel =
     collapsedCount > 0
-      ? 'Level 1 – Level ' + String(collapsedCount) + ' ✓ all completed'
+      ? t('xp.collapsedLevels', { from: '1', to: String(collapsedCount) })
       : null;
 
   function renderStatusIcon(status: LevelStatus, level: number) {
@@ -140,15 +142,15 @@ export default function XpLevelsModal({
       ? 'rgba(91, 154, 168, 0.15)'
       : 'rgba(91, 154, 168, 0.08)';
 
-    const levelLabel = 'Level ' + String(level);
+    const levelLabel = t('xp.levelNumber', { level: String(level) });
 
     let statusText = '';
     if (status === 'completed') {
-      statusText = 'Completed';
+      statusText = t('xp.statusCompleted');
     } else if (status === 'next') {
-      statusText = 'Next — ' + Number(xpToNext).toLocaleString() + ' XP to unlock';
+      statusText = t('xp.statusNext', { xp: Number(xpToNext).toLocaleString() });
     } else if (status === 'future') {
-      statusText = 'Coming up';
+      statusText = t('xp.statusComingUp');
     }
 
     return (
@@ -180,7 +182,7 @@ export default function XpLevelsModal({
             {isCurrent && (
               <View style={styles.youBadge}>
                 <Text style={styles.youBadgeText}>
-                  ★ YOU
+                  {t('xp.youBadge')}
                 </Text>
               </View>
             )}
@@ -258,7 +260,7 @@ export default function XpLevelsModal({
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: textColor }]}>
-              📈 XP Levels
+              {t('xp.levelsModalTitle')}
             </Text>
             <Text style={[styles.headerSubtitle, { color: textSecColor }]}>
               {headerSubtitle}
@@ -277,7 +279,7 @@ export default function XpLevelsModal({
         >
           {/* ── Current Level Hero Card ── */}
           <Text style={[styles.sectionLabel, { color: textSecColor }]}>
-            CURRENT LEVEL
+            {t('xp.currentLevelSection')}
           </Text>
           <View
             style={[
@@ -289,10 +291,10 @@ export default function XpLevelsModal({
             ]}
           >
             <Text style={[styles.heroLevelText, { color: textColor }]}>
-              {'★ LEVEL ' + String(currentLevel)}
+              {'★ ' + t('xp.levelNumber', { level: String(currentLevel) }).toUpperCase()}
             </Text>
             <Text style={[styles.heroProgressLabel, { color: textSecColor }]}>
-              {'Progress to Level ' + String(nextLevel)}
+              {t('xp.progressToLevel', { level: String(nextLevel) })}
             </Text>
             {/* Progress bar */}
             <View style={[styles.heroBarBg, { backgroundColor: trackColor }]}>
@@ -324,7 +326,7 @@ export default function XpLevelsModal({
               { color: textSecColor, marginTop: spacing.md },
             ]}
           >
-            ALL LEVELS
+            {t('xp.allLevelsSection')}
           </Text>
 
           <View style={[styles.allLevelsCard, { backgroundColor: cardBg }]}>
@@ -337,7 +339,9 @@ export default function XpLevelsModal({
                   color={colors.success}
                 />
                 <Text style={[styles.collapsedText, { color: textSecColor }]}>
-                  {'Earlier levels: ' + collapsedLabel}
+                  {t('xp.earlierLevels')}
+                  {': '}
+                  {collapsedLabel}
                 </Text>
               </View>
             )}
@@ -350,7 +354,7 @@ export default function XpLevelsModal({
 
           {/* Footer hint */}
           <Text style={[styles.footerHint, { color: textSecColor }]}>
-            …keep tracking to climb higher
+            {t('xp.levelsFooterHint')}
           </Text>
         </ScrollView>
       </SafeAreaView>

@@ -16,6 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import XpRankBadge from '@/components/xp/XpRankBadge';
@@ -42,6 +43,7 @@ export default function XpRanksModal({
   onClose,
   isDark,
 }: XpRanksModalProps) {
+  const { t } = useTranslation();
   const cardBg = isDark ? colors.cardDark : colors.card;
   const textColor = isDark ? colors.textDark : colors.text;
   const textSecColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -73,10 +75,10 @@ export default function XpRanksModal({
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: textColor }]}>
-              All Ranks
+              {t('xp.allRanksTitle')}
             </Text>
             <Text style={[styles.headerSubtitle, { color: textSecColor }]}>
-              Climb 20 ranks from Rookie to Apex
+              {t('xp.allRanksSubtitle')}
             </Text>
           </View>
           <View style={styles.headerSpacer} />
@@ -102,13 +104,15 @@ export default function XpRanksModal({
               const isLocked = currentLevel < minLevel;
               const isLast = tierIndex === 19;
 
-              const rangeLabel = 'Levels ' + String(minLevel) + '–' + String(maxLevel);
+              const rangeLabel = t('xp.levelsRange', { min: String(minLevel), max: String(maxLevel) });
 
               const rowBg = isCurrent
                 ? isDark ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.06)'
                 : 'transparent';
 
               const rowOpacity = isLocked ? 0.35 : 1;
+
+              const currentBadgeText = t('xp.currentBadge');
 
               return (
                 <View
@@ -151,7 +155,7 @@ export default function XpRanksModal({
                     {isCurrent && (
                       <View style={styles.currentBadge}>
                         <Text style={styles.currentBadgeText}>
-                          {'★ CURRENT'}
+                          {currentBadgeText}
                         </Text>
                       </View>
                     )}

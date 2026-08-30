@@ -17,6 +17,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -78,7 +79,7 @@ function fireConfetti(particles: Particle[]) {
 // ─── Milestone config ─────────────────────────────────────────────────────────
 
 interface MilestoneConfig {
-  badgeName: string;
+  badgeNameKey: string;
   gradientColors: [string, string];
   glowColor: string;
   isElite: boolean;
@@ -88,7 +89,7 @@ interface MilestoneConfig {
 function getMilestoneConfig(streakDays: number): MilestoneConfig {
   if (streakDays >= 365) {
     return {
-      badgeName: 'Year of Discipline',
+      badgeNameKey: 'streak.yearOfDiscipline',
       gradientColors: ['#FCD34D', '#D97706'],
       glowColor: 'rgba(252,211,77,0.6)',
       isElite: false,
@@ -97,7 +98,7 @@ function getMilestoneConfig(streakDays: number): MilestoneConfig {
   }
   if (streakDays >= 90) {
     return {
-      badgeName: 'Quarter King',
+      badgeNameKey: 'streak.quarterKing',
       gradientColors: ['#A78BFA', '#7C3AED'],
       glowColor: 'rgba(167,139,250,0.5)',
       isElite: true,
@@ -106,7 +107,7 @@ function getMilestoneConfig(streakDays: number): MilestoneConfig {
   }
   if (streakDays >= 30) {
     return {
-      badgeName: 'Monthly Master',
+      badgeNameKey: 'streak.monthlyMaster',
       gradientColors: ['#34D399', '#059669'],
       glowColor: 'rgba(52,211,153,0.4)',
       isElite: false,
@@ -115,7 +116,7 @@ function getMilestoneConfig(streakDays: number): MilestoneConfig {
   }
   // 7 days
   return {
-    badgeName: 'Week Warrior',
+    badgeNameKey: 'streak.weekWarrior',
     gradientColors: ['#60A5FA', '#2563EB'],
     glowColor: 'rgba(96,165,250,0.4)',
     isElite: false,
@@ -152,11 +153,15 @@ interface StreakBadgeModalProps {
 }
 
 export default function StreakBadgeModal({ visible, streakDays, onDismiss }: StreakBadgeModalProps) {
+  const { t } = useTranslation();
   const particles = useRef<Particle[]>(createParticles()).current;
   const { scale, opacity } = usePulse(visible);
 
   const config = getMilestoneConfig(streakDays);
-  const streakDisplay = String(streakDays) + ' Day Streak!';
+  const streakDisplay = t('streak.streakDisplay', { days: streakDays });
+  const headlineText = t('streak.milestone');
+  const badgeName = t(config.badgeNameKey);
+  const dismissHintText = t('streak.tapToContinue');
 
   useEffect(() => {
     if (visible) {
@@ -223,7 +228,7 @@ export default function StreakBadgeModal({ visible, streakDays, onDismiss }: Str
           >
             {/* Headline */}
             <Text style={[styles.headline, { color: config.gradientColors[0] }]}>
-              STREAK MILESTONE
+              {headlineText}
             </Text>
 
             {/* Flame with glow */}
@@ -264,14 +269,14 @@ export default function StreakBadgeModal({ visible, streakDays, onDismiss }: Str
               end={{ x: 1, y: 0 }}
               style={styles.badgePill}
             >
-              <Text style={styles.badgeName}>{config.badgeName}</Text>
+              <Text style={styles.badgeName}>{badgeName}</Text>
             </LinearGradient>
 
             {/* Divider */}
             <View style={[styles.divider, { backgroundColor: config.gradientColors[0] }]} />
 
             {/* Dismiss hint */}
-            <Text style={styles.dismissHint}>Tap anywhere to continue</Text>
+            <Text style={styles.dismissHint}>{dismissHintText}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </TouchableOpacity>

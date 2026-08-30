@@ -17,6 +17,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -27,16 +28,6 @@ const GOLD = '#FFB547';
 const MUTED = 'rgba(255,255,255,0.45)';
 
 const CHALLENGE_SHOWN_KEY = 'seven_day_challenge_shown';
-
-const DAYS = [
-  { day: 1, label: 'Log your first meal' },
-  { day: 2, label: 'Hit your calorie goal' },
-  { day: 3, label: 'Hit your protein goal' },
-  { day: 4, label: 'Walk 5,000 steps' },
-  { day: 5, label: 'Log all 3 meals' },
-  { day: 6, label: 'Complete a workout' },
-  { day: 7, label: 'Hit all 3 goals 🏆' },
-];
 
 const PARTICLE_CONFIG = [
   { top: '8%', left: '12%', size: 5, duration: 3200, delay: 0, opacity: 0.4 },
@@ -133,7 +124,8 @@ function FloatingParticles() {
 // ─── Day Row ──────────────────────────────────────────────────────────────────
 
 function DayRow({ day, label, anim }: { day: number; label: string; anim: Animated.Value }) {
-  const dayText = 'Day ' + day;
+  const { t } = useTranslation();
+  const dayText = t('sevenDayChallenge.dayNumber', { day });
   return (
     <Animated.View style={[styles.dayRow, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
       <View style={styles.dayBadge}>
@@ -153,7 +145,18 @@ export default function ChallengePopup({
   onAcceptChallenge,
   xpConfig,
 }: ChallengePopupProps) {
+  const { t } = useTranslation();
   const [accepting, setAccepting] = useState(false);
+
+  const DAYS = [
+    { day: 1, label: t('sevenDayChallenge.day1Label') },
+    { day: 2, label: t('sevenDayChallenge.day2Label') },
+    { day: 3, label: t('sevenDayChallenge.day3Label') },
+    { day: 4, label: t('sevenDayChallenge.day4Label') },
+    { day: 5, label: t('sevenDayChallenge.day5Label') },
+    { day: 6, label: t('sevenDayChallenge.day6Label') },
+    { day: 7, label: t('sevenDayChallenge.day7Label') },
+  ];
 
   // Staggered day row animations
   const dayAnims = useRef(DAYS.map(() => new Animated.Value(0))).current;
@@ -213,6 +216,12 @@ export default function ChallengePopup({
   const titleOpacity = headerAnim;
   const subtitleOpacity = headerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
 
+  const popupTitle = t('sevenDayChallenge.popupTitle');
+  const popupSubtitle = t('sevenDayChallenge.popupSubtitle');
+  const rewardPillText = t('sevenDayChallenge.rewardPill', { xp: xpConfig?.['seven_day_challenge'] ?? 500 });
+  const acceptBtnText = t('sevenDayChallenge.acceptChallenge');
+  const skipBtnText = t('sevenDayChallenge.skipForNow');
+
   return (
     <Modal
       visible={visible}
@@ -231,10 +240,10 @@ export default function ChallengePopup({
           {/* Header */}
           <Animated.View style={[styles.headerBlock, { opacity: titleOpacity }]}>
             <Text style={styles.title}>
-              {'Your 7-Day Challenge\nStarts Now.'}
+              {popupTitle}
             </Text>
             <Animated.Text style={[styles.subtitle, { opacity: subtitleOpacity }]}>
-              {'Most people quit in week 1. You won\'t. Complete all 7 days within 14 days to earn your badge.'}
+              {popupSubtitle}
             </Animated.Text>
           </Animated.View>
 
@@ -253,7 +262,7 @@ export default function ChallengePopup({
           {/* Reward pill */}
           <Animated.View style={[styles.rewardPill, { opacity: rewardAnim, transform: [{ scale: rewardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
             <Text style={styles.rewardText}>
-              {'🏅 +' + (xpConfig?.['seven_day_challenge'] ?? 500) + ' XP · Challenger Badge'}
+              {rewardPillText}
             </Text>
           </Animated.View>
 
@@ -269,7 +278,7 @@ export default function ChallengePopup({
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <Text style={styles.acceptBtnText}>
-                  {'Accept the Challenge 🔥'}
+                  {acceptBtnText}
                 </Text>
               )}
             </TouchableOpacity>
@@ -281,7 +290,7 @@ export default function ChallengePopup({
               disabled={accepting}
             >
               <Text style={styles.skipBtnText}>
-                {'Skip for now'}
+                {skipBtnText}
               </Text>
             </TouchableOpacity>
           </Animated.View>

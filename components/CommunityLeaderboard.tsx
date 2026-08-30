@@ -14,42 +14,16 @@ import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { fetchLeaderboard, type LeaderboardEntry, type LeaderboardResponse, type LeaderboardPeriod } from '@/utils/leaderboardApi';
 import { Trophy } from 'lucide-react-native';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { useTranslation } from 'react-i18next';
 
 type Tab = 'steps';
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
-const PERIOD_OPTIONS: { value: LeaderboardPeriod; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This Week' },
-  { value: 'month', label: 'This Month' },
-  { value: 'last30', label: 'Last 30 Days' },
-  { value: 'custom', label: 'Custom Range...' },
-];
-
 function formatShortDate(date: Date): string {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[date.getMonth()]} ${date.getDate()}`;
-}
-
-function getPeriodLabel(
-  period: LeaderboardPeriod,
-  customStart: Date | null,
-  customEnd: Date | null,
-): string {
-  switch (period) {
-    case 'today': return 'Today';
-    case 'week': return 'This Week';
-    case 'month': return 'This Month';
-    case 'last30': return 'Last 30 Days';
-    case 'custom':
-      if (customStart && customEnd) {
-        return `${formatShortDate(customStart)} – ${formatShortDate(customEnd)}`;
-      }
-      return 'Custom Range';
-    default: return 'This Week';
-  }
 }
 
 function SkeletonLine({ width, height = 13, isDark }: { width: number | string; height?: number; isDark: boolean }) {
@@ -82,12 +56,13 @@ function LeaderboardRow({
   isDark: boolean;
   isLast: boolean;
 }) {
+  const { t } = useTranslation();
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const medal = MEDAL[entry.rank];
   const rankLabel = medal ?? String(entry.rank);
   const valueFormatted = entry.totalValue.toLocaleString('en-US');
-  const youLabel = entry.isYou ? ' · You' : '';
+  const youSuffix = entry.isYou ? ` · ${t('leaderboard.you')}` : '';
   const rowBg = entry.isYou
     ? isDark
       ? colors.primary + '22'
@@ -108,8 +83,8 @@ function LeaderboardRow({
       <View style={styles.leaderNameCol}>
         <Text style={[styles.leaderName, { color: textColor }]} numberOfLines={1}>
           {entry.username}
-          {youLabel ? (
-            <Text style={{ color: colors.primary, fontWeight: '700' }}>{youLabel}</Text>
+          {youSuffix ? (
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>{youSuffix}</Text>
           ) : null}
         </Text>
       </View>
@@ -127,6 +102,8 @@ interface CommunityLeaderboardProps {
 }
 
 export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboardProps) {
+  const { t } = useTranslation();
+
   const [stepsData, setStepsData] = useState<LeaderboardResponse | null>(null);
   const [loadingSteps, setLoadingSteps] = useState(true);
 
@@ -152,6 +129,33 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const sheetBg = isDark ? '#1E2035' : '#FFFFFF';
   const sheetBorder = isDark ? colors.borderDark : colors.border;
+
+  const PERIOD_OPTIONS: { value: LeaderboardPeriod; label: string }[] = [
+    { value: 'today', label: t('leaderboard.periodToday') },
+    { value: 'week', label: t('leaderboard.periodThisWeek') },
+    { value: 'month', label: t('leaderboard.periodThisMonth') },
+    { value: 'last30', label: t('leaderboard.periodLast30') },
+    { value: 'custom', label: t('leaderboard.periodCustom') },
+  ];
+
+  const getPeriodLabel = (
+    p: LeaderboardPeriod,
+    cs: Date | null,
+    ce: Date | null,
+  ): string => {
+    switch (p) {
+      case 'today': return t('leaderboard.periodToday');
+      case 'week': return t('leaderboard.periodThisWeek');
+      case 'month': return t('leaderboard.periodThisMonth');
+      case 'last30': return t('leaderboard.periodLast30');
+      case 'custom':
+        if (cs && ce) {
+          return `${formatShortDate(cs)} – ${formatShortDate(ce)}`;
+        }
+        return t('leaderboard.periodCustomRange');
+      default: return t('leaderboard.periodThisWeek');
+    }
+  };
 
   const loadTab = useCallback(async (p: LeaderboardPeriod, cs: Date | null, ce: Date | null) => {
     console.log('[CommunityLeaderboard] Loading steps leaderboard, period:', p);
@@ -204,7 +208,7 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
   const handleCustomApply = () => {
     console.log('[CommunityLeaderboard] Custom range apply pressed:', toLocalDateString(tempStart), toLocalDateString(tempEnd));
     if (tempStart > tempEnd) {
-      setCustomDateError('Start date must be before or equal to end date.');
+      setCustomDateError(t('leaderboard.dateErrorStartBeforeEnd'));
       return;
     }
     setCustomStart(tempStart);
@@ -220,7 +224,7 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
 
   const activeData = stepsData;
   const isLoading = loadingSteps;
-  const unit = 'steps';
+  const unit = t('leaderboard.stepsUnit');
 
   const top5 = activeData?.leaderboard.slice(0, 5) ?? [];
   const userEntry = activeData?.leaderboard.find((e) => e.isYou);
@@ -235,7 +239,7 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Trophy size={18} color={colors.warning} strokeWidth={2} />
-          <Text style={[styles.title, { color: textColor }]}>Community Leaderboard</Text>
+          <Text style={[styles.title, { color: textColor }]}>{t('leaderboard.title')}</Text>
         </View>
         <TouchableOpacity
           onPress={handlePeriodButtonPress}
@@ -260,9 +264,9 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
         </View>
       ) : top5.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={[styles.emptyTitle, { color: textColor }]}>No data yet</Text>
+          <Text style={[styles.emptyTitle, { color: textColor }]}>{t('leaderboard.noDataTitle')}</Text>
           <Text style={[styles.emptySub, { color: subColor }]}>
-            Start checking in to join the leaderboard
+            {t('leaderboard.noDataSubtitle')}
           </Text>
         </View>
       ) : (
@@ -310,7 +314,7 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
             onPress={() => {/* prevent overlay close */}}
           >
             <View style={[styles.dragHandle, { backgroundColor: isDark ? '#4A4C62' : '#D4D6DA' }]} />
-            <Text style={[styles.sheetTitle, { color: textColor }]}>Select Period</Text>
+            <Text style={[styles.sheetTitle, { color: textColor }]}>{t('leaderboard.selectPeriod')}</Text>
             {PERIOD_OPTIONS.map((opt, idx) => {
               const isSelected = period === opt.value;
               const isLast = idx === PERIOD_OPTIONS.length - 1;
@@ -355,11 +359,11 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
             onPress={() => {/* prevent overlay close */}}
           >
             <View style={[styles.dragHandle, { backgroundColor: isDark ? '#4A4C62' : '#D4D6DA' }]} />
-            <Text style={[styles.sheetTitle, { color: textColor }]}>Custom Range</Text>
+            <Text style={[styles.sheetTitle, { color: textColor }]}>{t('leaderboard.customRange')}</Text>
 
             {/* Start Date */}
             <View style={[styles.dateRow, { borderColor: sheetBorder }]}>
-              <Text style={[styles.dateLabel, { color: subColor }]}>Start date</Text>
+              <Text style={[styles.dateLabel, { color: subColor }]}>{t('leaderboard.startDate')}</Text>
               {Platform.OS === 'ios' ? (
                 <DateTimePicker
                   value={tempStart}
@@ -389,7 +393,7 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
 
             {/* End Date */}
             <View style={[styles.dateRow, { borderColor: sheetBorder }]}>
-              <Text style={[styles.dateLabel, { color: subColor }]}>End date</Text>
+              <Text style={[styles.dateLabel, { color: subColor }]}>{t('leaderboard.endDate')}</Text>
               {Platform.OS === 'ios' ? (
                 <DateTimePicker
                   value={tempEnd}
@@ -461,14 +465,14 @@ export function CommunityLeaderboard({ isDark, refreshKey }: CommunityLeaderboar
                 style={[styles.customBtn, styles.cancelBtn, { borderColor: sheetBorder }]}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.cancelBtnText, { color: subColor }]}>Cancel</Text>
+                <Text style={[styles.cancelBtnText, { color: subColor }]}>{t('leaderboard.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleCustomApply}
                 style={[styles.customBtn, styles.applyBtn, { backgroundColor: colors.primary }]}
                 activeOpacity={0.7}
               >
-                <Text style={styles.applyBtnText}>Apply</Text>
+                <Text style={styles.applyBtnText}>{t('leaderboard.apply')}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

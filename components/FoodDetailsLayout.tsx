@@ -21,6 +21,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useTranslation } from 'react-i18next';
 
 // ─── Micronutrient helpers ────────────────────────────────────────────────────
 
@@ -621,6 +622,7 @@ export default function FoodDetailsLayout({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [product, setProduct] = useState<OpenFoodFactsProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -800,7 +802,7 @@ export default function FoodDetailsLayout({
       await checkFavoriteStatus(parsedProduct);
     } catch (error) {
       console.error('Error loading view data:', error);
-      Alert.alert('Error', 'Failed to load food details');
+      Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
     } finally {
       setLoading(false);
     }
@@ -902,7 +904,7 @@ export default function FoodDetailsLayout({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         router.back();
         return;
       }
@@ -921,7 +923,7 @@ export default function FoodDetailsLayout({
 
       if (error || !mealItem) {
         console.error('Error loading meal item:', error);
-        Alert.alert('Error', 'Failed to load food item');
+        Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
         router.back();
         return;
       }
@@ -959,7 +961,7 @@ export default function FoodDetailsLayout({
             : null
       );
       if (!food) {
-        Alert.alert('Error', 'Food data not found');
+        Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
         router.back();
         return;
       }
@@ -1200,7 +1202,7 @@ export default function FoodDetailsLayout({
       await checkFavoriteStatus(mockProduct);
     } catch (error) {
       console.error('Error in loadEditItem:', error);
-      Alert.alert('Error', 'Failed to load food item');
+      Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
       router.back();
     } finally {
       setLoading(false);
@@ -1375,7 +1377,7 @@ export default function FoodDetailsLayout({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in to save favorites');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -1407,11 +1409,11 @@ export default function FoodDetailsLayout({
       console.log('[FoodDetails] toggleFavorite returned:', newFavStatus);
       setIsFav(newFavStatus);
 
-      const message = newFavStatus ? 'Added to favorites' : 'Removed from favorites';
+      const message = newFavStatus ? t('foodDetails.addedToFavorites') : t('foodDetails.removedFromFavorites');
       setBannerQueue((prev) => [...prev, { id: Date.now(), message, timestamp: Date.now() }]);
     } catch (error) {
       console.error('[FoodDetails] Error toggling favorite:', error);
-      Alert.alert('Error', 'Failed to update favorites. Please try again.');
+      Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
     }
   };
 
@@ -1794,11 +1796,11 @@ export default function FoodDetailsLayout({
 
         if (error) {
           console.error('Error updating meal item:', error);
-          Alert.alert('Error', 'Failed to update food item');
+          Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
           return;
         }
 
-        setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Food updated successfully', timestamp: Date.now() }]);
+        setBannerQueue((prev) => [...prev, { id: Date.now(), message: t('foodDetails.foodUpdated'), timestamp: Date.now() }]);
         
         if (onSaveComplete) {
           onSaveComplete();
@@ -1888,7 +1890,7 @@ export default function FoodDetailsLayout({
             fiber: safeMacros.fiber,
           });
 
-          setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Added to meal', timestamp: Date.now() }]);
+          setBannerQueue((prev) => [...prev, { id: Date.now(), message: t('foodDetails.addedToMeal'), timestamp: Date.now() }]);
 
           setTimeout(() => {
             router.back();
@@ -2000,7 +2002,7 @@ export default function FoodDetailsLayout({
             return;
           }
 
-          setBannerQueue((prev) => [...prev, { id: Date.now(), message: 'Food added to meal', timestamp: Date.now() }]);
+          setBannerQueue((prev) => [...prev, { id: Date.now(), message: t('foodDetails.foodAddedToMeal'), timestamp: Date.now() }]);
 
           // ── Log food usage (fire-and-forget) — only when food came from catalog ──
           if (offData && foodItemId) {
@@ -2023,7 +2025,7 @@ export default function FoodDetailsLayout({
       }
     } catch (error) {
       console.error('Error in handleSave:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
   };
 
@@ -2041,7 +2043,7 @@ export default function FoodDetailsLayout({
     return (
       <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <Text style={{ color: textColor }}>No product data available</Text>
+          <Text style={{ color: textColor }}>{t('foodDetails.noProductData')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -2074,7 +2076,7 @@ export default function FoodDetailsLayout({
             <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: textColor }]}>
-            {mode === 'ingredient' ? 'Add Ingredient' : 'Food Details'}
+            {mode === 'ingredient' ? t('foodDetails.addIngredient') : t('foodDetails.title')}
           </Text>
         </View>
         <TouchableOpacity style={styles.favoriteButton} onPress={handleToggleFavorite}>
@@ -2105,7 +2107,7 @@ export default function FoodDetailsLayout({
         })()}
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>Serving Size</Text>
+          <Text style={[styles.sectionTitle, { color: textColor }]}>{t('foodDetails.servingSize')}</Text>
 
           <ServingPicker
             options={servingOptions}
@@ -2124,27 +2126,27 @@ export default function FoodDetailsLayout({
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>Nutrition Facts</Text>
+          <Text style={[styles.sectionTitle, { color: textColor }]}>{t('foodDetails.nutritionFacts')}</Text>
           <View style={[styles.macroCard, { backgroundColor: cardBackground }]}>
             <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: textColor }]}>Calories</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.calories} kcal</Text>
+              <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.calories')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{macros.calories} {t('common.kcal')}</Text>
             </View>
             <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: textColor }]}>Protein</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.protein}g</Text>
+              <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.protein')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{macros.protein}{t('common.grams')}</Text>
             </View>
             <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: textColor }]}>Carbs</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.carbs}g</Text>
+              <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.carbs')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{macros.carbs}{t('common.grams')}</Text>
             </View>
             <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: textColor }]}>Fats</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.fats}g</Text>
+              <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.fats')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{macros.fats}{t('common.grams')}</Text>
             </View>
             <View style={styles.macroRow}>
-              <Text style={[styles.macroLabel, { color: textColor }]}>Fiber</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.fiber}g</Text>
+              <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.fiber')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{macros.fiber}{t('common.grams')}</Text>
             </View>
           </View>
         </View>
@@ -2192,7 +2194,7 @@ export default function FoodDetailsLayout({
                   }}
                 >
                   <Text style={[styles.microToggleText, { color: textColor }]}>
-                    {showMicroDetails ? 'Hide detailed nutrition' : 'Show more nutrition'}
+                    {showMicroDetails ? t('foodDetails.hideDetailedNutrition') : t('foodDetails.showMoreNutrition')}
                   </Text>
                   <IconSymbol
                     ios_icon_name={showMicroDetails ? 'chevron.up' : 'chevron.down'}
@@ -2209,7 +2211,7 @@ export default function FoodDetailsLayout({
                   {extMacroRows.length > 0 && (
                     <>
                       <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666' }]}>
-                        Extended Macros
+                        {t('foodDetails.extendedMacros')}
                       </Text>
                       {extMacroRows.map((row, i) => (
                         <View
@@ -2227,7 +2229,7 @@ export default function FoodDetailsLayout({
                   {vitaminRows.length > 0 && (
                     <>
                       <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666', marginTop: extMacroRows.length > 0 ? spacing.md : spacing.xs }]}>
-                        Vitamins
+                        {t('foodDetails.vitaminsLabel')}
                       </Text>
                       {vitaminRows.map((row, i) => (
                         <View
@@ -2245,7 +2247,7 @@ export default function FoodDetailsLayout({
                   {mineralRows.length > 0 && (
                     <>
                       <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666', marginTop: (extMacroRows.length > 0 || vitaminRows.length > 0) ? spacing.md : spacing.xs }]}>
-                        Minerals
+                        {t('foodDetails.mineralsLabel')}
                       </Text>
                       {mineralRows.map((row, i) => (
                         <View
@@ -2262,7 +2264,7 @@ export default function FoodDetailsLayout({
                   {/* Ingredients */}
                   {ingredientsText && (
                     <>
-                      <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666', marginTop: spacing.md }]}>Ingredients</Text>
+                      <Text style={[styles.microSubheading, { color: isDark ? '#aaa' : '#666', marginTop: spacing.md }]}>{t('foodDetails.ingredientsLabel')}</Text>
                       <Text style={[styles.ingredientsText, { color: isDark ? '#ccc' : '#444' }]}>{ingredientsText}</Text>
                     </>
                   )}
@@ -2270,7 +2272,7 @@ export default function FoodDetailsLayout({
                   {/* Allergens */}
                   {allergensTags && allergensTags.length > 0 && (
                     <>
-                      <Text style={[styles.microSubheading, { color: isDark ? '#fca5a5' : '#b91c1c', marginTop: spacing.md }]}>Allergens</Text>
+                      <Text style={[styles.microSubheading, { color: isDark ? '#fca5a5' : '#b91c1c', marginTop: spacing.md }]}>{t('foodDetails.allergensLabel')}</Text>
                       <Text style={[styles.allergensText, { color: isDark ? '#fca5a5' : '#b91c1c' }]}>
                         {allergensTags.join(', ')}
                       </Text>
@@ -2307,7 +2309,7 @@ export default function FoodDetailsLayout({
               });
             }}>
               <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 13 }}>
-                Report incorrect data →
+                {t('foodDetails.reportIncorrect')} →
               </Text>
             </TouchableOpacity>
           </View>
@@ -2320,7 +2322,7 @@ export default function FoodDetailsLayout({
             handleSave();
           }}
         >
-          <Text style={styles.saveButtonText}>{mode === 'ingredient' ? 'Add Ingredient' : mode === 'edit' ? 'Save Changes' : 'Add to Meal'}</Text>
+          <Text style={styles.saveButtonText}>{mode === 'ingredient' ? t('foodDetails.addIngredient') : mode === 'edit' ? t('common.save') : t('foodDetails.addToMeal')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

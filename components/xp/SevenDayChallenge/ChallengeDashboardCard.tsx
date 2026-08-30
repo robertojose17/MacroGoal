@@ -14,6 +14,7 @@ import {
   Animated,
   Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { SevenDayChallenge } from '@/types/challenge';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 
@@ -133,6 +134,7 @@ export default function ChallengeDashboardCard({
   onMissionCompleted,
   onCompleteTodaysMission,
 }: ChallengeDashboardCardProps) {
+  const { t } = useTranslation();
   const [autoCompleting, setAutoCompleting] = useState(false);
   const hasAutoCompletedRef = useRef(false);
 
@@ -181,7 +183,7 @@ export default function ChallengeDashboardCard({
 
   // Derived display values
   const totalDays = 7;
-  const dayText = 'Day ' + challenge.current_day + ' of ' + totalDays;
+  const dayText = t('sevenDayChallenge.dayOf', { day: challenge.current_day, total: totalDays });
 
   // Days-remaining badge
   const daysRemaining = challenge.days_remaining;
@@ -195,46 +197,55 @@ export default function ChallengeDashboardCard({
   if (isCompleted) {
     daysLeftText = null;
   } else if (isExpired) {
-    daysLeftText = 'Expired';
+    daysLeftText = t('sevenDayChallenge.expired');
     daysLeftColor = mutedColor;
     daysLeftWeight = '500';
   } else if (daysRemaining !== undefined) {
     if (daysRemaining === 0) {
-      daysLeftText = 'Expires today';
+      daysLeftText = t('sevenDayChallenge.expiresToday');
       daysLeftColor = colors.protein;
       daysLeftWeight = '600';
     } else if (daysRemaining === 1) {
-      daysLeftText = 'Last day!';
+      daysLeftText = t('sevenDayChallenge.lastDay');
       daysLeftColor = colors.protein;
       daysLeftWeight = '600';
     } else if (daysRemaining <= 3) {
-      daysLeftText = daysRemaining + ' days left';
+      daysLeftText = t('sevenDayChallenge.daysLeft', { count: daysRemaining });
       daysLeftColor = colors.fats;
       daysLeftWeight = '600';
     } else {
-      daysLeftText = daysRemaining + ' days left';
+      daysLeftText = t('sevenDayChallenge.daysLeft', { count: daysRemaining });
       daysLeftColor = mutedColor;
       daysLeftWeight = '500';
     }
   }
-  const missionTitle = mission?.title_en ?? "Complete today's mission";
+  const missionTitle = mission?.title_en ?? t('sevenDayChallenge.completeTodaysMission');
   const missionCurrent = mission?.current ?? 0;
   const missionTarget = mission?.target ?? 1;
   const missionUnit = mission?.unit ?? '';
   const missionProgress = missionTarget > 0 ? missionCurrent / missionTarget : 0;
-  const missionProgressText = missionCurrent + ' / ' + missionTarget + (missionUnit ? ' ' + missionUnit + ' logged' : ' logged');
+  const missionProgressText = missionUnit
+    ? t('sevenDayChallenge.progressWithUnit', { current: missionCurrent, target: missionTarget, unit: missionUnit })
+    : t('sevenDayChallenge.progressLogged', { current: missionCurrent, target: missionTarget });
+
+  const headerTitleText = t('sevenDayChallenge.headerTitle');
+  const taglineText = t('sevenDayChallenge.tagline');
+  const todaysGoalText = t('sevenDayChallenge.todaysGoal');
+  const dayCompleteText = t('sevenDayChallenge.dayComplete');
+  const challengerBadgeOnDay7Text = t('sevenDayChallenge.challengerBadgeOnDay7');
+  const xpAmount = '+' + (xpConfig?.['seven_day_challenge'] ?? 500) + ' XP';
 
   // Build step nodes array: [node, connector, node, connector, ..., node]
   const stepItems: React.ReactNode[] = [];
   for (let d = 1; d <= totalDays; d++) {
-    const isCompleted = challenge.completed_days.includes(d);
-    const isCurrent = d === challenge.current_day && !isCompleted;
-    const isDay7 = d === 7 && !isCompleted && !isCurrent;
+    const isCompletedDay = challenge.completed_days.includes(d);
+    const isCurrent = d === challenge.current_day && !isCompletedDay;
+    const isDay7 = d === 7 && !isCompletedDay && !isCurrent;
     stepItems.push(
       <StepNode
         key={'node-' + d}
         dayNum={d}
-        isCompleted={isCompleted}
+        isCompleted={isCompletedDay}
         isCurrent={isCurrent}
         isDay7={isDay7}
         isDark={isDark}
@@ -259,7 +270,7 @@ export default function ChallengeDashboardCard({
     <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
       {/* Header row */}
       <View style={styles.headerRow}>
-        <Text style={[styles.headerTitle, { color: titleColor }]}>{'🔥 7-Day Challenge'}</Text>
+        <Text style={[styles.headerTitle, { color: titleColor }]}>{headerTitleText}</Text>
         <View style={styles.dayPillColumn}>
           <View style={[styles.dayPill, { backgroundColor: dayPillBg }]}>
             <Text style={[styles.dayPillText, { color: mutedColor }]}>{dayText}</Text>
@@ -273,7 +284,7 @@ export default function ChallengeDashboardCard({
       </View>
 
       {/* Tagline */}
-      <Text style={[styles.tagline, { color: mutedColor }]}>{'BUILD THE HABIT. EARN THE BADGE.'}</Text>
+      <Text style={[styles.tagline, { color: mutedColor }]}>{taglineText}</Text>
 
       {/* Step indicator */}
       <View style={styles.stepsRow}>
@@ -282,11 +293,11 @@ export default function ChallengeDashboardCard({
 
       {/* Inner card — today's goal */}
       <View style={[styles.innerCard, { backgroundColor: innerCardBg, borderColor: innerCardBorder }]}>
-        <Text style={styles.eyebrow}>{"TODAY'S GOAL"}</Text>
+        <Text style={styles.eyebrow}>{todaysGoalText}</Text>
         <Text style={[styles.missionTitle, { color: titleColor }]}>{missionTitle}</Text>
 
         {isTodayDone ? (
-          <Text style={styles.completedText}>{'✅ Day complete! Come back tomorrow.'}</Text>
+          <Text style={styles.completedText}>{dayCompleteText}</Text>
         ) : (
           <>
             <Text style={[styles.missionProgressText, { color: mutedColor }]}>{missionProgressText}</Text>
@@ -305,8 +316,8 @@ export default function ChallengeDashboardCard({
         <View style={[styles.footer, { backgroundColor: footerBg }]}>
           <Text style={styles.footerMedal}>{'🏅'}</Text>
           <Text style={[styles.footerLine, { color: titleColor }]}>
-            <Text style={{ fontWeight: '800' }}>{'+' + (xpConfig?.['seven_day_challenge'] ?? 500) + ' XP'}</Text>
-            <Text style={[styles.footerLineMuted, { color: mutedColor }]}>{'  ·  Challenger Badge on Day 7'}</Text>
+            <Text style={{ fontWeight: '800' }}>{xpAmount}</Text>
+            <Text style={[styles.footerLineMuted, { color: mutedColor }]}>{'  ·  '}{challengerBadgeOnDay7Text}</Text>
           </Text>
         </View>
       )}

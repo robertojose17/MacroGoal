@@ -3,6 +3,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, spacing, typography } from '@/styles/commonStyles';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
+import { useTranslation } from 'react-i18next';
 
 export interface FoodItemRowProps {
   name: string;
@@ -31,6 +32,7 @@ export default function FoodItemRow({
   isDark,
   style,
 }: FoodItemRowProps) {
+  const { t } = useTranslation();
   const textColor = isDark ? colors.textDark : colors.text;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const caloriesRounded = Math.round(calories);
@@ -62,7 +64,7 @@ export default function FoodItemRow({
                 {caloriesRounded}
               </Text>
               <Text style={[styles.foodCaloriesLabel, { color: secondaryColor }]}>
-                kcal
+                {t('common.kcal')}
               </Text>
             </View>
           )}
@@ -78,7 +80,7 @@ export default function FoodItemRow({
                 {caloriesRounded}
               </Text>
               <Text style={[styles.foodCaloriesLabel, { color: secondaryColor }]}>
-                kcal
+                {t('common.kcal')}
               </Text>
             </View>
           </View>
@@ -92,25 +94,25 @@ export default function FoodItemRow({
             {'•'}
           </Text>
           <Text style={[styles.macroValue, { color: colors.protein }]}>
-            {'P: '}
+            {t('foodItemRow.proteinPrefix')}
             {proteinRounded}
-            {'g'}
+            {t('common.grams')}
           </Text>
           <Text style={[styles.macroBase, { color: secondaryColor }]}>
             {'•'}
           </Text>
           <Text style={[styles.macroValue, { color: colors.carbs }]}>
-            {'C: '}
+            {t('foodItemRow.carbsPrefix')}
             {carbsRounded}
-            {'g'}
+            {t('common.grams')}
           </Text>
           <Text style={[styles.macroBase, { color: secondaryColor }]}>
             {'•'}
           </Text>
           <Text style={[styles.macroValue, { color: colors.fats }]}>
-            {'F: '}
+            {t('foodItemRow.fatsPrefix')}
             {fatsRounded}
-            {'g'}
+            {t('common.grams')}
           </Text>
         </View>
       </View>

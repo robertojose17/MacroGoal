@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useLeague } from '@/hooks/useLeague';
 import { TIER_METADATA } from '@/types/leagues';
 import LeagueLeaderboard from '@/components/xp/LeagueLeaderboard';
@@ -23,6 +24,7 @@ interface LeagueCardProps {
 }
 
 export default function LeagueCard({ isDark }: LeagueCardProps) {
+  const { t } = useTranslation();
   const { status, loading } = useLeague();
   const [showLeaderboard, setShowLeaderboard] = useState(false);
 
@@ -37,14 +39,14 @@ export default function LeagueCard({ isDark }: LeagueCardProps) {
   // Zone badge
   let zoneBadge: string | null = null;
   let zoneColor: string = meta.accent;
-  if (isPromotion) { zoneBadge = '↑ Moving up'; zoneColor = '#5CB97B'; }
-  else if (isDemotion) { zoneBadge = '⚠ Drop zone'; zoneColor = '#EF4444'; }
+  if (isPromotion) { zoneBadge = t('league.movingUp'); zoneColor = '#5CB97B'; }
+  else if (isDemotion) { zoneBadge = t('league.dropZone'); zoneColor = '#EF4444'; }
 
   // Position
-  const positionText = `#${status.user_position} of ${status.member_count}`;
+  const positionText = '#' + status.user_position + ' ' + t('league.of') + ' ' + status.member_count;
 
   // XP this week
-  const xpText = `${status.user_xp_this_week.toLocaleString()} XP`;
+  const xpText = status.user_xp_this_week.toLocaleString() + ' XP';
 
   // Colors
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';

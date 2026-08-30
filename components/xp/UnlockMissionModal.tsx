@@ -29,6 +29,7 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { unlockMissionSlot } from '@/utils/xpApi';
@@ -37,24 +38,24 @@ import { unlockMissionSlot } from '@/utils/xpApi';
 
 type PoolMission = {
   mission_type: string;
-  title: string;
+  title_key: string;
   xp: number;
-  description: string;
+  description_key: string;
   icon: string;
 };
 
 const UNLOCK_POOL: PoolMission[] = [
-  { mission_type: 'log_three_meals',        title: 'Log All 3 Meals',           xp: 75,  description: 'Breakfast, lunch, and dinner',  icon: 'Utensils'    },
-  { mission_type: 'complete_workout',        title: 'Complete a Workout',         xp: 100, description: 'One full workout session',       icon: 'Dumbbell'    },
-  { mission_type: 'keep_streak_alive',       title: 'Keep Streak Alive',          xp: 75,  description: "Don't miss today",              icon: 'Flame'       },
-  { mission_type: 'log_weight_with_photo',   title: 'Log Weight + Photo',         xp: 150, description: 'Track progress with proof',      icon: 'Camera'      },
-  { mission_type: 'burn_active_calories',    title: 'Burn 300 Active Calories',   xp: 100, description: 'From your Apple Watch',          icon: 'Zap'         },
-  { mission_type: 'burn_active_calories_hard', title: 'Burn 500 Active Calories', xp: 175, description: 'Bigger goal, bigger reward',     icon: 'Zap'         },
-  { mission_type: 'exercise_minutes',        title: '30 Min of Exercise',         xp: 100, description: 'Any moderate activity',          icon: 'Timer'       },
-  { mission_type: 'exercise_minutes_hard',   title: '60 Min of Exercise',         xp: 200, description: 'Go the distance',               icon: 'Timer'       },
-  { mission_type: 'walk_distance_mile',      title: 'Walk or Run 1 Mile',         xp: 75,  description: 'Just one mile',                 icon: 'MapPin'      },
-  { mission_type: 'walk_distance_3mile',     title: 'Walk or Run 3 Miles',        xp: 150, description: 'Go the long way',               icon: 'MapPin'      },
-  { mission_type: 'flights_climbed',         title: 'Climb 10 Flights of Stairs', xp: 75,  description: 'Take the stairs today',         icon: 'TrendingUp'  },
+  { mission_type: 'log_three_meals',        title_key: 'xp.unlock_title_log_three_meals',           xp: 75,  description_key: 'xp.unlock_desc_log_three_meals',  icon: 'Utensils'    },
+  { mission_type: 'complete_workout',        title_key: 'xp.unlock_title_complete_workout',           xp: 100, description_key: 'xp.unlock_desc_complete_workout',  icon: 'Dumbbell'    },
+  { mission_type: 'keep_streak_alive',       title_key: 'xp.unlock_title_keep_streak_alive',          xp: 75,  description_key: 'xp.unlock_desc_keep_streak_alive', icon: 'Flame'       },
+  { mission_type: 'log_weight_with_photo',   title_key: 'xp.unlock_title_log_weight_with_photo',      xp: 150, description_key: 'xp.unlock_desc_log_weight_with_photo', icon: 'Camera'  },
+  { mission_type: 'burn_active_calories',    title_key: 'xp.unlock_title_burn_active_calories',       xp: 100, description_key: 'xp.unlock_desc_burn_active_calories', icon: 'Zap'     },
+  { mission_type: 'burn_active_calories_hard', title_key: 'xp.unlock_title_burn_active_calories_hard', xp: 175, description_key: 'xp.unlock_desc_burn_active_calories_hard', icon: 'Zap' },
+  { mission_type: 'exercise_minutes',        title_key: 'xp.unlock_title_exercise_minutes',           xp: 100, description_key: 'xp.unlock_desc_exercise_minutes',  icon: 'Timer'       },
+  { mission_type: 'exercise_minutes_hard',   title_key: 'xp.unlock_title_exercise_minutes_hard',      xp: 200, description_key: 'xp.unlock_desc_exercise_minutes_hard', icon: 'Timer'   },
+  { mission_type: 'walk_distance_mile',      title_key: 'xp.unlock_title_walk_distance_mile',         xp: 75,  description_key: 'xp.unlock_desc_walk_distance_mile', icon: 'MapPin'    },
+  { mission_type: 'walk_distance_3mile',     title_key: 'xp.unlock_title_walk_distance_3mile',        xp: 150, description_key: 'xp.unlock_desc_walk_distance_3mile', icon: 'MapPin'   },
+  { mission_type: 'flights_climbed',         title_key: 'xp.unlock_title_flights_climbed',            xp: 75,  description_key: 'xp.unlock_desc_flights_climbed',   icon: 'TrendingUp'  },
 ];
 
 // ─── Icon renderer ────────────────────────────────────────────────────────────
@@ -86,6 +87,7 @@ type Props = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpConfig }: Props) {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [loading, setLoading] = useState(false);
@@ -100,13 +102,14 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
   function handleMissionPress(mission: PoolMission) {
     console.log('[UnlockMissionModal] Mission row tapped:', mission.mission_type);
     const resolvedXp = xpConfig?.[mission.mission_type] ?? mission.xp;
-    const alertTitle = 'Unlock Mission?';
-    const alertMsg = `${mission.title} (+${resolvedXp} XP) — you'll also earn a +50 XP unlock bonus right now.`;
+    const missionTitle = t(mission.title_key);
+    const alertTitle = t('xp.unlockMissionAlertTitle');
+    const alertMsg = t('xp.unlockMissionAlertMsg', { title: missionTitle, xp: resolvedXp });
 
     Alert.alert(alertTitle, alertMsg, [
-      { text: 'Cancel', style: 'cancel', onPress: () => console.log('[UnlockMissionModal] Unlock cancelled') },
+      { text: t('common.cancel'), style: 'cancel', onPress: () => console.log('[UnlockMissionModal] Unlock cancelled') },
       {
-        text: 'Unlock',
+        text: t('xp.unlock'),
         style: 'default',
         onPress: () => confirmUnlock(mission),
       },
@@ -122,18 +125,19 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
       setLoading(false);
       onClose();
       onUnlocked();
+      const missionTitle = t(mission.title_key);
       Alert.alert(
-        'Mission Unlocked! ✨',
-        `${mission.title} added to today's missions. +50 XP earned!`,
-        [{ text: 'Let\'s go!' }]
+        t('xp.missionUnlockedTitle'),
+        t('xp.missionUnlockedMsg', { title: missionTitle }),
+        [{ text: t('xp.letsGo') }]
       );
     } catch (err: any) {
       console.error('[UnlockMissionModal] Unlock failed:', err?.message ?? err);
       setLoading(false);
       Alert.alert(
-        'Unlock Failed',
-        err?.message ?? 'Something went wrong. Please try again.',
-        [{ text: 'OK' }]
+        t('xp.unlockFailedTitle'),
+        err?.message ?? t('xp.unlockFailedMsg'),
+        [{ text: t('common.ok') }]
       );
     }
   }
@@ -153,10 +157,10 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
         <View style={[styles.header, { borderBottomColor: rowBorder }]}>
           <View style={styles.headerTextBlock}>
             <Text style={[styles.headerTitle, { color: titleColor }]}>
-              Choose a Mission to Unlock
+              {t('xp.chooseMissionTitle')}
             </Text>
             <Text style={[styles.headerSubtitle, { color: subtitleColor }]}>
-              Pick the mission you want to add to today's board. You'll earn +50 XP just for unlocking it.
+              {t('xp.chooseMissionSubtitle')}
             </Text>
           </View>
           <TouchableOpacity
@@ -181,6 +185,8 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
             const isLast = index === UNLOCK_POOL.length - 1;
             const resolvedXp = xpConfig?.[mission.mission_type] ?? mission.xp;
             const xpText = '+' + resolvedXp + ' XP';
+            const missionTitle = t(mission.title_key);
+            const missionDescription = t(mission.description_key);
             return (
               <TouchableOpacity
                 key={mission.mission_type}
@@ -197,7 +203,7 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
                 </View>
                 <View style={styles.missionTextBlock}>
                   <Text style={[styles.missionTitle, { color: titleColor }]}>
-                    {mission.title}
+                    {missionTitle}
                   </Text>
                   <View style={styles.missionMeta}>
                     <Text style={[styles.missionXp, { color: '#FFB547' }]}>
@@ -207,7 +213,7 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
                       {'·'}
                     </Text>
                     <Text style={[styles.missionDescription, { color: subtitleColor }]}>
-                      {mission.description}
+                      {missionDescription}
                     </Text>
                   </View>
                 </View>
@@ -228,7 +234,7 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
             activeOpacity={0.7}
           >
             <Text style={[styles.cancelButtonText, { color: subtitleColor }]}>
-              Cancel
+              {t('common.cancel')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -239,7 +245,7 @@ export default function UnlockMissionModal({ visible, onClose, onUnlocked, xpCon
             <View style={[styles.loadingBox, { backgroundColor: bgColor }]}>
               <ActivityIndicator size="large" color="#FFB547" />
               <Text style={[styles.loadingText, { color: titleColor }]}>
-                Unlocking mission...
+                {t('xp.unlockingMission')}
               </Text>
             </View>
           </View>

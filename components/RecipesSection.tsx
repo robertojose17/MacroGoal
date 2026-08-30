@@ -9,6 +9,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase/client';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useTranslation } from 'react-i18next';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ export interface Recipe {
 }
 
 type RecipeFilter = 'All' | 'My Recipes' | 'Saved' | 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
-const RECIPE_FILTERS: RecipeFilter[] = ['All', 'My Recipes', 'Saved', 'Breakfast', 'Lunch', 'Dinner', 'Snack'];
+const RECIPE_FILTER_KEYS: RecipeFilter[] = ['All', 'My Recipes', 'Saved', 'Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ interface RecipeCardProps {
 }
 
 function RecipeCard({ recipe, isDark, onPress }: RecipeCardProps) {
+  const { t } = useTranslation();
   const cardBg = isDark ? colors.cardDark : colors.card;
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -105,7 +107,7 @@ function RecipeCard({ recipe, isDark, onPress }: RecipeCardProps) {
 
         <Text style={[rcStyles.caloriesText, { color: colors.calories }]}>
           {caloriesDisplay}
-          <Text style={[rcStyles.caloriesUnit, { color: secondaryColor }]}> kcal</Text>
+          <Text style={[rcStyles.caloriesUnit, { color: secondaryColor }]}> {t('recipes.kcalUnit')}</Text>
         </Text>
 
         {/* Rating row */}
@@ -122,19 +124,19 @@ function RecipeCard({ recipe, isDark, onPress }: RecipeCardProps) {
         {/* Macro row */}
         <View style={rcStyles.macroRow}>
           <Text style={[rcStyles.macroText, { color: colors.protein }]}>
-            {'P:'}
+            {t('recipes.proteinPrefix')}
             {proteinDisplay}
             {'g'}
           </Text>
           <Text style={[rcStyles.macroDot, { color: secondaryColor }]}> · </Text>
           <Text style={[rcStyles.macroText, { color: colors.carbs }]}>
-            {'C:'}
+            {t('recipes.carbsPrefix')}
             {carbsDisplay}
             {'g'}
           </Text>
           <Text style={[rcStyles.macroDot, { color: secondaryColor }]}> · </Text>
           <Text style={[rcStyles.macroText, { color: colors.fats }]}>
-            {'F:'}
+            {t('recipes.fatPrefix')}
             {fatDisplay}
             {'g'}
           </Text>
@@ -151,6 +153,7 @@ interface RecipesSectionProps {
 }
 
 export default function RecipesSection({ isDark }: RecipesSectionProps) {
+  const { t } = useTranslation();
   const router = useRouter();
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -165,6 +168,17 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const inputBg = isDark ? colors.cardDark : colors.card;
   const inputBorder = isDark ? colors.borderDark : colors.border;
+
+  // Localized filter labels
+  const filterLabels: Record<RecipeFilter, string> = {
+    'All': t('recipes.filterAll'),
+    'My Recipes': t('recipes.filterMyRecipes'),
+    'Saved': t('recipes.filterSaved'),
+    'Breakfast': t('recipes.filterBreakfast'),
+    'Lunch': t('recipes.filterLunch'),
+    'Dinner': t('recipes.filterDinner'),
+    'Snack': t('recipes.filterSnack'),
+  };
 
   const loadRecipes = useCallback(async () => {
     console.log('[RecipesSection] Loading recipes, filter:', activeFilter, 'query:', searchQuery);
@@ -194,7 +208,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
         const { data, error: fetchError } = await query;
         if (fetchError) {
           console.error('[RecipesSection] Error loading my recipes:', fetchError);
-          setError('Failed to load recipes. Please try again.');
+          setError(t('recipes.failedToLoad'));
           return;
         }
         console.log('[RecipesSection] My recipes loaded:', data?.length ?? 0);
@@ -215,7 +229,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
 
         if (favError) {
           console.error('[RecipesSection] Error loading favorites:', favError);
-          setError('Failed to load saved recipes. Please try again.');
+          setError(t('recipes.failedToLoadSaved'));
           return;
         }
 
@@ -243,7 +257,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
         const { data, error: fetchError } = await query;
         if (fetchError) {
           console.error('[RecipesSection] Error loading saved recipes:', fetchError);
-          setError('Failed to load saved recipes. Please try again.');
+          setError(t('recipes.failedToLoadSaved'));
           return;
         }
         console.log('[RecipesSection] Saved recipes loaded:', data?.length ?? 0);
@@ -272,7 +286,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
 
       if (fetchError) {
         console.error('[RecipesSection] Error loading recipes:', fetchError);
-        setError('Failed to load recipes. Please try again.');
+        setError(t('recipes.failedToLoad'));
         return;
       }
 
@@ -280,12 +294,12 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
       setRecipes((data as Recipe[]) ?? []);
     } catch (err: any) {
       console.error('[RecipesSection] Unexpected error:', err);
-      setError(err?.message || 'An unexpected error occurred.');
+      setError(err?.message || t('recipes.unexpectedError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [searchQuery, activeFilter]);
+  }, [searchQuery, activeFilter, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -341,7 +355,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
         />
         <TextInput
           style={[rcStyles.searchInput, { color: textColor }]}
-          placeholder="Search recipes..."
+          placeholder={t('recipes.searchPlaceholder')}
           placeholderTextColor={secondaryColor}
           value={searchQuery}
           onChangeText={handleSearch}
@@ -377,7 +391,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
         style={rcStyles.filterScroll}
         contentContainerStyle={rcStyles.filterContent}
       >
-        {RECIPE_FILTERS.map((filter) => {
+        {RECIPE_FILTER_KEYS.map((filter) => {
           const isActive = activeFilter === filter;
           return (
             <TouchableOpacity
@@ -393,7 +407,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
               activeOpacity={0.7}
             >
               <Text style={[rcStyles.filterChipText, { color: isActive ? '#fff' : secondaryColor }]}>
-                {filter}
+                {filterLabels[filter]}
               </Text>
             </TouchableOpacity>
           );
@@ -403,14 +417,14 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
   );
 
   const emptyTitle =
-    activeFilter === 'My Recipes' ? 'No recipes yet' :
-    activeFilter === 'Saved' ? 'No saved recipes' :
-    'No recipes found';
+    activeFilter === 'My Recipes' ? t('recipes.emptyMyRecipesTitle') :
+    activeFilter === 'Saved' ? t('recipes.emptySavedTitle') :
+    t('recipes.emptyAllTitle');
 
   const emptySubtitle =
-    activeFilter === 'My Recipes' ? 'Tap + Add Recipe to create your first recipe' :
-    activeFilter === 'Saved' ? 'Tap the bookmark icon on any recipe to save it here' :
-    searchQuery ? 'Try a different search term' : 'Be the first to add a recipe!';
+    activeFilter === 'My Recipes' ? t('recipes.emptyMyRecipesSubtitle') :
+    activeFilter === 'Saved' ? t('recipes.emptySavedSubtitle') :
+    searchQuery ? t('recipes.emptySearchSubtitle') : t('recipes.emptyAllSubtitle');
 
   const ListEmpty = loading ? (
     <View style={rcStyles.centerContainer}>
@@ -427,7 +441,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
           loadRecipes();
         }}
       >
-        <Text style={rcStyles.retryBtnText}>Retry</Text>
+        <Text style={rcStyles.retryBtnText}>{t('recipes.retry')}</Text>
       </TouchableOpacity>
     </View>
   ) : (
@@ -465,7 +479,7 @@ export default function RecipesSection({ isDark }: RecipesSectionProps) {
         activeOpacity={0.85}
       >
         <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={24} color="#fff" />
-        <Text style={rcStyles.fabText}>Add Recipe</Text>
+        <Text style={rcStyles.fabText}>{t('recipes.addRecipe')}</Text>
       </TouchableOpacity>
     </View>
   );

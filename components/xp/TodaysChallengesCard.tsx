@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { borderRadius, colors, spacing } from '@/styles/commonStyles';
@@ -368,6 +369,7 @@ function DetailSheet({
   onWeightLogged?: () => void;
   xpConfig?: Record<string, number>;
 }) {
+  const { t } = useTranslation();
   const [weightInput, setWeightInput] = useState('');
   const [weightSaving, setWeightSaving] = useState(false);
   const [weightSaved, setWeightSaved] = useState(false);
@@ -383,7 +385,7 @@ function DetailSheet({
     console.log('[TodaysChallengesCard] Log weight button pressed — input:', weightInput);
     const parsed = parseFloat(weightInput);
     if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
-      Alert.alert('Invalid weight', 'Please enter a weight between 0 and 1000 lbs.');
+      Alert.alert(t('xp.invalidWeight'), t('xp.invalidWeightMsg'));
       return;
     }
     if (weightSaving) return;
@@ -397,7 +399,7 @@ function DetailSheet({
         (t: any) => t.is_default && t.name.toLowerCase() === 'weight'
       );
       if (!weightTracker) {
-        Alert.alert('Error', 'Weight tracker not found.');
+        Alert.alert(t('xp.error'), t('xp.weightTrackerNotFound'));
         return;
       }
 
@@ -453,7 +455,7 @@ function DetailSheet({
       }, 600);
     } catch (err) {
       console.error('[TodaysChallengesCard] Weight log failed:', err);
-      Alert.alert('Error', 'Failed to save weight. Please try again.');
+      Alert.alert(t('xp.error'), t('xp.weightSaveFailed'));
     } finally {
       setWeightSaving(false);
     }
@@ -482,9 +484,9 @@ function DetailSheet({
   const nextTier = nextTierIndex >= 0 ? card.tiers[nextTierIndex] : null;
   const toNextLabel = nextTier
     ? String(Math.max(0, Math.round(nextTier.threshold_value - card.current_value))) +
-      ' more to reach next tier'
+      ' ' + t('xp.moreToNextTier')
     : isComplete
-    ? 'All tiers complete!'
+    ? t('xp.allTiersComplete')
     : '';
 
   const shortLabel = FALLBACK_LABELS[card.challenge_type] ?? card.label;
@@ -543,14 +545,14 @@ function DetailSheet({
 
           {/* Subtitle */}
           <Text style={[styles.sheetSubtitle, { color: subColor }]}>
-            How to earn XP today
+            {t('xp.howToEarnToday')}
           </Text>
           <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
           {/* Tier rows */}
           {card.tiers.length === 0 ? (
             <Text style={[styles.emptyTiers, { color: subColor }]}>
-              Tier data loading…
+              {t('xp.tierDataLoading')}
             </Text>
           ) : (
             card.tiers.map((tier, idx) => (
@@ -569,7 +571,7 @@ function DetailSheet({
               <View style={[styles.divider, { backgroundColor: dividerColor, marginTop: spacing.md }]} />
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: subColor }]}>
-                  {'Current: ' + currentValueLabel + (card.challenge_type === 'steps' ? ' steps' : '')}
+                  {t('xp.current') + ': ' + currentValueLabel + (card.challenge_type === 'steps' ? ' ' + t('xp.steps') : '')}
                 </Text>
                 {toNextLabel.length > 0 && (
                   <Text style={[styles.summaryHint, { color: subColor }]}>{toNextLabel}</Text>
@@ -596,7 +598,7 @@ function DetailSheet({
                   setWeightInput(text);
                 }}
                 keyboardType="decimal-pad"
-                placeholder="Enter weight (lbs)"
+                placeholder={t('xp.enterWeightPlaceholder')}
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 returnKeyType="done"
                 onSubmitEditing={handleWeightLog}
@@ -614,7 +616,7 @@ function DetailSheet({
                 {weightSaving ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.weightInlineButtonText}>Log</Text>
+                  <Text style={styles.weightInlineButtonText}>{t('xp.log')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -626,13 +628,13 @@ function DetailSheet({
               <View style={styles.weightHintItem}>
                 <Ionicons name="scale-outline" size={14} color={subColor} />
                 <Text style={[styles.weightHintText, { color: subColor }]}>
-                  {'Weight only  +50 XP'}
+                  {t('xp.weightOnly50Xp')}
                 </Text>
               </View>
               <View style={styles.weightHintItem}>
                 <Ionicons name="camera-outline" size={14} color={colors.primary} />
                 <Text style={[styles.weightHintText, { color: colors.primary }]}>
-                  {'Weight + Photo  +100 XP'}
+                  {t('xp.weightPhoto100Xp')}
                 </Text>
               </View>
             </View>
@@ -654,6 +656,7 @@ export default function TodaysChallengesCard({
   localSteps,
   onRefresh,
 }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [selectedCard, setSelectedCard] = useState<ChallengeCard | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -746,13 +749,13 @@ export default function TodaysChallengesCard({
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
-  const doneText = String(doneCount) + ' of 5 done';
+  const doneText = t('xp.doneCount', { count: doneCount });
 
   return (
     <View style={[styles.card, { backgroundColor: bgColor, borderColor }]}>
       {/* Card header */}
       <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: textColor }]}>Today's Challenges</Text>
+        <Text style={[styles.cardTitle, { color: textColor }]}>{t('xp.todaysChallenges')}</Text>
         <View style={[styles.doneBadge, { backgroundColor: doneCount > 0 ? 'rgba(91,154,168,0.12)' : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}>
           <Text style={[styles.doneText, { color: doneCount > 0 ? colors.primary : subColor }]}>
             {doneText}

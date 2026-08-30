@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import type { DailyMission } from '@/types/xp';
 
@@ -36,30 +37,14 @@ function getMissionIcon(missionType: string): keyof typeof Ionicons.glyphMap {
   return map[missionType] ?? 'star';
 }
 
-// Human-readable mission title
-function getMissionTitle(mission: DailyMission): string {
-  const titleMap: Record<string, string> = {
-    log_three_meals: 'Log All 3 Meals',
-    hit_protein_goal: 'Hit Protein Goal',
-    stay_within_calories: 'Stay Within Calories',
-    complete_workout: 'Complete Workout',
-    walk_5000_steps: 'Walk 5,000 Steps',
-    walk_8000_steps: 'Walk 8,000 Steps',
-    walk_10000_steps: 'Walk 10,000 Steps',
-    keep_streak_alive: 'Keep Streak Alive',
-    log_weight: 'Log Your Weight',
-  };
-  return titleMap[mission.mission_type] ?? mission.title ?? mission.mission_type;
-}
-
 interface MissionRowProps {
   mission: DailyMission;
   isDark: boolean;
+  missionTitle: string;
 }
 
-function MissionRow({ mission, isDark }: MissionRowProps) {
+function MissionRow({ mission, isDark, missionTitle }: MissionRowProps) {
   const icon = getMissionIcon(mission.mission_type);
-  const title = getMissionTitle(mission);
   const xpReward = mission.xp_reward;
   const done = mission.completed;
 
@@ -84,7 +69,7 @@ function MissionRow({ mission, isDark }: MissionRowProps) {
         ]}
         numberOfLines={1}
       >
-        {title}
+        {missionTitle}
       </Text>
 
       {/* XP reward */}
@@ -103,13 +88,29 @@ function MissionRow({ mission, isDark }: MissionRowProps) {
 }
 
 export default function DailyMissionsCard({ missions, isDark }: DailyMissionsCardProps) {
+  const { t } = useTranslation();
   const safeMissions = missions ?? [];
   const completedCount = safeMissions.filter((m) => m.completed).length;
   const totalCount = safeMissions.length;
   const allDone = totalCount > 0 && completedCount === totalCount;
   const progressFraction = totalCount > 0 ? completedCount / totalCount : 0;
 
-  const completedText = completedCount + ' / ' + totalCount + ' Completed';
+  const completedText = completedCount + ' / ' + totalCount + ' ' + t('xp.completed');
+
+  function getMissionTitle(mission: DailyMission): string {
+    const keyMap: Record<string, string> = {
+      log_three_meals: t('xp.mission_log_three_meals'),
+      hit_protein_goal: t('xp.mission_hit_protein_goal'),
+      stay_within_calories: t('xp.mission_stay_within_calories'),
+      complete_workout: t('xp.mission_complete_workout'),
+      walk_5000_steps: t('xp.mission_walk_5000_steps'),
+      walk_8000_steps: t('xp.mission_walk_8000_steps'),
+      walk_10000_steps: t('xp.mission_walk_10000_steps'),
+      keep_streak_alive: t('xp.mission_keep_streak_alive'),
+      log_weight: t('xp.mission_log_weight'),
+    };
+    return keyMap[mission.mission_type] ?? mission.title ?? mission.mission_type;
+  }
 
   return (
     <View
@@ -124,7 +125,7 @@ export default function DailyMissionsCard({ missions, isDark }: DailyMissionsCar
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.cardTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-          Today's Missions
+          {t('xp.todaysMissions')}
         </Text>
         <Text style={[styles.completedText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
           {completedText}
@@ -148,11 +149,16 @@ export default function DailyMissionsCard({ missions, isDark }: DailyMissionsCar
       <View style={styles.missionsContainer}>
         {safeMissions.length === 0 ? (
           <Text style={[styles.emptyText, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
-            No missions today. Check back soon!
+            {t('xp.noMissionsToday')}
           </Text>
         ) : (
           safeMissions.map((mission) => (
-            <MissionRow key={mission.id} mission={mission} isDark={isDark} />
+            <MissionRow
+              key={mission.id}
+              mission={mission}
+              isDark={isDark}
+              missionTitle={getMissionTitle(mission)}
+            />
           ))
         )}
       </View>
@@ -161,7 +167,7 @@ export default function DailyMissionsCard({ missions, isDark }: DailyMissionsCar
       {allDone && (
         <View style={styles.bonusBadge}>
           <Text style={styles.bonusText}>
-            BONUS +100 XP CLAIMED
+            {t('xp.bonusClaimed')}
           </Text>
         </View>
       )}

@@ -17,6 +17,7 @@ import {
   Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { getXpRank } from '@/utils/xpRanks';
 import XpRanksModal from '@/components/xp/XpRanksModal';
 import StreakBenefitsModal from '@/components/xp/StreakBenefitsModal';
@@ -34,6 +35,7 @@ interface XpHeroCardProps {
 }
 
 export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
+  const { t } = useTranslation();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const xpTooltipAnim = useRef(new Animated.Value(0)).current;
   const xpTooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,10 +66,10 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const xpInLevelDisplay = Number(xpInLevel).toLocaleString();
   const xpNeededDisplay = Number(xpNeeded).toLocaleString();
   const xpToNextDisplay = Number(Math.max(0, xpNeeded - xpInLevel)).toLocaleString();
-  const xpTooltipText = xpInLevelDisplay + ' / ' + xpNeededDisplay + ' XP → Lvl ' + String(nextLevel);
+  const xpTooltipText = xpInLevelDisplay + ' / ' + xpNeededDisplay + ' XP → ' + t('xp.lvlAbbrev') + ' ' + String(nextLevel);
   const totalXpLocalized = Number(totalXp).toLocaleString();
-  const levelText = 'Level ' + String(level);
-  const xpToNextText = xpToNextDisplay + ' XP to next rank';
+  const levelText = t('xp.levelNumber', { level: String(level) });
+  const xpToNextText = xpToNextDisplay + ' ' + t('xp.xpToNextRank');
 
   const progressWidth = Math.min(100, Math.max(0, progressPercent));
 
@@ -164,7 +166,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             />
 
             <View style={styles.rankTextStack}>
-              <Text style={styles.rankLabel}>{'RANK'}</Text>
+              <Text style={styles.rankLabel}>{t('xp.rankLabel')}</Text>
 
               <Pressable
                 onPress={() => {

@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Lock, Sparkles } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
   getMacroTier,
@@ -325,6 +326,7 @@ interface UnlockButtonProps {
 }
 
 function UnlockButton({ remainingSlots, bonusXp, onPress }: UnlockButtonProps) {
+  const { t } = useTranslation();
   const scale = useRef(new Animated.Value(1)).current;
 
   function handlePressIn() {
@@ -335,7 +337,7 @@ function UnlockButton({ remainingSlots, bonusXp, onPress }: UnlockButtonProps) {
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
   }
 
-  const bonusText = '+' + bonusXp + ' XP bonus · ' + remainingSlots + ' left';
+  const bonusText = '+' + bonusXp + ' ' + t('xp.unlockBonusSuffix', { slots: remainingSlots });
 
   return (
     <Pressable
@@ -350,7 +352,7 @@ function UnlockButton({ remainingSlots, bonusXp, onPress }: UnlockButtonProps) {
         <Sparkles size={18} color="#fff" />
         <View style={styles.unlockButtonTextBlock}>
           <Text style={styles.unlockButtonPrimary}>
-            Unlock a Mission
+            {t('xp.unlockAMission')}
           </Text>
           <Text style={styles.unlockButtonSecondary}>
             {bonusText}
@@ -371,11 +373,12 @@ interface LockedHintProps {
 }
 
 function LockedHint({ message, current, target, isDark }: LockedHintProps) {
+  const { t } = useTranslation();
   const progressPercent = target > 0 ? Math.min(current / target, 1) : 0;
   const progressWidth = Math.round(progressPercent * 100);
 
   const benefitMessage = target > 0
-    ? `Reach Level ${target} to unlock a bonus mission slot — extra missions, more XP, faster level-ups.`
+    ? t('xp.reachLevelToUnlock', { level: target })
     : message;
 
   return (
@@ -393,7 +396,7 @@ function LockedHint({ message, current, target, isDark }: LockedHintProps) {
       <View style={styles.lockedHintHeader}>
         <Lock size={16} color={GOLD} />
         <Text style={[styles.lockedHintTitle, { color: isDark ? '#F1F5F9' : '#2B2D42' }]}>
-          Earn more XP every day
+          {t('xp.earnMoreXpEveryDay')}
         </Text>
       </View>
       <Text style={[styles.lockedHintSubtitle, { color: isDark ? '#A0A2B8' : '#6B7280' }]}>
@@ -423,6 +426,7 @@ export default function TodaysMissionsCard({
   unlockSlotStatus,
   onUnlockPress,
 }: TodaysMissionsCardProps) {
+  const { t } = useTranslation();
   const safeMissions = missions ?? [];
 
   // Filter out nutrition duplicates from the missions array
@@ -476,7 +480,7 @@ export default function TodaysMissionsCard({
 
   const allDone = totalCount > 2 && totalDone === totalCount;
 
-  const headerCountText = totalDone + ' of ' + totalCount + ' done';
+  const headerCountText = t('xp.doneOfTotal', { done: totalDone, total: totalCount });
 
   // ─── isLast helpers ──────────────────────────────────────────────────────
   // The last "row" before the footer section
@@ -562,11 +566,7 @@ export default function TodaysMissionsCard({
 
   const maxSlotsText =
     unlockSlotStatus != null
-      ? 'All ' +
-        unlockSlotStatus.max_slots +
-        ' mission slot' +
-        (unlockSlotStatus.max_slots === 1 ? '' : 's') +
-        ' unlocked for today'
+      ? t('xp.allSlotsUnlocked', { count: unlockSlotStatus.max_slots })
       : '';
 
   return (
@@ -579,7 +579,7 @@ export default function TodaysMissionsCard({
       {/* ── Card header ── */}
       <View style={styles.cardHeader}>
         <Text style={[styles.cardTitle, { color: titleColor }]}>
-          Today's Missions
+          {t('xp.todaysMissions')}
         </Text>
         <Text style={[styles.headerCount, { color: subtitleColor }]}>
           {headerCountText}
@@ -593,7 +593,7 @@ export default function TodaysMissionsCard({
         {/* 1. Hit Calories */}
         <NutritionMissionRow
           icon="pie-chart"
-          title="Hit Calories"
+          title={t('xp.hitCalories')}
           current={totalCalories}
           goal={goalCalories}
           unit="kcal"
@@ -605,7 +605,7 @@ export default function TodaysMissionsCard({
         {/* 2. Hit Protein Goal */}
         <NutritionMissionRow
           icon="fitness"
-          title="Hit Protein Goal"
+          title={t('xp.hitProteinGoal')}
           current={totalProtein}
           goal={goalProtein}
           unit="g"
@@ -637,7 +637,7 @@ export default function TodaysMissionsCard({
         {/* Empty state */}
         {totalCount === 0 && (
           <Text style={[styles.emptyMissionsText, { color: subtitleColor }]}>
-            No missions today. Check back soon!
+            {t('xp.noMissionsToday')}
           </Text>
         )}
       </View>

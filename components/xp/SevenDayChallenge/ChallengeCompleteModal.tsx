@@ -17,6 +17,7 @@ import {
   Platform,
   Share,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -123,8 +124,9 @@ export default function ChallengeCompleteModal({
   onClose,
   xpConfig,
 }: ChallengeCompleteModalProps) {
+  const { t } = useTranslation();
   const challengeXp = xpConfig?.['seven_day_challenge'] ?? 500;
-  const challengeXpText = '+' + challengeXp + ' XP earned';
+  const challengeXpText = t('sevenDayChallenge.xpEarned', { xp: challengeXp });
   const medalScale = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const glowOpacity = useRef(new Animated.Value(0)).current;
@@ -187,6 +189,13 @@ export default function ChallengeCompleteModal({
     onClose();
   };
 
+  const titleText = t('sevenDayChallenge.completeTitle');
+  const subtitleText = t('sevenDayChallenge.completeSubtitle');
+  const badgeNameText = t('sevenDayChallenge.challengerBadge');
+  const unlockedForeverText = t('sevenDayChallenge.unlockedForever');
+  const shareText = t('sevenDayChallenge.shareAchievement');
+  const continueText = t('sevenDayChallenge.continueJourney');
+
   return (
     <Modal
       visible={visible}
@@ -215,10 +224,10 @@ export default function ChallengeCompleteModal({
           <Animated.View style={{ opacity: contentOpacity, alignItems: 'center', width: '100%' }}>
             {/* Title */}
             <Text style={styles.title}>
-              {'Challenge Complete!'}
+              {titleText}
             </Text>
             <Text style={styles.subtitle}>
-              {"You built a 7-day habit.\nThat's the hardest part."}
+              {subtitleText}
             </Text>
 
             {/* Glass badge card */}
@@ -226,8 +235,8 @@ export default function ChallengeCompleteModal({
               <View style={styles.glassRow}>
                 <Text style={styles.glassIcon}>{'🏅'}</Text>
                 <View style={styles.glassTextBlock}>
-                  <Text style={styles.glassTitle}>{'Challenger Badge'}</Text>
-                  <Text style={styles.glassSubtitle}>{'Unlocked Forever ✓'}</Text>
+                  <Text style={styles.glassTitle}>{badgeNameText}</Text>
+                  <Text style={styles.glassSubtitle}>{unlockedForeverText}</Text>
                 </View>
               </View>
             </View>
@@ -244,7 +253,7 @@ export default function ChallengeCompleteModal({
               activeOpacity={0.85}
             >
               <Text style={styles.shareBtnText}>
-                {'Share my achievement'}
+                {shareText}
               </Text>
             </TouchableOpacity>
 
@@ -254,7 +263,7 @@ export default function ChallengeCompleteModal({
               activeOpacity={0.7}
             >
               <Text style={styles.continueBtnText}>
-                {'Continue my journey →'}
+                {continueText}
               </Text>
             </TouchableOpacity>
           </Animated.View>

@@ -15,6 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 
@@ -58,6 +59,7 @@ export default function StreakBenefitsModal({
   onClose,
   isDark,
 }: StreakBenefitsModalProps) {
+  const { t } = useTranslation();
   const cardBg = isDark ? colors.cardDark : colors.card;
   const textColor = isDark ? colors.textDark : colors.text;
   const textSecColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -95,7 +97,7 @@ export default function StreakBenefitsModal({
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: textColor }]}>
-              {'🔥 Streak Benefits'}
+              {t('streak.benefitsTitle')}
             </Text>
           </View>
           <View style={styles.headerSpacer} />
@@ -120,7 +122,7 @@ export default function StreakBenefitsModal({
               </Text>
             </View>
             <Text style={[styles.heroLabel, { color: textSecColor }]}>
-              Day Streak
+              {t('streak.dayStreak')}
             </Text>
             <View style={styles.multiplierBadge}>
               <Text style={styles.multiplierBadgeText}>
@@ -131,19 +133,19 @@ export default function StreakBenefitsModal({
 
           {/* ── Table ── */}
           <Text style={[styles.sectionLabel, { color: textSecColor }]}>
-            MULTIPLIER TIERS
+            {t('streak.multiplierTiers')}
           </Text>
           <View style={[styles.tableCard, { backgroundColor: cardBg }]}>
             {/* Table header */}
             <View style={[styles.tableHeaderRow, { borderBottomColor: trackColor }]}>
               <Text style={[styles.tableHeaderCell, styles.colDays, { color: textSecColor }]}>
-                DAYS
+                {t('streak.tableDays')}
               </Text>
               <Text style={[styles.tableHeaderCell, styles.colMultiplier, { color: textSecColor }]}>
-                MULTIPLIER
+                {t('streak.tableMultiplier')}
               </Text>
               <Text style={[styles.tableHeaderCell, styles.colExample, { color: textSecColor }]}>
-                100 BASE XP
+                {t('streak.tableBaseXp')}
               </Text>
             </View>
 
@@ -185,7 +187,7 @@ export default function StreakBenefitsModal({
                     {isCurrentTier && (
                       <View style={styles.youBadge}>
                         <Text style={styles.youBadgeText}>
-                          {'★ YOU'}
+                          {t('streak.youBadge')}
                         </Text>
                       </View>
                     )}
@@ -198,7 +200,7 @@ export default function StreakBenefitsModal({
           {/* ── Explanation ── */}
           <View style={[styles.explanationCard, { backgroundColor: cardBg }]}>
             <Text style={[styles.explanationText, { color: textSecColor }]}>
-              {'Your streak boost stacks with Premium (1.5x) for a maximum of 3.0x XP on every action. A 365-day streak + Premium is the fastest path to the top ranks.'}
+              {t('streak.boostExplanation')}
             </Text>
           </View>
         </ScrollView>
