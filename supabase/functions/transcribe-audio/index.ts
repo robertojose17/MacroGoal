@@ -9,6 +9,7 @@ const corsHeaders = {
 interface TranscribeRequest {
   audioBase64: string;
   mimeType?: string;
+  language?: string;
 }
 
 console.log('[transcribe-audio] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -129,7 +130,8 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body: TranscribeRequest = await req.json();
-    const { audioBase64, mimeType = 'audio/m4a' } = body;
+    const { audioBase64, mimeType = 'audio/m4a', language = 'en' } = body;
+    console.log('[transcribe-audio] language:', language);
 
     if (!audioBase64) {
       console.error('[transcribe-audio] ❌ Missing audioBase64');
@@ -195,7 +197,7 @@ Deno.serve(async (req) => {
 
     formData.append('file', audioBlob, `audio.${fileExtension}`);
     formData.append('model', 'whisper-1');
-    formData.append('language', 'en'); // English language
+    formData.append('language', language);
     formData.append('response_format', 'json');
 
     console.log('[transcribe-audio] 📤 Calling OpenAI Whisper API...');

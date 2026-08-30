@@ -450,10 +450,16 @@ Deno.serve(async (req) => {
       daily_fats: 65,
     };
     const userPreferences = body.userPreferences || null;
+    const language: string = body.language || "en";
+    console.log("[MealPlan] language:", language);
 
     if (!messages.length) return jsonResp({ error: "messages required" }, 400);
 
-    const systemPrompt = buildPrompt(userGoals, userPreferences);
+    const languageInstruction = language === "es"
+      ? "LANGUAGE: You MUST respond in Spanish (español) at all times, regardless of what language the user writes in. Never switch languages mid-conversation."
+      : "LANGUAGE: You MUST respond in English at all times, regardless of what language the user writes in. Never switch languages mid-conversation.";
+
+    const systemPrompt = `${languageInstruction}\n\n${buildPrompt(userGoals, userPreferences)}`;
     const apiMessages = [
       { role: "system", content: systemPrompt },
       ...messages.map((m: any) => ({ role: m.role, content: m.content })),

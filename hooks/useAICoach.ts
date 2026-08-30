@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
 // expo/fetch supports SSE streaming in React Native
 import { fetch as expoFetch } from 'expo/fetch';
+import i18n from '@/lib/i18n';
 
 export type CoachMessage = {
   role: 'user' | 'assistant';
@@ -382,6 +383,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               weight_unit: weightUnit,
               conversation_id: conversationIdRef.current ?? null,
               use_web: useWeb,
+              language: i18n.language,
               ...(isFirstMessage ? { is_first_message: true } : {}),
             }),
             signal: abortController.signal,

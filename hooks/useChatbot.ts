@@ -1,6 +1,7 @@
 
 import { useCallback, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import i18n from '@/lib/i18n';
 
 export type ChatMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -62,6 +63,7 @@ export function useChatbot() {
         console.log('[useChatbot] Images:', params.images.length);
       }
 
+      console.log('[useChatbot] language:', i18n.language);
       const { data, error } = await supabase.functions.invoke('chatbot', {
         body: {
           messages: params.messages,
@@ -69,6 +71,7 @@ export function useChatbot() {
           model: params.model,
           temperature: params.temperature,
           max_tokens: params.max_tokens,
+          language: i18n.language,
         },
       });
 

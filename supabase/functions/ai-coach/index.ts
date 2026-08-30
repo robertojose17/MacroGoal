@@ -175,6 +175,7 @@ Deno.serve(async (req) => {
       weight_unit?: string;
       conversation_id?: string;
       is_first_message?: boolean;
+      language?: string;
     };
     try {
       body = await req.json();
@@ -188,6 +189,8 @@ Deno.serve(async (req) => {
     const messages = body.messages || [];
     const weightUnit = body.weight_unit || "lb";
     const conversationId = body.conversation_id || null;
+    const language = body.language || "en";
+    console.log("[AICoach] language:", language);
 
     if (!messages.length) {
       return new Response(JSON.stringify({ error: "No messages provided" }), {
@@ -313,7 +316,13 @@ Deno.serve(async (req) => {
     const hasExperience = !!memoryMap["onboarding_experience"];
     const hasChallenge = !!memoryMap["onboarding_challenge"];
 
+    const languageInstruction = language === "es"
+      ? "LANGUAGE: You MUST respond in Spanish (español) at all times, regardless of what language the user writes in. Never switch languages mid-conversation."
+      : "LANGUAGE: You MUST respond in English at all times, regardless of what language the user writes in. Never switch languages mid-conversation.";
+
     const systemPrompt = `You are an expert AI nutrition and fitness coach inside the Macro Goal app.
+
+${languageInstruction}
 
 FORMATTING RULES (non-negotiable):
 - Never use dashes, bullet points, asterisks, bold markers (**), or any markdown formatting

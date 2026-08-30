@@ -25,6 +25,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
 import { emitMealLogged } from '@/utils/xpEvents';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -656,9 +657,9 @@ export default function AIMealPlannerScreen() {
     const prompt = parts.join(' ');
 
     try {
-      console.log('[AIMealPlanner] invoking generate-meal-plan, prompt:', prompt, 'userPreferences:', userPreferences);
+      console.log('[AIMealPlanner] invoking generate-meal-plan, prompt:', prompt, 'userPreferences:', userPreferences, 'language:', i18n.language);
       const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-        body: { messages: [{ role: 'user', content: prompt }], userGoals, userPreferences },
+        body: { messages: [{ role: 'user', content: prompt }], userGoals, userPreferences, language: i18n.language },
       });
       if (!isMounted.current) return;
       if (error) throw new Error(error.message);
@@ -1026,9 +1027,9 @@ export default function AIMealPlannerScreen() {
 
     const prompt = `REPLACE_MEAL: Replace the ${mealType} meal with something different. User preference: ${replaceText.trim()}. Return the COMPLETE updated plan in the same JSON format, keeping all other meals exactly the same, only replacing the ${mealType} items and dish_description.`;
     try {
-      console.log('[AIMealPlanner] invoking generate-meal-plan for replace, prompt:', prompt);
+      console.log('[AIMealPlanner] invoking generate-meal-plan for replace, prompt:', prompt, 'language:', i18n.language);
       const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-        body: { messages: [{ role: 'user', content: prompt }], userGoals },
+        body: { messages: [{ role: 'user', content: prompt }], userGoals, language: i18n.language },
       });
       if (!isMounted.current) return;
       if (error) throw new Error(error.message);

@@ -221,6 +221,8 @@ Deno.serve(async (req) => {
     const model = body.model || DEFAULT_MODEL;
     const temperature = body.temperature ?? 0.7;
     const max_tokens = body.max_tokens ?? 1500;
+    const language = body.language || "en";
+    console.log("[Chatbot] language:", language);
 
     console.log("[Chatbot] 📦 Request parameters:");
     console.log("[Chatbot]   - Messages:", messages.length);
@@ -248,8 +250,13 @@ Deno.serve(async (req) => {
     console.log("[Chatbot]   - Model:", model);
     const started = performance.now();
 
+    const languageInstruction = language === "es"
+      ? "LANGUAGE: You MUST respond in Spanish (español) at all times, regardless of what language the user writes in. Never switch languages mid-conversation."
+      : "LANGUAGE: You MUST respond in English at all times, regardless of what language the user writes in. Never switch languages mid-conversation.";
+
     // Build messages array with multimodal support
     // Convert messages to OpenRouter format, adding images to the last user message
+    // Prepend language instruction to any system message
     const apiMessages = messages.map((msg: any, index: number) => {
       // If this is the last user message and we have images, make it multimodal
       if (msg.role === "user" && index === messages.length - 1 && images.length > 0) {
@@ -273,7 +280,13 @@ Deno.serve(async (req) => {
         };
       }
       
-      // Regular text message
+      // Regular text message — prepend language instruction to system messages
+      if (msg.role === "system") {
+        return {
+          role: msg.role,
+          content: `${languageInstruction}\n\n${msg.content}`,
+        };
+      }
       return {
         role: msg.role,
         content: msg.content
