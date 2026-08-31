@@ -31,7 +31,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 
 const ONESIGNAL_PROMPT_KEY = 'onesignal_prompt_shown_v1';
 
-const BG_IMAGE = require('../../assets/images/73291328-4520-475d-9d5f-c23a5206eb1d.jpeg');
+const BG_IMAGE = require('../../assets/images/3ce4e800-3062-4acc-9a7a-16575bc5185c.jpeg');
 const PRIMARY = '#4CAF50';
 const DARK_BG = '#0A0A0A';
 
