@@ -23,7 +23,7 @@ import { trackOnboardingEvent } from '@/utils/onboardingAnalytics';
 import * as Linking from 'expo-linking';
 import { useTranslation } from 'react-i18next';
 
-const BG_IMAGE = require('../../assets/images/23f6da81-f1f7-422e-89ef-d520d6510c09.jpeg');
+const BG_IMAGE = require('../../assets/images/3ce4e800-3062-4acc-9a7a-16575bc5185c.jpeg');
 
 
 export default function SignUpScreen() {
@@ -241,7 +241,7 @@ export default function SignUpScreen() {
     <View style={styles.bg}>
       <Image
         source={BG_IMAGE}
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
         resizeMode="cover"
       />
       {/* Gradient overlay: transparent at top, solid black at bottom */}
