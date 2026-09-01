@@ -22,8 +22,6 @@ import { tryAwardWorkout } from '@/utils/xpAwarder';
 import {
   Tracker,
   TrackerEntry,
-  TrackerStats,
-  getStats,
   listEntries,
   deleteEntry,
   deleteTracker,
@@ -33,16 +31,10 @@ import {
   updateEntry,
 } from '@/utils/trackersApi';
 import {
-  Flame,
-  Trophy,
-  Target,
-  TrendingUp,
   Calendar,
   MoreHorizontal,
   Plus,
   Trash2,
-  CheckCircle2,
-  BarChart3,
   Pencil,
   RotateCw,
   Camera,
@@ -80,63 +72,6 @@ function AnimatedPressable({
       <Pressable onPressIn={animIn} onPressOut={animOut} onPress={onPress} disabled={disabled} style={style}>
         {children}
       </Pressable>
-    </Animated.View>
-  );
-}
-
-// ─── StatCard ─────────────────────────────────────────────────────────────────
-function StatCard({
-  label,
-  value,
-  sub,
-  icon,
-  iconColor,
-  isDark,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: React.ReactNode;
-  iconColor: string;
-  isDark: boolean;
-}) {
-  const cardBg = isDark ? colors.cardDark : colors.card;
-  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-
-  return (
-    <View style={[styles.statCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-      <View style={[styles.statIconCircle, { backgroundColor: iconColor + '18' }]}>
-        {icon}
-      </View>
-      <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: subColor }]}>{label}</Text>
-      {sub ? <Text style={[styles.statSub, { color: subColor }]}>{sub}</Text> : null}
-    </View>
-  );
-}
-
-// ─── SkeletonStatCard ─────────────────────────────────────────────────────────
-function SkeletonStatCard({ isDark }: { isDark: boolean }) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const shimmer = isDark ? '#3A3C52' : '#D4D6DA';
-  const cardBg = isDark ? colors.cardDark : colors.card;
-  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
-  return (
-    <Animated.View style={[styles.statCard, { backgroundColor: cardBg, borderColor: cardBorder, opacity }]}>
-      <View style={[styles.skeletonCircle, { backgroundColor: shimmer }]} />
-      <View style={[styles.skeletonLine, { width: 48, backgroundColor: shimmer, marginTop: 8 }]} />
-      <View style={[styles.skeletonLine, { width: 64, height: 11, backgroundColor: shimmer, marginTop: 6 }]} />
     </Animated.View>
   );
 }
@@ -1221,7 +1156,6 @@ export default function TrackerDetailScreen() {
   const isDark = colorScheme === 'dark';
 
   const [tracker, setTracker] = useState<Tracker | null>(null);
-  const [stats, setStats] = useState<TrackerStats | null>(null);
   const [entries, setEntries] = useState<TrackerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1235,13 +1169,9 @@ export default function TrackerDetailScreen() {
     console.log('[TrackerDetail] Loading data for tracker:', id);
     try {
       setError(null);
-      const [allTrackers, statsData] = await Promise.all([
-        listTrackers(),
-        getStats(id),
-      ]);
+      const allTrackers = await listTrackers();
       const found = allTrackers.find(t => t.id === id) ?? null;
       setTracker(found);
-      setStats(statsData);
 
       // Backfill check_ins → tracker_entries for the weight tracker before listing entries
       if (found && found.name.toLowerCase() === 'weight') {
@@ -1267,11 +1197,7 @@ export default function TrackerDetailScreen() {
     if (!id || !tracker) return;
     console.log('[TrackerDetail] reloadEntries — tracker:', id);
     try {
-      const [newStats, newEntries] = await Promise.all([
-        getStats(id),
-        listEntries(id, 500),
-      ]);
-      setStats(newStats);
+      const newEntries = await listEntries(id, 500);
       setEntries(newEntries);
     } catch (e) {
       console.error('[TrackerDetail] reloadEntries error:', e);
@@ -1367,12 +1293,8 @@ export default function TrackerDetailScreen() {
         console.log('[TrackerDetail] Upserting steps entry from Health:', currentSteps);
         await logEntry(tracker.id, today, currentSteps);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        // Reload entries and stats
-        const [newStats, newEntries] = await Promise.all([
-          getStats(tracker.id),
-          listEntries(tracker.id, 500),
-        ]);
-        setStats(newStats);
+        // Reload entries
+        const newEntries = await listEntries(tracker.id, 500);
         setEntries(newEntries);
       }
     } catch (err) {
@@ -1399,24 +1321,6 @@ export default function TrackerDetailScreen() {
   const isGymTracker = tracker?.name.toLowerCase() === 'gym';
 
   const trackerTitle = tracker ? `${tracker.emoji} ${tracker.name}` : '';
-  const completionPct = stats ? Math.round(Number(stats.completion_rate)) : 0;
-  const avgDisplay = stats && tracker
-    ? formatValue(Number(stats.avg_value), tracker.tracker_type, tracker.unit)
-    : '—';
-
-  const statusLabel =
-    stats?.status === 'on_track' ? t('tracker.onTrack') :
-    stats?.status === 'improving' ? t('tracker.improving') :
-    t('tracker.behind');
-  const statusColor =
-    stats?.status === 'on_track' ? colors.success :
-    stats?.status === 'improving' ? colors.primary :
-    colors.warning;
-
-  const daysHitGoalText = stats
-    ? t('tracker.daysHitGoal', { done: stats.days_goal_met, total: stats.days_tracked })
-    : '';
-  const avgText = t('tracker.avgLabel', { value: avgDisplay });
 
   return (
     <>
@@ -1443,12 +1347,8 @@ export default function TrackerDetailScreen() {
         }
       >
         {loading ? (
-          /* Skeleton */
-          <>
-            <View style={styles.statsGrid}>
-              {[0, 1, 2, 3, 4, 5].map(i => <SkeletonStatCard key={i} isDark={isDark} />)}
-            </View>
-          </>
+          /* Skeleton — no stats grid, just show nothing while loading */
+          null
         ) : error ? (
           <View style={[styles.errorCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <Text style={[styles.errorTitle, { color: textColor }]}>{t('tracker.couldntLoad')}</Text>
@@ -1459,84 +1359,6 @@ export default function TrackerDetailScreen() {
           </View>
         ) : (
           <>
-            {/* Row 1: Streak + Best Streak */}
-            <View style={styles.statsGrid}>
-              <StatCard
-                label={t('tracker.dayStreak')}
-                value={String(stats?.current_streak ?? 0)}
-                sub={t('tracker.current')}
-                icon={<Flame size={20} color="#FF8A5B" strokeWidth={2} />}
-                iconColor="#FF8A5B"
-                isDark={isDark}
-              />
-              <StatCard
-                label={t('tracker.bestEver')}
-                value={String(stats?.best_streak ?? 0)}
-                sub={t('tracker.allTime')}
-                icon={<Trophy size={20} color="#F59E0B" strokeWidth={2} />}
-                iconColor="#F59E0B"
-                isDark={isDark}
-              />
-            </View>
-
-            {/* Row 2: Completion + Days Tracked */}
-            <View style={styles.statsGrid}>
-              <StatCard
-                label={t('tracker.ofDaysLogged')}
-                value={`${completionPct}%`}
-                icon={<CheckCircle2 size={20} color={colors.success} strokeWidth={2} />}
-                iconColor={colors.success}
-                isDark={isDark}
-              />
-              <StatCard
-                label={t('tracker.totalEntries')}
-                value={String(stats?.days_tracked ?? 0)}
-                icon={<Calendar size={20} color={colors.primary} strokeWidth={2} />}
-                iconColor={colors.primary}
-                isDark={isDark}
-              />
-            </View>
-
-            {/* Row 3: This Week + Last Week */}
-            <View style={styles.statsGrid}>
-              <StatCard
-                label={t('tracker.thisWeek')}
-                value={String(stats?.this_week_count ?? 0)}
-                icon={<TrendingUp size={20} color="#8B5CF6" strokeWidth={2} />}
-                iconColor="#8B5CF6"
-                isDark={isDark}
-              />
-              <StatCard
-                label={t('tracker.lastWeek')}
-                value={String(stats?.last_week_count ?? 0)}
-                icon={<BarChart3 size={20} color="#6B7280" strokeWidth={2} />}
-                iconColor="#6B7280"
-                isDark={isDark}
-              />
-            </View>
-
-            {/* Row 4: Status card */}
-            <View style={[styles.statusCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-              <View style={styles.statusCardRow}>
-                <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
-                  <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
-                </View>
-                {tracker?.goal_value && stats ? (
-                  <Text style={[styles.statusMeta, { color: subColor }]}>
-                    {daysHitGoalText}
-                  </Text>
-                ) : null}
-              </View>
-              {tracker && tracker.tracker_type !== 'binary' && stats && Number(stats.avg_value) > 0 ? (
-                <View style={styles.avgRow}>
-                  <Target size={14} color={subColor} strokeWidth={2} />
-                  <Text style={[styles.avgText, { color: subColor }]}>
-                    {avgText}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-
             {/* Daily Goal section — steps tracker only */}
             {isStepsTracker && tracker ? (
               <DailyGoalSection
@@ -1650,82 +1472,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 120,
     paddingTop: spacing.sm,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    boxShadow: '0px 1px 3px rgba(0,0,0,0.04), 0px 4px 12px rgba(0,0,0,0.03)',
-    elevation: 2,
-  },
-  statIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  statSub: {
-    fontSize: 11,
-    marginTop: 1,
-    textAlign: 'center',
-  },
-  statusCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    marginBottom: spacing.sm,
-    boxShadow: '0px 1px 3px rgba(0,0,0,0.04), 0px 4px 12px rgba(0,0,0,0.03)',
-    elevation: 2,
-  },
-  statusCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-  },
-  statusBadgeText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  statusMeta: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  avgRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: spacing.sm,
-  },
-  avgText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
   // Daily Goal card
   goalCard: {
@@ -1895,16 +1641,6 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // Skeleton
-  skeletonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-  },
-  skeletonLine: {
-    height: 13,
-    borderRadius: 6,
   },
   // Error
   errorCard: {
