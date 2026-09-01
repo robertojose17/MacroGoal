@@ -80,6 +80,7 @@
     "food": "Food",
     "coach": "Coach",
     "checkIns": "Check-Ins",
+    "social": "Social",
     "profile": "Profile"
   },
   "auth": {

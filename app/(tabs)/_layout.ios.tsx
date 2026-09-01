@@ -78,11 +78,11 @@ export default function TabLayout() {
         <Tabs.Screen
           name="check-ins"
           options={{
-            title: t('tabs.checkIns'),
+            title: t('tabs.social'),
             tabBarIcon: ({ color, focused }) => (
               <IconSymbol
-                ios_icon_name={focused ? 'checkmark.circle.fill' : 'checkmark.circle'}
-                android_material_icon_name="check-circle"
+                ios_icon_name={focused ? 'person.2.fill' : 'person.2'}
+                android_material_icon_name="group"
                 size={28}
                 color={color}
               />
