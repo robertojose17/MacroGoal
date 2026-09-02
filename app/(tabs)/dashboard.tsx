@@ -21,11 +21,12 @@ import { IconSymbol } from '@/components/IconSymbol';
 import PhotoProgressCard from '@/components/PhotoProgressCard';
 import ConsistencyScore from '@/components/ConsistencyScore';
 import GoalWeightCard from '@/components/GoalWeightCard';
-import TrackerQuickCard from '@/components/TrackerQuickCard';
+import TodaysChallengesCard from '@/components/xp/TodaysChallengesCard';
 
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { useXpStatus } from '@/hooks/useXpStatus';
+import { useSteps } from '@/hooks/useSteps';
 import { useLeague } from '@/hooks/useLeague';
 import { usePremium } from '@/hooks/usePremium';
 import { emitXpRefresh } from '@/utils/xpEvents';
@@ -257,6 +258,7 @@ export default function DashboardScreen() {
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
 
   const xp = useXpStatus();
+  const stepsHook = useSteps();
   const { isPremium } = usePremium();
   const { syncWidget } = useWidget();
 
@@ -343,15 +345,6 @@ export default function DashboardScreen() {
   const greeting = t(greetingKey);
   const firstName = user?.name?.split(' ')[0] || t('dashboard.there');
 
-  // Build goal object with today's calorie/protein data for TrackerQuickCard
-  const goalWithToday = goal
-    ? {
-        ...goal,
-        today_calories: todaySummary?.total_calories ?? 0,
-        today_protein: todaySummary?.total_protein ?? 0,
-      }
-    : null;
-
   if (loading) {
     return (
       <SafeAreaView
@@ -436,15 +429,15 @@ export default function DashboardScreen() {
           </CardErrorBoundary>
         )}
 
-        {/* ── Tracker Quick Card ── */}
+        {/* ── Today's Challenges Card ── */}
         {user && (
-          <CardErrorBoundary label="TrackerQuickCard">
-            <TrackerQuickCard
+          <CardErrorBoundary label="TodaysChallengesCard">
+            <TodaysChallengesCard
+              status={xp.status ?? null}
               isDark={isDark}
-              userId={user.id}
-              goal={goalWithToday}
-              onXpRefresh={() => {
-                console.log('[Dashboard] TrackerQuickCard XP refresh requested');
+              localSteps={stepsHook.steps}
+              onRefresh={() => {
+                console.log('[Dashboard] TodaysChallengesCard refresh requested');
                 xp.refresh();
                 emitXpRefresh();
               }}
