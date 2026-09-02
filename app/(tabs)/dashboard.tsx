@@ -127,7 +127,6 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
           },
         ]}
       >
-        <Text style={[styles.pillTitle, { color: textColor }]}>{t('dashboard.streakLeagueTitle')}</Text>
         <View style={styles.pillRow}>
           {streak > 0 && (
             <View style={styles.pillSegment}>
