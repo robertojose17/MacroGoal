@@ -13,10 +13,7 @@ import {
   Alert,
   Animated,
   LayoutAnimation,
-  Modal,
   Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -30,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 import { borderRadius, colors, spacing } from '@/styles/commonStyles';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { emitXpRefresh } from '@/utils/xpEvents';
-import { logEntry, listTrackers, listEntries } from '@/utils/trackersApi';
+import { logEntry, listTrackers } from '@/utils/trackersApi';
 import { tryAwardWorkout, tryAwardWeightCheckin } from '@/utils/xpAwarder';
 import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
 import { supabase } from '@/lib/supabase/client';
@@ -60,11 +57,6 @@ interface TodayEntry {
   value: number;
 }
 
-interface HistoryEntry {
-  id: string;
-  date: string;
-  value: number;
-}
 
 const TILE_CONFIGS: TileConfig[] = [
   { type: 'weight',   icon: 'scale-outline',     labelKey: 'common.weight'   },
@@ -219,519 +211,7 @@ function QuickBtn({
   );
 }
 
-// ─── History list (shared across sheets) ─────────────────────────────────────
 
-function HistoryList({
-  entries,
-  loading,
-  isDark,
-  renderRow,
-}: {
-  entries: HistoryEntry[];
-  loading: boolean;
-  isDark: boolean;
-  renderRow: (entry: HistoryEntry) => React.ReactNode;
-}) {
-  const { t } = useTranslation();
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const dividerColor = isDark ? colors.borderDark : colors.border;
-
-  if (loading) {
-    return (
-      <View style={styles.historyLoadingRow}>
-        <ActivityIndicator size="small" color={colors.primary} />
-      </View>
-    );
-  }
-
-  if (entries.length === 0) {
-    return (
-      <Text style={[styles.historyEmpty, { color: subColor }]}>{t('checkIns.noHistory')}</Text>
-    );
-  }
-
-  return (
-    <>
-      <View style={[styles.divider, { backgroundColor: dividerColor, marginTop: spacing.sm }]} />
-      <ScrollView style={styles.historyScroll} showsVerticalScrollIndicator={false}>
-        {entries.map((entry) => (
-          <View key={entry.id} style={styles.historyRow}>
-            {renderRow(entry)}
-          </View>
-        ))}
-        <View style={{ height: 8 }} />
-      </ScrollView>
-    </>
-  );
-}
-
-// ─── Weight bottom sheet ──────────────────────────────────────────────────────
-
-function WeightSheet({
-  isDark,
-  visible,
-  weightEntry,
-  weightTrackerId,
-  onClose,
-  onLogged,
-  onNavigate,
-  onLogWeight,
-}: {
-  isDark: boolean;
-  visible: boolean;
-  weightEntry: TodayEntry | null;
-  weightTrackerId: string | null;
-  onClose: () => void;
-  onLogged: (entry: TodayEntry) => void;
-  onNavigate: () => void;
-  onLogWeight: (parsed: number) => Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const [weightInput, setWeightInput] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  useEffect(() => {
-    if (!visible) {
-      setWeightInput('');
-      return;
-    }
-    if (weightEntry) {
-      setWeightInput(String(Number(weightEntry.value).toFixed(1)));
-    }
-    if (weightTrackerId) {
-      setHistoryLoading(true);
-      listEntries(weightTrackerId, 200)
-        .then((raw: any[]) => {
-          const sorted = [...raw].sort((a, b) => b.date.localeCompare(a.date));
-          setHistory(sorted.map((e) => ({ id: e.id, date: e.date, value: Number(e.value) })));
-        })
-        .catch((err) => console.warn('[CheckInTilesCard] WeightSheet history load failed:', err))
-        .finally(() => setHistoryLoading(false));
-    }
-  }, [visible, weightEntry, weightTrackerId]);
-
-  const handleLog = async () => {
-    console.log('[CheckInTilesCard] WeightSheet log pressed — input:', weightInput);
-    const parsed = parseFloat(weightInput);
-    if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
-      Alert.alert(t('checkIns.invalidWeight'), t('checkIns.enterValidWeight'));
-      return;
-    }
-    if (!weightTrackerId || saving) return;
-    setSaving(true);
-    try {
-      await onLogWeight(parsed);
-      onClose();
-    } catch (err) {
-      console.error('[CheckInTilesCard] WeightSheet log failed:', err);
-      Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cardBg = isDark ? colors.cardDark : '#fff';
-  const textColor = isDark ? colors.textDark : colors.primaryText;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const dividerColor = isDark ? colors.borderDark : colors.border;
-  const isLogged = !!weightEntry;
-  const loggedValueText = isLogged ? String(Number(weightEntry!.value).toFixed(1)) : '';
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.sheetOverlay} onPress={onClose}>
-        <Pressable style={[styles.sheetContainer, { backgroundColor: cardBg }]} onPress={(e) => e.stopPropagation()}>
-          <View style={[styles.sheetHandle, { backgroundColor: dividerColor }]} />
-
-          <View style={styles.sheetHeader}>
-            <View style={styles.sheetHeaderLeft}>
-              <View style={[styles.sheetIconCircle, { backgroundColor: isLogged ? 'rgba(92,185,123,0.15)' : 'rgba(91,154,168,0.12)' }]}>
-                <Ionicons name="scale-outline" size={22} color={isLogged ? colors.success : colors.primary} />
-              </View>
-              <TouchableOpacity onPress={() => { console.log('[CheckInTilesCard] WeightSheet title tapped — navigating to tracker history'); onNavigate(); }} activeOpacity={0.7}>
-                <Text style={[styles.sheetTitle, { color: textColor }]}>{t('common.weight')}</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity onPress={() => { console.log('[CheckInTilesCard] WeightSheet closed'); onClose(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close-circle" size={26} color={subColor} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-
-          {isLogged && (
-            <View style={styles.loggedRow}>
-              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-              <Text style={[styles.loggedText, { color: colors.success }]}>
-                {t('checkIns.done')}
-              </Text>
-              <Text style={[styles.loggedValue, { color: textColor }]}>
-                {loggedValueText}
-              </Text>
-              <Text style={[styles.loggedUnit, { color: subColor }]}>
-                {t('checkIns.lbUnit')}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.weightInlineRow}>
-            <TextInput
-              style={[
-                styles.weightInlineInput,
-                {
-                  backgroundColor: isDark ? '#1A1C2E' : '#FFFFFF',
-                  color: isDark ? colors.textDark : colors.primaryText,
-                  borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
-                },
-              ]}
-              value={weightInput}
-              onChangeText={(text) => {
-                console.log('[CheckInTilesCard] weight input changed:', text);
-                setWeightInput(text);
-              }}
-              keyboardType="decimal-pad"
-              placeholder={t('checkIns.lbsPlaceholder')}
-              placeholderTextColor={subColor}
-              returnKeyType="done"
-              onSubmitEditing={handleLog}
-              editable={!saving}
-            />
-            <TouchableOpacity
-              style={[styles.weightInlineButton, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}
-              onPress={handleLog}
-              activeOpacity={0.8}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.weightInlineButtonText}>{isLogged ? t('checkIns.save') : t('checkIns.log')}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.weightHintRow}>
-            <View style={styles.weightHintItem}>
-              <Ionicons name="scale-outline" size={14} color={subColor} />
-              <Text style={[styles.weightHintText, { color: subColor }]}>{t('xp.weightOnly50Xp')}</Text>
-            </View>
-            <View style={styles.weightHintItem}>
-              <Ionicons name="camera-outline" size={14} color={colors.primary} />
-              <Text style={[styles.weightHintText, { color: colors.primary }]}>{t('xp.weightPhoto100Xp')}</Text>
-            </View>
-          </View>
-
-          <HistoryList
-            entries={history}
-            loading={historyLoading}
-            isDark={isDark}
-            renderRow={(entry) => {
-              const valText = String(Number(entry.value).toFixed(1));
-              return (
-                <>
-                  <Text style={[styles.historyDate, { color: subColor }]}>{entry.date}</Text>
-                  <Text style={[styles.historyValue, { color: textColor }]}>{valText}</Text>
-                  <Text style={[styles.historyUnit, { color: subColor }]}>{t('checkIns.lbUnit')}</Text>
-                </>
-              );
-            }}
-          />
-
-          <View style={{ height: Platform.OS === 'ios' ? 32 : 16 }} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// ─── Steps bottom sheet ───────────────────────────────────────────────────────
-
-function StepsSheet({
-  isDark,
-  visible,
-  stepsCount,
-  stepsGoal,
-  stepsPct,
-  permission,
-  refreshing,
-  stepsTrackerId,
-  onClose,
-  onRefresh,
-  onRequestPermission,
-  onNavigate,
-}: {
-  isDark: boolean;
-  visible: boolean;
-  stepsCount: number;
-  stepsGoal: number;
-  stepsPct: number;
-  permission: string;
-  refreshing: boolean;
-  stepsTrackerId: string | null;
-  onClose: () => void;
-  onRefresh: () => void;
-  onRequestPermission: () => void;
-  onNavigate: () => void;
-}) {
-  const { t } = useTranslation();
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  useEffect(() => {
-    Animated.timing(progressAnim, { toValue: stepsPct, duration: 600, useNativeDriver: false }).start();
-  }, [stepsPct, progressAnim]);
-
-  useEffect(() => {
-    if (!visible || !stepsTrackerId) return;
-    setHistoryLoading(true);
-    listEntries(stepsTrackerId, 200)
-      .then((raw: any[]) => {
-        const sorted = [...raw].sort((a, b) => b.date.localeCompare(a.date));
-        setHistory(sorted.map((e) => ({ id: e.id, date: e.date, value: Number(e.value) })));
-      })
-      .catch((err) => console.warn('[CheckInTilesCard] StepsSheet history load failed:', err))
-      .finally(() => setHistoryLoading(false));
-  }, [visible, stepsTrackerId]);
-
-  const cardBg = isDark ? colors.cardDark : '#fff';
-  const textColor = isDark ? colors.textDark : colors.primaryText;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const dividerColor = isDark ? colors.borderDark : colors.border;
-  const isGranted = permission === 'granted';
-  const stepsCountFormatted = stepsCount.toLocaleString('en-US');
-  const stepsGoalFormatted = stepsGoal > 0 ? stepsGoal.toLocaleString('en-US') : null;
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.sheetOverlay} onPress={onClose}>
-        <Pressable style={[styles.sheetContainer, { backgroundColor: cardBg }]} onPress={(e) => e.stopPropagation()}>
-          <View style={[styles.sheetHandle, { backgroundColor: dividerColor }]} />
-
-          <View style={styles.sheetHeader}>
-            <View style={styles.sheetHeaderLeft}>
-              <View style={[styles.sheetIconCircle, { backgroundColor: stepsPct >= 100 ? 'rgba(92,185,123,0.15)' : 'rgba(91,154,168,0.12)' }]}>
-                <Ionicons name="walk-outline" size={22} color={stepsPct >= 100 ? colors.success : colors.primary} />
-              </View>
-              <TouchableOpacity onPress={() => { console.log('[CheckInTilesCard] StepsSheet title tapped — navigating to tracker history'); onNavigate(); }} activeOpacity={0.7}>
-                <Text style={[styles.sheetTitle, { color: textColor }]}>{t('common.steps')}</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity onPress={() => { console.log('[CheckInTilesCard] StepsSheet closed'); onClose(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close-circle" size={26} color={subColor} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-
-          {isGranted ? (
-            <>
-              <View style={styles.stepsCountRow}>
-                <Text style={[styles.stepsCountBig, { color: textColor }]}>{stepsCountFormatted}</Text>
-                {stepsGoalFormatted && (
-                  <Text style={[styles.stepsGoalText, { color: subColor }]}>
-                    {' / '}
-                    {stepsGoalFormatted}
-                  </Text>
-                )}
-              </View>
-
-              {stepsGoal > 0 && (
-                <View style={[styles.progressTrack, { backgroundColor: isDark ? '#2A2C40' : '#E5E7EB' }]}>
-                  <Animated.View
-                    style={[
-                      styles.progressFill,
-                      {
-                        backgroundColor: stepsPct >= 100 ? colors.success : colors.primary,
-                        width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
-                      },
-                    ]}
-                  />
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[styles.sheetActionBtn, { backgroundColor: colors.primary, opacity: refreshing ? 0.6 : 1 }]}
-                onPress={() => {
-                  console.log('[CheckInTilesCard] StepsSheet refresh from Health pressed');
-                  onRefresh();
-                }}
-                disabled={refreshing}
-                activeOpacity={0.8}
-              >
-                {refreshing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="refresh-outline" size={16} color="#fff" />
-                    <Text style={styles.sheetActionBtnText}>{t('checkIns.refreshFromHealth')}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={[styles.sheetActionBtn, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                console.log('[CheckInTilesCard] StepsSheet connect health pressed');
-                onRequestPermission();
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="heart-outline" size={16} color="#fff" />
-              <Text style={styles.sheetActionBtnText}>{t('checkIns.connect')}</Text>
-            </TouchableOpacity>
-          )}
-
-          <HistoryList
-            entries={history}
-            loading={historyLoading}
-            isDark={isDark}
-            renderRow={(entry) => {
-              const stepsFormatted = Math.round(entry.value).toLocaleString('en-US');
-              return (
-                <>
-                  <Text style={[styles.historyDate, { color: subColor }]}>{entry.date}</Text>
-                  <Text style={[styles.historyValue, { color: textColor }]}>{stepsFormatted}</Text>
-                  <Text style={[styles.historyUnit, { color: subColor }]}>steps</Text>
-                </>
-              );
-            }}
-          />
-
-          <View style={{ height: Platform.OS === 'ios' ? 32 : 16 }} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// ─── Gym bottom sheet ─────────────────────────────────────────────────────────
-
-function GymSheet({
-  isDark,
-  visible,
-  gymEntry,
-  gymTrackerId,
-  onClose,
-  onLogged,
-  onNavigate,
-  onLogGym,
-}: {
-  isDark: boolean;
-  visible: boolean;
-  gymEntry: TodayEntry | null;
-  gymTrackerId: string | null;
-  onClose: () => void;
-  onLogged: (entry: TodayEntry) => void;
-  onNavigate: () => void;
-  onLogGym: () => Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const [logging, setLogging] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  useEffect(() => {
-    if (!visible || !gymTrackerId) return;
-    setHistoryLoading(true);
-    listEntries(gymTrackerId, 200)
-      .then((raw: any[]) => {
-        const sorted = [...raw].sort((a, b) => b.date.localeCompare(a.date));
-        setHistory(sorted.map((e) => ({ id: e.id, date: e.date, value: Number(e.value) })));
-      })
-      .catch((err) => console.warn('[CheckInTilesCard] GymSheet history load failed:', err))
-      .finally(() => setHistoryLoading(false));
-  }, [visible, gymTrackerId]);
-
-  const cardBg = isDark ? colors.cardDark : '#fff';
-  const textColor = isDark ? colors.textDark : colors.primaryText;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const dividerColor = isDark ? colors.borderDark : colors.border;
-  const isDone = !!gymEntry;
-
-  const handleLog = async () => {
-    if (!gymTrackerId || logging) return;
-    console.log('[CheckInTilesCard] GymSheet log workout pressed — tracker:', gymTrackerId);
-    setLogging(true);
-    try {
-      await onLogGym();
-      onClose();
-    } catch (err) {
-      console.error('[CheckInTilesCard] GymSheet log failed:', err);
-      Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
-    } finally {
-      setLogging(false);
-    }
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.sheetOverlay} onPress={onClose}>
-        <Pressable style={[styles.sheetContainer, { backgroundColor: cardBg }]} onPress={(e) => e.stopPropagation()}>
-          <View style={[styles.sheetHandle, { backgroundColor: dividerColor }]} />
-
-          <View style={styles.sheetHeader}>
-            <View style={styles.sheetHeaderLeft}>
-              <View style={[styles.sheetIconCircle, { backgroundColor: isDone ? 'rgba(92,185,123,0.15)' : 'rgba(91,154,168,0.12)' }]}>
-                <Ionicons name="barbell-outline" size={22} color={isDone ? colors.success : colors.primary} />
-              </View>
-              <TouchableOpacity onPress={() => { console.log('[CheckInTilesCard] GymSheet title tapped — navigating to tracker history'); onNavigate(); }} activeOpacity={0.7}>
-                <Text style={[styles.sheetTitle, { color: textColor }]}>{t('common.gym')}</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity onPress={() => { console.log('[CheckInTilesCard] GymSheet closed'); onClose(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close-circle" size={26} color={subColor} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-
-          {isDone ? (
-            <View style={styles.gymDoneRow}>
-              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
-              <Text style={[styles.gymDoneText, { color: colors.success }]}>
-                {t('checkIns.workoutLogged')}
-              </Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.sheetActionBtn, { backgroundColor: colors.primary, opacity: logging ? 0.6 : 1 }]}
-              onPress={handleLog}
-              disabled={logging}
-              activeOpacity={0.8}
-            >
-              {logging ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="barbell-outline" size={16} color="#fff" />
-                  <Text style={styles.sheetActionBtnText}>{t('checkIns.logWorkout')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-
-          <HistoryList
-            entries={history}
-            loading={historyLoading}
-            isDark={isDark}
-            renderRow={(entry) => (
-              <>
-                <Text style={[styles.historyDate, { color: subColor }]}>{entry.date}</Text>
-                <Ionicons name="checkmark-circle" size={14} color={colors.success} style={{ marginLeft: 'auto' }} />
-              </>
-            )}
-          />
-
-          <View style={{ height: Platform.OS === 'ios' ? 32 : 16 }} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
 
 // ─── Main card ────────────────────────────────────────────────────────────────
 
@@ -744,11 +224,6 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   const [todayEntries, setTodayEntries] = useState<Record<string, TodayEntry | null>>({});
   const [loading, setLoading] = useState(true);
   const [stepsRefreshing, setStepsRefreshing] = useState(false);
-
-  // Sheet visibility
-  const [weightSheetVisible, setWeightSheetVisible] = useState(false);
-  const [stepsSheetVisible, setStepsSheetVisible] = useState(false);
-  const [gymSheetVisible, setGymSheetVisible] = useState(false);
 
   // Inline weight input
   const [inlineWeightVisible, setInlineWeightVisible] = useState(false);
@@ -979,13 +454,21 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   // ── Tile press handlers ────────────────────────────────────────────────────
   const handleTilePress = (type: TileType) => {
     console.log('[CheckInTilesCard] tile press handler for type:', type);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     if (type === 'weight') {
-      setWeightSheetVisible(true);
+      if (weightTracker) {
+        console.log('[CheckInTilesCard] weight tile tapped — navigating to tracker history:', weightTracker.id);
+        router.push({ pathname: '/tracker/[id]', params: { id: weightTracker.id } });
+      }
     } else if (type === 'steps') {
-      setStepsSheetVisible(true);
+      if (stepsTracker) {
+        console.log('[CheckInTilesCard] steps tile tapped — navigating to tracker history:', stepsTracker.id);
+        router.push({ pathname: '/tracker/[id]', params: { id: stepsTracker.id } });
+      }
     } else if (type === 'gym') {
-      setGymSheetVisible(true);
+      if (gymTracker) {
+        console.log('[CheckInTilesCard] gym tile tapped — navigating to tracker history:', gymTracker.id);
+        router.push({ pathname: '/tracker/[id]', params: { id: gymTracker.id } });
+      }
     } else if (type === 'calories') {
       console.log('[CheckInTilesCard] calories tile tapped — navigating to food log');
       router.push('/(home)');
@@ -1159,78 +642,6 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
         </View>
       )}
 
-      {/* Weight sheet */}
-      <WeightSheet
-        isDark={isDark}
-        visible={weightSheetVisible}
-        weightEntry={weightEntry}
-        weightTrackerId={weightTracker?.id ?? null}
-        onClose={() => { console.log('[CheckInTilesCard] WeightSheet dismissed'); setWeightSheetVisible(false); }}
-        onLogged={(entry) => {
-          console.log('[CheckInTilesCard] weight logged via sheet — refreshing XP');
-          if (weightTracker) {
-            setTodayEntries((prev) => ({ ...prev, [weightTracker.id]: entry }));
-          }
-          onXpRefresh();
-        }}
-        onNavigate={() => {
-          setWeightSheetVisible(false);
-          if (weightTracker) {
-            console.log('[CheckInTilesCard] navigating to weight tracker history:', weightTracker.id);
-            router.push({ pathname: '/tracker/[id]', params: { id: weightTracker.id } });
-          }
-        }}
-        onLogWeight={logWeightValue}
-      />
-
-      {/* Steps sheet */}
-      <StepsSheet
-        isDark={isDark}
-        visible={stepsSheetVisible}
-        stepsCount={stepsCount}
-        stepsGoal={stepsGoal}
-        stepsPct={stepsPct}
-        permission={stepsHook.permission}
-        refreshing={stepsRefreshing}
-        stepsTrackerId={stepsTracker?.id ?? null}
-        onClose={() => { console.log('[CheckInTilesCard] StepsSheet dismissed'); setStepsSheetVisible(false); }}
-        onRefresh={handleStepsRefresh}
-        onRequestPermission={() => {
-          console.log('[CheckInTilesCard] requesting steps permission');
-          stepsHook.requestPermission();
-        }}
-        onNavigate={() => {
-          setStepsSheetVisible(false);
-          if (stepsTracker) {
-            console.log('[CheckInTilesCard] navigating to steps tracker history:', stepsTracker.id);
-            router.push({ pathname: '/tracker/[id]', params: { id: stepsTracker.id } });
-          }
-        }}
-      />
-
-      {/* Gym sheet */}
-      <GymSheet
-        isDark={isDark}
-        visible={gymSheetVisible}
-        gymEntry={gymEntry}
-        gymTrackerId={gymTracker?.id ?? null}
-        onClose={() => { console.log('[CheckInTilesCard] GymSheet dismissed'); setGymSheetVisible(false); }}
-        onLogged={(entry) => {
-          console.log('[CheckInTilesCard] gym logged via sheet — refreshing XP');
-          if (gymTracker) {
-            setTodayEntries((prev) => ({ ...prev, [gymTracker.id]: entry }));
-          }
-          onXpRefresh();
-        }}
-        onNavigate={() => {
-          setGymSheetVisible(false);
-          if (gymTracker) {
-            console.log('[CheckInTilesCard] navigating to gym tracker history:', gymTracker.id);
-            router.push({ pathname: '/tracker/[id]', params: { id: gymTracker.id } });
-          }
-        }}
-        onLogGym={logGymWorkout}
-      />
     </View>
   );
 }
