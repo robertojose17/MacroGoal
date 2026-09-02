@@ -369,7 +369,12 @@
     "streakKeepGoing": "¡Racha de {{streak}} días — sigue así!",
     "dayComplete": "¡Día {{day}} completado!",
     "xpEarned": "+{{xp}} XP ganados",
-    "letsGo": "¡Vamos!"
+    "letsGo": "¡Vamos!",
+    "streakLeagueTitle": "Racha y Liga",
+    "todayCheckinsTitle": "Check-ins de Hoy",
+    "featuredTitle": "Promociona Tu Marca",
+    "featuredSub": "Llega a miles de usuarios fitness. Contáctanos para anunciarte.",
+    "featuredCta": "Saber Más"
   },
   "coach": {
     "title": "Entrenador IA",

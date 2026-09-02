@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Pressable,
   Animated,
+  Linking,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -89,6 +90,7 @@ function SkeletonBlock({ height, isDark }: { height: number; isDark: boolean }) 
 
 // ─── StreakLeaguePill ─────────────────────────────────────────────────────────
 function StreakLeaguePill({ isDark }: { isDark: boolean }) {
+  const { t } = useTranslation();
   const xp = useXpStatus();
   const league = useLeague();
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -101,6 +103,7 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
   const cardBg = isDark ? colors.cardDark : colors.card;
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
   const tierMeta = leagueStatus ? TIER_METADATA[leagueStatus.tier] : null;
   const leagueLabel = tierMeta ? tierMeta.label : null;
@@ -124,32 +127,35 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
           },
         ]}
       >
-        {streak > 0 && (
-          <View style={styles.pillSegment}>
-            <Text style={styles.pillEmoji}>🔥</Text>
-            <Text style={[styles.pillText, { color: textColor }]}>
-              {streak}
-            </Text>
-            <Text style={[styles.pillSubText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {' días'}
-            </Text>
-          </View>
-        )}
-        {streak > 0 && leagueLabel && (
-          <Text style={[styles.pillDot, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>·</Text>
-        )}
-        {leagueLabel && (
-          <View style={styles.pillSegment}>
-            <Text style={styles.pillEmoji}>{tierMeta?.emoji ?? '🏆'}</Text>
-            <Text style={[styles.pillText, { color: textColor }]}>{leagueLabel}</Text>
-            {leaguePosition != null && (
-              <Text style={[styles.pillSubText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {' #'}{leaguePosition}
+        <Text style={[styles.pillTitle, { color: textColor }]}>{t('dashboard.streakLeagueTitle')}</Text>
+        <View style={styles.pillRow}>
+          {streak > 0 && (
+            <View style={styles.pillSegment}>
+              <Text style={styles.pillEmoji}>🔥</Text>
+              <Text style={[styles.pillText, { color: textColor }]}>
+                {streak}
               </Text>
-            )}
-          </View>
-        )}
-        <Text style={[styles.pillChevron, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>›</Text>
+              <Text style={[styles.pillSubText, { color: subColor }]}>
+                {' '}{t('common.days')}
+              </Text>
+            </View>
+          )}
+          {streak > 0 && leagueLabel && (
+            <Text style={[styles.pillDot, { color: subColor }]}>·</Text>
+          )}
+          {leagueLabel && (
+            <View style={styles.pillSegment}>
+              <Text style={styles.pillEmoji}>{tierMeta?.emoji ?? '🏆'}</Text>
+              <Text style={[styles.pillText, { color: textColor }]}>{leagueLabel}</Text>
+              {leaguePosition != null && (
+                <Text style={[styles.pillSubText, { color: subColor }]}>
+                  {' #'}{leaguePosition}
+                </Text>
+              )}
+            </View>
+          )}
+          <Text style={[styles.pillChevron, { color: subColor }]}>›</Text>
+        </View>
       </Pressable>
 
       <LeagueLeaderboard
@@ -165,6 +171,7 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
 
 // ─── FeaturedCard ─────────────────────────────────────────────────────────────
 function FeaturedCard({ isDark }: { isDark: boolean }) {
+  const { t } = useTranslation();
   const [dismissed, setDismissed] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -191,12 +198,18 @@ function FeaturedCard({ isDark }: { isDark: boolean }) {
     setDismissed(true);
   };
 
+  const handleLearnMore = () => {
+    console.log('[Dashboard] FeaturedCard "Learn More" tapped — opening https://macrogoal.app');
+    Linking.openURL('https://macrogoal.app');
+  };
+
   if (dismissed === null || dismissed === true) return null;
 
   const cardBg = isDark ? colors.cardDark : colors.card;
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const logoBg = isDark ? '#2A2C40' : '#F3F4F6';
 
   return (
     <View style={[styles.featuredCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -212,10 +225,22 @@ function FeaturedCard({ isDark }: { isDark: boolean }) {
           <Text style={[styles.featuredClose, { color: subColor }]}>✕</Text>
         </TouchableOpacity>
       </View>
-      <Text style={[styles.featuredTitle, { color: textColor }]}>Partner Spotlight</Text>
-      <Text style={[styles.featuredSub, { color: subColor }]}>
-        Espacio disponible para marcas fitness. Contáctanos.
-      </Text>
+      <View style={styles.featuredBody}>
+        <View style={[styles.featuredLogo, { backgroundColor: logoBg }]}>
+          <Text style={styles.featuredLogoEmoji}>🏪</Text>
+        </View>
+        <View style={styles.featuredTextCol}>
+          <Text style={[styles.featuredTitle, { color: textColor }]}>{t('dashboard.featuredTitle')}</Text>
+          <Text style={[styles.featuredSub, { color: subColor }]}>{t('dashboard.featuredSub')}</Text>
+        </View>
+      </View>
+      <TouchableOpacity
+        style={styles.featuredCta}
+        onPress={handleLearnMore}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.featuredCtaText}>{t('dashboard.featuredCta')}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -514,17 +539,25 @@ const styles = StyleSheet.create({
   },
   // ── Streak + League Pill ──────────────────────────────────────────────────
   pillContainer: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  pillTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  pillRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.md,
     gap: 6,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
-      android: { elevation: 2 },
-    }),
   },
   pillSegment: {
     flexDirection: 'row',
@@ -550,24 +583,25 @@ const styles = StyleSheet.create({
   pillChevron: {
     fontSize: 18,
     fontWeight: '300',
-    marginLeft: 2,
+    marginLeft: 'auto' as any,
   },
   // ── Featured Card ─────────────────────────────────────────────────────────
   featuredCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    marginBottom: spacing.md,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
-      android: { elevation: 2 },
-    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   featuredHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 12,
   },
   featuredBadge: {
     backgroundColor: colors.primary + '18',
@@ -585,15 +619,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  featuredBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  featuredLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredLogoEmoji: {
+    fontSize: 24,
+  },
+  featuredTextCol: {
+    flex: 1,
+  },
   featuredTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   featuredSub: {
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 18,
+  },
+  featuredCta: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+  },
+  featuredCtaText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   // ── Share progress button ─────────────────────────────────────────────────
   shareProgressButton: {

@@ -289,6 +289,8 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
 
   return (
     <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+      {/* ── Card title ── */}
+      <Text style={[styles.cardTitle, { color: textColor }]}>{t('dashboard.todayCheckinsTitle')}</Text>
       {/* ── Weight row ── */}
       {weightTracker && (
         <View style={styles.row}>
@@ -475,38 +477,42 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
       )}
 
       {/* ── Protein row ── */}
-      {dailyProtein > 0 && (
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => {
-            console.log('[TrackerQuickCard] Protein row tapped — navigating to food log');
-            router.push('/(home)');
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.labelCol}>
-            <Text style={styles.rowEmoji}>💪</Text>
-            <Text style={[styles.rowLabel, { color: textColor }]}>{t('common.protein')}</Text>
-          </View>
-          <View style={styles.actionCol}>
-            <Text style={[styles.metricText, { color: textColor }]}>{proteinDisplay}</Text>
-          </View>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={styles.row}
+        onPress={() => {
+          console.log('[TrackerQuickCard] Protein row tapped — navigating to food log');
+          router.push('/(home)');
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.labelCol}>
+          <Text style={styles.rowEmoji}>💪</Text>
+          <Text style={[styles.rowLabel, { color: textColor }]}>{t('common.protein')}</Text>
+        </View>
+        <View style={styles.actionCol}>
+          <Text style={[styles.metricText, { color: textColor }]}>{proteinDisplay}</Text>
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    marginBottom: spacing.md,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
-      android: { elevation: 2 },
-    }),
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   dateLabel: {
     fontSize: 11,

@@ -369,7 +369,12 @@
     "streakKeepGoing": "{{streak}}-day streak — keep going!",
     "dayComplete": "Day {{day}} complete!",
     "xpEarned": "+{{xp}} XP earned",
-    "letsGo": "Let's go!"
+    "letsGo": "Let's go!",
+    "streakLeagueTitle": "Streak & League",
+    "todayCheckinsTitle": "Today's Check-ins",
+    "featuredTitle": "Promote Your Brand",
+    "featuredSub": "Reach thousands of fitness users. Contact us to advertise.",
+    "featuredCta": "Learn More"
   },
   "coach": {
     "title": "AI Coach",
