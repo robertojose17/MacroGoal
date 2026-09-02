@@ -117,7 +117,11 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
         onPress={handlePress}
         style={({ pressed }) => [
           styles.pillContainer,
-          { backgroundColor: cardBg, borderColor: cardBorder, opacity: pressed ? 0.8 : 1 },
+          {
+            backgroundColor: cardBg,
+            borderColor: cardBorder,
+            opacity: pressed ? 0.8 : 1,
+          },
         ]}
       >
         {streak > 0 && (
@@ -512,16 +516,14 @@ const styles = StyleSheet.create({
   pillContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: borderRadius.full,
+    borderRadius: 16,
     borderWidth: 1,
+    padding: spacing.md,
     marginBottom: spacing.md,
     gap: 6,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
-      android: { elevation: 1 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+      android: { elevation: 2 },
     }),
   },
   pillSegment: {

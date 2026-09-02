@@ -468,16 +468,6 @@
     "prompt6Title": "Give me something quick",
     "prompt6Sub": "Fast meal idea"
   },
-  "consistency": {
-    "insightStart": "Start logging meals to build your consistency score.",
-    "insightLockedIn": "Outstanding — you're hitting your targets consistently.",
-    "insightMoreCalories": "Log more calories each day to push your score higher.",
-    "insightMoreProtein": "Boost your protein intake to move into \"Locked In\" territory.",
-    "insightTracked": "You tracked {{tracked}} of {{total}} days — keep the streak going.",
-    "insightMissingDays": "Log food every day — missing days are the biggest score killer.",
-    "insightLowCalories": "Your calorie accuracy is low — try to hit closer to your daily target.",
-    "insightStayConsistent": "Stay consistent with logging and hitting your macro targets."
-  },
   "checkIns": {
     "title": "Check-Ins",
     "newCheckIn": "New Check-In",
@@ -2941,6 +2931,14 @@
     "desc_default": "Reach {{target}} {{unit}} today"
   },
   "consistency": {
+    "insightStart": "Start logging meals to build your consistency score.",
+    "insightLockedIn": "Outstanding — you're hitting your targets consistently.",
+    "insightMoreCalories": "Log more calories each day to push your score higher.",
+    "insightMoreProtein": "Boost your protein intake to move into \"Locked In\" territory.",
+    "insightTracked": "You tracked {{tracked}} of {{total}} days — keep the streak going.",
+    "insightMissingDays": "Log food every day — missing days are the biggest score killer.",
+    "insightLowCalories": "Your calorie accuracy is low — try to hit closer to your daily target.",
+    "insightStayConsistent": "Stay consistent with logging and hitting your macro targets.",
     "title": "Consistency Score",
     "loading": "Loading...",
     "today": "Today",

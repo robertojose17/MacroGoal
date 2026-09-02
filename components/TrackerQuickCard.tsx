@@ -271,12 +271,6 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
     }
   };
 
-  // ── Date label ─────────────────────────────────────────────────────────────
-  const now = new Date();
-  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-  const monthDay = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-  const dateLabel = `${dayName}, ${monthDay}`;
-
   // ── Calorie / protein display ──────────────────────────────────────────────
   const calsDisplay = `${Math.round(Number(goal?.today_calories ?? 0))} / ${Math.round(dailyCals)}`;
   const proteinDisplay = `${Math.round(Number(goal?.today_protein ?? 0))}g / ${Math.round(dailyProtein)}g`;
@@ -295,15 +289,6 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
 
   return (
     <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-      {/* Date header */}
-      <Text style={[styles.dateLabel, { color: subColor }]}>
-        {t('common.today').toUpperCase()}
-        {' — '}
-        {dateLabel}
-      </Text>
-
-      <View style={[styles.divider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-
       {/* ── Weight row ── */}
       {weightTracker && (
         <View style={styles.row}>

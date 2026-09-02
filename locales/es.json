@@ -468,16 +468,6 @@
     "prompt6Title": "Dame algo rápido",
     "prompt6Sub": "Idea de comida rápida"
   },
-  "consistency": {
-    "insightStart": "Comienza a registrar comidas para construir tu puntuación de consistencia.",
-    "insightLockedIn": "Excelente — estás alcanzando tus objetivos de manera consistente.",
-    "insightMoreCalories": "Registra más calorías cada día para subir tu puntuación.",
-    "insightMoreProtein": "Aumenta tu ingesta de proteínas para entrar en territorio \"Bloqueado\".",
-    "insightTracked": "Registraste {{tracked}} de {{total}} días — sigue la racha.",
-    "insightMissingDays": "Registra comida todos los días — los días perdidos son el mayor enemigo de tu puntuación.",
-    "insightLowCalories": "Tu precisión calórica es baja — intenta acercarte más a tu objetivo diario.",
-    "insightStayConsistent": "Mantén la consistencia en el registro y en alcanzar tus objetivos de macros."
-  },
   "checkIns": {
     "title": "Registros",
     "newCheckIn": "Nuevo Registro",
@@ -2941,6 +2931,14 @@
     "desc_default": "Alcanza {{target}} {{unit}} hoy"
   },
   "consistency": {
+    "insightStart": "Comienza a registrar comidas para construir tu puntuación de consistencia.",
+    "insightLockedIn": "Excelente — estás alcanzando tus objetivos de manera consistente.",
+    "insightMoreCalories": "Registra más calorías cada día para subir tu puntuación.",
+    "insightMoreProtein": "Aumenta tu ingesta de proteínas para entrar en territorio \"Bloqueado\".",
+    "insightTracked": "Registraste {{tracked}} de {{total}} días — sigue la racha.",
+    "insightMissingDays": "Registra comida todos los días — los días perdidos son el mayor enemigo de tu puntuación.",
+    "insightLowCalories": "Tu precisión calórica es baja — intenta acercarte más a tu objetivo diario.",
+    "insightStayConsistent": "Mantén la consistencia en el registro y en alcanzar tus objetivos de macros.",
     "title": "Puntuación de Consistencia",
     "loading": "Cargando...",
     "today": "Hoy",
