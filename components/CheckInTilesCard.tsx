@@ -2,8 +2,8 @@
  * CheckInTilesCard
  *
  * Combines the visual design of TodaysChallengesCard (compact tiles, icon circle,
- * big %, XP label) with the functional logic of TrackerQuickCard (inline weight
- * input, steps HealthKit refresh, gym one-tap log, calories/protein → food log,
+ * big %) with the functional logic of TrackerQuickCard (inline weight input,
+ * steps HealthKit refresh, gym one-tap log, calories/protein → food log,
  * tap title → tracker history).
  */
 
@@ -16,6 +16,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -52,7 +53,6 @@ interface TileConfig {
   type: TileType;
   icon: IoniconsName;
   labelKey: string;
-  xpLabel: string;
 }
 
 interface TodayEntry {
@@ -60,12 +60,18 @@ interface TodayEntry {
   value: number;
 }
 
+interface HistoryEntry {
+  id: string;
+  date: string;
+  value: number;
+}
+
 const TILE_CONFIGS: TileConfig[] = [
-  { type: 'weight',   icon: 'scale-outline',     labelKey: 'common.weight',   xpLabel: '+100 XP' },
-  { type: 'steps',    icon: 'walk-outline',       labelKey: 'common.steps',    xpLabel: '+200 XP' },
-  { type: 'gym',      icon: 'barbell-outline',    labelKey: 'common.gym',      xpLabel: '+75 XP'  },
-  { type: 'calories', icon: 'pie-chart-outline',  labelKey: 'common.calories', xpLabel: '+200 XP' },
-  { type: 'protein',  icon: 'fitness-outline',    labelKey: 'common.protein',  xpLabel: '+200 XP' },
+  { type: 'weight',   icon: 'scale-outline',     labelKey: 'common.weight'   },
+  { type: 'steps',    icon: 'walk-outline',       labelKey: 'common.steps'    },
+  { type: 'gym',      icon: 'barbell-outline',    labelKey: 'common.gym'      },
+  { type: 'calories', icon: 'pie-chart-outline',  labelKey: 'common.calories' },
+  { type: 'protein',  icon: 'fitness-outline',    labelKey: 'common.protein'  },
 ];
 
 // ─── Animated percentage number ───────────────────────────────────────────────
@@ -118,11 +124,13 @@ function CompactTile({
   percent,
   isDark,
   onPress,
+  quickAction,
 }: {
   config: TileConfig;
   percent: number;
   isDark: boolean;
   onPress: () => void;
+  quickAction: React.ReactNode;
 }) {
   const { t } = useTranslation();
   const isComplete = percent >= 100;
@@ -145,12 +153,6 @@ function CompactTile({
     : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
 
   const iconColor = isComplete
-    ? colors.success
-    : hasProgress
-    ? colors.primary
-    : isDark ? colors.textSecondaryDark : colors.textSecondary;
-
-  const xpColor = isComplete
     ? colors.success
     : hasProgress
     ? colors.primary
@@ -186,10 +188,80 @@ function CompactTile({
 
       <AnimatedPercent value={clampedPercent} isDark={isDark} isComplete={isComplete} />
 
-      <Text style={[styles.xpLabel, { color: xpColor }]} numberOfLines={1}>
-        {config.xpLabel}
-      </Text>
+      {quickAction}
     </TouchableOpacity>
+  );
+}
+
+// ─── Tiny quick-action button ─────────────────────────────────────────────────
+
+function QuickBtn({
+  label,
+  onPress,
+  isDone,
+}: {
+  label: string;
+  onPress: (e: any) => void;
+  isDone?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={[
+        styles.quickBtn,
+        isDone && styles.quickBtnDone,
+      ]}
+      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+    >
+      <Text style={[styles.quickBtnText, isDone && styles.quickBtnTextDone]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ─── History list (shared across sheets) ─────────────────────────────────────
+
+function HistoryList({
+  entries,
+  loading,
+  isDark,
+  renderRow,
+}: {
+  entries: HistoryEntry[];
+  loading: boolean;
+  isDark: boolean;
+  renderRow: (entry: HistoryEntry) => React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const dividerColor = isDark ? colors.borderDark : colors.border;
+
+  if (loading) {
+    return (
+      <View style={styles.historyLoadingRow}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <Text style={[styles.historyEmpty, { color: subColor }]}>{t('checkIns.noHistory')}</Text>
+    );
+  }
+
+  return (
+    <>
+      <View style={[styles.divider, { backgroundColor: dividerColor, marginTop: spacing.sm }]} />
+      <ScrollView style={styles.historyScroll} showsVerticalScrollIndicator={false}>
+        {entries.map((entry) => (
+          <View key={entry.id} style={styles.historyRow}>
+            {renderRow(entry)}
+          </View>
+        ))}
+        <View style={{ height: 8 }} />
+      </ScrollView>
+    </>
   );
 }
 
@@ -203,6 +275,7 @@ function WeightSheet({
   onClose,
   onLogged,
   onNavigate,
+  onLogWeight,
 }: {
   isDark: boolean;
   visible: boolean;
@@ -211,18 +284,33 @@ function WeightSheet({
   onClose: () => void;
   onLogged: (entry: TodayEntry) => void;
   onNavigate: () => void;
+  onLogWeight: (parsed: number) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [weightInput, setWeightInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (!visible) {
       setWeightInput('');
-    } else if (weightEntry) {
+      return;
+    }
+    if (weightEntry) {
       setWeightInput(String(Number(weightEntry.value).toFixed(1)));
     }
-  }, [visible, weightEntry]);
+    if (weightTrackerId) {
+      setHistoryLoading(true);
+      listEntries(weightTrackerId, 200)
+        .then((raw: any[]) => {
+          const sorted = [...raw].sort((a, b) => b.date.localeCompare(a.date));
+          setHistory(sorted.map((e) => ({ id: e.id, date: e.date, value: Number(e.value) })));
+        })
+        .catch((err) => console.warn('[CheckInTilesCard] WeightSheet history load failed:', err))
+        .finally(() => setHistoryLoading(false));
+    }
+  }, [visible, weightEntry, weightTrackerId]);
 
   const handleLog = async () => {
     console.log('[CheckInTilesCard] WeightSheet log pressed — input:', weightInput);
@@ -233,57 +321,11 @@ function WeightSheet({
     }
     if (!weightTrackerId || saving) return;
     setSaving(true);
-    const today = toLocalDateString(new Date());
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      console.log('[CheckInTilesCard] logging weight entry — tracker:', weightTrackerId, 'value:', parsed);
-      const entry = await logEntry(weightTrackerId, today, parsed);
-      onLogged({ id: entry.id, value: Number(entry.value) });
-
-      const weightInKg = parsed / 2.20462;
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        const { data: existingCheckIn } = await supabase
-          .from('check_ins')
-          .select('id')
-          .eq('user_id', authUser.id)
-          .eq('date', today)
-          .maybeSingle();
-
-        let checkInId: string | null = null;
-        if (existingCheckIn) {
-          console.log('[CheckInTilesCard] updating existing check_in weight — id:', existingCheckIn.id);
-          await supabase
-            .from('check_ins')
-            .update({ weight: weightInKg, updated_at: new Date().toISOString() })
-            .eq('id', existingCheckIn.id);
-          checkInId = existingCheckIn.id;
-        } else {
-          console.log('[CheckInTilesCard] inserting new check_in with weight');
-          const { data: newCheckIn } = await supabase
-            .from('check_ins')
-            .insert({ user_id: authUser.id, date: today, weight: weightInKg })
-            .select('id')
-            .single();
-          checkInId = newCheckIn?.id ?? null;
-        }
-
-        if (checkInId) {
-          console.log('[CheckInTilesCard] awarding weight check-in XP — check_in_id:', checkInId);
-          await tryAwardWeightCheckin(checkInId, weightInKg);
-          emitXpRefresh();
-        }
-      }
-
+      await onLogWeight(parsed);
       onClose();
-      setTimeout(() => {
-        console.log('[CheckInTilesCard] prompting for progress photo after weight log');
-        promptForProgressPhoto(parsed, today).catch((e) =>
-          console.warn('[CheckInTilesCard] Progress photo prompt failed:', e)
-        );
-      }, 600);
     } catch (err) {
-      console.error('[CheckInTilesCard] Weight log failed:', err);
+      console.error('[CheckInTilesCard] WeightSheet log failed:', err);
       Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
@@ -381,6 +423,22 @@ function WeightSheet({
             </View>
           </View>
 
+          <HistoryList
+            entries={history}
+            loading={historyLoading}
+            isDark={isDark}
+            renderRow={(entry) => {
+              const valText = String(Number(entry.value).toFixed(1));
+              return (
+                <>
+                  <Text style={[styles.historyDate, { color: subColor }]}>{entry.date}</Text>
+                  <Text style={[styles.historyValue, { color: textColor }]}>{valText}</Text>
+                  <Text style={[styles.historyUnit, { color: subColor }]}>{t('checkIns.lbUnit')}</Text>
+                </>
+              );
+            }}
+          />
+
           <View style={{ height: Platform.OS === 'ios' ? 32 : 16 }} />
         </Pressable>
       </Pressable>
@@ -419,10 +477,24 @@ function StepsSheet({
 }) {
   const { t } = useTranslation();
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     Animated.timing(progressAnim, { toValue: stepsPct, duration: 600, useNativeDriver: false }).start();
   }, [stepsPct, progressAnim]);
+
+  useEffect(() => {
+    if (!visible || !stepsTrackerId) return;
+    setHistoryLoading(true);
+    listEntries(stepsTrackerId, 200)
+      .then((raw: any[]) => {
+        const sorted = [...raw].sort((a, b) => b.date.localeCompare(a.date));
+        setHistory(sorted.map((e) => ({ id: e.id, date: e.date, value: Number(e.value) })));
+      })
+      .catch((err) => console.warn('[CheckInTilesCard] StepsSheet history load failed:', err))
+      .finally(() => setHistoryLoading(false));
+  }, [visible, stepsTrackerId]);
 
   const cardBg = isDark ? colors.cardDark : '#fff';
   const textColor = isDark ? colors.textDark : colors.primaryText;
@@ -513,6 +585,22 @@ function StepsSheet({
             </TouchableOpacity>
           )}
 
+          <HistoryList
+            entries={history}
+            loading={historyLoading}
+            isDark={isDark}
+            renderRow={(entry) => {
+              const stepsFormatted = Math.round(entry.value).toLocaleString('en-US');
+              return (
+                <>
+                  <Text style={[styles.historyDate, { color: subColor }]}>{entry.date}</Text>
+                  <Text style={[styles.historyValue, { color: textColor }]}>{stepsFormatted}</Text>
+                  <Text style={[styles.historyUnit, { color: subColor }]}>steps</Text>
+                </>
+              );
+            }}
+          />
+
           <View style={{ height: Platform.OS === 'ios' ? 32 : 16 }} />
         </Pressable>
       </Pressable>
@@ -530,6 +618,7 @@ function GymSheet({
   onClose,
   onLogged,
   onNavigate,
+  onLogGym,
 }: {
   isDark: boolean;
   visible: boolean;
@@ -538,9 +627,24 @@ function GymSheet({
   onClose: () => void;
   onLogged: (entry: TodayEntry) => void;
   onNavigate: () => void;
+  onLogGym: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [logging, setLogging] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !gymTrackerId) return;
+    setHistoryLoading(true);
+    listEntries(gymTrackerId, 200)
+      .then((raw: any[]) => {
+        const sorted = [...raw].sort((a, b) => b.date.localeCompare(a.date));
+        setHistory(sorted.map((e) => ({ id: e.id, date: e.date, value: Number(e.value) })));
+      })
+      .catch((err) => console.warn('[CheckInTilesCard] GymSheet history load failed:', err))
+      .finally(() => setHistoryLoading(false));
+  }, [visible, gymTrackerId]);
 
   const cardBg = isDark ? colors.cardDark : '#fff';
   const textColor = isDark ? colors.textDark : colors.primaryText;
@@ -552,39 +656,11 @@ function GymSheet({
     if (!gymTrackerId || logging) return;
     console.log('[CheckInTilesCard] GymSheet log workout pressed — tracker:', gymTrackerId);
     setLogging(true);
-    const today = toLocalDateString(new Date());
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      const entry = await logEntry(gymTrackerId, today, 1);
-      onLogged({ id: entry.id, value: Number(entry.value) });
-
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        const { data: existingCheckIn } = await supabase
-          .from('check_ins')
-          .select('id')
-          .eq('user_id', authUser.id)
-          .eq('date', today)
-          .maybeSingle();
-
-        if (existingCheckIn) {
-          await supabase
-            .from('check_ins')
-            .update({ went_to_gym: true, updated_at: new Date().toISOString() })
-            .eq('id', existingCheckIn.id);
-        } else {
-          await supabase
-            .from('check_ins')
-            .insert({ user_id: authUser.id, date: today, went_to_gym: true });
-        }
-        console.log('[CheckInTilesCard] synced went_to_gym=true to check_ins for date:', today);
-      }
-
-      await tryAwardWorkout(entry.id);
-      emitXpRefresh();
+      await onLogGym();
       onClose();
     } catch (err) {
-      console.error('[CheckInTilesCard] Gym log failed:', err);
+      console.error('[CheckInTilesCard] GymSheet log failed:', err);
       Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
     } finally {
       setLogging(false);
@@ -638,6 +714,18 @@ function GymSheet({
             </TouchableOpacity>
           )}
 
+          <HistoryList
+            entries={history}
+            loading={historyLoading}
+            isDark={isDark}
+            renderRow={(entry) => (
+              <>
+                <Text style={[styles.historyDate, { color: subColor }]}>{entry.date}</Text>
+                <Ionicons name="checkmark-circle" size={14} color={colors.success} style={{ marginLeft: 'auto' }} />
+              </>
+            )}
+          />
+
           <View style={{ height: Platform.OS === 'ios' ? 32 : 16 }} />
         </Pressable>
       </Pressable>
@@ -661,6 +749,14 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   const [weightSheetVisible, setWeightSheetVisible] = useState(false);
   const [stepsSheetVisible, setStepsSheetVisible] = useState(false);
   const [gymSheetVisible, setGymSheetVisible] = useState(false);
+
+  // Inline weight input
+  const [inlineWeightVisible, setInlineWeightVisible] = useState(false);
+  const [inlineWeightInput, setInlineWeightInput] = useState('');
+  const [inlineWeightSaving, setInlineWeightSaving] = useState(false);
+
+  // Gym quick-log
+  const [gymQuickLogging, setGymQuickLogging] = useState(false);
 
   // ── Load trackers + today entries ──────────────────────────────────────────
   const loadTrackers = useCallback(async () => {
@@ -733,6 +829,95 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
 
   const doneCount = Object.values(percents).filter((p) => p >= 100).length;
 
+  // ── Shared weight logging logic ────────────────────────────────────────────
+  const logWeightValue = useCallback(async (parsed: number) => {
+    if (!weightTracker) return;
+    console.log('[CheckInTilesCard] logWeightValue — tracker:', weightTracker.id, 'value:', parsed);
+    const today = toLocalDateString(new Date());
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    const entry = await logEntry(weightTracker.id, today, parsed);
+    setTodayEntries((prev) => ({ ...prev, [weightTracker.id]: { id: entry.id, value: Number(entry.value) } }));
+    onXpRefresh();
+
+    const weightInKg = parsed / 2.20462;
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      const { data: existingCheckIn } = await supabase
+        .from('check_ins')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .eq('date', today)
+        .maybeSingle();
+
+      let checkInId: string | null = null;
+      if (existingCheckIn) {
+        console.log('[CheckInTilesCard] updating existing check_in weight — id:', existingCheckIn.id);
+        await supabase
+          .from('check_ins')
+          .update({ weight: weightInKg, updated_at: new Date().toISOString() })
+          .eq('id', existingCheckIn.id);
+        checkInId = existingCheckIn.id;
+      } else {
+        console.log('[CheckInTilesCard] inserting new check_in with weight');
+        const { data: newCheckIn } = await supabase
+          .from('check_ins')
+          .insert({ user_id: authUser.id, date: today, weight: weightInKg })
+          .select('id')
+          .single();
+        checkInId = newCheckIn?.id ?? null;
+      }
+
+      if (checkInId) {
+        console.log('[CheckInTilesCard] awarding weight check-in XP — check_in_id:', checkInId);
+        await tryAwardWeightCheckin(checkInId, weightInKg);
+        emitXpRefresh();
+      }
+    }
+
+    setTimeout(() => {
+      console.log('[CheckInTilesCard] prompting for progress photo after weight log');
+      promptForProgressPhoto(parsed, today).catch((e) =>
+        console.warn('[CheckInTilesCard] Progress photo prompt failed:', e)
+      );
+    }, 600);
+  }, [weightTracker, onXpRefresh]);
+
+  // ── Shared gym logging logic ───────────────────────────────────────────────
+  const logGymWorkout = useCallback(async () => {
+    if (!gymTracker) return;
+    console.log('[CheckInTilesCard] logGymWorkout — tracker:', gymTracker.id);
+    const today = toLocalDateString(new Date());
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    const entry = await logEntry(gymTracker.id, today, 1);
+    setTodayEntries((prev) => ({ ...prev, [gymTracker.id]: { id: entry.id, value: Number(entry.value) } }));
+    onXpRefresh();
+
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      const { data: existingCheckIn } = await supabase
+        .from('check_ins')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .eq('date', today)
+        .maybeSingle();
+
+      if (existingCheckIn) {
+        await supabase
+          .from('check_ins')
+          .update({ went_to_gym: true, updated_at: new Date().toISOString() })
+          .eq('id', existingCheckIn.id);
+      } else {
+        await supabase
+          .from('check_ins')
+          .insert({ user_id: authUser.id, date: today, went_to_gym: true });
+      }
+      console.log('[CheckInTilesCard] synced went_to_gym=true to check_ins for date:', today);
+    }
+
+    await tryAwardWorkout(entry.id);
+    emitXpRefresh();
+  }, [gymTracker, onXpRefresh]);
+
   // ── Steps refresh ──────────────────────────────────────────────────────────
   const handleStepsRefresh = async () => {
     if (stepsRefreshing || !stepsTracker) return;
@@ -751,6 +936,43 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
       console.warn('[CheckInTilesCard] steps refresh failed:', err);
     } finally {
       setStepsRefreshing(false);
+    }
+  };
+
+  // ── Inline weight confirm ──────────────────────────────────────────────────
+  const handleInlineWeightConfirm = async () => {
+    console.log('[CheckInTilesCard] inline weight confirm pressed — input:', inlineWeightInput);
+    const parsed = parseFloat(inlineWeightInput);
+    if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
+      Alert.alert(t('checkIns.invalidWeight'), t('checkIns.enterValidWeight'));
+      return;
+    }
+    if (inlineWeightSaving) return;
+    setInlineWeightSaving(true);
+    try {
+      await logWeightValue(parsed);
+      setInlineWeightVisible(false);
+      setInlineWeightInput('');
+    } catch (err) {
+      console.error('[CheckInTilesCard] inline weight log failed:', err);
+      Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
+    } finally {
+      setInlineWeightSaving(false);
+    }
+  };
+
+  // ── Gym quick-log ──────────────────────────────────────────────────────────
+  const handleGymQuickLog = async () => {
+    if (gymQuickLogging || gymEntry) return;
+    console.log('[CheckInTilesCard] gym quick-log button pressed');
+    setGymQuickLogging(true);
+    try {
+      await logGymWorkout();
+    } catch (err) {
+      console.error('[CheckInTilesCard] gym quick-log failed:', err);
+      Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
+    } finally {
+      setGymQuickLogging(false);
     }
   };
 
@@ -779,6 +1001,77 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   const subColor   = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
   const doneText = t('xp.doneCount', { count: doneCount });
+
+  // ── Quick action nodes per tile ────────────────────────────────────────────
+  const weightQuickAction = (
+    <QuickBtn
+      label={t('checkIns.quickLog')}
+      onPress={(e) => {
+        e.stopPropagation();
+        console.log('[CheckInTilesCard] weight quick-log button pressed');
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setInlineWeightVisible((v) => !v);
+        setInlineWeightInput(weightEntry ? String(Number(weightEntry.value).toFixed(1)) : '');
+      }}
+    />
+  );
+
+  const stepsQuickAction = (
+    <QuickBtn
+      label={stepsRefreshing ? '…' : t('checkIns.quickSync')}
+      onPress={(e) => {
+        e.stopPropagation();
+        console.log('[CheckInTilesCard] steps quick-sync button pressed');
+        handleStepsRefresh();
+      }}
+    />
+  );
+
+  const gymQuickAction = gymEntry ? (
+    <QuickBtn
+      label="✓"
+      onPress={(e) => { e.stopPropagation(); }}
+      isDone
+    />
+  ) : (
+    <QuickBtn
+      label={gymQuickLogging ? '…' : t('checkIns.quickLog')}
+      onPress={(e) => {
+        e.stopPropagation();
+        handleGymQuickLog();
+      }}
+    />
+  );
+
+  const caloriesQuickAction = (
+    <QuickBtn
+      label={t('checkIns.quickAdd')}
+      onPress={(e) => {
+        e.stopPropagation();
+        console.log('[CheckInTilesCard] calories quick-add button pressed — navigating to add-food');
+        router.push('/add-food');
+      }}
+    />
+  );
+
+  const proteinQuickAction = (
+    <QuickBtn
+      label={t('checkIns.quickAdd')}
+      onPress={(e) => {
+        e.stopPropagation();
+        console.log('[CheckInTilesCard] protein quick-add button pressed — navigating to add-food');
+        router.push('/add-food');
+      }}
+    />
+  );
+
+  const quickActions: Record<TileType, React.ReactNode> = {
+    weight:   weightQuickAction,
+    steps:    stepsQuickAction,
+    gym:      gymQuickAction,
+    calories: caloriesQuickAction,
+    protein:  proteinQuickAction,
+  };
 
   if (loading) {
     return (
@@ -809,9 +1102,62 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
             percent={percents[config.type]}
             isDark={isDark}
             onPress={() => handleTilePress(config.type)}
+            quickAction={quickActions[config.type]}
           />
         ))}
       </View>
+
+      {/* Inline weight input row */}
+      {inlineWeightVisible && (
+        <View style={[styles.inlineWeightRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
+          <TextInput
+            style={[
+              styles.inlineWeightInput,
+              {
+                backgroundColor: isDark ? '#1A1C2E' : '#F5F5F7',
+                color: isDark ? colors.textDark : colors.primaryText,
+                borderColor: isDark ? colors.cardBorderDark : colors.cardBorder,
+              },
+            ]}
+            value={inlineWeightInput}
+            onChangeText={(text) => {
+              console.log('[CheckInTilesCard] inline weight input changed:', text);
+              setInlineWeightInput(text);
+            }}
+            keyboardType="decimal-pad"
+            placeholder={t('checkIns.lbsPlaceholder')}
+            placeholderTextColor={subColor}
+            returnKeyType="done"
+            onSubmitEditing={handleInlineWeightConfirm}
+            editable={!inlineWeightSaving}
+            autoFocus
+          />
+          <TouchableOpacity
+            style={[styles.inlineConfirmBtn, { backgroundColor: colors.primary, opacity: inlineWeightSaving ? 0.6 : 1 }]}
+            onPress={handleInlineWeightConfirm}
+            disabled={inlineWeightSaving}
+            activeOpacity={0.8}
+          >
+            {inlineWeightSaving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.inlineConfirmBtnText}>{t('checkIns.confirmLog')}</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.inlineCancelBtn, { borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}
+            onPress={() => {
+              console.log('[CheckInTilesCard] inline weight input cancelled');
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setInlineWeightVisible(false);
+              setInlineWeightInput('');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.inlineCancelBtnText, { color: subColor }]}>{t('checkIns.cancelLog')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Weight sheet */}
       <WeightSheet
@@ -821,7 +1167,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
         weightTrackerId={weightTracker?.id ?? null}
         onClose={() => { console.log('[CheckInTilesCard] WeightSheet dismissed'); setWeightSheetVisible(false); }}
         onLogged={(entry) => {
-          console.log('[CheckInTilesCard] weight logged — refreshing XP');
+          console.log('[CheckInTilesCard] weight logged via sheet — refreshing XP');
           if (weightTracker) {
             setTodayEntries((prev) => ({ ...prev, [weightTracker.id]: entry }));
           }
@@ -834,6 +1180,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
             router.push({ pathname: '/tracker/[id]', params: { id: weightTracker.id } });
           }
         }}
+        onLogWeight={logWeightValue}
       />
 
       {/* Steps sheet */}
@@ -869,7 +1216,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
         gymTrackerId={gymTracker?.id ?? null}
         onClose={() => { console.log('[CheckInTilesCard] GymSheet dismissed'); setGymSheetVisible(false); }}
         onLogged={(entry) => {
-          console.log('[CheckInTilesCard] gym logged — refreshing XP');
+          console.log('[CheckInTilesCard] gym logged via sheet — refreshing XP');
           if (gymTracker) {
             setTodayEntries((prev) => ({ ...prev, [gymTracker.id]: entry }));
           }
@@ -882,6 +1229,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
             router.push({ pathname: '/tracker/[id]', params: { id: gymTracker.id } });
           }
         }}
+        onLogGym={logGymWorkout}
       />
     </View>
   );
@@ -977,10 +1325,70 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  xpLabel: {
+
+  // ── Quick action button ──
+  quickBtn: {
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(91,154,168,0.15)',
+  },
+  quickBtnDone: {
+    backgroundColor: 'rgba(92,185,123,0.15)',
+  },
+  quickBtnText: {
     fontSize: 10,
     fontWeight: '600',
-    textAlign: 'center',
+    color: colors.primary,
+  },
+  quickBtnTextDone: {
+    color: colors.success,
+  },
+
+  // ── Inline weight input ──
+  inlineWeightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+  },
+  inlineWeightInput: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  inlineConfirmBtn: {
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 40,
+  },
+  inlineConfirmBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  inlineCancelBtn: {
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  inlineCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // ── Bottom sheet ──
@@ -1154,5 +1562,40 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+  },
+
+  // ── History list ──
+  historyScroll: {
+    maxHeight: 180,
+    marginTop: 4,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    gap: 8,
+  },
+  historyDate: {
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+  },
+  historyValue: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  historyUnit: {
+    fontSize: 12,
+    fontWeight: '400',
+    minWidth: 24,
+  },
+  historyLoadingRow: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  historyEmpty: {
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
 });

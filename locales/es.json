@@ -512,7 +512,13 @@
     "failedToRefreshSteps": "Error al actualizar pasos",
     "refreshFromHealth": "Actualizar desde Salud",
     "workoutLogged": "Entrenamiento registrado ✓",
-    "logWorkout": "Registrar entrenamiento"
+    "logWorkout": "Registrar entrenamiento",
+    "quickLog": "Registrar",
+    "quickAdd": "Agregar",
+    "quickSync": "Sincronizar",
+    "confirmLog": "✓",
+    "cancelLog": "✗",
+    "noHistory": "Sin historial aún"
   },
   "foodSearch": {
     "title": "Buscar Comida",

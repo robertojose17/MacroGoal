@@ -512,7 +512,13 @@
     "failedToRefreshSteps": "Failed to refresh steps",
     "refreshFromHealth": "Refresh from Health",
     "workoutLogged": "Workout logged ✓",
-    "logWorkout": "Log Workout"
+    "logWorkout": "Log Workout",
+    "quickLog": "Log",
+    "quickAdd": "Add",
+    "quickSync": "Sync",
+    "confirmLog": "✓",
+    "cancelLog": "✗",
+    "noHistory": "No history yet"
   },
   "foodSearch": {
     "title": "Search Food",
