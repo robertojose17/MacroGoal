@@ -416,6 +416,13 @@ export default function DashboardScreen() {
           <StreakLeaguePill isDark={isDark} />
         </CardErrorBoundary>
 
+        {/* ── Consistency Score ── */}
+        {user && (
+          <CardErrorBoundary label="ConsistencyScore">
+            <ConsistencyScore userId={user.id} isDark={isDark} />
+          </CardErrorBoundary>
+        )}
+
         {/* ── Goal Weight Card ── */}
         {user && (
           <CardErrorBoundary label="GoalWeightCard">
@@ -442,13 +449,6 @@ export default function DashboardScreen() {
                 emitXpRefresh();
               }}
             />
-          </CardErrorBoundary>
-        )}
-
-        {/* ── Consistency Score ── */}
-        {user && (
-          <CardErrorBoundary label="ConsistencyScore">
-            <ConsistencyScore userId={user.id} isDark={isDark} />
           </CardErrorBoundary>
         )}
 
