@@ -61,9 +61,10 @@ interface DatePickerModalProps {
   isDark: boolean;
   onSelect: (photo: CheckInPhoto) => void;
   onClose: () => void;
+  weightByCheckInId: Record<string, number | null>;
 }
 
-function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClose }: DatePickerModalProps) {
+function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClose, weightByCheckInId }: DatePickerModalProps) {
   const overlayBg = isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.45)';
   const sheetBg = isDark ? '#1E2035' : '#FFFFFF';
   const titleColor = isDark ? colors.textDark : colors.text;
@@ -94,7 +95,9 @@ function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClos
             )}
             renderItem={({ item }) => {
               const isSelected = item.id === selectedId;
-              const dateText = formatDate(item.created_at);
+              const weightLbs = weightByCheckInId[item.check_in_id];
+              const weightText = weightLbs != null ? ` · ${weightLbs.toFixed(1)} lbs` : '';
+              const displayText = formatDate(item.created_at) + weightText;
               return (
                 <TouchableOpacity
                   style={[
@@ -102,7 +105,7 @@ function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClos
                     { backgroundColor: isSelected ? itemBgSelected : itemBg },
                   ]}
                   onPress={() => {
-                    console.log('[PhotoProgressCard] Date selected:', dateText, 'id:', item.id);
+                    console.log('[PhotoProgressCard] Date selected:', displayText, 'id:', item.id);
                     onSelect(item);
                   }}
                   activeOpacity={0.7}
@@ -113,7 +116,7 @@ function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClos
                       { color: isSelected ? '#FFFFFF' : itemTextColor },
                     ]}
                   >
-                    {dateText}
+                    {displayText}
                   </Text>
                   {isSelected && (
                     <IconSymbol
@@ -149,17 +152,19 @@ interface DatePillProps {
   label: string;
   isDark: boolean;
   onPress: () => void;
+  weightLbs: number | null;
 }
 
-function DatePill({ label, isDark, onPress }: DatePillProps) {
+function DatePill({ label, isDark, onPress, weightLbs }: DatePillProps) {
   const pillBg = isDark ? '#1E2035' : '#F0F2F7';
+  const pillLabel = label + (weightLbs != null ? ` · ${weightLbs.toFixed(1)} lbs` : '');
   return (
     <TouchableOpacity
       style={[styles.datePill, { backgroundColor: pillBg }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={[styles.datePillText, { color: colors.primary }]}>{label}</Text>
+      <Text style={[styles.datePillText, { color: colors.primary }]}>{pillLabel}</Text>
       <IconSymbol
         ios_icon_name="chevron.down"
         android_material_icon_name="expand_more"
@@ -175,6 +180,7 @@ function DatePill({ label, isDark, onPress }: DatePillProps) {
 function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
   const [photos, setPhotos] = useState<CheckInPhoto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [weightByCheckInId, setWeightByCheckInId] = useState<Record<string, number | null>>({});
 
   // Selected photo IDs for each slot
   const [beforeId, setBeforeId] = useState<string | null>(null);
@@ -234,6 +240,24 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
       setPhotos(sorted);
 
+      // Fetch weights for each check-in
+      const checkInIds = fetched.map((p) => p.check_in_id).filter(Boolean);
+      let weightMap: Record<string, number | null> = {};
+      if (checkInIds.length > 0) {
+        console.log('[PhotoProgressCard] Fetching weights for check-in ids:', checkInIds);
+        const { data: checkIns } = await supabase
+          .from('check_ins')
+          .select('id, weight')
+          .in('id', checkInIds);
+        if (checkIns) {
+          checkIns.forEach((ci: any) => {
+            weightMap[ci.id] = ci.weight != null ? Number(ci.weight) * 2.20462 : null;
+          });
+        }
+        console.log('[PhotoProgressCard] Weight map loaded:', weightMap);
+      }
+      setWeightByCheckInId(weightMap);
+
       if (sorted.length >= 1) {
         // Try to restore saved selection from AsyncStorage
         let savedBefore: string | null = null;
@@ -289,6 +313,8 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
   const beforeDateLabel = beforePhoto ? formatDateShort(beforePhoto.created_at) : '';
   const afterDateLabel = afterPhoto ? formatDateShort(afterPhoto.created_at) : '';
+  const beforeWeightLbs = beforePhoto ? (weightByCheckInId[beforePhoto.check_in_id] ?? null) : null;
+  const afterWeightLbs = afterPhoto ? (weightByCheckInId[afterPhoto.check_in_id] ?? null) : null;
 
   const emptyState = photos.length === 0;
   const singlePhoto = photos.length === 1;
@@ -376,6 +402,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
                 label={afterDateLabel}
                 isDark={isDark}
                 onPress={handleAfterPillPress}
+                weightLbs={afterWeightLbs}
               />
             </View>
           </View>
@@ -418,6 +445,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
                 label={beforeDateLabel}
                 isDark={isDark}
                 onPress={handleBeforePillPress}
+                weightLbs={beforeWeightLbs}
               />
             </View>
           </View>
@@ -437,6 +465,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
                 label={afterDateLabel}
                 isDark={isDark}
                 onPress={handleAfterPillPress}
+                weightLbs={afterWeightLbs}
               />
             </View>
           </View>
@@ -451,6 +480,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
         isDark={isDark}
         onSelect={handleSelectDate}
         onClose={handleClosePicker}
+        weightByCheckInId={weightByCheckInId}
       />
     </View>
   );
