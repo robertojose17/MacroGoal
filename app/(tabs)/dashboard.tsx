@@ -100,7 +100,7 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
 
   if (!xp.status && !leagueStatus) return null;
 
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
