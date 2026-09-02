@@ -146,7 +146,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
   const gymEntry = gymTracker ? (todayEntries[gymTracker.id] ?? null) : null;
 
   const dailyCals = Number(goal?.daily_calories ?? 0);
-  const dailyProtein = Number(goal?.daily_protein ?? 0);
+  const dailyProtein = Number(goal?.protein_g ?? goal?.daily_protein ?? 0);
 
   // ── Log weight ─────────────────────────────────────────────────────────────
   const handleWeightLog = async (isEdit: boolean) => {
