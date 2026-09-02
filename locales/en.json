@@ -509,7 +509,10 @@
     "lbsPlaceholder": "lbs",
     "lbUnit": "lb",
     "sessionsUnit": "sessions",
-    "failedToRefreshSteps": "Failed to refresh steps"
+    "failedToRefreshSteps": "Failed to refresh steps",
+    "refreshFromHealth": "Refresh from Health",
+    "workoutLogged": "Workout logged ✓",
+    "logWorkout": "Log Workout"
   },
   "foodSearch": {
     "title": "Search Food",

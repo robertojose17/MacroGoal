@@ -509,7 +509,10 @@
     "lbsPlaceholder": "lbs",
     "lbUnit": "lb",
     "sessionsUnit": "sesiones",
-    "failedToRefreshSteps": "Error al actualizar pasos"
+    "failedToRefreshSteps": "Error al actualizar pasos",
+    "refreshFromHealth": "Actualizar desde Salud",
+    "workoutLogged": "Entrenamiento registrado ✓",
+    "logWorkout": "Registrar entrenamiento"
   },
   "foodSearch": {
     "title": "Buscar Comida",

@@ -21,12 +21,11 @@ import { IconSymbol } from '@/components/IconSymbol';
 import PhotoProgressCard from '@/components/PhotoProgressCard';
 import ConsistencyScore from '@/components/ConsistencyScore';
 import GoalWeightCard from '@/components/GoalWeightCard';
-import TodaysChallengesCard from '@/components/xp/TodaysChallengesCard';
+import CheckInTilesCard from '@/components/CheckInTilesCard';
 
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { useXpStatus } from '@/hooks/useXpStatus';
-import { useSteps } from '@/hooks/useSteps';
 import { useLeague } from '@/hooks/useLeague';
 import { usePremium } from '@/hooks/usePremium';
 import { emitXpRefresh } from '@/utils/xpEvents';
@@ -258,7 +257,6 @@ export default function DashboardScreen() {
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
 
   const xp = useXpStatus();
-  const stepsHook = useSteps();
   const { isPremium } = usePremium();
   const { syncWidget } = useWidget();
 
@@ -429,15 +427,19 @@ export default function DashboardScreen() {
           </CardErrorBoundary>
         )}
 
-        {/* ── Today's Challenges Card ── */}
+        {/* ── Check-In Tiles Card ── */}
         {user && (
-          <CardErrorBoundary label="TodaysChallengesCard">
-            <TodaysChallengesCard
-              status={xp.status ?? null}
+          <CardErrorBoundary label="CheckInTilesCard">
+            <CheckInTilesCard
               isDark={isDark}
-              localSteps={stepsHook.steps}
-              onRefresh={() => {
-                console.log('[Dashboard] TodaysChallengesCard refresh requested');
+              userId={user.id}
+              goal={{
+                ...goal,
+                today_calories: todaySummary?.total_calories ?? 0,
+                today_protein: todaySummary?.total_protein ?? 0,
+              }}
+              onXpRefresh={() => {
+                console.log('[Dashboard] CheckInTilesCard XP refresh requested');
                 xp.refresh();
                 emitXpRefresh();
               }}
