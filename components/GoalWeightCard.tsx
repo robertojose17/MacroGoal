@@ -284,38 +284,37 @@ export default function GoalWeightCard({
   console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'lossRateLbsPerWeek:', goalData?.lossRateLbsPerWeek, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
 
   const lossSpeedDisplay = (() => {
-    const KG_TO_LBS = 2.20462;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const fourteenDaysAgo = new Date(today);
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    // Use all tracker_entries (weight in lbs) — no date filter, use everything available
+    // This mirrors Macro Factor: use all weight data to compute a rolling rate
+    let points: { date: Date; weightLbs: number }[] = [];
 
-    // Primary: tracker_entries (lbs) — last 14 days
-    let points: { date: Date; weightLbs: number }[] = trackerEntries
-      .filter(e => new Date(e.date + 'T00:00:00') >= fourteenDaysAgo)
-      .map(e => ({ date: new Date(e.date + 'T00:00:00'), weightLbs: e.value }));
-
-    // Fallback 1: all tracker_entries if fewer than 2 in last 14 days
-    if (points.length < 2 && trackerEntries.length >= 2) {
-      points = trackerEntries.map(e => ({ date: new Date(e.date + 'T00:00:00'), weightLbs: e.value }));
-    }
-
-    // Fallback 2: check_ins (kg → lbs) — last 14 days
-    if (points.length < 2) {
+    if (trackerEntries.length >= 2) {
+      points = trackerEntries.map(e => ({
+        date: new Date(e.date + 'T00:00:00'),
+        weightLbs: e.value,
+      }));
+    } else if (checkIns.length >= 2) {
+      // Fallback: use check_ins (kg → lbs), only entries where weight is not null
       points = checkIns
-        .filter(c => new Date(c.date + 'T00:00:00') >= fourteenDaysAgo)
-        .map(c => ({ date: new Date(c.date + 'T00:00:00'), weightLbs: c.weight * KG_TO_LBS }));
-    }
-
-    // Fallback 3: all check_ins
-    if (points.length < 2 && checkIns.length >= 2) {
-      points = checkIns.map(c => ({ date: new Date(c.date + 'T00:00:00'), weightLbs: c.weight * KG_TO_LBS }));
+        .filter(c => c.weight != null)
+        .map(c => ({
+          date: new Date(c.date + 'T00:00:00'),
+          weightLbs: c.weight * KG_TO_LBS,
+        }));
     }
 
     if (points.length < 2) return '--';
 
-    const first = points[0];
-    const last = points[points.length - 1];
+    // Use the most recent 90 days of data if available, otherwise all data
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const ninetyDaysAgo = new Date(today);
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const recent = points.filter(p => p.date >= ninetyDaysAgo);
+    const working = recent.length >= 2 ? recent : points;
+
+    const first = working[0];
+    const last = working[working.length - 1];
     const daysDiff = (last.date.getTime() - first.date.getTime()) / (1000 * 60 * 60 * 24);
     const weeksDiff = daysDiff / 7;
     if (weeksDiff <= 0) return '--';
