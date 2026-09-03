@@ -290,15 +290,32 @@ export default function GoalWeightCard({
     const fourteenDaysAgo = new Date(today);
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    // checkIns has { date: string; weight: number } where weight is in kg
-    const recentPoints = checkIns
-      .filter(c => new Date(c.date + 'T00:00:00') >= fourteenDaysAgo)
-      .map(c => ({ date: new Date(c.date + 'T00:00:00'), weightLbs: c.weight * KG_TO_LBS }));
+    // Primary: tracker_entries (lbs) — last 14 days
+    let points: { date: Date; weightLbs: number }[] = trackerEntries
+      .filter(e => new Date(e.date + 'T00:00:00') >= fourteenDaysAgo)
+      .map(e => ({ date: new Date(e.date + 'T00:00:00'), weightLbs: e.value }));
 
-    if (recentPoints.length < 2) return '--';
+    // Fallback 1: all tracker_entries if fewer than 2 in last 14 days
+    if (points.length < 2 && trackerEntries.length >= 2) {
+      points = trackerEntries.map(e => ({ date: new Date(e.date + 'T00:00:00'), weightLbs: e.value }));
+    }
 
-    const first = recentPoints[0];
-    const last = recentPoints[recentPoints.length - 1];
+    // Fallback 2: check_ins (kg → lbs) — last 14 days
+    if (points.length < 2) {
+      points = checkIns
+        .filter(c => new Date(c.date + 'T00:00:00') >= fourteenDaysAgo)
+        .map(c => ({ date: new Date(c.date + 'T00:00:00'), weightLbs: c.weight * KG_TO_LBS }));
+    }
+
+    // Fallback 3: all check_ins
+    if (points.length < 2 && checkIns.length >= 2) {
+      points = checkIns.map(c => ({ date: new Date(c.date + 'T00:00:00'), weightLbs: c.weight * KG_TO_LBS }));
+    }
+
+    if (points.length < 2) return '--';
+
+    const first = points[0];
+    const last = points[points.length - 1];
     const daysDiff = (last.date.getTime() - first.date.getTime()) / (1000 * 60 * 60 * 24);
     const weeksDiff = daysDiff / 7;
     if (weeksDiff <= 0) return '--';
@@ -307,7 +324,7 @@ export default function GoalWeightCard({
     if (!isFinite(lbsPerWeek)) return '--';
     return lbsPerWeek.toFixed(1);
   })();
-  console.log('[GoalWeightCard] lossSpeed — checkIns last 14d:', checkIns.filter(c => { const today = new Date(); today.setHours(0,0,0,0); const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14); return new Date(c.date) >= fourteenDaysAgo; }).length, 'result:', lossSpeedDisplay);
+  console.log('[GoalWeightCard] lossSpeed — trackerEntries:', trackerEntries.length, 'checkIns:', checkIns.length, 'result:', lossSpeedDisplay);
 
   const lossSpeedLabel = lossSpeedDisplay === '--' ? '--' : `${lossSpeedDisplay} lbs/week`;
 
