@@ -292,8 +292,8 @@ export default function GoalWeightCard({
 
     // checkIns has { date: string; weight: number } where weight is in kg
     const recentPoints = checkIns
-      .filter(c => new Date(c.date) >= fourteenDaysAgo)
-      .map(c => ({ date: new Date(c.date), weightLbs: c.weight * KG_TO_LBS }));
+      .filter(c => new Date(c.date + 'T00:00:00') >= fourteenDaysAgo)
+      .map(c => ({ date: new Date(c.date + 'T00:00:00'), weightLbs: c.weight * KG_TO_LBS }));
 
     if (recentPoints.length < 2) return '--';
 
