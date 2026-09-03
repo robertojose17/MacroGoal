@@ -340,18 +340,19 @@ export default function GoalWeightCard({
       </View>
 
       {/* Carousel */}
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onLayout={handleLayout}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        scrollEventThrottle={16}
-        style={{ height: CHART_HEIGHT }}
-        contentContainerStyle={{ height: CHART_HEIGHT }}
-      >
+      <View style={{ width: '100%' }} onLayout={handleLayout}>
+        {slideWidth > 0 && (
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          scrollEventThrottle={16}
+          style={{ width: slideWidth, height: CHART_HEIGHT }}
+          contentContainerStyle={{ height: CHART_HEIGHT }}
+        >
         {/* Slide 1 — existing bodyRow */}
-        <View style={[styles.bodyRow, { width: slideWidth || '100%' as any }]}>
+        <View style={[styles.bodyRow, { width: slideWidth }]}>
           {/* Left column */}
           <View style={styles.leftColumn}>
             <View style={styles.weightHorizontalRow}>
@@ -399,7 +400,7 @@ export default function GoalWeightCard({
         </View>
 
         {/* Slide 2 — stats grid */}
-        <View style={[styles.statsSlide, { width: slideWidth || '100%' as any }]}>
+        <View style={[styles.statsSlide, { width: slideWidth }]}>
           {/* Row 1 */}
           <View style={styles.statsRow}>
             <View style={styles.statCell}>
@@ -424,6 +425,8 @@ export default function GoalWeightCard({
           </View>
         </View>
       </ScrollView>
+        )}
+      </View>
 
       {/* Pagination dots */}
       <View style={styles.dotsRow}>
