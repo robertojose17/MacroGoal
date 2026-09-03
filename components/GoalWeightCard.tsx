@@ -285,48 +285,29 @@ export default function GoalWeightCard({
 
   const lossSpeedDisplay = (() => {
     const KG_TO_LBS = 2.20462;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fourteenDaysAgo = new Date(today);
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    // Helper: compute lbs/week from a sorted array of {date, valueLbs}
-    const calcRate = (entries: { date: string; valueLbs: number }[]): string | null => {
-      if (entries.length < 2) return null;
-      const first = entries[0];
-      const last = entries[entries.length - 1];
-      const firstDate = new Date(first.date).getTime();
-      const lastDate = new Date(last.date).getTime();
-      const daysDiff = Math.abs(lastDate - firstDate) / (1000 * 60 * 60 * 24);
-      if (daysDiff === 0) return null;
-      const lbsPerWeek = ((first.valueLbs - last.valueLbs) / daysDiff) * 7;
-      if (!isFinite(lbsPerWeek)) return null;
-      return lbsPerWeek.toFixed(1);
-    };
+    // checkIns has { date: string; weight: number } where weight is in kg
+    const recentPoints = checkIns
+      .filter(c => new Date(c.date) >= fourteenDaysAgo)
+      .map(c => ({ date: new Date(c.date), weightLbs: c.weight * KG_TO_LBS }));
 
-    // 1. Try trackerEntries filtered to last 30 days
-    const recentTracker = trackerEntries
-      .filter((e) => e.date >= cutoffStr)
-      .map((e) => ({ date: e.date, valueLbs: e.value }));
-    const r1 = calcRate(recentTracker);
-    if (r1 !== null) return r1;
+    if (recentPoints.length < 2) return '--';
 
-    // 2. Fall back to checkIns filtered to last 30 days (kg → lbs)
-    const recentCheckIns = checkIns
-      .filter((e) => e.date >= cutoffStr)
-      .map((e) => ({ date: e.date, valueLbs: e.weight * KG_TO_LBS }));
-    const r2 = calcRate(recentCheckIns);
-    if (r2 !== null) return r2;
+    const first = recentPoints[0];
+    const last = recentPoints[recentPoints.length - 1];
+    const daysDiff = (last.date.getTime() - first.date.getTime()) / (1000 * 60 * 60 * 24);
+    const weeksDiff = daysDiff / 7;
+    if (weeksDiff <= 0) return '--';
 
-    // 3. Use ALL entries from whichever array is longer (no date filter)
-    const allTracker = trackerEntries.map((e) => ({ date: e.date, valueLbs: e.value }));
-    const allCheckIns = checkIns.map((e) => ({ date: e.date, valueLbs: e.weight * KG_TO_LBS }));
-    const allEntries = allTracker.length >= allCheckIns.length ? allTracker : allCheckIns;
-    const r3 = calcRate(allEntries);
-    if (r3 !== null) return r3;
-
-    return '--';
+    const lbsPerWeek = (first.weightLbs - last.weightLbs) / weeksDiff;
+    if (!isFinite(lbsPerWeek)) return '--';
+    return lbsPerWeek.toFixed(1);
   })();
-  console.log('[GoalWeightCard] lossSpeed — trackerEntries:', trackerEntries.length, 'checkIns:', checkIns.length, 'result:', lossSpeedDisplay);
+  console.log('[GoalWeightCard] lossSpeed — checkIns last 14d:', checkIns.filter(c => { const today = new Date(); today.setHours(0,0,0,0); const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14); return new Date(c.date) >= fourteenDaysAgo; }).length, 'result:', lossSpeedDisplay);
 
   const lossSpeedLabel = lossSpeedDisplay === '--' ? '--' : `${lossSpeedDisplay} lbs/week`;
 
