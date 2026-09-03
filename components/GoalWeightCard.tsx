@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,6 @@ import {
   TouchableOpacity,
   Platform,
   ActivityIndicator,
-  ScrollView,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-  LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -51,10 +47,6 @@ export default function GoalWeightCard({
   } | null>(null);
   const [startWeightFromGoal, setStartWeightFromGoal] = useState<number | null>(null);
   const [goalWeightKgDirect, setGoalWeightKgDirect] = useState<number | null>(null);
-
-  // Carousel state
-  const [activeSlide, setActiveSlide] = useState(0);
-  const [slideWidth, setSlideWidth] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -291,12 +283,6 @@ export default function GoalWeightCard({
   }
   console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'lossRateLbsPerWeek:', goalData?.lossRateLbsPerWeek, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
 
-  // ── Slide 2: Loss Speed from trackerEntries (last 20 days) ────────────────
-  const weightLostLbs = (() => {
-    const raw = startLbs - (lastTrackerEntryLbs ?? currentLbs);
-    return raw > 0 ? raw : 0;
-  })();
-
   const lossSpeedDisplay = (() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 20);
@@ -311,27 +297,11 @@ export default function GoalWeightCard({
     return lbsPerWeek.toFixed(1);
   })();
 
-  const weightLostDisplay = weightLostLbs.toFixed(1);
-  const lbsToGoDisplay = lbsToGo.toFixed(1);
   const lossSpeedLabel = lossSpeedDisplay === '--' ? '--' : `${lossSpeedDisplay} lbs/week`;
-  const estGoalDateLabel = estDateLabel || '--';
-
-  // ── Carousel handlers ─────────────────────────────────────────────────────
-  const handleLayout = (e: LayoutChangeEvent) => {
-    const w = e.nativeEvent.layout.width;
-    if (w > 0) setSlideWidth(w);
-  };
-
-  const handleMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetX = e.nativeEvent.contentOffset.x;
-    const newSlide = slideWidth > 0 ? Math.round(offsetX / slideWidth) : 0;
-    console.log('[GoalWeightCard] carousel swiped to slide:', newSlide);
-    setActiveSlide(newSlide);
-  };
 
   return (
     <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
-      {/* Header — unchanged */}
+      {/* Header */}
       <View style={styles.headerRow}>
         <Text style={[styles.title, { color: textPrimary }]}>{t('goalWeightCard.title')}</Text>
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
@@ -339,51 +309,41 @@ export default function GoalWeightCard({
         </View>
       </View>
 
-      {/* Carousel */}
-      <View style={{ width: '100%' }} onLayout={handleLayout}>
-        {slideWidth > 0 && (
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          scrollEventThrottle={16}
-          style={{ width: slideWidth, height: CHART_HEIGHT }}
-          contentContainerStyle={{ height: CHART_HEIGHT }}
-        >
-        {/* Slide 1 — existing bodyRow */}
-        <View style={[styles.bodyRow, { width: slideWidth }]}>
-          {/* Left column */}
-          <View style={styles.leftColumn}>
-            <View style={styles.weightHorizontalRow}>
-              <Text style={[styles.weightInlineValue, { color: textPrimary }]}>{startLbs}</Text>
-              <Text style={[styles.weightInlineUnit, { color: textPrimary }]}> lbs</Text>
-              <Text style={[styles.weightArrow, { color: textSecondary }]}>  →  </Text>
-              <Text style={[styles.weightInlineValue, { color: PRIMARY }]}>{goalLbs}</Text>
-              <Text style={[styles.weightInlineUnit, { color: PRIMARY }]}> lbs</Text>
-            </View>
+      {/* Body row */}
+      <View style={[styles.bodyRow, { marginBottom: 4 }]}>
+        {/* Left column */}
+        <View style={styles.leftColumn}>
+          <View style={styles.weightHorizontalRow}>
+            <Text style={[styles.weightInlineValue, { color: textPrimary }]}>{startLbs}</Text>
+            <Text style={[styles.weightInlineUnit, { color: textPrimary }]}> lbs</Text>
+            <Text style={[styles.weightArrow, { color: textSecondary }]}>  →  </Text>
+            <Text style={[styles.weightInlineValue, { color: PRIMARY }]}>{goalLbs}</Text>
+            <Text style={[styles.weightInlineUnit, { color: PRIMARY }]}> lbs</Text>
+          </View>
 
-            <View style={styles.progressSection}>
-              <View style={styles.barRow}>
-                <View style={[styles.track, { backgroundColor: trackBg, flex: 1 }]}>
-                  <LinearGradient
-                    colors={['#5B9AA8', '#7BC8D4']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.fill, { width: `${progressPct}%` as any }]}
-                  />
-                  <View style={[styles.progressDot, { left: `${progressPct}%` as any, borderColor: bg }]} />
-                </View>
-                <Text style={styles.pctText}>{progressPct}%</Text>
+          <View style={styles.progressSection}>
+            <View style={styles.barRow}>
+              <View style={[styles.track, { backgroundColor: trackBg, flex: 1 }]}>
+                <LinearGradient
+                  colors={['#5B9AA8', '#7BC8D4']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.fill, { width: `${progressPct}%` as any }]}
+                />
+                <View style={[styles.progressDot, { left: `${progressPct}%` as any, borderColor: bg }]} />
               </View>
-              {goalReached ? (
-                <Text style={[styles.lbsToGo, { color: '#5CB97B' }]}>{t('goalWeightCard.goalReached')}</Text>
-              ) : (
-                <Text style={[styles.lbsToGo, { color: textSecondary }]}>{t('goalWeightCard.lbsToGo', { lbs: lbsToGo })}</Text>
-              )}
+              <Text style={styles.pctText}>{progressPct}%</Text>
             </View>
+            {goalReached ? (
+              <Text style={[styles.lbsToGo, { color: '#5CB97B' }]}>{t('goalWeightCard.goalReached')}</Text>
+            ) : (
+              <Text style={[styles.lbsToGo, { color: textSecondary }]}>{t('goalWeightCard.lbsToGo', { lbs: lbsToGo })}</Text>
+            )}
+          </View>
 
-            <View style={styles.estSection}>
+          {/* Est. Arrival + Loss Speed side by side */}
+          <View style={styles.estSection}>
+            <View style={styles.estCell}>
               <Text style={[styles.estLabel, { color: textSecondary }]}>{t('goalWeightCard.estArrival')}</Text>
               {estDateLabel ? (
                 <Text style={[styles.estDate, { color: textPrimary }]}>{estDateLabel}</Text>
@@ -391,47 +351,17 @@ export default function GoalWeightCard({
                 <Text style={[styles.estDate, { color: textSecondary }]}>{t('goalWeightCard.calculating')}</Text>
               )}
             </View>
-          </View>
-
-          {/* Right column — mini chart */}
-          <View style={styles.chartColumn}>
-            <WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} />
-          </View>
-        </View>
-
-        {/* Slide 2 — stats grid */}
-        <View style={[styles.statsSlide, { width: slideWidth }]}>
-          {/* Row 1 */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCell}>
-              <Text style={[styles.statLabel, { color: textSecondary }]}>WEIGHT LOST</Text>
-              <Text style={[styles.statValue, { color: textPrimary }]}>{weightLostDisplay} lbs</Text>
-            </View>
-            <View style={styles.statCell}>
-              <Text style={[styles.statLabel, { color: textSecondary }]}>LBS TO GO</Text>
-              <Text style={[styles.statValue, { color: textPrimary }]}>{lbsToGoDisplay} lbs</Text>
-            </View>
-          </View>
-          {/* Row 2 */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCell}>
-              <Text style={[styles.statLabel, { color: textSecondary }]}>LOSS SPEED</Text>
-              <Text style={[styles.statValue, { color: textPrimary }]}>{lossSpeedLabel}</Text>
-            </View>
-            <View style={styles.statCell}>
-              <Text style={[styles.statLabel, { color: textSecondary }]}>EST. GOAL DATE</Text>
-              <Text style={[styles.statValue, { color: textPrimary }]}>{estGoalDateLabel}</Text>
+            <View style={styles.estCell}>
+              <Text style={[styles.estLabel, { color: textSecondary }]}>LOSS SPEED</Text>
+              <Text style={[styles.estDate, { color: textPrimary }]}>{lossSpeedLabel}</Text>
             </View>
           </View>
         </View>
-      </ScrollView>
-        )}
-      </View>
 
-      {/* Pagination dots */}
-      <View style={styles.dotsRow}>
-        <View style={[styles.dot, { backgroundColor: activeSlide === 0 ? PRIMARY : '#D1D5DB' }]} />
-        <View style={[styles.dot, { backgroundColor: activeSlide === 1 ? PRIMARY : '#D1D5DB' }]} />
+        {/* Right column — mini chart */}
+        <View style={styles.chartColumn}>
+          <WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} />
+        </View>
       </View>
     </View>
   );
@@ -462,7 +392,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700' },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
-  // Two-column body (slide 1)
+  // Two-column body
   bodyRow: {
     flexDirection: 'row',
     height: CHART_HEIGHT,
@@ -532,8 +462,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
-  // Estimated arrival
+  // Estimated arrival + loss speed row
   estSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  estCell: {
+    flex: 1,
     gap: 2,
   },
   estLabel: {
@@ -545,45 +480,6 @@ const styles = StyleSheet.create({
   estDate: {
     fontSize: 13,
     fontWeight: '700',
-  },
-  // Slide 2 — stats grid
-  statsSlide: {
-    height: CHART_HEIGHT,
-    justifyContent: 'space-evenly',
-    paddingHorizontal: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    flex: 1,
-    alignItems: 'center',
-  },
-  statCell: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 3,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  // Pagination dots
-  dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   // No goal / no data states
   noGoal: { fontSize: 14, lineHeight: 20, marginVertical: 8 },
