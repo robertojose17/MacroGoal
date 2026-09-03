@@ -284,8 +284,7 @@ export default function GoalWeightCard({
   console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'lossRateLbsPerWeek:', goalData?.lossRateLbsPerWeek, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
 
   const lossSpeedDisplay = (() => {
-    // Use all tracker_entries (weight in lbs) — no date filter, use everything available
-    // This mirrors Macro Factor: use all weight data to compute a rolling rate
+    // Build points from trackerEntries (lbs) or checkIns (kg→lbs)
     let points: { date: Date; weightLbs: number }[] = [];
 
     if (trackerEntries.length >= 2) {
@@ -293,8 +292,7 @@ export default function GoalWeightCard({
         date: new Date(e.date + 'T00:00:00'),
         weightLbs: e.value,
       }));
-    } else if (checkIns.length >= 2) {
-      // Fallback: use check_ins (kg → lbs), only entries where weight is not null
+    } else if (checkIns.filter(c => c.weight != null).length >= 2) {
       points = checkIns
         .filter(c => c.weight != null)
         .map(c => ({
@@ -305,7 +303,7 @@ export default function GoalWeightCard({
 
     if (points.length < 2) return '--';
 
-    // Use the most recent 90 days of data if available, otherwise all data
+    // Use last 90 days if enough data, otherwise all
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const ninetyDaysAgo = new Date(today);
@@ -313,13 +311,29 @@ export default function GoalWeightCard({
     const recent = points.filter(p => p.date >= ninetyDaysAgo);
     const working = recent.length >= 2 ? recent : points;
 
-    const first = working[0];
-    const last = working[working.length - 1];
-    const daysDiff = (last.date.getTime() - first.date.getTime()) / (1000 * 60 * 60 * 24);
-    const weeksDiff = daysDiff / 7;
-    if (weeksDiff <= 0) return '--';
+    // Convert dates to "days since first point" (x axis)
+    const t0 = working[0].date.getTime();
+    const xs = working.map(p => (p.date.getTime() - t0) / (1000 * 60 * 60 * 24));
+    const ys = working.map(p => p.weightLbs);
 
-    const lbsPerWeek = (first.weightLbs - last.weightLbs) / weeksDiff;
+    // Exponential decay weights: more recent = higher weight
+    // halfLife = 7 days (same as Macro Factor's ~1-week half-life)
+    const halfLife = 7;
+    const maxX = xs[xs.length - 1];
+    const ws = xs.map(x => Math.pow(0.5, (maxX - x) / halfLife));
+
+    // Weighted linear regression: slope = Σw(x-x̄)(y-ȳ) / Σw(x-x̄)²
+    const sumW = ws.reduce((a, b) => a + b, 0);
+    const xBar = ws.reduce((acc, w, i) => acc + w * xs[i], 0) / sumW;
+    const yBar = ws.reduce((acc, w, i) => acc + w * ys[i], 0) / sumW;
+
+    const num = ws.reduce((acc, w, i) => acc + w * (xs[i] - xBar) * (ys[i] - yBar), 0);
+    const den = ws.reduce((acc, w, i) => acc + w * (xs[i] - xBar) ** 2, 0);
+
+    if (den === 0) return '--';
+
+    const slopePerDay = num / den; // lbs/day (negative = losing)
+    const lbsPerWeek = -slopePerDay * 7; // flip sign: positive = losing weight
     if (!isFinite(lbsPerWeek)) return '--';
     return lbsPerWeek.toFixed(1);
   })();
