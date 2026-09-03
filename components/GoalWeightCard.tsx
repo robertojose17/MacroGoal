@@ -351,6 +351,7 @@ export default function GoalWeightCard({
                 <Text style={[styles.estDate, { color: textSecondary }]}>{t('goalWeightCard.calculating')}</Text>
               )}
             </View>
+            <View style={[styles.estDivider, { backgroundColor: textSecondary }]} />
             <View style={styles.estCell}>
               <Text style={[styles.estLabel, { color: textSecondary }]}>LOSS SPEED</Text>
               <Text style={[styles.estDate, { color: textPrimary }]}>{lossSpeedLabel}</Text>
@@ -466,19 +467,26 @@ const styles = StyleSheet.create({
   estSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 2,
   },
   estCell: {
     flex: 1,
     gap: 2,
   },
+  estDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginHorizontal: 8,
+    opacity: 0.2,
+  },
   estLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   estDate: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   // No goal / no data states
