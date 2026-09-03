@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,10 @@ import {
   TouchableOpacity,
   Platform,
   ActivityIndicator,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +20,7 @@ import { colors, borderRadius as br, spacing } from '@/styles/commonStyles';
 
 const KG_TO_LBS = 2.20462;
 const CHART_HEIGHT = 120;
+const PRIMARY = '#5B9AA8';
 
 // ─── GoalWeightCard ───────────────────────────────────────────────────────────
 
@@ -36,7 +41,6 @@ export default function GoalWeightCard({
 }: GoalWeightCardProps) {
   const router = useRouter();
   const { t } = useTranslation();
-  // We still need check-ins to derive currentKg fallback, weekNum, estText, and startKg
   const [checkIns, setCheckIns] = useState<{ date: string; weight: number }[]>([]);
   const [trackerEntries, setTrackerEntries] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +51,10 @@ export default function GoalWeightCard({
   } | null>(null);
   const [startWeightFromGoal, setStartWeightFromGoal] = useState<number | null>(null);
   const [goalWeightKgDirect, setGoalWeightKgDirect] = useState<number | null>(null);
+
+  // Carousel state
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [slideWidth, setSlideWidth] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +85,6 @@ export default function GoalWeightCard({
             .maybeSingle(),
         ]);
 
-        // Step 1: find the weight tracker for this user
         const { data: weightTracker } = await supabase
           .from('trackers')
           .select('id')
@@ -86,7 +93,6 @@ export default function GoalWeightCard({
           .eq('is_default', true)
           .maybeSingle();
 
-        // Step 2: if found, get all entries ordered by date ascending
         let fetchedTrackerEntries: { date: string; value: number }[] = [];
         if (weightTracker?.id) {
           const { data: entriesData } = await supabase
@@ -127,13 +133,11 @@ export default function GoalWeightCard({
         const goal = goalsResult.data?.[0];
         const userData = userResult.data;
 
-        // Bug 2 fix: load goal_weight directly from users table as authoritative source
         if (userData?.goal_weight != null) {
           console.log('[GoalWeightCard] goalWeightKgDirect from users table:', userData.goal_weight);
           setGoalWeightKgDirect(Number(userData.goal_weight));
         }
 
-        // Use earliest check-in as the authoritative start weight
         if (points.length > 0) {
           setStartWeightFromGoal(points[0].weight);
           console.log('[GoalWeightCard] startWeightFromGoal from earliest check-in:', points[0].weight, 'kg =', Math.round(points[0].weight * 2.20462), 'lbs');
@@ -206,7 +210,6 @@ export default function GoalWeightCard({
     );
   }
 
-  // Use last check-in weight as fallback for current weight
   const currentKg = propCurrent ?? (checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null);
 
   // ── No current weight ─────────────────────────────────────────────────────
@@ -236,24 +239,19 @@ export default function GoalWeightCard({
   }
 
   // ── Derived values ────────────────────────────────────────────────────────
-  // Bug 1 fix: use start weight derived from goal start_date check-in
   const startKg = startWeightFromGoal ?? propStart ?? (checkIns.length > 0 ? checkIns[0].weight : currentKg);
-  // Bug 2 fix: use goal_weight loaded directly from users table as authoritative source
   const resolvedGoalKg = goalWeightKgDirect ?? propGoal;
   const currentLbs = Math.round(currentKg * KG_TO_LBS);
   const goalLbs = Math.round(resolvedGoalKg * KG_TO_LBS);
 
   const lastCheckInKg = checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null;
 
-  // Last check-in from tracker_entries (in lbs) — source of truth matching check-in tab
   const lastTrackerEntryLbs = trackerEntries.length > 0
     ? trackerEntries[trackerEntries.length - 1].value
     : null;
 
-  // Convert to kg for comparison with goal (which is in kg)
   const lastTrackerEntryKg = lastTrackerEntryLbs != null ? lastTrackerEntryLbs / KG_TO_LBS : null;
 
-  // Use tracker entry as active weight for progress bar
   const activeWeightKg = lastTrackerEntryKg ?? lastCheckInKg ?? currentKg;
 
   const isLosing = resolvedGoalKg < startKg;
@@ -267,7 +265,6 @@ export default function GoalWeightCard({
   const progressPct = Math.round(progress * 100);
 
   const startLbs = Math.round(startKg * KG_TO_LBS);
-  // lbs to go: from last tracker entry (lbs) to goal
   const lbsToGo = lastTrackerEntryLbs != null
     ? Math.max(0, Math.round(Math.abs(lastTrackerEntryLbs - (resolvedGoalKg * KG_TO_LBS))))
     : Math.max(0, Math.round(Math.abs((currentKg ?? 0) - resolvedGoalKg) * KG_TO_LBS));
@@ -281,10 +278,8 @@ export default function GoalWeightCard({
     let daysToGoal: number | null = null;
 
     if (lossRateLbsPerWeek > 0) {
-      // Primary: use loss_rate_lbs_per_week directly (always populated)
       daysToGoal = Math.round(lbsToGo / (lossRateLbsPerWeek / 7));
     } else if (dailyDeficit > 50) {
-      // Fallback: caloric deficit only if loss rate is missing
       daysToGoal = Math.round(lbsToGo / (dailyDeficit / 3500));
     }
 
@@ -296,9 +291,47 @@ export default function GoalWeightCard({
   }
   console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'lossRateLbsPerWeek:', goalData?.lossRateLbsPerWeek, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
 
+  // ── Slide 2: Loss Speed from trackerEntries (last 20 days) ────────────────
+  const weightLostLbs = (() => {
+    const raw = startLbs - (lastTrackerEntryLbs ?? currentLbs);
+    return raw > 0 ? raw : 0;
+  })();
+
+  const lossSpeedDisplay = (() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 20);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const recent = trackerEntries.filter((e) => e.date >= cutoffStr);
+    if (recent.length < 2) return '--';
+    const firstVal = recent[0].value;
+    const lastVal = recent[recent.length - 1].value;
+    const days = recent.length - 1;
+    const lbsPerWeek = ((firstVal - lastVal) / days) * 7;
+    if (!isFinite(lbsPerWeek)) return '--';
+    return lbsPerWeek.toFixed(1);
+  })();
+
+  const weightLostDisplay = weightLostLbs.toFixed(1);
+  const lbsToGoDisplay = lbsToGo.toFixed(1);
+  const lossSpeedLabel = lossSpeedDisplay === '--' ? '--' : `${lossSpeedDisplay} lbs/week`;
+  const estGoalDateLabel = estDateLabel || '--';
+
+  // ── Carousel handlers ─────────────────────────────────────────────────────
+  const handleLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0) setSlideWidth(w);
+  };
+
+  const handleMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const newSlide = slideWidth > 0 ? Math.round(offsetX / slideWidth) : 0;
+    console.log('[GoalWeightCard] carousel swiped to slide:', newSlide);
+    setActiveSlide(newSlide);
+  };
+
   return (
     <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
-      {/* Header */}
+      {/* Header — unchanged */}
       <View style={styles.headerRow}>
         <Text style={[styles.title, { color: textPrimary }]}>{t('goalWeightCard.title')}</Text>
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
@@ -306,55 +339,96 @@ export default function GoalWeightCard({
         </View>
       </View>
 
-      {/* Two-column body */}
-      <View style={styles.bodyRow}>
-        {/* Left column — premium weight progress */}
-        <View style={[styles.leftColumn]}>
-          {/* Start → Goal weights (horizontal) */}
-          <View style={styles.weightHorizontalRow}>
-            <Text style={[styles.weightInlineValue, { color: textPrimary }]}>{startLbs}</Text>
-            <Text style={[styles.weightInlineUnit, { color: textPrimary }]}> lbs</Text>
-            <Text style={[styles.weightArrow, { color: textSecondary }]}>  →  </Text>
-            <Text style={[styles.weightInlineValue, { color: '#5B9AA8' }]}>{goalLbs}</Text>
-            <Text style={[styles.weightInlineUnit, { color: '#5B9AA8' }]}> lbs</Text>
-          </View>
-
-          {/* Progress bar */}
-          <View style={styles.progressSection}>
-            <View style={styles.barRow}>
-              <View style={[styles.track, { backgroundColor: trackBg, flex: 1 }]}>
-                <LinearGradient
-                  colors={['#5B9AA8', '#7BC8D4']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.fill, { width: `${progressPct}%` as any }]}
-                />
-                <View style={[styles.progressDot, { left: `${progressPct}%` as any, borderColor: bg }]} />
-              </View>
-              <Text style={styles.pctText}>{progressPct}%</Text>
+      {/* Carousel */}
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onLayout={handleLayout}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        scrollEventThrottle={16}
+        style={{ height: CHART_HEIGHT }}
+        contentContainerStyle={{ height: CHART_HEIGHT }}
+      >
+        {/* Slide 1 — existing bodyRow */}
+        <View style={[styles.bodyRow, { width: slideWidth || '100%' as any }]}>
+          {/* Left column */}
+          <View style={styles.leftColumn}>
+            <View style={styles.weightHorizontalRow}>
+              <Text style={[styles.weightInlineValue, { color: textPrimary }]}>{startLbs}</Text>
+              <Text style={[styles.weightInlineUnit, { color: textPrimary }]}> lbs</Text>
+              <Text style={[styles.weightArrow, { color: textSecondary }]}>  →  </Text>
+              <Text style={[styles.weightInlineValue, { color: PRIMARY }]}>{goalLbs}</Text>
+              <Text style={[styles.weightInlineUnit, { color: PRIMARY }]}> lbs</Text>
             </View>
-            {goalReached ? (
-              <Text style={[styles.lbsToGo, { color: '#5CB97B' }]}>{t('goalWeightCard.goalReached')}</Text>
-            ) : (
-              <Text style={[styles.lbsToGo, { color: textSecondary }]}>{t('goalWeightCard.lbsToGo', { lbs: lbsToGo })}</Text>
-            )}
+
+            <View style={styles.progressSection}>
+              <View style={styles.barRow}>
+                <View style={[styles.track, { backgroundColor: trackBg, flex: 1 }]}>
+                  <LinearGradient
+                    colors={['#5B9AA8', '#7BC8D4']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.fill, { width: `${progressPct}%` as any }]}
+                  />
+                  <View style={[styles.progressDot, { left: `${progressPct}%` as any, borderColor: bg }]} />
+                </View>
+                <Text style={styles.pctText}>{progressPct}%</Text>
+              </View>
+              {goalReached ? (
+                <Text style={[styles.lbsToGo, { color: '#5CB97B' }]}>{t('goalWeightCard.goalReached')}</Text>
+              ) : (
+                <Text style={[styles.lbsToGo, { color: textSecondary }]}>{t('goalWeightCard.lbsToGo', { lbs: lbsToGo })}</Text>
+              )}
+            </View>
+
+            <View style={styles.estSection}>
+              <Text style={[styles.estLabel, { color: textSecondary }]}>{t('goalWeightCard.estArrival')}</Text>
+              {estDateLabel ? (
+                <Text style={[styles.estDate, { color: textPrimary }]}>{estDateLabel}</Text>
+              ) : (
+                <Text style={[styles.estDate, { color: textSecondary }]}>{t('goalWeightCard.calculating')}</Text>
+              )}
+            </View>
           </View>
 
-          {/* Estimated arrival */}
-          <View style={styles.estSection}>
-            <Text style={[styles.estLabel, { color: textSecondary }]}>{t('goalWeightCard.estArrival')}</Text>
-            {estDateLabel ? (
-              <Text style={[styles.estDate, { color: textPrimary }]}>{estDateLabel}</Text>
-            ) : (
-              <Text style={[styles.estDate, { color: textSecondary }]}>{t('goalWeightCard.calculating')}</Text>
-            )}
+          {/* Right column — mini chart */}
+          <View style={styles.chartColumn}>
+            <WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} />
           </View>
         </View>
 
-        {/* Right column — mini chart */}
-        <View style={styles.chartColumn}>
-          <WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} />
+        {/* Slide 2 — stats grid */}
+        <View style={[styles.statsSlide, { width: slideWidth || '100%' as any }]}>
+          {/* Row 1 */}
+          <View style={styles.statsRow}>
+            <View style={styles.statCell}>
+              <Text style={[styles.statLabel, { color: textSecondary }]}>WEIGHT LOST</Text>
+              <Text style={[styles.statValue, { color: textPrimary }]}>{weightLostDisplay} lbs</Text>
+            </View>
+            <View style={styles.statCell}>
+              <Text style={[styles.statLabel, { color: textSecondary }]}>LBS TO GO</Text>
+              <Text style={[styles.statValue, { color: textPrimary }]}>{lbsToGoDisplay} lbs</Text>
+            </View>
+          </View>
+          {/* Row 2 */}
+          <View style={styles.statsRow}>
+            <View style={styles.statCell}>
+              <Text style={[styles.statLabel, { color: textSecondary }]}>LOSS SPEED</Text>
+              <Text style={[styles.statValue, { color: textPrimary }]}>{lossSpeedLabel}</Text>
+            </View>
+            <View style={styles.statCell}>
+              <Text style={[styles.statLabel, { color: textSecondary }]}>EST. GOAL DATE</Text>
+              <Text style={[styles.statValue, { color: textPrimary }]}>{estGoalDateLabel}</Text>
+            </View>
+          </View>
         </View>
+      </ScrollView>
+
+      {/* Pagination dots */}
+      <View style={styles.dotsRow}>
+        <View style={[styles.dot, { backgroundColor: activeSlide === 0 ? PRIMARY : '#D1D5DB' }]} />
+        <View style={[styles.dot, { backgroundColor: activeSlide === 1 ? PRIMARY : '#D1D5DB' }]} />
       </View>
     </View>
   );
@@ -385,11 +459,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700' },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
-  // Two-column body
+  // Two-column body (slide 1)
   bodyRow: {
     flexDirection: 'row',
     height: CHART_HEIGHT,
-    marginBottom: 4,
   },
   leftColumn: {
     flex: 1,
@@ -469,6 +542,45 @@ const styles = StyleSheet.create({
   estDate: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  // Slide 2 — stats grid
+  statsSlide: {
+    height: CHART_HEIGHT,
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    flex: 1,
+    alignItems: 'center',
+  },
+  statCell: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  // Pagination dots
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   // No goal / no data states
   noGoal: { fontSize: 14, lineHeight: 20, marginVertical: 8 },
