@@ -115,6 +115,9 @@ export default function HomeScreen() {
     refresh: refreshRescue,
   } = useStreakRescue();
 
+  // ── Adaptive TDEE banner state ──
+  const [adaptiveBannerDismissed, setAdaptiveBannerDismissed] = useState(false);
+
   // Segmented control
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -927,8 +930,68 @@ export default function HomeScreen() {
     const itemCountLabel = itemCount === 1 ? t('home.item') : t('home.items');
     const sessions = groupIntoSessions(allFoodItems);
 
+    const lastUpdate = goal?.last_adaptive_update;
+    const showAdaptiveBanner = (() => {
+      if (adaptiveBannerDismissed || !lastUpdate) return false;
+      try {
+        const updateDate = new Date(lastUpdate + 'T00:00:00');
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const diffMs = now.getTime() - updateDate.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        return diffDays >= 0 && diffDays <= 2;
+      } catch {
+        return false;
+      }
+    })();
+    const adaptiveCalories = goal?.daily_calories ? Math.round(Number(goal.daily_calories)) : null;
+
     return (
       <View>
+        {/* ── Adaptive TDEE Banner ── */}
+        {showAdaptiveBanner && adaptiveCalories !== null && (
+          <View style={[styles.adaptiveBanner, { backgroundColor: isDark ? '#1A2D35' : '#E8F4F7', borderColor: colors.primary + '40' }]}>
+            <View style={styles.adaptiveBannerLeft}>
+              <View style={[styles.adaptiveBannerIconCircle, { backgroundColor: colors.primary + '20' }]}>
+                <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.adaptiveBannerText}>
+                <Text style={[styles.adaptiveBannerTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  {t('adaptiveTdee.bannerTitle')}
+                </Text>
+                <Text style={[styles.adaptiveBannerSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  {adaptiveCalories}
+                  {' kcal'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.adaptiveBannerRight}>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Home iOS] Adaptive TDEE banner "See why" pressed');
+                  router.push('/adaptive-tdee-history');
+                }}
+                activeOpacity={0.7}
+                style={styles.adaptiveBannerSeeWhy}
+              >
+                <Text style={[styles.adaptiveBannerSeeWhyText, { color: colors.primary }]}>
+                  {t('adaptiveTdee.seeWhy')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Home iOS] Adaptive TDEE banner dismissed');
+                  setAdaptiveBannerDismissed(true);
+                }}
+                activeOpacity={0.7}
+                style={styles.adaptiveBannerClose}
+              >
+                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={14} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Calories + macros summary card */}
         <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
           <View style={styles.caloriesContent}>
@@ -1900,6 +1963,57 @@ const styles = StyleSheet.create({
   },
   templateSubtitle: {
     fontSize: 12,
+  },
+
+  // ── Adaptive TDEE Banner ──────────────────────────────────────────────────
+  adaptiveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  adaptiveBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.sm,
+  },
+  adaptiveBannerIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adaptiveBannerText: {
+    flex: 1,
+  },
+  adaptiveBannerTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  adaptiveBannerSubtitle: {
+    fontSize: 12,
+  },
+  adaptiveBannerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  adaptiveBannerSeeWhy: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  adaptiveBannerSeeWhyText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  adaptiveBannerClose: {
+    padding: 4,
   },
 });
 

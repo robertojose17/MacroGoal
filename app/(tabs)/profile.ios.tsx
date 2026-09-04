@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation, Switch } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -61,6 +61,9 @@ export default function ProfileScreen() {
 
   // Goal weight prompt state
   const [showGoalWeightPrompt, setShowGoalWeightPrompt] = useState(false);
+
+  // Adaptive TDEE state
+  const [showAdjustmentDayModal, setShowAdjustmentDayModal] = useState(false);
 
   // Food preferences state
   const [showFoodPrefsModal, setShowFoodPrefsModal] = useState(false);
@@ -1281,6 +1284,100 @@ export default function ProfileScreen() {
                         {t('profile.recalculateGoals')}
                       </Text>
                     </TouchableOpacity>
+
+                    {/* ── Adaptive TDEE Divider ── */}
+                    <View style={[styles.adaptiveDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
+
+                    {/* ── A. Smart Calorie Adjustment Toggle ── */}
+                    <View style={styles.adaptiveRow}>
+                      <View style={styles.adaptiveRowLeft}>
+                        <View style={[styles.adaptiveIconCircle, { backgroundColor: isDark ? '#1E2D35' : '#EBF4F6' }]}>
+                          <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={16} color={colors.primary} />
+                        </View>
+                        <View style={styles.adaptiveTextStack}>
+                          <Text style={[styles.adaptiveLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                            {t('adaptiveTdee.smartAdjustment')}
+                          </Text>
+                          <Text style={[styles.adaptiveSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                            {t('adaptiveTdee.smartAdjustmentSubtitle')}
+                          </Text>
+                        </View>
+                      </View>
+                      <Switch
+                        value={user?.adaptive_tdee_enabled !== false}
+                        onValueChange={async (val) => {
+                          console.log('[Profile iOS] Smart Calorie Adjustment toggled:', val);
+                          try {
+                            const { error } = await supabase
+                              .from('users')
+                              .update({ adaptive_tdee_enabled: val, updated_at: new Date().toISOString() })
+                              .eq('id', user.id);
+                            if (error) throw error;
+                            setUser((prev: any) => ({ ...prev, adaptive_tdee_enabled: val }));
+                          } catch (err: any) {
+                            console.error('[Profile iOS] Error saving adaptive_tdee_enabled:', err);
+                            Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                          }
+                        }}
+                        trackColor={{ false: isDark ? colors.borderDark : colors.border, true: colors.primary + '80' }}
+                        thumbColor={user?.adaptive_tdee_enabled !== false ? colors.primary : (isDark ? colors.textSecondaryDark : colors.disabled)}
+                      />
+                    </View>
+
+                    {/* ── B. Adjustment Day Selector (only when enabled) ── */}
+                    {user?.adaptive_tdee_enabled !== false && (
+                      <TouchableOpacity
+                        style={styles.adaptiveRow}
+                        onPress={() => {
+                          console.log('[Profile iOS] Adjustment Day row pressed');
+                          setShowAdjustmentDayModal(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.adaptiveRowLeft}>
+                          <View style={[styles.adaptiveIconCircle, { backgroundColor: isDark ? '#1E2D35' : '#EBF4F6' }]}>
+                            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={16} color={colors.primary} />
+                          </View>
+                          <Text style={[styles.adaptiveLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                            {t('adaptiveTdee.adjustmentDay')}
+                          </Text>
+                        </View>
+                        <View style={styles.adaptiveRowRight}>
+                          <Text style={[styles.adaptiveValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                            {[
+                              t('adaptiveTdee.sunday'),
+                              t('adaptiveTdee.monday'),
+                              t('adaptiveTdee.tuesday'),
+                              t('adaptiveTdee.wednesday'),
+                              t('adaptiveTdee.thursday'),
+                              t('adaptiveTdee.friday'),
+                              t('adaptiveTdee.saturday'),
+                            ][user?.adjustment_day ?? 0]}
+                          </Text>
+                          <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="arrow-forward" size={16} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+                        </View>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* ── C. View Adjustment History ── */}
+                    <TouchableOpacity
+                      style={styles.adaptiveRow}
+                      onPress={() => {
+                        console.log('[Profile iOS] Calorie Adjustment History row pressed');
+                        router.push('/adaptive-tdee-history');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.adaptiveRowLeft}>
+                        <View style={[styles.adaptiveIconCircle, { backgroundColor: isDark ? '#1E2D35' : '#EBF4F6' }]}>
+                          <IconSymbol ios_icon_name="chart.line.uptrend.xyaxis" android_material_icon_name="trending-up" size={16} color={colors.primary} />
+                        </View>
+                        <Text style={[styles.adaptiveLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                          {t('adaptiveTdee.viewHistory')}
+                        </Text>
+                      </View>
+                      <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="arrow-forward" size={16} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+                    </TouchableOpacity>
                   </>
                 ) : (
                   <View style={styles.noGoalContainer}>
@@ -1810,6 +1907,87 @@ export default function ProfileScreen() {
                 <Text style={styles.foodPrefsSaveButtonText}>{t('profile.savePreferences')}</Text>
               )}
             </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Adjustment Day Picker Modal ─────────────────────────────────────── */}
+      <Modal
+        visible={showAdjustmentDayModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAdjustmentDayModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAdjustmentDayModal(false)}
+        >
+          <TouchableOpacity
+            style={[styles.adjustmentDayModal, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+            activeOpacity={1}
+          >
+            <View style={styles.adjustmentDayHeader}>
+              <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                {t('adaptiveTdee.adjustmentDay')}
+              </Text>
+              <TouchableOpacity onPress={() => setShowAdjustmentDayModal(false)}>
+                <IconSymbol
+                  ios_icon_name="xmark.circle.fill"
+                  android_material_icon_name="cancel"
+                  size={24}
+                  color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+            {[
+              t('adaptiveTdee.sunday'),
+              t('adaptiveTdee.monday'),
+              t('adaptiveTdee.tuesday'),
+              t('adaptiveTdee.wednesday'),
+              t('adaptiveTdee.thursday'),
+              t('adaptiveTdee.friday'),
+              t('adaptiveTdee.saturday'),
+            ].map((dayName, index) => {
+              const isSelected = (user?.adjustment_day ?? 0) === index;
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.adjustmentDayOption,
+                    { borderBottomColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' },
+                    isSelected && { backgroundColor: colors.primary + '15' },
+                  ]}
+                  onPress={async () => {
+                    console.log('[Profile iOS] Adjustment day selected:', dayName, 'index:', index);
+                    try {
+                      const { error } = await supabase
+                        .from('users')
+                        .update({ adjustment_day: index, updated_at: new Date().toISOString() })
+                        .eq('id', user.id);
+                      if (error) throw error;
+                      setUser((prev: any) => ({ ...prev, adjustment_day: index }));
+                      setShowAdjustmentDayModal(false);
+                    } catch (err: any) {
+                      console.error('[Profile iOS] Error saving adjustment_day:', err);
+                      Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    styles.adjustmentDayOptionText,
+                    { color: isSelected ? colors.primary : (isDark ? colors.textDark : colors.text) },
+                    isSelected && { fontWeight: '700' },
+                  ]}>
+                    {dayName}
+                  </Text>
+                  {isSelected && (
+                    <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -2370,6 +2548,77 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 16,
+  },
+  // ── Adaptive TDEE ────────────────────────────────────────────────────────
+  adaptiveDivider: {
+    height: 1,
+    marginVertical: spacing.sm,
+  },
+  adaptiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+  },
+  adaptiveRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.sm,
+  },
+  adaptiveRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  adaptiveIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adaptiveTextStack: {
+    flex: 1,
+  },
+  adaptiveLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  adaptiveSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  adaptiveValue: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // ── Adjustment Day Modal ──────────────────────────────────────────────────
+  adjustmentDayModal: {
+    width: '85%',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  adjustmentDayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  adjustmentDayOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  adjustmentDayOptionText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
   // ── Challenger Badge ──────────────────────────────────────────────────────
   badgeRow: {
