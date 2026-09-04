@@ -30,6 +30,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import GoPremiumFloatingBadge from "@/components/GoPremiumFloatingBadge";
 import Constants from "expo-constants";
 import { trackOnboardingEvent } from "@/utils/onboardingAnalytics";
+import { toLocalDateString } from "@/utils/dateUtils";
+import WelcomeBackModal from "@/components/WelcomeBackModal";
 import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
 import { AFFILIATE_CODE_STORAGE_KEY, setRevenueCatAffiliateCode } from "@/utils/affiliateApi";
 import mobileAds from "@/utils/mobileAds";
@@ -77,6 +79,8 @@ export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const hasNavigatedRef = React.useRef(false);
   const appOpenedTrackedRef = React.useRef(false);
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
+  const [welcomeBackUserId, setWelcomeBackUserId] = useState('');
 
   // ─── Issue 1 fix: hide splash immediately on mount, no waiting ───────────
   useEffect(() => {
@@ -336,6 +340,43 @@ export default function RootLayout() {
           console.log("[Navigation] No user row or timeout → /onboarding/complete");
           router.replace("/onboarding/complete");
         } else if (result.data.onboarding_completed) {
+          // ── Gap detection: check if user has been away 30+ days ──────────
+          try {
+            const { data: gapData } = await supabase
+              .from('users')
+              .select('last_app_open')
+              .eq('id', session.user.id)
+              .maybeSingle();
+
+            if (gapData?.last_app_open) {
+              const lastOpen = new Date(gapData.last_app_open + 'T00:00:00');
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const diffDays = Math.floor(
+                (today.getTime() - lastOpen.getTime()) / (1000 * 60 * 60 * 24)
+              );
+              console.log('[Navigation] Days since last app open:', diffDays);
+              if (diffDays >= 30) {
+                console.log('[Navigation] Gap detected:', diffDays, 'days — showing welcome back modal');
+                setWelcomeBackUserId(session.user.id);
+                setShowWelcomeBack(true);
+              }
+            } else {
+              console.log('[Navigation] last_app_open is null — new user or first time, skipping gap check');
+            }
+
+            // Always update last_app_open (fire and forget)
+            supabase
+              .from('users')
+              .update({ last_app_open: toLocalDateString(new Date()) })
+              .eq('id', session.user.id)
+              .then(() => console.log('[Navigation] last_app_open updated'))
+              .catch((e: unknown) => console.warn('[Navigation] last_app_open update failed:', e));
+          } catch (gapErr) {
+            console.warn('[Navigation] Gap check failed (non-fatal):', gapErr);
+          }
+          // ─────────────────────────────────────────────────────────────────
+
           const firstLaunchDone = await AsyncStorage.getItem(`first_launch_done_${session.user.id}`);
           if (!firstLaunchDone) {
             console.log("[Navigation] First launch after onboarding → /(tabs)/coach");
@@ -644,6 +685,14 @@ export default function RootLayout() {
         </ThemeProvider>
 
         <GoPremiumFloatingBadge />
+        <WelcomeBackModal
+          visible={showWelcomeBack}
+          userId={welcomeBackUserId}
+          onDismiss={() => {
+            console.log('[Layout] WelcomeBackModal dismissed');
+            setShowWelcomeBack(false);
+          }}
+        />
       </SafeAreaProvider>
     </ErrorBoundary>
     </NotificationProvider>
