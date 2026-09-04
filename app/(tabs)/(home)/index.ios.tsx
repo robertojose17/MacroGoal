@@ -117,6 +117,7 @@ export default function HomeScreen() {
 
   // ── Adaptive TDEE banner state ──
   const [adaptiveBannerDismissed, setAdaptiveBannerDismissed] = useState(false);
+  const [latestTdeeEstimate, setLatestTdeeEstimate] = useState<any>(null);
 
   // Segmented control
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
@@ -194,6 +195,20 @@ export default function HomeScreen() {
       } else {
         console.log('[Home iOS] No active goal found, using defaults');
         setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
+      }
+
+      const { data: tdeeData } = await supabase
+        .from('tdee_estimates')
+        .select('week_start, estimated_tdee, prescribed_calories, adjustment_amount, avg_calories_eaten, avg_weight_lbs, prev_avg_weight_lbs, data_days_count, adjustment_applied')
+        .eq('user_id', user.id)
+        .eq('adjustment_applied', true)
+        .order('week_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (tdeeData) {
+        console.log('[Home iOS] Latest TDEE estimate loaded:', tdeeData);
+        setLatestTdeeEstimate(tdeeData);
       }
 
       const dateString = toLocalDateString(selectedDate);
@@ -946,52 +961,27 @@ export default function HomeScreen() {
     })();
     const adaptiveCalories = goal?.daily_calories ? Math.round(Number(goal.daily_calories)) : null;
 
+    const adjustmentAmount = latestTdeeEstimate?.adjustment_amount ? Math.round(Number(latestTdeeEstimate.adjustment_amount)) : null;
+    const adjustmentSign = adjustmentAmount && adjustmentAmount > 0 ? '+' : '';
+    const avgCalsEaten = latestTdeeEstimate?.avg_calories_eaten ? Math.round(Number(latestTdeeEstimate.avg_calories_eaten)) : null;
+    const prevWeightLbs = latestTdeeEstimate?.prev_avg_weight_lbs ? Number(latestTdeeEstimate.prev_avg_weight_lbs) : null;
+    const currWeightLbs = latestTdeeEstimate?.avg_weight_lbs ? Number(latestTdeeEstimate.avg_weight_lbs) : null;
+    const weightLost = (prevWeightLbs && currWeightLbs) ? Math.round((prevWeightLbs - currWeightLbs) * 10) / 10 : null;
+
+    const bannerSubtitle = adaptiveCalories !== null
+      ? (adjustmentAmount ? `${adaptiveCalories} kcal/day  •  ${adjustmentSign}${adjustmentAmount} kcal` : `${adaptiveCalories} kcal/day`)
+      : null;
+
+    const bannerWhyLine = avgCalsEaten !== null
+      ? (weightLost !== null && weightLost > 0
+        ? `You ate ~${avgCalsEaten} kcal/day and lost ${weightLost} lbs this week`
+        : weightLost !== null && weightLost < 0
+          ? `You ate ~${avgCalsEaten} kcal/day and gained ${Math.abs(weightLost)} lbs this week`
+          : `You ate ~${avgCalsEaten} kcal/day this week`)
+      : null;
+
     return (
       <View>
-        {/* ── Adaptive TDEE Banner ── */}
-        {showAdaptiveBanner && adaptiveCalories !== null && (
-          <View style={[styles.adaptiveBanner, { backgroundColor: isDark ? '#1A2D35' : '#E8F4F7', borderColor: colors.primary + '40' }]}>
-            <View style={styles.adaptiveBannerLeft}>
-              <View style={[styles.adaptiveBannerIconCircle, { backgroundColor: colors.primary + '20' }]}>
-                <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={16} color={colors.primary} />
-              </View>
-              <View style={styles.adaptiveBannerText}>
-                <Text style={[styles.adaptiveBannerTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  {t('adaptiveTdee.bannerTitle')}
-                </Text>
-                <Text style={[styles.adaptiveBannerSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  {adaptiveCalories}
-                  {' kcal'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.adaptiveBannerRight}>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[Home iOS] Adaptive TDEE banner "See why" pressed');
-                  router.push('/adaptive-tdee-history');
-                }}
-                activeOpacity={0.7}
-                style={styles.adaptiveBannerSeeWhy}
-              >
-                <Text style={[styles.adaptiveBannerSeeWhyText, { color: colors.primary }]}>
-                  {t('adaptiveTdee.seeWhy')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[Home iOS] Adaptive TDEE banner dismissed');
-                  setAdaptiveBannerDismissed(true);
-                }}
-                activeOpacity={0.7}
-                style={styles.adaptiveBannerClose}
-              >
-                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={14} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         {/* Calories + macros summary card */}
         <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
           <View style={styles.caloriesContent}>
@@ -1011,6 +1001,63 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Adaptive TDEE Banner ── */}
+        {showAdaptiveBanner && adaptiveCalories !== null && (
+          <View style={[styles.adaptiveBanner, { backgroundColor: isDark ? '#0D2420' : '#F0FAF5', borderColor: colors.primary + '30' }]}>
+            {/* Top row: icon + title + dismiss */}
+            <View style={styles.adaptiveBannerTopRow}>
+              <View style={styles.adaptiveBannerTitleRow}>
+                <View style={[styles.adaptiveBannerIconCircle, { backgroundColor: colors.primary + '20' }]}>
+                  <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={16} color={colors.primary} />
+                </View>
+                <Text style={[styles.adaptiveBannerTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  {t('adaptiveTdee.bannerTitle')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Home iOS] Adaptive TDEE banner dismissed');
+                  setAdaptiveBannerDismissed(true);
+                }}
+                activeOpacity={0.7}
+                style={styles.adaptiveBannerClose}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={14} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Subtitle: new calories + adjustment */}
+            {bannerSubtitle !== null && (
+              <Text style={[styles.adaptiveBannerSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {bannerSubtitle}
+              </Text>
+            )}
+
+            {/* Why line */}
+            {bannerWhyLine !== null && (
+              <Text style={[styles.adaptiveBannerWhyLine, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {bannerWhyLine}
+              </Text>
+            )}
+
+            {/* See details link */}
+            <View style={styles.adaptiveBannerFooter}>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Home iOS] Adaptive TDEE banner "See details" pressed');
+                  router.push('/adaptive-tdee-history');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.adaptiveBannerSeeWhyText, { color: colors.primary }]}>
+                  {'See details →'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Today's Food — session-grouped list */}
         <View style={[styles.mealCard, { backgroundColor: cardBg }]}>
@@ -1967,53 +2014,57 @@ const styles = StyleSheet.create({
 
   // ── Adaptive TDEE Banner ──────────────────────────────────────────────────
   adaptiveBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  adaptiveBannerLeft: {
+  adaptiveBannerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  adaptiveBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
+    flex: 1,
   },
   adaptiveBannerIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  adaptiveBannerText: {
-    flex: 1,
-  },
   adaptiveBannerTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontSize: 14,
+    fontWeight: '700',
   },
   adaptiveBannerSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: spacing.xs,
+    marginLeft: 40,
+  },
+  adaptiveBannerWhyLine: {
     fontSize: 12,
+    marginBottom: spacing.sm,
+    marginLeft: 40,
+    lineHeight: 17,
   },
-  adaptiveBannerRight: {
+  adaptiveBannerFooter: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  adaptiveBannerSeeWhy: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    justifyContent: 'flex-end',
+    marginTop: 2,
   },
   adaptiveBannerSeeWhyText: {
     fontSize: 13,
     fontWeight: '600',
   },
   adaptiveBannerClose: {
-    padding: 4,
+    padding: 2,
   },
 });
 
