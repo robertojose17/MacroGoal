@@ -18,6 +18,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { useProgressIntelligence } from '@/hooks/useProgressIntelligence';
 
 interface ProgressCardProps {
   userId: string;
@@ -223,6 +224,7 @@ function PremiumStatCard({ title, value, subtitle, explanation, accent, isDark }
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ProgressCard({ userId, isDark, layout = 'carousel' }: ProgressCardProps) {
   const { t } = useTranslation();
+  const { state: progressState } = useProgressIntelligence();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -718,28 +720,40 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     const { startWeightLbs, goalWeightLbs, startDate, dailyCalories } = profileData;
     const totalDays = plannedData.length - 1;
 
-    // Weight lost
-    const latestWeight = actualWeightPoints.length > 0
+    // Weight lost — use PIE trendWeightLbs if available, else last raw check-in
+    const rawLatestWeight = actualWeightPoints.length > 0
       ? actualWeightPoints[actualWeightPoints.length - 1].weightLbs
       : null;
+    // 3a. Trend weight: prefer PIE trendWeightLbs (smoothed), fall back to last raw check-in
+    const latestWeight: number | null =
+      progressState?.trendWeightLbs ?? rawLatestWeight;
+    if (progressState?.trendWeightLbs != null) {
+      console.log('[ProgressCard] Using PIE trendWeightLbs:', progressState.trendWeightLbs);
+    }
     const weightLost = latestWeight !== null ? startWeightLbs - latestWeight : null;
 
-    // Current pace (last 14 days of check-ins)
+    // Current pace (last 14 days of check-ins) — local fallback calculation
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const fourteenDaysAgo = new Date(today);
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     const recentPoints = actualWeightPoints.filter(p => p.date >= fourteenDaysAgo);
-    let currentPaceLbsPerWeek: number | null = null;
+    let localPaceLbsPerWeek: number | null = null;
     if (recentPoints.length >= 2) {
       const first = recentPoints[0];
       const last = recentPoints[recentPoints.length - 1];
       const daysDiff = (last.date.getTime() - first.date.getTime()) / (1000 * 60 * 60 * 24);
       const weeksDiff = daysDiff / 7;
-      currentPaceLbsPerWeek = weeksDiff > 0 ? (first.weightLbs - last.weightLbs) / weeksDiff : null;
+      localPaceLbsPerWeek = weeksDiff > 0 ? (first.weightLbs - last.weightLbs) / weeksDiff : null;
+    }
+    // 3b. Weight pace: prefer PIE value, fall back to local 14-day calculation
+    const currentPaceLbsPerWeek: number | null =
+      progressState?.weightPace?.lbsPerWeek ?? localPaceLbsPerWeek;
+    if (progressState?.weightPace?.lbsPerWeek != null) {
+      console.log('[ProgressCard] Using PIE weightPace.lbsPerWeek:', progressState.weightPace.lbsPerWeek);
     }
 
-    // Adherence
+    // Adherence — local fallback calculation
     const logsByDate: { [key: string]: number } = {};
     calorieLogs.forEach(log => {
       logsByDate[toLocalDateString(log.date)] = log.calories;
@@ -750,7 +764,15 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       const upper = dailyCalories * 1.15;
       return log.calories >= lower && log.calories <= upper;
     }).length;
-    const adherencePct = trackedDays > 0 ? Math.round((adherentDays / trackedDays) * 100) : null;
+    const localAdherencePct = trackedDays > 0 ? Math.round((adherentDays / trackedDays) * 100) : null;
+    // 3c. Adherence: prefer PIE score (0–1 fraction → multiply by 100), fall back to local
+    const adherencePct: number | null =
+      progressState?.adherence?.score != null
+        ? Math.round(progressState.adherence.score * 100)
+        : localAdherencePct;
+    if (progressState?.adherence?.score != null) {
+      console.log('[ProgressCard] Using PIE adherence.score:', progressState.adherence.score, '→', adherencePct, '%');
+    }
 
     // Cumulative calorie deviation → days ahead/behind
     let cumulativeCalDev = 0;
@@ -765,9 +787,18 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     const plannedGoalDate = new Date(startDate);
     plannedGoalDate.setDate(plannedGoalDate.getDate() + totalDays);
 
-    // Projected goal date
-    const projectedGoalDate = new Date(plannedGoalDate);
-    projectedGoalDate.setDate(projectedGoalDate.getDate() - Math.round(daysAhead));
+    // Projected goal date — local fallback
+    const localProjectedGoalDate = new Date(plannedGoalDate);
+    localProjectedGoalDate.setDate(localProjectedGoalDate.getDate() - Math.round(daysAhead));
+    // 3d. Projected goal date: prefer PIE value, fall back to local calorie-deviation estimate
+    const projectedGoalDate: Date = (() => {
+      const pieDate = progressState?.projection?.projectedGoalDate;
+      if (pieDate) {
+        console.log('[ProgressCard] Using PIE projection.projectedGoalDate:', pieDate);
+        return new Date(pieDate + 'T00:00:00');
+      }
+      return localProjectedGoalDate;
+    })();
 
     // Status vs plan
     let vsStatus: 'ahead' | 'behind' | 'on-track';
@@ -806,7 +837,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       daysSinceStart,
       daysDeviation: Math.abs(Math.round(daysAhead)),
     };
-  }, [profileData, plannedData, actualWeightPoints, calorieLogs, calorieProjectionData]);
+  }, [profileData, plannedData, actualWeightPoints, calorieLogs, calorieProjectionData, progressState]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const formatDate = (d: Date) => {
