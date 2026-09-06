@@ -415,18 +415,27 @@ export default function SocialProfileScreen() {
           <View style={styles.photoProgressSection}>
             <Text style={[styles.sectionTitle, { color: textColor }]}>Photo Progress</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoProgressScroll}>
-              {stats.check_in_photos.map((photo) => (
-                <View key={photo.id} style={styles.photoProgressItem}>
-                  <ZoomablePhoto uri={photo.photo_url} style={styles.photoProgressThumb} />
-                  {photo.weight != null ? (
-                    <Text style={[styles.photoProgressWeight, { color: subColor }]}>
-                      {Number(photo.weight).toFixed(1)}
-                      {' '}
-                      {stats.preferred_units ?? 'lbs'}
-                    </Text>
-                  ) : null}
-                </View>
-              ))}
+              {stats.check_in_photos.map((photo) => {
+                const d = new Date(photo.date ?? photo.created_at ?? '');
+                const dateLabel = d instanceof Date && !isNaN(d.getTime())
+                  ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : '';
+                return (
+                  <View key={photo.id} style={styles.photoProgressItem}>
+                    <ZoomablePhoto uri={photo.photo_url} style={styles.photoProgressThumb} />
+                    {dateLabel ? (
+                      <Text style={[styles.photoProgressDate, { color: subColor }]}>{dateLabel}</Text>
+                    ) : null}
+                    {photo.weight != null ? (
+                      <Text style={[styles.photoProgressWeight, { color: subColor }]}>
+                        {Number(photo.weight).toFixed(1)}
+                        {' '}
+                        {stats.preferred_units ?? 'lbs'}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })}
             </ScrollView>
           </View>
         ) : null}
@@ -846,22 +855,28 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   photoProgressScroll: {
-    gap: spacing.sm,
+    gap: spacing.md,
     paddingBottom: 4,
+    paddingHorizontal: spacing.md,
   },
   photoProgressItem: {
     alignItems: 'center',
     gap: 4,
+    width: 150,
   },
   photoProgressThumb: {
-    width: 100,
-    height: 100,
-    borderRadius: borderRadius.md,
+    width: 150,
+    height: 200,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   photoProgressWeight: {
     fontSize: 11,
     fontWeight: '500',
+  },
+  photoProgressDate: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   lockedStats: {
     paddingVertical: spacing.xxl,
