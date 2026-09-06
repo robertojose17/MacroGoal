@@ -77,6 +77,11 @@ function setCached(userId: string, state: ProgressState): void {
   cache.set(userId, { state, fetchedAt: Date.now() });
 }
 
+export function invalidatePIECache(userId: string): void {
+  cache.delete(userId);
+  console.log('[useProgressIntelligence] Cache invalidated for userId:', userId);
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 interface UseProgressIntelligenceResult {

@@ -27,6 +27,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { tryAwardWorkout, tryAwardWeightCheckin, tryAwardProgressPhoto } from '@/utils/xpAwarder';
 import { emitXpRefresh } from '@/utils/xpEvents';
 import { useTranslation } from 'react-i18next';
+import { invalidatePIECache } from '@/hooks/useProgressIntelligence';
 
 type CheckInType = 'weight' | 'steps' | 'gym';
 
@@ -323,6 +324,10 @@ export default function CheckInFormScreen() {
 
         savedCheckInId = insertedData?.id ?? null;
         console.log('[CheckInForm] ✅ Check-in created successfully, id:', savedCheckInId);
+        if (checkInType === 'weight') {
+          console.log('[CheckInForm] Invalidating PIE cache for userId:', authUser.id);
+          invalidatePIECache(authUser.id);
+        }
         await syncToTrackerEntries(authUser.id, checkInType, dateString, checkInData, notes);
       }
 

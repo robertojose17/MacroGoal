@@ -28,6 +28,7 @@ import { formatServing } from '@/utils/servingFormat';
 import { hybridSearch } from '@/utils/foodSearchHybrid';
 import { logFoodUsage } from '@/utils/logFoodUsage';
 import { calcMacros } from '@/utils/macros';
+import { invalidatePIECache } from '@/hooks/useProgressIntelligence';
 
 
 
@@ -625,6 +626,11 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] ✅ Quick added to My Meal draft!');
       showSuccessBanner(t('addFood.added'));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user?.id) {
+        console.log('[AddFood] Invalidating PIE cache for userId:', sessionData.session.user.id);
+        invalidatePIECache(sessionData.session.user.id);
+      }
     } catch (error) {
       console.error('[AddFood] Error quick adding search result:', error);
       Alert.alert(t('common.error'), t('addFood.failedToAdd'));
@@ -918,6 +924,11 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] ✅ Quick added favorite to My Meal draft!');
       showSuccessBanner(t('addFood.added'));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user?.id) {
+        console.log('[AddFood] Invalidating PIE cache for userId:', sessionData.session.user.id);
+        invalidatePIECache(sessionData.session.user.id);
+      }
     } catch (error) {
       console.error('[AddFood] Error quick adding favorite:', error);
       Alert.alert(t('common.error'), t('addFood.failedToAdd'));

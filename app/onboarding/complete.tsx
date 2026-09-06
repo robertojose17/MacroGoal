@@ -296,7 +296,7 @@ export default function CompleteOnboardingScreen() {
       // Check if journey_start_date is already set (only set it once, on first completion)
       const { data: existingUser } = await supabase
         .from('users')
-        .select('journey_start_date')
+        .select('journey_start_date, journey_start_weight')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -320,6 +320,7 @@ export default function CompleteOnboardingScreen() {
         const todayStr = toLocalDateString(new Date());
         console.log('[Onboarding] Setting journey_start_date for first time:', todayStr);
         updatePayload.journey_start_date = todayStr;
+        updatePayload.journey_start_weight = weightInKg;
       } else {
         console.log('[Onboarding] journey_start_date already set, skipping');
       }
@@ -370,6 +371,20 @@ export default function CompleteOnboardingScreen() {
       }
 
       console.log('[Onboarding] Goal created successfully');
+
+      // Fire-and-forget backfill — no await, no error handling needed
+      const session = (await supabase.auth.getSession()).data.session;
+      if (session) {
+        console.log('[Onboarding] Triggering backfill-tdee-estimates for userId:', session.user.id);
+        fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/backfill-tdee-estimates`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: session.user.id }),
+        }).catch(() => {}); // intentionally ignored
+      }
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to save your information. Please try again.';
       console.error('[Onboarding] Save error:', error);
