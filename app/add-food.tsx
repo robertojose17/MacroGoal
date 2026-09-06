@@ -1070,7 +1070,7 @@ export default function AddFoodScreen() {
         p_meal_type: mealType,
         p_food_id: foodId,
         p_food_item_id: (favorite as any).food_item_id ?? null,
-        p_quantity: gramsDiary / 100,
+        p_quantity: 1,
         p_calories: safeNum(calories),
         p_protein: safeNum(protein),
         p_carbs: safeNum(carbs),
