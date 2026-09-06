@@ -42,12 +42,6 @@ export default function LeagueCard({ isDark }: LeagueCardProps) {
   if (isPromotion) { zoneBadge = t('league.movingUp'); zoneColor = '#5CB97B'; }
   else if (isDemotion) { zoneBadge = t('league.dropZone'); zoneColor = '#EF4444'; }
 
-  // Position
-  const positionText = '#' + status.user_position + ' ' + t('league.of') + ' ' + status.member_count;
-
-  // XP this week
-  const xpText = status.user_xp_this_week.toLocaleString() + ' XP';
-
   // Colors
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textPrimary = isDark ? '#FFFFFF' : '#111827';
@@ -81,19 +75,13 @@ export default function LeagueCard({ isDark }: LeagueCardProps) {
           {/* Left: emoji + league name */}
           <View style={styles.leftGroup}>
             <Text style={styles.emoji}>{meta.emoji}</Text>
-            <View>
-              <Text style={[styles.leagueName, { color: textPrimary }]}>{meta.label}</Text>
-              <Text style={[styles.position, { color: textSecondary }]}>{positionText}</Text>
-            </View>
+            <Text style={[styles.leagueName, { color: textPrimary }]}>{meta.label}</Text>
           </View>
 
-          {/* Right: XP + zone badge */}
-          <View style={styles.rightGroup}>
-            {zoneBadge && (
-              <Text style={[styles.zoneBadge, { color: zoneColor }]}>{zoneBadge}</Text>
-            )}
-            <Text style={[styles.xpText, { color: meta.accent }]}>{xpText}</Text>
-          </View>
+          {/* Right: zone badge (only if in promotion or demotion) */}
+          {zoneBadge && (
+            <Text style={[styles.zoneBadge, { color: zoneColor }]}>{zoneBadge}</Text>
+          )}
 
           {/* Chevron */}
           <Text style={[styles.chevron, { color: textSecondary }]}>›</Text>
@@ -120,9 +108,6 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
-  cardLight: {
-    borderColor: 'rgba(0,0,0,0.07)',
-  },
   content: {
     flex: 1,
     flexDirection: 'row',
@@ -144,21 +129,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  position: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  rightGroup: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
   zoneBadge: {
     fontSize: 11,
-    fontWeight: '700',
-  },
-  xpText: {
-    fontSize: 13,
     fontWeight: '700',
   },
   chevron: {

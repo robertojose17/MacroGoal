@@ -2,7 +2,7 @@
  * XpHeroCard
  *
  * Single horizontal card with:
- * - LEFT: RankIcon + rank/level text + progress bar
+ * - LEFT: Level number + XP progress bar toward next level
  * - DIVIDER
  * - RIGHT: Streak stat + Total XP stat
  */
@@ -18,15 +18,12 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { getXpRank } from '@/utils/xpRanks';
-import XpRanksModal from '@/components/xp/XpRanksModal';
 import StreakBenefitsModal from '@/components/xp/StreakBenefitsModal';
 import XpLevelsModal from '@/components/xp/XpLevelsModal';
 import LeagueLeaderboard from './LeagueLeaderboard';
 import LeagueWelcomeModal from './LeagueWelcomeModal';
 import { useLeague } from '@/hooks/useLeague';
 import type { XpStatus } from '@/types/xp';
-import RankIcon from '@/components/xp/RankIcon';
 import { supabase } from '@/lib/supabase/client';
 
 interface XpHeroCardProps {
@@ -40,7 +37,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
   const xpTooltipAnim = useRef(new Animated.Value(0)).current;
   const xpTooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [showRanksModal, setShowRanksModal] = useState(false);
   const [showStreakModal, setShowStreakModal] = useState(false);
   const [showLevelsModal, setShowLevelsModal] = useState(false);
   const [showLeagueModal, setShowLeagueModal] = useState(false);
@@ -59,19 +55,21 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
 
   const streakAtRisk = streak > 0 && xpToday < 100;
   const nextLevel = level + 1;
-  const rank = getXpRank(level);
 
   // Pre-compute display strings
   const streakDisplay = String(streak);
   const xpInLevelDisplay = Number(xpInLevel).toLocaleString();
   const xpNeededDisplay = Number(xpNeeded).toLocaleString();
-  const xpToNextDisplay = Number(Math.max(0, xpNeeded - xpInLevel)).toLocaleString();
   const xpTooltipText = xpInLevelDisplay + ' / ' + xpNeededDisplay + ' XP → ' + t('xp.lvlAbbrev') + ' ' + String(nextLevel);
   const totalXpLocalized = Number(totalXp).toLocaleString();
   const levelText = t('xp.levelNumber', { level: String(level) });
-  const xpToNextText = xpToNextDisplay + ' ' + t('xp.xpToNextRank');
+  const levelDisplay = String(level);
 
   const progressWidth = Math.min(100, Math.max(0, progressPercent));
+
+  // Progress bar color
+  const progressColor = '#5CB97B';
+  const progressGradientEnd = '#4AAA6A';
 
   // Colors
   const cardBg = isDark ? '#1C1C1E' : '#F5F3EE';
@@ -88,7 +86,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Get starting weight from user profile (set during onboarding)
         const { data: userData } = await supabase
           .from('users')
           .select('current_weight')
@@ -98,7 +95,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         const startWeightKg = parseFloat(String(userData?.current_weight || '0'));
         if (!startWeightKg || isNaN(startWeightKg) || startWeightKg <= 0) return;
 
-        // Get latest check-in weight
         const { data: checkIns } = await supabase
           .from('check_ins')
           .select('weight')
@@ -156,39 +152,21 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
         {/* LEFT SECTION */}
         <View style={styles.leftSection}>
 
-          {/* Icon + text row */}
-          <View style={styles.iconTextRow}>
-            <RankIcon
-              tierIndex={rank.tierIndex}
-              color={rank.primaryColor}
-              gradientColor={rank.gradientColor}
-              size={56}
-            />
-
-            <View style={styles.rankTextStack}>
-              <Text style={styles.rankLabel}>{t('xp.rankLabel')}</Text>
-
-              <Pressable
-                onPress={() => {
-                  console.log('[XpHeroCard] rank text tapped → XpRanksModal');
-                  setShowRanksModal(true);
-                }}
-                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Text style={[styles.rankTierName, { color: rank.primaryColor }]}>{rank.tierName} {rank.romanNumeral}</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => {
-                  console.log('[XpHeroCard] level label tapped → XpLevelsModal');
-                  setShowLevelsModal(true);
-                }}
-                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Text style={[styles.levelText, { color: textSecondary }]}>{levelText}</Text>
-              </Pressable>
-            </View>
-          </View>
+          {/* Level display */}
+          <Pressable
+            onPress={() => {
+              console.log('[XpHeroCard] level label tapped → XpLevelsModal');
+              setShowLevelsModal(true);
+            }}
+            style={({ pressed }) => [styles.levelBlock, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={[styles.levelBigNumber, { color: progressColor }]}>
+              {levelDisplay}
+            </Text>
+            <Text style={[styles.levelLabel, { color: textSecondary }]}>
+              {levelText}
+            </Text>
+          </Pressable>
 
           {/* Progress bar */}
           <Pressable onPress={handleProgressBarTap} style={styles.progressBarWrapper}>
@@ -198,7 +176,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             >
               {trackWidth > 0 && (
                 <LinearGradient
-                  colors={[rank.primaryColor, rank.gradientColor ?? rank.primaryColor]}
+                  colors={[progressColor, progressGradientEnd]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressFill, { width: trackWidth * (progressWidth / 100) }]}
@@ -209,7 +187,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
                   styles.progressDot,
                   {
                     left: trackWidth > 0 ? trackWidth * (progressWidth / 100) - 7 : 0,
-                    backgroundColor: rank.primaryColor,
+                    backgroundColor: progressColor,
                     borderColor: cardBg,
                   },
                 ]}
@@ -267,15 +245,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
       {cardContent}
 
       {/* MODALS */}
-      <XpRanksModal
-        visible={showRanksModal}
-        currentLevel={level}
-        onClose={() => {
-          console.log('[XpHeroCard] XpRanksModal closed');
-          setShowRanksModal(false);
-        }}
-        isDark={isDark}
-      />
       <StreakBenefitsModal
         visible={showStreakModal}
         currentStreak={streak}
@@ -315,15 +284,6 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
       {cardContent}
 
       {/* MODALS */}
-      <XpRanksModal
-        visible={showRanksModal}
-        currentLevel={level}
-        onClose={() => {
-          console.log('[XpHeroCard] XpRanksModal closed');
-          setShowRanksModal(false);
-        }}
-        isDark={isDark}
-      />
       <StreakBenefitsModal
         visible={showStreakModal}
         currentStreak={streak}
@@ -381,41 +341,29 @@ const styles = StyleSheet.create({
   // LEFT SECTION
   leftSection: {
     flex: 1.6,
-    gap: 6,
+    gap: 8,
     overflow: 'visible',
   },
-  iconTextRow: {
+  levelBlock: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    alignItems: 'baseline',
+    gap: 6,
   },
-  rankTextStack: {
-    flex: 1,
-    gap: 1,
-  },
-  rankLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    color: '#5CB97B',
-  },
-  rankTierName: {
-    fontSize: 18,
+  levelBigNumber: {
+    fontSize: 36,
     fontWeight: '800',
+    letterSpacing: -1,
+    lineHeight: 40,
   },
-  levelText: {
-    fontSize: 12,
-    fontWeight: '500',
+  levelLabel: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Progress bar
   progressBarWrapper: {
     width: '100%',
     overflow: 'visible',
-  },
-  barRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   progressTrack: {
     width: '100%',
@@ -499,9 +447,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     color: '#5CB97B',
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '500',
   },
 });
