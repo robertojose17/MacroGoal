@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,33 +13,46 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Trophy, Flame, Camera, Pencil } from 'lucide-react-native';
+import { X, Trophy, Flame, Camera, Type, BarChart2 } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { createPost } from '@/utils/socialApi';
 import type { PostType } from '@/utils/socialApi';
 
-const POST_TYPES: { type: PostType; label: string; icon: React.ReactNode; description: string }[] = [
+type PostTypeOption = {
+  type: PostType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+};
+
+const POST_TYPES: PostTypeOption[] = [
   {
-    type: 'custom',
-    label: 'Custom post',
-    icon: <Pencil size={20} color={colors.primary} />,
-    description: 'Share anything on your mind',
+    type: 'text',
+    label: 'Text',
+    icon: <Type size={20} color={colors.primary} />,
+    description: 'Share your thoughts',
   },
   {
     type: 'streak',
-    label: 'Share streak',
+    label: 'Streak',
     icon: <Flame size={20} color="#EF4444" />,
-    description: 'Celebrate your logging streak',
+    description: 'Celebrate your streak',
   },
   {
     type: 'milestone',
-    label: 'Share milestone',
+    label: 'Milestone',
     icon: <Trophy size={20} color="#F59E0B" />,
-    description: 'Announce a big achievement',
+    description: 'Announce an achievement',
+  },
+  {
+    type: 'stats',
+    label: 'Stats',
+    icon: <BarChart2 size={20} color={colors.calories} />,
+    description: 'Share your macros',
   },
   {
     type: 'photo',
-    label: 'Share photo',
+    label: 'Photo',
     icon: <Camera size={20} color={colors.primary} />,
     description: 'Post a progress photo',
   },
@@ -68,19 +81,19 @@ export default function CreatePostSheet({
   onClose,
   onPosted,
 }: CreatePostSheetProps) {
-  const [selectedType, setSelectedType] = useState<PostType>('custom');
+  const [selectedType, setSelectedType] = useState<PostType>('text');
   const [content, setContent] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [milestoneType, setMilestoneType] = useState(MILESTONE_TYPES[0]);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const bg = isDark ? colors.backgroundDark : '#fff';
+  const bg = isDark ? colors.backgroundDark : '#FFFFFF';
   const cardBg = isDark ? colors.cardDark : colors.card;
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const inputBg = isDark ? colors.cardDark : colors.card;
+  const inputBg = isDark ? '#1E2035' : colors.card;
 
   const handleTypeSelect = useCallback((type: PostType) => {
     console.log('[CreatePostSheet] Post type selected:', type);
@@ -89,9 +102,13 @@ export default function CreatePostSheet({
   }, []);
 
   const handlePost = useCallback(async () => {
-    console.log('[CreatePostSheet] Post button pressed — type:', selectedType, 'public:', isPublic);
-    if (!content.trim() && selectedType === 'custom') {
+    console.log('[CreatePostSheet] Post button pressed — type:', selectedType, 'public:', isPublic, 'content length:', content.trim().length);
+    if (!content.trim()) {
       setError('Please write something to share.');
+      return;
+    }
+    if (content.trim().length > 280) {
+      setError('Post must be 280 characters or less.');
       return;
     }
     setPosting(true);
@@ -99,14 +116,14 @@ export default function CreatePostSheet({
     try {
       await createPost({
         post_type: selectedType,
-        content: content.trim() || undefined,
+        content: content.trim(),
         streak_days: selectedType === 'streak' ? currentStreak : undefined,
         milestone_type: selectedType === 'milestone' ? milestoneType : undefined,
         is_public: isPublic,
       });
       console.log('[CreatePostSheet] Post created successfully');
       setContent('');
-      setSelectedType('custom');
+      setSelectedType('text');
       setIsPublic(true);
       onPosted();
       onClose();
@@ -126,6 +143,10 @@ export default function CreatePostSheet({
     onClose();
   }, [onClose]);
 
+  const charCount = content.length;
+  const charLimitReached = charCount >= 260;
+  const charColor = charCount > 280 ? colors.error : charLimitReached ? colors.warning : subColor;
+
   return (
     <Modal
       visible={visible}
@@ -137,16 +158,17 @@ export default function CreatePostSheet({
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={handleClose}
-        />
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={handleClose} />
         <View style={[styles.sheet, { backgroundColor: bg }]}>
           {/* Header */}
           <View style={styles.sheetHeader}>
             <Text style={[styles.sheetTitle, { color: textColor }]}>Create post</Text>
-            <Pressable onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close">
+            <Pressable
+              onPress={handleClose}
+              style={styles.closeBtn}
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+            >
               <X size={22} color={subColor} />
             </Pressable>
           </View>
@@ -154,7 +176,11 @@ export default function CreatePostSheet({
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Post type selector */}
             <Text style={[styles.sectionLabel, { color: subColor }]}>Post type</Text>
-            <View style={styles.typeGrid}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.typeRow}
+            >
               {POST_TYPES.map((pt) => {
                 const isSelected = selectedType === pt.type;
                 return (
@@ -162,29 +188,36 @@ export default function CreatePostSheet({
                     key={pt.type}
                     onPress={() => handleTypeSelect(pt.type)}
                     style={[
-                      styles.typeCard,
-                      { backgroundColor: cardBg, borderColor: isSelected ? colors.primary : borderColor },
-                      isSelected && { borderWidth: 2 },
+                      styles.typeChip,
+                      {
+                        backgroundColor: isSelected ? colors.primary + '18' : cardBg,
+                        borderColor: isSelected ? colors.primary : borderColor,
+                      },
                     ]}
                     accessibilityLabel={pt.label}
                     accessibilityRole="button"
                   >
                     {pt.icon}
-                    <Text style={[styles.typeLabel, { color: textColor }]}>{pt.label}</Text>
-                    <Text style={[styles.typeDesc, { color: subColor }]} numberOfLines={2}>
-                      {pt.description}
+                    <Text style={[styles.typeChipLabel, { color: isSelected ? colors.primary : textColor }]}>
+                      {pt.label}
                     </Text>
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
 
             {/* Streak info */}
             {selectedType === 'streak' && (
               <View style={[styles.infoBox, { backgroundColor: '#FEE2E2' }]}>
                 <Flame size={18} color="#EF4444" />
                 <Text style={styles.infoBoxText}>
-                  Your current streak: <Text style={{ fontWeight: '700' }}>{currentStreak} days</Text>
+                  Current streak:
+                  {' '}
+                  <Text style={{ fontWeight: '700' }}>
+                    {currentStreak}
+                    {' '}
+                    days
+                  </Text>
                 </Text>
               </View>
             )}
@@ -202,8 +235,10 @@ export default function CreatePostSheet({
                     }}
                     style={[
                       styles.milestoneOption,
-                      { borderColor: milestoneType === mt ? colors.primary : borderColor },
-                      milestoneType === mt && { backgroundColor: colors.primary + '12' },
+                      {
+                        borderColor: milestoneType === mt ? colors.primary : borderColor,
+                        backgroundColor: milestoneType === mt ? colors.primary + '10' : 'transparent',
+                      },
                     ]}
                     accessibilityLabel={mt}
                     accessibilityRole="button"
@@ -218,27 +253,34 @@ export default function CreatePostSheet({
 
             {/* Content input */}
             <Text style={[styles.sectionLabel, { color: subColor }]}>
-              {selectedType === 'custom' ? 'What\'s on your mind?' : 'Add a caption (optional)'}
+              {selectedType === 'text' ? "What's on your mind?" : 'Caption'}
             </Text>
             <TextInput
               style={[styles.textInput, { backgroundColor: inputBg, borderColor, color: textColor }]}
-              placeholder={selectedType === 'custom' ? 'Share your progress, thoughts, or tips...' : 'Add a caption...'}
+              placeholder={
+                selectedType === 'text'
+                  ? 'Share your progress, thoughts, or tips...'
+                  : 'Add a caption...'
+              }
               placeholderTextColor={subColor}
               value={content}
               onChangeText={setContent}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
-              maxLength={500}
+              maxLength={300}
             />
-            <Text style={[styles.charCount, { color: subColor }]}>{content.length}/500</Text>
+            <Text style={[styles.charCount, { color: charColor }]}>
+              {charCount}
+              /280
+            </Text>
 
             {/* Public toggle */}
             <View style={[styles.toggleRow, { borderColor }]}>
               <View style={styles.toggleInfo}>
                 <Text style={[styles.toggleLabel, { color: textColor }]}>Public post</Text>
                 <Text style={[styles.toggleDesc, { color: subColor }]}>
-                  {isPublic ? 'Visible to everyone in the community' : 'Only visible to your connections'}
+                  {isPublic ? 'Visible to everyone' : 'Only your followers'}
                 </Text>
               </View>
               <Switch
@@ -272,7 +314,7 @@ export default function CreatePostSheet({
               )}
             </Pressable>
 
-            <View style={{ height: 32 }} />
+            <View style={{ height: 40 }} />
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -309,33 +351,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: spacing.sm,
     marginTop: spacing.md,
   },
-  typeGrid: {
+  typeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
+    paddingBottom: 4,
   },
-  typeCard: {
-    width: '47%',
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    padding: spacing.sm,
-    gap: 4,
+  typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
-  typeLabel: {
-    fontSize: 14,
+  typeChipLabel: {
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 4,
-  },
-  typeDesc: {
-    fontSize: 12,
-    lineHeight: 16,
   },
   infoBox: {
     flexDirection: 'row',
@@ -357,6 +396,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
+    marginBottom: 4,
   },
   milestoneOptionText: {
     fontSize: 14,

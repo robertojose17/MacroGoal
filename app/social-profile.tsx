@@ -1,5 +1,5 @@
 /**
- * Social Profile Screen
+ * Social Profile Screen — Instagram-style
  * Route: /social-profile?user_id=X
  */
 
@@ -13,25 +13,30 @@ import {
   ActivityIndicator,
   Image,
   ImageSourcePropType,
-  Animated,
-  Modal,
-  TouchableOpacity,
   RefreshControl,
+  FlatList,
+  Dimensions,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { X, Flame, Trophy, TrendingUp, Calendar } from 'lucide-react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  Lock,
+  TrendingUp,
+  Flame,
+  Trophy,
+  ChevronLeft,
+} from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
-  fetchUserStats,
-  fetchConnections,
-  sendConnectionRequest,
+  fetchProfile,
+  followUser,
+  unfollowUser,
+  toggleLike,
 } from '@/utils/socialApi';
-import type { UserStats, ConnectionRole, Connection } from '@/utils/socialApi';
-import { supabase } from '@/lib/supabase/client';
-import type { SocialPost } from '@/utils/socialApi';
+import type { SocialProfile, SocialPost } from '@/utils/socialApi';
+import Avatar from '@/components/social/Avatar';
 import SocialPostCard from '@/components/social/SocialPostCard';
-import { toggleLike } from '@/utils/socialApi';
+import { ZoomablePhoto } from '@/components/ZoomablePhoto';
 
 function resolveImageSource(
   source: string | number | ImageSourcePropType | undefined
@@ -45,9 +50,9 @@ function formatDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function defaultFromDate(): string {
+function defaultFromDate(days = 30): string {
   const d = new Date();
-  d.setDate(d.getDate() - 30);
+  d.setDate(d.getDate() - days);
   return formatDate(d);
 }
 
@@ -55,74 +60,43 @@ function defaultToDate(): string {
   return formatDate(new Date());
 }
 
-function Avatar({ username, avatarUrl, size = 80 }: { username: string; avatarUrl: string | null; size?: number }) {
-  const initial = (username ?? 'U').charAt(0).toUpperCase();
-  if (avatarUrl) {
-    return (
-      <Image
-        source={resolveImageSource(avatarUrl)}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        resizeMode="cover"
-      />
-    );
-  }
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: colors.primary + '22',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ fontSize: size * 0.38, fontWeight: '700', color: colors.primary }}>
-        {initial}
-      </Text>
-    </View>
-  );
-}
+type ProfileTab = 'posts' | 'stats';
+type DateRange = '7d' | '30d' | '90d';
 
-const ROLE_COLORS: Record<ConnectionRole, { bg: string; text: string; label: string }> = {
-  coach: { bg: '#EDE9FE', text: '#6D28D9', label: 'Coach' },
-  friend: { bg: '#DBEAFE', text: '#1D4ED8', label: 'Friend' },
-  partner: { bg: '#FCE7F3', text: '#BE185D', label: 'Partner' },
-};
-
-const ROLES: Array<{ role: ConnectionRole; label: string; color: string; bg: string }> = [
-  { role: 'friend', label: 'Friend', color: '#1D4ED8', bg: '#DBEAFE' },
-  { role: 'coach', label: 'Coach', color: '#6D28D9', bg: '#EDE9FE' },
-  { role: 'partner', label: 'Partner', color: '#BE185D', bg: '#FCE7F3' },
+const DATE_RANGES: { key: DateRange; label: string; days: number }[] = [
+  { key: '7d', label: '7d', days: 7 },
+  { key: '30d', label: '30d', days: 30 },
+  { key: '90d', label: '90d', days: 90 },
 ];
 
-function MacroCard({ label, value, unit, color, isDark }: { label: string; value: number | undefined; unit: string; color: string; isDark: boolean }) {
-  const bg = isDark ? colors.cardDark : colors.card;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const GRID_ITEM_SIZE = (SCREEN_WIDTH - spacing.md * 2 - 4) / 3;
+
+function StatPill({
+  label,
+  value,
+  unit,
+  color,
+  isDark,
+}: {
+  label: string;
+  value: number | null | undefined;
+  unit: string;
+  color: string;
+  isDark: boolean;
+}) {
+  const bg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const displayValue = value != null ? Math.round(value).toLocaleString() : '—';
-  return (
-    <View style={[styles.macroCard, { backgroundColor: bg, borderColor }]}>
-      <View style={[styles.macroColorDot, { backgroundColor: color }]} />
-      <Text style={[styles.macroValue, { color: textColor }]}>{displayValue}</Text>
-      <Text style={[styles.macroUnit, { color: subColor }]}>{unit}</Text>
-      <Text style={[styles.macroLabel, { color: subColor }]}>{label}</Text>
-    </View>
-  );
-}
+  const displayValue = value != null ? Math.round(Number(value)).toString() : '—';
 
-function WeightBar({ date, weight, maxWeight, isDark }: { date: string; weight: number; maxWeight: number; isDark: boolean }) {
-  const barHeight = maxWeight > 0 ? (weight / maxWeight) * 60 : 0;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const shortDate = date.slice(5); // MM-DD
   return (
-    <View style={styles.weightBarContainer}>
-      <Text style={[styles.weightBarValue, { color: subColor }]}>{Math.round(weight)}</Text>
-      <View style={styles.weightBarTrack}>
-        <View style={[styles.weightBarFill, { height: barHeight, backgroundColor: colors.primary }]} />
-      </View>
-      <Text style={[styles.weightBarDate, { color: subColor }]}>{shortDate}</Text>
+    <View style={[styles.statPill, { backgroundColor: bg, borderColor }]}>
+      <View style={[styles.statPillDot, { backgroundColor: color }]} />
+      <Text style={[styles.statPillValue, { color: textColor }]}>{displayValue}</Text>
+      <Text style={[styles.statPillUnit, { color: subColor }]}>{unit}</Text>
+      <Text style={[styles.statPillLabel, { color: subColor }]}>{label}</Text>
     </View>
   );
 }
@@ -131,126 +105,120 @@ export default function SocialProfileScreen() {
   const { user_id } = useLocalSearchParams<{ user_id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
 
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState<string | null>(null);
-
-  const [connection, setConnection] = useState<Connection | null>(null);
-  const [connectionLoading, setConnectionLoading] = useState(true);
-
-  const [fromDate, setFromDate] = useState(defaultFromDate());
-  const [toDate, setToDate] = useState(defaultToDate());
-
-  const [posts, setPosts] = useState<SocialPost[]>([]);
-  const [postsLoading, setPostsLoading] = useState(true);
-
-  const [showRolePicker, setShowRolePicker] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-
+  const [profile, setProfile] = useState<SocialProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
+  const [dateRange, setDateRange] = useState<DateRange>('30d');
+  const [fromDate, setFromDate] = useState(defaultFromDate(30));
+  const [toDate] = useState(defaultToDate());
+
+  const [followLoading, setFollowLoading] = useState(false);
+  const [posts, setPosts] = useState<SocialPost[]>([]);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
-  const modalBg = isDark ? colors.cardDark : '#fff';
 
-  // ─── Load connection status ──────────────────────────────────────────────────
-  const loadConnection = useCallback(async () => {
+  // ─── Load profile ────────────────────────────────────────────────────────────
+  const loadProfile = useCallback(async (from: string, to: string, isRefresh = false) => {
     if (!user_id) return;
-    console.log('[SocialProfile] Loading connection status — user_id:', user_id);
+    console.log('[SocialProfile] loadProfile — user_id:', user_id, 'from:', from, 'to:', to, 'isRefresh:', isRefresh);
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
     try {
-      const conns = await fetchConnections();
-      const found = conns.find((c) => c.other_user.id === user_id) ?? null;
-      console.log('[SocialProfile] Connection found:', found?.status ?? 'none');
-      setConnection(found);
-    } catch (e) {
-      console.error('[SocialProfile] loadConnection error:', e);
-    } finally {
-      setConnectionLoading(false);
-    }
-  }, [user_id]);
-
-  // ─── Load stats ──────────────────────────────────────────────────────────────
-  const loadStats = useCallback(async (from: string, to: string) => {
-    if (!user_id) return;
-    console.log('[SocialProfile] Loading stats — user_id:', user_id, 'from:', from, 'to:', to);
-    setStatsLoading(true);
-    setStatsError(null);
-    try {
-      const data = await fetchUserStats(user_id, from, to);
-      setStats(data);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+      const data = await fetchProfile(user_id, from, to);
+      setProfile(data);
+      setPosts(data.posts ?? []);
+      console.log('[SocialProfile] Loaded profile — is_own:', data.is_own_profile, 'is_mutual:', data.is_mutual, 'posts:', data.posts?.length ?? 0);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load stats';
-      console.error('[SocialProfile] loadStats error:', msg);
-      setStatsError(msg);
+      const msg = e instanceof Error ? e.message : 'Failed to load profile';
+      console.error('[SocialProfile] loadProfile error:', msg);
+      setError(msg);
     } finally {
-      setStatsLoading(false);
-    }
-  }, [user_id]);
-
-  // ─── Load posts ──────────────────────────────────────────────────────────────
-  const loadPosts = useCallback(async () => {
-    if (!user_id) return;
-    console.log('[SocialProfile] Loading posts — user_id:', user_id);
-    setPostsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('social_posts')
-        .select('*, author:users(id, username, avatar_url)')
-        .eq('user_id', user_id)
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      if (error) throw error;
-      console.log('[SocialProfile] Loaded', data?.length ?? 0, 'posts');
-      setPosts((data ?? []) as unknown as SocialPost[]);
-    } catch (e) {
-      console.error('[SocialProfile] loadPosts error:', e);
-    } finally {
-      setPostsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   }, [user_id]);
 
   useEffect(() => {
-    loadConnection();
-    loadStats(fromDate, toDate);
-    loadPosts();
+    loadProfile(fromDate, toDate);
   }, [user_id]);
 
-  const handleApplyDates = useCallback(() => {
-    console.log('[SocialProfile] Apply dates pressed — from:', fromDate, 'to:', toDate);
-    loadStats(fromDate, toDate);
-  }, [fromDate, toDate, loadStats]);
+  const handleDateRangeChange = useCallback((range: DateRange) => {
+    const days = DATE_RANGES.find((r) => r.key === range)?.days ?? 30;
+    const newFrom = defaultFromDate(days);
+    console.log('[SocialProfile] Date range changed to:', range, 'from:', newFrom);
+    setDateRange(range);
+    setFromDate(newFrom);
+    loadProfile(newFrom, toDate);
+  }, [toDate, loadProfile]);
 
-  const handleRefresh = useCallback(async () => {
+  const handleRefresh = useCallback(() => {
     console.log('[SocialProfile] Pull-to-refresh');
-    setRefreshing(true);
-    await Promise.all([loadConnection(), loadStats(fromDate, toDate), loadPosts()]);
-    setRefreshing(false);
-  }, [fromDate, toDate, loadConnection, loadStats, loadPosts]);
+    loadProfile(fromDate, toDate, true);
+  }, [fromDate, toDate, loadProfile]);
 
-  const handleConnect = useCallback(async (role: ConnectionRole) => {
-    if (!user_id) return;
-    console.log('[SocialProfile] Connect pressed — user_id:', user_id, 'role:', role);
-    setShowRolePicker(false);
-    setConnecting(true);
+  // ─── Follow / Unfollow ───────────────────────────────────────────────────────
+  const handleFollowToggle = useCallback(async () => {
+    if (!profile || !user_id) return;
+    const isFollowing = profile.is_following;
+    console.log('[SocialProfile] Follow toggle pressed — user_id:', user_id, 'currently following:', isFollowing);
+    setFollowLoading(true);
+    // Optimistic update
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            is_following: !isFollowing,
+            user: {
+              ...prev.user,
+              followers_count: isFollowing
+                ? prev.user.followers_count - 1
+                : prev.user.followers_count + 1,
+            },
+          }
+        : prev
+    );
     try {
-      await sendConnectionRequest(user_id, role);
-      console.log('[SocialProfile] Connection request sent');
-      await loadConnection();
+      if (isFollowing) {
+        await unfollowUser(user_id);
+        console.log('[SocialProfile] Unfollowed user:', user_id);
+      } else {
+        await followUser(user_id);
+        console.log('[SocialProfile] Followed user:', user_id);
+      }
+      // Reload to get updated mutual status
+      await loadProfile(fromDate, toDate);
     } catch (e) {
-      console.error('[SocialProfile] sendConnectionRequest failed:', e);
+      console.error('[SocialProfile] Follow toggle failed, reverting:', e);
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_following: isFollowing,
+              user: {
+                ...prev.user,
+                followers_count: isFollowing
+                  ? prev.user.followers_count + 1
+                  : prev.user.followers_count - 1,
+              },
+            }
+          : prev
+      );
     } finally {
-      setConnecting(false);
+      setFollowLoading(false);
     }
-  }, [user_id, loadConnection]);
+  }, [profile, user_id, fromDate, toDate, loadProfile]);
 
+  // ─── Like ────────────────────────────────────────────────────────────────────
   const handleLike = useCallback(async (postId: string) => {
     console.log('[SocialProfile] Like pressed — post_id:', postId);
     setPosts((prev) =>
@@ -270,36 +238,259 @@ export default function SocialProfileScreen() {
     }
   }, []);
 
-  // ─── Derived ─────────────────────────────────────────────────────────────────
-  const username = stats?.username ?? connection?.other_user?.username ?? 'User';
-  const avatarUrl = stats?.avatar_url ?? connection?.other_user?.avatar_url ?? null;
-  const role = stats?.role ?? connection?.role ?? null;
-  const roleInfo = role ? ROLE_COLORS[role] : null;
-  const isConnected = connection?.status === 'accepted';
-  const isPending = connection?.status === 'pending';
-  const canViewStats = isConnected;
+  if (loading) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Profile', headerBackButtonDisplayMode: 'minimal' }} />
+        <View style={[styles.loadingContainer, { backgroundColor: bg }]}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      </>
+    );
+  }
 
-  const weightData = stats?.daily_weights ?? [];
-  const maxWeight = weightData.length > 0 ? Math.max(...weightData.map((w) => w.weight_lbs)) : 0;
-  const visibleWeights = weightData.slice(-14); // last 14 days
+  if (error || !profile) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Profile', headerBackButtonDisplayMode: 'minimal' }} />
+        <View style={[styles.loadingContainer, { backgroundColor: bg }]}>
+          <Text style={[styles.errorTitle, { color: textColor }]}>Couldn't load profile</Text>
+          <Text style={[styles.errorSub, { color: subColor }]}>{error ?? 'Unknown error'}</Text>
+          <Pressable
+            onPress={() => {
+              console.log('[SocialProfile] Retry pressed');
+              loadProfile(fromDate, toDate);
+            }}
+            style={styles.retryBtn}
+            accessibilityRole="button"
+          >
+            <Text style={styles.retryBtnText}>Try again</Text>
+          </Pressable>
+        </View>
+      </>
+    );
+  }
 
-  const adherencePct = stats?.adherence_pct != null ? Math.round(Number(stats.adherence_pct)) : null;
-  const streak = stats?.streak ?? 0;
-  const latestWeight = stats?.latest_weight;
-  const goalWeight = stats?.goal_weight;
-  const startWeight = stats?.start_weight;
-  const units = stats?.preferred_units ?? 'lbs';
+  const { user, is_following, is_mutual, is_own_profile, stats } = profile;
+  const canViewStats = is_mutual || is_own_profile;
 
-  const progressPct =
-    startWeight != null && goalWeight != null && latestWeight != null && startWeight !== goalWeight
-      ? Math.min(100, Math.max(0, Math.round(((startWeight - latestWeight) / (startWeight - goalWeight)) * 100)))
+  // Follow button state
+  let followBtnLabel = 'Follow';
+  let followBtnBg = colors.primary;
+  let followBtnTextColor = '#FFFFFF';
+  let followBtnBorderColor = colors.primary;
+  if (is_own_profile) {
+    followBtnLabel = 'Edit Profile';
+    followBtnBg = 'transparent';
+    followBtnTextColor = textColor;
+    followBtnBorderColor = borderColor;
+  } else if (is_mutual) {
+    followBtnLabel = 'Friends ✓';
+    followBtnBg = 'transparent';
+    followBtnTextColor = colors.success;
+    followBtnBorderColor = colors.success;
+  } else if (is_following) {
+    followBtnLabel = 'Following';
+    followBtnBg = 'transparent';
+    followBtnTextColor = textColor;
+    followBtnBorderColor = borderColor;
+  }
+
+  const photoPosts = posts.filter((p) => p.post_type === 'photo' && p.image_url);
+  const nonPhotoPosts = posts.filter((p) => p.post_type !== 'photo');
+
+  const renderStatsTab = () => {
+    if (!canViewStats) {
+      return (
+        <View style={styles.lockedStats}>
+          <Lock size={32} color={subColor} />
+          <Text style={[styles.lockedTitle, { color: textColor }]}>Stats are private</Text>
+          <Text style={[styles.lockedSub, { color: subColor }]}>
+            Follow each other to see stats
+          </Text>
+        </View>
+      );
+    }
+    if (!stats) {
+      return (
+        <View style={styles.lockedStats}>
+          <Text style={[styles.lockedSub, { color: subColor }]}>No stats available</Text>
+        </View>
+      );
+    }
+
+    const weightChangeDisplay = stats.weight_change != null
+      ? (stats.weight_change > 0 ? '+' : '') + Number(stats.weight_change).toFixed(1)
       : null;
+    const weightChangeColor = stats.weight_change != null
+      ? (stats.weight_change < 0 ? colors.success : colors.warning)
+      : subColor;
+    const consistencyDisplay = stats.consistency_score != null
+      ? Math.round(Number(stats.consistency_score)).toString() + '%'
+      : '—';
+
+    return (
+      <View style={styles.statsContainer}>
+        {/* Date range pills */}
+        <View style={styles.dateRangeRow}>
+          {DATE_RANGES.map((r) => {
+            const isActive = dateRange === r.key;
+            return (
+              <Pressable
+                key={r.key}
+                onPress={() => handleDateRangeChange(r.key)}
+                style={[
+                  styles.dateRangeBtn,
+                  {
+                    backgroundColor: isActive ? colors.primary : 'transparent',
+                    borderColor: isActive ? colors.primary : borderColor,
+                  },
+                ]}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.dateRangeBtnText, { color: isActive ? '#fff' : subColor }]}>
+                  {r.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Calories */}
+        <View style={[styles.caloriesCard, { backgroundColor: cardBg, borderColor }]}>
+          <Text style={[styles.caloriesLabel, { color: subColor }]}>Avg Calories</Text>
+          <Text style={[styles.caloriesValue, { color: colors.calories }]}>
+            {stats.avg_calories != null ? Math.round(Number(stats.avg_calories)).toString() : '—'}
+          </Text>
+          <Text style={[styles.caloriesUnit, { color: subColor }]}>kcal / day</Text>
+        </View>
+
+        {/* Macros row */}
+        <View style={styles.macroRow}>
+          <StatPill label="Protein" value={stats.avg_protein} unit="g" color={colors.protein} isDark={isDark} />
+          <StatPill label="Carbs" value={stats.avg_carbs} unit="g" color={colors.carbs} isDark={isDark} />
+          <StatPill label="Fat" value={stats.avg_fat} unit="g" color={colors.fats} isDark={isDark} />
+        </View>
+
+        {/* Weight change */}
+        {weightChangeDisplay ? (
+          <View style={[styles.weightChangeCard, { backgroundColor: cardBg, borderColor }]}>
+            <TrendingUp size={20} color={weightChangeColor} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.weightChangeLabel, { color: subColor }]}>Weight change</Text>
+              <Text style={[styles.weightChangeValue, { color: weightChangeColor }]}>
+                {weightChangeDisplay}
+                {' '}
+                {stats.preferred_units ?? 'lbs'}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Streak + Consistency */}
+        <View style={styles.streakConsistencyRow}>
+          <View style={[styles.streakCard, { backgroundColor: cardBg, borderColor }]}>
+            <Flame size={22} color="#EF4444" />
+            <Text style={[styles.streakValue, { color: textColor }]}>{stats.streak}</Text>
+            <Text style={[styles.streakLabel, { color: subColor }]}>day streak</Text>
+          </View>
+          <View style={[styles.streakCard, { backgroundColor: cardBg, borderColor }]}>
+            <Trophy size={22} color="#F59E0B" />
+            <Text style={[styles.streakValue, { color: textColor }]}>{consistencyDisplay}</Text>
+            <Text style={[styles.streakLabel, { color: subColor }]}>consistency</Text>
+          </View>
+        </View>
+
+        {/* Days tracked */}
+        {stats.days_tracked > 0 ? (
+          <Text style={[styles.daysTracked, { color: subColor }]}>
+            {stats.days_tracked}
+            {' '}
+            days tracked in this period
+          </Text>
+        ) : null}
+
+        {/* Photo progress */}
+        {stats.check_in_photos && stats.check_in_photos.length > 0 ? (
+          <View style={styles.photoProgressSection}>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Photo Progress</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoProgressScroll}>
+              {stats.check_in_photos.map((photo) => (
+                <View key={photo.id} style={styles.photoProgressItem}>
+                  <ZoomablePhoto uri={photo.photo_url} style={styles.photoProgressThumb} />
+                  {photo.weight != null ? (
+                    <Text style={[styles.photoProgressWeight, { color: subColor }]}>
+                      {Number(photo.weight).toFixed(1)}
+                      {' '}
+                      {stats.preferred_units ?? 'lbs'}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  const renderPostsTab = () => {
+    if (posts.length === 0) {
+      return (
+        <View style={styles.emptyPosts}>
+          <Text style={[styles.emptyPostsText, { color: subColor }]}>No posts yet</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        {/* Photo grid */}
+        {photoPosts.length > 0 ? (
+          <View style={styles.photoGrid}>
+            {photoPosts.map((post) => (
+              <Pressable
+                key={post.id}
+                onPress={() => {
+                  console.log('[SocialProfile] Photo grid item pressed — post_id:', post.id);
+                  router.push(`/social-post-detail?post_id=${post.id}`);
+                }}
+                style={styles.photoGridItem}
+                accessibilityRole="button"
+              >
+                <Image
+                  source={resolveImageSource(post.image_url ?? '')}
+                  style={styles.photoGridImage}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Non-photo posts */}
+        {nonPhotoPosts.map((post, index) => (
+          <SocialPostCard
+            key={post.id}
+            post={post}
+            isDark={isDark}
+            onLike={handleLike}
+            onPressUser={(uid) => {
+              console.log('[SocialProfile] Post user pressed — user_id:', uid);
+              router.push(`/social-profile?user_id=${uid}`);
+            }}
+            index={index}
+          />
+        ))}
+      </View>
+    );
+  };
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: username,
+          title: user.username,
           headerBackButtonDisplayMode: 'minimal',
           headerShown: true,
         }}
@@ -307,7 +498,6 @@ export default function SocialProfileScreen() {
 
       <ScrollView
         style={[styles.container, { backgroundColor: bg }]}
-        contentContainerStyle={styles.scrollContent}
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -316,278 +506,92 @@ export default function SocialProfileScreen() {
       >
         {/* ── Profile header ── */}
         <View style={styles.profileHeader}>
-          {connectionLoading ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <>
-              <Avatar username={username} avatarUrl={avatarUrl} size={80} />
-              <Text style={[styles.profileUsername, { color: textColor }]}>{username}</Text>
-
-              <View style={styles.profileBadges}>
-                {roleInfo && (
-                  <View style={[styles.roleBadge, { backgroundColor: roleInfo.bg }]}>
-                    <Text style={[styles.roleBadgeText, { color: roleInfo.text }]}>{roleInfo.label}</Text>
-                  </View>
-                )}
-                {isPending && (
-                  <View style={[styles.roleBadge, { backgroundColor: '#FEF3C7' }]}>
-                    <Text style={[styles.roleBadgeText, { color: '#92400E' }]}>Request sent</Text>
-                  </View>
-                )}
+          <View style={styles.profileTopRow}>
+            <Avatar username={user.username} size={80} />
+            <View style={styles.profileStats}>
+              <View style={styles.profileStatItem}>
+                <Text style={[styles.profileStatValue, { color: textColor }]}>{user.posts_count}</Text>
+                <Text style={[styles.profileStatLabel, { color: subColor }]}>Posts</Text>
               </View>
+              <View style={styles.profileStatItem}>
+                <Text style={[styles.profileStatValue, { color: textColor }]}>{user.followers_count}</Text>
+                <Text style={[styles.profileStatLabel, { color: subColor }]}>Followers</Text>
+              </View>
+              <View style={styles.profileStatItem}>
+                <Text style={[styles.profileStatValue, { color: textColor }]}>{user.following_count}</Text>
+                <Text style={[styles.profileStatLabel, { color: subColor }]}>Following</Text>
+              </View>
+            </View>
+          </View>
 
-              {!isConnected && !isPending && (
-                <Pressable
-                  onPress={() => {
-                    console.log('[SocialProfile] Connect button pressed');
-                    setShowRolePicker(true);
-                  }}
-                  disabled={connecting}
-                  style={[styles.connectBtn, { opacity: connecting ? 0.7 : 1 }]}
-                  accessibilityLabel="Connect with user"
-                  accessibilityRole="button"
-                >
-                  {connecting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.connectBtnText}>Connect</Text>
-                  )}
-                </Pressable>
+          <Text style={[styles.profileUsername, { color: textColor }]}>{user.username}</Text>
+          {user.name ? (
+            <Text style={[styles.profileName, { color: subColor }]}>{user.name}</Text>
+          ) : null}
+          {user.bio ? (
+            <Text style={[styles.profileBio, { color: textColor }]}>{user.bio}</Text>
+          ) : null}
+
+          {/* Follow button */}
+          {!is_own_profile && (
+            <Pressable
+              onPress={() => {
+                console.log('[SocialProfile] Follow button pressed — user_id:', user_id, 'is_following:', is_following);
+                handleFollowToggle();
+              }}
+              disabled={followLoading}
+              style={[
+                styles.followBtn,
+                {
+                  backgroundColor: followBtnBg,
+                  borderColor: followBtnBorderColor,
+                  opacity: followLoading ? 0.7 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+            >
+              {followLoading ? (
+                <ActivityIndicator size="small" color={followBtnTextColor} />
+              ) : (
+                <Text style={[styles.followBtnText, { color: followBtnTextColor }]}>
+                  {followBtnLabel}
+                </Text>
               )}
-            </>
+            </Pressable>
           )}
         </View>
 
-        {/* ── Date range picker (connected only) ── */}
-        {canViewStats && (
-          <View style={[styles.dateRangeCard, { backgroundColor: cardBg, borderColor }]}>
-            <View style={styles.dateRangeRow}>
-              <Calendar size={16} color={subColor} />
-              <Text style={[styles.dateRangeLabel, { color: subColor }]}>Date range</Text>
-            </View>
-            <View style={styles.dateInputsRow}>
-              <View style={[styles.dateInput, { borderColor }]}>
-                <Text style={[styles.dateInputLabel, { color: subColor }]}>From</Text>
-                <Text style={[styles.dateInputValue, { color: textColor }]}>{fromDate}</Text>
-              </View>
-              <Text style={[styles.dateSeparator, { color: subColor }]}>→</Text>
-              <View style={[styles.dateInput, { borderColor }]}>
-                <Text style={[styles.dateInputLabel, { color: subColor }]}>To</Text>
-                <Text style={[styles.dateInputValue, { color: textColor }]}>{toDate}</Text>
-              </View>
+        {/* ── Tab switcher ── */}
+        <View style={[styles.tabSwitcher, { borderColor }]}>
+          {(['posts', 'stats'] as ProfileTab[]).map((tab) => {
+            const isActive = activeTab === tab;
+            const label = tab === 'posts' ? 'Posts' : 'Stats';
+            return (
               <Pressable
-                onPress={handleApplyDates}
-                style={styles.applyBtn}
-                accessibilityLabel="Apply date range"
-                accessibilityRole="button"
+                key={tab}
+                onPress={() => {
+                  console.log('[SocialProfile] Tab switched to:', tab);
+                  setActiveTab(tab);
+                }}
+                style={[styles.tabBtn, isActive && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+                accessibilityRole="tab"
               >
-                <Text style={styles.applyBtnText}>Apply</Text>
+                <Text style={[styles.tabBtnText, { color: isActive ? colors.primary : subColor }]}>
+                  {label}
+                </Text>
+                {tab === 'stats' && !canViewStats ? (
+                  <Lock size={12} color={subColor} style={{ marginLeft: 4 }} />
+                ) : null}
               </Pressable>
-            </View>
-          </View>
-        )}
+            );
+          })}
+        </View>
 
-        {/* ── Stats section ── */}
-        {canViewStats && (
-          <Animated.View style={{ opacity: fadeAnim }}>
-            {statsLoading ? (
-              <View style={styles.statsLoading}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={[styles.statsLoadingText, { color: subColor }]}>Loading stats...</Text>
-              </View>
-            ) : statsError ? (
-              <View style={[styles.errorCard, { backgroundColor: cardBg, borderColor }]}>
-                <Text style={[styles.errorTitle, { color: textColor }]}>Couldn't load stats</Text>
-                <Text style={[styles.errorSub, { color: subColor }]}>{statsError}</Text>
-                <Pressable
-                  onPress={() => loadStats(fromDate, toDate)}
-                  style={styles.retryBtn}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.retryBtnText}>Try again</Text>
-                </Pressable>
-              </View>
-            ) : stats ? (
-              <>
-                {/* Macro averages */}
-                <Text style={[styles.sectionTitle, { color: textColor }]}>Macro averages</Text>
-                <View style={styles.macroGrid}>
-                  <MacroCard label="Calories" value={stats.avg_calories} unit="kcal" color={colors.calories} isDark={isDark} />
-                  <MacroCard label="Protein" value={stats.avg_protein} unit="g" color={colors.protein} isDark={isDark} />
-                  <MacroCard label="Carbs" value={stats.avg_carbs} unit="g" color={colors.carbs} isDark={isDark} />
-                  <MacroCard label="Fat" value={stats.avg_fat} unit="g" color={colors.fats} isDark={isDark} />
-                </View>
-
-                {/* Coach-specific: weight chart + adherence */}
-                {role === 'coach' && (
-                  <>
-                    {adherencePct != null && (
-                      <>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Adherence</Text>
-                        <View style={[styles.adherenceCard, { backgroundColor: cardBg, borderColor }]}>
-                          <View style={styles.adherenceCircle}>
-                            <Text style={[styles.adherencePct, { color: colors.primary }]}>{adherencePct}%</Text>
-                            <Text style={[styles.adherenceLabel, { color: subColor }]}>on track</Text>
-                          </View>
-                          <View style={styles.adherenceBar}>
-                            <View style={[styles.adherenceBarFill, { width: `${adherencePct}%`, backgroundColor: colors.primary }]} />
-                          </View>
-                        </View>
-                      </>
-                    )}
-
-                    {visibleWeights.length > 0 && (
-                      <>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Weight trend</Text>
-                        <View style={[styles.chartCard, { backgroundColor: cardBg, borderColor }]}>
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            <View style={styles.chartBars}>
-                              {visibleWeights.map((w) => (
-                                <WeightBar
-                                  key={w.date}
-                                  date={w.date}
-                                  weight={w.weight_lbs}
-                                  maxWeight={maxWeight}
-                                  isDark={isDark}
-                                />
-                              ))}
-                            </View>
-                          </ScrollView>
-                        </View>
-                      </>
-                    )}
-
-                    {progressPct != null && startWeight != null && goalWeight != null && (
-                      <>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Goal progress</Text>
-                        <View style={[styles.progressCard, { backgroundColor: cardBg, borderColor }]}>
-                          <View style={styles.progressLabels}>
-                            <Text style={[styles.progressLabel, { color: subColor }]}>Start: {startWeight} {units}</Text>
-                            <Text style={[styles.progressLabel, { color: colors.primary }]}>{progressPct}%</Text>
-                            <Text style={[styles.progressLabel, { color: subColor }]}>Goal: {goalWeight} {units}</Text>
-                          </View>
-                          <View style={[styles.progressTrack, { backgroundColor: borderColor }]}>
-                            <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: colors.primary }]} />
-                          </View>
-                          {latestWeight != null && (
-                            <Text style={[styles.currentWeightText, { color: textColor }]}>
-                              Current: {latestWeight} {units}
-                            </Text>
-                          )}
-                        </View>
-                      </>
-                    )}
-                  </>
-                )}
-
-                {/* Friend/partner: streak + weight */}
-                {(role === 'friend' || role === 'partner') && (
-                  <View style={styles.statsRow}>
-                    {streak > 0 && (
-                      <View style={[styles.statCard, { backgroundColor: cardBg, borderColor }]}>
-                        <Flame size={22} color="#EF4444" />
-                        <Text style={[styles.statValue, { color: textColor }]}>{streak}</Text>
-                        <Text style={[styles.statLabel, { color: subColor }]}>day streak</Text>
-                      </View>
-                    )}
-                    {latestWeight != null && (
-                      <View style={[styles.statCard, { backgroundColor: cardBg, borderColor }]}>
-                        <TrendingUp size={22} color={colors.primary} />
-                        <Text style={[styles.statValue, { color: textColor }]}>{latestWeight}</Text>
-                        <Text style={[styles.statLabel, { color: subColor }]}>{units}</Text>
-                      </View>
-                    )}
-                    {goalWeight != null && (
-                      <View style={[styles.statCard, { backgroundColor: cardBg, borderColor }]}>
-                        <Trophy size={22} color="#F59E0B" />
-                        <Text style={[styles.statValue, { color: textColor }]}>{goalWeight}</Text>
-                        <Text style={[styles.statLabel, { color: subColor }]}>goal {units}</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </>
-            ) : null}
-          </Animated.View>
-        )}
-
-        {/* Public view: streak only */}
-        {!canViewStats && !connectionLoading && (
-          <View style={styles.publicStats}>
-            {streak > 0 && (
-              <View style={[styles.statCard, { backgroundColor: cardBg, borderColor }]}>
-                <Flame size={22} color="#EF4444" />
-                <Text style={[styles.statValue, { color: textColor }]}>{streak}</Text>
-                <Text style={[styles.statLabel, { color: subColor }]}>day streak</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* ── Recent posts ── */}
-        <Text style={[styles.sectionTitle, { color: textColor }]}>Recent posts</Text>
-        {postsLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
-        ) : posts.length === 0 ? (
-          <Text style={[styles.noPostsText, { color: subColor }]}>No public posts yet.</Text>
-        ) : (
-          posts.map((post, index) => (
-            <SocialPostCard
-              key={post.id}
-              post={post}
-              isDark={isDark}
-              onLike={handleLike}
-              index={index}
-            />
-          ))
-        )}
+        {/* ── Tab content ── */}
+        {activeTab === 'posts' ? renderPostsTab() : renderStatsTab()}
 
         <View style={{ height: 60 }} />
       </ScrollView>
-
-      {/* Role picker modal */}
-      <Modal
-        visible={showRolePicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRolePicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => {
-            console.log('[SocialProfile] Role picker dismissed');
-            setShowRolePicker(false);
-          }}
-        >
-          <View style={[styles.modalSheet, { backgroundColor: modalBg }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: textColor }]}>Connect as...</Text>
-              <Pressable
-                onPress={() => setShowRolePicker(false)}
-                style={styles.closeBtn}
-                accessibilityLabel="Close"
-              >
-                <X size={20} color={subColor} />
-              </Pressable>
-            </View>
-            <Text style={[styles.modalSubtitle, { color: subColor }]}>
-              How do you know {username}?
-            </Text>
-            {ROLES.map((r) => (
-              <Pressable
-                key={r.role}
-                onPress={() => handleConnect(r.role)}
-                style={[styles.roleOption, { backgroundColor: r.bg }]}
-                accessibilityLabel={`Connect as ${r.label}`}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.roleOptionText, { color: r.color }]}>{r.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </>
   );
 }
@@ -596,128 +600,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: 40,
-  },
-  profileHeader: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    gap: spacing.sm,
-  },
-  profileUsername: {
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    marginTop: spacing.sm,
-  },
-  profileBadges: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  roleBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  roleBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  connectBtn: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: 12,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary,
-    marginTop: spacing.sm,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  connectBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  dateRangeCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  dateRangeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dateRangeLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  dateInputsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  dateInput: {
+  loadingContainer: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-  },
-  dateInputLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 2,
-  },
-  dateInputValue: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  dateSeparator: {
-    fontSize: 16,
-  },
-  applyBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary,
-  },
-  applyBtnText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  statsLoading: {
     alignItems: 'center',
-    paddingVertical: spacing.xl,
-    gap: spacing.sm,
-  },
-  statsLoadingText: {
-    fontSize: 14,
-  },
-  errorCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.md,
+    justifyContent: 'center',
     gap: spacing.sm,
   },
   errorTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
+    marginBottom: 4,
   },
   errorSub: {
-    fontSize: 13,
+    fontSize: 14,
     textAlign: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xl,
   },
   retryBtn: {
     paddingHorizontal: spacing.lg,
@@ -730,141 +628,196 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
+  profileHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  macroGrid: {
+  profileTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  profileStats: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  profileStatItem: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  profileStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  profileStatLabel: {
+    fontSize: 12,
+  },
+  profileUsername: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  profileName: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  profileBio: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
+  followBtn: {
+    borderWidth: 1.5,
+    borderRadius: borderRadius.md,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  followBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabSwitcher: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    marginTop: spacing.sm,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Posts tab
+  photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    gap: 2,
+  },
+  photoGridItem: {
+    width: GRID_ITEM_SIZE,
+    height: GRID_ITEM_SIZE,
+  },
+  photoGridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  emptyPosts: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  emptyPostsText: {
+    fontSize: 14,
+  },
+  // Stats tab
+  statsContainer: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  dateRangeRow: {
+    flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  macroCard: {
-    width: '47%',
+  dateRangeBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  dateRangeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  caloriesCard: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: 4,
+  },
+  caloriesLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  caloriesValue: {
+    fontSize: 48,
+    fontWeight: '800',
+    lineHeight: 56,
+  },
+  caloriesUnit: {
+    fontSize: 14,
+  },
+  macroRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  statPill: {
+    flex: 1,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     padding: spacing.md,
     alignItems: 'center',
     gap: 3,
   },
-  macroColorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginBottom: 4,
-  },
-  macroValue: {
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  macroUnit: {
-    fontSize: 12,
-  },
-  macroLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  adherenceCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  adherenceCircle: {
-    alignItems: 'center',
-  },
-  adherencePct: {
-    fontSize: 32,
-    fontWeight: '800',
-  },
-  adherenceLabel: {
-    fontSize: 13,
-  },
-  adherenceBar: {
+  statPillDot: {
+    width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    overflow: 'hidden',
+    marginBottom: 2,
   },
-  adherenceBarFill: {
-    height: '100%',
-    borderRadius: 4,
+  statPillValue: {
+    fontSize: 20,
+    fontWeight: '700',
   },
-  chartCard: {
-    borderRadius: borderRadius.lg,
+  statPillUnit: {
+    fontSize: 11,
+  },
+  statPillLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  weightChangeCard: {
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  chartBars: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
-    paddingBottom: 4,
-  },
-  weightBarContainer: {
     alignItems: 'center',
-    gap: 3,
-  },
-  weightBarValue: {
-    fontSize: 10,
-  },
-  weightBarTrack: {
-    width: 20,
-    height: 60,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    borderRadius: 4,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  weightBarFill: {
-    borderRadius: 4,
-  },
-  weightBarDate: {
-    fontSize: 9,
-  },
-  progressCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
     gap: spacing.sm,
   },
-  progressLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  progressLabel: {
+  weightChangeLabel: {
     fontSize: 12,
     fontWeight: '500',
   },
-  progressTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
+  weightChangeValue: {
+    fontSize: 20,
+    fontWeight: '700',
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  currentWeightText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  statsRow: {
+  streakConsistencyRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
   },
-  statCard: {
+  streakCard: {
     flex: 1,
     borderRadius: borderRadius.md,
     borderWidth: 1,
@@ -872,63 +825,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  statValue: {
-    fontSize: 20,
+  streakValue: {
+    fontSize: 22,
     fontWeight: '700',
   },
-  statLabel: {
+  streakLabel: {
     fontSize: 12,
   },
-  publicStats: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  noPostsText: {
-    fontSize: 14,
+  daysTracked: {
+    fontSize: 12,
     textAlign: 'center',
-    paddingVertical: spacing.md,
+    marginTop: 4,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+  photoProgressSection: {
+    marginTop: spacing.sm,
   },
-  modalSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: spacing.lg,
-    paddingBottom: 40,
-    gap: spacing.sm,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  modalTitle: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: '700',
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSubtitle: {
-    fontSize: 14,
     marginBottom: spacing.sm,
   },
-  roleOption: {
-    paddingVertical: 14,
-    paddingHorizontal: spacing.md,
-    borderRadius: 12,
-    alignItems: 'center',
+  photoProgressScroll: {
+    gap: spacing.sm,
+    paddingBottom: 4,
   },
-  roleOptionText: {
-    fontSize: 16,
-    fontWeight: '600',
+  photoProgressItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  photoProgressThumb: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  photoProgressWeight: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  lockedStats: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  lockedTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginTop: spacing.sm,
+  },
+  lockedSub: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

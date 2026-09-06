@@ -1,7 +1,6 @@
 /**
- * Community Tab (check-ins.tsx)
- *
- * Full community hub with Feed, Connections, and Discover sub-tabs.
+ * Community Tab — Fitness Instagram
+ * Sub-tabs: Feed | Discover | People
  */
 
 import React, {
@@ -23,31 +22,24 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Stack } from 'expo-router';
-import { Users, Camera, Search, Plus } from 'lucide-react-native';
+import { Stack, useRouter } from 'expo-router';
+import { Users, Search, Edit3 } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
   fetchFeed,
-  fetchConnections,
+  fetchFollowing,
+  fetchFollowers,
   searchUsers,
   toggleLike,
-  sendConnectionRequest,
-  acceptConnection,
-  declineConnection,
 } from '@/utils/socialApi';
-import type {
-  SocialPost,
-  Connection,
-  SearchUser,
-  ConnectionRole,
-} from '@/utils/socialApi';
+import type { SocialPost, SearchUser } from '@/utils/socialApi';
 import SocialPostCard from '@/components/social/SocialPostCard';
-import ConnectionRow from '@/components/social/ConnectionRow';
 import SearchUserRow from '@/components/social/SearchUserRow';
 import CreatePostSheet from '@/components/social/CreatePostSheet';
 
-type SubTab = 'feed' | 'connections' | 'discover';
+type SubTab = 'feed' | 'discover' | 'people';
+type PeopleSection = 'following' | 'followers';
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 function SkeletonCard({ isDark }: { isDark: boolean }) {
@@ -60,8 +52,8 @@ function SkeletonCard({ isDark }: { isDark: boolean }) {
       ])
     ).start();
   }, []);
-  const bg = isDark ? colors.cardDark : colors.card;
   const shimmer = isDark ? '#3A3C52' : '#E5E7EB';
+  const bg = isDark ? colors.cardDark : '#FFFFFF';
   return (
     <Animated.View style={[styles.skeletonCard, { backgroundColor: bg, opacity }]}>
       <View style={styles.skeletonHeader}>
@@ -71,58 +63,9 @@ function SkeletonCard({ isDark }: { isDark: boolean }) {
           <View style={[styles.skeletonLine, { width: 80, height: 10, marginTop: 6, backgroundColor: shimmer }]} />
         </View>
       </View>
-      <View style={[styles.skeletonLine, { width: '90%', backgroundColor: shimmer, marginBottom: 8 }]} />
-      <View style={[styles.skeletonLine, { width: '70%', backgroundColor: shimmer }]} />
+      <View style={[styles.skeletonImage, { backgroundColor: shimmer }]} />
+      <View style={[styles.skeletonLine, { width: '60%', backgroundColor: shimmer, margin: spacing.md }]} />
     </Animated.View>
-  );
-}
-
-// ─── Empty states ─────────────────────────────────────────────────────────────
-function FeedEmpty({ isDark }: { isDark: boolean }) {
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  return (
-    <View style={styles.emptyState}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
-        <Camera size={32} color={colors.primary} />
-      </View>
-      <Text style={[styles.emptyTitle, { color: textColor }]}>No posts yet</Text>
-      <Text style={[styles.emptySubtitle, { color: subColor }]}>
-        Be the first to share your progress!
-      </Text>
-    </View>
-  );
-}
-
-function ConnectionsEmpty({ isDark }: { isDark: boolean }) {
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  return (
-    <View style={styles.emptyState}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
-        <Users size={32} color={colors.primary} />
-      </View>
-      <Text style={[styles.emptyTitle, { color: textColor }]}>No connections yet</Text>
-      <Text style={[styles.emptySubtitle, { color: subColor }]}>
-        Discover people in the Discover tab to connect with friends, coaches, or partners.
-      </Text>
-    </View>
-  );
-}
-
-function DiscoverEmpty({ isDark }: { isDark: boolean }) {
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  return (
-    <View style={styles.emptyState}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
-        <Search size={32} color={colors.primary} />
-      </View>
-      <Text style={[styles.emptyTitle, { color: textColor }]}>Find people</Text>
-      <Text style={[styles.emptySubtitle, { color: subColor }]}>
-        Search by username to find friends, coaches, or partners.
-      </Text>
-    </View>
   );
 }
 
@@ -130,43 +73,60 @@ function DiscoverEmpty({ isDark }: { isDark: boolean }) {
 export default function CommunityScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<SubTab>('feed');
+  const [peopleSection, setPeopleSection] = useState<PeopleSection>('following');
 
   // Feed state
   const [feed, setFeed] = useState<SocialPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedRefreshing, setFeedRefreshing] = useState(false);
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false);
+  const [feedOffset, setFeedOffset] = useState(0);
+  const [feedHasMore, setFeedHasMore] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [showCreatePost, setShowCreatePost] = useState(false);
-
-  // Connections state
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [connectionsLoading, setConnectionsLoading] = useState(true);
-  const [connectionsError, setConnectionsError] = useState<string | null>(null);
 
   // Discover state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [discoverUsers, setDiscoverUsers] = useState<SearchUser[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // People state
+  const [following, setFollowing] = useState<SearchUser[]>([]);
+  const [followers, setFollowers] = useState<SearchUser[]>([]);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [peopleRefreshing, setPeopleRefreshing] = useState(false);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const FEED_LIMIT = 20;
 
   // ─── Load feed ──────────────────────────────────────────────────────────────
   const loadFeed = useCallback(async (isRefresh = false) => {
     console.log('[Community] loadFeed — isRefresh:', isRefresh);
-    if (isRefresh) setFeedRefreshing(true);
-    else setFeedLoading(true);
+    if (isRefresh) {
+      setFeedRefreshing(true);
+      setFeedOffset(0);
+      setFeedHasMore(true);
+    } else {
+      setFeedLoading(true);
+    }
     setFeedError(null);
     try {
-      const posts = await fetchFeed(20, 0);
+      const posts = await fetchFeed('following', FEED_LIMIT, 0);
       setFeed(posts);
+      setFeedOffset(posts.length);
+      setFeedHasMore(posts.length === FEED_LIMIT);
+      console.log('[Community] loadFeed — loaded', posts.length, 'posts');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load feed';
       console.error('[Community] loadFeed error:', msg);
@@ -177,46 +137,80 @@ export default function CommunityScreen() {
     }
   }, []);
 
-  // ─── Load connections ────────────────────────────────────────────────────────
-  const loadConnections = useCallback(async () => {
-    console.log('[Community] loadConnections');
-    setConnectionsLoading(true);
-    setConnectionsError(null);
+  const loadMoreFeed = useCallback(async () => {
+    if (feedLoadingMore || !feedHasMore) return;
+    console.log('[Community] loadMoreFeed — offset:', feedOffset);
+    setFeedLoadingMore(true);
     try {
-      const conns = await fetchConnections();
-      setConnections(conns);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load connections';
-      console.error('[Community] loadConnections error:', msg);
-      setConnectionsError(msg);
+      const posts = await fetchFeed('following', FEED_LIMIT, feedOffset);
+      setFeed((prev) => [...prev, ...posts]);
+      setFeedOffset((prev) => prev + posts.length);
+      setFeedHasMore(posts.length === FEED_LIMIT);
+    } catch (e) {
+      console.error('[Community] loadMoreFeed error:', e);
     } finally {
-      setConnectionsLoading(false);
+      setFeedLoadingMore(false);
+    }
+  }, [feedLoadingMore, feedHasMore, feedOffset]);
+
+  // ─── Load discover ───────────────────────────────────────────────────────────
+  const loadDiscover = useCallback(async () => {
+    console.log('[Community] loadDiscover');
+    setDiscoverLoading(true);
+    try {
+      const results = await searchUsers('');
+      setDiscoverUsers(results);
+    } catch (e) {
+      console.error('[Community] loadDiscover error:', e);
+    } finally {
+      setDiscoverLoading(false);
+    }
+  }, []);
+
+  // ─── Load people ─────────────────────────────────────────────────────────────
+  const loadPeople = useCallback(async (isRefresh = false) => {
+    console.log('[Community] loadPeople — isRefresh:', isRefresh);
+    if (isRefresh) setPeopleRefreshing(true);
+    else setPeopleLoading(true);
+    try {
+      const [followingData, followersData] = await Promise.all([
+        fetchFollowing(),
+        fetchFollowers(),
+      ]);
+      setFollowing(followingData);
+      setFollowers(followersData);
+      console.log('[Community] loadPeople — following:', followingData.length, 'followers:', followersData.length);
+    } catch (e) {
+      console.error('[Community] loadPeople error:', e);
+    } finally {
+      setPeopleLoading(false);
+      setPeopleRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
     loadFeed();
-    loadConnections();
   }, []);
 
   // ─── Tab switch ──────────────────────────────────────────────────────────────
   const handleTabSwitch = useCallback((tab: SubTab) => {
     console.log('[Community] Tab switched to:', tab);
     setActiveTab(tab);
-  }, []);
+    if (tab === 'discover' && discoverUsers.length === 0) {
+      loadDiscover();
+    }
+    if (tab === 'people' && following.length === 0 && followers.length === 0) {
+      loadPeople();
+    }
+  }, [discoverUsers.length, following.length, followers.length, loadDiscover, loadPeople]);
 
   // ─── Like toggle ─────────────────────────────────────────────────────────────
   const handleLike = useCallback(async (postId: string) => {
     console.log('[Community] handleLike — post_id:', postId);
-    // Optimistic update
     setFeed((prev) =>
       prev.map((p) =>
         p.id === postId
-          ? {
-              ...p,
-              liked_by_me: !p.liked_by_me,
-              likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1,
-            }
+          ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
           : p
       )
     );
@@ -224,48 +218,18 @@ export default function CommunityScreen() {
       const result = await toggleLike(postId);
       setFeed((prev) =>
         prev.map((p) =>
-          p.id === postId
-            ? { ...p, liked_by_me: result.liked, likes_count: result.likes_count }
-            : p
+          p.id === postId ? { ...p, liked_by_me: result.liked, likes_count: result.likes_count } : p
         )
       );
     } catch (e) {
       console.error('[Community] toggleLike failed, reverting:', e);
-      // Revert optimistic update
       setFeed((prev) =>
         prev.map((p) =>
           p.id === postId
-            ? {
-                ...p,
-                liked_by_me: !p.liked_by_me,
-                likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1,
-              }
+            ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
             : p
         )
       );
-    }
-  }, []);
-
-  // ─── Accept / Decline connection ─────────────────────────────────────────────
-  const handleAccept = useCallback(async (connectionId: string) => {
-    console.log('[Community] handleAccept — connection_id:', connectionId);
-    try {
-      await acceptConnection(connectionId);
-      setConnections((prev) =>
-        prev.map((c) => (c.id === connectionId ? { ...c, status: 'accepted' } : c))
-      );
-    } catch (e) {
-      console.error('[Community] acceptConnection failed:', e);
-    }
-  }, []);
-
-  const handleDecline = useCallback(async (connectionId: string) => {
-    console.log('[Community] handleDecline — connection_id:', connectionId);
-    try {
-      await declineConnection(connectionId);
-      setConnections((prev) => prev.filter((c) => c.id !== connectionId));
-    } catch (e) {
-      console.error('[Community] declineConnection failed:', e);
     }
   }, []);
 
@@ -280,48 +244,39 @@ export default function CommunityScreen() {
     searchDebounceRef.current = setTimeout(async () => {
       console.log('[Community] Searching users — query:', text);
       setSearchLoading(true);
-      setSearchError(null);
       try {
         const results = await searchUsers(text.trim());
         setSearchResults(results);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Search failed';
-        console.error('[Community] searchUsers error:', msg);
-        setSearchError(msg);
+      } catch (e) {
+        console.error('[Community] searchUsers error:', e);
       } finally {
         setSearchLoading(false);
       }
     }, 400);
   }, []);
 
-  // ─── Connect ─────────────────────────────────────────────────────────────────
-  const handleConnect = useCallback(async (userId: string, role: ConnectionRole) => {
-    console.log('[Community] handleConnect — user_id:', userId, 'role:', role);
-    await sendConnectionRequest(userId, role);
-    setSearchResults((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, connection_status: 'pending' } : u))
-    );
-  }, []);
-
-  // ─── Derived data ─────────────────────────────────────────────────────────────
-  const pendingConnections = connections.filter((c) => c.status === 'pending');
-  const acceptedConnections = connections.filter((c) => c.status === 'accepted');
-
-  // ─── Render sub-tabs ─────────────────────────────────────────────────────────
+  // ─── Render Feed ─────────────────────────────────────────────────────────────
   const renderFeed = () => {
     if (feedLoading) {
       return (
-        <View style={styles.tabContent}>
+        <View>
           {[0, 1, 2].map((i) => <SkeletonCard key={i} isDark={isDark} />)}
         </View>
       );
     }
     if (feedError) {
       return (
-        <View style={styles.errorState}>
-          <Text style={[styles.errorTitle, { color: textColor }]}>Couldn't load feed</Text>
-          <Text style={[styles.errorSub, { color: subColor }]}>{feedError}</Text>
-          <Pressable onPress={() => loadFeed()} style={styles.retryBtn} accessibilityRole="button">
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyTitle, { color: textColor }]}>Couldn't load feed</Text>
+          <Text style={[styles.emptySubtitle, { color: subColor }]}>{feedError}</Text>
+          <Pressable
+            onPress={() => {
+              console.log('[Community] Retry feed pressed');
+              loadFeed();
+            }}
+            style={styles.retryBtn}
+            accessibilityRole="button"
+          >
             <Text style={styles.retryBtnText}>Try again</Text>
           </Pressable>
         </View>
@@ -336,11 +291,35 @@ export default function CommunityScreen() {
             post={item}
             isDark={isDark}
             onLike={handleLike}
+            onPressUser={(userId) => {
+              console.log('[Community] Navigate to profile — user_id:', userId);
+              router.push(`/social-profile?user_id=${userId}`);
+            }}
             index={index}
           />
         )}
         contentContainerStyle={[styles.listContent, feed.length === 0 && styles.listContentEmpty]}
-        ListEmptyComponent={<FeedEmpty isDark={isDark} />}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
+              <Users size={32} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>No posts yet</Text>
+            <Text style={[styles.emptySubtitle, { color: subColor }]}>
+              Follow people to see their posts here
+            </Text>
+            <Pressable
+              onPress={() => {
+                console.log('[Community] Empty feed — go to Discover pressed');
+                handleTabSwitch('discover');
+              }}
+              style={styles.retryBtn}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryBtnText}>Discover people</Text>
+            </Pressable>
+          </View>
+        }
         refreshControl={
           <RefreshControl
             refreshing={feedRefreshing}
@@ -351,138 +330,167 @@ export default function CommunityScreen() {
             tintColor={colors.primary}
           />
         }
+        onEndReached={() => {
+          console.log('[Community] Feed end reached — loading more');
+          loadMoreFeed();
+        }}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={
+          feedLoadingMore ? (
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+          ) : null
+        }
         showsVerticalScrollIndicator={false}
       />
     );
   };
 
-  const renderConnections = () => {
-    if (connectionsLoading) {
-      return (
-        <View style={styles.tabContent}>
-          {[0, 1, 2].map((i) => <SkeletonCard key={i} isDark={isDark} />)}
-        </View>
-      );
-    }
-    if (connectionsError) {
-      return (
-        <View style={styles.errorState}>
-          <Text style={[styles.errorTitle, { color: textColor }]}>Couldn't load connections</Text>
-          <Text style={[styles.errorSub, { color: subColor }]}>{connectionsError}</Text>
-          <Pressable onPress={loadConnections} style={styles.retryBtn} accessibilityRole="button">
-            <Text style={styles.retryBtnText}>Try again</Text>
-          </Pressable>
-        </View>
-      );
-    }
-
-    const allItems: { type: 'section' | 'connection'; label?: string; connection?: Connection }[] = [];
-    if (pendingConnections.length > 0) {
-      allItems.push({ type: 'section', label: 'Pending requests' });
-      pendingConnections.forEach((c) => allItems.push({ type: 'connection', connection: c }));
-    }
-    if (acceptedConnections.length > 0) {
-      allItems.push({ type: 'section', label: 'My connections' });
-      acceptedConnections.forEach((c) => allItems.push({ type: 'connection', connection: c }));
-    }
-
-    if (allItems.length === 0) {
-      return <ConnectionsEmpty isDark={isDark} />;
-    }
+  // ─── Render Discover ─────────────────────────────────────────────────────────
+  const renderDiscover = () => {
+    const displayUsers = searchQuery.trim() ? searchResults : discoverUsers;
+    const isLoading = searchQuery.trim() ? searchLoading : discoverLoading;
 
     return (
-      <FlatList
-        data={allItems}
-        keyExtractor={(item, index) =>
-          item.type === 'section' ? `section-${index}` : item.connection!.id
-        }
-        renderItem={({ item, index }) => {
-          if (item.type === 'section') {
-            return (
-              <Text style={[styles.sectionHeader, { color: subColor }]}>{item.label}</Text>
-            );
-          }
-          const conn = item.connection!;
-          const isPending = conn.status === 'pending';
-          return (
-            <ConnectionRow
-              connection={conn}
-              isDark={isDark}
-              onAccept={isPending ? handleAccept : undefined}
-              onDecline={isPending ? handleDecline : undefined}
-              index={index}
-            />
-          );
-        }}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={false}
-            onRefresh={() => {
-              console.log('[Community] Connections pull-to-refresh');
-              loadConnections();
-            }}
-            tintColor={colors.primary}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Search bar */}
+        <View style={[styles.searchBarContainer, { backgroundColor: cardBg, borderColor }]}>
+          <Search size={18} color={subColor} />
+          <TextInput
+            style={[styles.searchInput, { color: textColor }]}
+            placeholder="Search by username..."
+            placeholderTextColor={subColor}
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
           />
-        }
-      />
+          {isLoading && <ActivityIndicator size="small" color={colors.primary} />}
+        </View>
+
+        {!searchQuery.trim() && !discoverLoading && discoverUsers.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
+              <Search size={32} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>Find people</Text>
+            <Text style={[styles.emptySubtitle, { color: subColor }]}>
+              Search by username to find and follow others
+            </Text>
+          </View>
+        ) : searchQuery.trim() && !searchLoading && searchResults.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>No users found</Text>
+            <Text style={[styles.emptySubtitle, { color: subColor }]}>Try a different username</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={displayUsers}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <SearchUserRow
+                user={item}
+                isDark={isDark}
+                index={index}
+              />
+            )}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          />
+        )}
+      </KeyboardAvoidingView>
     );
   };
 
-  const renderDiscover = () => (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={[styles.searchBarContainer, { backgroundColor: cardBg, borderColor }]}>
-        <Search size={18} color={subColor} />
-        <TextInput
-          style={[styles.searchInput, { color: textColor }]}
-          placeholder="Search by username..."
-          placeholderTextColor={subColor}
-          value={searchQuery}
-          onChangeText={handleSearchChange}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
-        {searchLoading && <ActivityIndicator size="small" color={colors.primary} />}
-      </View>
+  // ─── Render People ───────────────────────────────────────────────────────────
+  const renderPeople = () => {
+    const data = peopleSection === 'following' ? following : followers;
 
-      {searchError ? (
-        <View style={styles.errorState}>
-          <Text style={[styles.errorTitle, { color: textColor }]}>Search failed</Text>
-          <Text style={[styles.errorSub, { color: subColor }]}>{searchError}</Text>
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Section toggle */}
+        <View style={[styles.peopleSectionToggle, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor }]}>
+          {(['following', 'followers'] as PeopleSection[]).map((section) => {
+            const isActive = peopleSection === section;
+            const label = section === 'following' ? 'Following' : 'Followers';
+            return (
+              <Pressable
+                key={section}
+                onPress={() => {
+                  console.log('[Community] People section switched to:', section);
+                  setPeopleSection(section);
+                }}
+                style={[
+                  styles.peopleSectionBtn,
+                  isActive && { backgroundColor: colors.primary },
+                ]}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.peopleSectionBtnText, { color: isActive ? '#fff' : subColor }]}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-      ) : !searchQuery.trim() ? (
-        <DiscoverEmpty isDark={isDark} />
-      ) : searchResults.length === 0 && !searchLoading ? (
-        <View style={styles.emptyState}>
-          <Text style={[styles.emptyTitle, { color: textColor }]}>No users found</Text>
-          <Text style={[styles.emptySubtitle, { color: subColor }]}>
-            Try a different username.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={searchResults}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <SearchUserRow
-              user={item}
-              isDark={isDark}
-              onConnect={handleConnect}
-              index={index}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        />
-      )}
-    </KeyboardAvoidingView>
-  );
+
+        {peopleLoading ? (
+          <View style={styles.loadingCenter}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={data}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <SearchUserRow
+                user={item}
+                isDark={isDark}
+                index={index}
+              />
+            )}
+            contentContainerStyle={[styles.listContent, data.length === 0 && styles.listContentEmpty]}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
+                  <Users size={32} color={colors.primary} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: textColor }]}>
+                  {peopleSection === 'following' ? 'Not following anyone yet' : 'No followers yet'}
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: subColor }]}>
+                  {peopleSection === 'following'
+                    ? 'Discover people in the Discover tab'
+                    : 'Share your profile to get followers'}
+                </Text>
+              </View>
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={peopleRefreshing}
+                onRefresh={() => {
+                  console.log('[Community] People pull-to-refresh');
+                  loadPeople(true);
+                }}
+                tintColor={colors.primary}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
+    );
+  };
+
+  const SUB_TABS: { key: SubTab; label: string }[] = [
+    { key: 'feed', label: 'Feed' },
+    { key: 'discover', label: 'Discover' },
+    { key: 'people', label: 'People' },
+  ];
 
   return (
     <>
@@ -494,33 +502,36 @@ export default function CommunityScreen() {
           headerShadowVisible: false,
           headerLargeTitleShadowVisible: false,
           headerLargeStyle: { backgroundColor: 'transparent' },
+          headerRight: () => (
+            <Pressable
+              onPress={() => {
+                console.log('[Community] Create post button pressed');
+                setShowCreatePost(true);
+              }}
+              style={styles.headerCreateBtn}
+              accessibilityLabel="Create post"
+              accessibilityRole="button"
+            >
+              <Edit3 size={22} color={colors.primary} />
+            </Pressable>
+          ),
         }}
       />
 
       <View style={[styles.container, { backgroundColor: bg }]}>
-        {/* Segmented control */}
-        <View style={[styles.segmentedControl, { backgroundColor: cardBg, borderColor }]}>
-          {(['feed', 'connections', 'discover'] as SubTab[]).map((tab) => {
-            const isActive = activeTab === tab;
-            const label = tab === 'feed' ? 'Feed' : tab === 'connections' ? 'Connections' : 'Discover';
+        {/* Sub-tab switcher */}
+        <View style={[styles.segmentedControl, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor }]}>
+          {SUB_TABS.map(({ key, label }) => {
+            const isActive = activeTab === key;
             return (
               <Pressable
-                key={tab}
-                onPress={() => handleTabSwitch(tab)}
-                style={[
-                  styles.segmentBtn,
-                  isActive && { backgroundColor: colors.primary },
-                ]}
+                key={key}
+                onPress={() => handleTabSwitch(key)}
+                style={[styles.segmentBtn, isActive && { backgroundColor: colors.primary }]}
                 accessibilityLabel={label}
                 accessibilityRole="tab"
               >
-                <Text
-                  style={[
-                    styles.segmentBtnText,
-                    { color: isActive ? '#fff' : subColor },
-                    isActive && { fontWeight: '700' },
-                  ]}
-                >
+                <Text style={[styles.segmentBtnText, { color: isActive ? '#fff' : subColor }, isActive && { fontWeight: '700' }]}>
                   {label}
                 </Text>
               </Pressable>
@@ -531,24 +542,9 @@ export default function CommunityScreen() {
         {/* Tab content */}
         <View style={{ flex: 1 }}>
           {activeTab === 'feed' && renderFeed()}
-          {activeTab === 'connections' && renderConnections()}
           {activeTab === 'discover' && renderDiscover()}
+          {activeTab === 'people' && renderPeople()}
         </View>
-
-        {/* FAB — only on feed tab */}
-        {activeTab === 'feed' && (
-          <Pressable
-            onPress={() => {
-              console.log('[Community] FAB pressed — opening CreatePostSheet');
-              setShowCreatePost(true);
-            }}
-            style={styles.fab}
-            accessibilityLabel="Create new post"
-            accessibilityRole="button"
-          >
-            <Plus size={24} color="#fff" />
-          </Pressable>
-        )}
       </View>
 
       {/* Create Post Sheet */}
@@ -572,6 +568,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  headerCreateBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   segmentedControl: {
     flexDirection: 'row',
     marginHorizontal: spacing.md,
@@ -592,26 +594,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  tabContent: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-  },
   listContent: {
-    paddingHorizontal: spacing.md,
     paddingBottom: 120,
-    paddingTop: spacing.sm,
   },
   listContentEmpty: {
     flex: 1,
     justifyContent: 'center',
-  },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
   },
   emptyState: {
     flex: 1,
@@ -639,23 +627,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
     maxWidth: 280,
-  },
-  errorState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: 60,
-  },
-  errorTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  errorSub: {
-    fontSize: 14,
-    textAlign: 'center',
     marginBottom: spacing.md,
   },
   retryBtn: {
@@ -685,32 +656,40 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingVertical: 0,
   },
-  fab: {
-    position: 'absolute',
-    bottom: 100,
-    right: spacing.md,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
+  peopleSectionToggle: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: 3,
+    gap: 2,
+  },
+  peopleSectionBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  peopleSectionBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loadingCenter: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
   },
   skeletonCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    padding: spacing.md,
   },
   skeletonAvatar: {
     width: 40,
@@ -723,5 +702,9 @@ const styles = StyleSheet.create({
   skeletonLine: {
     height: 13,
     borderRadius: 6,
+  },
+  skeletonImage: {
+    width: '100%',
+    aspectRatio: 1,
   },
 });

@@ -9,9 +9,10 @@ import {
   ImageSourcePropType,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Heart, MessageCircle, Trophy, Flame, Camera, Pencil } from 'lucide-react-native';
+import { MessageCircle, Trophy, Flame, TrendingUp, MoreHorizontal } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
-import type { SocialPost, PostType } from '@/utils/socialApi';
+import type { SocialPost } from '@/utils/socialApi';
+import Avatar from '@/components/social/Avatar';
 
 function resolveImageSource(
   source: string | number | ImageSourcePropType | undefined
@@ -21,7 +22,7 @@ function resolveImageSource(
   return source as ImageSourcePropType;
 }
 
-function timeAgo(dateStr: string): string {
+export function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
@@ -33,86 +34,25 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function getPostTypeIcon(type: PostType, isDark: boolean) {
-  const color = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  switch (type) {
-    case 'milestone': return <Trophy size={14} color="#F59E0B" />;
-    case 'streak': return <Flame size={14} color="#EF4444" />;
-    case 'photo': return <Camera size={14} color={color} />;
-    default: return <Pencil size={14} color={color} />;
-  }
-}
-
-function getPostTypeLabel(type: PostType): string {
-  switch (type) {
-    case 'milestone': return 'Milestone';
-    case 'streak': return 'Streak';
-    case 'photo': return 'Photo';
-    default: return 'Post';
-  }
-}
-
-function getPostTypeBadgeColor(type: PostType): string {
-  switch (type) {
-    case 'milestone': return '#FEF3C7';
-    case 'streak': return '#FEE2E2';
-    case 'photo': return '#EFF6FF';
-    default: return '#F3F4F6';
-  }
-}
-
-function getPostTypeBadgeTextColor(type: PostType): string {
-  switch (type) {
-    case 'milestone': return '#92400E';
-    case 'streak': return '#991B1B';
-    case 'photo': return '#1E40AF';
-    default: return '#374151';
-  }
-}
-
-interface AvatarProps {
-  username: string;
-  avatarUrl: string | null;
-  size?: number;
-}
-
-function Avatar({ username, avatarUrl, size = 40 }: AvatarProps) {
-  const initial = (username ?? 'U').charAt(0).toUpperCase();
-  if (avatarUrl) {
-    return (
-      <Image
-        source={resolveImageSource(avatarUrl)}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        resizeMode="cover"
-      />
-    );
-  }
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: colors.primary + '22',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ fontSize: size * 0.4, fontWeight: '700', color: colors.primary }}>
-        {initial}
-      </Text>
-    </View>
-  );
-}
-
 interface SocialPostCardProps {
   post: SocialPost;
   isDark: boolean;
   onLike: (postId: string) => void;
+  onComment?: (postId: string) => void;
+  onPressUser?: (userId: string) => void;
   index?: number;
+  hideCommentButton?: boolean;
 }
 
-export default function SocialPostCard({ post, isDark, onLike, index = 0 }: SocialPostCardProps) {
+export default function SocialPostCard({
+  post,
+  isDark,
+  onLike,
+  onComment,
+  onPressUser,
+  index = 0,
+  hideCommentButton = false,
+}: SocialPostCardProps) {
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
@@ -136,41 +76,182 @@ export default function SocialPostCard({ post, isDark, onLike, index = 0 }: Soci
   }, []);
 
   const handleLike = useCallback(() => {
-    console.log('[SocialPostCard] Like pressed — post_id:', post.id, 'currently liked:', post.liked_by_me);
+    console.log('[SocialPostCard] Like (🔥) pressed — post_id:', post.id, 'currently liked:', post.liked_by_me);
     Animated.sequence([
-      Animated.spring(likeScale, {
-        toValue: 1.4,
-        useNativeDriver: true,
-        speed: 50,
-        bounciness: 8,
-      }),
-      Animated.spring(likeScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        speed: 50,
-        bounciness: 4,
-      }),
+      Animated.spring(likeScale, { toValue: 1.3, useNativeDriver: true, speed: 50, bounciness: 10 }),
+      Animated.spring(likeScale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }),
     ]).start();
     onLike(post.id);
   }, [post.id, post.liked_by_me, onLike]);
 
   const handleComment = useCallback(() => {
     console.log('[SocialPostCard] Comment pressed — post_id:', post.id);
-    router.push(`/social-post-detail?post_id=${post.id}`);
-  }, [post.id, router]);
+    if (onComment) {
+      onComment(post.id);
+    } else {
+      router.push(`/social-post-detail?post_id=${post.id}`);
+    }
+  }, [post.id, onComment, router]);
 
-  const bg = isDark ? colors.cardDark : colors.card;
+  const handlePressUser = useCallback(() => {
+    console.log('[SocialPostCard] User pressed — user_id:', post.author?.id, 'username:', post.author?.username);
+    if (onPressUser) {
+      onPressUser(post.author?.id ?? '');
+    } else {
+      router.push(`/social-profile?user_id=${post.author?.id}`);
+    }
+  }, [post.author, onPressUser, router]);
+
+  const bg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
   const timeAgoText = timeAgo(post.created_at);
-  const badgeBg = getPostTypeBadgeColor(post.post_type);
-  const badgeText = getPostTypeBadgeTextColor(post.post_type);
-  const typeLabel = getPostTypeLabel(post.post_type);
   const likesCount = post.likes_count;
   const commentsCount = post.comments_count;
-  const likeColor = post.liked_by_me ? '#EF4444' : subColor;
+  const likeActive = post.liked_by_me;
+  const authorUsername = post.author?.username ?? 'Unknown';
+  const authorName = post.author?.name ?? null;
+  const captionText = post.content ?? null;
+
+  // Derived display values
+  const caloriesDisplay = post.calories != null ? Math.round(Number(post.calories)).toString() : null;
+  const proteinDisplay = post.protein != null ? Math.round(Number(post.protein)).toString() : null;
+  const carbsDisplay = post.carbs != null ? Math.round(Number(post.carbs)).toString() : null;
+  const fatDisplay = post.fat != null ? Math.round(Number(post.fat)).toString() : null;
+  const streakDisplay = post.streak_days != null ? post.streak_days.toString() : null;
+  const weightDisplay = post.weight_value != null ? Number(post.weight_value).toFixed(1) : null;
+  const weightUnit = post.weight_unit ?? 'lbs';
+
+  const renderPostBody = () => {
+    switch (post.post_type) {
+      case 'photo':
+        return post.image_url ? (
+          <Image
+            source={resolveImageSource(post.image_url)}
+            style={styles.photoImage}
+            resizeMode="cover"
+          />
+        ) : null;
+
+      case 'streak':
+        return (
+          <View style={[styles.specialCard, { backgroundColor: isDark ? '#3D1A1A' : '#FEF2F2' }]}>
+            <Flame size={36} color="#EF4444" />
+            {streakDisplay ? (
+              <Text style={[styles.streakNumber, { color: '#EF4444' }]}>{streakDisplay}</Text>
+            ) : null}
+            <Text style={[styles.streakLabel, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+              day streak
+            </Text>
+          </View>
+        );
+
+      case 'milestone':
+        return (
+          <View style={[styles.specialCard, { backgroundColor: isDark ? '#2D2A14' : '#FFFBEB' }]}>
+            <Trophy size={32} color="#F59E0B" />
+            {post.milestone_type ? (
+              <Text style={[styles.milestoneType, { color: isDark ? '#FCD34D' : '#92400E' }]}>
+                {post.milestone_type}
+              </Text>
+            ) : null}
+            {weightDisplay ? (
+              <Text style={[styles.milestoneWeight, { color: isDark ? colors.textDark : colors.text }]}>
+                {weightDisplay}
+                {' '}
+                {weightUnit}
+              </Text>
+            ) : null}
+          </View>
+        );
+
+      case 'stats':
+        return (
+          <View style={[styles.statsCard, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor }]}>
+            {caloriesDisplay ? (
+              <View style={styles.statsRow}>
+                <Text style={[styles.statsLabel, { color: subColor }]}>Calories</Text>
+                <Text style={[styles.statsValue, { color: colors.calories }]}>{caloriesDisplay}</Text>
+                <Text style={[styles.statsUnit, { color: subColor }]}>kcal</Text>
+              </View>
+            ) : null}
+            <View style={styles.macroPills}>
+              {proteinDisplay ? (
+                <View style={[styles.macroPill, { backgroundColor: colors.protein + '18' }]}>
+                  <Text style={[styles.macroPillText, { color: colors.protein }]}>
+                    {proteinDisplay}
+                    g P
+                  </Text>
+                </View>
+              ) : null}
+              {carbsDisplay ? (
+                <View style={[styles.macroPill, { backgroundColor: colors.carbs + '18' }]}>
+                  <Text style={[styles.macroPillText, { color: colors.carbs }]}>
+                    {carbsDisplay}
+                    g C
+                  </Text>
+                </View>
+              ) : null}
+              {fatDisplay ? (
+                <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
+                  <Text style={[styles.macroPillText, { color: colors.fats }]}>
+                    {fatDisplay}
+                    g F
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        );
+
+      case 'meal':
+        return (
+          <View>
+            {post.image_url ? (
+              <Image
+                source={resolveImageSource(post.image_url)}
+                style={styles.photoImage}
+                resizeMode="cover"
+              />
+            ) : null}
+            {(proteinDisplay || carbsDisplay || fatDisplay) ? (
+              <View style={styles.mealMacroPills}>
+                {proteinDisplay ? (
+                  <View style={[styles.macroPill, { backgroundColor: colors.protein + '18' }]}>
+                    <Text style={[styles.macroPillText, { color: colors.protein }]}>
+                      {proteinDisplay}
+                      g P
+                    </Text>
+                  </View>
+                ) : null}
+                {carbsDisplay ? (
+                  <View style={[styles.macroPill, { backgroundColor: colors.carbs + '18' }]}>
+                    <Text style={[styles.macroPillText, { color: colors.carbs }]}>
+                      {carbsDisplay}
+                      g C
+                    </Text>
+                  </View>
+                ) : null}
+                {fatDisplay ? (
+                  <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
+                    <Text style={[styles.macroPillText, { color: colors.fats }]}>
+                      {fatDisplay}
+                      g F
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        );
+
+      case 'text':
+      default:
+        return null;
+    }
+  };
 
   return (
     <Animated.View
@@ -181,187 +262,276 @@ export default function SocialPostCard({ post, isDark, onLike, index = 0 }: Soci
       ]}
     >
       {/* Header */}
-      <View style={styles.header}>
-        <Avatar username={post.author?.username ?? 'U'} avatarUrl={post.author?.avatar_url ?? null} size={40} />
+      <Pressable onPress={handlePressUser} style={styles.header} accessibilityRole="button">
+        <Avatar username={authorUsername} size={40} />
         <View style={styles.headerInfo}>
           <Text style={[styles.username, { color: textColor }]} numberOfLines={1}>
-            {post.author?.username ?? 'Unknown'}
+            {authorUsername}
           </Text>
+          {authorName ? (
+            <Text style={[styles.authorName, { color: subColor }]} numberOfLines={1}>
+              {authorName}
+            </Text>
+          ) : null}
           <Text style={[styles.timestamp, { color: subColor }]}>{timeAgoText}</Text>
         </View>
-        <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
-          {getPostTypeIcon(post.post_type, isDark)}
-          <Text style={[styles.typeBadgeText, { color: badgeText }]}>{typeLabel}</Text>
-        </View>
-      </View>
+        <Pressable
+          onPress={() => console.log('[SocialPostCard] More options pressed — post_id:', post.id)}
+          style={styles.moreBtn}
+          accessibilityLabel="More options"
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <MoreHorizontal size={20} color={subColor} />
+        </Pressable>
+      </Pressable>
 
-      {/* Content */}
-      {post.content ? (
-        <Text style={[styles.content, { color: textColor }]}>{post.content}</Text>
-      ) : null}
+      {/* Post body */}
+      {renderPostBody()}
 
-      {/* Streak info */}
-      {post.post_type === 'streak' && post.streak_days != null ? (
-        <View style={styles.streakRow}>
-          <Flame size={18} color="#EF4444" />
-          <Text style={[styles.streakText, { color: textColor }]}>
-            {post.streak_days}
-          </Text>
-          <Text style={[styles.streakLabel, { color: subColor }]}>day streak</Text>
-        </View>
-      ) : null}
-
-      {/* Weight info */}
-      {post.weight_value != null ? (
-        <View style={styles.weightRow}>
-          <Text style={[styles.weightValue, { color: colors.primary }]}>
-            {Number(post.weight_value).toFixed(1)}
-          </Text>
-          <Text style={[styles.weightUnit, { color: subColor }]}>
-            {post.weight_unit ?? 'lbs'}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Image */}
-      {post.image_url ? (
-        <Image
-          source={resolveImageSource(post.image_url)}
-          style={styles.postImage}
-          resizeMode="cover"
-        />
-      ) : null}
-
-      {/* Actions */}
-      <View style={styles.actions}>
+      {/* Actions row */}
+      <View style={[styles.actionsRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}>
         <Pressable
           onPress={handleLike}
           style={styles.actionBtn}
           accessibilityLabel="Like post"
           accessibilityRole="button"
         >
-          <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-            <Heart
-              size={20}
-              color={likeColor}
-              fill={post.liked_by_me ? '#EF4444' : 'transparent'}
-            />
-          </Animated.View>
-          <Text style={[styles.actionCount, { color: subColor }]}>{likesCount}</Text>
+          <Animated.Text
+            style={[styles.likeEmoji, { transform: [{ scale: likeScale }], opacity: likeActive ? 1 : 0.45 }]}
+          >
+            🔥
+          </Animated.Text>
+          <Text style={[styles.actionCount, { color: likeActive ? colors.warning : subColor }]}>
+            {likesCount}
+          </Text>
         </Pressable>
 
+        {!hideCommentButton && (
+          <Pressable
+            onPress={handleComment}
+            style={styles.actionBtn}
+            accessibilityLabel="View comments"
+            accessibilityRole="button"
+          >
+            <MessageCircle size={20} color={subColor} />
+            <Text style={[styles.actionCount, { color: subColor }]}>{commentsCount}</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Likes count */}
+      {likesCount > 0 ? (
+        <Text style={[styles.likesLine, { color: textColor }]}>
+          {likesCount}
+          {' '}
+          {likesCount === 1 ? 'like' : 'likes'}
+        </Text>
+      ) : null}
+
+      {/* Caption */}
+      {captionText ? (
+        <View style={styles.captionRow}>
+          <Text style={[styles.captionUsername, { color: textColor }]}>{authorUsername}</Text>
+          <Text style={[styles.captionText, { color: textColor }]}>{captionText}</Text>
+        </View>
+      ) : null}
+
+      {/* View comments link */}
+      {commentsCount > 0 && !hideCommentButton ? (
         <Pressable
           onPress={handleComment}
-          style={styles.actionBtn}
-          accessibilityLabel="View comments"
+          style={styles.viewCommentsBtn}
           accessibilityRole="button"
         >
-          <MessageCircle size={20} color={subColor} />
-          <Text style={[styles.actionCount, { color: subColor }]}>{commentsCount}</Text>
+          <Text style={[styles.viewCommentsText, { color: subColor }]}>
+            View all
+            {' '}
+            {commentsCount}
+            {' '}
+            {commentsCount === 1 ? 'comment' : 'comments'}
+          </Text>
         </Pressable>
-      </View>
+      ) : null}
+
+      {/* Timestamp */}
+      <Text style={[styles.timeFooter, { color: subColor }]}>{timeAgoText}</Text>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
     marginBottom: spacing.md,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+    borderBottomWidth: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
     gap: spacing.sm,
   },
   headerInfo: {
     flex: 1,
   },
   username: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
-  timestamp: {
+  authorName: {
     fontSize: 12,
     marginTop: 1,
   },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  typeBadgeText: {
+  timestamp: {
     fontSize: 11,
-    fontWeight: '600',
+    marginTop: 1,
   },
-  content: {
-    fontSize: 15,
-    lineHeight: 22,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  streakRow: {
-    flexDirection: 'row',
+  moreBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    justifyContent: 'center',
   },
-  streakText: {
-    fontSize: 22,
-    fontWeight: '700',
+  photoImage: {
+    width: '100%',
+    aspectRatio: 1,
+  },
+  specialCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: 8,
+  },
+  streakNumber: {
+    fontSize: 48,
+    fontWeight: '800',
+    lineHeight: 56,
   },
   streakLabel: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '600',
   },
-  weightRow: {
+  milestoneType: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  milestoneWeight: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  statsCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  statsRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    gap: 6,
   },
-  weightValue: {
+  statsLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  statsValue: {
     fontSize: 22,
+    fontWeight: '800',
+  },
+  statsUnit: {
+    fontSize: 13,
+  },
+  macroPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  mealMacroPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  macroPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  macroPillText: {
+    fontSize: 12,
     fontWeight: '700',
   },
-  weightUnit: {
-    fontSize: 14,
-  },
-  postImage: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-  },
-  actions: {
+  actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.lg,
+    paddingTop: 10,
+    paddingBottom: 6,
+    gap: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingVertical: 4,
+    gap: 5,
+    minHeight: 36,
+  },
+  likeEmoji: {
+    fontSize: 22,
   },
   actionCount: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  likesLine: {
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: spacing.md,
+    marginBottom: 4,
+  },
+  captionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    marginBottom: 4,
+    gap: 4,
+  },
+  captionUsername: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  captionText: {
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+  },
+  viewCommentsBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 2,
+  },
+  viewCommentsText: {
+    fontSize: 13,
+  },
+  timeFooter: {
+    fontSize: 10,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 10,
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
 });

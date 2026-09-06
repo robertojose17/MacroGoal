@@ -14,12 +14,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Image,
-  ImageSourcePropType,
   Animated,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { Heart, Send, MessageCircle } from 'lucide-react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Send } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
@@ -29,59 +27,21 @@ import {
   fetchFeed,
 } from '@/utils/socialApi';
 import type { SocialPost, Comment } from '@/utils/socialApi';
+import SocialPostCard, { timeAgo } from '@/components/social/SocialPostCard';
+import Avatar from '@/components/social/Avatar';
 
-function resolveImageSource(
-  source: string | number | ImageSourcePropType | undefined
-): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function Avatar({ username, avatarUrl, size = 36 }: { username: string; avatarUrl: string | null; size?: number }) {
-  const initial = (username ?? 'U').charAt(0).toUpperCase();
-  if (avatarUrl) {
-    return (
-      <Image
-        source={resolveImageSource(avatarUrl)}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        resizeMode="cover"
-      />
-    );
-  }
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: colors.primary + '22',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ fontSize: size * 0.38, fontWeight: '700', color: colors.primary }}>
-        {initial}
-      </Text>
-    </View>
-  );
-}
-
-function CommentItem({ comment, isDark, index }: { comment: Comment; isDark: boolean; index: number }) {
+function CommentItem({
+  comment,
+  isDark,
+  index,
+}: {
+  comment: Comment;
+  isDark: boolean;
+  index: number;
+}) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity, { toValue: 1, duration: 300, delay: index * 40, useNativeDriver: true }),
@@ -91,8 +51,9 @@ function CommentItem({ comment, isDark, index }: { comment: Comment; isDark: boo
 
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const bg = isDark ? colors.cardDark : colors.card;
+  const bg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const authorUsername = comment.author?.username ?? 'Unknown';
   const timeText = timeAgo(comment.created_at);
 
   return (
@@ -103,12 +64,15 @@ function CommentItem({ comment, isDark, index }: { comment: Comment; isDark: boo
         { opacity, transform: [{ translateY }] },
       ]}
     >
-      <Avatar username={comment.author?.username ?? 'U'} avatarUrl={comment.author?.avatar_url ?? null} size={32} />
+      <Pressable
+        onPress={() => console.log('[PostDetail] Comment author pressed — user_id:', comment.author?.id)}
+        accessibilityRole="button"
+      >
+        <Avatar username={authorUsername} size={32} />
+      </Pressable>
       <View style={styles.commentBody}>
         <View style={styles.commentMeta}>
-          <Text style={[styles.commentUsername, { color: textColor }]}>
-            {comment.author?.username ?? 'Unknown'}
-          </Text>
+          <Text style={[styles.commentUsername, { color: textColor }]}>{authorUsername}</Text>
           <Text style={[styles.commentTime, { color: subColor }]}>{timeText}</Text>
         </View>
         <Text style={[styles.commentContent, { color: textColor }]}>{comment.content}</Text>
@@ -121,6 +85,7 @@ export default function SocialPostDetailScreen() {
   const { post_id } = useLocalSearchParams<{ post_id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
 
   const [post, setPost] = useState<SocialPost | null>(null);
   const [postLoading, setPostLoading] = useState(true);
@@ -128,24 +93,30 @@ export default function SocialPostDetailScreen() {
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const likeScale = useRef(new Animated.Value(1)).current;
 
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const cardBg = isDark ? colors.cardDark : colors.card;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
-  const inputBg = isDark ? colors.cardDark : colors.card;
 
-  // Load post from feed (single post lookup via feed)
+  // Load post
   useEffect(() => {
     if (!post_id) return;
     console.log('[PostDetail] Loading post — post_id:', post_id);
     setPostLoading(true);
-    fetchFeed(50, 0)
+    fetchFeed('following', 50, 0)
       .then((posts) => {
         const found = posts.find((p) => p.id === post_id) ?? null;
-        console.log('[PostDetail] Post found:', !!found);
+        if (!found) {
+          // Try discover feed
+          return fetchFeed('discover', 50, 0).then((discoverPosts) => {
+            const foundInDiscover = discoverPosts.find((p) => p.id === post_id) ?? null;
+            console.log('[PostDetail] Post found in discover:', !!foundInDiscover);
+            setPost(foundInDiscover);
+          });
+        }
+        console.log('[PostDetail] Post found in following feed:', !!found);
         setPost(found);
       })
       .catch((e) => console.error('[PostDetail] Failed to load post:', e))
@@ -166,24 +137,15 @@ export default function SocialPostDetailScreen() {
       .finally(() => setCommentsLoading(false));
   }, [post_id]);
 
-  const handleLike = useCallback(async () => {
-    if (!post) return;
-    console.log('[PostDetail] Like pressed — post_id:', post.id, 'currently liked:', post.liked_by_me);
-    Animated.sequence([
-      Animated.spring(likeScale, { toValue: 1.4, useNativeDriver: true, speed: 50, bounciness: 8 }),
-      Animated.spring(likeScale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }),
-    ]).start();
+  const handleLike = useCallback(async (postId: string) => {
+    console.log('[PostDetail] Like pressed — post_id:', postId);
     setPost((prev) =>
       prev
-        ? {
-            ...prev,
-            liked_by_me: !prev.liked_by_me,
-            likes_count: prev.liked_by_me ? prev.likes_count - 1 : prev.likes_count + 1,
-          }
+        ? { ...prev, liked_by_me: !prev.liked_by_me, likes_count: prev.liked_by_me ? prev.likes_count - 1 : prev.likes_count + 1 }
         : prev
     );
     try {
-      const result = await toggleLike(post.id);
+      const result = await toggleLike(postId);
       setPost((prev) =>
         prev ? { ...prev, liked_by_me: result.liked, likes_count: result.likes_count } : prev
       );
@@ -191,19 +153,15 @@ export default function SocialPostDetailScreen() {
       console.error('[PostDetail] toggleLike failed:', e);
       setPost((prev) =>
         prev
-          ? {
-              ...prev,
-              liked_by_me: !prev.liked_by_me,
-              likes_count: prev.liked_by_me ? prev.likes_count - 1 : prev.likes_count + 1,
-            }
+          ? { ...prev, liked_by_me: !prev.liked_by_me, likes_count: prev.liked_by_me ? prev.likes_count - 1 : prev.likes_count + 1 }
           : prev
       );
     }
-  }, [post]);
+  }, []);
 
   const handleSubmitComment = useCallback(async () => {
     if (!post_id || !commentText.trim()) return;
-    console.log('[PostDetail] Submit comment — post_id:', post_id, 'length:', commentText.trim().length);
+    console.log('[PostDetail] Submit comment pressed — post_id:', post_id, 'length:', commentText.trim().length);
     setSubmitting(true);
     try {
       const newComment = await addComment(post_id, commentText.trim());
@@ -220,76 +178,36 @@ export default function SocialPostDetailScreen() {
     }
   }, [post_id, commentText]);
 
-  const likeColor = post?.liked_by_me ? '#EF4444' : subColor;
-  const likesCount = post?.likes_count ?? 0;
-  const commentsCount = post?.comments_count ?? 0;
-  const timeText = post ? timeAgo(post.created_at) : '';
+  const commentsCountText = commentsLoading
+    ? 'Loading comments...'
+    : `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}`;
 
   const renderHeader = () => {
     if (postLoading) {
       return (
-        <View style={[styles.postCard, { backgroundColor: cardBg, borderColor }]}>
+        <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor }]}>
           <ActivityIndicator color={colors.primary} style={{ margin: spacing.lg }} />
         </View>
       );
     }
     if (!post) {
       return (
-        <View style={[styles.postCard, { backgroundColor: cardBg, borderColor }]}>
+        <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor }]}>
           <Text style={[styles.errorText, { color: subColor }]}>Post not found.</Text>
         </View>
       );
     }
     return (
-      <View style={[styles.postCard, { backgroundColor: cardBg, borderColor }]}>
-        {/* Author */}
-        <View style={styles.postHeader}>
-          <Avatar username={post.author?.username ?? 'U'} avatarUrl={post.author?.avatar_url ?? null} size={44} />
-          <View style={styles.postHeaderInfo}>
-            <Text style={[styles.postUsername, { color: textColor }]}>
-              {post.author?.username ?? 'Unknown'}
-            </Text>
-            <Text style={[styles.postTime, { color: subColor }]}>{timeText}</Text>
-          </View>
-        </View>
-
-        {/* Content */}
-        {post.content ? (
-          <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
-        ) : null}
-
-        {/* Image */}
-        {post.image_url ? (
-          <Image
-            source={resolveImageSource(post.image_url)}
-            style={styles.postImage}
-            resizeMode="cover"
-          />
-        ) : null}
-
-        {/* Actions */}
-        <View style={[styles.postActions, { borderTopColor: borderColor }]}>
-          <Pressable
-            onPress={handleLike}
-            style={styles.actionBtn}
-            accessibilityLabel="Like post"
-            accessibilityRole="button"
-          >
-            <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-              <Heart
-                size={22}
-                color={likeColor}
-                fill={post.liked_by_me ? '#EF4444' : 'transparent'}
-              />
-            </Animated.View>
-            <Text style={[styles.actionCount, { color: subColor }]}>{likesCount}</Text>
-          </Pressable>
-          <View style={styles.actionBtn}>
-            <MessageCircle size={22} color={subColor} />
-            <Text style={[styles.actionCount, { color: subColor }]}>{commentsCount}</Text>
-          </View>
-        </View>
-      </View>
+      <SocialPostCard
+        post={post}
+        isDark={isDark}
+        onLike={handleLike}
+        onPressUser={(userId) => {
+          console.log('[PostDetail] Author pressed — navigating to profile user_id:', userId);
+          router.push(`/social-profile?user_id=${userId}`);
+        }}
+        hideCommentButton
+      />
     );
   };
 
@@ -317,7 +235,7 @@ export default function SocialPostDetailScreen() {
             <>
               {renderHeader()}
               <Text style={[styles.commentsLabel, { color: subColor }]}>
-                {commentsLoading ? 'Loading comments...' : `${comments.length} comment${comments.length !== 1 ? 's' : ''}`}
+                {commentsCountText}
               </Text>
             </>
           }
@@ -328,7 +246,7 @@ export default function SocialPostDetailScreen() {
         {/* Comment input */}
         <View style={[styles.commentInputRow, { backgroundColor: cardBg, borderTopColor: borderColor }]}>
           <TextInput
-            style={[styles.commentInput, { backgroundColor: inputBg, borderColor, color: textColor }]}
+            style={[styles.commentInput, { backgroundColor: isDark ? '#1E2035' : colors.card, borderColor, color: textColor }]}
             placeholder="Add a comment..."
             placeholderTextColor={subColor}
             value={commentText}
@@ -339,12 +257,12 @@ export default function SocialPostDetailScreen() {
             onSubmitEditing={handleSubmitComment}
           />
           <Pressable
-            onPress={handleSubmitComment}
+            onPress={() => {
+              console.log('[PostDetail] Send comment button pressed');
+              handleSubmitComment();
+            }}
             disabled={!commentText.trim() || submitting}
-            style={[
-              styles.sendBtn,
-              { opacity: !commentText.trim() || submitting ? 0.4 : 1 },
-            ]}
+            style={[styles.sendBtn, { opacity: !commentText.trim() || submitting ? 0.4 : 1 }]}
             accessibilityLabel="Send comment"
             accessibilityRole="button"
           >
@@ -367,64 +285,18 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: spacing.md,
     paddingBottom: 20,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
   },
-  postCard: {
+  loadingCard: {
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     marginBottom: spacing.md,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  postHeaderInfo: {
-    flex: 1,
-  },
-  postUsername: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  postTime: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  postContent: {
-    fontSize: 16,
-    lineHeight: 24,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  postImage: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-  },
-  postActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.lg,
-    borderTopWidth: 1,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingVertical: 4,
-  },
-  actionCount: {
-    fontSize: 15,
-    fontWeight: '500',
+  errorText: {
+    textAlign: 'center',
+    padding: spacing.lg,
+    fontSize: 14,
   },
   commentsLabel: {
     fontSize: 12,
@@ -484,10 +356,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  errorText: {
-    textAlign: 'center',
-    padding: spacing.lg,
-    fontSize: 14,
   },
 });

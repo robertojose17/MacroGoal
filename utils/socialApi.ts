@@ -4,9 +4,18 @@ const BASE = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ConnectionRole = 'friend' | 'coach' | 'partner';
-export type ConnectionStatus = 'pending' | 'accepted' | 'blocked';
-export type PostType = 'milestone' | 'streak' | 'photo' | 'custom';
+export interface SocialUser {
+  id: string;
+  username: string;
+  name: string | null;
+  bio: string | null;
+  is_private: boolean;
+  followers_count: number;
+  following_count: number;
+  posts_count: number;
+}
+
+export type PostType = 'photo' | 'milestone' | 'streak' | 'stats' | 'meal' | 'text';
 
 export interface SocialPost {
   id: string;
@@ -14,54 +23,41 @@ export interface SocialPost {
   post_type: PostType;
   content: string | null;
   image_url: string | null;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
   weight_value: number | null;
-  weight_unit: 'lbs' | 'kg' | null;
+  weight_unit: string | null;
   streak_days: number | null;
   milestone_type: string | null;
   is_public: boolean;
   likes_count: number;
   comments_count: number;
   created_at: string;
-  author: { id: string; username: string; avatar_url: string | null };
+  author: { id: string; username: string; name: string | null };
   liked_by_me: boolean;
 }
 
-export interface Connection {
-  id: string;
-  role: ConnectionRole;
-  status: ConnectionStatus;
-  created_at: string;
-  other_user: {
-    id: string;
-    username: string;
-    avatar_url: string | null;
-    preferred_units?: string;
-  };
-}
-
-export interface UserStats {
-  daily_weights?: { date: string; weight_lbs: number }[];
-  daily_macros?: {
-    day: string;
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  }[];
-  adherence_pct?: number;
-  trend_weight?: number;
-  avg_calories?: number;
-  avg_protein?: number;
-  avg_carbs?: number;
-  avg_fat?: number;
-  streak?: number;
-  latest_weight?: number;
-  goal_weight?: number;
-  start_weight?: number;
-  preferred_units?: string;
-  username?: string;
-  avatar_url?: string | null;
-  role?: ConnectionRole;
+export interface SocialProfile {
+  user: SocialUser;
+  is_following: boolean;
+  is_mutual: boolean;
+  is_own_profile: boolean;
+  posts: SocialPost[];
+  stats: {
+    avg_calories: number | null;
+    avg_protein: number | null;
+    avg_carbs: number | null;
+    avg_fat: number | null;
+    weight_change: number | null;
+    weight_logs: { date: string; weight: number }[];
+    streak: number;
+    consistency_score: number | null;
+    preferred_units: string;
+    check_in_photos: { id: string; photo_url: string; created_at: string; weight: number | null }[];
+    days_tracked: number;
+  } | null;
 }
 
 export interface Comment {
@@ -70,22 +66,28 @@ export interface Comment {
   user_id: string;
   content: string;
   created_at: string;
-  author: { id: string; username: string; avatar_url: string | null };
+  author: { id: string; username: string; name: string | null };
 }
 
 export interface SearchUser {
   id: string;
   username: string;
-  avatar_url: string | null;
-  connection_status: ConnectionStatus | null;
+  name: string | null;
+  is_following: boolean;
+  followers_count: number;
+  posts_count: number;
 }
 
 export interface CreatePostInput {
   post_type: PostType;
   content?: string;
   image_url?: string;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
   weight_value?: number;
-  weight_unit?: 'lbs' | 'kg';
+  weight_unit?: string;
   streak_days?: number;
   milestone_type?: string;
   is_public?: boolean;
@@ -103,14 +105,14 @@ async function authHeaders(): Promise<Record<string, string>> {
   };
 }
 
-async function apiFetch<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = await authHeaders();
   const url = `${BASE}${path}`;
   console.log(`[SocialApi] ${options.method ?? 'GET'} ${url}`);
-  const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers ?? {}) } });
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...headers, ...(options.headers ?? {}) },
+  });
   if (!res.ok) {
     const text = await res.text();
     console.error(`[SocialApi] Error ${res.status} from ${path}:`, text);
@@ -121,75 +123,70 @@ async function apiFetch<T>(
 
 // ─── Feed ─────────────────────────────────────────────────────────────────────
 
-export async function fetchFeed(limit = 20, offset = 0): Promise<SocialPost[]> {
-  console.log('[SocialApi] fetchFeed — limit:', limit, 'offset:', offset);
+export async function fetchFeed(
+  mode: 'following' | 'discover' = 'following',
+  limit = 20,
+  offset = 0
+): Promise<SocialPost[]> {
+  console.log('[SocialApi] fetchFeed — mode:', mode, 'limit:', limit, 'offset:', offset);
   const data = await apiFetch<SocialPost[]>(
-    `/social-feed?limit=${limit}&offset=${offset}`
+    `/social-feed?mode=${mode}&limit=${limit}&offset=${offset}`
   );
   console.log('[SocialApi] fetchFeed — received', data?.length ?? 0, 'posts');
   return data ?? [];
 }
 
-// ─── Connections ──────────────────────────────────────────────────────────────
+// ─── Profile ──────────────────────────────────────────────────────────────────
 
-export async function fetchConnections(): Promise<Connection[]> {
-  console.log('[SocialApi] fetchConnections');
-  const data = await apiFetch<Connection[]>('/social-connections');
-  console.log('[SocialApi] fetchConnections — received', data?.length ?? 0, 'connections');
+export async function fetchProfile(
+  userId: string,
+  fromDate?: string,
+  toDate?: string
+): Promise<SocialProfile> {
+  console.log('[SocialApi] fetchProfile — user_id:', userId, 'from:', fromDate, 'to:', toDate);
+  let path = `/social-profile?user_id=${encodeURIComponent(userId)}`;
+  if (fromDate) path += `&from_date=${fromDate}`;
+  if (toDate) path += `&to_date=${toDate}`;
+  const data = await apiFetch<SocialProfile>(path);
+  console.log('[SocialApi] fetchProfile — is_own:', data?.is_own_profile, 'is_mutual:', data?.is_mutual);
+  return data;
+}
+
+// ─── Follows ──────────────────────────────────────────────────────────────────
+
+export async function followUser(targetUserId: string): Promise<void> {
+  console.log('[SocialApi] followUser — target_user_id:', targetUserId);
+  await apiFetch('/social-follows', {
+    method: 'POST',
+    body: JSON.stringify({ target_user_id: targetUserId }),
+  });
+  console.log('[SocialApi] followUser — success');
+}
+
+export async function unfollowUser(targetUserId: string): Promise<void> {
+  console.log('[SocialApi] unfollowUser — target_user_id:', targetUserId);
+  await apiFetch(`/social-follows?target_user_id=${encodeURIComponent(targetUserId)}`, {
+    method: 'DELETE',
+  });
+  console.log('[SocialApi] unfollowUser — success');
+}
+
+export async function fetchFollowing(userId?: string): Promise<SearchUser[]> {
+  console.log('[SocialApi] fetchFollowing — user_id:', userId ?? 'self');
+  let path = '/social-follows?type=following';
+  if (userId) path += `&user_id=${encodeURIComponent(userId)}`;
+  const data = await apiFetch<SearchUser[]>(path);
+  console.log('[SocialApi] fetchFollowing — received', data?.length ?? 0, 'users');
   return data ?? [];
 }
 
-export async function sendConnectionRequest(
-  addressee_id: string,
-  role: ConnectionRole
-): Promise<void> {
-  console.log('[SocialApi] sendConnectionRequest — addressee_id:', addressee_id, 'role:', role);
-  await apiFetch('/social-connections', {
-    method: 'POST',
-    body: JSON.stringify({ addressee_id, role }),
-  });
-  console.log('[SocialApi] sendConnectionRequest — success');
-}
-
-export async function acceptConnection(connection_id: string): Promise<void> {
-  console.log('[SocialApi] acceptConnection — connection_id:', connection_id);
-  await apiFetch('/social-connections', {
-    method: 'PATCH',
-    body: JSON.stringify({ connection_id, status: 'accepted' }),
-  });
-  console.log('[SocialApi] acceptConnection — success');
-}
-
-export async function declineConnection(connection_id: string): Promise<void> {
-  console.log('[SocialApi] declineConnection — connection_id:', connection_id);
-  await apiFetch('/social-connections', {
-    method: 'PATCH',
-    body: JSON.stringify({ connection_id, status: 'blocked' }),
-  });
-  console.log('[SocialApi] declineConnection — success');
-}
-
-export async function removeConnection(connection_id: string): Promise<void> {
-  console.log('[SocialApi] removeConnection — connection_id:', connection_id);
-  await apiFetch(`/social-connections?connection_id=${connection_id}`, {
-    method: 'DELETE',
-  });
-  console.log('[SocialApi] removeConnection — success');
-}
-
-// ─── User Stats ───────────────────────────────────────────────────────────────
-
-export async function fetchUserStats(
-  target_user_id: string,
-  from_date: string,
-  to_date: string
-): Promise<UserStats> {
-  console.log('[SocialApi] fetchUserStats — user:', target_user_id, 'from:', from_date, 'to:', to_date);
-  const data = await apiFetch<UserStats>(
-    `/social-user-stats?target_user_id=${target_user_id}&from_date=${from_date}&to_date=${to_date}`
-  );
-  console.log('[SocialApi] fetchUserStats — received stats for:', data?.username);
-  return data;
+export async function fetchFollowers(userId?: string): Promise<SearchUser[]> {
+  console.log('[SocialApi] fetchFollowers — user_id:', userId ?? 'self');
+  let path = '/social-follows?type=followers';
+  if (userId) path += `&user_id=${encodeURIComponent(userId)}`;
+  const data = await apiFetch<SearchUser[]>(path);
+  console.log('[SocialApi] fetchFollowers — received', data?.length ?? 0, 'users');
+  return data ?? [];
 }
 
 // ─── Post Actions ─────────────────────────────────────────────────────────────
@@ -206,10 +203,7 @@ export async function toggleLike(
   return data;
 }
 
-export async function addComment(
-  post_id: string,
-  content: string
-): Promise<Comment> {
+export async function addComment(post_id: string, content: string): Promise<Comment> {
   console.log('[SocialApi] addComment — post_id:', post_id, 'content length:', content.length);
   const data = await apiFetch<Comment>('/social-post-actions/comment', {
     method: 'POST',
@@ -222,10 +216,27 @@ export async function addComment(
 export async function fetchComments(post_id: string): Promise<Comment[]> {
   console.log('[SocialApi] fetchComments — post_id:', post_id);
   const data = await apiFetch<Comment[]>(
-    `/social-post-actions/comments?post_id=${post_id}`
+    `/social-post-actions/comments?post_id=${encodeURIComponent(post_id)}`
   );
   console.log('[SocialApi] fetchComments — received', data?.length ?? 0, 'comments');
   return data ?? [];
+}
+
+export async function createPost(post: CreatePostInput): Promise<void> {
+  console.log('[SocialApi] createPost — type:', post.post_type, 'public:', post.is_public);
+  await apiFetch('/social-post-actions/create', {
+    method: 'POST',
+    body: JSON.stringify(post),
+  });
+  console.log('[SocialApi] createPost — success');
+}
+
+export async function deletePost(postId: string): Promise<void> {
+  console.log('[SocialApi] deletePost — post_id:', postId);
+  await apiFetch(`/social-post-actions/delete?post_id=${encodeURIComponent(postId)}`, {
+    method: 'DELETE',
+  });
+  console.log('[SocialApi] deletePost — success');
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
@@ -237,33 +248,4 @@ export async function searchUsers(q: string): Promise<SearchUser[]> {
   );
   console.log('[SocialApi] searchUsers — found', data?.length ?? 0, 'users');
   return data ?? [];
-}
-
-// ─── Create Post ──────────────────────────────────────────────────────────────
-
-export async function createPost(post: CreatePostInput): Promise<void> {
-  console.log('[SocialApi] createPost — type:', post.post_type, 'public:', post.is_public);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user?.id) {
-    console.error('[SocialApi] createPost — no session, aborting');
-    throw new Error('Not authenticated');
-  }
-  const { error } = await supabase.from('social_posts').insert({
-    user_id: session.user.id,
-    post_type: post.post_type,
-    content: post.content ?? null,
-    image_url: post.image_url ?? null,
-    weight_value: post.weight_value ?? null,
-    weight_unit: post.weight_unit ?? null,
-    streak_days: post.streak_days ?? null,
-    milestone_type: post.milestone_type ?? null,
-    is_public: post.is_public ?? true,
-  });
-  if (error) {
-    console.error('[SocialApi] createPost — supabase error:', error.message);
-    throw error;
-  }
-  console.log('[SocialApi] createPost — success');
 }
