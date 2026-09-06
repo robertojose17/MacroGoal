@@ -230,6 +230,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [calorieLogs, setCalorieLogs] = useState<CalorieLog[]>([]);
   const [actualWeightPoints, setActualWeightPoints] = useState<WeightCheckIn[]>([]);
+  const [isMetric, setIsMetric] = useState(false);
 
   // ── Carousel state ───────────────────────────────────────────────────────
   const [activePage, setActivePage] = useState(0);
@@ -353,6 +354,8 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       }
 
       // preferred_units is 'metric' or 'imperial' — weights in DB are always stored in kg
+      const userIsMetric = userData.preferred_units === 'metric';
+      setIsMetric(userIsMetric);
       console.log('[ProgressCard] preferred_units:', userData.preferred_units, '— DB weights are always kg, converting to lbs for chart');
 
       // Always convert from kg (DB storage) to lbs (chart display)
@@ -718,6 +721,11 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     if (!profileData || !plannedData || plannedData.length === 0) return null;
 
     const { startWeightLbs, goalWeightLbs, startDate, dailyCalories } = profileData;
+
+    // Unit conversion helpers — chart math stays in lbs; only display values convert
+    const lbsToDisplay = (lbs: number) => isMetric ? lbs / 2.20462 : lbs;
+    const weightUnit = isMetric ? 'kg' : 'lbs';
+    const paceUnit = isMetric ? 'kg/wk' : 'lb/wk';
     const totalDays = plannedData.length - 1;
 
     // Weight lost — use PIE trendWeightLbs if available, else last raw check-in
@@ -820,6 +828,13 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     // Days since start
     const daysSinceStart = Math.round((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
+    // Display-unit converted values (for stat cards only — chart math stays in lbs)
+    const displayWeightLost = weightLost !== null ? lbsToDisplay(weightLost) : null;
+    const displayLatestWeight = latestWeight !== null ? lbsToDisplay(latestWeight) : null;
+    const displayStartWeight = lbsToDisplay(startWeightLbs);
+    const displayGoalWeight = lbsToDisplay(goalWeightLbs);
+    const displayPace = currentPaceLbsPerWeek !== null ? lbsToDisplay(currentPaceLbsPerWeek) : null;
+
     return {
       latestWeight,
       weightLost,
@@ -836,8 +851,16 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       graphStatus,
       daysSinceStart,
       daysDeviation: Math.abs(Math.round(daysAhead)),
+      // Display-unit values
+      displayWeightLost,
+      displayLatestWeight,
+      displayStartWeight,
+      displayGoalWeight,
+      displayPace,
+      weightUnit,
+      paceUnit,
     };
-  }, [profileData, plannedData, actualWeightPoints, calorieLogs, calorieProjectionData, progressState]);
+  }, [profileData, plannedData, actualWeightPoints, calorieLogs, calorieProjectionData, progressState, isMetric]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const formatDate = (d: Date) => {
@@ -899,18 +922,20 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     ? actualWeightPoints[actualWeightPoints.length - 1].weightLbs
     : (profileData ? profileData.startWeightLbs : 0);
 
-  const card1Value = stats && stats.weightLost !== null
-    ? (stats.weightLost >= 0
-        ? `↓ ${stats.weightLost.toFixed(1)} lb`
-        : `↑ ${Math.abs(stats.weightLost).toFixed(1)} lb`)
+  const card1WeightUnit = stats?.weightUnit ?? 'lbs';
+  const card1Value = stats && stats.displayWeightLost !== null
+    ? (stats.displayWeightLost >= 0
+        ? `↓ ${stats.displayWeightLost.toFixed(1)} ${card1WeightUnit}`
+        : `↑ ${Math.abs(stats.displayWeightLost).toFixed(1)} ${card1WeightUnit}`)
     : '--';
   const card1Subtitle = stats ? t('progressCard.sinceStart', { days: stats.daysSinceStart }) : '--';
   const card1Accent = stats && stats.weightLost !== null
     ? (stats.weightLost >= 0 ? '#22C55E' : '#EF4444')
     : undefined;
 
-  const card2Value = stats && stats.currentPaceLbsPerWeek !== null
-    ? `${stats.currentPaceLbsPerWeek >= 0 ? '-' : '+'}${Math.abs(stats.currentPaceLbsPerWeek).toFixed(1)} lb/wk`
+  const card2PaceUnit = stats?.paceUnit ?? 'lb/wk';
+  const card2Value = stats && stats.displayPace !== null
+    ? `${stats.currentPaceLbsPerWeek! >= 0 ? '-' : '+'}${Math.abs(stats.displayPace).toFixed(1)} ${card2PaceUnit}`
     : t('common.noData');
   const card2Subtitle = stats && stats.adherencePct !== null ? t('progressCard.onPlan', { pct: stats.adherencePct }) : '--';
 
@@ -933,9 +958,11 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     ? (card3RawDaysAhead > 0 ? '#22C55E' : card3RawDaysAhead < 0 ? '#EF4444' : '#3B82F6')
     : undefined;
 
-  const card4StartStr = profileData ? profileData.startWeightLbs.toFixed(1) : '--';
-  const card4CurrentStr = currentWeightLbs.toFixed(1);
-  const card4Value = `${card4StartStr} → ${card4CurrentStr} lb`;
+  const card4WeightUnit = stats?.weightUnit ?? 'lbs';
+  const card4StartStr = stats ? stats.displayStartWeight.toFixed(1) : (profileData ? profileData.startWeightLbs.toFixed(1) : '--');
+  const card4DisplayCurrentLbs = isMetric ? currentWeightLbs / 2.20462 : currentWeightLbs;
+  const card4CurrentStr = card4DisplayCurrentLbs.toFixed(1);
+  const card4Value = `${card4StartStr} → ${card4CurrentStr} ${card4WeightUnit}`;
   const card4GoalDateStr = stats
     ? (stats.projectedGoalDate
         ? formatDate(stats.projectedGoalDate)

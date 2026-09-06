@@ -22,18 +22,22 @@ function formatDateES(isoDate: string): string {
   return `${day} ${month} ${year}`;
 }
 
-function formatWeight(lbs: number | null): string {
+function formatWeight(lbs: number | null, isMetric: boolean): string {
   if (lbs == null) return '—';
-  return `${Number(lbs).toFixed(1)} lbs`;
+  const val = isMetric ? lbs / 2.20462 : lbs;
+  const unit = isMetric ? 'kg' : 'lbs';
+  return `${Number(val).toFixed(1)} ${unit}`;
 }
 
 function formatTDEE(kcal: number): string {
   return Number(kcal).toLocaleString('es-MX') + ' kcal/día';
 }
 
-function formatPace(lbsPerWeek: number): string {
-  const sign = lbsPerWeek > 0 ? '+' : '';
-  return `${sign}${Number(lbsPerWeek).toFixed(2)} lbs/semana`;
+function formatPace(lbsPerWeek: number, isMetric: boolean): string {
+  const val = isMetric ? lbsPerWeek / 2.20462 : lbsPerWeek;
+  const unit = isMetric ? 'kg/sem' : 'lbs/sem';
+  const sign = val > 0 ? '+' : '';
+  return `${sign}${Number(val).toFixed(2)} ${unit}`;
 }
 
 const CONFIDENCE_LABEL: Record<string, string> = {
@@ -121,9 +125,10 @@ const STATUS_TEXT_DARK: Record<string, string> = {
 interface SectionProps {
   isDark: boolean;
   progressState: ProgressState;
+  isMetric: boolean;
 }
 
-function JourneyProgressSection({ isDark, progressState }: SectionProps) {
+function JourneyProgressSection({ isDark, progressState, isMetric }: SectionProps) {
   const jp = progressState.journeyProgress;
   if (jp.progressFraction == null) return null;
 
@@ -137,9 +142,9 @@ function JourneyProgressSection({ isDark, progressState }: SectionProps) {
   const barBg = isDark ? '#3A3C52' : '#E5E7EB';
   const barFillColor = colors.primary;
 
-  const startText = formatWeight(jp.startWeightLbs);
-  const currentText = formatWeight(jp.currentWeightLbs);
-  const goalText = formatWeight(jp.goalWeightLbs);
+  const startText = formatWeight(jp.startWeightLbs, isMetric);
+  const currentText = formatWeight(jp.currentWeightLbs, isMetric);
+  const goalText = formatWeight(jp.goalWeightLbs, isMetric);
 
   return (
     <View style={styles.subsection}>
@@ -228,7 +233,7 @@ function TDEESection({ isDark, progressState }: SectionProps) {
   );
 }
 
-function PaceSection({ isDark, progressState }: SectionProps) {
+function PaceSection({ isDark, progressState, isMetric }: SectionProps) {
   const pace = progressState.weightPace;
   const status = progressState.progressStatus;
 
@@ -241,7 +246,7 @@ function PaceSection({ isDark, progressState }: SectionProps) {
 
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const labelColor = isDark ? colors.textDark : colors.text;
-  const paceText = formatPace(pace.lbsPerWeek);
+  const paceText = formatPace(pace.lbsPerWeek, isMetric);
 
   return (
     <View style={styles.subsection}>
@@ -263,6 +268,7 @@ export default function ProgressDetailScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [userId, setUserId] = useState<string | null>(null);
+  const [isMetric, setIsMetric] = useState(false);
 
   const { state: progressState, loading: pieLoading } = useProgressIntelligence();
 
@@ -271,6 +277,22 @@ export default function ProgressDetailScreen() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       console.log('[ProgressDetailScreen] User loaded:', user?.id ?? 'none');
       setUserId(user?.id ?? null);
+      if (user?.id) {
+        supabase
+          .from('users')
+          .select('preferred_units')
+          .eq('id', user.id)
+          .maybeSingle()
+          .then(({ data, error }) => {
+            if (error) {
+              console.warn('[ProgressDetailScreen] Failed to fetch preferred_units, defaulting to imperial:', error.message);
+              return;
+            }
+            const metric = data?.preferred_units === 'metric';
+            console.log('[ProgressDetailScreen] preferred_units:', data?.preferred_units, '→ isMetric:', metric);
+            setIsMetric(metric);
+          });
+      }
     });
   }, []);
 
@@ -328,7 +350,7 @@ export default function ProgressDetailScreen() {
 
                 {hasJourney && (
                   <>
-                    <JourneyProgressSection isDark={isDark} progressState={progressState!} />
+                    <JourneyProgressSection isDark={isDark} progressState={progressState!} isMetric={isMetric} />
                     {(hasProjection || hasTDEE || hasPace) && (
                       <View style={[styles.divider, { backgroundColor: dividerColor }]} />
                     )}
@@ -337,7 +359,7 @@ export default function ProgressDetailScreen() {
 
                 {hasProjection && (
                   <>
-                    <ProjectionSection isDark={isDark} progressState={progressState!} />
+                    <ProjectionSection isDark={isDark} progressState={progressState!} isMetric={isMetric} />
                     {(hasTDEE || hasPace) && (
                       <View style={[styles.divider, { backgroundColor: dividerColor }]} />
                     )}
@@ -346,7 +368,7 @@ export default function ProgressDetailScreen() {
 
                 {hasTDEE && (
                   <>
-                    <TDEESection isDark={isDark} progressState={progressState!} />
+                    <TDEESection isDark={isDark} progressState={progressState!} isMetric={isMetric} />
                     {hasPace && (
                       <View style={[styles.divider, { backgroundColor: dividerColor }]} />
                     )}
@@ -354,7 +376,7 @@ export default function ProgressDetailScreen() {
                 )}
 
                 {hasPace && (
-                  <PaceSection isDark={isDark} progressState={progressState!} />
+                  <PaceSection isDark={isDark} progressState={progressState!} isMetric={isMetric} />
                 )}
               </View>
             )}
