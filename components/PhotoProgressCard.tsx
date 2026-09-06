@@ -444,10 +444,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
             <ZoomablePhoto
               uri={afterPhoto.photo_url}
-              photoId={afterPhoto.id}
-              width={photoWidth}
-              height={photoHeight}
-              isDark={isDark}
+              style={StyleSheet.absoluteFill}
             />
             <View style={styles.datePillRow}>
               <DatePill
@@ -487,10 +484,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
             <ZoomablePhoto
               uri={beforePhoto.photo_url}
-              photoId={beforePhoto.id}
-              width={photoWidth}
-              height={photoHeight}
-              isDark={isDark}
+              style={StyleSheet.absoluteFill}
             />
             <View style={styles.datePillRow}>
               <DatePill
@@ -507,10 +501,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
             <ZoomablePhoto
               uri={afterPhoto.photo_url}
-              photoId={afterPhoto.id}
-              width={photoWidth}
-              height={photoHeight}
-              isDark={isDark}
+              style={StyleSheet.absoluteFill}
             />
             <View style={styles.datePillRow}>
               <DatePill

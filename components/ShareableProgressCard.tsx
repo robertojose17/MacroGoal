@@ -199,12 +199,10 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                 }
               }}
             >
-              {useZoomBefore && photoDimensions ? (
+              {useZoomBefore ? (
                 <ZoomablePhoto
                   uri={beforePhoto as string}
-                  photoId={beforePhotoId as string}
-                  width={photoDimensions.width}
-                  height={photoDimensions.height}
+                  style={StyleSheet.absoluteFill}
                 />
               ) : (
                 <>
@@ -237,12 +235,10 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 
             {/* AFTER */}
             <View style={styles.photoContainer}>
-              {useZoomAfter && photoDimensions ? (
+              {useZoomAfter ? (
                 <ZoomablePhoto
                   uri={afterPhoto as string}
-                  photoId={afterPhotoId as string}
-                  width={photoDimensions.width}
-                  height={photoDimensions.height}
+                  style={StyleSheet.absoluteFill}
                 />
               ) : (
                 <>
