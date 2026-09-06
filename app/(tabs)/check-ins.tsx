@@ -23,7 +23,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Users, Search, Edit3 } from 'lucide-react-native';
+import { Users, Search, SquarePen } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
@@ -512,7 +512,7 @@ export default function CommunityScreen() {
               accessibilityLabel="Create post"
               accessibilityRole="button"
             >
-              <Edit3 size={22} color={colors.primary} />
+              <SquarePen size={22} color={colors.primary} />
             </Pressable>
           ),
         }}

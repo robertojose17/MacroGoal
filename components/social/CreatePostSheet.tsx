@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Trophy, Flame, Camera, Type, BarChart2 } from 'lucide-react-native';
+import { X, Trophy, Flame, Camera, Type, ChartBar } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { createPost } from '@/utils/socialApi';
 import type { PostType } from '@/utils/socialApi';
@@ -47,7 +47,7 @@ const POST_TYPES: PostTypeOption[] = [
   {
     type: 'stats',
     label: 'Stats',
-    icon: <BarChart2 size={20} color={colors.calories} />,
+    icon: <ChartBar size={20} color={colors.calories} />,
     description: 'Share your macros',
   },
   {
