@@ -577,6 +577,26 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
             </View>
           ) : (
             <>
+              {/* ── Status Banner — always visible ── */}
+              {banner && (
+                <View
+                  style={[
+                    styles.bannerCard,
+                    {
+                      backgroundColor: cardBg,
+                      borderLeftColor: banner.color,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.bannerTitle, { color: banner.color }]}>
+                    {banner.title}
+                  </Text>
+                  <Text style={[styles.bannerSubtitle, { color: textSecondary }]}>
+                    {banner.subtitle}
+                  </Text>
+                </View>
+              )}
+
               {/* ── Leaderboard Accordion ── */}
               <TouchableOpacity
                 style={[styles.accordionHeader, { backgroundColor: cardBg }]}
@@ -590,122 +610,32 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
                 <Text style={[styles.accordionTitle, { color: textPrimary }]}>
                   {'🏆 Leaderboard'}
                 </Text>
-                <Text style={[styles.accordionChevron, { color: textSecondary }]}>
-                  {leaderboardExpanded ? '▲' : '▼'}
-                </Text>
+                <View style={styles.accordionHeaderRight}>
+                  <Text
+                    style={[
+                      styles.accordionRankText,
+                      {
+                        color:
+                          userZone === 'promotion'
+                            ? '#50C878'
+                            : userZone === 'demotion'
+                            ? '#EF4444'
+                            : textSecondary,
+                      },
+                    ]}
+                  >
+                    {status.leaderboard.find((e) => e.is_you)?.rank}
+                    {' de '}
+                    {status.leaderboard.length}
+                  </Text>
+                  <Text style={[styles.accordionChevron, { color: textSecondary }]}>
+                    {leaderboardExpanded ? '▲' : '▼'}
+                  </Text>
+                </View>
               </TouchableOpacity>
 
               {leaderboardExpanded && (
                 <>
-                  {/* ── B) Status Banner ── */}
-                  {banner && (
-                    <View
-                      style={[
-                        styles.bannerCard,
-                        {
-                          backgroundColor: cardBg,
-                          borderLeftColor: banner.color,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.bannerTitle, { color: banner.color }]}>
-                        {banner.title}
-                      </Text>
-                      <Text style={[styles.bannerSubtitle, { color: textSecondary }]}>
-                        {banner.subtitle}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* ── C) Zone Pills ── */}
-                  <View style={styles.zonePillsRow}>
-                    {/* Promotion pill */}
-                    <View
-                      style={[
-                        styles.zonePill,
-                        userZone === 'promotion'
-                          ? styles.zonePillActivePromo
-                          : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
-                      ]}
-                    >
-                      <Text style={styles.zonePillDot}>{'🟢'}</Text>
-                      <Text
-                        style={[
-                          styles.zonePillLabel,
-                          { color: userZone === 'promotion' ? '#FFFFFF' : textSecondary },
-                        ]}
-                      >
-                        {'Promotion'}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.zonePillCount,
-                          { color: userZone === 'promotion' ? 'rgba(255,255,255,0.8)' : textSecondary },
-                        ]}
-                      >
-                        {'Top '}
-                        {promoCount}
-                      </Text>
-                    </View>
-
-                    {/* Neutral pill */}
-                    <View
-                      style={[
-                        styles.zonePill,
-                        userZone === 'neutral'
-                          ? styles.zonePillActiveNeutral
-                          : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
-                      ]}
-                    >
-                      <Text style={styles.zonePillDot}>{'⚪'}</Text>
-                      <Text
-                        style={[
-                          styles.zonePillLabel,
-                          { color: userZone === 'neutral' ? '#FFFFFF' : textSecondary },
-                        ]}
-                      >
-                        {'Neutral'}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.zonePillCount,
-                          { color: userZone === 'neutral' ? 'rgba(255,255,255,0.8)' : textSecondary },
-                        ]}
-                      >
-                        {'Middle'}
-                      </Text>
-                    </View>
-
-                    {/* Drop Zone pill */}
-                    <View
-                      style={[
-                        styles.zonePill,
-                        userZone === 'demotion'
-                          ? styles.zonePillActiveDrop
-                          : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
-                      ]}
-                    >
-                      <Text style={styles.zonePillDot}>{'🔴'}</Text>
-                      <Text
-                        style={[
-                          styles.zonePillLabel,
-                          { color: userZone === 'demotion' ? '#FFFFFF' : textSecondary },
-                        ]}
-                      >
-                        {'Drop Zone'}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.zonePillCount,
-                          { color: userZone === 'demotion' ? 'rgba(255,255,255,0.8)' : textSecondary },
-                        ]}
-                      >
-                        {'Bottom '}
-                        {dropCount}
-                      </Text>
-                    </View>
-                  </View>
-
                   {/* ── D) Leaderboard ── */}
 
                   {/* Promotion Zone */}
@@ -877,6 +807,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  accordionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  accordionRankText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 
   // ── Status banner ─────────────────────────────────────────────────────────
   bannerCard: {
@@ -894,44 +833,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 18,
-  },
-
-  // ── Zone pills ────────────────────────────────────────────────────────────
-  zonePillsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: spacing.xs,
-  },
-  zonePill: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    gap: 2,
-  },
-  zonePillActivePromo: {
-    backgroundColor: '#50C878',
-  },
-  zonePillActiveNeutral: {
-    backgroundColor: colors.accent,
-  },
-  zonePillActiveDrop: {
-    backgroundColor: '#EF4444',
-  },
-  zonePillDot: {
-    fontSize: 14,
-  },
-  zonePillLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  zonePillCount: {
-    fontSize: 10,
-    fontWeight: '500',
-    textAlign: 'center',
   },
 
   // ── Zone headers ──────────────────────────────────────────────────────────
