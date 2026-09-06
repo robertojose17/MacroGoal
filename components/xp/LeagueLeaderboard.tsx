@@ -2,8 +2,8 @@
  * LeagueLeaderboard
  *
  * Full-screen page-sheet modal showing the weekly league leaderboard.
- * Displays XP progress, status banner, zone pills, leaderboard, and
- * an "How to Earn XP" reference section.
+ * Displays XP progress, status banner, zone pills, leaderboard, flash challenges,
+ * and an "How to Earn XP" reference section.
  *
  * Uses useLeague() internally so it always shows fresh data.
  * Supports pull-to-refresh.
@@ -22,20 +22,19 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useLeague } from '@/hooks/useLeague';
 import { TIER_METADATA, getNextTier, getPrevTier } from '@/types/leagues';
 import type { LeagueLeaderboardEntry, LeagueStatus } from '@/types/leagues';
 import i18n from '@/lib/i18n';
+import { useFlashChallenges } from '@/hooks/useFlashChallenges';
+import type { FlashChallenge } from '@/utils/flashChallengesApi';
 
 interface LeagueLeaderboardProps {
   visible: boolean;
   onClose: () => void;
 }
-
-const WEEKLY_XP_GOAL = 1000;
 
 /** Format milliseconds remaining as "Xd Yh" */
 function formatTimeRemaining(weekEndIso: string): string {
@@ -166,6 +165,97 @@ function LeaderboardRow({ entry, isPromotion, isDemotion, accentColor, isDark }:
   );
 }
 
+// ─── Flash Challenges Section ─────────────────────────────────────────────────
+
+function getMetricEmoji(metricType: FlashChallenge['metric_type']): string {
+  switch (metricType) {
+    case 'steps': return '🏃';
+    case 'active_calories': return '🔥';
+    case 'exercise_minutes': return '⏱️';
+    case 'distance': return '📍';
+    case 'floors': return '🏢';
+    case 'running_pace': return '⚡';
+    case 'referral': return '🤝';
+    default: return '⚡';
+  }
+}
+
+interface FlashChallengesSectionProps {
+  isDark: boolean;
+}
+
+function FlashChallengesSection({ isDark }: FlashChallengesSectionProps) {
+  const { challenges, loading } = useFlashChallenges();
+  const textPrimary = isDark ? colors.textDark : colors.text;
+  const textSecondary = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? colors.cardDark : colors.card;
+  const borderColor = isDark ? colors.borderDark : colors.border;
+  const dividerColor = isDark ? colors.borderDark : colors.border;
+
+  const activeChallenges = challenges.filter(
+    (c) => c.challenge_status === 'available' || c.challenge_status === 'accepted'
+  );
+
+  return (
+    <View style={[styles.flashSection, { borderTopColor: dividerColor }]}>
+      {/* Section header */}
+      <View style={styles.earnHeader}>
+        <Text style={styles.earnHeaderIcon}>{'⚡'}</Text>
+        <Text style={[styles.earnHeaderTitle, { color: textPrimary }]}>
+          {'Flash Challenges'}
+        </Text>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: spacing.sm }} />
+      ) : activeChallenges.length === 0 ? (
+        <Text style={[styles.flashEmptyText, { color: textSecondary }]}>
+          {'No active challenges right now — check back tomorrow'}
+        </Text>
+      ) : (
+        activeChallenges.map((challenge) => {
+          const emoji = getMetricEmoji(challenge.metric_type);
+          const xpText = `+${challenge.xp_reward} XP`;
+          const isAccepted = challenge.challenge_status === 'accepted';
+          const statusLabel = isAccepted ? 'Accepted' : 'Available';
+          const statusBg = isAccepted ? '#F97316' : '#3B82F6';
+
+          return (
+            <View
+              key={challenge.id}
+              style={[
+                styles.flashCard,
+                { backgroundColor: cardBg, borderColor },
+              ]}
+            >
+              {/* Left: emoji */}
+              <Text style={styles.flashEmoji}>{emoji}</Text>
+
+              {/* Middle: title + description */}
+              <View style={styles.flashMiddle}>
+                <Text style={[styles.flashTitle, { color: textPrimary }]} numberOfLines={1}>
+                  {challenge.title}
+                </Text>
+                <Text style={[styles.flashDescription, { color: textSecondary }]} numberOfLines={1}>
+                  {challenge.description}
+                </Text>
+              </View>
+
+              {/* Right: XP + status pill */}
+              <View style={styles.flashRight}>
+                <Text style={styles.flashXp}>{xpText}</Text>
+                <View style={[styles.flashStatusPill, { backgroundColor: statusBg }]}>
+                  <Text style={styles.flashStatusText}>{statusLabel}</Text>
+                </View>
+              </View>
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 // ─── XP Earn Section ──────────────────────────────────────────────────────────
 
 interface EarnRow {
@@ -184,37 +274,41 @@ const EARN_CATEGORIES: EarnCategory[] = [
     title: '🍽️ Nutrition',
     rows: [
       { emoji: '🍽️', label: 'Log a meal', xp: '+10 XP' },
-      { emoji: '🎯', label: 'Hit calorie goal', xp: '+30 XP' },
-      { emoji: '💪', label: 'Hit protein goal', xp: '+20 XP' },
-      { emoji: '✅', label: 'Log all meals (full day)', xp: '+50 XP' },
+      { emoji: '🎯', label: 'Hit calorie goal', xp: '+15 XP' },
+      { emoji: '💪', label: 'Hit protein goal (≥80%)', xp: '+20 XP' },
+      { emoji: '🥑', label: 'Hit carbs goal', xp: '+20 XP' },
+      { emoji: '🧈', label: 'Hit fats goal', xp: '+20 XP' },
     ],
   },
   {
-    title: '📸 Check-ins',
+    title: '📸 Check-ins & Progress',
     rows: [
-      { emoji: '⚖️', label: 'Log your weight', xp: '+40 XP' },
-      { emoji: '📸', label: 'Add progress photo', xp: '+60 XP' },
+      { emoji: '⚖️', label: 'Log your weight', xp: '+50 XP' },
+      { emoji: '📸', label: 'Weight check-in with photo', xp: '+100 XP' },
+      { emoji: '🖼️', label: 'Add progress photo', xp: '+50 XP' },
+      { emoji: '📣', label: 'Share progress', xp: '+100 XP' },
     ],
   },
   {
-    title: '🔥 Consistency',
+    title: '🏃 Activity',
     rows: [
-      { emoji: '🔥', label: 'Daily streak (each day)', xp: '+25 XP' },
-      { emoji: '🏅', label: '7-day streak bonus', xp: '+100 XP' },
-      { emoji: '🏆', label: '30-day streak bonus', xp: '+500 XP' },
+      { emoji: '🏋️', label: 'Workout', xp: '+75 XP' },
+      { emoji: '👟', label: 'Steps 5,000+', xp: '+100 XP' },
+      { emoji: '👟', label: 'Steps 10,000+', xp: '+125 XP' },
+      { emoji: '👟', label: 'Steps 15,000+', xp: '+175 XP' },
+      { emoji: '👟', label: 'Steps 20,000+', xp: '+200 XP' },
     ],
   },
   {
     title: '⚡ Flash Challenges',
     rows: [
-      { emoji: '⚡', label: 'Complete a Flash Challenge', xp: '+75–200 XP' },
+      { emoji: '⚡', label: 'Complete a Flash Challenge', xp: '+500 XP' },
     ],
   },
   {
-    title: '🤝 Community',
+    title: '🤝 Community & Referrals',
     rows: [
-      { emoji: '📣', label: 'Share a post', xp: '+20 XP' },
-      { emoji: '❤️', label: 'Get 10 likes on a post', xp: '+15 XP' },
+      { emoji: '🤝', label: 'Refer a friend', xp: '+1,000 XP' },
     ],
   },
 ];
@@ -228,6 +322,8 @@ function EarnXpSection({ isDark }: EarnSectionProps) {
   const textSecondary = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const dividerColor = isDark ? colors.borderDark : colors.border;
   const cardBg = isDark ? colors.cardDark : colors.card;
+  const multiplierBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
+  const multiplierBorder = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
 
   return (
     <View style={[styles.earnSection, { borderTopColor: dividerColor }]}>
@@ -263,6 +359,32 @@ function EarnXpSection({ isDark }: EarnSectionProps) {
           })}
         </View>
       ))}
+
+      {/* Streak Multipliers card */}
+      <View style={[styles.multiplierCard, { backgroundColor: multiplierBg, borderColor: multiplierBorder }]}>
+        <Text style={[styles.multiplierTitle, { color: textPrimary }]}>
+          {'🔥 Streak Multipliers'}
+        </Text>
+        {[
+          { label: '7+ day streak', value: '1.1×' },
+          { label: '30+ day streak', value: '1.25×' },
+          { label: '90+ day streak', value: '1.5×' },
+          { label: '365+ day streak', value: '2.0×' },
+          { label: '⭐ Premium', value: '1.5× bonus' },
+        ].map((item, idx) => (
+          <View key={idx} style={styles.multiplierRow}>
+            <Text style={[styles.multiplierLabel, { color: textSecondary }]}>
+              {item.label}
+            </Text>
+            <Text style={[styles.multiplierValue, { color: textPrimary }]}>
+              {item.value}
+            </Text>
+          </View>
+        ))}
+        <Text style={[styles.multiplierNote, { color: textSecondary }]}>
+          {'Multipliers stack — a 30-day streak + Premium = 1.875×'}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -301,7 +423,6 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
   const textSecondary = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const modalBg = isDark ? colors.backgroundDark : colors.background;
   const dividerColor = isDark ? colors.borderDark : colors.border;
-  const progressTrackColor = isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB';
 
   const meta = status ? TIER_METADATA[status.tier] : null;
   const nextTier = status ? getNextTier(status.tier) : null;
@@ -332,10 +453,9 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
 
   const weekEndsText = timeRemaining ? `Week ends in ${timeRemaining}` : '';
 
-  // XP progress bar
+  // Weekly XP
   const weeklyXp = status?.user_xp_this_week ?? 0;
   const weeklyXpDisplay = weeklyXp.toLocaleString();
-  const xpProgressPercent = Math.min(100, Math.max(0, (weeklyXp / WEEKLY_XP_GOAL) * 100));
 
   // Zone pill state
   const userZone = status?.is_in_promotion_zone
@@ -411,7 +531,7 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
             </View>
           ) : (
             <>
-              {/* ── A) XP Progress Bar ── */}
+              {/* ── A) XP Card (no progress bar) ── */}
               <View style={[styles.xpProgressCard, { backgroundColor: cardBg }]}>
                 {/* League emoji + name centered */}
                 <View style={styles.xpProgressHeader}>
@@ -427,22 +547,6 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
                 </Text>
                 <Text style={[styles.xpWeekLabel, { color: textSecondary }]}>
                   {'XP this week'}
-                </Text>
-
-                {/* Progress bar */}
-                <View style={[styles.xpProgressTrack, { backgroundColor: progressTrackColor }]}>
-                  <LinearGradient
-                    colors={[meta?.accent ?? colors.accent, meta?.accent ?? colors.accent]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.xpProgressFill, { width: `${xpProgressPercent}%` }]}
-                  />
-                </View>
-                <Text style={[styles.xpGoalLabel, { color: textSecondary }]}>
-                  {weeklyXpDisplay}
-                  {' / '}
-                  {WEEKLY_XP_GOAL.toLocaleString()}
-                  {' XP weekly goal'}
                 </Text>
               </View>
 
@@ -637,7 +741,10 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
                 </>
               )}
 
-              {/* ── E) How to Earn XP ── */}
+              {/* ── E) Flash Challenges ── */}
+              <FlashChallengesSection isDark={isDark} />
+
+              {/* ── F) How to Earn XP ── */}
               <EarnXpSection isDark={isDark} />
             </>
           )}
@@ -703,7 +810,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ── XP Progress Card ──────────────────────────────────────────────────────
+  // ── XP Card ───────────────────────────────────────────────────────────────
   xpProgressCard: {
     borderRadius: borderRadius.md,
     padding: spacing.md,
@@ -732,23 +839,7 @@ const styles = StyleSheet.create({
   xpWeekLabel: {
     fontSize: 13,
     fontWeight: '500',
-    marginBottom: 12,
     marginTop: 2,
-  },
-  xpProgressTrack: {
-    width: '100%',
-    height: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  xpProgressFill: {
-    height: 8,
-    borderRadius: 8,
-  },
-  xpGoalLabel: {
-    fontSize: 12,
-    fontWeight: '500',
   },
 
   // ── Status banner ─────────────────────────────────────────────────────────
@@ -881,6 +972,66 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
+  // ── Flash Challenges section ───────────────────────────────────────────────
+  flashSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  flashEmptyText: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: spacing.sm,
+  },
+  flashCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  flashEmoji: {
+    fontSize: 22,
+    width: 32,
+    textAlign: 'center',
+  },
+  flashMiddle: {
+    flex: 1,
+    gap: 2,
+  },
+  flashTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  flashDescription: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  flashRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  flashXp: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#5CB97B',
+  },
+  flashStatusPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  flashStatusText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+
   // ── Earn XP section ───────────────────────────────────────────────────────
   earnSection: {
     marginTop: spacing.md,
@@ -939,5 +1090,41 @@ const styles = StyleSheet.create({
   earnRowDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 36,
+  },
+
+  // ── Streak Multipliers card ───────────────────────────────────────────────
+  multiplierCard: {
+    borderRadius: borderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+    gap: 2,
+  },
+  multiplierTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  multiplierRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  multiplierLabel: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  multiplierValue: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  multiplierNote: {
+    fontSize: 11,
+    fontWeight: '400',
+    fontStyle: 'italic',
+    marginTop: 6,
+    lineHeight: 15,
   },
 });
