@@ -441,7 +441,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Single photo */}
       {singlePhoto && afterPhoto && (
         <View style={styles.photosRow}>
-          <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
+          <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
             <ZoomablePhoto
               uri={afterPhoto.photo_url}
               style={StyleSheet.absoluteFill}
@@ -481,7 +481,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Two or more photos */}
       {!emptyState && !singlePhoto && beforePhoto && afterPhoto && (
         <View style={styles.photosRow}>
-          <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
+          <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
             <ZoomablePhoto
               uri={beforePhoto.photo_url}
               style={StyleSheet.absoluteFill}
@@ -498,7 +498,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
           <View style={[styles.photoSeparator, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
-          <View style={[styles.photoWrapper, { overflow: 'hidden' }]}>
+          <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
             <ZoomablePhoto
               uri={afterPhoto.photo_url}
               style={StyleSheet.absoluteFill}
