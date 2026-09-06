@@ -1,6 +1,15 @@
 
-import React, { useRef, useEffect } from 'react';
-import { Animated, PanResponder } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
+import {
+  Gesture,
+  GestureDetector,
+} from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── AsyncStorage helpers ─────────────────────────────────────────────────────
@@ -54,120 +63,95 @@ export interface ZoomablePhotoProps {
 }
 
 export function ZoomablePhoto({ uri, photoId, width, height }: ZoomablePhotoProps): JSX.Element {
-  const scale = useRef(new Animated.Value(1)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
+  // Committed (saved) transform values
+  const savedScale = useSharedValue(1);
+  const savedTx = useSharedValue(0);
+  const savedTy = useSharedValue(0);
 
-  // Track raw values for math
-  const scaleRef = useRef(1);
-  const txRef = useRef(0);
-  const tyRef = useRef(0);
+  // Live transform values driven by gestures
+  const scale = useSharedValue(1);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
 
-  // For pinch: track initial distance between 2 touches
-  const initialDistance = useRef<number | null>(null);
-  const initialScale = useRef(1);
-
-  // For pan: track initial touch centroid
-  const initialTouchX = useRef(0);
-  const initialTouchY = useRef(0);
-  const initialTxRef = useRef(0);
-  const initialTyRef = useRef(0);
-
+  // Load persisted transform on mount
   useEffect(() => {
     loadPhotoTransform(photoId).then((saved) => {
       if (saved) {
-        scaleRef.current = saved.scale;
-        txRef.current = saved.translateX;
-        tyRef.current = saved.translateY;
-        scale.setValue(saved.scale);
-        translateX.setValue(saved.translateX);
-        translateY.setValue(saved.translateY);
         console.log('[ZoomablePhoto] Restored transform for', photoId, saved);
+        savedScale.value = saved.scale;
+        savedTx.value = saved.translateX;
+        savedTy.value = saved.translateY;
+        scale.value = saved.scale;
+        tx.value = saved.translateX;
+        ty.value = saved.translateY;
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoId]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => {
-        return evt.nativeEvent.touches.length === 2;
-      },
-      onMoveShouldSetPanResponder: (evt) => {
-        const touches = evt.nativeEvent.touches.length;
-        if (touches === 2) return true;
-        if (touches === 1 && scaleRef.current > 1.01) return true;
-        return false;
-      },
-      onPanResponderGrant: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          const dx = touches[1].pageX - touches[0].pageX;
-          const dy = touches[1].pageY - touches[0].pageY;
-          initialDistance.current = Math.sqrt(dx * dx + dy * dy);
-          initialScale.current = scaleRef.current;
-          initialTouchX.current = (touches[0].pageX + touches[1].pageX) / 2;
-          initialTouchY.current = (touches[0].pageY + touches[1].pageY) / 2;
-        } else {
-          initialTouchX.current = touches[0].pageX;
-          initialTouchY.current = touches[0].pageY;
-        }
-        initialTxRef.current = txRef.current;
-        initialTyRef.current = tyRef.current;
-        console.log('[ZoomablePhoto] Gesture started, touches:', touches.length, 'photoId:', photoId);
-      },
-      onPanResponderMove: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2 && initialDistance.current !== null) {
-          const dx = touches[1].pageX - touches[0].pageX;
-          const dy = touches[1].pageY - touches[0].pageY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const newScale = Math.min(4.0, Math.max(1.0, initialScale.current * (dist / initialDistance.current)));
-          scaleRef.current = newScale;
-          scale.setValue(newScale);
-          const cx = (touches[0].pageX + touches[1].pageX) / 2;
-          const cy = (touches[0].pageY + touches[1].pageY) / 2;
-          const newTx = initialTxRef.current + (cx - initialTouchX.current);
-          const newTy = initialTyRef.current + (cy - initialTouchY.current);
-          txRef.current = newTx;
-          tyRef.current = newTy;
-          translateX.setValue(newTx);
-          translateY.setValue(newTy);
-        } else if (touches.length === 1) {
-          const newTx = initialTxRef.current + (touches[0].pageX - initialTouchX.current);
-          const newTy = initialTyRef.current + (touches[0].pageY - initialTouchY.current);
-          txRef.current = newTx;
-          tyRef.current = newTy;
-          translateX.setValue(newTx);
-          translateY.setValue(newTy);
-        }
-      },
-      onPanResponderRelease: () => {
-        initialDistance.current = null;
-        console.log('[ZoomablePhoto] Gesture released, saving transform for', photoId, { scale: scaleRef.current, translateX: txRef.current, translateY: tyRef.current });
-        savePhotoTransform(photoId, scaleRef.current, txRef.current, tyRef.current);
-      },
-      onPanResponderTerminate: () => {
-        initialDistance.current = null;
-        console.log('[ZoomablePhoto] Gesture terminated, saving transform for', photoId, { scale: scaleRef.current, translateX: txRef.current, translateY: tyRef.current });
-        savePhotoTransform(photoId, scaleRef.current, txRef.current, tyRef.current);
-      },
+  // Pinch gesture
+  const pinch = Gesture.Pinch()
+    .runOnJS(false)
+    .onUpdate((e) => {
+      scale.value = Math.min(4.0, Math.max(1.0, savedScale.value * e.scale));
     })
-  ).current;
+    .onEnd(() => {
+      savedScale.value = scale.value;
+      if (scale.value <= 1.01) {
+        tx.value = withSpring(0);
+        ty.value = withSpring(0);
+        savedTx.value = 0;
+        savedTy.value = 0;
+      }
+      savePhotoTransform(photoId, scale.value, tx.value, ty.value);
+    });
+
+  // Pan gesture — activates immediately, captures before parent ScrollView
+  const pan = Gesture.Pan()
+    .runOnJS(false)
+    .minDistance(0)
+    .onStart(() => {
+      console.log('[ZoomablePhoto] Pan gesture started, photoId:', photoId, 'scale:', savedScale.value);
+    })
+    .onUpdate((e) => {
+      tx.value = savedTx.value + e.translationX;
+      ty.value = savedTy.value + e.translationY;
+    })
+    .onEnd(() => {
+      savedTx.value = tx.value;
+      savedTy.value = ty.value;
+      if (scale.value <= 1.01) {
+        tx.value = withSpring(0);
+        ty.value = withSpring(0);
+        savedTx.value = 0;
+        savedTy.value = 0;
+      }
+      console.log('[ZoomablePhoto] Pan gesture ended, saving transform for', photoId, { scale: savedScale.value, tx: savedTx.value, ty: savedTy.value });
+      savePhotoTransform(photoId, scale.value, tx.value, ty.value);
+    });
+
+  // Simultaneous so pinch + pan work together
+  const composed = Gesture.Simultaneous(pinch, pan);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: tx.value },
+      { translateY: ty.value },
+      { scale: scale.value },
+    ],
+  }));
 
   return (
-    <Animated.View
-      style={{ width, height, overflow: 'hidden' }}
-      {...panResponder.panHandlers}
-    >
-      <Animated.Image
-        source={{ uri }}
-        style={[
-          { width, height },
-          { transform: [{ translateX }, { translateY }, { scale }] },
-        ]}
-        resizeMode="cover"
-      />
-    </Animated.View>
+    <GestureDetector gesture={composed}>
+      <Animated.View style={{ width, height, overflow: 'hidden' }}>
+        <Animated.Image
+          source={{ uri }}
+          style={[{ width, height }, animatedStyle]}
+          resizeMode="cover"
+        />
+      </Animated.View>
+    </GestureDetector>
   );
 }
+
+const styles = StyleSheet.create({});
