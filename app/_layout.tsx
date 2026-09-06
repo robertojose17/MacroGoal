@@ -680,6 +680,23 @@ export default function RootLayout() {
                   name="affiliate-admin"
                   options={{ title: i18n.t('nav.affiliateAdmin'), headerShown: true }}
                 />
+
+                <Stack.Screen
+                  name="social-profile"
+                  options={{
+                    headerShown: true,
+                    headerBackButtonDisplayMode: 'minimal',
+                    title: 'Profile',
+                  }}
+                />
+                <Stack.Screen
+                  name="social-post-detail"
+                  options={{
+                    headerShown: true,
+                    headerBackButtonDisplayMode: 'minimal',
+                    title: 'Post',
+                  }}
+                />
               </Stack>
           </WidgetProvider>
         </ThemeProvider>
