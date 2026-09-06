@@ -497,11 +497,11 @@ export default function CommunityScreen() {
       <Stack.Screen
         options={{
           title: 'Community',
-          headerLargeTitle: true,
-          headerTransparent: true,
+          headerShown: true,
           headerShadowVisible: false,
-          headerLargeTitleShadowVisible: false,
-          headerLargeStyle: { backgroundColor: 'transparent' },
+          headerStyle: { backgroundColor: isDark ? colors.backgroundDark : colors.background },
+          headerTintColor: isDark ? colors.textDark : colors.text,
+          headerTitleStyle: { fontWeight: '700', fontSize: 18 },
           headerRight: () => (
             <Pressable
               onPress={() => {
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
   segmentedControl: {
     flexDirection: 'row',
     marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
+    marginTop: 8,
     marginBottom: spacing.sm,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
