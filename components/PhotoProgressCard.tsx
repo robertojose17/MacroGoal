@@ -441,11 +441,13 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Single photo */}
       {singlePhoto && afterPhoto && (
         <View style={styles.photosRow}>
-          <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
-            <ZoomablePhoto
-              uri={afterPhoto.photo_url}
-              style={StyleSheet.absoluteFill}
-            />
+          <View style={styles.photoSlot}>
+            <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
+              <ZoomablePhoto
+                uri={afterPhoto.photo_url}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
             <View style={styles.datePillRow}>
               <DatePill
                 label={afterDateLabel}
@@ -458,22 +460,24 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
           <View style={[styles.photoSeparator, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
-          <View
-            style={[
-              styles.photoWrapper,
-              styles.placeholderWrapper,
-              { height: photoHeight, borderColor: isDark ? '#3A3C52' : '#D4D6DA' },
-            ]}
-          >
-            <IconSymbol
-              ios_icon_name="camera"
-              android_material_icon_name="photo_camera"
-              size={28}
-              color={subtextColor}
-            />
-            <Text style={[styles.placeholderText, { color: subtextColor }]}>
-              Next check-in
-            </Text>
+          <View style={styles.photoSlot}>
+            <View
+              style={[
+                styles.photoWrapper,
+                styles.placeholderWrapper,
+                { height: photoHeight, borderColor: isDark ? '#3A3C52' : '#D4D6DA' },
+              ]}
+            >
+              <IconSymbol
+                ios_icon_name="camera"
+                android_material_icon_name="photo_camera"
+                size={28}
+                color={subtextColor}
+              />
+              <Text style={[styles.placeholderText, { color: subtextColor }]}>
+                Next check-in
+              </Text>
+            </View>
           </View>
         </View>
       )}
@@ -481,11 +485,13 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Two or more photos */}
       {!emptyState && !singlePhoto && beforePhoto && afterPhoto && (
         <View style={styles.photosRow}>
-          <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
-            <ZoomablePhoto
-              uri={beforePhoto.photo_url}
-              style={StyleSheet.absoluteFill}
-            />
+          <View style={styles.photoSlot}>
+            <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
+              <ZoomablePhoto
+                uri={beforePhoto.photo_url}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
             <View style={styles.datePillRow}>
               <DatePill
                 label={beforeDateLabel}
@@ -498,11 +504,13 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
           <View style={[styles.photoSeparator, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
-          <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
-            <ZoomablePhoto
-              uri={afterPhoto.photo_url}
-              style={StyleSheet.absoluteFill}
-            />
+          <View style={styles.photoSlot}>
+            <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
+              <ZoomablePhoto
+                uri={afterPhoto.photo_url}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
             <View style={styles.datePillRow}>
               <DatePill
                 label={afterDateLabel}
@@ -646,8 +654,12 @@ const styles = StyleSheet.create({
   },
   photosRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     paddingBottom: spacing.md,
+  },
+  photoSlot: {
+    flex: 1,
+    alignItems: 'center',
   },
   photoWrapper: {
     flex: 1,
