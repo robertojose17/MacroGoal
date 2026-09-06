@@ -1298,7 +1298,7 @@
     "photoOfMeal": "Photo of meal",
     "premiumGateMessage": "This feature requires a premium subscription.",
     "tryAsking": "Try asking about a meal or food item",
-    "welcomeMessage": "Hi! I'm your AI nutrition coach. Ask me anything about food, macros, or your diet.",
+    "welcomeMessage": "Hi! I'm your AI Meal Estimator. Describe what you ate or take a photo and I'll estimate the nutrition for you.",
     "withPhoto": "with photo"
   },
   "checkInForm": {
