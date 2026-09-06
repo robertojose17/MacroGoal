@@ -36,7 +36,7 @@ import {
 import type { SocialProfile, SocialPost } from '@/utils/socialApi';
 import Avatar from '@/components/social/Avatar';
 import SocialPostCard from '@/components/social/SocialPostCard';
-import { ZoomablePhoto } from '@/components/ZoomablePhoto';
+
 
 function resolveImageSource(
   source: string | number | ImageSourcePropType | undefined
@@ -422,7 +422,7 @@ export default function SocialProfileScreen() {
                   : '';
                 return (
                   <View key={photo.id} style={styles.photoProgressItem}>
-                    <ZoomablePhoto uri={photo.photo_url} style={styles.photoProgressThumb} />
+                    <Image source={resolveImageSource(photo.photo_url)} style={styles.photoProgressThumb} resizeMode="cover" />
                     {dateLabel ? (
                       <Text style={[styles.photoProgressDate, { color: subColor }]}>{dateLabel}</Text>
                     ) : null}
@@ -868,7 +868,6 @@ const styles = StyleSheet.create({
     width: 150,
     height: 200,
     borderRadius: 12,
-    overflow: 'hidden',
   },
   photoProgressWeight: {
     fontSize: 11,
