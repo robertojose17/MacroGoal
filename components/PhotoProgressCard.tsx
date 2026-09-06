@@ -14,6 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
@@ -178,6 +179,13 @@ function DatePill({ label, isDark, onPress, weightLbs }: DatePillProps) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
+  const router = useRouter();
+
+  const handleAddPhoto = useCallback(() => {
+    console.log('[PhotoProgressCard] Add photo button pressed');
+    router.push('/check-in-form');
+  }, [router]);
+
   const [photos, setPhotos] = useState<CheckInPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [weightByCheckInId, setWeightByCheckInId] = useState<Record<string, number | null>>({});
@@ -327,8 +335,21 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <Text style={[styles.cardTitle, { color: textColor }]}>
             Photo Progress
           </Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddPhoto}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <IconSymbol
+              ios_icon_name="plus.circle.fill"
+              android_material_icon_name="add_circle"
+              size={26}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
         </View>
-          <View style={styles.loadingContainer}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
         </View>
       </View>
@@ -369,21 +390,52 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
         <Text style={[styles.cardTitle, { color: textColor }]}>
           Photo Progress
         </Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAddPhoto}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <IconSymbol
+            ios_icon_name="plus.circle.fill"
+            android_material_icon_name="add_circle"
+            size={26}
+            color={colors.primary}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Empty state */}
       {emptyState && (
-        <View style={styles.emptyContainer}>
-          <IconSymbol
-            ios_icon_name="photo.stack"
-            android_material_icon_name="photo_library"
-            size={40}
-            color={subtextColor}
-          />
-          <Text style={[styles.emptyText, { color: subtextColor }]}>
-            Log a check-in with a photo to see your progress
+        <TouchableOpacity
+          style={styles.emptyContainer}
+          onPress={handleAddPhoto}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? '#252740' : '#F0F2FF' }]}>
+            <IconSymbol
+              ios_icon_name="camera.fill"
+              android_material_icon_name="photo_camera"
+              size={32}
+              color={colors.primary}
+            />
+          </View>
+          <Text style={[styles.emptyTitle, { color: textColor }]}>
+            Add your first progress photo
           </Text>
-        </View>
+          <Text style={[styles.emptySubtext, { color: subtextColor }]}>
+            Track your transformation over time
+          </Text>
+          <View style={[styles.emptyCtaButton, { backgroundColor: colors.primary }]}>
+            <IconSymbol
+              ios_icon_name="plus"
+              android_material_icon_name="add"
+              size={14}
+              color="#FFFFFF"
+            />
+            <Text style={styles.emptyCtaText}>Add Check-In</Text>
+          </View>
+        </TouchableOpacity>
       )}
 
       {/* Single photo */}
@@ -537,6 +589,7 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
@@ -564,6 +617,41 @@ const styles = StyleSheet.create({
     ...typography.caption,
     textAlign: 'center',
     maxWidth: 220,
+  },
+  addButton: {
+    marginLeft: 'auto',
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    ...typography.caption,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  emptyCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.xs,
+  },
+  emptyCtaText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   photosRow: {
     flexDirection: 'row',
