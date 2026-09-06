@@ -18,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
-import { ZoomablePhoto } from '@/components/ZoomablePhoto';
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -442,10 +442,11 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {singlePhoto && afterPhoto && (
         <View style={styles.photosRow}>
           <View style={styles.photoSlot}>
-            <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
-              <ZoomablePhoto
-                uri={afterPhoto.photo_url}
-                style={StyleSheet.absoluteFill}
+            <View style={[styles.photoWrapper, { height: photoHeight }]}>
+              <Image
+                source={{ uri: afterPhoto.photo_url }}
+                style={{ width: photoWidth, height: photoHeight }}
+                resizeMode="cover"
               />
             </View>
             <View style={styles.datePillRow}>
@@ -486,10 +487,11 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {!emptyState && !singlePhoto && beforePhoto && afterPhoto && (
         <View style={styles.photosRow}>
           <View style={styles.photoSlot}>
-            <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
-              <ZoomablePhoto
-                uri={beforePhoto.photo_url}
-                style={StyleSheet.absoluteFill}
+            <View style={[styles.photoWrapper, { height: photoHeight }]}>
+              <Image
+                source={{ uri: beforePhoto.photo_url }}
+                style={{ width: photoWidth, height: photoHeight }}
+                resizeMode="cover"
               />
             </View>
             <View style={styles.datePillRow}>
@@ -505,10 +507,11 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <View style={[styles.photoSeparator, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
           <View style={styles.photoSlot}>
-            <View style={[styles.photoWrapper, { overflow: 'hidden', height: photoHeight }]}>
-              <ZoomablePhoto
-                uri={afterPhoto.photo_url}
-                style={StyleSheet.absoluteFill}
+            <View style={[styles.photoWrapper, { height: photoHeight }]}>
+              <Image
+                source={{ uri: afterPhoto.photo_url }}
+                style={{ width: photoWidth, height: photoHeight }}
+                resizeMode="cover"
               />
             </View>
             <View style={styles.datePillRow}>

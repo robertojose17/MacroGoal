@@ -20,6 +20,7 @@ import {
   Platform,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -29,6 +30,7 @@ import { TIER_METADATA, getNextTier, getPrevTier } from '@/types/leagues';
 import type { LeagueLeaderboardEntry, LeagueStatus } from '@/types/leagues';
 import i18n from '@/lib/i18n';
 import { useFlashChallenges } from '@/hooks/useFlashChallenges';
+import { acceptChallenge } from '@/utils/flashChallengesApi';
 import type { FlashChallenge } from '@/utils/flashChallengesApi';
 
 interface LeagueLeaderboardProps {
@@ -185,7 +187,14 @@ interface FlashChallengesSectionProps {
 }
 
 function FlashChallengesSection({ isDark }: FlashChallengesSectionProps) {
-  const { challenges, loading } = useFlashChallenges();
+  const { challenges: rawChallenges, loading } = useFlashChallenges();
+  const [challenges, setChallenges] = useState<FlashChallenge[]>([]);
+  const [accepting, setAccepting] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setChallenges(rawChallenges);
+  }, [rawChallenges]);
+
   const textPrimary = isDark ? colors.textDark : colors.text;
   const textSecondary = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -195,6 +204,29 @@ function FlashChallengesSection({ isDark }: FlashChallengesSectionProps) {
   const activeChallenges = challenges.filter(
     (c) => c.challenge_status === 'available' || c.challenge_status === 'accepted'
   );
+
+  const handleAccept = async (challengeId: string) => {
+    console.log('[FlashChallenges] accept pressed', { challengeId });
+    setAccepting((prev) => new Set(prev).add(challengeId));
+    try {
+      await acceptChallenge(challengeId, 0);
+      console.log('[FlashChallenges] accept success', { challengeId });
+      setChallenges((prev) =>
+        prev.map((c) =>
+          c.id === challengeId ? { ...c, challenge_status: 'accepted' as const } : c
+        )
+      );
+    } catch (err) {
+      console.log('[FlashChallenges] accept error', { challengeId, err });
+      Alert.alert('Failed to accept challenge');
+    } finally {
+      setAccepting((prev) => {
+        const next = new Set(prev);
+        next.delete(challengeId);
+        return next;
+      });
+    }
+  };
 
   return (
     <View style={[styles.flashSection, { borderTopColor: dividerColor }]}>
@@ -217,8 +249,10 @@ function FlashChallengesSection({ isDark }: FlashChallengesSectionProps) {
           const emoji = getMetricEmoji(challenge.metric_type);
           const xpText = `+${challenge.xp_reward} XP`;
           const isAccepted = challenge.challenge_status === 'accepted';
+          const isAvailable = challenge.challenge_status === 'available';
           const statusLabel = isAccepted ? 'Accepted' : 'Available';
           const statusBg = isAccepted ? '#F97316' : '#3B82F6';
+          const isAccepting = accepting.has(challenge.id);
 
           return (
             <View
@@ -241,11 +275,26 @@ function FlashChallengesSection({ isDark }: FlashChallengesSectionProps) {
                 </Text>
               </View>
 
-              {/* Right: XP + status pill */}
+              {/* Right: XP + status pill + accept button */}
               <View style={styles.flashRight}>
                 <Text style={styles.flashXp}>{xpText}</Text>
-                <View style={[styles.flashStatusPill, { backgroundColor: statusBg }]}>
-                  <Text style={styles.flashStatusText}>{statusLabel}</Text>
+                <View style={styles.flashStatusRow}>
+                  <View style={[styles.flashStatusPill, { backgroundColor: statusBg }]}>
+                    <Text style={styles.flashStatusText}>{statusLabel}</Text>
+                  </View>
+                  {isAvailable && (
+                    isAccepting ? (
+                      <ActivityIndicator size="small" color={colors.accent} style={styles.flashAcceptSpinner} />
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.flashAcceptButton}
+                        onPress={() => handleAccept(challenge.id)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.flashAcceptText}>{'Accept'}</Text>
+                      </TouchableOpacity>
+                    )
+                  )}
                 </View>
               </View>
             </View>
@@ -396,6 +445,7 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
   const { status, loading, refresh } = useLeague();
   const [refreshing, setRefreshing] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState('');
+  const [leaderboardExpanded, setLeaderboardExpanded] = useState(false);
 
   // Update countdown every minute
   useEffect(() => {
@@ -452,10 +502,6 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
     : [];
 
   const weekEndsText = timeRemaining ? `Week ends in ${timeRemaining}` : '';
-
-  // Weekly XP
-  const weeklyXp = status?.user_xp_this_week ?? 0;
-  const weeklyXpDisplay = weeklyXp.toLocaleString();
 
   // Zone pill state
   const userZone = status?.is_in_promotion_zone
@@ -531,213 +577,216 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
             </View>
           ) : (
             <>
-              {/* ── A) XP Card (no progress bar) ── */}
-              <View style={[styles.xpProgressCard, { backgroundColor: cardBg }]}>
-                {/* League emoji + name centered */}
-                <View style={styles.xpProgressHeader}>
-                  <Text style={styles.xpProgressEmoji}>{meta?.emoji ?? '🏆'}</Text>
-                  <Text style={[styles.xpProgressLeagueName, { color: textPrimary }]}>
-                    {meta?.label ?? 'League'}
-                  </Text>
-                </View>
-
-                {/* Big XP number */}
-                <Text style={[styles.xpBigNumber, { color: meta?.accent ?? colors.accent }]}>
-                  {weeklyXpDisplay}
+              {/* ── Leaderboard Accordion ── */}
+              <TouchableOpacity
+                style={[styles.accordionHeader, { backgroundColor: cardBg }]}
+                onPress={() => {
+                  const next = !leaderboardExpanded;
+                  console.log('[LeagueLeaderboard] leaderboard accordion toggled', { expanded: next });
+                  setLeaderboardExpanded(next);
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.accordionTitle, { color: textPrimary }]}>
+                  {'🏆 Leaderboard'}
                 </Text>
-                <Text style={[styles.xpWeekLabel, { color: textSecondary }]}>
-                  {'XP this week'}
+                <Text style={[styles.accordionChevron, { color: textSecondary }]}>
+                  {leaderboardExpanded ? '▲' : '▼'}
                 </Text>
-              </View>
+              </TouchableOpacity>
 
-              {/* ── B) Status Banner ── */}
-              {banner && (
-                <View
-                  style={[
-                    styles.bannerCard,
-                    {
-                      backgroundColor: cardBg,
-                      borderLeftColor: banner.color,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.bannerTitle, { color: banner.color }]}>
-                    {banner.title}
-                  </Text>
-                  <Text style={[styles.bannerSubtitle, { color: textSecondary }]}>
-                    {banner.subtitle}
-                  </Text>
-                </View>
-              )}
-
-              {/* ── C) Zone Pills ── */}
-              <View style={styles.zonePillsRow}>
-                {/* Promotion pill */}
-                <View
-                  style={[
-                    styles.zonePill,
-                    userZone === 'promotion'
-                      ? styles.zonePillActivePromo
-                      : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
-                  ]}
-                >
-                  <Text style={styles.zonePillDot}>{'🟢'}</Text>
-                  <Text
-                    style={[
-                      styles.zonePillLabel,
-                      { color: userZone === 'promotion' ? '#FFFFFF' : textSecondary },
-                    ]}
-                  >
-                    {'Promotion'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.zonePillCount,
-                      { color: userZone === 'promotion' ? 'rgba(255,255,255,0.8)' : textSecondary },
-                    ]}
-                  >
-                    {'Top '}
-                    {promoCount}
-                  </Text>
-                </View>
-
-                {/* Neutral pill */}
-                <View
-                  style={[
-                    styles.zonePill,
-                    userZone === 'neutral'
-                      ? styles.zonePillActiveNeutral
-                      : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
-                  ]}
-                >
-                  <Text style={styles.zonePillDot}>{'⚪'}</Text>
-                  <Text
-                    style={[
-                      styles.zonePillLabel,
-                      { color: userZone === 'neutral' ? '#FFFFFF' : textSecondary },
-                    ]}
-                  >
-                    {'Neutral'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.zonePillCount,
-                      { color: userZone === 'neutral' ? 'rgba(255,255,255,0.8)' : textSecondary },
-                    ]}
-                  >
-                    {'Middle'}
-                  </Text>
-                </View>
-
-                {/* Drop Zone pill */}
-                <View
-                  style={[
-                    styles.zonePill,
-                    userZone === 'demotion'
-                      ? styles.zonePillActiveDrop
-                      : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
-                  ]}
-                >
-                  <Text style={styles.zonePillDot}>{'🔴'}</Text>
-                  <Text
-                    style={[
-                      styles.zonePillLabel,
-                      { color: userZone === 'demotion' ? '#FFFFFF' : textSecondary },
-                    ]}
-                  >
-                    {'Drop Zone'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.zonePillCount,
-                      { color: userZone === 'demotion' ? 'rgba(255,255,255,0.8)' : textSecondary },
-                    ]}
-                  >
-                    {'Bottom '}
-                    {dropCount}
-                  </Text>
-                </View>
-              </View>
-
-              {/* ── D) Leaderboard ── */}
-
-              {/* Promotion Zone */}
-              {promotionEntries.length > 0 && (
+              {leaderboardExpanded && (
                 <>
-                  <View style={styles.zoneHeader}>
-                    <Text style={[styles.zoneLabel, { color: '#50C878' }]}>
-                      {i18n.t('league.promotionZone')}
-                    </Text>
-                    {nextMeta && (
-                      <Text style={styles.zoneTierBadge}>
-                        {nextMeta.emoji}
-                        {' '}
-                        {nextMeta.label}
+                  {/* ── B) Status Banner ── */}
+                  {banner && (
+                    <View
+                      style={[
+                        styles.bannerCard,
+                        {
+                          backgroundColor: cardBg,
+                          borderLeftColor: banner.color,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.bannerTitle, { color: banner.color }]}>
+                        {banner.title}
                       </Text>
-                    )}
-                  </View>
-                  <View style={[styles.zoneCard, { backgroundColor: cardBg }]}>
-                    {promotionEntries.map((entry) => (
-                      <LeaderboardRow
-                        key={entry.user_id}
-                        entry={entry}
-                        isPromotion
-                        isDemotion={false}
-                        accentColor={meta?.accent ?? colors.accent}
-                        isDark={isDark}
-                      />
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {/* Middle Zone */}
-              {middleEntries.length > 0 && (
-                <>
-                  <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-                  <View style={[styles.zoneCard, { backgroundColor: cardBg }]}>
-                    {middleEntries.map((entry) => (
-                      <LeaderboardRow
-                        key={entry.user_id}
-                        entry={entry}
-                        isPromotion={false}
-                        isDemotion={false}
-                        accentColor={meta?.accent ?? colors.accent}
-                        isDark={isDark}
-                      />
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {/* Demotion Zone */}
-              {demotionEntries.length > 0 && (
-                <>
-                  <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-                  <View style={styles.zoneHeader}>
-                    <Text style={[styles.zoneLabel, { color: '#EF4444' }]}>
-                      {i18n.t('league.dropZone')}
-                    </Text>
-                    {prevMeta && (
-                      <Text style={styles.zoneTierBadge}>
-                        {prevMeta.emoji}
-                        {' '}
-                        {prevMeta.label}
+                      <Text style={[styles.bannerSubtitle, { color: textSecondary }]}>
+                        {banner.subtitle}
                       </Text>
-                    )}
+                    </View>
+                  )}
+
+                  {/* ── C) Zone Pills ── */}
+                  <View style={styles.zonePillsRow}>
+                    {/* Promotion pill */}
+                    <View
+                      style={[
+                        styles.zonePill,
+                        userZone === 'promotion'
+                          ? styles.zonePillActivePromo
+                          : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
+                      ]}
+                    >
+                      <Text style={styles.zonePillDot}>{'🟢'}</Text>
+                      <Text
+                        style={[
+                          styles.zonePillLabel,
+                          { color: userZone === 'promotion' ? '#FFFFFF' : textSecondary },
+                        ]}
+                      >
+                        {'Promotion'}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.zonePillCount,
+                          { color: userZone === 'promotion' ? 'rgba(255,255,255,0.8)' : textSecondary },
+                        ]}
+                      >
+                        {'Top '}
+                        {promoCount}
+                      </Text>
+                    </View>
+
+                    {/* Neutral pill */}
+                    <View
+                      style={[
+                        styles.zonePill,
+                        userZone === 'neutral'
+                          ? styles.zonePillActiveNeutral
+                          : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
+                      ]}
+                    >
+                      <Text style={styles.zonePillDot}>{'⚪'}</Text>
+                      <Text
+                        style={[
+                          styles.zonePillLabel,
+                          { color: userZone === 'neutral' ? '#FFFFFF' : textSecondary },
+                        ]}
+                      >
+                        {'Neutral'}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.zonePillCount,
+                          { color: userZone === 'neutral' ? 'rgba(255,255,255,0.8)' : textSecondary },
+                        ]}
+                      >
+                        {'Middle'}
+                      </Text>
+                    </View>
+
+                    {/* Drop Zone pill */}
+                    <View
+                      style={[
+                        styles.zonePill,
+                        userZone === 'demotion'
+                          ? styles.zonePillActiveDrop
+                          : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
+                      ]}
+                    >
+                      <Text style={styles.zonePillDot}>{'🔴'}</Text>
+                      <Text
+                        style={[
+                          styles.zonePillLabel,
+                          { color: userZone === 'demotion' ? '#FFFFFF' : textSecondary },
+                        ]}
+                      >
+                        {'Drop Zone'}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.zonePillCount,
+                          { color: userZone === 'demotion' ? 'rgba(255,255,255,0.8)' : textSecondary },
+                        ]}
+                      >
+                        {'Bottom '}
+                        {dropCount}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={[styles.zoneCard, { backgroundColor: cardBg }]}>
-                    {demotionEntries.map((entry) => (
-                      <LeaderboardRow
-                        key={entry.user_id}
-                        entry={entry}
-                        isPromotion={false}
-                        isDemotion
-                        accentColor={meta?.accent ?? colors.accent}
-                        isDark={isDark}
-                      />
-                    ))}
-                  </View>
+
+                  {/* ── D) Leaderboard ── */}
+
+                  {/* Promotion Zone */}
+                  {promotionEntries.length > 0 && (
+                    <>
+                      <View style={styles.zoneHeader}>
+                        <Text style={[styles.zoneLabel, { color: '#50C878' }]}>
+                          {i18n.t('league.promotionZone')}
+                        </Text>
+                        {nextMeta && (
+                          <Text style={styles.zoneTierBadge}>
+                            {nextMeta.emoji}
+                            {' '}
+                            {nextMeta.label}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.zoneCard, { backgroundColor: cardBg }]}>
+                        {promotionEntries.map((entry) => (
+                          <LeaderboardRow
+                            key={entry.user_id}
+                            entry={entry}
+                            isPromotion
+                            isDemotion={false}
+                            accentColor={meta?.accent ?? colors.accent}
+                            isDark={isDark}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Middle Zone */}
+                  {middleEntries.length > 0 && (
+                    <>
+                      <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                      <View style={[styles.zoneCard, { backgroundColor: cardBg }]}>
+                        {middleEntries.map((entry) => (
+                          <LeaderboardRow
+                            key={entry.user_id}
+                            entry={entry}
+                            isPromotion={false}
+                            isDemotion={false}
+                            accentColor={meta?.accent ?? colors.accent}
+                            isDark={isDark}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Demotion Zone */}
+                  {demotionEntries.length > 0 && (
+                    <>
+                      <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                      <View style={styles.zoneHeader}>
+                        <Text style={[styles.zoneLabel, { color: '#EF4444' }]}>
+                          {i18n.t('league.dropZone')}
+                        </Text>
+                        {prevMeta && (
+                          <Text style={styles.zoneTierBadge}>
+                            {prevMeta.emoji}
+                            {' '}
+                            {prevMeta.label}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.zoneCard, { backgroundColor: cardBg }]}>
+                        {demotionEntries.map((entry) => (
+                          <LeaderboardRow
+                            key={entry.user_id}
+                            entry={entry}
+                            isPromotion={false}
+                            isDemotion
+                            accentColor={meta?.accent ?? colors.accent}
+                            isDark={isDark}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  )}
                 </>
               )}
 
@@ -810,36 +859,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ── XP Card ───────────────────────────────────────────────────────────────
-  xpProgressCard: {
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  xpProgressHeader: {
+  // ── Accordion ─────────────────────────────────────────────────────────────
+  accordionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  xpProgressEmoji: {
-    fontSize: 22,
-  },
-  xpProgressLeagueName: {
+  accordionTitle: {
     fontSize: 15,
     fontWeight: '700',
   },
-  xpBigNumber: {
-    fontSize: 40,
-    fontWeight: '800',
-    letterSpacing: -1,
-    lineHeight: 46,
-  },
-  xpWeekLabel: {
+  accordionChevron: {
     fontSize: 13,
-    fontWeight: '500',
-    marginTop: 2,
+    fontWeight: '600',
   },
 
   // ── Status banner ─────────────────────────────────────────────────────────
@@ -1014,6 +1050,27 @@ const styles = StyleSheet.create({
   flashRight: {
     alignItems: 'flex-end',
     gap: 4,
+  },
+  flashStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  flashAcceptButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  flashAcceptText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  flashAcceptSpinner: {
+    width: 28,
+    height: 18,
   },
   flashXp: {
     fontSize: 13,
