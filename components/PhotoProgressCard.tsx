@@ -1,10 +1,9 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
   ActivityIndicator,
   TouchableOpacity,
   Modal,
@@ -19,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { ZoomablePhoto } from '@/components/ZoomablePhoto';
+import { ZoomablePanPhoto } from '@/components/ZoomablePanPhoto';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 
@@ -542,21 +542,15 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {singlePhoto && afterPhoto && (
         <View style={styles.photosRow}>
           <View style={styles.photoSlot}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => {
+            <ZoomablePanPhoto
+              uri={afterPhoto.photo_url}
+              width={photoWidth}
+              height={photoHeight}
+              onTap={() => {
                 console.log('[PhotoProgressCard] Single photo tapped, opening viewer');
                 handleOpenViewer(afterPhoto.photo_url, afterDateLabel);
               }}
-            >
-              <View style={[styles.photoWrapper, { width: photoWidth, height: photoHeight }]}>
-                <Image
-                  source={{ uri: afterPhoto.photo_url }}
-                  style={{ width: photoWidth, height: photoHeight, borderRadius: 0 }}
-                  resizeMode="cover"
-                />
-              </View>
-            </TouchableOpacity>
+            />
             <View style={styles.datePillRow}>
               <DatePill
                 label={afterDateLabel}
@@ -595,21 +589,15 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {!emptyState && !singlePhoto && beforePhoto && afterPhoto && (
         <View style={styles.photosRow}>
           <View style={styles.photoSlot}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => {
+            <ZoomablePanPhoto
+              uri={beforePhoto.photo_url}
+              width={photoWidth}
+              height={photoHeight}
+              onTap={() => {
                 console.log('[PhotoProgressCard] Before photo tapped, opening viewer');
                 handleOpenViewer(beforePhoto.photo_url, beforeDateLabel);
               }}
-            >
-              <View style={[styles.photoWrapper, { width: photoWidth, height: photoHeight }]}>
-                <Image
-                  source={{ uri: beforePhoto.photo_url }}
-                  style={{ width: photoWidth, height: photoHeight, borderRadius: 0 }}
-                  resizeMode="cover"
-                />
-              </View>
-            </TouchableOpacity>
+            />
             <View style={styles.datePillRow}>
               <DatePill
                 label={beforeDateLabel}
@@ -623,21 +611,15 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <View style={[styles.photoSeparator, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
           <View style={styles.photoSlot}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => {
+            <ZoomablePanPhoto
+              uri={afterPhoto.photo_url}
+              width={photoWidth}
+              height={photoHeight}
+              onTap={() => {
                 console.log('[PhotoProgressCard] After photo tapped, opening viewer');
                 handleOpenViewer(afterPhoto.photo_url, afterDateLabel);
               }}
-            >
-              <View style={[styles.photoWrapper, { width: photoWidth, height: photoHeight }]}>
-                <Image
-                  source={{ uri: afterPhoto.photo_url }}
-                  style={{ width: photoWidth, height: photoHeight, borderRadius: 0 }}
-                  resizeMode="cover"
-                />
-              </View>
-            </TouchableOpacity>
+            />
             <View style={styles.datePillRow}>
               <DatePill
                 label={afterDateLabel}
