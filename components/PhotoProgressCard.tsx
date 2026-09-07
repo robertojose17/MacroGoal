@@ -15,8 +15,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { ZoomablePhoto } from '@/components/ZoomablePhoto';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 
@@ -176,6 +178,86 @@ function DatePill({ label, isDark, onPress, weightLbs }: DatePillProps) {
   );
 }
 
+// ─── Fullscreen Photo Viewer ──────────────────────────────────────────────────
+
+interface PhotoViewerModalProps {
+  uri: string | null;
+  label: string;
+  onClose: () => void;
+}
+
+function PhotoViewerModal({ uri, label, onClose }: PhotoViewerModalProps) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal
+      visible={uri !== null}
+      animationType="fade"
+      transparent={false}
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={viewerStyles.container}>
+        {uri !== null && (
+          <ZoomablePhoto uri={uri} style={{ flex: 1 }} />
+        )}
+        {/* Close button */}
+        <TouchableOpacity
+          style={[viewerStyles.closeButton, { top: insets.top + 12 }]}
+          onPress={() => {
+            console.log('[PhotoProgressCard] Fullscreen viewer closed');
+            onClose();
+          }}
+          activeOpacity={0.8}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <IconSymbol
+            ios_icon_name="xmark"
+            android_material_icon_name="close"
+            size={20}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
+        {/* Date label */}
+        {label.length > 0 && (
+          <View style={[viewerStyles.labelPill, { bottom: insets.bottom + 24 }]}>
+            <Text style={viewerStyles.labelText}>{label}</Text>
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+const viewerStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labelPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  labelText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
@@ -196,6 +278,10 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
 
   // Which picker is open
   const [openPicker, setOpenPicker] = useState<SlotKey | null>(null);
+
+  // Fullscreen photo viewer
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [viewerLabel, setViewerLabel] = useState<string>('');
 
   const persistBeforeId = useCallback(async (id: string) => {
     try {
@@ -382,6 +468,17 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
     setOpenPicker(null);
   };
 
+  const handleOpenViewer = (uri: string, label: string) => {
+    console.log('[PhotoProgressCard] Opening fullscreen viewer for photo:', uri, 'label:', label);
+    setViewerUri(uri);
+    setViewerLabel(label);
+  };
+
+  const handleCloseViewer = () => {
+    setViewerUri(null);
+    setViewerLabel('');
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -442,13 +539,21 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {singlePhoto && afterPhoto && (
         <View style={styles.photosRow}>
           <View style={styles.photoSlot}>
-            <View style={[styles.photoWrapper, { height: photoHeight }]}>
-              <Image
-                source={{ uri: afterPhoto.photo_url }}
-                style={{ width: photoWidth, height: photoHeight }}
-                resizeMode="cover"
-              />
-            </View>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                console.log('[PhotoProgressCard] Single photo tapped, opening viewer');
+                handleOpenViewer(afterPhoto.photo_url, afterDateLabel);
+              }}
+            >
+              <View style={[styles.photoWrapper, { height: photoHeight }]}>
+                <Image
+                  source={{ uri: afterPhoto.photo_url }}
+                  style={{ width: photoWidth, height: photoHeight }}
+                  resizeMode="cover"
+                />
+              </View>
+            </TouchableOpacity>
             <View style={styles.datePillRow}>
               <DatePill
                 label={afterDateLabel}
@@ -487,13 +592,21 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {!emptyState && !singlePhoto && beforePhoto && afterPhoto && (
         <View style={styles.photosRow}>
           <View style={styles.photoSlot}>
-            <View style={[styles.photoWrapper, { height: photoHeight }]}>
-              <Image
-                source={{ uri: beforePhoto.photo_url }}
-                style={{ width: photoWidth, height: photoHeight }}
-                resizeMode="cover"
-              />
-            </View>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                console.log('[PhotoProgressCard] Before photo tapped, opening viewer');
+                handleOpenViewer(beforePhoto.photo_url, beforeDateLabel);
+              }}
+            >
+              <View style={[styles.photoWrapper, { height: photoHeight }]}>
+                <Image
+                  source={{ uri: beforePhoto.photo_url }}
+                  style={{ width: photoWidth, height: photoHeight }}
+                  resizeMode="cover"
+                />
+              </View>
+            </TouchableOpacity>
             <View style={styles.datePillRow}>
               <DatePill
                 label={beforeDateLabel}
@@ -507,13 +620,21 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <View style={[styles.photoSeparator, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
           <View style={styles.photoSlot}>
-            <View style={[styles.photoWrapper, { height: photoHeight }]}>
-              <Image
-                source={{ uri: afterPhoto.photo_url }}
-                style={{ width: photoWidth, height: photoHeight }}
-                resizeMode="cover"
-              />
-            </View>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                console.log('[PhotoProgressCard] After photo tapped, opening viewer');
+                handleOpenViewer(afterPhoto.photo_url, afterDateLabel);
+              }}
+            >
+              <View style={[styles.photoWrapper, { height: photoHeight }]}>
+                <Image
+                  source={{ uri: afterPhoto.photo_url }}
+                  style={{ width: photoWidth, height: photoHeight }}
+                  resizeMode="cover"
+                />
+              </View>
+            </TouchableOpacity>
             <View style={styles.datePillRow}>
               <DatePill
                 label={afterDateLabel}
@@ -535,6 +656,13 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
         onSelect={handleSelectDate}
         onClose={handleClosePicker}
         weightByCheckInId={weightByCheckInId}
+      />
+
+      {/* Fullscreen photo viewer */}
+      <PhotoViewerModal
+        uri={viewerUri}
+        label={viewerLabel}
+        onClose={handleCloseViewer}
       />
     </View>
   );
