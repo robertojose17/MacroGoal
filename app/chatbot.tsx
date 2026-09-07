@@ -25,7 +25,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { useTranslation } from 'react-i18next';
-import ServingPicker, { ServingOption } from '@/components/ServingPicker';
+
 
 
 // Quick action cards and craving chips are defined inside the component so they can use t()
@@ -817,10 +817,10 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
     [latestEstimate]
   );
 
-  // Handle unit switch in ServingPicker — convert quantity and recalculate macros
+  // Handle unit switch — convert quantity and recalculate macros
   const handleUnitChange = useCallback(
-    (ingredientId: string, option: ServingOption) => {
-      console.log('[Chatbot] Unit changed for ingredient:', ingredientId, '→', option.key, '(gramsPerUnit:', option.gramsPerUnit, ')');
+    (ingredientId: string, newUnit: string, newUnitGrams: number) => {
+      console.log('[Chatbot] Unit changed for ingredient:', ingredientId, '→', newUnit, '(gramsPerUnit:', newUnitGrams, ')');
       if (!latestEstimate) return;
 
       setLatestEstimate((prev) => {
@@ -830,40 +830,45 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           if (ing.id !== ingredientId) return ing;
 
           const oldUnit = ing.unit;
-          const newUnit = option.key;
-
           if (oldUnit === newUnit) return ing;
 
           // Convert quantity when switching units
-          let newQuantity: number;
-          if (newUnit === 'g') {
-            // switching to grams: multiply by old unit's grams
-            const oldUnitGrams = ing.unit_grams > 0 ? ing.unit_grams : option.gramsPerUnit;
-            newQuantity = Math.round(ing.quantity * oldUnitGrams);
-          } else if (oldUnit === 'g') {
-            // switching from grams to preferred unit
-            const newUnitGrams = option.gramsPerUnit > 0 ? option.gramsPerUnit : 1;
-            newQuantity = Math.max(1, Math.round(ing.quantity / newUnitGrams));
+          // First get current grams
+          let currentGrams: number;
+          if (oldUnit === 'g') {
+            currentGrams = ing.quantity;
+          } else if (oldUnit === 'oz') {
+            currentGrams = ing.quantity * 28.35;
           } else {
-            // switching between two non-gram units (e.g. oz ↔ preferred_unit)
-            const oldGrams = ing.unit_grams > 0 ? ing.quantity * ing.unit_grams : ing.quantity;
-            const newUnitGrams = option.gramsPerUnit > 0 ? option.gramsPerUnit : 1;
-            newQuantity = Math.max(1, Math.round(oldGrams / newUnitGrams));
+            // preferred_unit
+            currentGrams = ing.quantity * (ing.unit_grams > 0 ? ing.unit_grams : 1);
           }
 
-          // Recalculate macros with new unit and quantity
+          let newQuantity: number;
+          if (newUnit === 'g') {
+            newQuantity = Math.round(currentGrams);
+          } else if (newUnit === 'oz') {
+            newQuantity = Math.round((currentGrams / 28.35) * 10) / 10;
+          } else {
+            // preferred_unit
+            const ugrams = newUnitGrams > 0 ? newUnitGrams : 1;
+            newQuantity = Math.round((currentGrams / ugrams) * 10) / 10;
+          }
+          if (newQuantity <= 0) newQuantity = 1;
+
+          // Recalculate macros
+          let gramsForCalc: number;
+          if (newUnit === 'g') {
+            gramsForCalc = newQuantity;
+          } else if (newUnit === 'oz') {
+            gramsForCalc = newQuantity * 28.35;
+          } else {
+            gramsForCalc = newQuantity * (newUnitGrams > 0 ? newUnitGrams : 1);
+          }
+
           let calories, protein, carbs, fats, fiber;
-          const newUnitGrams = option.gramsPerUnit;
-          if (newUnit === 'g' && ing.calories_per_100g > 0) {
-            const ratio = newQuantity / 100;
-            calories = Math.round(ing.calories_per_100g * ratio);
-            protein = Math.round(ing.protein_per_100g * ratio * 10) / 10;
-            carbs = Math.round(ing.carbs_per_100g * ratio * 10) / 10;
-            fats = Math.round(ing.fat_per_100g * ratio * 10) / 10;
-            fiber = Math.round(ing.fiber_per_100g * ratio * 10) / 10;
-          } else if (newUnitGrams > 0 && ing.calories_per_100g > 0) {
-            const gramsEquivalent = newQuantity * newUnitGrams;
-            const ratio = gramsEquivalent / 100;
+          if (ing.calories_per_100g > 0) {
+            const ratio = gramsForCalc / 100;
             calories = Math.round(ing.calories_per_100g * ratio);
             protein = Math.round(ing.protein_per_100g * ratio * 10) / 10;
             carbs = Math.round(ing.carbs_per_100g * ratio * 10) / 10;
@@ -879,8 +884,8 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
             fiber = Math.round(ing.fiber * ratio * 10) / 10;
           }
 
-          // Update unit_grams to reflect the newly selected option's gramsPerUnit
-          const updatedUnitGrams = newUnit === ing.preferred_unit ? ing.unit_grams : option.gramsPerUnit;
+          // Keep unit_grams in sync: if switching back to preferred_unit, restore original unit_grams
+          const updatedUnitGrams = newUnit === ing.preferred_unit ? ing.unit_grams : newUnitGrams;
 
           return { ...ing, unit: newUnit, quantity: newQuantity, unit_grams: updatedUnitGrams, calories, protein, carbs, fats, fiber };
         });
@@ -1609,13 +1614,17 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   const sourceName = ingredient.nutrition_source?.source_name ?? null;
                   const confidenceDetailText = `🔍 ID: ${ingredient.id_confidence} · ⚖️ Portion: ${ingredient.model_portion_confidence} · 📊 Nutrition: ${ingredient.nutrition_confidence}`;
 
-                  // Build serving options for this ingredient
-                  const servingOptions: ServingOption[] = [];
+                  // Build unit options for this ingredient
+                  const unitOptions: { key: string; label: string; gramsPerUnit: number }[] = [];
                   if (ingredient.preferred_unit && ingredient.unit_grams > 0 && ingredient.preferred_unit !== 'g' && ingredient.preferred_unit !== 'oz') {
-                    servingOptions.push({ key: ingredient.preferred_unit, label: ingredient.preferred_unit, gramsPerUnit: ingredient.unit_grams });
+                    unitOptions.push({ key: ingredient.preferred_unit, label: ingredient.preferred_unit, gramsPerUnit: ingredient.unit_grams });
                   }
-                  servingOptions.push({ key: 'g', label: 'g', gramsPerUnit: 1 });
-                  servingOptions.push({ key: 'oz', label: 'oz', gramsPerUnit: 28.3495 });
+                  unitOptions.push({ key: 'g', label: 'g', gramsPerUnit: 1 });
+                  unitOptions.push({ key: 'oz', label: 'oz', gramsPerUnit: 28.35 });
+
+                  const quantityDisplay = Number.isInteger(ingredient.quantity)
+                    ? ingredient.quantity.toString()
+                    : ingredient.quantity.toFixed(1);
 
                   return (
                     <View
@@ -1658,20 +1667,74 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text style={{ fontSize: 16 }}>{confidenceEmojiVal}</Text>
                         </View>
 
-                        <ServingPicker
-                          options={servingOptions}
-                          selectedKey={ingredient.unit}
-                          quantity={ingredient.quantity.toString()}
-                          onOptionChange={(option) => {
-                            console.log('[Chatbot] Unit changed for', ingredient.name, '→', option.key);
-                            handleUnitChange(ingredient.id, option);
-                          }}
-                          onQuantityChange={(val) => {
-                            console.log('[Chatbot] Quantity changed for', ingredient.name, ':', val);
-                            handleQuantityChange(ingredient.id, val);
-                          }}
-                          isDark={isDark}
-                        />
+                        {/* Quantity row: [−]  qty  [+]  unit▾ */}
+                        <View style={styles.ingredientQuantityRow}>
+                          <TouchableOpacity
+                            style={[styles.qtyButton, { borderColor: isDark ? colors.borderDark : colors.border }]}
+                            onPress={() => {
+                              const next = Math.max(0, ingredient.quantity - 1);
+                              console.log('[Chatbot] Decrement quantity for', ingredient.name, '→', next);
+                              handleQuantityChange(ingredient.id, next.toString());
+                            }}
+                          >
+                            <Text style={[styles.qtyButtonText, { color: isDark ? colors.textDark : colors.text }]}>−</Text>
+                          </TouchableOpacity>
+
+                          <TextInput
+                            style={[
+                              styles.quantityInput,
+                              {
+                                borderColor: isDark ? colors.borderDark : colors.border,
+                                color: isDark ? colors.textDark : colors.text,
+                                backgroundColor: isDark ? colors.cardDark : colors.card,
+                              },
+                            ]}
+                            value={quantityDisplay}
+                            onChangeText={(val) => {
+                              console.log('[Chatbot] Quantity text changed for', ingredient.name, ':', val);
+                              handleQuantityChange(ingredient.id, val);
+                            }}
+                            keyboardType="decimal-pad"
+                            selectTextOnFocus
+                          />
+
+                          <TouchableOpacity
+                            style={[styles.qtyButton, { borderColor: isDark ? colors.borderDark : colors.border }]}
+                            onPress={() => {
+                              const next = ingredient.quantity + 1;
+                              console.log('[Chatbot] Increment quantity for', ingredient.name, '→', next);
+                              handleQuantityChange(ingredient.id, next.toString());
+                            }}
+                          >
+                            <Text style={[styles.qtyButtonText, { color: isDark ? colors.textDark : colors.text }]}>+</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.unitPill, { borderColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.cardDark : colors.card }]}
+                            onPress={() => {
+                              console.log('[Chatbot] Unit picker pressed for', ingredient.name, 'current unit:', ingredient.unit);
+                              Alert.alert(
+                                'Select unit',
+                                undefined,
+                                [
+                                  ...unitOptions.map((opt) => ({
+                                    text: opt.key === ingredient.unit ? `✓ ${opt.label}` : opt.label,
+                                    onPress: () => {
+                                      console.log('[Chatbot] Unit selected for', ingredient.name, '→', opt.key);
+                                      handleUnitChange(ingredient.id, opt.key, opt.gramsPerUnit);
+                                    },
+                                  })),
+                                  { text: 'Cancel', style: 'cancel' as const },
+                                ]
+                              );
+                            }}
+                          >
+                            <Text style={[styles.unitPillText, { color: isDark ? colors.textDark : colors.text }]}>
+                              {ingredient.unit}
+                            </Text>
+                            <Text style={[styles.unitPillChevron, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>▾</Text>
+                          </TouchableOpacity>
+                        </View>
 
                         <View style={styles.ingredientMacros}>
                           <Text
@@ -2084,7 +2147,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.xs,
-    gap: spacing.sm,
+    gap: 6,
+  },
+  qtyButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    lineHeight: 22,
   },
   quantityInput: {
     borderWidth: 1,
@@ -2092,7 +2168,25 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     fontSize: 14,
-    minWidth: 60,
+    minWidth: 56,
+    textAlign: 'center',
+  },
+  unitPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    gap: 3,
+    marginLeft: 2,
+  },
+  unitPillText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  unitPillChevron: {
+    fontSize: 10,
   },
   unitText: {
     ...typography.body,

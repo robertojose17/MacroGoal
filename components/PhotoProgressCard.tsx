@@ -398,8 +398,11 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
   const subtextColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
   const windowWidth = Dimensions.get('window').width;
-  const photoHeight = Math.floor((windowWidth - spacing.md * 2) * 0.75);
-  const photoWidth = (windowWidth - spacing.md * 2) / 2;
+  const CARD_H_PADDING = spacing.md * 2; // left + right padding on photosRow
+  const SEPARATOR_WIDTH = 1;
+  const availableWidth = windowWidth - spacing.md * 2 - CARD_H_PADDING - SEPARATOR_WIDTH;
+  const photoWidth = Math.floor(availableWidth / 2);
+  const photoHeight = Math.floor(photoWidth * 1.35); // portrait ratio
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const beforePhoto = photos.find((p) => p.id === beforeId) ?? null;
@@ -546,10 +549,10 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
                 handleOpenViewer(afterPhoto.photo_url, afterDateLabel);
               }}
             >
-              <View style={[styles.photoWrapper, { height: photoHeight }]}>
+              <View style={[styles.photoWrapper, { width: photoWidth, height: photoHeight }]}>
                 <Image
                   source={{ uri: afterPhoto.photo_url }}
-                  style={{ width: photoWidth, height: photoHeight }}
+                  style={{ width: photoWidth, height: photoHeight, borderRadius: 0 }}
                   resizeMode="cover"
                 />
               </View>
@@ -571,7 +574,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
               style={[
                 styles.photoWrapper,
                 styles.placeholderWrapper,
-                { height: photoHeight, borderColor: isDark ? '#3A3C52' : '#D4D6DA' },
+                { width: photoWidth, height: photoHeight, borderColor: isDark ? '#3A3C52' : '#D4D6DA' },
               ]}
             >
               <IconSymbol
@@ -599,10 +602,10 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
                 handleOpenViewer(beforePhoto.photo_url, beforeDateLabel);
               }}
             >
-              <View style={[styles.photoWrapper, { height: photoHeight }]}>
+              <View style={[styles.photoWrapper, { width: photoWidth, height: photoHeight }]}>
                 <Image
                   source={{ uri: beforePhoto.photo_url }}
-                  style={{ width: photoWidth, height: photoHeight }}
+                  style={{ width: photoWidth, height: photoHeight, borderRadius: 0 }}
                   resizeMode="cover"
                 />
               </View>
@@ -627,10 +630,10 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
                 handleOpenViewer(afterPhoto.photo_url, afterDateLabel);
               }}
             >
-              <View style={[styles.photoWrapper, { height: photoHeight }]}>
+              <View style={[styles.photoWrapper, { width: photoWidth, height: photoHeight }]}>
                 <Image
                   source={{ uri: afterPhoto.photo_url }}
-                  style={{ width: photoWidth, height: photoHeight }}
+                  style={{ width: photoWidth, height: photoHeight, borderRadius: 0 }}
                   resizeMode="cover"
                 />
               </View>
@@ -786,6 +789,7 @@ const styles = StyleSheet.create({
   photosRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
   },
   photoSlot: {
@@ -793,7 +797,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoWrapper: {
-    flex: 1,
     alignItems: 'center',
     gap: spacing.xs,
   },
