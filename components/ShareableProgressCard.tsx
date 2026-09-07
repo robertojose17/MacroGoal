@@ -1,5 +1,5 @@
 
-import React, { useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,9 @@ import {
   Dimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '@/styles/commonStyles';
-import { ZoomablePhoto } from '@/components/ZoomablePhoto';
+import { ZoomablePanPhoto } from '@/components/ZoomablePanPhoto';
 
 export const PROGRESS_CARD_WIDTH = Dimensions.get('window').width;
 export const PROGRESS_CARD_HEIGHT = 640;
@@ -47,11 +48,15 @@ export interface ShareableProgressCardProps {
   username?: string | null;
   beforeTransform?: PhotoTransform | null;
   afterTransform?: PhotoTransform | null;
-  /** Photo IDs used as AsyncStorage keys for ZoomablePhoto (interactive mode only) */
+  /** Photo IDs used as AsyncStorage keys for ZoomablePanPhoto (interactive mode only) */
   beforePhotoId?: string | null;
   afterPhotoId?: string | null;
-  /** When true, renders ZoomablePhoto (pinch/pan). When false (default), renders static Image with transform. */
+  /** When true, renders ZoomablePanPhoto (pinch/pan). When false (default), renders static Image with transform. */
   interactive?: boolean;
+  /** Called when the user adjusts the before-photo transform (interactive=true only). */
+  onBeforeTransformChange?: (scale: number, translateX: number, translateY: number) => void;
+  /** Called when the user adjusts the after-photo transform (interactive=true only). */
+  onAfterTransformChange?: (scale: number, translateX: number, translateY: number) => void;
 }
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -77,6 +82,8 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
       beforePhotoId,
       afterPhotoId,
       interactive = false,
+      onBeforeTransformChange,
+      onAfterTransformChange,
     },
     ref
   ) {
@@ -87,7 +94,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const [beforeLoadedState, setBeforeLoadedState] = useState(false);
     const [afterLoadedState, setAfterLoadedState] = useState(false);
 
-    // Measured dimensions for ZoomablePhoto (flex:1 containers need onLayout)
+    // Measured dimensions for ZoomablePanPhoto (flex:1 containers need onLayout)
     const [photoDimensions, setPhotoDimensions] = useState<{ width: number; height: number } | null>(null);
 
     const beforeTransformStyle = beforeTransform
@@ -161,7 +168,37 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
       },
     }), [beforePhoto, afterPhoto]);
 
-    // Determine whether to use ZoomablePhoto for each slot
+    // ── AsyncStorage persist + parent callback for before photo ───────────────
+    const handleBeforeTransformChange = useCallback(
+      (s: number, tx: number, ty: number) => {
+        if (!beforePhotoId) return;
+        console.log('[ShareableProgressCard] Persisting before transform:', s, tx, ty);
+        AsyncStorage.setItem(`@photoTransform.${beforePhotoId}.scale`, String(s));
+        AsyncStorage.setItem(`@photoTransform.${beforePhotoId}.translateX`, String(tx));
+        AsyncStorage.setItem(`@photoTransform.${beforePhotoId}.translateY`, String(ty));
+        if (onBeforeTransformChange) {
+          onBeforeTransformChange(s, tx, ty);
+        }
+      },
+      [beforePhotoId, onBeforeTransformChange],
+    );
+
+    // ── AsyncStorage persist + parent callback for after photo ────────────────
+    const handleAfterTransformChange = useCallback(
+      (s: number, tx: number, ty: number) => {
+        if (!afterPhotoId) return;
+        console.log('[ShareableProgressCard] Persisting after transform:', s, tx, ty);
+        AsyncStorage.setItem(`@photoTransform.${afterPhotoId}.scale`, String(s));
+        AsyncStorage.setItem(`@photoTransform.${afterPhotoId}.translateX`, String(tx));
+        AsyncStorage.setItem(`@photoTransform.${afterPhotoId}.translateY`, String(ty));
+        if (onAfterTransformChange) {
+          onAfterTransformChange(s, tx, ty);
+        }
+      },
+      [afterPhotoId, onAfterTransformChange],
+    );
+
+    // Determine whether to use ZoomablePanPhoto for each slot
     const useZoomBefore = interactive && !!beforePhoto && !!beforePhotoId;
     const useZoomAfter = interactive && !!afterPhoto && !!afterPhotoId;
 
@@ -200,10 +237,22 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
               }}
             >
               {useZoomBefore ? (
-                <ZoomablePhoto
-                  uri={beforePhoto as string}
-                  style={StyleSheet.absoluteFill}
-                />
+                photoDimensions ? (
+                  <ZoomablePanPhoto
+                    uri={beforePhoto as string}
+                    width={photoDimensions.width}
+                    height={photoDimensions.height}
+                    resizeMode="cover"
+                    initialScale={beforeTransform?.scale ?? 1}
+                    initialTranslateX={beforeTransform?.translateX ?? 0}
+                    initialTranslateY={beforeTransform?.translateY ?? 0}
+                    onTransformChange={handleBeforeTransformChange}
+                  />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+                  </View>
+                )
               ) : (
                 <>
                   {!beforeLoadedState && (
@@ -234,12 +283,33 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
             <View style={styles.photoDivider} />
 
             {/* AFTER */}
-            <View style={styles.photoContainer}>
+            <View
+              style={styles.photoContainer}
+              onLayout={(e) => {
+                // After container shares the same dimensions — only update if not yet set
+                const { width, height } = e.nativeEvent.layout;
+                if (width > 0 && height > 0 && !photoDimensions) {
+                  setPhotoDimensions({ width, height });
+                }
+              }}
+            >
               {useZoomAfter ? (
-                <ZoomablePhoto
-                  uri={afterPhoto as string}
-                  style={StyleSheet.absoluteFill}
-                />
+                photoDimensions ? (
+                  <ZoomablePanPhoto
+                    uri={afterPhoto as string}
+                    width={photoDimensions.width}
+                    height={photoDimensions.height}
+                    resizeMode="cover"
+                    initialScale={afterTransform?.scale ?? 1}
+                    initialTranslateX={afterTransform?.translateX ?? 0}
+                    initialTranslateY={afterTransform?.translateY ?? 0}
+                    onTransformChange={handleAfterTransformChange}
+                  />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+                  </View>
+                )
               ) : (
                 <>
                   {!afterLoadedState && (

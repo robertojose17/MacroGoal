@@ -749,6 +749,18 @@ export default function ShareProgressScreen() {
                 beforePhotoId={cardData.beforePhotoId}
                 afterPhotoId={cardData.afterPhotoId}
                 interactive={true}
+                onBeforeTransformChange={(scale, translateX, translateY) => {
+                  console.log('[ShareProgress] Before transform updated:', scale, translateX, translateY);
+                  setCardData((prev) =>
+                    prev ? { ...prev, beforeTransform: { scale, translateX, translateY } } : prev
+                  );
+                }}
+                onAfterTransformChange={(scale, translateX, translateY) => {
+                  console.log('[ShareProgress] After transform updated:', scale, translateX, translateY);
+                  setCardData((prev) =>
+                    prev ? { ...prev, afterTransform: { scale, translateX, translateY } } : prev
+                  );
+                }}
               />
             </View>
           </View>

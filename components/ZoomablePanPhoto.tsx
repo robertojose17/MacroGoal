@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react';
+
+import React, { useCallback, useRef } from 'react';
 import {
   Image,
   Platform,
@@ -18,7 +19,6 @@ import {
 // Lazy-require so the module is never evaluated on web (where the stub lives).
 let GestureDetector: any = null;
 let Gesture: any = null;
-let Animated: any = null;
 let useSharedValue: any = null;
 let useAnimatedStyle: any = null;
 let withSpring: any = null;
@@ -52,6 +52,12 @@ export interface ZoomablePanPhotoProps {
   onTap?: () => void;
   style?: StyleProp<ViewStyle>;
   resizeMode?: ImageResizeMode;
+  /** Initial transform to restore a saved position. */
+  initialScale?: number;
+  initialTranslateX?: number;
+  initialTranslateY?: number;
+  /** Called (debounced ~200ms) whenever the user changes zoom or pan. */
+  onTransformChange?: (scale: number, translateX: number, translateY: number) => void;
 }
 
 // ─── Native component (gesture-handler + reanimated) ─────────────────────────
@@ -59,6 +65,7 @@ export interface ZoomablePanPhotoProps {
 const MIN_SCALE = 1.0;
 const MAX_SCALE = 4.0;
 const SPRING_CONFIG = { damping: 20, stiffness: 200, mass: 0.8 };
+const DEBOUNCE_MS = 200;
 
 function ZoomablePanPhotoNative({
   uri,
@@ -67,15 +74,22 @@ function ZoomablePanPhotoNative({
   onTap,
   style,
   resizeMode = 'cover',
+  initialScale = 1,
+  initialTranslateX = 0,
+  initialTranslateY = 0,
+  onTransformChange,
 }: ZoomablePanPhotoProps) {
-  // ── Shared values ──────────────────────────────────────────────────────────
-  const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
+  // ── Debounce timer ref (JS thread) ─────────────────────────────────────────
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const savedTranslateX = useSharedValue(0);
-  const savedTranslateY = useSharedValue(0);
+  // ── Shared values ──────────────────────────────────────────────────────────
+  const scale = useSharedValue(initialScale);
+  const savedScale = useSharedValue(initialScale);
+
+  const translateX = useSharedValue(initialTranslateX);
+  const translateY = useSharedValue(initialTranslateY);
+  const savedTranslateX = useSharedValue(initialTranslateX);
+  const savedTranslateY = useSharedValue(initialTranslateY);
 
   // ── Animated style ─────────────────────────────────────────────────────────
   const animatedStyle = useAnimatedStyle(() => ({
@@ -86,6 +100,19 @@ function ZoomablePanPhotoNative({
     ],
   }));
 
+  // ── Debounced transform change notifier (JS thread) ───────────────────────
+  const notifyTransformChange = useCallback(
+    (s: number, tx: number, ty: number) => {
+      if (!onTransformChange) return;
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(() => {
+        console.log('[ZoomablePanPhoto] onTransformChange:', s, tx, ty);
+        onTransformChange(s, tx, ty);
+      }, DEBOUNCE_MS);
+    },
+    [onTransformChange],
+  );
+
   // ── Reset helper (called from JS thread) ──────────────────────────────────
   const resetZoom = useCallback(() => {
     console.log('[ZoomablePanPhoto] Double-tap reset: scale=1, pan=0,0');
@@ -95,7 +122,8 @@ function ZoomablePanPhotoNative({
     translateY.value = withSpring(0, SPRING_CONFIG);
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
-  }, [scale, savedScale, translateX, translateY, savedTranslateX, savedTranslateY]);
+    notifyTransformChange(1, 0, 0);
+  }, [scale, savedScale, translateX, translateY, savedTranslateX, savedTranslateY, notifyTransformChange]);
 
   const openFullscreen = useCallback(() => {
     if (onTap) {
@@ -126,6 +154,9 @@ function ZoomablePanPhotoNative({
         translateY.value = withSpring(0, SPRING_CONFIG);
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(notifyTransformChange)(1, 0, 0);
+      } else {
+        runOnJS(notifyTransformChange)(scale.value, translateX.value, translateY.value);
       }
     });
 
@@ -151,6 +182,7 @@ function ZoomablePanPhotoNative({
       translateY.value = withSpring(clampedY, SPRING_CONFIG);
       savedTranslateX.value = clampedX;
       savedTranslateY.value = clampedY;
+      runOnJS(notifyTransformChange)(scale.value, clampedX, clampedY);
     });
 
   // ── Double-tap gesture ─────────────────────────────────────────────────────
