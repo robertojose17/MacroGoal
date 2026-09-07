@@ -39,6 +39,14 @@ const generateMessageId = () => {
 // Extended message type with guaranteed ID
 type MessageWithId = ChatMessage & { id: string; showUpgradeButton?: boolean };
 
+type NutritionSource = {
+  source_type: 'usda' | 'restaurant_official' | 'web_search' | 'gemini_estimate';
+  source_name: string;
+  source_url?: string;
+  retrieval_date?: string;
+  nutrition_match_confidence: 'high' | 'medium' | 'low';
+};
+
 type Ingredient = {
   id: string;
   name: string;
@@ -50,13 +58,34 @@ type Ingredient = {
   fats: number;
   fiber: number;
   included: boolean;
-  // Store original values for proper scaling
-  originalQuantity: number;
-  originalCalories: number;
-  originalProtein: number;
-  originalCarbs: number;
-  originalFats: number;
-  originalFiber: number;
+  // Per-100g values for precise recalculation
+  calories_per_100g: number;
+  protein_per_100g: number;
+  carbs_per_100g: number;
+  fat_per_100g: number;
+  fiber_per_100g: number;
+  // Confidence dimensions
+  id_confidence: 'high' | 'medium' | 'low';
+  model_portion_confidence: 'high' | 'medium' | 'low';
+  nutrition_confidence: 'high' | 'medium' | 'low';
+  overall_confidence: 'high' | 'medium' | 'low';
+  // Portion range
+  grams_min?: number;
+  grams_max?: number;
+  // Nutrition provenance
+  nutrition_source?: NutritionSource;
+  // User verification
+  scale_verified: boolean;
+};
+
+type PackagingCandidate = {
+  name: string;
+  brand: string;
+  calories_per_100g: number;
+  protein_per_100g: number;
+  carbs_per_100g: number;
+  fat_per_100g: number;
+  fiber_per_100g: number;
 };
 
 type AIEstimate = {
@@ -68,6 +97,23 @@ type AIEstimate = {
   totalCarbs: number;
   totalFats: number;
   totalFiber: number;
+  scan_mode?: string;
+  detected_restaurant?: string;
+  packaging_ambiguous?: boolean;
+  packaging_candidates?: PackagingCandidate[];
+};
+
+// Confidence helpers
+const confidenceColor = (level: 'high' | 'medium' | 'low') => {
+  if (level === 'high') return '#22c55e';
+  if (level === 'medium') return '#f59e0b';
+  return '#ef4444';
+};
+
+const confidenceEmoji = (level: 'high' | 'medium' | 'low') => {
+  if (level === 'high') return '🟢';
+  if (level === 'medium') return '🟡';
+  return '🔴';
 };
 
 export default function ChatbotScreen() {
@@ -108,6 +154,7 @@ export default function ChatbotScreen() {
   console.log('[Chatbot] Meal Type:', mealType);
   console.log('[Chatbot] Date:', date);
   console.log('[Chatbot] Return To:', returnTo);
+  console.log('[Chatbot] isMealEstimator:', isMealEstimator);
 
   const [messages, setMessages] = useState<MessageWithId[]>([
     {
@@ -118,9 +165,10 @@ export default function ChatbotScreen() {
     },
   ]);
   const [inputText, setInputText] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null); // Base64 data URL
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [latestEstimate, setLatestEstimate] = useState<AIEstimate | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState<string>('');
+  const [expandedConfidenceId, setExpandedConfidenceId] = useState<string | null>(null);
 
   const { sendMessage, loading } = useChatbot();
   const { isPremium, loading: premiumLoading } = usePremium();
@@ -205,8 +253,12 @@ export default function ChatbotScreen() {
     }
   }, []);
 
-  // Take photo
+  // Take photo — appends to selectedImages (max 3)
   const handleTakePhoto = useCallback(async () => {
+    if (selectedImages.length >= 3) {
+      Alert.alert(t('chatbot.addPhoto'), 'You can add up to 3 photos.');
+      return;
+    }
     try {
       const hasPermission = await requestCameraPermission();
       if (!hasPermission) return;
@@ -219,17 +271,23 @@ export default function ChatbotScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
+        console.log('[Chatbot] Photo taken, converting to base64');
         const base64 = await convertImageToBase64(result.assets[0].uri);
-        setSelectedImage(base64);
+        setSelectedImages((prev) => [...prev, base64].slice(0, 3));
+        console.log('[Chatbot] Photo added, total images:', selectedImages.length + 1);
       }
     } catch (error) {
       console.error('[Chatbot] Error taking photo:', error);
       Alert.alert(t('common.error'), t('chatbot.failedToTakePhoto'));
     }
-  }, [requestCameraPermission, convertImageToBase64]);
+  }, [requestCameraPermission, convertImageToBase64, selectedImages.length]);
 
-  // Choose from gallery
+  // Choose from gallery — appends to selectedImages (max 3)
   const handleChooseFromGallery = useCallback(async () => {
+    if (selectedImages.length >= 3) {
+      Alert.alert(t('chatbot.addPhoto'), 'You can add up to 3 photos.');
+      return;
+    }
     try {
       const hasPermission = await requestMediaLibraryPermission();
       if (!hasPermission) return;
@@ -242,17 +300,20 @@ export default function ChatbotScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
+        console.log('[Chatbot] Gallery image selected, converting to base64');
         const base64 = await convertImageToBase64(result.assets[0].uri);
-        setSelectedImage(base64);
+        setSelectedImages((prev) => [...prev, base64].slice(0, 3));
+        console.log('[Chatbot] Gallery image added, total images:', selectedImages.length + 1);
       }
     } catch (error) {
       console.error('[Chatbot] Error choosing photo:', error);
       Alert.alert(t('common.error'), t('chatbot.failedToChoosePhoto'));
     }
-  }, [requestMediaLibraryPermission, convertImageToBase64]);
+  }, [requestMediaLibraryPermission, convertImageToBase64, selectedImages.length]);
 
   // Handle photo selection
   const handleAddPhoto = useCallback(() => {
+    console.log('[Chatbot] Add photo button pressed');
     Alert.alert(t('chatbot.addPhoto'), t('chatbot.choosePhotoSource'), [
       {
         text: t('chatbot.takePhoto'),
@@ -269,9 +330,10 @@ export default function ChatbotScreen() {
     ]);
   }, [handleTakePhoto, handleChooseFromGallery]);
 
-  // Remove selected photo
-  const handleRemovePhoto = useCallback(() => {
-    setSelectedImage(null);
+  // Remove a specific photo by index
+  const handleRemovePhoto = useCallback((index: number) => {
+    console.log('[Chatbot] Remove photo at index:', index);
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   // Send a quick action or craving chip as a message
@@ -323,6 +385,7 @@ export default function ChatbotScreen() {
             { role: 'user', content: text, timestamp: Date.now() },
           ],
           images: [],
+          source: 'chatbot',
         }).then((result) => {
           if (!isMountedRef.current) return;
           if (result && result.message) {
@@ -357,35 +420,51 @@ export default function ChatbotScreen() {
       console.log('[Chatbot] Parsing structured ingredient data');
 
       const ingredients: Ingredient[] = mealData.ingredients.map((ing: any, index: number) => {
-        const quantity = parseFloat(ing.quantity) || 1;
-        const calories = parseFloat(ing.calories) || 0;
-        const protein = parseFloat(ing.protein) || 0;
-        const carbs = parseFloat(ing.carbs) || 0;
-        const fats = parseFloat(ing.fats) || 0;
-        const fiber = parseFloat(ing.fiber) || 0;
+        const quantity = parseFloat(ing.quantity) || 100;
+        const calories_per_100g = parseFloat(ing.calories_per_100g) || 0;
+        const protein_per_100g = parseFloat(ing.protein_per_100g) || 0;
+        const carbs_per_100g = parseFloat(ing.carbs_per_100g) || 0;
+        const fat_per_100g = parseFloat(ing.fat_per_100g) || 0;
+        const fiber_per_100g = parseFloat(ing.fiber_per_100g) || 0;
+
+        // Calculate actual macros from per-100g values and quantity
+        const unit = ing.unit || 'g';
+        const gramsForCalc = unit === 'g' ? quantity : 100; // fallback for non-gram units
+        const ratio = gramsForCalc / 100;
+
+        const calories = parseFloat(ing.calories) || Math.round(calories_per_100g * ratio);
+        const protein = parseFloat(ing.protein) || Math.round(protein_per_100g * ratio * 10) / 10;
+        const carbs = parseFloat(ing.carbs) || Math.round(carbs_per_100g * ratio * 10) / 10;
+        const fats = parseFloat(ing.fats) || Math.round(fat_per_100g * ratio * 10) / 10;
+        const fiber = parseFloat(ing.fiber) || Math.round(fiber_per_100g * ratio * 10) / 10;
 
         return {
           id: `ing-${Date.now()}-${index}`,
           name: ing.name || 'Unknown ingredient',
           quantity,
-          unit: ing.unit || 'serving',
+          unit,
           calories,
           protein,
           carbs,
           fats,
           fiber,
           included: true,
-          // Store original values for proper scaling
-          originalQuantity: quantity,
-          originalCalories: calories,
-          originalProtein: protein,
-          originalCarbs: carbs,
-          originalFats: fats,
-          originalFiber: fiber,
+          calories_per_100g,
+          protein_per_100g,
+          carbs_per_100g,
+          fat_per_100g,
+          fiber_per_100g,
+          id_confidence: ing.id_confidence || 'medium',
+          model_portion_confidence: ing.model_portion_confidence || 'medium',
+          nutrition_confidence: ing.nutrition_confidence || 'medium',
+          overall_confidence: ing.overall_confidence || 'medium',
+          grams_min: ing.grams_min,
+          grams_max: ing.grams_max,
+          nutrition_source: ing.nutrition_source,
+          scale_verified: false,
         };
       });
 
-      // Calculate totals
       const totals = ingredients.reduce(
         (acc, ing) => ({
           calories: acc.calories + ing.calories,
@@ -412,6 +491,10 @@ export default function ChatbotScreen() {
         totalCarbs: Math.round(totals.carbs * 10) / 10,
         totalFats: Math.round(totals.fats * 10) / 10,
         totalFiber: Math.round(totals.fiber * 10) / 10,
+        scan_mode: mealData.scan_mode,
+        detected_restaurant: mealData.detected_restaurant,
+        packaging_ambiguous: mealData.packaging_ambiguous,
+        packaging_candidates: mealData.packaging_candidates,
       };
     } catch (error) {
       console.error('[Chatbot] Error parsing meal data:', error);
@@ -422,8 +505,8 @@ export default function ChatbotScreen() {
   const handleSend = useCallback(async () => {
     const trimmedInput = inputText.trim();
 
-    // Check if we have either text or image
-    if (!trimmedInput && !selectedImage) {
+    // Check if we have either text or images
+    if (!trimmedInput && selectedImages.length === 0) {
       Alert.alert(t('chatbot.inputRequired'), t('chatbot.inputRequiredMessage'));
       return;
     }
@@ -432,9 +515,9 @@ export default function ChatbotScreen() {
 
     // Determine the display message
     let displayMessage = trimmedInput;
-    if (!displayMessage && selectedImage) {
+    if (!displayMessage && selectedImages.length > 0) {
       displayMessage = t('chatbot.photoOfMeal');
-    } else if (displayMessage && selectedImage) {
+    } else if (displayMessage && selectedImages.length > 0) {
       displayMessage = `${displayMessage} ${t('chatbot.withPhoto')}`;
     }
 
@@ -460,6 +543,7 @@ export default function ChatbotScreen() {
     }
 
     console.log('[Chatbot] Sending message to backend — isPremium:', isPremium, 'premiumLoading:', premiumLoading);
+    console.log('[Chatbot] isMealEstimator:', isMealEstimator, 'images count:', selectedImages.length);
 
     const userMessage: MessageWithId = {
       id: generateMessageId(),
@@ -475,15 +559,48 @@ export default function ChatbotScreen() {
       setInputText('');
     }
 
-    // Store the image for this request, then clear it
-    const imageToSend = selectedImage;
-    setSelectedImage(null);
+    // Store images for this request, then clear
+    const imagesToSend = [...selectedImages];
+    setSelectedImages([]);
 
     try {
-      // Enhanced system message requesting structured ingredient data
-      const systemMessage: ChatMessage = {
-        role: 'system',
-        content: `You are a nutrition expert with real-time internet access. Your job is to provide accurate nutritional data for meals.
+      const validMessages = messages.filter((m) => {
+        return m && typeof m === 'object' && m.role && m.content && m.role !== 'system';
+      });
+
+      let apiMessages: ChatMessage[];
+
+      if (isMealEstimator) {
+        // For meal estimator: backend injects the comprehensive prompt when source === 'meal-estimator'
+        // Send a minimal system message; the edge function handles the rest
+        const systemMessage: ChatMessage = {
+          role: 'system',
+          content: 'You are a nutrition expert.',
+        };
+
+        let actualPrompt = trimmedInput;
+        if (!actualPrompt && imagesToSend.length > 0) {
+          actualPrompt = 'Please analyze this meal photo and provide a detailed nutritional breakdown.';
+        }
+
+        apiMessages = [
+          systemMessage,
+          ...validMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+          })),
+          {
+            role: 'user' as const,
+            content: actualPrompt,
+            timestamp: Date.now(),
+          },
+        ];
+      } else {
+        // Standard chatbot mode: send full system prompt
+        const systemMessage: ChatMessage = {
+          role: 'system',
+          content: `You are a nutrition expert with real-time internet access. Your job is to provide accurate nutritional data for meals.
 
 STEP 1 — SEARCH FIRST:
 If the user mentions any specific restaurant, fast food chain, brand, or named menu item (e.g. "McDonald's Big Mac", "Starbucks Caramel Macchiato", "Chipotle chicken burrito bowl"), you MUST search the internet for the EXACT nutritional data from that restaurant's official menu or a reliable nutrition database. Use the most current data available. Do not guess or estimate for named products — find the real numbers.
@@ -518,38 +635,36 @@ Always respond in TWO parts:
 Break complex meals into individual ingredients. Be specific with portions. Round all numbers to the nearest integer.
 
 Do NOT include citation markers, reference numbers, or footnotes such as [1], [2], [3], [4] etc. in your response. Write in plain prose only.`,
-      };
+        };
 
-      const validMessages = messages.filter((m) => {
-        return m && typeof m === 'object' && m.role && m.content && m.role !== 'system';
-      });
+        let actualPrompt = trimmedInput;
+        if (!actualPrompt && imagesToSend.length > 0) {
+          actualPrompt =
+            'You are a precise nutrition expert with extensive knowledge of restaurant menus, fast food chains, and branded food products worldwide. When the user mentions a specific restaurant (McDonalds, Chipotle, Subway, etc.), brand, or menu item, use the ACTUAL nutritional data for that specific product — not a generic estimate. If the item is generic or homemade, provide a reasonable estimate based on standard portions.';
+        }
 
-      // Prepare the actual prompt to send to AI
-      let actualPrompt = trimmedInput;
-      if (!actualPrompt && imageToSend) {
-        // Image-only: use default prompt
-        actualPrompt =
-          'You are a precise nutrition expert with extensive knowledge of restaurant menus, fast food chains, and branded food products worldwide. When the user mentions a specific restaurant (McDonalds, Chipotle, Subway, etc.), brand, or menu item, use the ACTUAL nutritional data for that specific product — not a generic estimate. If the item is generic or homemade, provide a reasonable estimate based on standard portions.';
+        apiMessages = [
+          systemMessage,
+          ...validMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+          })),
+          {
+            role: 'user' as const,
+            content: actualPrompt,
+            timestamp: Date.now(),
+          },
+        ];
       }
 
-      const apiMessages: ChatMessage[] = [
-        systemMessage,
-        ...validMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          timestamp: m.timestamp,
-        })),
-        {
-          role: 'user',
-          content: actualPrompt,
-          timestamp: Date.now(),
-        },
-      ];
+      console.log('[Chatbot] Calling sendMessage with source:', isMealEstimator ? 'meal-estimator' : 'chatbot');
 
       // Send with images if available
       const result = await sendMessage({
         messages: apiMessages,
-        images: imageToSend ? [imageToSend] : [],
+        images: imagesToSend,
+        source: isMealEstimator ? 'meal-estimator' : 'chatbot',
       });
 
       if (!isMountedRef.current) return;
@@ -597,13 +712,12 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       };
       setMessages((prev) => [...prev, errorMessage]);
     }
-  }, [inputText, selectedImage, loading, messages, sendMessage, parseMealData, isPremium, premiumLoading]);
+  }, [inputText, selectedImages, loading, messages, sendMessage, parseMealData, isPremium, premiumLoading, isMealEstimator]);
 
-  // Update ingredient quantity and recalculate totals
+  // Update ingredient quantity using per-100g values when available
   const handleQuantityChange = useCallback(
     (ingredientId: string, newQuantity: string) => {
       if (!latestEstimate) return;
-
       const quantity = parseFloat(newQuantity);
       if (isNaN(quantity) || quantity < 0) return;
 
@@ -613,22 +727,30 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         const updatedIngredients = prev.ingredients.map((ing) => {
           if (ing.id !== ingredientId) return ing;
 
-          // Calculate ratio based on original quantity
-          const ratio = quantity / ing.originalQuantity;
+          let calories, protein, carbs, fats, fiber;
 
-          // Scale all macros proportionally from original values
-          return {
-            ...ing,
-            quantity,
-            calories: Math.round(ing.originalCalories * ratio),
-            protein: Math.round(ing.originalProtein * ratio * 10) / 10,
-            carbs: Math.round(ing.originalCarbs * ratio * 10) / 10,
-            fats: Math.round(ing.originalFats * ratio * 10) / 10,
-            fiber: Math.round(ing.originalFiber * ratio * 10) / 10,
-          };
+          if (ing.unit === 'g' && ing.calories_per_100g > 0) {
+            // Use per-100g values for precise recalculation
+            const ratio = quantity / 100;
+            calories = Math.round(ing.calories_per_100g * ratio);
+            protein = Math.round(ing.protein_per_100g * ratio * 10) / 10;
+            carbs = Math.round(ing.carbs_per_100g * ratio * 10) / 10;
+            fats = Math.round(ing.fat_per_100g * ratio * 10) / 10;
+            fiber = Math.round(ing.fiber_per_100g * ratio * 10) / 10;
+          } else {
+            // Fallback: proportional scaling from original
+            const originalQty = ing.quantity || 1;
+            const ratio = quantity / originalQty;
+            calories = Math.round(ing.calories * ratio);
+            protein = Math.round(ing.protein * ratio * 10) / 10;
+            carbs = Math.round(ing.carbs * ratio * 10) / 10;
+            fats = Math.round(ing.fats * ratio * 10) / 10;
+            fiber = Math.round(ing.fiber * ratio * 10) / 10;
+          }
+
+          return { ...ing, quantity, calories, protein, carbs, fats, fiber };
         });
 
-        // Recalculate totals from included ingredients only
         const totals = updatedIngredients
           .filter((ing) => ing.included)
           .reduce(
@@ -696,15 +818,74 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
     [latestEstimate]
   );
 
+  // Toggle scale_verified for an ingredient
+  const handleScaleVerify = useCallback((ingredientId: string) => {
+    console.log('[Chatbot] Scale verify toggled for ingredient:', ingredientId);
+    setLatestEstimate((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        ingredients: prev.ingredients.map((ing) =>
+          ing.id === ingredientId ? { ...ing, scale_verified: !ing.scale_verified } : ing
+        ),
+      };
+    });
+  }, []);
+
+  // Select a packaging candidate and apply its per-100g values to all ingredients
+  const handleSelectCandidate = useCallback((candidate: PackagingCandidate) => {
+    console.log('[Chatbot] Packaging candidate selected:', candidate.brand, candidate.name);
+    setLatestEstimate((prev) => {
+      if (!prev) return prev;
+
+      const updatedIngredients = prev.ingredients.map((ing) => {
+        const ratio = ing.unit === 'g' ? ing.quantity / 100 : 1;
+        return {
+          ...ing,
+          calories_per_100g: candidate.calories_per_100g,
+          protein_per_100g: candidate.protein_per_100g,
+          carbs_per_100g: candidate.carbs_per_100g,
+          fat_per_100g: candidate.fat_per_100g,
+          fiber_per_100g: candidate.fiber_per_100g,
+          calories: Math.round(candidate.calories_per_100g * ratio),
+          protein: Math.round(candidate.protein_per_100g * ratio * 10) / 10,
+          carbs: Math.round(candidate.carbs_per_100g * ratio * 10) / 10,
+          fats: Math.round(candidate.fat_per_100g * ratio * 10) / 10,
+          fiber: Math.round(candidate.fiber_per_100g * ratio * 10) / 10,
+        };
+      });
+
+      const totals = updatedIngredients
+        .filter((ing) => ing.included)
+        .reduce(
+          (acc, ing) => ({
+            calories: acc.calories + ing.calories,
+            protein: acc.protein + ing.protein,
+            carbs: acc.carbs + ing.carbs,
+            fats: acc.fats + ing.fats,
+            fiber: acc.fiber + ing.fiber,
+          }),
+          { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+        );
+
+      return {
+        ...prev,
+        ingredients: updatedIngredients,
+        totalCalories: Math.round(totals.calories),
+        totalProtein: Math.round(totals.protein * 10) / 10,
+        totalCarbs: Math.round(totals.carbs * 10) / 10,
+        totalFats: Math.round(totals.fats * 10) / 10,
+        totalFiber: Math.round(totals.fiber * 10) / 10,
+        packaging_ambiguous: false,
+      };
+    });
+  }, []);
+
   /**
    * CRITICAL FIX: Handle "Log This Meal" / "Add to My Meal" button
    * Branch based on context:
    * - my_meals_builder: Add ingredients to My Meal draft and navigate back to Create Meal screen
    * - meal_log (or undefined): Log ingredients to diary and navigate back to Foods tab
-   * 
-   * CRITICAL FIX FOR NAVIGATION:
-   * Use router.back() instead of router.push() to close the AI Meal Estimator
-   * and return to the existing Foods tab (previous screen)
    */
   const handleLogMeal = useCallback(async () => {
     if (!latestEstimate) return;
@@ -747,33 +928,41 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           try {
             console.log('[Chatbot] Creating food entry for ingredient:', ingredient.name);
 
-            // CRITICAL FIX: Convert to per-100g values for storage
+            // Use per-100g values if available, otherwise calculate from current values
             let per100gCalories, per100gProtein, per100gCarbs, per100gFats, per100gFiber;
-            let servingGrams = 100; // Default to 100g
+            let servingGrams = 100;
 
             if (ingredient.unit === 'g') {
-              // If unit is grams, calculate per-100g
-              const ratio = 100 / ingredient.quantity;
-              per100gCalories = ingredient.calories * ratio;
-              per100gProtein = ingredient.protein * ratio;
-              per100gCarbs = ingredient.carbs * ratio;
-              per100gFats = ingredient.fats * ratio;
-              per100gFiber = ingredient.fiber * ratio;
-              servingGrams = ingredient.quantity;
+              if (ingredient.calories_per_100g > 0) {
+                // Use the stored per-100g values directly
+                per100gCalories = ingredient.calories_per_100g;
+                per100gProtein = ingredient.protein_per_100g;
+                per100gCarbs = ingredient.carbs_per_100g;
+                per100gFats = ingredient.fat_per_100g;
+                per100gFiber = ingredient.fiber_per_100g;
+              } else {
+                // Fallback: calculate from current values
+                const ratio = 100 / ingredient.quantity;
+                per100gCalories = ingredient.calories * ratio;
+                per100gProtein = ingredient.protein * ratio;
+                per100gCarbs = ingredient.carbs * ratio;
+                per100gFats = ingredient.fats * ratio;
+                per100gFiber = ingredient.fiber * ratio;
+              }
+              // If scale_verified, use exact quantity; otherwise use ingredient.quantity
+              servingGrams = ingredient.scale_verified ? ingredient.quantity : ingredient.quantity;
             } else {
-              // For other units (serving, cup, etc.), store as-is
-              // This is the nutrition for 1 serving
               per100gCalories = ingredient.calories;
               per100gProtein = ingredient.protein;
               per100gCarbs = ingredient.carbs;
               per100gFats = ingredient.fats;
               per100gFiber = ingredient.fiber;
-              servingGrams = 100; // Default
+              servingGrams = 100;
             }
 
             const foodPayload = {
               name: `${ingredient.name} (AI Estimated)`,
-              serving_amount: 100, // Always store as per-100g
+              serving_amount: 100,
               serving_unit: 'g',
               calories: per100gCalories,
               protein: per100gProtein,
@@ -893,33 +1082,40 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           try {
             console.log('[Chatbot] Creating food entry for ingredient:', ingredient.name);
 
-            // CRITICAL FIX: Convert to per-100g values for storage
+            // Use per-100g values if available, otherwise calculate from current values
             let per100gCalories, per100gProtein, per100gCarbs, per100gFats, per100gFiber;
-            let servingGrams = 100; // Default to 100g
+            let servingGrams = 100;
 
             if (ingredient.unit === 'g') {
-              // If unit is grams, calculate per-100g
-              const ratio = 100 / ingredient.quantity;
-              per100gCalories = ingredient.calories * ratio;
-              per100gProtein = ingredient.protein * ratio;
-              per100gCarbs = ingredient.carbs * ratio;
-              per100gFats = ingredient.fats * ratio;
-              per100gFiber = ingredient.fiber * ratio;
+              if (ingredient.calories_per_100g > 0) {
+                per100gCalories = ingredient.calories_per_100g;
+                per100gProtein = ingredient.protein_per_100g;
+                per100gCarbs = ingredient.carbs_per_100g;
+                per100gFats = ingredient.fat_per_100g;
+                per100gFiber = ingredient.fiber_per_100g;
+              } else {
+                const ratio = 100 / ingredient.quantity;
+                per100gCalories = ingredient.calories * ratio;
+                per100gProtein = ingredient.protein * ratio;
+                per100gCarbs = ingredient.carbs * ratio;
+                per100gFats = ingredient.fats * ratio;
+                per100gFiber = ingredient.fiber * ratio;
+              }
+              // scale_verified: use exact quantity as gram value
               servingGrams = ingredient.quantity;
             } else {
-              // For other units (serving, cup, etc.), store as-is
               per100gCalories = ingredient.calories;
               per100gProtein = ingredient.protein;
               per100gCarbs = ingredient.carbs;
               per100gFats = ingredient.fats;
               per100gFiber = ingredient.fiber;
-              servingGrams = 100; // Default
+              servingGrams = 100;
             }
 
             // Create food entry with per-100g values
             const foodPayload = {
               name: `${ingredient.name} (AI Estimated)`,
-              serving_amount: 100, // Always store as per-100g
+              serving_amount: 100,
               serving_unit: 'g',
               calories: per100gCalories,
               protein: per100gProtein,
@@ -1064,7 +1260,10 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       edges={['top']}
     >
       <View style={[styles.header, { borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => {
+          console.log('[Chatbot] Back button pressed');
+          router.back();
+        }} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -1266,102 +1465,219 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   {t('chatbot.adjustQuantities')}
                 </Text>
 
-                {latestEstimate.ingredients.map((ingredient, index) => (
-                  <View
-                    key={ingredient.id}
-                    style={[
-                      styles.ingredientRow,
-                      {
-                        backgroundColor: isDark ? colors.backgroundDark : colors.background,
-                        opacity: ingredient.included ? 1 : 0.5,
-                      },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      onPress={() => handleToggleIngredient(ingredient.id)}
-                      style={styles.ingredientCheckbox}
+                {latestEstimate.ingredients.map((ingredient) => {
+                  const confidenceEmojiVal = confidenceEmoji(ingredient.overall_confidence);
+                  const isExpanded = expandedConfidenceId === ingredient.id;
+                  const scaleVerifiedColor = ingredient.scale_verified
+                    ? '#22c55e'
+                    : isDark
+                    ? colors.textSecondaryDark
+                    : colors.textSecondary;
+                  const scaleVerifiedText = ingredient.scale_verified ? '✓ Weight verified' : 'Verify weight';
+                  const confidenceToggleText = isExpanded ? '▲ Hide details' : '▼ Why this estimate?';
+                  const gramsRangeText = ingredient.grams_min && ingredient.grams_max
+                    ? `Range: ${ingredient.grams_min}–${ingredient.grams_max}g`
+                    : null;
+                  const sourceUrl = ingredient.nutrition_source?.source_url ?? null;
+                  const sourceName = ingredient.nutrition_source?.source_name ?? null;
+                  const confidenceDetailText = `🔍 ID: ${ingredient.id_confidence} · ⚖️ Portion: ${ingredient.model_portion_confidence} · 📊 Nutrition: ${ingredient.nutrition_confidence}`;
+
+                  return (
+                    <View
+                      key={ingredient.id}
+                      style={[
+                        styles.ingredientRow,
+                        {
+                          backgroundColor: isDark ? colors.backgroundDark : colors.background,
+                          opacity: ingredient.included ? 1 : 0.5,
+                        },
+                      ]}
                     >
-                      <IconSymbol
-                        ios_icon_name={ingredient.included ? 'checkmark.circle.fill' : 'circle'}
-                        android_material_icon_name={ingredient.included ? 'check_circle' : 'radio_button_unchecked'}
-                        size={24}
-                        color={
-                          ingredient.included
-                            ? colors.primary
-                            : isDark
-                            ? colors.textSecondaryDark
-                            : colors.textSecondary
-                        }
-                      />
-                    </TouchableOpacity>
-
-                    <View style={styles.ingredientContent}>
-                      <Text style={[styles.ingredientName, { color: isDark ? colors.textDark : colors.text }]}>
-                        {ingredient.name}
-                      </Text>
-
-                      <View style={styles.ingredientQuantityRow}>
-                        <TextInput
-                          style={[
-                            styles.quantityInput,
-                            {
-                              backgroundColor: isDark ? colors.cardDark : colors.card,
-                              borderColor: isDark ? colors.borderDark : colors.border,
-                              color: isDark ? colors.textDark : colors.text,
-                            },
-                          ]}
-                          value={ingredient.quantity.toString()}
-                          onChangeText={(text) => handleQuantityChange(ingredient.id, text)}
-                          keyboardType="decimal-pad"
-                          editable={ingredient.included}
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log('[Chatbot] Toggle ingredient:', ingredient.name);
+                          handleToggleIngredient(ingredient.id);
+                        }}
+                        style={styles.ingredientCheckbox}
+                      >
+                        <IconSymbol
+                          ios_icon_name={ingredient.included ? 'checkmark.circle.fill' : 'circle'}
+                          android_material_icon_name={ingredient.included ? 'check_circle' : 'radio_button_unchecked'}
+                          size={24}
+                          color={
+                            ingredient.included
+                              ? colors.primary
+                              : isDark
+                              ? colors.textSecondaryDark
+                              : colors.textSecondary
+                          }
                         />
-                        <Text
-                          style={[styles.unitText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
-                        >
-                          {ingredient.unit}
-                        </Text>
-                      </View>
+                      </TouchableOpacity>
 
-                      <View style={styles.ingredientMacros}>
-                        <Text
-                          style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                      <View style={styles.ingredientContent}>
+                        {/* Name row with confidence emoji */}
+                        <View style={styles.ingredientNameRow}>
+                          <Text style={[styles.ingredientName, { color: isDark ? colors.textDark : colors.text, flex: 1 }]}>
+                            {ingredient.name}
+                          </Text>
+                          <Text style={{ fontSize: 16 }}>{confidenceEmojiVal}</Text>
+                        </View>
+
+                        <View style={styles.ingredientQuantityRow}>
+                          <TextInput
+                            style={[
+                              styles.quantityInput,
+                              {
+                                backgroundColor: isDark ? colors.cardDark : colors.card,
+                                borderColor: isDark ? colors.borderDark : colors.border,
+                                color: isDark ? colors.textDark : colors.text,
+                              },
+                            ]}
+                            value={ingredient.quantity.toString()}
+                            onChangeText={(text) => {
+                              console.log('[Chatbot] Quantity changed for', ingredient.name, ':', text);
+                              handleQuantityChange(ingredient.id, text);
+                            }}
+                            keyboardType="decimal-pad"
+                            editable={ingredient.included}
+                          />
+                          <Text
+                            style={[styles.unitText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                          >
+                            {ingredient.unit}
+                          </Text>
+                        </View>
+
+                        <View style={styles.ingredientMacros}>
+                          <Text
+                            style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                          >
+                            {ingredient.calories} kcal
+                          </Text>
+                          <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
+                            •
+                          </Text>
+                          <Text
+                            style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                          >
+                            P: {ingredient.protein}g
+                          </Text>
+                          <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
+                            •
+                          </Text>
+                          <Text
+                            style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                          >
+                            C: {ingredient.carbs}g
+                          </Text>
+                          <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
+                            •
+                          </Text>
+                          <Text
+                            style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                          >
+                            F: {ingredient.fats}g
+                          </Text>
+                        </View>
+
+                        {/* Nutrition source label */}
+                        {sourceName !== null && (
+                          <Text style={[styles.sourceLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                            {'📊 '}
+                            {sourceName}
+                          </Text>
+                        )}
+
+                        {/* "Why this estimate?" toggle */}
+                        <TouchableOpacity
+                          onPress={() => {
+                            console.log('[Chatbot] Confidence toggle for ingredient:', ingredient.name);
+                            setExpandedConfidenceId(isExpanded ? null : ingredient.id);
+                          }}
                         >
-                          {ingredient.calories} kcal
-                        </Text>
-                        <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
-                          •
-                        </Text>
-                        <Text
-                          style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
+                          <Text style={{ color: colors.primary, fontSize: 12 }}>
+                            {confidenceToggleText}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* Expanded confidence detail */}
+                        {isExpanded && (
+                          <View style={styles.confidenceDetail}>
+                            <Text style={styles.confidenceDetailText}>
+                              {confidenceDetailText}
+                            </Text>
+                            {gramsRangeText !== null && (
+                              <Text style={styles.confidenceDetailText}>
+                                {gramsRangeText}
+                              </Text>
+                            )}
+                            {sourceUrl !== null && (
+                              <Text style={styles.confidenceDetailText} numberOfLines={1}>
+                                {'Source: '}
+                                {sourceUrl}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+
+                        {/* Scale verified toggle */}
+                        <TouchableOpacity
+                          style={styles.scaleVerifyButton}
+                          onPress={() => handleScaleVerify(ingredient.id)}
                         >
-                          P: {ingredient.protein}g
-                        </Text>
-                        <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
-                          •
-                        </Text>
-                        <Text
-                          style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
-                        >
-                          C: {ingredient.carbs}g
-                        </Text>
-                        <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
-                          •
-                        </Text>
-                        <Text
-                          style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
-                        >
-                          F: {ingredient.fats}g
-                        </Text>
+                          <IconSymbol
+                            ios_icon_name={ingredient.scale_verified ? 'checkmark.seal.fill' : 'checkmark.seal'}
+                            android_material_icon_name={ingredient.scale_verified ? 'verified' : 'verified_outlined'}
+                            size={16}
+                            color={scaleVerifiedColor}
+                          />
+                          <Text style={{ fontSize: 12, color: scaleVerifiedColor }}>
+                            {scaleVerifiedText}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
+
+              {/* Packaging ambiguity selector */}
+              {latestEstimate.packaging_ambiguous && latestEstimate.packaging_candidates && (
+                <View style={[styles.ambiguityCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+                  <Text style={[styles.ambiguityTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                    🔍 Multiple products found — which one?
+                  </Text>
+                  {latestEstimate.packaging_candidates.map((candidate, idx) => {
+                    const candidateLabel = `${candidate.brand} ${candidate.name}`;
+                    const candidateMacroText = `${candidate.calories_per_100g} kcal/100g · P:${candidate.protein_per_100g}g · C:${candidate.carbs_per_100g}g · F:${candidate.fat_per_100g}g`;
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.candidateRow, { borderColor: isDark ? colors.borderDark : colors.border }]}
+                        onPress={() => {
+                          console.log('[Chatbot] Packaging candidate selected:', candidateLabel);
+                          handleSelectCandidate(candidate);
+                        }}
+                      >
+                        <Text style={[styles.candidateName, { color: isDark ? colors.textDark : colors.text }]}>
+                          {candidateLabel}
+                        </Text>
+                        <Text style={[styles.candidateMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                          {candidateMacroText}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
 
               {/* Log Meal Button - CRITICAL: Dynamic text based on context */}
               <TouchableOpacity
                 style={[styles.logMealButton, { backgroundColor: colors.primary }]}
-                onPress={handleLogMeal}
+                onPress={() => {
+                  console.log('[Chatbot] Log meal button pressed, context:', context);
+                  handleLogMeal();
+                }}
                 activeOpacity={0.7}
               >
                 <IconSymbol
@@ -1400,19 +1716,37 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         )}
 
         <View style={[styles.inputContainer, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          {/* Image preview */}
-          {selectedImage && (
-            <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: selectedImage }} style={styles.imagePreview} resizeMode="cover" />
-              <TouchableOpacity style={styles.removeImageButton} onPress={handleRemovePhoto}>
-                <IconSymbol
-                  ios_icon_name="xmark.circle.fill"
-                  android_material_icon_name="cancel"
-                  size={24}
-                  color="#FFFFFF"
-                />
-              </TouchableOpacity>
-            </View>
+          {/* Multi-image thumbnails */}
+          {selectedImages.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageThumbnailsScroll}>
+              {selectedImages.map((img, idx) => (
+                <View key={idx} style={styles.imageThumbnailWrapper}>
+                  <Image source={{ uri: img }} style={styles.imageThumbnail} resizeMode="cover" />
+                  <TouchableOpacity style={styles.removeThumbnailButton} onPress={() => handleRemovePhoto(idx)}>
+                    <IconSymbol
+                      ios_icon_name="xmark.circle.fill"
+                      android_material_icon_name="cancel"
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {selectedImages.length < 3 && (
+                <TouchableOpacity
+                  style={[styles.addMorePhotoButton, { borderColor: colors.primary }]}
+                  onPress={handleAddPhoto}
+                >
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={{ color: colors.primary, fontSize: 11, marginTop: 2 }}>Add</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
           )}
 
           <View style={styles.inputRow}>
@@ -1454,13 +1788,16 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                 styles.sendButton,
                 {
                   backgroundColor:
-                    (inputText.trim() || selectedImage) && !loading
+                    (inputText.trim() || selectedImages.length > 0) && !loading
                       ? colors.primary
                       : colors.border,
                 },
               ]}
-              onPress={handleSend}
-              disabled={(!inputText.trim() && !selectedImage) || loading}
+              onPress={() => {
+                console.log('[Chatbot] Send button pressed, text length:', inputText.trim().length, 'images:', selectedImages.length);
+                handleSend();
+              }}
+              disabled={(!inputText.trim() && selectedImages.length === 0) || loading}
             >
               <IconSymbol ios_icon_name="arrow.up" android_material_icon_name="send" size={20} color="#FFFFFF" />
             </TouchableOpacity>
@@ -1610,9 +1947,13 @@ const styles = StyleSheet.create({
   ingredientContent: {
     flex: 1,
   },
+  ingredientNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
   ingredientName: {
     ...typography.bodyBold,
-    marginBottom: spacing.xs,
   },
   ingredientQuantityRow: {
     flexDirection: 'row',
@@ -1645,6 +1986,50 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontSize: 12,
   },
+  sourceLabel: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  confidenceDetail: {
+    marginTop: 4,
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  confidenceDetailText: {
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  scaleVerifyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  ambiguityCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+  },
+  ambiguityTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  candidateRow: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  candidateName: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  candidateMacros: {
+    fontSize: 12,
+  },
   logMealButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1666,22 +2051,31 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  imagePreviewContainer: {
+  imageThumbnailsScroll: {
+    marginBottom: 8,
+  },
+  imageThumbnailWrapper: {
     position: 'relative',
-    marginBottom: spacing.sm,
-    alignSelf: 'flex-start',
+    marginRight: 8,
   },
-  imagePreview: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.md,
+  imageThumbnail: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
   },
-  removeImageButton: {
+  removeThumbnailButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: colors.error,
-    borderRadius: 12,
+    top: -6,
+    right: -6,
+  },
+  addMorePhotoButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inputRow: {
     flexDirection: 'row',

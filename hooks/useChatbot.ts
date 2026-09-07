@@ -15,6 +15,7 @@ export type ChatbotParams = {
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  source?: string; // e.g. 'meal-estimator' | 'chatbot'
 };
 
 export type ChatbotResult = {
@@ -59,6 +60,7 @@ export function useChatbot() {
       console.log('[useChatbot] 📤 Sending message to chatbot function');
       console.log('[useChatbot] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('[useChatbot] Messages:', params.messages.length);
+      console.log('[useChatbot] Source:', params.source || 'chatbot');
       if (params.images && params.images.length > 0) {
         console.log('[useChatbot] Images:', params.images.length);
       }
@@ -72,6 +74,7 @@ export function useChatbot() {
           temperature: params.temperature,
           max_tokens: params.max_tokens,
           language: i18n.language,
+          source: params.source || 'chatbot',
         },
       });
 
