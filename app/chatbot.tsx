@@ -25,6 +25,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { useTranslation } from 'react-i18next';
+import ServingPicker, { ServingOption } from '@/components/ServingPicker';
 
 
 // Quick action cards and craving chips are defined inside the component so they can use t()
@@ -76,6 +77,10 @@ type Ingredient = {
   nutrition_source?: NutritionSource;
   // User verification
   scale_verified: boolean;
+  // Preferred countable unit (e.g. "slice", "piece", "strip", "cup") — null if no natural unit
+  preferred_unit: string | null;
+  // Grams per 1 preferred_unit (e.g. 21 for a cheese slice). 0 if preferred_unit is null.
+  unit_grams: number;
 };
 
 type PackagingCandidate = {
@@ -420,16 +425,30 @@ export default function ChatbotScreen() {
       console.log('[Chatbot] Parsing structured ingredient data');
 
       const ingredients: Ingredient[] = mealData.ingredients.map((ing: any, index: number) => {
-        const quantity = parseFloat(ing.quantity) || 100;
+        const gramsFromAI = parseFloat(ing.quantity) || 100;
         const calories_per_100g = parseFloat(ing.calories_per_100g) || 0;
         const protein_per_100g = parseFloat(ing.protein_per_100g) || 0;
         const carbs_per_100g = parseFloat(ing.carbs_per_100g) || 0;
         const fat_per_100g = parseFloat(ing.fat_per_100g) || 0;
         const fiber_per_100g = parseFloat(ing.fiber_per_100g) || 0;
 
-        // Calculate actual macros from per-100g values and quantity
-        const unit = ing.unit || 'g';
-        const gramsForCalc = unit === 'g' ? quantity : 100; // fallback for non-gram units
+        // New fields: preferred_unit and unit_grams
+        const preferred_unit: string | null = ing.preferred_unit || null;
+        const unit_grams: number = parseFloat(ing.unit_grams) || 0;
+
+        // Determine display unit and quantity
+        let unit: string;
+        let quantity: number;
+        if (preferred_unit && unit_grams > 0) {
+          unit = preferred_unit;
+          quantity = Math.max(1, Math.round(gramsFromAI / unit_grams));
+        } else {
+          unit = ing.unit || 'g';
+          quantity = gramsFromAI;
+        }
+
+        // Calculate actual macros from per-100g values and grams
+        const gramsForCalc = unit === 'g' ? quantity : (unit_grams > 0 ? quantity * unit_grams : gramsFromAI);
         const ratio = gramsForCalc / 100;
 
         const calories = parseFloat(ing.calories) || Math.round(calories_per_100g * ratio);
@@ -437,6 +456,8 @@ export default function ChatbotScreen() {
         const carbs = parseFloat(ing.carbs) || Math.round(carbs_per_100g * ratio * 10) / 10;
         const fats = parseFloat(ing.fats) || Math.round(fat_per_100g * ratio * 10) / 10;
         const fiber = parseFloat(ing.fiber) || Math.round(fiber_per_100g * ratio * 10) / 10;
+
+        console.log('[Chatbot] Parsed ingredient:', ing.name, '| unit:', unit, '| quantity:', quantity, '| preferred_unit:', preferred_unit, '| unit_grams:', unit_grams);
 
         return {
           id: `ing-${Date.now()}-${index}`,
@@ -462,6 +483,8 @@ export default function ChatbotScreen() {
           grams_max: ing.grams_max,
           nutrition_source: ing.nutrition_source,
           scale_verified: false,
+          preferred_unit,
+          unit_grams,
         };
       });
 
@@ -619,16 +642,23 @@ Always respond in TWO parts:
     {
       "name": "ingredient name",
       "quantity": number,
-      "unit": "g" or "oz" or "cup" or "tbsp" or "serving",
+      "unit": "g",
       "calories": number,
       "protein": number,
       "carbs": number,
       "fats": number,
-      "fiber": number
+      "fiber": number,
+      "preferred_unit": string or null,
+      "unit_grams": number
     }
   ]
 }
 \`\`\`
+
+Where:
+- "quantity" is always in grams
+- "preferred_unit" is the most natural countable unit for this food (e.g. "slice", "piece", "strip", "cup", "egg", "cookie", "tbsp"). Use null for foods with no natural countable unit (rice, sauce, liquid, mixed dishes).
+- "unit_grams" is grams per 1 preferred_unit. Use 0 if preferred_unit is null. Examples: cheese slice=21, large egg=50, bacon strip=8, oreo cookie=11, tbsp peanut butter=16.
 
 2. A brief natural language explanation mentioning whether the data came from an official source or is an estimate.
 
@@ -737,6 +767,15 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
             carbs = Math.round(ing.carbs_per_100g * ratio * 10) / 10;
             fats = Math.round(ing.fat_per_100g * ratio * 10) / 10;
             fiber = Math.round(ing.fiber_per_100g * ratio * 10) / 10;
+          } else if (ing.unit !== 'g' && ing.unit_grams > 0 && ing.calories_per_100g > 0) {
+            // Convert preferred_unit quantity to grams first, then use per-100g
+            const gramsEquivalent = quantity * ing.unit_grams;
+            const ratio = gramsEquivalent / 100;
+            calories = Math.round(ing.calories_per_100g * ratio);
+            protein = Math.round(ing.protein_per_100g * ratio * 10) / 10;
+            carbs = Math.round(ing.carbs_per_100g * ratio * 10) / 10;
+            fats = Math.round(ing.fat_per_100g * ratio * 10) / 10;
+            fiber = Math.round(ing.fiber_per_100g * ratio * 10) / 10;
           } else {
             // Fallback: proportional scaling from original
             const originalQty = ing.quantity || 1;
@@ -749,6 +788,101 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           }
 
           return { ...ing, quantity, calories, protein, carbs, fats, fiber };
+        });
+
+        const totals = updatedIngredients
+          .filter((ing) => ing.included)
+          .reduce(
+            (acc, ing) => ({
+              calories: acc.calories + ing.calories,
+              protein: acc.protein + ing.protein,
+              carbs: acc.carbs + ing.carbs,
+              fats: acc.fats + ing.fats,
+              fiber: acc.fiber + ing.fiber,
+            }),
+            { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+          );
+
+        return {
+          ...prev,
+          ingredients: updatedIngredients,
+          totalCalories: Math.round(totals.calories),
+          totalProtein: Math.round(totals.protein * 10) / 10,
+          totalCarbs: Math.round(totals.carbs * 10) / 10,
+          totalFats: Math.round(totals.fats * 10) / 10,
+          totalFiber: Math.round(totals.fiber * 10) / 10,
+        };
+      });
+    },
+    [latestEstimate]
+  );
+
+  // Handle unit switch in ServingPicker — convert quantity and recalculate macros
+  const handleUnitChange = useCallback(
+    (ingredientId: string, option: ServingOption) => {
+      console.log('[Chatbot] Unit changed for ingredient:', ingredientId, '→', option.key, '(gramsPerUnit:', option.gramsPerUnit, ')');
+      if (!latestEstimate) return;
+
+      setLatestEstimate((prev) => {
+        if (!prev) return prev;
+
+        const updatedIngredients = prev.ingredients.map((ing) => {
+          if (ing.id !== ingredientId) return ing;
+
+          const oldUnit = ing.unit;
+          const newUnit = option.key;
+
+          if (oldUnit === newUnit) return ing;
+
+          // Convert quantity when switching units
+          let newQuantity: number;
+          if (newUnit === 'g') {
+            // switching to grams: multiply by old unit's grams
+            const oldUnitGrams = ing.unit_grams > 0 ? ing.unit_grams : option.gramsPerUnit;
+            newQuantity = Math.round(ing.quantity * oldUnitGrams);
+          } else if (oldUnit === 'g') {
+            // switching from grams to preferred unit
+            const newUnitGrams = option.gramsPerUnit > 0 ? option.gramsPerUnit : 1;
+            newQuantity = Math.max(1, Math.round(ing.quantity / newUnitGrams));
+          } else {
+            // switching between two non-gram units (e.g. oz ↔ preferred_unit)
+            const oldGrams = ing.unit_grams > 0 ? ing.quantity * ing.unit_grams : ing.quantity;
+            const newUnitGrams = option.gramsPerUnit > 0 ? option.gramsPerUnit : 1;
+            newQuantity = Math.max(1, Math.round(oldGrams / newUnitGrams));
+          }
+
+          // Recalculate macros with new unit and quantity
+          let calories, protein, carbs, fats, fiber;
+          const newUnitGrams = option.gramsPerUnit;
+          if (newUnit === 'g' && ing.calories_per_100g > 0) {
+            const ratio = newQuantity / 100;
+            calories = Math.round(ing.calories_per_100g * ratio);
+            protein = Math.round(ing.protein_per_100g * ratio * 10) / 10;
+            carbs = Math.round(ing.carbs_per_100g * ratio * 10) / 10;
+            fats = Math.round(ing.fat_per_100g * ratio * 10) / 10;
+            fiber = Math.round(ing.fiber_per_100g * ratio * 10) / 10;
+          } else if (newUnitGrams > 0 && ing.calories_per_100g > 0) {
+            const gramsEquivalent = newQuantity * newUnitGrams;
+            const ratio = gramsEquivalent / 100;
+            calories = Math.round(ing.calories_per_100g * ratio);
+            protein = Math.round(ing.protein_per_100g * ratio * 10) / 10;
+            carbs = Math.round(ing.carbs_per_100g * ratio * 10) / 10;
+            fats = Math.round(ing.fat_per_100g * ratio * 10) / 10;
+            fiber = Math.round(ing.fiber_per_100g * ratio * 10) / 10;
+          } else {
+            const originalQty = ing.quantity || 1;
+            const ratio = newQuantity / originalQty;
+            calories = Math.round(ing.calories * ratio);
+            protein = Math.round(ing.protein * ratio * 10) / 10;
+            carbs = Math.round(ing.carbs * ratio * 10) / 10;
+            fats = Math.round(ing.fats * ratio * 10) / 10;
+            fiber = Math.round(ing.fiber * ratio * 10) / 10;
+          }
+
+          // Update unit_grams to reflect the newly selected option's gramsPerUnit
+          const updatedUnitGrams = newUnit === ing.preferred_unit ? ing.unit_grams : option.gramsPerUnit;
+
+          return { ...ing, unit: newUnit, quantity: newQuantity, unit_grams: updatedUnitGrams, calories, protein, carbs, fats, fiber };
         });
 
         const totals = updatedIngredients
@@ -932,33 +1066,29 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
             let per100gCalories, per100gProtein, per100gCarbs, per100gFats, per100gFiber;
             let servingGrams = 100;
 
-            if (ingredient.unit === 'g') {
-              if (ingredient.calories_per_100g > 0) {
-                // Use the stored per-100g values directly
-                per100gCalories = ingredient.calories_per_100g;
-                per100gProtein = ingredient.protein_per_100g;
-                per100gCarbs = ingredient.carbs_per_100g;
-                per100gFats = ingredient.fat_per_100g;
-                per100gFiber = ingredient.fiber_per_100g;
-              } else {
-                // Fallback: calculate from current values
-                const ratio = 100 / ingredient.quantity;
-                per100gCalories = ingredient.calories * ratio;
-                per100gProtein = ingredient.protein * ratio;
-                per100gCarbs = ingredient.carbs * ratio;
-                per100gFats = ingredient.fats * ratio;
-                per100gFiber = ingredient.fiber * ratio;
-              }
-              // If scale_verified, use exact quantity; otherwise use ingredient.quantity
-              servingGrams = ingredient.scale_verified ? ingredient.quantity : ingredient.quantity;
+            // Convert current quantity to grams
+            const currentGrams = ingredient.unit === 'g'
+              ? ingredient.quantity
+              : ingredient.unit_grams > 0
+                ? ingredient.quantity * ingredient.unit_grams
+                : ingredient.quantity;
+
+            if (ingredient.calories_per_100g > 0) {
+              per100gCalories = ingredient.calories_per_100g;
+              per100gProtein = ingredient.protein_per_100g;
+              per100gCarbs = ingredient.carbs_per_100g;
+              per100gFats = ingredient.fat_per_100g;
+              per100gFiber = ingredient.fiber_per_100g;
             } else {
-              per100gCalories = ingredient.calories;
-              per100gProtein = ingredient.protein;
-              per100gCarbs = ingredient.carbs;
-              per100gFats = ingredient.fats;
-              per100gFiber = ingredient.fiber;
-              servingGrams = 100;
+              // Fallback: calculate from current values
+              const ratio = 100 / currentGrams;
+              per100gCalories = ingredient.calories * ratio;
+              per100gProtein = ingredient.protein * ratio;
+              per100gCarbs = ingredient.carbs * ratio;
+              per100gFats = ingredient.fats * ratio;
+              per100gFiber = ingredient.fiber * ratio;
             }
+            servingGrams = currentGrams;
 
             const foodPayload = {
               name: `${ingredient.name} (AI Estimated)`,
@@ -1086,31 +1216,28 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
             let per100gCalories, per100gProtein, per100gCarbs, per100gFats, per100gFiber;
             let servingGrams = 100;
 
-            if (ingredient.unit === 'g') {
-              if (ingredient.calories_per_100g > 0) {
-                per100gCalories = ingredient.calories_per_100g;
-                per100gProtein = ingredient.protein_per_100g;
-                per100gCarbs = ingredient.carbs_per_100g;
-                per100gFats = ingredient.fat_per_100g;
-                per100gFiber = ingredient.fiber_per_100g;
-              } else {
-                const ratio = 100 / ingredient.quantity;
-                per100gCalories = ingredient.calories * ratio;
-                per100gProtein = ingredient.protein * ratio;
-                per100gCarbs = ingredient.carbs * ratio;
-                per100gFats = ingredient.fats * ratio;
-                per100gFiber = ingredient.fiber * ratio;
-              }
-              // scale_verified: use exact quantity as gram value
-              servingGrams = ingredient.quantity;
+            // Convert current quantity to grams
+            const currentGrams = ingredient.unit === 'g'
+              ? ingredient.quantity
+              : ingredient.unit_grams > 0
+                ? ingredient.quantity * ingredient.unit_grams
+                : ingredient.quantity;
+
+            if (ingredient.calories_per_100g > 0) {
+              per100gCalories = ingredient.calories_per_100g;
+              per100gProtein = ingredient.protein_per_100g;
+              per100gCarbs = ingredient.carbs_per_100g;
+              per100gFats = ingredient.fat_per_100g;
+              per100gFiber = ingredient.fiber_per_100g;
             } else {
-              per100gCalories = ingredient.calories;
-              per100gProtein = ingredient.protein;
-              per100gCarbs = ingredient.carbs;
-              per100gFats = ingredient.fats;
-              per100gFiber = ingredient.fiber;
-              servingGrams = 100;
+              const ratio = 100 / currentGrams;
+              per100gCalories = ingredient.calories * ratio;
+              per100gProtein = ingredient.protein * ratio;
+              per100gCarbs = ingredient.carbs * ratio;
+              per100gFats = ingredient.fats * ratio;
+              per100gFiber = ingredient.fiber * ratio;
             }
+            servingGrams = currentGrams;
 
             // Create food entry with per-100g values
             const foodPayload = {
@@ -1482,6 +1609,14 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   const sourceName = ingredient.nutrition_source?.source_name ?? null;
                   const confidenceDetailText = `🔍 ID: ${ingredient.id_confidence} · ⚖️ Portion: ${ingredient.model_portion_confidence} · 📊 Nutrition: ${ingredient.nutrition_confidence}`;
 
+                  // Build serving options for this ingredient
+                  const servingOptions: ServingOption[] = [];
+                  if (ingredient.preferred_unit && ingredient.unit_grams > 0 && ingredient.preferred_unit !== 'g' && ingredient.preferred_unit !== 'oz') {
+                    servingOptions.push({ key: ingredient.preferred_unit, label: ingredient.preferred_unit, gramsPerUnit: ingredient.unit_grams });
+                  }
+                  servingOptions.push({ key: 'g', label: 'g', gramsPerUnit: 1 });
+                  servingOptions.push({ key: 'oz', label: 'oz', gramsPerUnit: 28.3495 });
+
                   return (
                     <View
                       key={ingredient.id}
@@ -1523,30 +1658,20 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text style={{ fontSize: 16 }}>{confidenceEmojiVal}</Text>
                         </View>
 
-                        <View style={styles.ingredientQuantityRow}>
-                          <TextInput
-                            style={[
-                              styles.quantityInput,
-                              {
-                                backgroundColor: isDark ? colors.cardDark : colors.card,
-                                borderColor: isDark ? colors.borderDark : colors.border,
-                                color: isDark ? colors.textDark : colors.text,
-                              },
-                            ]}
-                            value={ingredient.quantity.toString()}
-                            onChangeText={(text) => {
-                              console.log('[Chatbot] Quantity changed for', ingredient.name, ':', text);
-                              handleQuantityChange(ingredient.id, text);
-                            }}
-                            keyboardType="decimal-pad"
-                            editable={ingredient.included}
-                          />
-                          <Text
-                            style={[styles.unitText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
-                          >
-                            {ingredient.unit}
-                          </Text>
-                        </View>
+                        <ServingPicker
+                          options={servingOptions}
+                          selectedKey={ingredient.unit}
+                          quantity={ingredient.quantity.toString()}
+                          onOptionChange={(option) => {
+                            console.log('[Chatbot] Unit changed for', ingredient.name, '→', option.key);
+                            handleUnitChange(ingredient.id, option);
+                          }}
+                          onQuantityChange={(val) => {
+                            console.log('[Chatbot] Quantity changed for', ingredient.name, ':', val);
+                            handleQuantityChange(ingredient.id, val);
+                          }}
+                          isDark={isDark}
+                        />
 
                         <View style={styles.ingredientMacros}>
                           <Text
