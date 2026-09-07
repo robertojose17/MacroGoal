@@ -451,11 +451,22 @@ export default function ChatbotScreen() {
         const gramsForCalc = unit === 'g' ? quantity : (unit_grams > 0 ? quantity * unit_grams : gramsFromAI);
         const ratio = gramsForCalc / 100;
 
-        const calories = parseFloat(ing.calories) || Math.round(calories_per_100g * ratio);
-        const protein = parseFloat(ing.protein) || Math.round(protein_per_100g * ratio * 10) / 10;
-        const carbs = parseFloat(ing.carbs) || Math.round(carbs_per_100g * ratio * 10) / 10;
-        const fats = parseFloat(ing.fats) || Math.round(fat_per_100g * ratio * 10) / 10;
-        const fiber = parseFloat(ing.fiber) || Math.round(fiber_per_100g * ratio * 10) / 10;
+        // Always use per-100g values when available — never trust raw AI macro values
+        let calories: number, protein: number, carbs: number, fats: number, fiber: number;
+        if (calories_per_100g > 0) {
+          calories = Math.round(calories_per_100g * ratio);
+          protein = Math.round(protein_per_100g * ratio * 10) / 10;
+          carbs = Math.round(carbs_per_100g * ratio * 10) / 10;
+          fats = Math.round(fat_per_100g * ratio * 10) / 10;
+          fiber = Math.round(fiber_per_100g * ratio * 10) / 10;
+        } else {
+          // Fallback: use raw AI values only when per-100g is missing
+          calories = parseFloat(ing.calories) || 0;
+          protein = parseFloat(ing.protein) || 0;
+          carbs = parseFloat(ing.carbs) || 0;
+          fats = parseFloat(ing.fats) || 0;
+          fiber = parseFloat(ing.fiber) || 0;
+        }
 
         console.log('[Chatbot] Parsed ingredient:', ing.name, '| unit:', unit, '| quantity:', quantity, '| preferred_unit:', preferred_unit, '| unit_grams:', unit_grams);
 
@@ -641,7 +652,9 @@ NEVER write paragraphs, bullet lists, or explanations before or instead of the J
       "nutrition_source": "official" or "usda" or "web_search" or "estimate",
       "scale_verified": false
     }
-  ]
+  ],
+  "search_query": "brand name + product name for Open Food Facts lookup, or null if no brand/label visible",
+  "is_packaged_product": true or false
 }
 \`\`\`
 
@@ -652,7 +665,10 @@ Rules:
 - All per_100g fields are REQUIRED — calculate them as: value / quantity * 100
 - Break complex meals into individual ingredients
 - Round all numbers to nearest integer
-- Do NOT include citation markers like [1], [2], [3] in any text`,
+- Do NOT include citation markers like [1], [2], [3] in any text
+- "search_query": If you can read a brand name or product label in the image, set this to the most specific search string (e.g. "Franz Keto Bread", "Oreo Double Stuf", "Lay's Classic Chips"). Set to null for restaurant food, homemade food, or unbranded items.
+- "is_packaged_product": true if the item appears to be a packaged/branded product with a nutrition label, false otherwise.
+- When is_packaged_product is true, your nutrition estimates are a FALLBACK only — the app will attempt to look up real data from Open Food Facts using search_query.`,
         };
 
         let actualPrompt = trimmedInput;
@@ -767,6 +783,92 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         if (result.mealData) {
           const estimate = parseMealData(result.mealData, trimmedInput || 'Photo of meal');
           if (estimate) {
+            // Attempt to enrich with real Open Food Facts data for packaged/branded products
+            if (result.mealData?.search_query) {
+              console.log('[Chatbot] Packaged product detected, looking up Open Food Facts:', result.mealData.search_query);
+              try {
+                const { searchOpenFoodFacts, extractNutrition, extractServingSize } = await import('@/utils/openFoodFacts');
+                const searchResult = await searchOpenFoodFacts(result.mealData.search_query);
+                if (searchResult.products && searchResult.products.length > 0) {
+                  const product = searchResult.products[0];
+                  const nutrition = extractNutrition(product);
+                  const serving = extractServingSize(product);
+
+                  // Only apply if we got valid calories (not 0)
+                  if (nutrition.calories > 0) {
+                    estimate.ingredients = estimate.ingredients.map((ing) => {
+                      const gramsForCalc = ing.unit === 'g'
+                        ? ing.quantity
+                        : ing.unit_grams > 0
+                          ? ing.quantity * ing.unit_grams
+                          : ing.quantity;
+                      const ratio = gramsForCalc / 100;
+
+                      // If the product has a natural serving unit, update preferred_unit and unit_grams
+                      let preferred_unit = ing.preferred_unit;
+                      let unit_grams = ing.unit_grams;
+                      let unit = ing.unit;
+                      let quantity = ing.quantity;
+
+                      if (serving.hasValidGrams && serving.grams > 0) {
+                        const servingMatch = serving.description.match(/^(\d+)\s+(.+)$/);
+                        if (servingMatch && servingMatch[2] && servingMatch[2] !== 'serving') {
+                          preferred_unit = servingMatch[2].replace(/s$/, ''); // singularize
+                          unit_grams = serving.grams;
+                          unit = preferred_unit;
+                          quantity = Math.max(1, Math.round(gramsForCalc / unit_grams));
+                        }
+                      }
+
+                      return {
+                        ...ing,
+                        calories_per_100g: nutrition.calories,
+                        protein_per_100g: nutrition.protein,
+                        carbs_per_100g: nutrition.carbs,
+                        fat_per_100g: nutrition.fat,
+                        fiber_per_100g: nutrition.fiber,
+                        calories: Math.round(nutrition.calories * ratio),
+                        protein: Math.round(nutrition.protein * ratio * 10) / 10,
+                        carbs: Math.round(nutrition.carbs * ratio * 10) / 10,
+                        fats: Math.round(nutrition.fat * ratio * 10) / 10,
+                        fiber: Math.round(nutrition.fiber * ratio * 10) / 10,
+                        preferred_unit,
+                        unit_grams,
+                        unit,
+                        quantity,
+                        nutrition_confidence: 'high' as const,
+                      };
+                    });
+
+                    // Recalculate totals from enriched ingredients
+                    const totals = estimate.ingredients
+                      .filter((ing) => ing.included)
+                      .reduce(
+                        (acc, ing) => ({
+                          calories: acc.calories + ing.calories,
+                          protein: acc.protein + ing.protein,
+                          carbs: acc.carbs + ing.carbs,
+                          fats: acc.fats + ing.fats,
+                          fiber: acc.fiber + ing.fiber,
+                        }),
+                        { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+                      );
+
+                    estimate.totalCalories = Math.round(totals.calories);
+                    estimate.totalProtein = Math.round(totals.protein * 10) / 10;
+                    estimate.totalCarbs = Math.round(totals.carbs * 10) / 10;
+                    estimate.totalFats = Math.round(totals.fats * 10) / 10;
+                    estimate.totalFiber = Math.round(totals.fiber * 10) / 10;
+
+                    console.log('[Chatbot] ✅ Enriched with Open Food Facts data for:', result.mealData.search_query);
+                  }
+                }
+              } catch (offError) {
+                console.warn('[Chatbot] Open Food Facts lookup failed (non-fatal):', offError);
+                // Non-fatal — keep AI estimate
+              }
+            }
+
             console.log('[Chatbot] Setting latest estimate with', estimate.ingredients.length, 'ingredients');
             setLatestEstimate(estimate);
           } else {
