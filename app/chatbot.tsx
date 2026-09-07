@@ -607,7 +607,7 @@ export default function ChatbotScreen() {
       if (isMealEstimator) {
         const systemMessage: ChatMessage = {
           role: 'system',
-          content: `You are an expert nutrition analyst with vision capabilities and real-time web search access.
+          content: `You are an expert nutrition analyst with vision capabilities and MANDATORY real-time web search access.
 
 CRITICAL: You MUST ALWAYS respond with ONLY a JSON code block. No introductory text, no explanations before the JSON, no prose paragraphs. Your ENTIRE response must be:
 
@@ -618,21 +618,33 @@ NEVER write paragraphs, bullet lists, or explanations before or instead of the J
 
 ## SCAN MODE — detect automatically:
 - PLATE/RESTAURANT: Identify each dish component separately
-- PACKAGED PRODUCT: Read the nutrition label if visible; otherwise use brand database
+- PACKAGED PRODUCT: Read the nutrition label if visible; if not fully visible, SEARCH THE WEB for the brand
 - TEXT DESCRIPTION: Parse the described foods
 
-## NUTRITION RESOLUTION (in order):
-1. Official restaurant/brand data (search web if needed)
-2. USDA FoodData Central
-3. Web search for nutrition data
-4. Gemini knowledge estimate (mark confidence accordingly)
+## MANDATORY NUTRITION RESOLUTION — follow this order strictly:
+
+### FOR PACKAGED/BRANDED PRODUCTS (any item with a visible brand, logo, or product name):
+1. READ the brand name and product name from the image (e.g. "Franz Keto Bread", "Oreo Double Stuf", "Lay's Classic")
+2. SEARCH THE WEB immediately for "[brand] [product] nutrition facts" — check the manufacturer's official website, USDA FoodData Central (fdc.nal.usda.gov), or Nutritionix
+3. Use the EXACT per-serving nutrition data from the official source
+4. Set nutrition_source to "official" and nutrition_confidence to "high"
+5. NEVER estimate or guess macros for a branded product — always search first
+
+### FOR RESTAURANT FOOD:
+1. SEARCH THE WEB for "[restaurant name] [menu item] nutrition" — use the restaurant's official nutrition PDF or website
+2. Use exact data from the official source
+3. Set nutrition_source to "official" and nutrition_confidence to "high"
+
+### FOR GENERIC/HOMEMADE FOOD (no brand, no restaurant):
+1. Use USDA FoodData Central data from your knowledge
+2. Set nutrition_source to "usda" and nutrition_confidence to "medium"
 
 ## REQUIRED JSON FORMAT:
 \`\`\`json
 {
   "ingredients": [
     {
-      "name": "ingredient name",
+      "name": "ingredient name including brand if applicable",
       "quantity": number,
       "unit": "g",
       "calories": number,
@@ -643,7 +655,8 @@ NEVER write paragraphs, bullet lists, or explanations before or instead of the J
       "calories_per_100g": number,
       "protein_per_100g": number,
       "carbs_per_100g": number,
-      "fats_per_100g": number,
+      "fat_per_100g": number,
+      "fiber_per_100g": number,
       "preferred_unit": "slice" or "piece" or "strip" or "egg" or "cup" or "tbsp" or null,
       "unit_grams": number,
       "confidence_portion": "high" or "medium" or "low",
@@ -653,22 +666,20 @@ NEVER write paragraphs, bullet lists, or explanations before or instead of the J
       "scale_verified": false
     }
   ],
-  "search_query": "brand name + product name for Open Food Facts lookup, or null if no brand/label visible",
   "is_packaged_product": true or false
 }
 \`\`\`
 
 Rules:
 - "quantity" is always in grams initially
-- "preferred_unit": natural countable unit (slice=21g, large egg=50g, bacon strip=8g, oreo=11g, tbsp peanut butter=16g). null for rice/sauce/liquids.
-- "unit_grams": grams per 1 preferred_unit. 0 if preferred_unit is null.
-- All per_100g fields are REQUIRED — calculate them as: value / quantity * 100
+- "preferred_unit": natural countable unit matching the product's official serving size (e.g. for Franz Keto Bread: "slice" with unit_grams from the official label). null for rice/sauce/liquids.
+- "unit_grams": grams per 1 preferred_unit taken from the OFFICIAL nutrition label. 0 if preferred_unit is null.
+- All per_100g fields are REQUIRED — calculate them as: (macro_per_serving / serving_size_grams) * 100
 - Break complex meals into individual ingredients
 - Round all numbers to nearest integer
 - Do NOT include citation markers like [1], [2], [3] in any text
-- "search_query": If you can read a brand name or product label in the image, set this to the most specific search string (e.g. "Franz Keto Bread", "Oreo Double Stuf", "Lay's Classic Chips"). Set to null for restaurant food, homemade food, or unbranded items.
-- "is_packaged_product": true if the item appears to be a packaged/branded product with a nutrition label, false otherwise.
-- When is_packaged_product is true, your nutrition estimates are a FALLBACK only — the app will attempt to look up real data from Open Food Facts using search_query.`,
+- For branded products: the "name" field must include the brand (e.g. "Franz Keto Bread" not just "Keto Bread")
+- "is_packaged_product": true if the item appears to be a packaged/branded product, false otherwise`,
         };
 
         let actualPrompt = trimmedInput;
@@ -783,92 +794,6 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         if (result.mealData) {
           const estimate = parseMealData(result.mealData, trimmedInput || 'Photo of meal');
           if (estimate) {
-            // Attempt to enrich with real Open Food Facts data for packaged/branded products
-            if (result.mealData?.search_query) {
-              console.log('[Chatbot] Packaged product detected, looking up Open Food Facts:', result.mealData.search_query);
-              try {
-                const { searchOpenFoodFacts, extractNutrition, extractServingSize } = await import('@/utils/openFoodFacts');
-                const searchResult = await searchOpenFoodFacts(result.mealData.search_query);
-                if (searchResult.products && searchResult.products.length > 0) {
-                  const product = searchResult.products[0];
-                  const nutrition = extractNutrition(product);
-                  const serving = extractServingSize(product);
-
-                  // Only apply if we got valid calories (not 0)
-                  if (nutrition.calories > 0) {
-                    estimate.ingredients = estimate.ingredients.map((ing) => {
-                      const gramsForCalc = ing.unit === 'g'
-                        ? ing.quantity
-                        : ing.unit_grams > 0
-                          ? ing.quantity * ing.unit_grams
-                          : ing.quantity;
-                      const ratio = gramsForCalc / 100;
-
-                      // If the product has a natural serving unit, update preferred_unit and unit_grams
-                      let preferred_unit = ing.preferred_unit;
-                      let unit_grams = ing.unit_grams;
-                      let unit = ing.unit;
-                      let quantity = ing.quantity;
-
-                      if (serving.hasValidGrams && serving.grams > 0) {
-                        const servingMatch = serving.description.match(/^(\d+)\s+(.+)$/);
-                        if (servingMatch && servingMatch[2] && servingMatch[2] !== 'serving') {
-                          preferred_unit = servingMatch[2].replace(/s$/, ''); // singularize
-                          unit_grams = serving.grams;
-                          unit = preferred_unit;
-                          quantity = Math.max(1, Math.round(gramsForCalc / unit_grams));
-                        }
-                      }
-
-                      return {
-                        ...ing,
-                        calories_per_100g: nutrition.calories,
-                        protein_per_100g: nutrition.protein,
-                        carbs_per_100g: nutrition.carbs,
-                        fat_per_100g: nutrition.fat,
-                        fiber_per_100g: nutrition.fiber,
-                        calories: Math.round(nutrition.calories * ratio),
-                        protein: Math.round(nutrition.protein * ratio * 10) / 10,
-                        carbs: Math.round(nutrition.carbs * ratio * 10) / 10,
-                        fats: Math.round(nutrition.fat * ratio * 10) / 10,
-                        fiber: Math.round(nutrition.fiber * ratio * 10) / 10,
-                        preferred_unit,
-                        unit_grams,
-                        unit,
-                        quantity,
-                        nutrition_confidence: 'high' as const,
-                      };
-                    });
-
-                    // Recalculate totals from enriched ingredients
-                    const totals = estimate.ingredients
-                      .filter((ing) => ing.included)
-                      .reduce(
-                        (acc, ing) => ({
-                          calories: acc.calories + ing.calories,
-                          protein: acc.protein + ing.protein,
-                          carbs: acc.carbs + ing.carbs,
-                          fats: acc.fats + ing.fats,
-                          fiber: acc.fiber + ing.fiber,
-                        }),
-                        { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
-                      );
-
-                    estimate.totalCalories = Math.round(totals.calories);
-                    estimate.totalProtein = Math.round(totals.protein * 10) / 10;
-                    estimate.totalCarbs = Math.round(totals.carbs * 10) / 10;
-                    estimate.totalFats = Math.round(totals.fats * 10) / 10;
-                    estimate.totalFiber = Math.round(totals.fiber * 10) / 10;
-
-                    console.log('[Chatbot] ✅ Enriched with Open Food Facts data for:', result.mealData.search_query);
-                  }
-                }
-              } catch (offError) {
-                console.warn('[Chatbot] Open Food Facts lookup failed (non-fatal):', offError);
-                // Non-fatal — keep AI estimate
-              }
-            }
-
             console.log('[Chatbot] Setting latest estimate with', estimate.ingredients.length, 'ingredients');
             setLatestEstimate(estimate);
           } else {
