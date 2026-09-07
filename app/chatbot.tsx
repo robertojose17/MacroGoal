@@ -1667,19 +1667,8 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text style={{ fontSize: 16 }}>{confidenceEmojiVal}</Text>
                         </View>
 
-                        {/* Quantity row: [−]  qty  [+]  unit▾ */}
+                        {/* Quantity row: qty  unit▾ */}
                         <View style={styles.ingredientQuantityRow}>
-                          <TouchableOpacity
-                            style={[styles.qtyButton, { borderColor: isDark ? colors.borderDark : colors.border }]}
-                            onPress={() => {
-                              const next = Math.max(0, ingredient.quantity - 1);
-                              console.log('[Chatbot] Decrement quantity for', ingredient.name, '→', next);
-                              handleQuantityChange(ingredient.id, next.toString());
-                            }}
-                          >
-                            <Text style={[styles.qtyButtonText, { color: isDark ? colors.textDark : colors.text }]}>−</Text>
-                          </TouchableOpacity>
-
                           <TextInput
                             style={[
                               styles.quantityInput,
@@ -1697,17 +1686,6 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                             keyboardType="decimal-pad"
                             selectTextOnFocus
                           />
-
-                          <TouchableOpacity
-                            style={[styles.qtyButton, { borderColor: isDark ? colors.borderDark : colors.border }]}
-                            onPress={() => {
-                              const next = ingredient.quantity + 1;
-                              console.log('[Chatbot] Increment quantity for', ingredient.name, '→', next);
-                              handleQuantityChange(ingredient.id, next.toString());
-                            }}
-                          >
-                            <Text style={[styles.qtyButtonText, { color: isDark ? colors.textDark : colors.text }]}>+</Text>
-                          </TouchableOpacity>
 
                           <TouchableOpacity
                             style={[styles.unitPill, { borderColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.cardDark : colors.card }]}
@@ -2149,26 +2127,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     gap: 6,
   },
-  qtyButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
   quantityInput: {
+    flex: 1,
+    minWidth: 80,
     borderWidth: 1,
     borderRadius: borderRadius.sm,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     fontSize: 14,
-    minWidth: 56,
     textAlign: 'center',
   },
   unitPill: {
