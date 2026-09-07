@@ -1299,7 +1299,8 @@
     "premiumGateMessage": "This feature requires a premium subscription.",
     "tryAsking": "Try asking about a meal or food item",
     "welcomeMessage": "Hi! I'm your AI Meal Estimator. Describe what you ate or take a photo and I'll estimate the nutrition for you.",
-    "withPhoto": "with photo"
+    "withPhoto": "with photo",
+    "scaleReferenceTip": "Include a credit card or ID in the photo for more accurate portion sizes"
   },
   "checkInForm": {
     "title": "Check-In",

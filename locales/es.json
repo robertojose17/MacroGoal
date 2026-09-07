@@ -1299,7 +1299,8 @@
     "premiumGateMessage": "Esta función requiere una suscripción premium.",
     "tryAsking": "Intenta preguntar sobre una comida o alimento",
     "welcomeMessage": "¡Hola! Soy tu Estimador de Comidas con IA. Describe lo que comiste o toma una foto y estimaré la nutrición por ti.",
-    "withPhoto": "con foto"
+    "withPhoto": "con foto",
+    "scaleReferenceTip": "Incluye una tarjeta de crédito o ID en la foto para porciones más precisas"
   },
   "checkInForm": {
     "title": "Registro",

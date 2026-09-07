@@ -612,7 +612,7 @@ export default function ChatbotScreen() {
 CRITICAL: You MUST ALWAYS respond with ONLY a JSON code block. No introductory text, no explanations before the JSON, no prose paragraphs. Your ENTIRE response must be:
 
 1. A JSON code block (required, always first)
-2. Optionally, a single SHORT sentence after the JSON block (max 1 line) mentioning the data source
+2. Optionally, a single SHORT sentence after the JSON block (max 1 line) mentioning the data source and whether a scale reference was used
 
 NEVER write paragraphs, bullet lists, or explanations before or instead of the JSON.
 
@@ -620,6 +620,32 @@ NEVER write paragraphs, bullet lists, or explanations before or instead of the J
 - PLATE/RESTAURANT: Identify each dish component separately
 - PACKAGED PRODUCT: Read the nutrition label if visible; if not fully visible, SEARCH THE WEB for the brand
 - TEXT DESCRIPTION: Parse the described foods
+
+## SCALE REFERENCE DETECTION (check this FIRST before estimating any portions)
+Scan the image for any of these scale reference objects:
+- Credit card, debit card, ID card, driver's license, loyalty card — standard size: 85.6mm × 54mm (3.37" × 2.13"), thickness ~0.76mm
+- Coin (if identifiable: US quarter = 24.26mm, US penny = 19.05mm, euro = 23.25mm)
+- Standard fork/spoon (dinner fork ≈ 190mm, teaspoon ≈ 140mm)
+- Human hand (average adult palm width ≈ 85mm)
+
+If a scale reference IS detected:
+- Calculate the pixel-to-mm ratio using the reference object
+- Use this ratio to estimate the physical dimensions and weight of all food items in the frame
+- Set model_portion_confidence to "high" for items where the scale reference clearly applies
+- Mention "scale reference used" in your one-line note after the JSON
+
+If NO scale reference is detected:
+- Estimate portions based on visual cues only (plate size, depth, density)
+- Set model_portion_confidence to "medium" or "low" accordingly
+- Be conservative — when uncertain, estimate toward the lower end of the plausible range
+
+## MULTIPLE PACKAGED PRODUCTS
+If the image contains more than one distinct packaged/branded product:
+- Treat each product as a completely SEPARATE entity
+- Perform a SEPARATE web search for each product's nutrition facts independently
+- Do NOT mix, average, or share nutrition data between different products
+- Each product gets its own entry in the ingredients array with its own nutrition_source and confidence fields
+- If you cannot confidently identify which nutrition data belongs to which product, set nutrition_confidence to "low" for that item and nutrition_source to "estimate"
 
 ## MANDATORY NUTRITION RESOLUTION — follow this order strictly:
 
@@ -666,20 +692,22 @@ NEVER write paragraphs, bullet lists, or explanations before or instead of the J
       "scale_verified": false
     }
   ],
-  "is_packaged_product": true or false
+  "is_packaged_product": true or false,
+  "scale_reference_detected": true or false
 }
 \`\`\`
 
 Rules:
 - "quantity" is always in grams initially
-- "preferred_unit": natural countable unit matching the product's official serving size (e.g. for Franz Keto Bread: "slice" with unit_grams from the official label). null for rice/sauce/liquids.
+- "preferred_unit": natural countable unit matching the product's official serving size. null for rice/sauce/liquids.
 - "unit_grams": grams per 1 preferred_unit taken from the OFFICIAL nutrition label. 0 if preferred_unit is null.
 - All per_100g fields are REQUIRED — calculate them as: (macro_per_serving / serving_size_grams) * 100
 - Break complex meals into individual ingredients
 - Round all numbers to nearest integer
 - Do NOT include citation markers like [1], [2], [3] in any text
 - For branded products: the "name" field must include the brand (e.g. "Franz Keto Bread" not just "Keto Bread")
-- "is_packaged_product": true if the item appears to be a packaged/branded product, false otherwise`,
+- "is_packaged_product": true if the item appears to be a packaged/branded product, false otherwise
+- "scale_reference_detected": true if you found a card, coin, utensil, or hand to use as scale reference`,
         };
 
         let actualPrompt = trimmedInput;
@@ -1994,6 +2022,19 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                 </TouchableOpacity>
               )}
             </ScrollView>
+          )}
+
+          {isMealEstimator && (
+            <Text style={{
+              fontSize: 11,
+              color: isDark ? colors.textSecondaryDark : colors.textSecondary,
+              textAlign: 'center',
+              paddingHorizontal: spacing.md,
+              paddingBottom: spacing.xs,
+              opacity: 0.7,
+            }}>
+              💳 {t('chatbot.scaleReferenceTip')}
+            </Text>
           )}
 
           <View style={styles.inputRow}>
