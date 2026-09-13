@@ -132,6 +132,7 @@ function RecipeCard({
   onPress: () => void;
   onSave: () => void;
 }) {
+  const [imgError, setImgError] = React.useState(false);
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const textColor = isDark ? colors.textDark : colors.text;
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
@@ -143,6 +144,12 @@ function RecipeCard({
   const calText = `${Math.round(recipe.calories_per_serving)} cal`;
   const proteinText = `${Math.round(recipe.protein_per_serving)}g protein`;
   const carbsText = `${Math.round(recipe.carbs_per_serving)}g carbs`;
+
+  const recipeKeywords = encodeURIComponent(recipe.name.split(' ').slice(0, 3).join(','));
+  const fallbackUri = `https://source.unsplash.com/400x300/?food,${recipeKeywords}`;
+  const imageSource = (!recipe.image_url || imgError)
+    ? { uri: fallbackUri }
+    : { uri: recipe.image_url };
 
   return (
     <Pressable
@@ -158,17 +165,15 @@ function RecipeCard({
       accessibilityRole="button"
     >
       {/* Image */}
-      {recipe.image_url ? (
-        <Image
-          source={resolveImageSource(recipe.image_url)}
-          style={recipeStyles.recipeCardImage}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={[recipeStyles.recipeCardImage, { backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center' }]}>
-          <ChefHat size={32} color={colors.primary + '80'} />
-        </View>
-      )}
+      <Image
+        source={imageSource}
+        style={recipeStyles.recipeCardImage}
+        resizeMode="cover"
+        onError={() => {
+          console.log('[RecipeCard] Image failed to load, switching to Unsplash fallback:', recipe.name);
+          setImgError(true);
+        }}
+      />
 
       {/* Tag badge */}
       {firstTag && tagColor && (

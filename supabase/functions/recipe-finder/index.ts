@@ -105,7 +105,7 @@ The JSON must have this exact structure:
 Include 2-3 real user reviews per recipe from the source website. Make macros realistic and accurate.`;
 
     // 5. Call OpenRouter
-    console.log("[recipe-finder] Calling OpenRouter with model google/gemini-2.0-flash-exp");
+    console.log("[recipe-finder] Calling OpenRouter with model google/gemini-2.5-flash:online");
     const chatRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -115,7 +115,7 @@ Include 2-3 real user reviews per recipe from the source website. Make macros re
         "X-Title": "Macro Goal Recipe Finder",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-exp",
+        model: "google/gemini-2.5-flash:online",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
@@ -165,6 +165,13 @@ Include 2-3 real user reviews per recipe from the source website. Make macros re
     }
 
     console.log("[recipe-finder] Parsed", recipes.length, "recipes");
+
+    // Replace image_url with Unsplash fallbacks so the frontend never tries to load blocked hotlinks
+    recipes = recipes.map((r: any) => ({
+      ...r,
+      image_url: `https://source.unsplash.com/800x600/?food,${encodeURIComponent((r.name || 'recipe').split(' ').slice(0, 3).join(','))}`,
+    }));
+    console.log("[recipe-finder] Replaced image_url with Unsplash fallbacks for", recipes.length, "recipes");
 
     const duration_ms = Math.round(performance.now() - started);
     return new Response(JSON.stringify({ recipes, duration_ms }), {
