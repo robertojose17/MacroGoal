@@ -166,12 +166,12 @@ Include 2-3 real user reviews per recipe from the source website. Make macros re
 
     console.log("[recipe-finder] Parsed", recipes.length, "recipes");
 
-    // Replace image_url with Unsplash fallbacks so the frontend never tries to load blocked hotlinks
+    // Replace image_url with picsum fallbacks so the frontend never tries to load blocked hotlinks
     recipes = recipes.map((r: any) => ({
       ...r,
-      image_url: `https://source.unsplash.com/800x600/?food,${encodeURIComponent((r.name || 'recipe').split(' ').slice(0, 3).join(','))}`,
+      image_url: `https://picsum.photos/seed/${encodeURIComponent((r.name || 'recipe').replace(/\s+/g, '-').toLowerCase())}/800/600`,
     }));
-    console.log("[recipe-finder] Replaced image_url with Unsplash fallbacks for", recipes.length, "recipes");
+    console.log("[recipe-finder] Replaced image_url with picsum fallbacks for", recipes.length, "recipes");
 
     const duration_ms = Math.round(performance.now() - started);
     return new Response(JSON.stringify({ recipes, duration_ms }), {

@@ -132,7 +132,6 @@ function RecipeCard({
   onPress: () => void;
   onSave: () => void;
 }) {
-  const [imgError, setImgError] = React.useState(false);
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const textColor = isDark ? colors.textDark : colors.text;
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
@@ -145,11 +144,7 @@ function RecipeCard({
   const proteinText = `${Math.round(recipe.protein_per_serving)}g protein`;
   const carbsText = `${Math.round(recipe.carbs_per_serving)}g carbs`;
 
-  const recipeKeywords = encodeURIComponent(recipe.name.split(' ').slice(0, 3).join(','));
-  const fallbackUri = `https://source.unsplash.com/400x300/?food,${recipeKeywords}`;
-  const imageSource = (!recipe.image_url || imgError)
-    ? { uri: fallbackUri }
-    : { uri: recipe.image_url };
+  const imageSource = { uri: recipe.image_url || `https://picsum.photos/seed/${encodeURIComponent(recipe.name.replace(/\s+/g, '-').toLowerCase())}/400/300` };
 
   return (
     <Pressable
@@ -169,10 +164,6 @@ function RecipeCard({
         source={imageSource}
         style={recipeStyles.recipeCardImage}
         resizeMode="cover"
-        onError={() => {
-          console.log('[RecipeCard] Image failed to load, switching to Unsplash fallback:', recipe.name);
-          setImgError(true);
-        }}
       />
 
       {/* Tag badge */}

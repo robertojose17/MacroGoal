@@ -145,7 +145,6 @@ export default function RecipeFinderDetailScreen() {
     }
   })();
 
-  const [imgError, setImgError] = useState(false);
   const [servings, setServings] = useState(recipe?.servings ?? 1);
   const [isSaved, setIsSaved] = useState(recipe?.is_saved ?? false);
   const [ingredientsExpanded, setIngredientsExpanded] = useState(true);
@@ -366,23 +365,11 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
         >
           {/* Hero image */}
-          {(() => {
-            const recipeKeywords = encodeURIComponent(recipe.name.split(' ').slice(0, 3).join(','));
-            const imageSource = (!recipe.image_url || imgError)
-              ? { uri: `https://source.unsplash.com/800x600/?food,${recipeKeywords}` }
-              : { uri: recipe.image_url };
-            return (
-              <Image
-                source={imageSource}
-                style={styles.heroImage}
-                resizeMode="cover"
-                onError={() => {
-                  console.log('[RecipeDetail] Hero image failed to load, switching to Unsplash fallback:', recipe.name);
-                  setImgError(true);
-                }}
-              />
-            );
-          })()}
+          <Image
+            source={{ uri: `https://picsum.photos/seed/${encodeURIComponent(recipe.name.replace(/\s+/g, '-').toLowerCase())}/800/600` }}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
 
           {/* Header section */}
           <View style={[styles.section, { paddingTop: spacing.md }]}>
