@@ -66,20 +66,26 @@ Return recipes that fit their remaining macros. Focus on popular, well-reviewed 
 Find recipes from popular cooking websites like AllRecipes, Serious Eats, Food Network, Epicurious, or similar authoritative sources.`;
     }
 
-    const systemPrompt = `You are a recipe search assistant. When given a query, find real recipes from popular cooking websites and return them as structured JSON.
+    const systemPrompt = `You are a recipe search assistant with web access. Find real recipes and return structured JSON.
 
-IMPORTANT: Return ONLY a valid JSON object. No markdown, no code blocks, no explanation text. Just the raw JSON.
+CRITICAL RULES — violating any of these makes the response invalid:
+1. calories_per_serving MUST be > 0. Never return 0 calories. A real recipe always has calories.
+2. Every ingredient MUST have calories > 0. Use USDA data: chicken breast ~165 cal/100g, olive oil ~884 cal/100g, pasta ~371 cal/100g, rice ~130 cal/100g cooked, egg ~155 cal/100g. Calculate calories for the EXACT amount listed (e.g. 200g chicken = 330 cal).
+3. instructions MUST have at least 5 steps. Never return an empty or short instructions array.
+4. image_url: search the web for the REAL photo of this specific dish from the recipe source. Return the direct image URL (must end in .jpg, .jpeg, .png, or .webp). If you cannot find a real image, return null — do NOT return a placeholder or picsum URL.
+5. Sum of ingredient calories should approximately equal calories_per_serving × servings (within 20%).
 
-The JSON must have this exact structure:
+RETURN ONLY valid JSON. No markdown, no code blocks.
+
 {
   "recipes": [
     {
       "id": "unique-string-id",
       "name": "Recipe Name",
       "description": "Brief description",
-      "image_url": "https://example.com/image.jpg or null",
+      "image_url": "https://real-source.com/real-dish-photo.jpg",
       "source_name": "AllRecipes",
-      "source_url": "https://allrecipes.com/recipe/... or null",
+      "source_url": "https://allrecipes.com/recipe/...",
       "prep_time_minutes": 30,
       "servings": 4,
       "calories_per_serving": 450,
@@ -88,11 +94,15 @@ The JSON must have this exact structure:
       "fat_per_serving": 12,
       "fiber_per_serving": 5,
       "ingredients": [
-        { "name": "chicken breast", "amount": "2 lbs", "calories": 220, "protein": 42, "carbs": 0, "fat": 5 }
+        { "name": "chicken breast", "amount": "200g", "calories": 330, "protein": 62, "carbs": 0, "fat": 7 }
       ],
       "instructions": [
-        "Step 1: ...",
-        "Step 2: ..."
+        "Step 1: Preheat oven to 400°F (200°C).",
+        "Step 2: Season chicken with salt, pepper, and garlic powder.",
+        "Step 3: Heat olive oil in an oven-safe skillet over medium-high heat.",
+        "Step 4: Sear chicken 3 minutes per side until golden brown.",
+        "Step 5: Transfer skillet to oven and bake 15-20 minutes until internal temperature reaches 165°F.",
+        "Step 6: Rest 5 minutes before serving."
       ],
       "reviews": [
         { "text": "Amazing recipe!", "author": "John D.", "rating": 5 }
@@ -100,9 +110,7 @@ The JSON must have this exact structure:
       "tags": ["high-protein", "quick"]
     }
   ]
-}
-
-Include 2-3 real user reviews per recipe from the source website. Make macros realistic and accurate.`;
+}`;
 
     // 5. Call OpenRouter
     console.log("[recipe-finder] Calling OpenRouter with model google/gemini-2.5-flash:online");
@@ -166,12 +174,94 @@ Include 2-3 real user reviews per recipe from the source website. Make macros re
 
     console.log("[recipe-finder] Parsed", recipes.length, "recipes");
 
-    // Replace image_url with picsum fallbacks so the frontend never tries to load blocked hotlinks
+    // ── Image resolution: real URL → TheMealDB → category Pexels ──────────────
+    const CATEGORY_IMAGES: Record<string, string> = {
+      chicken: 'https://images.pexels.com/photos/2338407/pexels-photo-2338407.jpeg?w=800',
+      beef: 'https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg?w=800',
+      pork: 'https://images.pexels.com/photos/3535383/pexels-photo-3535383.jpeg?w=800',
+      fish: 'https://images.pexels.com/photos/3655916/pexels-photo-3655916.jpeg?w=800',
+      salmon: 'https://images.pexels.com/photos/3655916/pexels-photo-3655916.jpeg?w=800',
+      pasta: 'https://images.pexels.com/photos/1279330/pexels-photo-1279330.jpeg?w=800',
+      pizza: 'https://images.pexels.com/photos/2147491/pexels-photo-2147491.jpeg?w=800',
+      burger: 'https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg?w=800',
+      salad: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?w=800',
+      soup: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?w=800',
+      taco: 'https://images.pexels.com/photos/2087748/pexels-photo-2087748.jpeg?w=800',
+      burrito: 'https://images.pexels.com/photos/2087748/pexels-photo-2087748.jpeg?w=800',
+      rice: 'https://images.pexels.com/photos/723198/pexels-photo-723198.jpeg?w=800',
+      steak: 'https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg?w=800',
+      shrimp: 'https://images.pexels.com/photos/3655916/pexels-photo-3655916.jpeg?w=800',
+      default: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?w=800',
+    };
+
+    function getCategoryImage(name: string): string {
+      const lower = name.toLowerCase();
+      for (const key of Object.keys(CATEGORY_IMAGES)) {
+        if (key !== 'default' && lower.includes(key)) return CATEGORY_IMAGES[key];
+      }
+      return CATEGORY_IMAGES.default;
+    }
+
+    function isRealImageUrl(url: string | null | undefined): boolean {
+      if (!url || url.includes('picsum.photos')) return false;
+      if (/\.(jpg|jpeg|png|webp)(\?|$)/i.test(url)) return true;
+      if (/\/(images?|img|cdn|media|photos?|static|assets?|uploads?)\//i.test(url)) return true;
+      return false;
+    }
+
+    async function fetchMealDbImage(name: string): Promise<string | null> {
+      try {
+        const encoded = encodeURIComponent(name);
+        const res = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encoded}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data?.meals?.[0]?.strMealThumb) return data.meals[0].strMealThumb;
+        // Try first word
+        const firstWord = name.split(' ')[0];
+        if (firstWord.length > 3) {
+          const res2 = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(firstWord)}`);
+          if (res2.ok) {
+            const data2 = await res2.json();
+            if (data2?.meals?.[0]?.strMealThumb) return data2.meals[0].strMealThumb;
+          }
+        }
+        return null;
+      } catch { return null; }
+    }
+
+    recipes = await Promise.all(recipes.map(async (r: any) => {
+      let imageUrl: string | null = r.image_url;
+      if (!isRealImageUrl(imageUrl)) {
+        const mealDbImg = await fetchMealDbImage(r.name || '');
+        imageUrl = mealDbImg ?? getCategoryImage(r.name || '');
+      }
+      return { ...r, image_url: imageUrl };
+    }));
+    console.log("[recipe-finder] Resolved images for", recipes.length, "recipes");
+
+    // Filter out recipes with 0 calories or no steps
+    recipes = recipes.filter((r: any) => {
+      if (!r.calories_per_serving || r.calories_per_serving <= 0) {
+        console.warn('[recipe-finder] Dropping recipe with 0 calories:', r.name);
+        return false;
+      }
+      if (!r.instructions || r.instructions.length < 3) {
+        console.warn('[recipe-finder] Dropping recipe with no steps:', r.name);
+        return false;
+      }
+      return true;
+    });
+    // Fix ingredient calories: if any ingredient has 0 calories, estimate from name
     recipes = recipes.map((r: any) => ({
       ...r,
-      image_url: `https://picsum.photos/seed/${encodeURIComponent((r.name || 'recipe').replace(/\s+/g, '-').toLowerCase())}/800/600`,
+      ingredients: (r.ingredients || []).map((ing: any) => {
+        if (!ing.calories || ing.calories <= 0) {
+          // Rough estimate: 50 cal per ingredient as absolute minimum fallback
+          return { ...ing, calories: 50 };
+        }
+        return ing;
+      }),
     }));
-    console.log("[recipe-finder] Replaced image_url with picsum fallbacks for", recipes.length, "recipes");
 
     const duration_ms = Math.round(performance.now() - started);
     return new Response(JSON.stringify({ recipes, duration_ms }), {

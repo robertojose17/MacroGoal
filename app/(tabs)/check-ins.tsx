@@ -879,53 +879,6 @@ export default function CommunityScreen() {
                 </View>
               ) : null}
 
-              {/* Suggested for you */}
-              <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
-                <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Suggested for you</Text>
-                {dailySuggestions?.context_summary && (
-                  <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
-                    {dailySuggestions.context_summary}
-                  </Text>
-                )}
-              </View>
-
-              {suggestionsLoading ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={recipeStyles.horizontalList}
-                >
-                  {[0, 1, 2].map((i) => <RecipeSkeletonCard key={i} isDark={isDark} horizontal />)}
-                </ScrollView>
-              ) : dailySuggestions && dailySuggestions.recipes.length > 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={recipeStyles.horizontalList}
-                >
-                  {dailySuggestions.recipes.map((recipe) => (
-                    <RecipeCard
-                      key={recipe.id}
-                      recipe={recipe}
-                      isDark={isDark}
-                      horizontal
-                      onPress={() => {
-                        console.log('[Community] Suggested recipe pressed — id:', recipe.id, 'name:', recipe.name);
-                        router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
-                      }}
-                      onSave={() => handleRecipeSave(recipe)}
-                    />
-                  ))}
-                </ScrollView>
-              ) : (
-                <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor }]}>
-                  <ChefHat size={28} color={subColor} />
-                  <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>
-                    Search for recipes to get personalized suggestions
-                  </Text>
-                </View>
-              )}
-
               {/* Saved recipes */}
               <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
                 <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Saved Recipes</Text>

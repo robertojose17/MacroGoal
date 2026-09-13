@@ -379,7 +379,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
         >
           {/* Hero image */}
           <Image
-            source={{ uri: `https://picsum.photos/seed/${encodeURIComponent(recipe.name.replace(/\s+/g, '-').toLowerCase())}/800/600` }}
+            source={{ uri: recipe.image_url || `https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?w=800` }}
             style={styles.heroImage}
             resizeMode="cover"
           />
