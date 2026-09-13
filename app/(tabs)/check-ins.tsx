@@ -21,9 +21,12 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Users, Search, SquarePen } from 'lucide-react-native';
+import { Users, Search, SquarePen, ChefHat, Clock, Bookmark, BookmarkCheck } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
@@ -37,8 +40,28 @@ import type { SocialPost, SearchUser } from '@/utils/socialApi';
 import SocialPostCard from '@/components/social/SocialPostCard';
 import SearchUserRow from '@/components/social/SearchUserRow';
 import CreatePostSheet from '@/components/social/CreatePostSheet';
+import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
+import { supabase } from '@/lib/supabase/client';
 
-type SubTab = 'feed' | 'discover' | 'people';
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
+
+const TAG_COLORS: Record<string, string> = {
+  'high-protein': colors.success,
+  'low-carb': colors.primary,
+  'low-calorie': '#8B5CF6',
+  'quick': colors.warning,
+  'vegetarian': '#10B981',
+  'vegan': '#059669',
+  'keto': '#F59E0B',
+  'high-fiber': '#6366F1',
+  'meal-prep': '#EC4899',
+};
+
+type SubTab = 'feed' | 'discover' | 'people' | 'recipes';
 type PeopleSection = 'following' | 'followers';
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
@@ -66,6 +89,133 @@ function SkeletonCard({ isDark }: { isDark: boolean }) {
       <View style={[styles.skeletonImage, { backgroundColor: shimmer }]} />
       <View style={[styles.skeletonLine, { width: '60%', backgroundColor: shimmer, margin: spacing.md }]} />
     </Animated.View>
+  );
+}
+
+// ─── Recipe skeleton card ─────────────────────────────────────────────────────
+function RecipeSkeletonCard({ isDark, horizontal }: { isDark: boolean; horizontal?: boolean }) {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  const shimmer = isDark ? '#3A3C52' : '#E5E7EB';
+  const bg = isDark ? colors.cardDark : '#FFFFFF';
+  const width = horizontal ? 220 : undefined;
+  return (
+    <Animated.View style={[recipeStyles.recipeCard, { backgroundColor: bg, opacity, width: width || '100%' }]}>
+      <View style={[recipeStyles.recipeCardImage, { backgroundColor: shimmer }]} />
+      <View style={{ padding: spacing.sm, gap: 6 }}>
+        <View style={[styles.skeletonLine, { width: '80%', backgroundColor: shimmer }]} />
+        <View style={[styles.skeletonLine, { width: '50%', height: 10, backgroundColor: shimmer }]} />
+        <View style={[styles.skeletonLine, { width: '70%', height: 10, backgroundColor: shimmer }]} />
+      </View>
+    </Animated.View>
+  );
+}
+
+// ─── Recipe card ──────────────────────────────────────────────────────────────
+function RecipeCard({
+  recipe,
+  isDark,
+  horizontal,
+  onPress,
+  onSave,
+}: {
+  recipe: RecipeResult;
+  isDark: boolean;
+  horizontal?: boolean;
+  onPress: () => void;
+  onSave: () => void;
+}) {
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const firstTag = recipe.tags[0] || null;
+  const tagColor = firstTag ? (TAG_COLORS[firstTag] || colors.primary) : null;
+  const prepText = recipe.prep_time_minutes != null ? `${recipe.prep_time_minutes} min` : null;
+  const calText = `${Math.round(recipe.calories_per_serving)} cal`;
+  const proteinText = `${Math.round(recipe.protein_per_serving)}g protein`;
+  const carbsText = `${Math.round(recipe.carbs_per_serving)}g carbs`;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        recipeStyles.recipeCard,
+        {
+          backgroundColor: cardBg,
+          borderColor,
+          width: horizontal ? 220 : undefined,
+        },
+      ]}
+      accessibilityRole="button"
+    >
+      {/* Image */}
+      {recipe.image_url ? (
+        <Image
+          source={resolveImageSource(recipe.image_url)}
+          style={recipeStyles.recipeCardImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={[recipeStyles.recipeCardImage, { backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center' }]}>
+          <ChefHat size={32} color={colors.primary + '80'} />
+        </View>
+      )}
+
+      {/* Tag badge */}
+      {firstTag && tagColor && (
+        <View style={[recipeStyles.tagBadge, { backgroundColor: tagColor }]}>
+          <Text style={recipeStyles.tagBadgeText}>{firstTag.replace('-', ' ')}</Text>
+        </View>
+      )}
+
+      {/* Save button */}
+      <Pressable
+        onPress={(e) => {
+          e.stopPropagation();
+          onSave();
+        }}
+        style={recipeStyles.saveBtn}
+        accessibilityRole="button"
+        accessibilityLabel={recipe.is_saved ? 'Unsave recipe' : 'Save recipe'}
+      >
+        {recipe.is_saved
+          ? <BookmarkCheck size={16} color={colors.primary} fill={colors.primary} />
+          : <Bookmark size={16} color="#fff" />}
+      </Pressable>
+
+      {/* Info */}
+      <View style={recipeStyles.recipeCardInfo}>
+        <Text style={[recipeStyles.recipeCardName, { color: textColor }]} numberOfLines={2}>
+          {recipe.name}
+        </Text>
+        <View style={recipeStyles.recipeCardMeta}>
+          <Text style={[recipeStyles.recipeCardSource, { color: subColor }]}>{recipe.source_name}</Text>
+          {prepText && (
+            <>
+              <Text style={[recipeStyles.recipeCardDot, { color: subColor }]}>·</Text>
+              <Clock size={11} color={subColor} />
+              <Text style={[recipeStyles.recipeCardSource, { color: subColor }]}>{prepText}</Text>
+            </>
+          )}
+        </View>
+        <View style={recipeStyles.recipeCardMacros}>
+          <Text style={[recipeStyles.recipeCardCal, { color: colors.calories }]}>{calText}</Text>
+          <Text style={[recipeStyles.recipeCardMacroSep, { color: subColor }]}>·</Text>
+          <Text style={[recipeStyles.recipeCardMacroVal, { color: colors.protein }]}>{proteinText}</Text>
+          <Text style={[recipeStyles.recipeCardMacroSep, { color: subColor }]}>·</Text>
+          <Text style={[recipeStyles.recipeCardMacroVal, { color: colors.carbs }]}>{carbsText}</Text>
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -101,6 +251,25 @@ export default function CommunityScreen() {
   const [followers, setFollowers] = useState<SearchUser[]>([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleRefreshing, setPeopleRefreshing] = useState(false);
+
+  // Recipes state
+  const {
+    searchRecipes,
+    searchResults: recipeSearchResults,
+    searchLoading: recipeSearchLoading,
+    searchError: recipeSearchError,
+    dailySuggestions,
+    suggestionsLoading,
+    loadDailySuggestions,
+    savedRecipes,
+    saveRecipe,
+    unsaveRecipe,
+    loadSavedRecipes,
+  } = useRecipeFinder();
+  const [recipeQuery, setRecipeQuery] = useState('');
+  const [recipeSearchActive, setRecipeSearchActive] = useState(false);
+  const recipeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recipesInitialized = useRef(false);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -192,6 +361,41 @@ export default function CommunityScreen() {
     loadFeed();
   }, []);
 
+  // ─── Load recipe suggestions ──────────────────────────────────────────────────
+  const initRecipes = useCallback(async () => {
+    if (recipesInitialized.current) return;
+    recipesInitialized.current = true;
+    console.log('[Community] initRecipes — loading saved recipes and suggestions');
+    await loadSavedRecipes();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let goals = { calories: 2000, protein: 150, carbs: 200, fat: 65, remainingCalories: 2000 };
+      if (user) {
+        const [goalRes, mealsRes] = await Promise.all([
+          supabase.from('goals').select('daily_calories, protein_g, carbs_g, fat_g').eq('user_id', user.id).eq('is_active', true).maybeSingle(),
+          supabase.from('meals').select('meal_items(calories)').eq('user_id', user.id).eq('date', new Date().toISOString().split('T')[0]),
+        ]);
+        const g = goalRes.data;
+        if (g) {
+          let consumed = 0;
+          (mealsRes.data || []).forEach((m: any) => {
+            (m.meal_items || []).forEach((item: any) => { consumed += Number(item.calories) || 0; });
+          });
+          goals = {
+            calories: Number(g.daily_calories) || 2000,
+            protein: Number(g.protein_g) || 150,
+            carbs: Number(g.carbs_g) || 200,
+            fat: Number(g.fat_g) || 65,
+            remainingCalories: Math.max(0, (Number(g.daily_calories) || 2000) - consumed),
+          };
+        }
+      }
+      await loadDailySuggestions(goals);
+    } catch (e) {
+      console.warn('[Community] initRecipes error:', e);
+    }
+  }, [loadSavedRecipes, loadDailySuggestions]);
+
   // ─── Tab switch ──────────────────────────────────────────────────────────────
   const handleTabSwitch = useCallback((tab: SubTab) => {
     console.log('[Community] Tab switched to:', tab);
@@ -202,7 +406,10 @@ export default function CommunityScreen() {
     if (tab === 'people' && following.length === 0 && followers.length === 0) {
       loadPeople();
     }
-  }, [discoverUsers.length, following.length, followers.length, loadDiscover, loadPeople]);
+    if (tab === 'recipes') {
+      initRecipes();
+    }
+  }, [discoverUsers.length, following.length, followers.length, loadDiscover, loadPeople, initRecipes]);
 
   // ─── Like toggle ─────────────────────────────────────────────────────────────
   const handleLike = useCallback(async (postId: string) => {
@@ -486,10 +693,211 @@ export default function CommunityScreen() {
     );
   };
 
+  // ─── Recipe search handler ────────────────────────────────────────────────────
+  const handleRecipeSearchChange = useCallback((text: string) => {
+    setRecipeQuery(text);
+    if (recipeDebounceRef.current) clearTimeout(recipeDebounceRef.current);
+    if (!text.trim()) {
+      setRecipeSearchActive(false);
+      return;
+    }
+    recipeDebounceRef.current = setTimeout(() => {
+      console.log('[Community] Recipe search — query:', text);
+      setRecipeSearchActive(true);
+      searchRecipes(text.trim());
+    }, 800);
+  }, [searchRecipes]);
+
+  const handleRecipeSearchSubmit = useCallback(() => {
+    if (!recipeQuery.trim()) return;
+    console.log('[Community] Recipe search submitted — query:', recipeQuery);
+    if (recipeDebounceRef.current) clearTimeout(recipeDebounceRef.current);
+    setRecipeSearchActive(true);
+    searchRecipes(recipeQuery.trim());
+  }, [recipeQuery, searchRecipes]);
+
+  const handleRecipeSave = useCallback(async (recipe: RecipeResult) => {
+    console.log('[Community] Recipe save toggled — id:', recipe.id, 'saved:', recipe.is_saved);
+    if (recipe.is_saved) {
+      await unsaveRecipe(recipe.id);
+    } else {
+      await saveRecipe(recipe);
+    }
+  }, [saveRecipe, unsaveRecipe]);
+
+  // ─── Render Recipes ───────────────────────────────────────────────────────────
+  const renderRecipes = () => {
+    const displayResults = recipeSearchActive ? recipeSearchResults : [];
+
+    return (
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Search bar */}
+        <View style={[styles.searchBarContainer, { backgroundColor: cardBg, borderColor }]}>
+          <Search size={18} color={subColor} />
+          <TextInput
+            style={[styles.searchInput, { color: textColor }]}
+            placeholder="Search any recipe..."
+            placeholderTextColor={subColor}
+            value={recipeQuery}
+            onChangeText={handleRecipeSearchChange}
+            onSubmitEditing={handleRecipeSearchSubmit}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {recipeSearchLoading && <ActivityIndicator size="small" color={colors.primary} />}
+          {recipeQuery.length > 0 && !recipeSearchLoading && (
+            <Pressable
+              onPress={() => {
+                console.log('[Community] Recipe search cleared');
+                setRecipeQuery('');
+                setRecipeSearchActive(false);
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={{ color: subColor, fontSize: 18, lineHeight: 20 }}>×</Text>
+            </Pressable>
+          )}
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Search results */}
+          {recipeSearchActive ? (
+            <View style={{ paddingHorizontal: spacing.md }}>
+              {recipeSearchLoading ? (
+                [0, 1, 2].map((i) => <RecipeSkeletonCard key={i} isDark={isDark} />)
+              ) : recipeSearchError ? (
+                <View style={styles.emptyState}>
+                  <Text style={[styles.emptyTitle, { color: textColor }]}>Search failed</Text>
+                  <Text style={[styles.emptySubtitle, { color: subColor }]}>{recipeSearchError}</Text>
+                  <Pressable
+                    onPress={() => {
+                      console.log('[Community] Recipe search retry pressed');
+                      searchRecipes(recipeQuery.trim());
+                    }}
+                    style={styles.retryBtn}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.retryBtnText}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : displayResults.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={[styles.emptyTitle, { color: textColor }]}>No recipes found</Text>
+                  <Text style={[styles.emptySubtitle, { color: subColor }]}>Try a different search term</Text>
+                </View>
+              ) : (
+                displayResults.map((recipe) => (
+                  <View key={recipe.id} style={{ marginBottom: spacing.sm }}>
+                    <RecipeCard
+                      recipe={recipe}
+                      isDark={isDark}
+                      onPress={() => {
+                        console.log('[Community] Recipe card pressed — id:', recipe.id, 'name:', recipe.name);
+                        router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
+                      }}
+                      onSave={() => handleRecipeSave(recipe)}
+                    />
+                  </View>
+                ))
+              )}
+            </View>
+          ) : (
+            <>
+              {/* Suggested for you */}
+              <View style={recipeStyles.sectionHeader}>
+                <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Suggested for you</Text>
+                {dailySuggestions?.context_summary && (
+                  <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
+                    {dailySuggestions.context_summary}
+                  </Text>
+                )}
+              </View>
+
+              {suggestionsLoading ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={recipeStyles.horizontalList}
+                >
+                  {[0, 1, 2].map((i) => <RecipeSkeletonCard key={i} isDark={isDark} horizontal />)}
+                </ScrollView>
+              ) : dailySuggestions && dailySuggestions.recipes.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={recipeStyles.horizontalList}
+                >
+                  {dailySuggestions.recipes.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      isDark={isDark}
+                      horizontal
+                      onPress={() => {
+                        console.log('[Community] Suggested recipe pressed — id:', recipe.id, 'name:', recipe.name);
+                        router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
+                      }}
+                      onSave={() => handleRecipeSave(recipe)}
+                    />
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor }]}>
+                  <ChefHat size={28} color={subColor} />
+                  <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>
+                    Search for recipes to get personalized suggestions
+                  </Text>
+                </View>
+              )}
+
+              {/* Saved recipes */}
+              <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
+                <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Saved Recipes</Text>
+              </View>
+
+              {savedRecipes.length === 0 ? (
+                <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
+                  <Bookmark size={24} color={subColor} />
+                  <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>
+                    Save recipes to find them here
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+                  {savedRecipes.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      isDark={isDark}
+                      onPress={() => {
+                        console.log('[Community] Saved recipe pressed — id:', recipe.id, 'name:', recipe.name);
+                        router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
+                      }}
+                      onSave={() => handleRecipeSave(recipe)}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  };
+
   const SUB_TABS: { key: SubTab; label: string }[] = [
     { key: 'feed', label: 'Feed' },
     { key: 'discover', label: 'Discover' },
     { key: 'people', label: 'People' },
+    { key: 'recipes', label: 'Recipes' },
   ];
 
   return (
@@ -544,6 +952,7 @@ export default function CommunityScreen() {
           {activeTab === 'feed' && renderFeed()}
           {activeTab === 'discover' && renderDiscover()}
           {activeTab === 'people' && renderPeople()}
+          {activeTab === 'recipes' && renderRecipes()}
         </View>
       </View>
 
@@ -706,5 +1115,111 @@ const styles = StyleSheet.create({
   skeletonImage: {
     width: '100%',
     aspectRatio: 1,
+  },
+});
+
+const recipeStyles = StyleSheet.create({
+  sectionHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  horizontalList: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  recipeCard: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  recipeCardImage: {
+    width: '100%',
+    height: 160,
+  },
+  tagBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  tagBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  saveBtn: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeCardInfo: {
+    padding: spacing.sm,
+    gap: 4,
+  },
+  recipeCardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  recipeCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  recipeCardSource: {
+    fontSize: 12,
+  },
+  recipeCardDot: {
+    fontSize: 12,
+  },
+  recipeCardMacros: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  recipeCardCal: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  recipeCardMacroSep: {
+    fontSize: 12,
+  },
+  recipeCardMacroVal: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyHorizontal: {
+    marginHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  emptyHorizontalText: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
