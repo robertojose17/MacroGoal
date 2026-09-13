@@ -34,6 +34,37 @@ export default function TabLayout() {
         }}
       >
         <Tabs.Screen
+          name="recipes"
+          options={{
+            title: 'Recipes',
+            tabBarIcon: ({ color, focused }) => {
+              console.log('[Tab Layout iOS] Rendering Recipes tab icon, focused:', focused);
+              return (
+                <IconSymbol
+                  ios_icon_name={focused ? 'fork.knife.circle.fill' : 'fork.knife.circle'}
+                  android_material_icon_name="restaurant"
+                  size={28}
+                  color={color}
+                />
+              );
+            },
+          }}
+        />
+        <Tabs.Screen
+          name="check-ins"
+          options={{
+            title: t('tabs.social'),
+            tabBarIcon: ({ color, focused }) => (
+              <IconSymbol
+                ios_icon_name={focused ? 'person.2.fill' : 'person.2'}
+                android_material_icon_name="group"
+                size={28}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="dashboard"
           options={{
             title: t('tabs.dashboard'),
@@ -48,20 +79,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="(home)"
-          options={{
-            title: t('tabs.food'),
-            tabBarIcon: ({ color, focused }) => (
-              <IconSymbol
-                ios_icon_name={focused ? 'fork.knife.circle.fill' : 'fork.knife.circle'}
-                android_material_icon_name="restaurant"
-                size={28}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="coach"
           options={{
             title: t('tabs.coach'),
@@ -69,20 +86,6 @@ export default function TabLayout() {
               <IconSymbol
                 ios_icon_name={focused ? 'brain.head.profile.fill' : 'brain.head.profile'}
                 android_material_icon_name="psychology"
-                size={28}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="check-ins"
-          options={{
-            title: t('tabs.social'),
-            tabBarIcon: ({ color, focused }) => (
-              <IconSymbol
-                ios_icon_name={focused ? 'person.2.fill' : 'person.2'}
-                android_material_icon_name="group"
                 size={28}
                 color={color}
               />
@@ -105,6 +108,10 @@ export default function TabLayout() {
               );
             },
           }}
+        />
+        <Tabs.Screen
+          name="(home)"
+          options={{ href: null }}
         />
         <Tabs.Screen
           name="premium"

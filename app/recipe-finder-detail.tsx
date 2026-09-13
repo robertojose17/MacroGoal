@@ -172,6 +172,19 @@ export default function RecipeFinderDetailScreen() {
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
 
+  // ─── Track popular recipe click on mount ────────────────────────────────────
+  useEffect(() => {
+    if (!recipe?.id) return;
+    console.log('[RecipeDetail] Tracking click for recipe id:', recipe.id);
+    supabase.functions.invoke('popular-recipes', {
+      method: 'POST',
+      body: { id: recipe.id },
+    }).catch((e: any) => {
+      console.warn('[RecipeDetail] Click tracking failed (silent):', e?.message);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Load remaining macros ──────────────────────────────────────────────────
   useEffect(() => {
     async function loadRemaining() {
