@@ -5,7 +5,6 @@
 import { useState, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase/client';
-import { useChatbot, ChatMessage } from '@/hooks/useChatbot';
 
 export type RecipeIngredient = {
   name: string;
@@ -55,72 +54,10 @@ export type UserGoals = {
   carbs: number;
   fat: number;
   remainingCalories: number;
+  remainingProtein?: number;
 };
 
 const SUGGESTIONS_KEY_PREFIX = '@recipe_suggestions_';
-
-const RECIPE_SEARCH_SYSTEM_PROMPT = `You are a recipe finder AI. When the user asks for a recipe or type of food, search the web for real recipes from authoritative sources (AllRecipes, Serious Eats, Food Network, NYT Cooking, Bon Appétit, etc.).
-
-Return ONLY a JSON code block with this exact structure:
-\`\`\`json
-{
-  "recipes": [
-    {
-      "name": "Recipe Name",
-      "description": "One sentence description",
-      "image_url": "https://... (og:image URL from the source page, or null)",
-      "source_name": "AllRecipes",
-      "source_url": "https://...",
-      "prep_time_minutes": 25,
-      "servings": 4,
-      "calories_per_serving": 487,
-      "protein_per_serving": 42,
-      "carbs_per_serving": 38,
-      "fat_per_serving": 12,
-      "fiber_per_serving": 3,
-      "ingredients": [
-        { "name": "chicken breast", "amount": "200g", "calories": 220, "protein": 41, "carbs": 0, "fat": 5 }
-      ],
-      "instructions": ["Step 1: ...", "Step 2: ..."],
-      "reviews": [
-        { "text": "Made this 5 times, incredible!", "author": "user123", "rating": 5 }
-      ],
-      "tags": ["high-protein", "low-carb"]
-    }
-  ]
-}
-\`\`\`
-
-Rules:
-- Return 5 recipes for search queries
-- Return 3 recipes for suggestion requests
-- Always search the web for real recipes — never invent recipes
-- Include real og:image URLs from the source pages when available
-- Include 2-3 real user reviews/comments from the source page
-- Calculate accurate nutrition per serving based on ingredients
-- Tags must be from: high-protein, low-carb, low-calorie, quick, vegetarian, vegan, keto, high-fiber, meal-prep`;
-
-function parseRecipesFromResponse(text: string): RecipeResult[] {
-  try {
-    // Extract JSON block
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
-    if (!jsonMatch) {
-      // Try raw JSON
-      const rawMatch = text.match(/\{[\s\S]*"recipes"[\s\S]*\}/);
-      if (!rawMatch) {
-        console.warn('[useRecipeFinder] No JSON block found in response');
-        return [];
-      }
-      const parsed = JSON.parse(rawMatch[0]);
-      return normalizeRecipes(parsed.recipes || []);
-    }
-    const parsed = JSON.parse(jsonMatch[1]);
-    return normalizeRecipes(parsed.recipes || []);
-  } catch (e) {
-    console.error('[useRecipeFinder] Failed to parse recipes JSON:', e);
-    return [];
-  }
-}
 
 function normalizeRecipes(raw: any[]): RecipeResult[] {
   return raw.map((r: any, idx: number) => ({
@@ -156,9 +93,28 @@ function normalizeRecipes(raw: any[]): RecipeResult[] {
   }));
 }
 
-export function useRecipeFinder() {
-  const { sendMessage } = useChatbot();
+// kept for any callers that may still pass raw AI text (e.g. recipe-finder-detail chatbot path)
+export function parseRecipesFromResponse(text: string): RecipeResult[] {
+  try {
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+    if (!jsonMatch) {
+      const rawMatch = text.match(/\{[\s\S]*"recipes"[\s\S]*\}/);
+      if (!rawMatch) {
+        console.warn('[useRecipeFinder] No JSON block found in response');
+        return [];
+      }
+      const parsed = JSON.parse(rawMatch[0]);
+      return normalizeRecipes(parsed.recipes || []);
+    }
+    const parsed = JSON.parse(jsonMatch[1]);
+    return normalizeRecipes(parsed.recipes || []);
+  } catch (e) {
+    console.error('[useRecipeFinder] Failed to parse recipes JSON:', e);
+    return [];
+  }
+}
 
+export function useRecipeFinder() {
   const [searchResults, setSearchResults] = useState<RecipeResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -173,23 +129,17 @@ export function useRecipeFinder() {
   // ─── Search recipes ──────────────────────────────────────────────────────────
   const searchRecipes = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) return;
-    console.log('[useRecipeFinder] searchRecipes — query:', query);
+    console.log('[useRecipeFinder] searchRecipes — invoking recipe-finder edge function, query:', query);
     setSearchLoading(true);
     setSearchError(null);
     setSearchResults([]);
-
-    const messages: ChatMessage[] = [
-      { role: 'system', content: RECIPE_SEARCH_SYSTEM_PROMPT },
-      { role: 'user', content: `Find me recipes for: ${query}` },
-    ];
-
     try {
-      const result = await sendMessage({ messages, source: 'recipe-finder' });
-      if (!result) {
-        setSearchError('No response from AI. Please try again.');
-        return;
-      }
-      const recipes = parseRecipesFromResponse(result.message);
+      const { data, error } = await supabase.functions.invoke('recipe-finder', {
+        body: { query, type: 'search' },
+      });
+      if (error) throw new Error(error.message);
+      console.log('[useRecipeFinder] searchRecipes — response received, duration_ms:', data?.duration_ms);
+      const recipes = normalizeRecipes(data?.recipes || []);
       console.log('[useRecipeFinder] searchRecipes — parsed', recipes.length, 'recipes');
       setSearchResults(recipes);
     } catch (e: any) {
@@ -199,7 +149,7 @@ export function useRecipeFinder() {
     } finally {
       setSearchLoading(false);
     }
-  }, [sendMessage]);
+  }, []);
 
   // ─── Daily suggestions ───────────────────────────────────────────────────────
   const loadDailySuggestions = useCallback(async (
@@ -211,7 +161,6 @@ export function useRecipeFinder() {
     const today = new Date().toISOString().split('T')[0];
     const cacheKey = `${SUGGESTIONS_KEY_PREFIX}${today}`;
 
-    // Check cache first
     if (!forceRefresh) {
       try {
         const cached = await AsyncStorage.getItem(cacheKey);
@@ -223,71 +172,43 @@ export function useRecipeFinder() {
             return;
           }
         }
-      } catch (e) {
-        console.warn('[useRecipeFinder] Cache read error:', e);
-      }
+      } catch {}
     }
 
     loadingRef.current = true;
     setSuggestionsLoading(true);
-    console.log('[useRecipeFinder] loadDailySuggestions — generating new suggestions');
-
-    const hour = new Date().getHours();
-    const timeOfDay = hour < 11 ? 'morning' : hour < 15 ? 'midday' : hour < 19 ? 'afternoon' : 'evening';
-
-    const systemPrompt = `You are a nutrition-aware recipe recommender. Based on the user's macro goals and remaining calories for today, suggest 3 recipes that would fit well into their day.
-
-User context:
-- Remaining calories today: ${userGoals.remainingCalories} kcal
-- Daily protein goal: ${userGoals.protein}g
-- Daily carbs goal: ${userGoals.carbs}g
-- Daily fat goal: ${userGoals.fat}g
-- Time of day: ${timeOfDay}
-
-Return ONLY a JSON code block with the same recipe structure (3 recipes).
-Search the web for real recipes that match the nutritional needs. Prioritize recipes where the macros per serving closely match the remaining macros.
-
-${RECIPE_SEARCH_SYSTEM_PROMPT}`;
-
-    const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Suggest 3 recipes that fit my remaining ${userGoals.remainingCalories} calories today. I need about ${userGoals.protein}g protein total per day.` },
-    ];
+    console.log('[useRecipeFinder] loadDailySuggestions — invoking recipe-finder edge function');
 
     try {
-      const result = await sendMessage({ messages, source: 'recipe-finder' });
-      if (!result) {
-        console.warn('[useRecipeFinder] loadDailySuggestions — no response');
-        return;
-      }
-      const recipes = parseRecipesFromResponse(result.message);
+      const { data, error } = await supabase.functions.invoke('recipe-finder', {
+        body: {
+          query: 'healthy recipes',
+          type: 'suggestions',
+          userGoals: {
+            ...userGoals,
+            remainingProtein: userGoals.remainingProtein ?? Math.round(userGoals.protein * 0.5),
+          },
+        },
+      });
+      if (error) throw new Error(error.message);
+      console.log('[useRecipeFinder] loadDailySuggestions — response received, duration_ms:', data?.duration_ms);
+      const recipes = normalizeRecipes(data?.recipes || []);
       console.log('[useRecipeFinder] loadDailySuggestions — parsed', recipes.length, 'suggestions');
 
       const contextSummary = userGoals.remainingCalories > 0
         ? `Suggestions based on your ${userGoals.remainingCalories} remaining calories`
         : 'Suggested recipes for your goals';
 
-      const suggestions: DailySuggestions = {
-        recipes,
-        generated_date: today,
-        context_summary: contextSummary,
-      };
-
+      const suggestions: DailySuggestions = { recipes, generated_date: today, context_summary: contextSummary };
       setDailySuggestions(suggestions);
-
-      // Cache
-      try {
-        await AsyncStorage.setItem(cacheKey, JSON.stringify(suggestions));
-      } catch (e) {
-        console.warn('[useRecipeFinder] Cache write error:', e);
-      }
+      try { await AsyncStorage.setItem(cacheKey, JSON.stringify(suggestions)); } catch {}
     } catch (e: any) {
       console.error('[useRecipeFinder] loadDailySuggestions error:', e?.message);
     } finally {
       setSuggestionsLoading(false);
       loadingRef.current = false;
     }
-  }, [sendMessage]);
+  }, []);
 
   // ─── Save recipe ─────────────────────────────────────────────────────────────
   const saveRecipe = useCallback(async (recipe: RecipeResult): Promise<void> => {
