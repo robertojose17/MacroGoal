@@ -267,6 +267,11 @@ export default function CommunityScreen() {
   const recipeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipesInitialized = useRef(false);
 
+  // Popular recipes state
+  const [popularRecipes, setPopularRecipes] = useState<RecipeResult[]>([]);
+  const [popularLoading, setPopularLoading] = useState(false);
+  const [popularError, setPopularError] = useState<string | null>(null);
+
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -357,12 +362,32 @@ export default function CommunityScreen() {
     loadFeed();
   }, []);
 
+  // ─── Load popular recipes ─────────────────────────────────────────────────────
+  const loadPopularRecipes = useCallback(async () => {
+    console.log('[Community] loadPopularRecipes — fetching popular-recipes edge function');
+    setPopularLoading(true);
+    setPopularError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('popular-recipes', { method: 'GET' } as any);
+      if (error) throw error;
+      const recipes: RecipeResult[] = Array.isArray(data) ? data : (data?.recipes ?? []);
+      console.log('[Community] loadPopularRecipes — loaded', recipes.length, 'recipes');
+      setPopularRecipes(recipes);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load popular recipes';
+      console.error('[Community] loadPopularRecipes error:', msg);
+      setPopularError(msg);
+    } finally {
+      setPopularLoading(false);
+    }
+  }, []);
+
   // ─── Load recipe suggestions ──────────────────────────────────────────────────
   const initRecipes = useCallback(async () => {
     if (recipesInitialized.current) return;
     recipesInitialized.current = true;
-    console.log('[Community] initRecipes — loading saved recipes and suggestions');
-    await loadSavedRecipes();
+    console.log('[Community] initRecipes — loading saved recipes, suggestions, and popular recipes');
+    await Promise.all([loadSavedRecipes(), loadPopularRecipes()]);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       let goals = { calories: 2000, protein: 150, carbs: 200, fat: 65, remainingCalories: 2000 };
@@ -390,7 +415,7 @@ export default function CommunityScreen() {
     } catch (e) {
       console.warn('[Community] initRecipes error:', e);
     }
-  }, [loadSavedRecipes, loadDailySuggestions]);
+  }, [loadSavedRecipes, loadDailySuggestions, loadPopularRecipes]);
 
   // ─── Tab switch ──────────────────────────────────────────────────────────────
   const handleTabSwitch = useCallback((tab: SubTab) => {
@@ -807,8 +832,55 @@ export default function CommunityScreen() {
             </View>
           ) : (
             <>
-              {/* Suggested for you */}
+              {/* Most Popular Recipes — 2-column grid */}
               <View style={recipeStyles.sectionHeader}>
+                <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Most Popular Recipes</Text>
+              </View>
+
+              {popularLoading ? (
+                <View style={recipeStyles.popularGrid}>
+                  {[0, 1, 2, 3].map((i) => (
+                    <View key={i} style={recipeStyles.popularGridItem}>
+                      <RecipeSkeletonCard isDark={isDark} />
+                    </View>
+                  ))}
+                </View>
+              ) : popularError ? (
+                <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
+                  <ChefHat size={24} color={subColor} />
+                  <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>{popularError}</Text>
+                  <Pressable
+                    onPress={() => {
+                      console.log('[Community] Popular recipes retry pressed');
+                      loadPopularRecipes();
+                    }}
+                    style={styles.retryBtn}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.retryBtnText}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : popularRecipes.length > 0 ? (
+                <View style={recipeStyles.popularGrid}>
+                  {popularRecipes.map((recipe) => (
+                    <View key={recipe.id} style={recipeStyles.popularGridItem}>
+                      <RecipeCard
+                        recipe={recipe}
+                        isDark={isDark}
+                        onPress={() => {
+                          console.log('[Community] Popular recipe pressed — id:', recipe.id, 'name:', recipe.name);
+                          supabase.functions.invoke('popular-recipes', { method: 'POST', body: { id: recipe.id } } as any).catch(() => {});
+                          router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
+                        }}
+                        onSave={() => handleRecipeSave(recipe)}
+                      />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {/* Suggested for you */}
+              <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
                 <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Suggested for you</Text>
                 {dailySuggestions?.context_summary && (
                   <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
@@ -890,10 +962,10 @@ export default function CommunityScreen() {
   };
 
   const SUB_TABS: { key: SubTab; label: string }[] = [
+    { key: 'recipes', label: 'Recipes' },
     { key: 'feed', label: 'Feed' },
     { key: 'discover', label: 'Discover' },
     { key: 'people', label: 'People' },
-    { key: 'recipes', label: 'Recipes' },
   ];
 
   return (
@@ -1217,5 +1289,14 @@ const recipeStyles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  popularGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  popularGridItem: {
+    width: '48%',
   },
 });
