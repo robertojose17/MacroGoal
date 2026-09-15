@@ -1,33 +1,26 @@
 /**
- * Most Popular Recipes Tab Screen
- * Fetches and displays popular recipes from the popular-recipes edge function
+ * Recipes Tab — Trending Now + Popular This Week + Search
  */
-
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  Image,
-  ActivityIndicator,
-  RefreshControl,
+  View, Text, StyleSheet, Pressable, Image,
+  ActivityIndicator, RefreshControl, ScrollView, TextInput,
   ImageSourcePropType,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Search, X } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase/client';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
+  if (!source) return { uri: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?w=400' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;
 }
 
-interface PopularRecipe {
+interface RecipeItem {
   id: string;
   name: string;
   description: string | null;
@@ -41,83 +34,123 @@ interface PopularRecipe {
   carbs_per_serving: number | null;
   fat_per_serving: number | null;
   fiber_per_serving: number | null;
-  ingredients: any;
-  instructions: any;
-  reviews: any;
-  tags: any;
+  ingredients: any[];
+  instructions: any[];
+  reviews: any[];
+  tags: any[];
   click_count: number | null;
   generated_at: string | null;
   last_clicked_at: string | null;
 }
 
-function RecipeCard({
-  recipe,
-  onPress,
-  isDark,
-}: {
-  recipe: PopularRecipe;
-  onPress: () => void;
-  isDark: boolean;
-}) {
+function normalizeRecipe(recipe: any): RecipeItem {
+  return {
+    ...recipe,
+    tags: Array.isArray(recipe.tags) ? recipe.tags : [],
+    ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+    instructions: Array.isArray(recipe.instructions)
+      ? recipe.instructions.map((s: any) =>
+          typeof s === 'string' ? s : String(s?.text ?? s?.description ?? s?.instruction ?? JSON.stringify(s))
+        )
+      : [],
+    reviews: Array.isArray(recipe.reviews) ? recipe.reviews : [],
+  };
+}
+
+// ── Trending card (horizontal) ────────────────────────────────────────────────
+function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress: () => void; isDark: boolean }) {
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-
   const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
   const protein = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)) : null;
-  const prepTime = recipe.prep_time_minutes != null ? `${recipe.prep_time_minutes} min` : null;
-  const clickCount = recipe.click_count != null ? Number(recipe.click_count) : 0;
-
-  const imageSource = recipe.image_url
-    ? resolveImageSource(recipe.image_url)
-    : resolveImageSource(`https://picsum.photos/seed/${encodeURIComponent((recipe.name || 'recipe').replace(/\s+/g, '-').toLowerCase())}/400/300`);
+  const caloriesBg = colors.calories + '18';
+  const proteinBg = colors.protein + '18';
 
   return (
     <Pressable
-      onPress={onPress}
-      style={[styles.card, { backgroundColor: cardBg, borderColor }]}
-      accessibilityRole="button"
+      onPress={() => {
+        console.log('[Recipes] Trending card pressed:', recipe.name, recipe.id);
+        onPress();
+      }}
+      style={[styles.trendingCard, { backgroundColor: cardBg, borderColor }]}
     >
       <Image
-        source={imageSource}
-        style={styles.cardImage}
+        source={resolveImageSource(recipe.image_url ?? undefined)}
+        style={styles.trendingImage}
         resizeMode="cover"
       />
-      <View style={styles.cardBody}>
-        <Text style={[styles.cardName, { color: textColor }]} numberOfLines={2}>
-          {recipe.name}
-        </Text>
-        <View style={styles.cardMeta}>
+      <View style={styles.trendingBody}>
+        <Text style={[styles.trendingName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
+        <View style={styles.pillRow}>
           {calories != null && (
-            <View style={[styles.metaPill, { backgroundColor: colors.calories + '18' }]}>
-              <Text style={[styles.metaPillText, { color: colors.calories }]}>
-                {calories}
-              </Text>
-              <Text style={[styles.metaPillUnit, { color: colors.calories }]}>cal</Text>
+            <View style={[styles.pill, { backgroundColor: caloriesBg }]}>
+              <Text style={[styles.pillText, { color: colors.calories }]}>{calories} cal</Text>
             </View>
           )}
           {protein != null && (
-            <View style={[styles.metaPill, { backgroundColor: colors.protein + '18' }]}>
-              <Text style={[styles.metaPillText, { color: colors.protein }]}>
-                {protein}
-              </Text>
-              <Text style={[styles.metaPillUnit, { color: colors.protein }]}>g protein</Text>
+            <View style={[styles.pill, { backgroundColor: proteinBg }]}>
+              <Text style={[styles.pillText, { color: colors.protein }]}>{protein}g P</Text>
             </View>
           )}
         </View>
-        {prepTime != null && (
-          <Text style={[styles.prepTime, { color: subColor }]}>
-            {prepTime}
+        {recipe.source_name && (
+          <Text style={[styles.trendingSource, { color: subColor }]} numberOfLines={1}>
+            {recipe.source_name}
           </Text>
         )}
+      </View>
+    </Pressable>
+  );
+}
+
+// ── Popular grid card ─────────────────────────────────────────────────────────
+function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress: () => void; isDark: boolean }) {
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
+  const protein = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)) : null;
+  const clickCount = recipe.click_count != null ? Number(recipe.click_count) : 0;
+  const caloriesBg = colors.calories + '18';
+  const proteinBg = colors.protein + '18';
+
+  return (
+    <Pressable
+      onPress={() => {
+        console.log('[Recipes] Popular card pressed:', recipe.name, recipe.id);
+        onPress();
+      }}
+      style={[styles.popularCard, { backgroundColor: cardBg, borderColor }]}
+    >
+      <Image
+        source={resolveImageSource(recipe.image_url ?? undefined)}
+        style={styles.popularImage}
+        resizeMode="cover"
+      />
+      <View style={styles.popularBody}>
+        <Text style={[styles.popularName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
+        <View style={styles.pillRow}>
+          {calories != null && (
+            <View style={[styles.pill, { backgroundColor: caloriesBg }]}>
+              <Text style={[styles.pillText, { color: colors.calories }]}>{calories} cal</Text>
+            </View>
+          )}
+          {protein != null && (
+            <View style={[styles.pill, { backgroundColor: proteinBg }]}>
+              <Text style={[styles.pillText, { color: colors.protein }]}>{protein}g P</Text>
+            </View>
+          )}
+        </View>
+        {recipe.prep_time_minutes != null && (
+          <Text style={[styles.prepTime, { color: subColor }]}>{recipe.prep_time_minutes} min</Text>
+        )}
         {clickCount > 0 && (
-          <View style={styles.popularRow}>
+          <View style={styles.clickRow}>
             <Text style={styles.fireEmoji}>🔥</Text>
-            <Text style={[styles.popularText, { color: subColor }]}>
-              {clickCount}
-              {' people made this'}
-            </Text>
+            <Text style={[styles.clickText, { color: subColor }]}>{clickCount} made this</Text>
           </View>
         )}
       </View>
@@ -125,39 +158,79 @@ function RecipeCard({
   );
 }
 
+// ── Search result row ─────────────────────────────────────────────────────────
+function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: () => void; isDark: boolean }) {
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
+  const caloriesText = calories != null ? `${calories} cal` : '';
+  const sourceText = recipe.source_name ? ` · ${recipe.source_name}` : '';
+  const metaText = caloriesText + sourceText;
+
+  return (
+    <Pressable
+      onPress={() => {
+        console.log('[Recipes] Search result pressed:', recipe.name, recipe.id);
+        onPress();
+      }}
+      style={[styles.searchResultRow, { borderBottomColor: borderColor }]}
+    >
+      <Image
+        source={resolveImageSource(recipe.image_url ?? undefined)}
+        style={styles.searchResultImage}
+        resizeMode="cover"
+      />
+      <View style={styles.searchResultInfo}>
+        <Text style={[styles.searchResultName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
+        <Text style={[styles.searchResultMeta, { color: subColor }]}>{metaText}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// ── Main screen ───────────────────────────────────────────────────────────────
 export default function RecipesScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
 
-  const [recipes, setRecipes] = useState<PopularRecipe[]>([]);
+  const [trending, setTrending] = useState<RecipeItem[]>([]);
+  const [popularThisWeek, setPopularThisWeek] = useState<RecipeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Search state
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const inputBg = isDark ? colors.cardDark : '#F5F5F5';
 
-  const fetchRecipes = useCallback(async (isRefresh = false) => {
-    console.log('[Recipes] Fetching popular recipes, isRefresh:', isRefresh);
+  const fetchPopular = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     setError(null);
+    console.log('[Recipes] Fetching popular recipes, isRefresh:', isRefresh);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('popular-recipes', {
-        method: 'GET',
-      });
+      const { data, error: fnError } = await supabase.functions.invoke('popular-recipes', { method: 'GET' });
       if (fnError) {
-        console.error('[Recipes] Edge function error:', fnError);
+        console.error('[Recipes] popular-recipes error:', fnError);
         setError('Failed to load recipes. Pull to refresh.');
       } else {
-        const list: PopularRecipe[] = Array.isArray(data) ? data : (data?.recipes ?? []);
-        console.log('[Recipes] Fetched', list.length, 'popular recipes');
-        setRecipes(list);
+        console.log('[Recipes] popular-recipes response — trending:', data?.trending?.length ?? 0, 'popular_this_week:', data?.popular_this_week?.length ?? 0);
+        setTrending((data?.trending ?? []).map(normalizeRecipe));
+        setPopularThisWeek((data?.popular_this_week ?? []).map(normalizeRecipe));
       }
     } catch (e: any) {
-      console.error('[Recipes] fetchRecipes error:', e?.message);
+      console.error('[Recipes] fetchPopular error:', e?.message);
       setError('Failed to load recipes. Pull to refresh.');
     } finally {
       setLoading(false);
@@ -165,83 +238,86 @@ export default function RecipesScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchRecipes(false);
-  }, [fetchRecipes]);
+  useEffect(() => { fetchPopular(false); }, [fetchPopular]);
 
   const handleRefresh = useCallback(() => {
     console.log('[Recipes] Pull-to-refresh triggered');
     setRefreshing(true);
-    fetchRecipes(true);
-  }, [fetchRecipes]);
+    fetchPopular(true);
+  }, [fetchPopular]);
 
-  const handleRecipePress = useCallback((recipe: PopularRecipe) => {
-    console.log('[Recipes] Recipe card pressed — id:', recipe.id, 'name:', recipe.name);
+  // Search with debounce
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchText(text);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!text.trim()) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      console.log('[Recipes] Search request fired, query:', text.trim());
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data, error: fnError } = await supabase.functions.invoke('recipe-finder', {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+          body: { query: text.trim(), type: 'search' },
+        });
+        if (fnError) {
+          console.error('[Recipes] search error:', fnError);
+          setSearchResults([]);
+        } else {
+          const results = (data?.recipes ?? []).map(normalizeRecipe);
+          console.log('[Recipes] Search results count:', results.length);
+          setSearchResults(results);
+        }
+      } catch (e: any) {
+        console.error('[Recipes] search error:', e?.message);
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 500);
+  }, []);
 
-    // Fire-and-forget click increment
+  const handleRecipePress = useCallback((recipe: RecipeItem | any) => {
+    const normalized = normalizeRecipe(recipe);
+    console.log('[Recipes] Recipe pressed, tracking click:', normalized.id, normalized.name);
+    // Fire-and-forget click tracking
     supabase.functions.invoke('popular-recipes', {
       method: 'POST',
-      body: { id: recipe.id },
-    }).then(() => {
-      console.log('[Recipes] Click count incremented for recipe:', recipe.id);
-    }).catch((e: any) => {
-      console.warn('[Recipes] Failed to increment click count:', e?.message);
-    });
-
-    // Build a RecipeResult-compatible object for the detail screen
-    const recipeParam = {
-      id: recipe.id,
-      name: recipe.name,
-      description: recipe.description ?? '',
-      image_url: recipe.image_url ?? null,
-      source_name: recipe.source_name ?? 'Popular Recipes',
-      source_url: recipe.source_url ?? null,
-      prep_time_minutes: recipe.prep_time_minutes ?? null,
-      servings: recipe.servings ?? 1,
-      calories_per_serving: Number(recipe.calories_per_serving) || 0,
-      protein_per_serving: Number(recipe.protein_per_serving) || 0,
-      carbs_per_serving: Number(recipe.carbs_per_serving) || 0,
-      fat_per_serving: Number(recipe.fat_per_serving) || 0,
-      fiber_per_serving: Number(recipe.fiber_per_serving) || 0,
-      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-      instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
-      reviews: Array.isArray(recipe.reviews) ? recipe.reviews : [],
-      tags: Array.isArray(recipe.tags) ? recipe.tags : [],
-      is_saved: false,
-    };
+      body: { id: normalized.id },
+    }).catch(() => {});
 
     router.push({
       pathname: '/recipe-finder-detail',
-      params: { recipe: JSON.stringify(recipeParam) },
+      params: { recipe: JSON.stringify(normalized) },
     });
   }, [router]);
 
-  const renderItem = useCallback(({ item, index }: { item: PopularRecipe; index: number }) => {
-    const isLeft = index % 2 === 0;
-    return (
-      <View style={[styles.gridItem, isLeft ? { paddingRight: spacing.xs / 2 } : { paddingLeft: spacing.xs / 2 }]}>
-        <RecipeCard
-          recipe={item}
-          onPress={() => handleRecipePress(item)}
-          isDark={isDark}
-        />
-      </View>
-    );
-  }, [handleRecipePress, isDark]);
+  const handleSearchResultPress = useCallback((recipe: any) => {
+    console.log('[Recipes] Search result selected:', recipe.name);
+    setSearchText('');
+    setSearchResults([]);
+    handleRecipePress(recipe);
+  }, [handleRecipePress]);
 
-  const headerComponent = (
-    <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-      <Text style={[styles.headerTitle, { color: textColor }]}>Most Popular</Text>
-      <Text style={[styles.headerSubtitle, { color: subColor }]}>
-        {'What people are cooking right now 🔥'}
-      </Text>
-    </View>
-  );
+  const handleClearSearch = useCallback(() => {
+    console.log('[Recipes] Search cleared');
+    setSearchText('');
+    setSearchResults([]);
+  }, []);
+
+  const isSearchActive = searchText.trim().length > 0;
+  const headerPaddingTop = insets.top + spacing.md;
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: bg }]}>
-        {headerComponent}
+      <View style={[styles.container, { backgroundColor: bg }]}>
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+          <Text style={[styles.headerTitle, { color: textColor }]}>Recipes</Text>
+        </View>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: subColor }]}>Loading recipes...</Text>
@@ -250,54 +326,11 @@ export default function RecipesScreen() {
     );
   }
 
-  if (error) {
-    return (
-      <View style={[styles.container, { backgroundColor: bg }]}>
-        {headerComponent}
-        <View style={styles.centered}>
-          <Text style={[styles.errorText, { color: subColor }]}>{error}</Text>
-          <Pressable
-            onPress={() => {
-              console.log('[Recipes] Retry button pressed');
-              fetchRecipes(false);
-            }}
-            style={[styles.retryBtn, { backgroundColor: colors.primary }]}
-            accessibilityRole="button"
-          >
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  if (recipes.length === 0) {
-    return (
-      <View style={[styles.container, { backgroundColor: bg }]}>
-        {headerComponent}
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: spacing.md }} />
-          <Text style={[styles.emptyTitle, { color: textColor }]}>Generating popular recipes...</Text>
-          <Text style={[styles.emptySubtitle, { color: subColor }]}>
-            Check back soon — we're curating the best recipes for you.
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      <FlatList
-        data={recipes}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        numColumns={2}
-        ListHeaderComponent={headerComponent}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: insets.bottom + 100 },
-        ]}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -306,131 +339,169 @@ export default function RecipesScreen() {
             colors={[colors.primary]}
           />
         }
-        showsVerticalScrollIndicator={false}
-        columnWrapperStyle={styles.columnWrapper}
-      />
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+          <Text style={[styles.headerTitle, { color: textColor }]}>Recipes</Text>
+          <Text style={[styles.headerSubtitle, { color: subColor }]}>Discover what people are cooking 🍳</Text>
+        </View>
+
+        {/* Search bar */}
+        <View style={[styles.searchContainer, { marginHorizontal: spacing.md, marginBottom: spacing.md }]}>
+          <View style={[styles.searchBar, { backgroundColor: inputBg, borderColor }]}>
+            <Search size={18} color={subColor} />
+            <TextInput
+              style={[styles.searchInput, { color: textColor }]}
+              placeholder="Search any recipe..."
+              placeholderTextColor={subColor}
+              value={searchText}
+              onChangeText={handleSearchChange}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {searchText.length > 0 && (
+              <Pressable onPress={handleClearSearch}>
+                <X size={18} color={subColor} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Search results dropdown */}
+          {isSearchActive && (
+            <View style={[styles.searchDropdown, { backgroundColor: cardBg, borderColor }]}>
+              {searchLoading ? (
+                <View style={styles.searchLoadingRow}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={[styles.searchLoadingText, { color: subColor }]}>Searching the web...</Text>
+                </View>
+              ) : searchResults.length === 0 ? (
+                <Text style={[styles.noResultsText, { color: subColor }]}>No recipes found. Try a different search.</Text>
+              ) : (
+                searchResults.map((recipe, idx) => (
+                  <SearchResultRow
+                    key={recipe.id ?? idx}
+                    recipe={recipe}
+                    onPress={() => handleSearchResultPress(recipe)}
+                    isDark={isDark}
+                  />
+                ))
+              )}
+            </View>
+          )}
+        </View>
+
+        {error && (
+          <View style={styles.errorRow}>
+            <Text style={[styles.errorText, { color: subColor }]}>{error}</Text>
+          </View>
+        )}
+
+        {/* Trending Now */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: textColor }]}>🔥 Trending Now</Text>
+          <Text style={[styles.sectionSubtitle, { color: subColor }]}>Most clicked this week</Text>
+        </View>
+        {trending.length === 0 ? (
+          <Text style={[styles.emptySection, { color: subColor }]}>Loading trending recipes...</Text>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.trendingList}
+          >
+            {trending.map((recipe) => (
+              <TrendingCard
+                key={recipe.id}
+                recipe={recipe}
+                onPress={() => handleRecipePress(recipe)}
+                isDark={isDark}
+              />
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Popular This Week */}
+        <View style={[styles.sectionHeader, { marginTop: spacing.lg }]}>
+          <Text style={[styles.sectionTitle, { color: textColor }]}>✨ Popular This Week</Text>
+          <Text style={[styles.sectionSubtitle, { color: subColor }]}>Trending in the community</Text>
+        </View>
+        {popularThisWeek.length === 0 ? (
+          <Text style={[styles.emptySection, { color: subColor }]}>Loading popular recipes...</Text>
+        ) : (
+          <View style={[styles.popularGrid, { paddingHorizontal: spacing.md }]}>
+            {popularThisWeek.map((recipe, idx) => {
+              const gridItemStyle = idx % 2 === 0 ? { paddingRight: 4 } : { paddingLeft: 4 };
+              return (
+                <View key={recipe.id} style={[styles.popularGridItem, gridItemStyle]}>
+                  <PopularCard
+                    recipe={recipe}
+                    onPress={() => handleRecipePress(recipe)}
+                    isDark={isDark}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  header: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginBottom: 4 },
+  headerSubtitle: { fontSize: 14 },
+  loadingText: { marginTop: spacing.md, fontSize: 14 },
+  errorRow: { paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+  errorText: { fontSize: 13, textAlign: 'center' },
+  searchContainer: { position: 'relative', zIndex: 100 },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: 10,
+    borderRadius: borderRadius.lg, borderWidth: 1,
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  header: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    fontWeight: '400',
-  },
-  listContent: {
-    paddingHorizontal: spacing.md,
-  },
-  columnWrapper: {
-    marginBottom: spacing.sm,
-  },
-  gridItem: {
-    flex: 1,
-  },
-  card: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
+  searchInput: { flex: 1, fontSize: 15, padding: 0 },
+  searchDropdown: {
+    position: 'absolute', top: '100%', left: 0, right: 0,
+    borderRadius: borderRadius.lg, borderWidth: 1,
+    marginTop: 4, maxHeight: 380, zIndex: 200,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 8, elevation: 8,
     overflow: 'hidden',
   },
-  cardImage: {
-    width: '100%',
-    height: 160,
-  },
-  cardBody: {
-    padding: spacing.sm,
-  },
-  cardName: {
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
-    marginBottom: spacing.xs,
-  },
-  cardMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginBottom: 4,
-  },
-  metaPill: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    gap: 2,
-  },
-  metaPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  metaPillUnit: {
-    fontSize: 10,
-    fontWeight: '400',
-  },
-  prepTime: {
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  popularRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 2,
-  },
-  fireEmoji: {
-    fontSize: 11,
-  },
-  popularText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: 14,
-  },
-  errorText: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  retryBtn: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: 12,
-    borderRadius: borderRadius.md,
-  },
-  retryBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  searchLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
+  searchLoadingText: { fontSize: 14 },
+  noResultsText: { padding: spacing.md, fontSize: 14, textAlign: 'center' },
+  searchResultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderBottomWidth: 1 },
+  searchResultImage: { width: 52, height: 52, borderRadius: borderRadius.sm },
+  searchResultInfo: { flex: 1 },
+  searchResultName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  searchResultMeta: { fontSize: 12 },
+  sectionHeader: { paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 2 },
+  sectionSubtitle: { fontSize: 12 },
+  emptySection: { paddingHorizontal: spacing.md, fontSize: 13, marginBottom: spacing.md },
+  trendingList: { paddingHorizontal: spacing.md, gap: spacing.sm, paddingBottom: 4 },
+  trendingCard: { width: 200, borderRadius: borderRadius.lg, borderWidth: 1, overflow: 'hidden' },
+  trendingImage: { width: '100%', height: 130 },
+  trendingBody: { padding: spacing.sm },
+  trendingName: { fontSize: 13, fontWeight: '700', lineHeight: 18, marginBottom: 4 },
+  trendingSource: { fontSize: 11, marginTop: 4 },
+  popularGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  popularGridItem: { width: '50%', marginBottom: spacing.sm },
+  popularCard: { borderRadius: borderRadius.lg, borderWidth: 1, overflow: 'hidden' },
+  popularImage: { width: '100%', height: 150 },
+  popularBody: { padding: spacing.sm },
+  popularName: { fontSize: 13, fontWeight: '700', lineHeight: 18, marginBottom: 4 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
+  pill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.sm },
+  pillText: { fontSize: 11, fontWeight: '600' },
+  prepTime: { fontSize: 11, marginBottom: 2 },
+  clickRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  fireEmoji: { fontSize: 11 },
+  clickText: { fontSize: 11, fontWeight: '500' },
 });
