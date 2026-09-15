@@ -1,5 +1,5 @@
 /**
- * Recipes Tab — Trending Now + Popular This Week + Search
+ * Recipes Tab — Trending Now + Popular This Week + Search + Category Filters
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
@@ -56,6 +56,56 @@ function normalizeRecipe(recipe: any): RecipeItem {
     reviews: Array.isArray(recipe.reviews) ? recipe.reviews : [],
   };
 }
+
+// ── Category filter definitions ───────────────────────────────────────────────
+interface FilterDef {
+  id: string;
+  label: string;
+  match: (r: RecipeItem) => boolean;
+}
+
+const FILTERS: FilterDef[] = [
+  { id: 'all', label: 'All', match: () => true },
+  {
+    id: 'high-protein',
+    label: '🔥 High Protein',
+    match: (r) => r.protein_per_serving != null && Number(r.protein_per_serving) >= 30,
+  },
+  {
+    id: 'low-carb',
+    label: '🥗 Low Carb',
+    match: (r) => r.carbs_per_serving != null && Number(r.carbs_per_serving) <= 20,
+  },
+  {
+    id: 'vegetarian',
+    label: '🌱 Vegetarian',
+    match: (r) => {
+      const tags = r.tags.map((t: any) => String(t).toLowerCase());
+      return tags.includes('vegetarian') || tags.includes('vegan');
+    },
+  },
+  {
+    id: 'quick',
+    label: '⚡ Quick',
+    match: (r) => r.prep_time_minutes != null && Number(r.prep_time_minutes) <= 20,
+  },
+  {
+    id: 'breakfast',
+    label: '🍳 Breakfast',
+    match: (r) => {
+      const tags = r.tags.map((t: any) => String(t).toLowerCase());
+      return tags.includes('breakfast');
+    },
+  },
+  {
+    id: 'keto',
+    label: '🥩 Keto',
+    match: (r) => {
+      const tags = r.tags.map((t: any) => String(t).toLowerCase());
+      return tags.includes('keto') || (r.carbs_per_serving != null && Number(r.carbs_per_serving) <= 10);
+    },
+  },
+];
 
 // ── Trending card (horizontal) ────────────────────────────────────────────────
 function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress: () => void; isDark: boolean }) {
@@ -201,6 +251,7 @@ export default function RecipesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string>('all');
 
   // Search state
   const [searchText, setSearchText] = useState('');
@@ -309,8 +360,20 @@ export default function RecipesScreen() {
     setSearchResults([]);
   }, []);
 
+  const handleFilterPress = useCallback((filterId: string) => {
+    console.log('[Recipes] Filter selected:', filterId);
+    setActiveFilter(filterId);
+  }, []);
+
   const isSearchActive = searchText.trim().length > 0;
   const headerPaddingTop = insets.top + spacing.md;
+
+  // Derive filtered lists client-side
+  const activeFilterDef = FILTERS.find((f) => f.id === activeFilter) ?? FILTERS[0];
+  const filteredTrending = activeFilter === 'all' ? trending : trending.filter(activeFilterDef.match);
+  const filteredPopular = activeFilter === 'all' ? popularThisWeek : popularThisWeek.filter(activeFilterDef.match);
+  const noFilterResults = activeFilter !== 'all' && filteredTrending.length === 0 && filteredPopular.length === 0;
+  const emptyFilterMessage = `No ${activeFilterDef.label.replace(/^[^\w]+/, '')} recipes yet — search to add some!`;
 
   if (loading) {
     return (
@@ -391,58 +454,95 @@ export default function RecipesScreen() {
           )}
         </View>
 
+        {/* Category filter bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.filterList, { paddingHorizontal: spacing.md }]}
+          style={styles.filterBar}
+        >
+          {FILTERS.map((filter) => {
+            const isActive = activeFilter === filter.id;
+            const chipBg = isActive ? colors.primary : 'transparent';
+            const chipBorder = isActive ? colors.primary : borderColor;
+            const chipText = isActive ? '#FFFFFF' : subColor;
+            return (
+              <Pressable
+                key={filter.id}
+                onPress={() => handleFilterPress(filter.id)}
+                style={[styles.filterChip, { backgroundColor: chipBg, borderColor: chipBorder }]}
+              >
+                <Text style={[styles.filterChipText, { color: chipText }]}>{filter.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         {error && (
           <View style={styles.errorRow}>
             <Text style={[styles.errorText, { color: subColor }]}>{error}</Text>
           </View>
         )}
 
-        {/* Trending Now */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>🔥 Trending Now</Text>
-          <Text style={[styles.sectionSubtitle, { color: subColor }]}>Most clicked this week</Text>
-        </View>
-        {trending.length === 0 ? (
-          <Text style={[styles.emptySection, { color: subColor }]}>Loading trending recipes...</Text>
+        {/* Empty state when filter has no matches */}
+        {noFilterResults ? (
+          <View style={styles.filterEmptyState}>
+            <Text style={[styles.filterEmptyText, { color: subColor }]}>{emptyFilterMessage}</Text>
+          </View>
         ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.trendingList}
-          >
-            {trending.map((recipe) => (
-              <TrendingCard
-                key={recipe.id}
-                recipe={recipe}
-                onPress={() => handleRecipePress(recipe)}
-                isDark={isDark}
-              />
-            ))}
-          </ScrollView>
-        )}
-
-        {/* Popular This Week */}
-        <View style={[styles.sectionHeader, { marginTop: spacing.lg }]}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>✨ Popular This Week</Text>
-          <Text style={[styles.sectionSubtitle, { color: subColor }]}>Trending in the community</Text>
-        </View>
-        {popularThisWeek.length === 0 ? (
-          <Text style={[styles.emptySection, { color: subColor }]}>Loading popular recipes...</Text>
-        ) : (
-          <View style={[styles.popularGrid, { paddingHorizontal: spacing.md }]}>
-            {popularThisWeek.map((recipe, idx) => {
-              const gridItemStyle = idx % 2 === 0 ? { paddingRight: 4 } : { paddingLeft: 4 };
-              return (
-                <View key={recipe.id} style={[styles.popularGridItem, gridItemStyle]}>
-                  <PopularCard
+          <>
+            {/* Trending Now */}
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>🔥 Trending Now</Text>
+              <Text style={[styles.sectionSubtitle, { color: subColor }]}>Most clicked this week</Text>
+            </View>
+            {filteredTrending.length === 0 ? (
+              <Text style={[styles.emptySection, { color: subColor }]}>
+                {trending.length === 0 ? 'Loading trending recipes...' : 'No matches in trending.'}
+              </Text>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.trendingList}
+              >
+                {filteredTrending.map((recipe) => (
+                  <TrendingCard
+                    key={recipe.id}
                     recipe={recipe}
                     onPress={() => handleRecipePress(recipe)}
                     isDark={isDark}
                   />
-                </View>
-              );
-            })}
-          </View>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Popular This Week */}
+            <View style={[styles.sectionHeader, { marginTop: spacing.lg }]}>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>✨ Popular This Week</Text>
+              <Text style={[styles.sectionSubtitle, { color: subColor }]}>Trending in the community</Text>
+            </View>
+            {filteredPopular.length === 0 ? (
+              <Text style={[styles.emptySection, { color: subColor }]}>
+                {popularThisWeek.length === 0 ? 'Loading popular recipes...' : 'No matches in popular.'}
+              </Text>
+            ) : (
+              <View style={[styles.popularGrid, { paddingHorizontal: spacing.md }]}>
+                {filteredPopular.map((recipe, idx) => {
+                  const gridItemStyle = idx % 2 === 0 ? { paddingRight: 4 } : { paddingLeft: 4 };
+                  return (
+                    <View key={recipe.id} style={[styles.popularGridItem, gridItemStyle]}>
+                      <PopularCard
+                        recipe={recipe}
+                        onPress={() => handleRecipePress(recipe)}
+                        isDark={isDark}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -481,6 +581,18 @@ const styles = StyleSheet.create({
   searchResultInfo: { flex: 1 },
   searchResultName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   searchResultMeta: { fontSize: 12 },
+  filterBar: { marginBottom: spacing.md },
+  filterList: { gap: spacing.sm, paddingVertical: 2 },
+  filterChip: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1,
+  },
+  filterChipText: { fontSize: 13, fontWeight: '600' },
+  filterEmptyState: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  filterEmptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
   sectionHeader: { paddingHorizontal: spacing.md, marginBottom: spacing.sm },
   sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 2 },
   sectionSubtitle: { fontSize: 12 },
