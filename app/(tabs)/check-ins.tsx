@@ -250,12 +250,6 @@ export default function CommunityScreen() {
 
   // Recipes state
   const {
-    searchRecipes,
-    searchResults: recipeSearchResults,
-    searchLoading: recipeSearchLoading,
-    searchError: recipeSearchError,
-    dailySuggestions,
-    suggestionsLoading,
     loadDailySuggestions,
     savedRecipes,
     saveRecipe,
@@ -263,14 +257,18 @@ export default function CommunityScreen() {
     loadSavedRecipes,
   } = useRecipeFinder();
   const [recipeQuery, setRecipeQuery] = useState('');
-  const [recipeSearchActive, setRecipeSearchActive] = useState(false);
-  const recipeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipesInitialized = useRef(false);
 
   // Popular recipes state
   const [popularRecipes, setPopularRecipes] = useState<RecipeResult[]>([]);
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState<string | null>(null);
+
+  // Recipe library search state (edge function)
+  const [recipeSearchResults2, setRecipeSearchResults2] = useState<RecipeResult[]>([]);
+  const [recipeSearchLoading2, setRecipeSearchLoading2] = useState(false);
+  const [recipeSearchError2, setRecipeSearchError2] = useState<string | null>(null);
+  const recipeDebounceRef2 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -714,28 +712,34 @@ export default function CommunityScreen() {
     );
   };
 
-  // ─── Recipe search handler ────────────────────────────────────────────────────
+  // ─── Recipe search handler (edge function) ───────────────────────────────────
   const handleRecipeSearchChange = useCallback((text: string) => {
     setRecipeQuery(text);
-    if (recipeDebounceRef.current) clearTimeout(recipeDebounceRef.current);
+    if (recipeDebounceRef2.current) clearTimeout(recipeDebounceRef2.current);
     if (!text.trim()) {
-      setRecipeSearchActive(false);
+      setRecipeSearchResults2([]);
+      setRecipeSearchError2(null);
       return;
     }
-    recipeDebounceRef.current = setTimeout(() => {
-      console.log('[Community] Recipe search — query:', text);
-      setRecipeSearchActive(true);
-      searchRecipes(text.trim());
-    }, 800);
-  }, [searchRecipes]);
-
-  const handleRecipeSearchSubmit = useCallback(() => {
-    if (!recipeQuery.trim()) return;
-    console.log('[Community] Recipe search submitted — query:', recipeQuery);
-    if (recipeDebounceRef.current) clearTimeout(recipeDebounceRef.current);
-    setRecipeSearchActive(true);
-    searchRecipes(recipeQuery.trim());
-  }, [recipeQuery, searchRecipes]);
+    recipeDebounceRef2.current = setTimeout(async () => {
+      console.log('[Community] Recipe library search — query:', text);
+      setRecipeSearchLoading2(true);
+      setRecipeSearchError2(null);
+      try {
+        const { data, error } = await supabase.functions.invoke('recipe-search', { body: { query: text.trim() } });
+        if (error) throw error;
+        const results: RecipeResult[] = Array.isArray(data) ? data : (data?.recipes ?? []);
+        console.log('[Community] Recipe library search — found', results.length, 'results');
+        setRecipeSearchResults2(results);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Search failed';
+        console.error('[Community] Recipe library search error:', msg);
+        setRecipeSearchError2(msg);
+      } finally {
+        setRecipeSearchLoading2(false);
+      }
+    }, 500);
+  }, []);
 
   const handleRecipeSave = useCallback(async (recipe: RecipeResult) => {
     console.log('[Community] Recipe save toggled — id:', recipe.id, 'saved:', recipe.is_saved);
@@ -746,9 +750,19 @@ export default function CommunityScreen() {
     }
   }, [saveRecipe, unsaveRecipe]);
 
+  const handleRecipePress = useCallback((recipe: RecipeResult) => {
+    console.log('[Community] Recipe card pressed — id:', recipe.id, 'name:', recipe.name);
+    supabase.functions.invoke('popular-recipes', {
+      body: { action: 'click', recipe_id: recipe.id, recipe_name: recipe.name },
+    }).catch(() => {});
+    router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
+  }, [router]);
+
   // ─── Render Recipes ───────────────────────────────────────────────────────────
   const renderRecipes = () => {
-    const displayResults = recipeSearchActive ? recipeSearchResults : [];
+    const isSearchActive = recipeQuery.trim().length > 0;
+    const trendingRecipes = popularRecipes.slice(0, 5);
+    const popularThisWeek = popularRecipes.slice(5, 20);
 
     return (
       <KeyboardAvoidingView
@@ -760,22 +774,22 @@ export default function CommunityScreen() {
           <Search size={18} color={subColor} />
           <TextInput
             style={[styles.searchInput, { color: textColor }]}
-            placeholder="Search any recipe..."
+            placeholder="Search recipes..."
             placeholderTextColor={subColor}
             value={recipeQuery}
             onChangeText={handleRecipeSearchChange}
-            onSubmitEditing={handleRecipeSearchSubmit}
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
           />
-          {recipeSearchLoading && <ActivityIndicator size="small" color={colors.primary} />}
-          {recipeQuery.length > 0 && !recipeSearchLoading && (
+          {recipeSearchLoading2 && <ActivityIndicator size="small" color={colors.primary} />}
+          {recipeQuery.length > 0 && !recipeSearchLoading2 && (
             <Pressable
               onPress={() => {
                 console.log('[Community] Recipe search cleared');
                 setRecipeQuery('');
-                setRecipeSearchActive(false);
+                setRecipeSearchResults2([]);
+                setRecipeSearchError2(null);
               }}
               accessibilityRole="button"
             >
@@ -789,19 +803,19 @@ export default function CommunityScreen() {
           contentContainerStyle={{ paddingBottom: 120 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Search results */}
-          {recipeSearchActive ? (
+          {isSearchActive ? (
+            /* ── Search results ── */
             <View style={{ paddingHorizontal: spacing.md }}>
-              {recipeSearchLoading ? (
+              {recipeSearchLoading2 ? (
                 [0, 1, 2].map((i) => <RecipeSkeletonCard key={i} isDark={isDark} />)
-              ) : recipeSearchError ? (
+              ) : recipeSearchError2 ? (
                 <View style={styles.emptyState}>
                   <Text style={[styles.emptyTitle, { color: textColor }]}>Search failed</Text>
-                  <Text style={[styles.emptySubtitle, { color: subColor }]}>{recipeSearchError}</Text>
+                  <Text style={[styles.emptySubtitle, { color: subColor }]}>{recipeSearchError2}</Text>
                   <Pressable
                     onPress={() => {
-                      console.log('[Community] Recipe search retry pressed');
-                      searchRecipes(recipeQuery.trim());
+                      console.log('[Community] Recipe search retry pressed — query:', recipeQuery);
+                      handleRecipeSearchChange(recipeQuery);
                     }}
                     style={styles.retryBtn}
                     accessibilityRole="button"
@@ -809,21 +823,18 @@ export default function CommunityScreen() {
                     <Text style={styles.retryBtnText}>Try again</Text>
                   </Pressable>
                 </View>
-              ) : displayResults.length === 0 ? (
+              ) : recipeSearchResults2.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={[styles.emptyTitle, { color: textColor }]}>No recipes found</Text>
                   <Text style={[styles.emptySubtitle, { color: subColor }]}>Try a different search term</Text>
                 </View>
               ) : (
-                displayResults.map((recipe) => (
+                recipeSearchResults2.map((recipe) => (
                   <View key={recipe.id} style={{ marginBottom: spacing.sm }}>
                     <RecipeCard
                       recipe={recipe}
                       isDark={isDark}
-                      onPress={() => {
-                        console.log('[Community] Recipe card pressed — id:', recipe.id, 'name:', recipe.name);
-                        router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
-                      }}
+                      onPress={() => handleRecipePress(recipe)}
                       onSave={() => handleRecipeSave(recipe)}
                     />
                   </View>
@@ -832,21 +843,28 @@ export default function CommunityScreen() {
             </View>
           ) : (
             <>
-              {/* Most Popular Recipes — 2-column grid */}
+              {/* ── Section 1: Trending Now ── */}
               <View style={recipeStyles.sectionHeader}>
-                <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Most Popular Recipes</Text>
+                <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
+                  🔥 Trending Now
+                </Text>
+                <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
+                  Most clicked in the last 48h
+                </Text>
               </View>
 
               {popularLoading ? (
-                <View style={recipeStyles.popularGrid}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={recipeStyles.horizontalList}
+                >
                   {[0, 1, 2, 3].map((i) => (
-                    <View key={i} style={recipeStyles.popularGridItem}>
-                      <RecipeSkeletonCard isDark={isDark} />
-                    </View>
+                    <RecipeSkeletonCard key={i} isDark={isDark} horizontal />
                   ))}
-                </View>
+                </ScrollView>
               ) : popularError ? (
-                <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
+                <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor }]}>
                   <ChefHat size={24} color={subColor} />
                   <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>{popularError}</Text>
                   <Pressable
@@ -860,26 +878,63 @@ export default function CommunityScreen() {
                     <Text style={styles.retryBtnText}>Try again</Text>
                   </Pressable>
                 </View>
-              ) : popularRecipes.length > 0 ? (
-                <View style={recipeStyles.popularGrid}>
-                  {popularRecipes.map((recipe) => (
-                    <View key={recipe.id} style={recipeStyles.popularGridItem}>
-                      <RecipeCard
-                        recipe={recipe}
-                        isDark={isDark}
-                        onPress={() => {
-                          console.log('[Community] Popular recipe pressed — id:', recipe.id, 'name:', recipe.name);
-                          supabase.functions.invoke('popular-recipes', { method: 'POST', body: { id: recipe.id } } as any).catch(() => {});
-                          router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
-                        }}
-                        onSave={() => handleRecipeSave(recipe)}
-                      />
-                    </View>
+              ) : trendingRecipes.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={recipeStyles.horizontalList}
+                >
+                  {trendingRecipes.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      isDark={isDark}
+                      horizontal
+                      onPress={() => handleRecipePress(recipe)}
+                      onSave={() => handleRecipeSave(recipe)}
+                    />
                   ))}
-                </View>
+                </ScrollView>
               ) : null}
 
-              {/* Saved recipes */}
+              {/* ── Section 2: Popular This Week ── */}
+              {(popularLoading || popularThisWeek.length > 0) && (
+                <>
+                  <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
+                    <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
+                      ✨ Popular This Week
+                    </Text>
+                    <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
+                      Top picks from the web
+                    </Text>
+                  </View>
+
+                  {popularLoading ? (
+                    <View style={recipeStyles.popularGrid}>
+                      {[0, 1, 2, 3].map((i) => (
+                        <View key={i} style={recipeStyles.popularGridItem}>
+                          <RecipeSkeletonCard isDark={isDark} />
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={recipeStyles.popularGrid}>
+                      {popularThisWeek.map((recipe) => (
+                        <View key={recipe.id} style={recipeStyles.popularGridItem}>
+                          <RecipeCard
+                            recipe={recipe}
+                            isDark={isDark}
+                            onPress={() => handleRecipePress(recipe)}
+                            onSave={() => handleRecipeSave(recipe)}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* ── Saved recipes ── */}
               <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
                 <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Saved Recipes</Text>
               </View>
@@ -898,10 +953,7 @@ export default function CommunityScreen() {
                       key={recipe.id}
                       recipe={recipe}
                       isDark={isDark}
-                      onPress={() => {
-                        console.log('[Community] Saved recipe pressed — id:', recipe.id, 'name:', recipe.name);
-                        router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
-                      }}
+                      onPress={() => handleRecipePress(recipe)}
                       onSave={() => handleRecipeSave(recipe)}
                     />
                   ))}
