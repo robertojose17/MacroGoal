@@ -426,7 +426,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
 
             {/* Source row */}
             <View style={styles.sourceRow}>
-              {recipe.source_url ? (
+              {recipe.source_url && recipe.url_verified !== false ? (
                 <Pressable
                   onPress={() => {
                     console.log('[RecipeDetail] Source link pressed — url:', recipe.source_url);

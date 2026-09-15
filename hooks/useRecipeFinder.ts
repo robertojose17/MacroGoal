@@ -28,6 +28,7 @@ export type RecipeResult = {
   image_url: string | null;
   source_name: string;
   source_url: string | null;
+  url_verified?: boolean;
   prep_time_minutes: number | null;
   servings: number;
   calories_per_serving: number;
