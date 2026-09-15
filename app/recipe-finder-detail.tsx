@@ -142,14 +142,39 @@ export default function RecipeFinderDetailScreen() {
       if (!params.recipe) return null;
       const parsed = JSON.parse(params.recipe);
       console.log('[RecipeDetail] Parsed recipe from params — id:', parsed?.id, 'name:', parsed?.name || parsed?.title);
-      // Normalize all array fields to prevent null crashes
+
+      // Normalize instructions: can be strings OR objects like { step: 1, text: "..." }
+      const normalizeInstruction = (s: any): string => {
+        if (typeof s === 'string') return s;
+        if (s && typeof s === 'object') return String(s.text ?? s.description ?? s.instruction ?? s.step_text ?? JSON.stringify(s));
+        return String(s ?? '');
+      };
+
+      // Normalize ingredients: ensure all fields are primitives
+      const normalizeIngredient = (ing: any) => ({
+        name: String(ing?.name ?? ''),
+        amount: String(ing?.amount ?? ''),
+        calories: Number(ing?.calories ?? 0),
+        protein: Number(ing?.protein ?? 0),
+        carbs: Number(ing?.carbs ?? 0),
+        fat: Number(ing?.fat ?? 0),
+      });
+
       return {
         ...parsed,
-        name: parsed.name || parsed.title || 'Recipe',
-        tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
-        instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
+        name: String(parsed.name ?? parsed.title ?? 'Recipe'),
+        description: String(parsed.description ?? ''),
+        source_name: String(parsed.source_name ?? ''),
+        tags: Array.isArray(parsed.tags) ? parsed.tags.map((t: any) => String(t)) : [],
+        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients.map(normalizeIngredient) : [],
+        instructions: Array.isArray(parsed.instructions) ? parsed.instructions.map(normalizeInstruction) : [],
         reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
+        calories_per_serving: Number(parsed.calories_per_serving ?? 0),
+        protein_per_serving: Number(parsed.protein_per_serving ?? 0),
+        carbs_per_serving: Number(parsed.carbs_per_serving ?? 0),
+        fat_per_serving: Number(parsed.fat_per_serving ?? 0),
+        fiber_per_serving: Number(parsed.fiber_per_serving ?? 0),
+        servings: Number(parsed.servings ?? 1),
       };
     } catch {
       return null;
@@ -532,9 +557,9 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                   idx < (recipe.ingredients ?? []).length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor },
                 ]}
               >
-                <Text style={[styles.ingredientName, { color: textColor }]}>{ing.name}</Text>
+                <Text style={[styles.ingredientName, { color: textColor }]}>{String(ing.name ?? '')}</Text>
                 <View style={styles.ingredientRight}>
-                  <Text style={[styles.ingredientAmount, { color: subColor }]}>{ing.amount}</Text>
+                  <Text style={[styles.ingredientAmount, { color: subColor }]}>{String(ing.amount ?? '')}</Text>
                   <Text style={[styles.ingredientCals, { color: subColor }]}>{ing.calories} cal</Text>
                 </View>
               </View>
@@ -563,7 +588,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 <View style={[styles.stepCircle, { backgroundColor: colors.primary }]}>
                   <Text style={styles.stepNumber}>{idx + 1}</Text>
                 </View>
-                <Text style={[styles.stepText, { color: textColor }]}>{step}</Text>
+                <Text style={[styles.stepText, { color: textColor }]}>{String(step)}</Text>
               </View>
             ))}
           </View>

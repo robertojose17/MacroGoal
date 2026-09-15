@@ -755,13 +755,18 @@ export default function CommunityScreen() {
     supabase.functions.invoke('popular-recipes', {
       body: { action: 'click', recipe_id: recipe.id, recipe_name: recipe.name },
     }).catch(() => {});
+    const normalizeInstruction = (s: any): string => {
+      if (typeof s === 'string') return s;
+      if (s && typeof s === 'object') return String(s.text ?? s.description ?? s.instruction ?? s.step_text ?? JSON.stringify(s));
+      return String(s ?? '');
+    };
     const normalized = {
       ...recipe,
       name: recipe.name || (recipe as any).title || 'Recipe',
       image_url: recipe.image_url || null,
       tags: Array.isArray(recipe.tags) ? recipe.tags : [],
       ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-      instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
+      instructions: Array.isArray(recipe.instructions) ? recipe.instructions.map(normalizeInstruction) : [],
       reviews: Array.isArray(recipe.reviews) ? recipe.reviews : [],
     };
     console.log('[Community] Navigating to recipe detail — normalized name:', normalized.name, 'ingredients:', normalized.ingredients.length, 'instructions:', normalized.instructions.length);
