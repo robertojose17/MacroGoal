@@ -751,11 +751,21 @@ export default function CommunityScreen() {
   }, [saveRecipe, unsaveRecipe]);
 
   const handleRecipePress = useCallback((recipe: RecipeResult) => {
-    console.log('[Community] Recipe card pressed — id:', recipe.id, 'name:', recipe.name);
+    console.log('[Community] Recipe card pressed — id:', recipe.id, 'name:', recipe.name || (recipe as any).title);
     supabase.functions.invoke('popular-recipes', {
       body: { action: 'click', recipe_id: recipe.id, recipe_name: recipe.name },
     }).catch(() => {});
-    router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(recipe) } });
+    const normalized = {
+      ...recipe,
+      name: recipe.name || (recipe as any).title || 'Recipe',
+      image_url: recipe.image_url || null,
+      tags: Array.isArray(recipe.tags) ? recipe.tags : [],
+      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+      instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
+      reviews: Array.isArray(recipe.reviews) ? recipe.reviews : [],
+    };
+    console.log('[Community] Navigating to recipe detail — normalized name:', normalized.name, 'ingredients:', normalized.ingredients.length, 'instructions:', normalized.instructions.length);
+    router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(normalized) } });
   }, [router]);
 
   // ─── Render Recipes ───────────────────────────────────────────────────────────

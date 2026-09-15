@@ -139,7 +139,18 @@ export default function RecipeFinderDetailScreen() {
   // Parse recipe from params
   const recipe: RecipeResult | null = (() => {
     try {
-      return params.recipe ? JSON.parse(params.recipe) : null;
+      if (!params.recipe) return null;
+      const parsed = JSON.parse(params.recipe);
+      console.log('[RecipeDetail] Parsed recipe from params — id:', parsed?.id, 'name:', parsed?.name || parsed?.title);
+      // Normalize all array fields to prevent null crashes
+      return {
+        ...parsed,
+        name: parsed.name || parsed.title || 'Recipe',
+        tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+        instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
+        reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
+      };
     } catch {
       return null;
     }
@@ -420,9 +431,9 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
             </View>
 
             {/* Tags */}
-            {recipe.tags.length > 0 && (
+            {(recipe.tags ?? []).length > 0 && (
               <View style={styles.tagsRow}>
-                {recipe.tags.map((tag) => {
+                {(recipe.tags ?? []).map((tag) => {
                   const tagColor = TAG_COLORS[tag] || colors.primary;
                   return (
                     <View key={tag} style={[styles.tagPill, { backgroundColor: tagColor + '18', borderColor: tagColor + '40' }]}>
@@ -507,18 +518,18 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
               accessibilityRole="button"
             >
               <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Ingredients ({recipe.ingredients.length})
+                Ingredients ({(recipe.ingredients ?? []).length})
               </Text>
               {ingredientsExpanded
                 ? <ChevronUp size={18} color={subColor} />
                 : <ChevronDown size={18} color={subColor} />}
             </Pressable>
-            {ingredientsExpanded && recipe.ingredients.map((ing, idx) => (
+            {ingredientsExpanded && (recipe.ingredients ?? []).map((ing, idx) => (
               <View
                 key={idx}
                 style={[
                   styles.ingredientRow,
-                  idx < recipe.ingredients.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor },
+                  idx < (recipe.ingredients ?? []).length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor },
                 ]}
               >
                 <Text style={[styles.ingredientName, { color: textColor }]}>{ing.name}</Text>
@@ -541,13 +552,13 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
               accessibilityRole="button"
             >
               <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Instructions ({recipe.instructions.length} steps)
+                Instructions ({(recipe.instructions ?? []).length} steps)
               </Text>
               {instructionsExpanded
                 ? <ChevronUp size={18} color={subColor} />
                 : <ChevronDown size={18} color={subColor} />}
             </Pressable>
-            {instructionsExpanded && recipe.instructions.map((step, idx) => (
+            {instructionsExpanded && (recipe.instructions ?? []).map((step, idx) => (
               <View key={idx} style={styles.instructionRow}>
                 <View style={[styles.stepCircle, { backgroundColor: colors.primary }]}>
                   <Text style={styles.stepNumber}>{idx + 1}</Text>
@@ -558,7 +569,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           </View>
 
           {/* Reviews */}
-          {recipe.reviews.length > 0 && (
+          {(recipe.reviews ?? []).length > 0 && (
             <View style={[styles.card, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md, marginTop: spacing.md }]}>
               <Pressable
                 onPress={() => {
@@ -569,13 +580,13 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 accessibilityRole="button"
               >
                 <Text style={[styles.sectionTitle, { color: textColor }]}>
-                  Reviews ({recipe.reviews.length})
+                  Reviews ({(recipe.reviews ?? []).length})
                 </Text>
                 {reviewsExpanded
                   ? <ChevronUp size={18} color={subColor} />
                   : <ChevronDown size={18} color={subColor} />}
               </Pressable>
-              {reviewsExpanded && recipe.reviews.map((review, idx) => (
+              {reviewsExpanded && (recipe.reviews ?? []).map((review, idx) => (
                 <View
                   key={idx}
                   style={[
