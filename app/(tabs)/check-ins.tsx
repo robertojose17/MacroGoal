@@ -260,7 +260,8 @@ export default function CommunityScreen() {
   const recipesInitialized = useRef(false);
 
   // Popular recipes state
-  const [popularRecipes, setPopularRecipes] = useState<RecipeResult[]>([]);
+  const [trendingRecipes, setTrendingRecipes] = useState<RecipeResult[]>([]);
+  const [popularThisWeek, setPopularThisWeek] = useState<RecipeResult[]>([]);
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState<string | null>(null);
 
@@ -368,9 +369,11 @@ export default function CommunityScreen() {
     try {
       const { data, error } = await supabase.functions.invoke('popular-recipes', { method: 'GET' } as any);
       if (error) throw error;
-      const recipes: RecipeResult[] = Array.isArray(data) ? data : (data?.recipes ?? []);
-      console.log('[Community] loadPopularRecipes — loaded', recipes.length, 'recipes');
-      setPopularRecipes(recipes);
+      const trending: RecipeResult[] = Array.isArray(data?.trending) ? data.trending : [];
+      const popular: RecipeResult[] = Array.isArray(data?.popular_this_week) ? data.popular_this_week : [];
+      console.log('[Community] loadPopularRecipes — trending:', trending.length, 'popular_this_week:', popular.length);
+      setTrendingRecipes(trending);
+      setPopularThisWeek(popular);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load popular recipes';
       console.error('[Community] loadPopularRecipes error:', msg);
@@ -776,8 +779,6 @@ export default function CommunityScreen() {
   // ─── Render Recipes ───────────────────────────────────────────────────────────
   const renderRecipes = () => {
     const isSearchActive = recipeQuery.trim().length > 0;
-    const trendingRecipes = popularRecipes.slice(0, 5);
-    const popularThisWeek = popularRecipes.slice(5, 20);
 
     return (
       <KeyboardAvoidingView
@@ -913,7 +914,7 @@ export default function CommunityScreen() {
               ) : null}
 
               {/* ── Section 2: Popular This Week ── */}
-              {(popularLoading || popularThisWeek.length > 0) && (
+              {(popularLoading || popularThisWeek.length > 0 || (!popularLoading && !popularError)) && (
                 <>
                   <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
                     <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
