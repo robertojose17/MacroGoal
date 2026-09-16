@@ -148,9 +148,11 @@ export function formatFoodRowServing(
   if (perServingGramsMatch) {
     gramsValue = parseFloat(perServingGramsMatch[1]);
   } else {
-    // No parenthetical grams in label — derive per-serving grams from fallback
-    const totalGrams = fallbackGrams != null && fallbackGrams > 0 ? fallbackGrams : 100;
-    gramsValue = Math.round(totalGrams / qty);
+    // No parenthetical grams — if no real gram data, skip the (Xg) suffix entirely
+    if (fallbackGrams == null || fallbackGrams <= 0) {
+      return `${qty} ${label}`;
+    }
+    gramsValue = Math.round(fallbackGrams / qty);
   }
 
   const gramsDisplay = Number.isInteger(gramsValue) ? gramsValue : parseFloat(gramsValue.toFixed(2));

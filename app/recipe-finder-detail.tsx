@@ -324,7 +324,8 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
     const logCarbsLocal = Math.round(recipe.carbs_per_serving * logServings);
     const logFatLocal = Math.round(recipe.fat_per_serving * logServings);
     const logFiberLocal = Math.round(recipe.fiber_per_serving * logServings);
-    const servingDesc = `${logServings} serving(s) · ${recipe.name}`;
+    console.log('[recipe-finder-detail] handleLogToDiary pressed', { recipeId: recipe.id, logServings });
+    const servingDesc = logServings === 1 ? '1 serving' : `${logServings} servings`;
     console.log('[RecipeDetail] Log to diary — recipe:', recipe.name, 'servings:', logServings, 'calories:', logCaloriesLocal, 'protein:', logProteinLocal);
     setLogging(true);
     try {
