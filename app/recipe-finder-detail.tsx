@@ -324,26 +324,54 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
     const logCarbsLocal = Math.round(recipe.carbs_per_serving * logServings);
     const logFatLocal = Math.round(recipe.fat_per_serving * logServings);
     const logFiberLocal = Math.round(recipe.fiber_per_serving * logServings);
+    const servingDesc = `${logServings} serving(s) · ${recipe.name}`;
     console.log('[RecipeDetail] Log to diary — recipe:', recipe.name, 'servings:', logServings, 'calories:', logCaloriesLocal, 'protein:', logProteinLocal);
     setLogging(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { showToast('Please sign in to log food'); return; }
       const today = toLocalDateString();
-      console.log('[RecipeDetail] Calling supabase.rpc log_food — user:', user.id, 'date:', today);
+
+      // Insert a temporary food entry so the diary shows the recipe name cleanly
+      console.log('[RecipeDetail] Inserting food entry for recipe:', recipe.name);
+      const { data: newFood, error: foodError } = await supabase
+        .from('foods')
+        .insert({
+          name: recipe.name,
+          brand: null,
+          serving_amount: 1,
+          serving_unit: 'serving',
+          calories: recipe.calories_per_serving,
+          protein: recipe.protein_per_serving,
+          carbs: recipe.carbs_per_serving,
+          fats: recipe.fat_per_serving,
+          fiber: recipe.fiber_per_serving,
+          barcode: null,
+          user_created: true,
+        })
+        .select('id')
+        .single();
+
+      if (foodError) {
+        console.error('[RecipeDetail] Failed to insert food entry:', foodError?.message);
+        throw foodError;
+      }
+      console.log('[RecipeDetail] Food entry created — id:', newFood.id);
+
+      console.log('[RecipeDetail] Calling supabase.rpc log_food — user:', user.id, 'date:', today, 'food_id:', newFood.id);
       const { error: rpcError } = await supabase.rpc('log_food', {
         p_user_id: user.id,
         p_date: today,
         p_meal_type: 'breakfast',
-        p_food_id: null,
+        p_food_id: newFood.id,
         p_food_item_id: null,
-        p_quantity: 1,
+        p_quantity: logServings,
         p_calories: logCaloriesLocal,
         p_protein: logProteinLocal,
         p_carbs: logCarbsLocal,
         p_fats: logFatLocal,
         p_fiber: logFiberLocal,
-        p_serving_description: `${logServings} serving(s)`,
+        p_serving_description: servingDesc,
         p_grams: null,
         p_logged_at: new Date().toISOString(),
       });
