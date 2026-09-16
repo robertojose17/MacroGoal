@@ -64,17 +64,6 @@ const TAG_COLORS: Record<string, string> = {
 type SubTab = 'feed' | 'discover' | 'people' | 'recipes';
 type PeopleSection = 'following' | 'followers';
 
-const FILTER_KEY_MAP: Record<string, string> = {
-  'All': '',
-  'High Protein': 'high-protein',
-  'Low Carb': 'low-carb',
-  'Vegetarian': 'vegetarian',
-  'Quick': 'quick',
-  'Breakfast': 'breakfast',
-  'Keto': 'keto',
-};
-const FILTER_CHIPS = Object.keys(FILTER_KEY_MAP);
-
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 function SkeletonCard({ isDark }: { isDark: boolean }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
@@ -286,15 +275,8 @@ export default function CommunityScreen() {
 
   // Popular recipes state
   const [trendingRecipes, setTrendingRecipes] = useState<RecipeResult[]>([]);
-  const [popularThisWeek, setPopularThisWeek] = useState<RecipeResult[]>([]);
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState<string | null>(null);
-
-  // Infinite scroll + filter state
-  const [popularPage, setPopularPage] = useState(0);
-  const [popularHasMore, setPopularHasMore] = useState(false);
-  const [popularLoadingMore, setPopularLoadingMore] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<string>('All');
 
 
 
@@ -391,7 +373,7 @@ export default function CommunityScreen() {
     loadFeed();
   }, []);
 
-  // ─── Fetch popular-recipes via direct fetch (supports query params) ──────────
+  // ─── Fetch popular-recipes via direct fetch (trending only) ──────────────────
   const fetchPopularRecipesUrl = useCallback(async (
     section: 'popular' | 'trending',
     page: number,
@@ -423,65 +405,30 @@ export default function CommunityScreen() {
     };
   }, []);
 
-  // ─── Load popular recipes (initial / filter change) ───────────────────────────
-  const loadPopularRecipes = useCallback(async (filter = activeFilter) => {
-    const filterKey = FILTER_KEY_MAP[filter] ?? '';
-    console.log('[Community] loadPopularRecipes — filter:', filter, 'filterKey:', filterKey);
+  // ─── Load popular recipes (trending only) ─────────────────────────────────────
+  const loadPopularRecipes = useCallback(async () => {
+    console.log('[Community] loadPopularRecipes — fetching trending');
     setPopularLoading(true);
     setPopularError(null);
-    setPopularPage(0);
     try {
-      const [popularRes, trendingRes] = await Promise.all([
-        fetchPopularRecipesUrl('popular', 0, 20, filterKey),
-        fetchPopularRecipesUrl('trending', 0, 5, filterKey),
-      ]);
-      console.log('[Community] loadPopularRecipes — popular:', popularRes.recipes.length, 'has_more:', popularRes.has_more, 'trending:', trendingRes.recipes.length);
-      setPopularThisWeek(popularRes.recipes);
-      setPopularHasMore(popularRes.has_more);
+      const trendingRes = await fetchPopularRecipesUrl('trending', 0, 5, '');
+      console.log('[Community] loadPopularRecipes — trending:', trendingRes.recipes.length);
       setTrendingRecipes(trendingRes.recipes);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load popular recipes';
+      const msg = e instanceof Error ? e.message : 'Failed to load trending recipes';
       console.error('[Community] loadPopularRecipes error:', msg);
       setPopularError(msg);
     } finally {
       setPopularLoading(false);
     }
-  }, [activeFilter, fetchPopularRecipesUrl]);
-
-  // ─── Load more popular recipes (infinite scroll) ──────────────────────────────
-  const loadMorePopularRecipes = useCallback(async () => {
-    if (popularLoadingMore || !popularHasMore) return;
-    const nextPage = popularPage + 1;
-    const filterKey = FILTER_KEY_MAP[activeFilter] ?? '';
-    console.log('[Community] loadMorePopularRecipes — page:', nextPage, 'filter:', activeFilter);
-    setPopularLoadingMore(true);
-    try {
-      const res = await fetchPopularRecipesUrl('popular', nextPage, 20, filterKey);
-      console.log('[Community] loadMorePopularRecipes — appending', res.recipes.length, 'recipes, has_more:', res.has_more);
-      setPopularThisWeek((prev) => [...prev, ...res.recipes]);
-      setPopularPage(nextPage);
-      setPopularHasMore(res.has_more);
-    } catch (e) {
-      console.error('[Community] loadMorePopularRecipes error:', e);
-    } finally {
-      setPopularLoadingMore(false);
-    }
-  }, [popularLoadingMore, popularHasMore, popularPage, activeFilter, fetchPopularRecipesUrl]);
-
-  // ─── Filter chip press ────────────────────────────────────────────────────────
-  const handleFilterPress = useCallback((filter: string) => {
-    if (filter === activeFilter) return;
-    console.log('[Community] Filter chip pressed:', filter);
-    setActiveFilter(filter);
-    loadPopularRecipes(filter);
-  }, [activeFilter, loadPopularRecipes]);
+  }, [fetchPopularRecipesUrl]);
 
   // ─── Load recipe suggestions ──────────────────────────────────────────────────
   const initRecipes = useCallback(async () => {
     if (recipesInitialized.current) return;
     recipesInitialized.current = true;
-    console.log('[Community] initRecipes — loading saved recipes, suggestions, popular recipes, and browse feed');
-    await Promise.all([loadSavedRecipes(), loadPopularRecipes(activeFilter), initBrowse()]);
+    console.log('[Community] initRecipes — loading saved recipes, trending, and browse feed');
+    await Promise.all([loadSavedRecipes(), loadPopularRecipes(), initBrowse()]);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       let goals = { calories: 2000, protein: 150, carbs: 200, fat: 65, remainingCalories: 2000 };
@@ -509,7 +456,7 @@ export default function CommunityScreen() {
     } catch (e) {
       console.warn('[Community] initRecipes error:', e);
     }
-  }, [loadSavedRecipes, loadDailySuggestions, loadPopularRecipes, activeFilter, initBrowse]);
+  }, [loadSavedRecipes, loadDailySuggestions, loadPopularRecipes, initBrowse]);
 
   // ─── Tab switch ──────────────────────────────────────────────────────────────
   const handleTabSwitch = useCallback((tab: SubTab) => {
@@ -857,12 +804,6 @@ export default function CommunityScreen() {
   const renderRecipes = () => {
     const isSearchActive = recipeQuery.trim().length > 0;
 
-    // Popular This Week FlatList data — pairs of recipes for the 2-column grid
-    const popularPairs: [RecipeResult, RecipeResult | null][] = [];
-    for (let i = 0; i < popularThisWeek.length; i += 2) {
-      popularPairs.push([popularThisWeek[i], popularThisWeek[i + 1] ?? null]);
-    }
-
     return (
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -962,19 +903,16 @@ export default function CommunityScreen() {
             />
           )
         ) : (
-          /* ── Browse mode: Trending + Popular + Saved ── */
+          /* ── Browse mode: Trending Now + Discover + Saved Recipes ── */
           <FlatList
-            data={popularPairs}
-            keyExtractor={(_, idx) => `popular-pair-${idx}`}
+            data={browseResults}
+            keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 120 }}
             onEndReached={() => {
-              if (popularHasMore) {
-                console.log('[Community] Popular This Week end reached — loading more popular');
-                loadMorePopularRecipes();
-              } else if (browseHasMore && !browseLoadingMore) {
-                console.log('[Community] Popular exhausted, end reached — loading more browse');
+              if (browseHasMore && !browseLoadingMore) {
+                console.log('[Community] Discover end reached — loading more browse');
                 loadMoreBrowse();
               }
             }}
@@ -1007,7 +945,7 @@ export default function CommunityScreen() {
                     <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>{popularError}</Text>
                     <Pressable
                       onPress={() => {
-                        console.log('[Community] Popular recipes retry pressed');
+                        console.log('[Community] Trending recipes retry pressed');
                         loadPopularRecipes();
                       }}
                       style={styles.retryBtn}
@@ -1033,99 +971,86 @@ export default function CommunityScreen() {
                       />
                     ))}
                   </ScrollView>
+                ) : browseResults.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={recipeStyles.horizontalList}
+                  >
+                    {browseResults.slice(0, 5).map((recipe) => (
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        isDark={isDark}
+                        horizontal
+                        onPress={() => handleRecipePress(recipe)}
+                        onSave={() => handleRecipeSave(recipe)}
+                      />
+                    ))}
+                  </ScrollView>
                 ) : null}
 
-                {/* ── Section 2: Popular This Week header + filter chips ── */}
+                {/* ── Section 2: Discover header ── */}
                 <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
                   <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
-                    ✨ Popular This Week
+                    ✨ Discover
                   </Text>
                   <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
-                    Top picks from the web
+                    Endless fitness recipes, just for you
                   </Text>
                 </View>
 
-                {/* Filter chips */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={recipeStyles.filterChipsRow}
-                >
-                  {FILTER_CHIPS.map((chip) => {
-                    const isActive = activeFilter === chip;
-                    return (
-                      <Pressable
-                        key={chip}
-                        onPress={() => handleFilterPress(chip)}
-                        style={[
-                          recipeStyles.filterChip,
-                          {
-                            backgroundColor: isActive ? colors.primary : (isDark ? colors.cardDark : '#FFFFFF'),
-                            borderColor: isActive ? colors.primary : borderColor,
-                          },
-                        ]}
-                        accessibilityRole="button"
-                      >
-                        <Text style={[recipeStyles.filterChipText, { color: isActive ? '#fff' : subColor }]}>
-                          {chip}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-
-                {/* Loading skeleton for initial popular load */}
-                {popularLoading && (
-                  <View style={recipeStyles.popularGrid}>
-                    {[0, 1, 2, 3].map((i) => (
-                      <View key={i} style={recipeStyles.popularGridItem}>
-                        <RecipeSkeletonCard isDark={isDark} />
-                      </View>
+                {/* Loading skeleton for initial browse load */}
+                {browseLoading && (
+                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+                    {[0, 1, 2].map((i) => (
+                      <RecipeSkeletonCard key={i} isDark={isDark} />
                     ))}
                   </View>
                 )}
               </>
             }
-            renderItem={({ item: [left, right] }) => (
-              <View style={recipeStyles.popularGrid}>
-                <View style={recipeStyles.popularGridItem}>
+            renderItem={({ item, index }) => {
+              const badgeLabel = (item as any).click_count > 0 ? '🔥 Trending' : '✨ New';
+              const showBadge = (index + 1) % 6 === 0;
+              return (
+                <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.sm }}>
+                  {showBadge && (
+                    <View style={recipeStyles.discoverBadgeRow}>
+                      <Text style={recipeStyles.discoverBadgeText}>{badgeLabel}</Text>
+                    </View>
+                  )}
                   <RecipeCard
-                    recipe={left}
+                    recipe={item}
                     isDark={isDark}
-                    onPress={() => handleRecipePress(left)}
-                    onSave={() => handleRecipeSave(left)}
+                    onPress={() => handleRecipePress(item)}
+                    onSave={() => handleRecipeSave(item)}
                   />
                 </View>
-                {right ? (
-                  <View style={recipeStyles.popularGridItem}>
-                    <RecipeCard
-                      recipe={right}
-                      isDark={isDark}
-                      onPress={() => handleRecipePress(right)}
-                      onSave={() => handleRecipeSave(right)}
-                    />
-                  </View>
-                ) : (
-                  <View style={recipeStyles.popularGridItem} />
-                )}
-              </View>
-            )}
+              );
+            }}
             ListFooterComponent={
               <>
-                {popularLoadingMore && (
-                  <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+                {browseLoadingMore && (
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.primary}
+                    style={{ marginVertical: spacing.sm }}
+                  />
                 )}
 
-                {/* ── Saved recipes ── */}
-                <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
-                  <Text style={[recipeStyles.sectionTitle, { color: textColor }]}>Saved Recipes</Text>
+                {/* ── Section 3: Saved Recipes ── */}
+                <View style={[recipeStyles.sectionHeader, { marginTop: spacing.lg }]}>
+                  <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
+                    ❤️ Saved Recipes
+                  </Text>
                 </View>
 
                 {savedRecipes.length === 0 ? (
                   <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
                     <Bookmark size={24} color={subColor} />
                     <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>
-                      Save recipes to find them here
+                      Save recipes you love to find them here
                     </Text>
                   </View>
                 ) : (
@@ -1140,58 +1065,6 @@ export default function CommunityScreen() {
                       />
                     ))}
                   </View>
-                )}
-
-                {/* ── Discover feed (infinite scroll browse) ── */}
-                <View style={[recipeStyles.sectionHeader, { marginTop: spacing.lg }]}>
-                  <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
-                    🌎 Discover
-                  </Text>
-                  <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
-                    Endless fitness recipes, just for you
-                  </Text>
-                </View>
-
-                {browseLoading ? (
-                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
-                    {[0, 1, 2].map((i) => (
-                      <RecipeSkeletonCard key={i} isDark={isDark} />
-                    ))}
-                  </View>
-                ) : browseResults.length === 0 ? null : (
-                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
-                    {browseResults.map((recipe) => (
-                      <RecipeCard
-                        key={recipe.id}
-                        recipe={recipe}
-                        isDark={isDark}
-                        onPress={() => handleRecipePress(recipe)}
-                        onSave={() => handleRecipeSave(recipe)}
-                      />
-                    ))}
-                  </View>
-                )}
-
-                {/* Load more trigger row — invisible sentinel + optional spinner */}
-                {browseResults.length > 0 && browseHasMore && (
-                  <Pressable
-                    onLayout={() => {
-                      if (browseHasMore && !browseLoadingMore) {
-                        console.log('[Community] Discover sentinel visible — loading more browse');
-                        loadMoreBrowse();
-                      }
-                    }}
-                    style={{ height: 1 }}
-                    accessibilityElementsHidden
-                  />
-                )}
-                {browseLoadingMore && prefetchedRef.current.length === 0 && (
-                  <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
-                )}
-                {!browseHasMore && browseResults.length > 0 && (
-                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md, marginBottom: 40 }}>
-                    You've seen it all — check back soon!
-                  </Text>
                 )}
               </>
             }
@@ -1530,28 +1403,12 @@ const recipeStyles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  popularGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
+  discoverBadgeRow: {
+    marginBottom: spacing.xs,
   },
-  popularGridItem: {
-    width: '48%',
-  },
-  filterChipsRow: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.xs,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: '600',
+  discoverBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
