@@ -133,6 +133,15 @@ export function useRecipeFinder() {
 
   const loadingRef = useRef(false);
 
+  // ─── Browse feed state ───────────────────────────────────────────────────────
+  const [browseResults, setBrowseResults] = useState<RecipeResult[]>([]);
+  const [browsePage, setBrowsePage] = useState(0);
+  const [browseHasMore, setBrowseHasMore] = useState(true);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseLoadingMore, setBrowseLoadingMore] = useState(false);
+  const prefetchedRef = useRef<RecipeResult[]>([]); // invisible prefetch buffer
+  const isPrefetchingRef = useRef(false);
+
   // ─── Search recipes (page 0 — replaces results) ──────────────────────────────
   const searchRecipes = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) return;
@@ -302,6 +311,106 @@ export function useRecipeFinder() {
     }
   }, []);
 
+  // ─── Browse feed: internal page fetcher ─────────────────────────────────────
+  const fetchBrowsePage = useCallback(async (page: number): Promise<{ recipes: RecipeResult[]; hasMore: boolean }> => {
+    console.log('[useRecipeFinder] fetchBrowsePage — page:', page);
+    const { data, error } = await supabase.functions.invoke('recipe-finder', {
+      body: { type: 'browse', page },
+    });
+    if (error) throw new Error(error.message);
+    console.log('[useRecipeFinder] fetchBrowsePage — page:', page, 'received:', data?.recipes?.length ?? 0, 'has_more:', data?.has_more);
+    return { recipes: normalizeRecipes(data?.recipes || []), hasMore: Boolean(data?.has_more) };
+  }, []);
+
+  // ─── Browse feed: init (page 0 + silent prefetch of page 1) ─────────────────
+  const initBrowse = useCallback(async (): Promise<void> => {
+    if (browseLoading) return;
+    console.log('[useRecipeFinder] initBrowse — starting');
+    setBrowseLoading(true);
+    setBrowseResults([]);
+    setBrowsePage(0);
+    setBrowseHasMore(true);
+    prefetchedRef.current = [];
+    try {
+      const { recipes, hasMore } = await fetchBrowsePage(0);
+      setBrowseResults(recipes);
+      setBrowseHasMore(hasMore);
+      setBrowsePage(0);
+      console.log('[useRecipeFinder] initBrowse — loaded', recipes.length, 'recipes, has_more:', hasMore);
+      // Silently prefetch page 1
+      if (hasMore) {
+        isPrefetchingRef.current = true;
+        fetchBrowsePage(1)
+          .then(({ recipes: prefetched }) => {
+            prefetchedRef.current = prefetched;
+            console.log('[useRecipeFinder] initBrowse — prefetched page 1:', prefetched.length, 'recipes');
+          })
+          .catch(() => {})
+          .finally(() => { isPrefetchingRef.current = false; });
+      }
+    } catch (e: any) {
+      console.error('[useRecipeFinder] initBrowse error:', e?.message);
+    } finally {
+      setBrowseLoading(false);
+    }
+  }, [browseLoading, fetchBrowsePage]);
+
+  // ─── Browse feed: load more (serves from prefetch buffer, then prefetches next) ─
+  const loadMoreBrowse = useCallback(async (): Promise<void> => {
+    if (browseLoadingMore || !browseHasMore) return;
+    const nextPage = browsePage + 1;
+    console.log('[useRecipeFinder] loadMoreBrowse — nextPage:', nextPage, 'prefetchAvailable:', prefetchedRef.current.length);
+    setBrowseLoadingMore(true);
+    try {
+      // If we have prefetched data, use it instantly (no spinner visible)
+      if (prefetchedRef.current.length > 0) {
+        const newRecipes = prefetchedRef.current;
+        prefetchedRef.current = [];
+        setBrowseResults((prev) => [...prev, ...newRecipes]);
+        setBrowsePage(nextPage);
+        setBrowseHasMore(true); // assume more until proven otherwise
+        setBrowseLoadingMore(false);
+        console.log('[useRecipeFinder] loadMoreBrowse — served', newRecipes.length, 'from prefetch buffer instantly');
+        // Prefetch the NEXT page silently
+        if (!isPrefetchingRef.current) {
+          isPrefetchingRef.current = true;
+          fetchBrowsePage(nextPage + 1)
+            .then(({ recipes: prefetched, hasMore: moreAvailable }) => {
+              prefetchedRef.current = prefetched;
+              console.log('[useRecipeFinder] loadMoreBrowse — prefetched page', nextPage + 1, ':', prefetched.length, 'recipes, has_more:', moreAvailable);
+              if (!moreAvailable && prefetched.length === 0) setBrowseHasMore(false);
+            })
+            .catch(() => {})
+            .finally(() => { isPrefetchingRef.current = false; });
+        }
+        return;
+      }
+
+      // No prefetch available — fetch now (shows spinner briefly)
+      console.log('[useRecipeFinder] loadMoreBrowse — no prefetch, fetching page', nextPage, 'now');
+      const { recipes: newRecipes, hasMore } = await fetchBrowsePage(nextPage);
+      setBrowseResults((prev) => [...prev, ...newRecipes]);
+      setBrowsePage(nextPage);
+      setBrowseHasMore(hasMore || newRecipes.length > 0);
+      console.log('[useRecipeFinder] loadMoreBrowse — fetched', newRecipes.length, 'recipes, has_more:', hasMore);
+      // Prefetch next
+      if (!isPrefetchingRef.current) {
+        isPrefetchingRef.current = true;
+        fetchBrowsePage(nextPage + 1)
+          .then(({ recipes: prefetched }) => {
+            prefetchedRef.current = prefetched;
+            console.log('[useRecipeFinder] loadMoreBrowse — prefetched page', nextPage + 1, ':', prefetched.length, 'recipes');
+          })
+          .catch(() => {})
+          .finally(() => { isPrefetchingRef.current = false; });
+      }
+    } catch (e: any) {
+      console.error('[useRecipeFinder] loadMoreBrowse error:', e?.message);
+    } finally {
+      setBrowseLoadingMore(false);
+    }
+  }, [browseLoadingMore, browseHasMore, browsePage, fetchBrowsePage]);
+
   // ─── Load saved recipes ──────────────────────────────────────────────────────
   const loadSavedRecipes = useCallback(async (): Promise<void> => {
     console.log('[useRecipeFinder] loadSavedRecipes');
@@ -343,5 +452,13 @@ export function useRecipeFinder() {
     saveRecipe,
     unsaveRecipe,
     loadSavedRecipes,
+    // Browse feed
+    browseResults,
+    browseLoading,
+    browseLoadingMore,
+    browseHasMore,
+    initBrowse,
+    loadMoreBrowse,
+    prefetchedRef,
   };
 }

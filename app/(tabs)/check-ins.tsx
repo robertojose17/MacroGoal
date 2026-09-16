@@ -273,6 +273,13 @@ export default function CommunityScreen() {
     hasMore: recipeFinderHasMore,
     isLoadingMore: recipeFinderLoadingMore,
     loadMore: recipeFinderLoadMore,
+    browseResults,
+    browseLoading,
+    browseLoadingMore,
+    browseHasMore,
+    initBrowse,
+    loadMoreBrowse,
+    prefetchedRef,
   } = useRecipeFinder();
   const [recipeQuery, setRecipeQuery] = useState('');
   const recipesInitialized = useRef(false);
@@ -473,8 +480,8 @@ export default function CommunityScreen() {
   const initRecipes = useCallback(async () => {
     if (recipesInitialized.current) return;
     recipesInitialized.current = true;
-    console.log('[Community] initRecipes — loading saved recipes, suggestions, and popular recipes');
-    await Promise.all([loadSavedRecipes(), loadPopularRecipes(activeFilter)]);
+    console.log('[Community] initRecipes — loading saved recipes, suggestions, popular recipes, and browse feed');
+    await Promise.all([loadSavedRecipes(), loadPopularRecipes(activeFilter), initBrowse()]);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       let goals = { calories: 2000, protein: 150, carbs: 200, fat: 65, remainingCalories: 2000 };
@@ -502,7 +509,7 @@ export default function CommunityScreen() {
     } catch (e) {
       console.warn('[Community] initRecipes error:', e);
     }
-  }, [loadSavedRecipes, loadDailySuggestions, loadPopularRecipes, activeFilter]);
+  }, [loadSavedRecipes, loadDailySuggestions, loadPopularRecipes, activeFilter, initBrowse]);
 
   // ─── Tab switch ──────────────────────────────────────────────────────────────
   const handleTabSwitch = useCallback((tab: SubTab) => {
@@ -963,10 +970,15 @@ export default function CommunityScreen() {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 120 }}
             onEndReached={() => {
-              console.log('[Community] Popular This Week end reached — loading more');
-              loadMorePopularRecipes();
+              if (popularHasMore) {
+                console.log('[Community] Popular This Week end reached — loading more popular');
+                loadMorePopularRecipes();
+              } else if (browseHasMore && !browseLoadingMore) {
+                console.log('[Community] Popular exhausted, end reached — loading more browse');
+                loadMoreBrowse();
+              }
             }}
-            onEndReachedThreshold={0.3}
+            onEndReachedThreshold={0.5}
             ListHeaderComponent={
               <>
                 {/* ── Section 1: Trending Now ── */}
@@ -1128,6 +1140,58 @@ export default function CommunityScreen() {
                       />
                     ))}
                   </View>
+                )}
+
+                {/* ── Discover feed (infinite scroll browse) ── */}
+                <View style={[recipeStyles.sectionHeader, { marginTop: spacing.lg }]}>
+                  <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
+                    🌎 Discover
+                  </Text>
+                  <Text style={[recipeStyles.sectionSubtitle, { color: subColor }]}>
+                    Endless fitness recipes, just for you
+                  </Text>
+                </View>
+
+                {browseLoading ? (
+                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+                    {[0, 1, 2].map((i) => (
+                      <RecipeSkeletonCard key={i} isDark={isDark} />
+                    ))}
+                  </View>
+                ) : browseResults.length === 0 ? null : (
+                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+                    {browseResults.map((recipe) => (
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        isDark={isDark}
+                        onPress={() => handleRecipePress(recipe)}
+                        onSave={() => handleRecipeSave(recipe)}
+                      />
+                    ))}
+                  </View>
+                )}
+
+                {/* Load more trigger row — invisible sentinel + optional spinner */}
+                {browseResults.length > 0 && browseHasMore && (
+                  <Pressable
+                    onLayout={() => {
+                      if (browseHasMore && !browseLoadingMore) {
+                        console.log('[Community] Discover sentinel visible — loading more browse');
+                        loadMoreBrowse();
+                      }
+                    }}
+                    style={{ height: 1 }}
+                    accessibilityElementsHidden
+                  />
+                )}
+                {browseLoadingMore && prefetchedRef.current.length === 0 && (
+                  <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+                )}
+                {!browseHasMore && browseResults.length > 0 && (
+                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md, marginBottom: 40 }}>
+                    You've seen it all — check back soon!
+                  </Text>
                 )}
               </>
             }
