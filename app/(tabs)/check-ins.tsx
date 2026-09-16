@@ -934,17 +934,28 @@ export default function CommunityScreen() {
                     </Text>
                   </View>
                 ) : (
-                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={recipeStyles.horizontalList}
+                  >
                     {savedRecipes.map((recipe) => (
                       <RecipeCard
                         key={recipe.id}
                         recipe={recipe}
                         isDark={isDark}
-                        onPress={() => handleRecipePress(recipe)}
-                        onSave={() => handleRecipeSave(recipe)}
+                        horizontal
+                        onPress={() => {
+                          console.log('[Community] Saved recipe card pressed:', recipe.id);
+                          handleRecipePress(recipe);
+                        }}
+                        onSave={() => {
+                          console.log('[Community] Saved recipe unsave pressed:', recipe.id);
+                          handleRecipeSave(recipe);
+                        }}
                       />
                     ))}
-                  </View>
+                  </ScrollView>
                 )}
 
                 {/* ── Section 2: Trending Now ── */}
