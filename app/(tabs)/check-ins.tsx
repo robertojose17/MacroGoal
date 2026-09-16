@@ -30,14 +30,11 @@ import { Users, Search, SquarePen, ChefHat, Clock, Bookmark, BookmarkCheck } fro
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
-  fetchFeed,
   fetchFollowing,
   fetchFollowers,
   searchUsers,
-  toggleLike,
 } from '@/utils/socialApi';
-import type { SocialPost, SearchUser } from '@/utils/socialApi';
-import SocialPostCard from '@/components/social/SocialPostCard';
+import type { SearchUser } from '@/utils/socialApi';
 import SearchUserRow from '@/components/social/SearchUserRow';
 import CreatePostSheet from '@/components/social/CreatePostSheet';
 import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
@@ -61,36 +58,8 @@ const TAG_COLORS: Record<string, string> = {
   'meal-prep': '#EC4899',
 };
 
-type SubTab = 'feed' | 'discover' | 'people' | 'recipes';
+type SubTab = 'discover' | 'people' | 'recipes';
 type PeopleSection = 'following' | 'followers';
-
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
-function SkeletonCard({ isDark }: { isDark: boolean }) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  const shimmer = isDark ? '#3A3C52' : '#E5E7EB';
-  const bg = isDark ? colors.cardDark : '#FFFFFF';
-  return (
-    <Animated.View style={[styles.skeletonCard, { backgroundColor: bg, opacity }]}>
-      <View style={styles.skeletonHeader}>
-        <View style={[styles.skeletonAvatar, { backgroundColor: shimmer }]} />
-        <View style={styles.skeletonHeaderText}>
-          <View style={[styles.skeletonLine, { width: 120, backgroundColor: shimmer }]} />
-          <View style={[styles.skeletonLine, { width: 80, height: 10, marginTop: 6, backgroundColor: shimmer }]} />
-        </View>
-      </View>
-      <View style={[styles.skeletonImage, { backgroundColor: shimmer }]} />
-      <View style={[styles.skeletonLine, { width: '60%', backgroundColor: shimmer, margin: spacing.md }]} />
-    </Animated.View>
-  );
-}
 
 // ─── Recipe skeleton card ─────────────────────────────────────────────────────
 function RecipeSkeletonCard({ isDark, horizontal }: { isDark: boolean; horizontal?: boolean }) {
@@ -221,17 +190,9 @@ export default function CommunityScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<SubTab>('feed');
+  const [activeTab, setActiveTab] = useState<SubTab>('recipes');
   const [peopleSection, setPeopleSection] = useState<PeopleSection>('following');
 
-  // Feed state
-  const [feed, setFeed] = useState<SocialPost[]>([]);
-  const [feedLoading, setFeedLoading] = useState(true);
-  const [feedRefreshing, setFeedRefreshing] = useState(false);
-  const [feedLoadingMore, setFeedLoadingMore] = useState(false);
-  const [feedOffset, setFeedOffset] = useState(0);
-  const [feedHasMore, setFeedHasMore] = useState(true);
-  const [feedError, setFeedError] = useState<string | null>(null);
   const [showCreatePost, setShowCreatePost] = useState(false);
 
   // Discover state
@@ -289,51 +250,6 @@ export default function CommunityScreen() {
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
 
-  const FEED_LIMIT = 20;
-
-  // ─── Load feed ──────────────────────────────────────────────────────────────
-  const loadFeed = useCallback(async (isRefresh = false) => {
-    console.log('[Community] loadFeed — isRefresh:', isRefresh);
-    if (isRefresh) {
-      setFeedRefreshing(true);
-      setFeedOffset(0);
-      setFeedHasMore(true);
-    } else {
-      setFeedLoading(true);
-    }
-    setFeedError(null);
-    try {
-      const posts = await fetchFeed('following', FEED_LIMIT, 0);
-      setFeed(posts);
-      setFeedOffset(posts.length);
-      setFeedHasMore(posts.length === FEED_LIMIT);
-      console.log('[Community] loadFeed — loaded', posts.length, 'posts');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load feed';
-      console.error('[Community] loadFeed error:', msg);
-      setFeedError(msg);
-    } finally {
-      setFeedLoading(false);
-      setFeedRefreshing(false);
-    }
-  }, []);
-
-  const loadMoreFeed = useCallback(async () => {
-    if (feedLoadingMore || !feedHasMore) return;
-    console.log('[Community] loadMoreFeed — offset:', feedOffset);
-    setFeedLoadingMore(true);
-    try {
-      const posts = await fetchFeed('following', FEED_LIMIT, feedOffset);
-      setFeed((prev) => [...prev, ...posts]);
-      setFeedOffset((prev) => prev + posts.length);
-      setFeedHasMore(posts.length === FEED_LIMIT);
-    } catch (e) {
-      console.error('[Community] loadMoreFeed error:', e);
-    } finally {
-      setFeedLoadingMore(false);
-    }
-  }, [feedLoadingMore, feedHasMore, feedOffset]);
-
   // ─── Load discover ───────────────────────────────────────────────────────────
   const loadDiscover = useCallback(async () => {
     console.log('[Community] loadDiscover');
@@ -367,10 +283,6 @@ export default function CommunityScreen() {
       setPeopleLoading(false);
       setPeopleRefreshing(false);
     }
-  }, []);
-
-  useEffect(() => {
-    loadFeed();
   }, []);
 
   // ─── Fetch popular-recipes via direct fetch (trending only) ──────────────────
@@ -473,35 +385,6 @@ export default function CommunityScreen() {
     }
   }, [discoverUsers.length, following.length, followers.length, loadDiscover, loadPeople, initRecipes]);
 
-  // ─── Like toggle ─────────────────────────────────────────────────────────────
-  const handleLike = useCallback(async (postId: string) => {
-    console.log('[Community] handleLike — post_id:', postId);
-    setFeed((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
-          : p
-      )
-    );
-    try {
-      const result = await toggleLike(postId);
-      setFeed((prev) =>
-        prev.map((p) =>
-          p.id === postId ? { ...p, liked_by_me: result.liked, likes_count: result.likes_count } : p
-        )
-      );
-    } catch (e) {
-      console.error('[Community] toggleLike failed, reverting:', e);
-      setFeed((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
-            : p
-        )
-      );
-    }
-  }, []);
-
   // ─── Search ──────────────────────────────────────────────────────────────────
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
@@ -523,96 +406,6 @@ export default function CommunityScreen() {
       }
     }, 400);
   }, []);
-
-  // ─── Render Feed ─────────────────────────────────────────────────────────────
-  const renderFeed = () => {
-    if (feedLoading) {
-      return (
-        <View>
-          {[0, 1, 2].map((i) => <SkeletonCard key={i} isDark={isDark} />)}
-        </View>
-      );
-    }
-    if (feedError) {
-      return (
-        <View style={styles.emptyState}>
-          <Text style={[styles.emptyTitle, { color: textColor }]}>Couldn't load feed</Text>
-          <Text style={[styles.emptySubtitle, { color: subColor }]}>{feedError}</Text>
-          <Pressable
-            onPress={() => {
-              console.log('[Community] Retry feed pressed');
-              loadFeed();
-            }}
-            style={styles.retryBtn}
-            accessibilityRole="button"
-          >
-            <Text style={styles.retryBtnText}>Try again</Text>
-          </Pressable>
-        </View>
-      );
-    }
-    return (
-      <FlatList
-        data={feed}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <SocialPostCard
-            post={item}
-            isDark={isDark}
-            onLike={handleLike}
-            onPressUser={(userId) => {
-              console.log('[Community] Navigate to profile — user_id:', userId);
-              router.push(`/social-profile?user_id=${userId}`);
-            }}
-            index={index}
-          />
-        )}
-        contentContainerStyle={[styles.listContent, feed.length === 0 && styles.listContentEmpty]}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
-              <Users size={32} color={colors.primary} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: textColor }]}>No posts yet</Text>
-            <Text style={[styles.emptySubtitle, { color: subColor }]}>
-              Follow people to see their posts here
-            </Text>
-            <Pressable
-              onPress={() => {
-                console.log('[Community] Empty feed — go to Discover pressed');
-                handleTabSwitch('discover');
-              }}
-              style={styles.retryBtn}
-              accessibilityRole="button"
-            >
-              <Text style={styles.retryBtnText}>Discover people</Text>
-            </Pressable>
-          </View>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={feedRefreshing}
-            onRefresh={() => {
-              console.log('[Community] Feed pull-to-refresh');
-              loadFeed(true);
-            }}
-            tintColor={colors.primary}
-          />
-        }
-        onEndReached={() => {
-          console.log('[Community] Feed end reached — loading more');
-          loadMoreFeed();
-        }}
-        onEndReachedThreshold={0.4}
-        ListFooterComponent={
-          feedLoadingMore ? (
-            <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
-          ) : null
-        }
-        showsVerticalScrollIndicator={false}
-      />
-    );
-  };
 
   // ─── Render Discover ─────────────────────────────────────────────────────────
   const renderDiscover = () => {
@@ -1085,7 +878,6 @@ export default function CommunityScreen() {
 
   const SUB_TABS: { key: SubTab; label: string }[] = [
     { key: 'recipes', label: 'Recipes' },
-    { key: 'feed', label: 'Feed' },
     { key: 'discover', label: 'Discover' },
     { key: 'people', label: 'People' },
   ];
@@ -1139,7 +931,6 @@ export default function CommunityScreen() {
 
         {/* Tab content */}
         <View style={{ flex: 1 }}>
-          {activeTab === 'feed' && renderFeed()}
           {activeTab === 'discover' && renderDiscover()}
           {activeTab === 'people' && renderPeople()}
           {activeTab === 'recipes' && renderRecipes()}
@@ -1155,8 +946,7 @@ export default function CommunityScreen() {
           setShowCreatePost(false);
         }}
         onPosted={() => {
-          console.log('[Community] Post created — refreshing feed');
-          loadFeed(true);
+          console.log('[Community] Post created');
         }}
       />
     </>
@@ -1279,32 +1069,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  skeletonCard: {
-    marginBottom: 1,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  skeletonHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  skeletonAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  skeletonHeaderText: {
-    flex: 1,
-  },
   skeletonLine: {
     height: 13,
     borderRadius: 6,
-  },
-  skeletonImage: {
-    width: '100%',
-    aspectRatio: 1,
   },
 });
 
