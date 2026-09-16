@@ -39,7 +39,6 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
 import { useChatbot, ChatMessage } from '@/hooks/useChatbot';
-import { addMealItem } from '@/utils/foodDatabase';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase } from '@/lib/supabase/client';
 
@@ -190,7 +189,6 @@ export default function RecipeFinderDetailScreen() {
   // Log sheet state
   const [logSheetVisible, setLogSheetVisible] = useState(false);
   const [logServings, setLogServings] = useState(recipe?.servings ?? 1);
-  const [logMealType, setLogMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch');
   const [logging, setLogging] = useState(false);
 
   // AI macro fit state
@@ -326,32 +324,40 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
     const logCarbsLocal = Math.round(recipe.carbs_per_serving * logServings);
     const logFatLocal = Math.round(recipe.fat_per_serving * logServings);
     const logFiberLocal = Math.round(recipe.fiber_per_serving * logServings);
-    console.log('[RecipeDetail] Log to diary — recipe:', recipe.name, 'servings:', logServings, 'mealType:', logMealType);
+    console.log('[RecipeDetail] Log to diary — recipe:', recipe.name, 'servings:', logServings, 'calories:', logCaloriesLocal, 'protein:', logProteinLocal);
     setLogging(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { showToast('Please sign in to log food'); return; }
       const today = toLocalDateString();
-      await addMealItem({
-        mealType: logMealType,
-        date: today,
-        foodName: recipe.name,
-        servingDescription: `${logServings} serving(s)`,
-        quantity: 1,
-        calories: logCaloriesLocal,
-        protein: logProteinLocal,
-        carbs: logCarbsLocal,
-        fats: logFatLocal,
-        fiber: logFiberLocal,
+      console.log('[RecipeDetail] Calling supabase.rpc log_food — user:', user.id, 'date:', today);
+      const { error: rpcError } = await supabase.rpc('log_food', {
+        p_user_id: user.id,
+        p_date: today,
+        p_meal_type: 'breakfast',
+        p_food_id: null,
+        p_food_item_id: null,
+        p_quantity: 1,
+        p_calories: logCaloriesLocal,
+        p_protein: logProteinLocal,
+        p_carbs: logCarbsLocal,
+        p_fats: logFatLocal,
+        p_fiber: logFiberLocal,
+        p_serving_description: `${logServings} serving(s)`,
+        p_grams: null,
+        p_logged_at: new Date().toISOString(),
       });
-      console.log('[RecipeDetail] Logged to diary successfully');
+      if (rpcError) throw rpcError;
+      console.log('[RecipeDetail] Logged to diary successfully via Supabase RPC');
       setLogSheetVisible(false);
-      showToast(`${recipe.name} added to ${logMealType}!`);
+      showToast(`${recipe.name} added to diary!`);
     } catch (e: any) {
       console.error('[RecipeDetail] handleLogToDiary error:', e?.message);
       showToast('Failed to log recipe. Try again.');
     } finally {
       setLogging(false);
     }
-  }, [recipe, logServings, logMealType, showToast]);
+  }, [recipe, logServings, showToast]);
 
   if (!recipe) {
     return (
@@ -377,14 +383,30 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
   const logFat = Math.round(recipe.fat_per_serving * logServings);
   const logFiber = Math.round(recipe.fiber_per_serving * logServings);
 
-  const mealTypes: { key: 'breakfast' | 'lunch' | 'dinner' | 'snack'; label: string }[] = [
-    { key: 'breakfast', label: 'Breakfast' },
-    { key: 'lunch', label: 'Lunch' },
-    { key: 'dinner', label: 'Dinner' },
-    { key: 'snack', label: 'Snack' },
-  ];
-
   const prepTimeText = recipe.prep_time_minutes != null ? `${recipe.prep_time_minutes} min` : null;
+
+  // ─── Scaled ingredients ──────────────────────────────────────────────────────
+  const scalingRatio = servings / (recipe.servings || 1);
+  const scaledIngredients = (recipe.ingredients ?? []).map((ing) => {
+    const match = String(ing.amount ?? '').match(/^([\d./]+)\s*(.*)/);
+    if (!match) return { ...ing, scaledCalories: Math.round((ing.calories || 0) * scalingRatio) };
+    let originalNum: number;
+    try {
+      // Handle fractions like "1/2"
+      const parts = match[1].split('/');
+      originalNum = parts.length === 2 ? Number(parts[0]) / Number(parts[1]) : Number(parts[0]);
+    } catch {
+      return { ...ing, scaledCalories: Math.round((ing.calories || 0) * scalingRatio) };
+    }
+    if (!isFinite(originalNum) || originalNum === 0) return { ...ing, scaledCalories: Math.round((ing.calories || 0) * scalingRatio) };
+    const scaledNum = originalNum * scalingRatio;
+    const formatted = scaledNum % 1 === 0 ? String(Math.round(scaledNum)) : scaledNum.toFixed(1);
+    return {
+      ...ing,
+      amount: `${formatted} ${match[2]}`.trim(),
+      scaledCalories: Math.round((ing.calories || 0) * scalingRatio),
+    };
+  });
 
   return (
     <>
@@ -549,18 +571,18 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 ? <ChevronUp size={18} color={subColor} />
                 : <ChevronDown size={18} color={subColor} />}
             </Pressable>
-            {ingredientsExpanded && (recipe.ingredients ?? []).map((ing, idx) => (
+            {ingredientsExpanded && scaledIngredients.map((ing, idx) => (
               <View
                 key={idx}
                 style={[
                   styles.ingredientRow,
-                  idx < (recipe.ingredients ?? []).length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor },
+                  idx < scaledIngredients.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor },
                 ]}
               >
                 <Text style={[styles.ingredientName, { color: textColor }]}>{String(ing.name ?? '')}</Text>
                 <View style={styles.ingredientRight}>
                   <Text style={[styles.ingredientAmount, { color: subColor }]}>{String(ing.amount ?? '')}</Text>
-                  <Text style={[styles.ingredientCals, { color: subColor }]}>{ing.calories} cal</Text>
+                  <Text style={[styles.ingredientCals, { color: subColor }]}>{ing.scaledCalories} cal</Text>
                 </View>
               </View>
             ))}
@@ -720,33 +742,6 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 <Plus size={16} color={colors.primary} />
               </Pressable>
             </View>
-          </View>
-
-          {/* Meal type */}
-          <Text style={[styles.logSheetLabel, { color: subColor, marginBottom: spacing.sm }]}>Meal</Text>
-          <View style={styles.mealTypeRow}>
-            {mealTypes.map(({ key, label }) => {
-              const isActive = logMealType === key;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => {
-                    console.log('[RecipeDetail] Meal type selected:', key);
-                    setLogMealType(key);
-                  }}
-                  style={[
-                    styles.mealTypeBtn,
-                    { borderColor: isActive ? colors.primary : borderColor },
-                    isActive && { backgroundColor: colors.primary + '18' },
-                  ]}
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.mealTypeBtnText, { color: isActive ? colors.primary : subColor }]}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
           </View>
 
           {/* Macro preview */}
@@ -1084,22 +1079,6 @@ const styles = StyleSheet.create({
   logSheetLabel: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  mealTypeRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  mealTypeBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
-    alignItems: 'center',
-  },
-  mealTypeBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   logMacroRow: {
     flexDirection: 'row',

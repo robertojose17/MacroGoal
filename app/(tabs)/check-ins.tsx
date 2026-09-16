@@ -903,7 +903,7 @@ export default function CommunityScreen() {
             />
           )
         ) : (
-          /* ── Browse mode: Trending Now + Discover + Saved Recipes ── */
+          /* ── Browse mode: Saved Recipes + Trending Now + Discover ── */
           <FlatList
             data={browseResults}
             keyExtractor={(item) => item.id}
@@ -919,8 +919,36 @@ export default function CommunityScreen() {
             onEndReachedThreshold={0.5}
             ListHeaderComponent={
               <>
-                {/* ── Section 1: Trending Now ── */}
-                <View style={recipeStyles.sectionHeader}>
+                {/* ── Section 1: Saved Recipes ── */}
+                <View style={[recipeStyles.sectionHeader, { marginTop: spacing.sm }]}>
+                  <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
+                    ❤️ Saved Recipes
+                  </Text>
+                </View>
+
+                {savedRecipes.length === 0 ? (
+                  <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
+                    <Bookmark size={24} color={subColor} />
+                    <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>
+                      Save recipes you love to find them here
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
+                    {savedRecipes.map((recipe) => (
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        isDark={isDark}
+                        onPress={() => handleRecipePress(recipe)}
+                        onSave={() => handleRecipeSave(recipe)}
+                      />
+                    ))}
+                  </View>
+                )}
+
+                {/* ── Section 2: Trending Now ── */}
+                <View style={[recipeStyles.sectionHeader, { marginTop: spacing.lg }]}>
                   <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
                     🔥 Trending Now
                   </Text>
@@ -990,7 +1018,7 @@ export default function CommunityScreen() {
                   </ScrollView>
                 ) : null}
 
-                {/* ── Section 2: Discover header ── */}
+                {/* ── Section 3: Discover header ── */}
                 <View style={[recipeStyles.sectionHeader, { marginTop: spacing.md }]}>
                   <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
                     ✨ Discover
@@ -1030,43 +1058,13 @@ export default function CommunityScreen() {
               );
             }}
             ListFooterComponent={
-              <>
-                {browseLoadingMore && (
-                  <ActivityIndicator
-                    size="small"
-                    color={colors.primary}
-                    style={{ marginVertical: spacing.sm }}
-                  />
-                )}
-
-                {/* ── Section 3: Saved Recipes ── */}
-                <View style={[recipeStyles.sectionHeader, { marginTop: spacing.lg }]}>
-                  <Text style={[recipeStyles.sectionTitle, { color: textColor, fontSize: 18 }]}>
-                    ❤️ Saved Recipes
-                  </Text>
-                </View>
-
-                {savedRecipes.length === 0 ? (
-                  <View style={[recipeStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
-                    <Bookmark size={24} color={subColor} />
-                    <Text style={[recipeStyles.emptyHorizontalText, { color: subColor }]}>
-                      Save recipes you love to find them here
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ paddingHorizontal: spacing.md, gap: spacing.sm }}>
-                    {savedRecipes.map((recipe) => (
-                      <RecipeCard
-                        key={recipe.id}
-                        recipe={recipe}
-                        isDark={isDark}
-                        onPress={() => handleRecipePress(recipe)}
-                        onSave={() => handleRecipeSave(recipe)}
-                      />
-                    ))}
-                  </View>
-                )}
-              </>
+              browseLoadingMore ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.primary}
+                  style={{ marginVertical: spacing.sm }}
+                />
+              ) : null
             }
           />
         )}
