@@ -119,6 +119,12 @@ export function useRecipeFinder() {
   const [searchResults, setSearchResults] = useState<RecipeResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchPage, setSearchPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Keep a ref to the current query so loadMore can use it without stale closure
+  const currentQueryRef = useRef('');
 
   const [dailySuggestions, setDailySuggestions] = useState<DailySuggestions | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -127,22 +133,27 @@ export function useRecipeFinder() {
 
   const loadingRef = useRef(false);
 
-  // ─── Search recipes ──────────────────────────────────────────────────────────
+  // ─── Search recipes (page 0 — replaces results) ──────────────────────────────
   const searchRecipes = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) return;
-    console.log('[useRecipeFinder] searchRecipes — invoking recipe-finder edge function, query:', query);
+    console.log('[useRecipeFinder] searchRecipes — query:', query, 'page: 0');
+    currentQueryRef.current = query;
     setSearchLoading(true);
     setSearchError(null);
     setSearchResults([]);
+    setSearchPage(0);
+    setHasMore(true);
     try {
       const { data, error } = await supabase.functions.invoke('recipe-finder', {
-        body: { query, type: 'search' },
+        body: { query, type: 'search', page: 0 },
       });
       if (error) throw new Error(error.message);
-      console.log('[useRecipeFinder] searchRecipes — response received, duration_ms:', data?.duration_ms);
+      console.log('[useRecipeFinder] searchRecipes — response received, duration_ms:', data?.duration_ms, 'has_more:', data?.has_more, 'total:', data?.total);
       const recipes = normalizeRecipes(data?.recipes || []);
-      console.log('[useRecipeFinder] searchRecipes — parsed', recipes.length, 'recipes');
+      console.log('[useRecipeFinder] searchRecipes — parsed', recipes.length, 'recipes (page 0)');
       setSearchResults(recipes);
+      setHasMore(Boolean(data?.has_more));
+      setSearchPage(0);
     } catch (e: any) {
       const msg = e?.message || 'Failed to search recipes';
       console.error('[useRecipeFinder] searchRecipes error:', msg);
@@ -151,6 +162,31 @@ export function useRecipeFinder() {
       setSearchLoading(false);
     }
   }, []);
+
+  // ─── Load more search results (appends) ──────────────────────────────────────
+  const loadMore = useCallback(async (): Promise<void> => {
+    const query = currentQueryRef.current;
+    if (!query.trim() || isLoadingMore || !hasMore) return;
+    const nextPage = searchPage + 1;
+    console.log('[useRecipeFinder] loadMore — query:', query, 'page:', nextPage);
+    setIsLoadingMore(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('recipe-finder', {
+        body: { query, type: 'search', page: nextPage },
+      });
+      if (error) throw new Error(error.message);
+      console.log('[useRecipeFinder] loadMore — response received, duration_ms:', data?.duration_ms, 'has_more:', data?.has_more, 'page:', nextPage);
+      const recipes = normalizeRecipes(data?.recipes || []);
+      console.log('[useRecipeFinder] loadMore — appending', recipes.length, 'recipes');
+      setSearchResults((prev) => [...prev, ...recipes]);
+      setHasMore(Boolean(data?.has_more));
+      setSearchPage(nextPage);
+    } catch (e: any) {
+      console.error('[useRecipeFinder] loadMore error:', e?.message);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMore, searchPage]);
 
   // ─── Daily suggestions ───────────────────────────────────────────────────────
   const loadDailySuggestions = useCallback(async (
@@ -297,6 +333,9 @@ export function useRecipeFinder() {
     searchResults,
     searchLoading,
     searchError,
+    hasMore,
+    isLoadingMore,
+    loadMore,
     dailySuggestions,
     suggestionsLoading,
     loadDailySuggestions,

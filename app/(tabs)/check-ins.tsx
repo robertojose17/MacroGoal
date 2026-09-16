@@ -266,6 +266,13 @@ export default function CommunityScreen() {
     saveRecipe,
     unsaveRecipe,
     loadSavedRecipes,
+    searchRecipes,
+    searchResults: recipeFinderResults,
+    searchLoading: recipeFinderLoading,
+    searchError: recipeFinderError,
+    hasMore: recipeFinderHasMore,
+    isLoadingMore: recipeFinderLoadingMore,
+    loadMore: recipeFinderLoadMore,
   } = useRecipeFinder();
   const [recipeQuery, setRecipeQuery] = useState('');
   const recipesInitialized = useRef(false);
@@ -284,10 +291,7 @@ export default function CommunityScreen() {
 
 
 
-  // Recipe library search state (edge function)
-  const [recipeSearchResults2, setRecipeSearchResults2] = useState<RecipeResult[]>([]);
-  const [recipeSearchLoading2, setRecipeSearchLoading2] = useState(false);
-  const [recipeSearchError2, setRecipeSearchError2] = useState<string | null>(null);
+  // Recipe search debounce ref
   const recipeDebounceRef2 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
@@ -797,34 +801,18 @@ export default function CommunityScreen() {
     );
   };
 
-  // ─── Recipe search handler (edge function) ───────────────────────────────────
+  // ─── Recipe search handler (recipe-finder edge function, paginated) ──────────
   const handleRecipeSearchChange = useCallback((text: string) => {
     setRecipeQuery(text);
     if (recipeDebounceRef2.current) clearTimeout(recipeDebounceRef2.current);
     if (!text.trim()) {
-      setRecipeSearchResults2([]);
-      setRecipeSearchError2(null);
       return;
     }
-    recipeDebounceRef2.current = setTimeout(async () => {
-      console.log('[Community] Recipe library search — query:', text);
-      setRecipeSearchLoading2(true);
-      setRecipeSearchError2(null);
-      try {
-        const { data, error } = await supabase.functions.invoke('recipe-search', { body: { query: text.trim() } });
-        if (error) throw error;
-        const results: RecipeResult[] = Array.isArray(data) ? data : (data?.recipes ?? []);
-        console.log('[Community] Recipe library search — found', results.length, 'results');
-        setRecipeSearchResults2(results);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Search failed';
-        console.error('[Community] Recipe library search error:', msg);
-        setRecipeSearchError2(msg);
-      } finally {
-        setRecipeSearchLoading2(false);
-      }
+    recipeDebounceRef2.current = setTimeout(() => {
+      console.log('[Community] Recipe search — query:', text.trim());
+      searchRecipes(text.trim());
     }, 500);
-  }, []);
+  }, [searchRecipes]);
 
   const handleRecipeSave = useCallback(async (recipe: RecipeResult) => {
     console.log('[Community] Recipe save toggled — id:', recipe.id, 'saved:', recipe.is_saved);
@@ -886,14 +874,13 @@ export default function CommunityScreen() {
             autoCapitalize="none"
             autoCorrect={false}
           />
-          {recipeSearchLoading2 && <ActivityIndicator size="small" color={colors.primary} />}
-          {recipeQuery.length > 0 && !recipeSearchLoading2 && (
+          {recipeFinderLoading && <ActivityIndicator size="small" color={colors.primary} />}
+          {recipeQuery.length > 0 && !recipeFinderLoading && (
             <Pressable
               onPress={() => {
                 console.log('[Community] Recipe search cleared');
                 setRecipeQuery('');
-                setRecipeSearchResults2([]);
-                setRecipeSearchError2(null);
+                if (recipeDebounceRef2.current) clearTimeout(recipeDebounceRef2.current);
               }}
               accessibilityRole="button"
             >
@@ -903,47 +890,70 @@ export default function CommunityScreen() {
         </View>
 
         {isSearchActive ? (
-          /* ── Search results ── */
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 120 }}
-            keyboardShouldPersistTaps="handled"
-          >
-            {recipeSearchLoading2 ? (
-              [0, 1, 2].map((i) => <RecipeSkeletonCard key={i} isDark={isDark} />)
-            ) : recipeSearchError2 ? (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyTitle, { color: textColor }]}>Search failed</Text>
-                <Text style={[styles.emptySubtitle, { color: subColor }]}>{recipeSearchError2}</Text>
-                <Pressable
-                  onPress={() => {
-                    console.log('[Community] Recipe search retry pressed — query:', recipeQuery);
-                    handleRecipeSearchChange(recipeQuery);
-                  }}
-                  style={styles.retryBtn}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.retryBtnText}>Try again</Text>
-                </Pressable>
-              </View>
-            ) : recipeSearchResults2.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyTitle, { color: textColor }]}>No recipes found</Text>
-                <Text style={[styles.emptySubtitle, { color: subColor }]}>Try a different search term</Text>
-              </View>
-            ) : (
-              recipeSearchResults2.map((recipe) => (
-                <View key={recipe.id} style={{ marginBottom: spacing.sm }}>
+          /* ── Search results (paginated FlatList) ── */
+          recipeFinderLoading ? (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 120 }}
+            >
+              {[0, 1, 2].map((i) => <RecipeSkeletonCard key={i} isDark={isDark} />)}
+            </ScrollView>
+          ) : recipeFinderError ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: textColor }]}>Search failed</Text>
+              <Text style={[styles.emptySubtitle, { color: subColor }]}>{recipeFinderError}</Text>
+              <Pressable
+                onPress={() => {
+                  console.log('[Community] Recipe search retry pressed — query:', recipeQuery);
+                  searchRecipes(recipeQuery.trim());
+                }}
+                style={styles.retryBtn}
+                accessibilityRole="button"
+              >
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <FlatList
+              data={recipeFinderResults}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={{ marginBottom: spacing.sm }}>
                   <RecipeCard
-                    recipe={recipe}
+                    recipe={item}
                     isDark={isDark}
-                    onPress={() => handleRecipePress(recipe)}
-                    onSave={() => handleRecipeSave(recipe)}
+                    onPress={() => handleRecipePress(item)}
+                    onSave={() => handleRecipeSave(item)}
                   />
                 </View>
-              ))
-            )}
-          </ScrollView>
+              )}
+              contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 120 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              onEndReached={() => {
+                if (recipeFinderHasMore && !recipeFinderLoadingMore) {
+                  console.log('[Community] Recipe search end reached — loading more');
+                  recipeFinderLoadMore();
+                }
+              }}
+              onEndReachedThreshold={0.3}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Text style={[styles.emptyTitle, { color: textColor }]}>No recipes found</Text>
+                  <Text style={[styles.emptySubtitle, { color: subColor }]}>Try a different search term</Text>
+                </View>
+              }
+              ListFooterComponent={
+                recipeFinderLoadingMore ? (
+                  <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+                ) : !recipeFinderHasMore && recipeFinderResults.length > 0 ? (
+                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>
+                    No more recipes
+                  </Text>
+                ) : null
+              }
+            />
+          )
         ) : (
           /* ── Browse mode: Trending + Popular + Saved ── */
           <FlatList
