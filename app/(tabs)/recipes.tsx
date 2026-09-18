@@ -271,7 +271,12 @@ export default function RecipesScreen() {
     setError(null);
     console.log('[Recipes] Fetching popular recipes, isRefresh:', isRefresh);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('popular-recipes', { method: 'GET' });
+      const { data: { session } } = await supabase.auth.getSession();
+      const functionName = session?.user?.id
+        ? `popular-recipes?user_id=${session.user.id}`
+        : 'popular-recipes';
+      console.log('[Recipes] popular-recipes request — user_id:', session?.user?.id ?? 'anonymous');
+      const { data, error: fnError } = await supabase.functions.invoke(functionName, { method: 'GET' });
       if (fnError) {
         console.error('[Recipes] popular-recipes error:', fnError);
         setError('Failed to load recipes. Pull to refresh.');

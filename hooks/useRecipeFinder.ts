@@ -314,8 +314,11 @@ export function useRecipeFinder() {
   // ─── Browse feed: internal page fetcher ─────────────────────────────────────
   const fetchBrowsePage = useCallback(async (page: number): Promise<{ recipes: RecipeResult[]; hasMore: boolean }> => {
     console.log('[useRecipeFinder] fetchBrowsePage — page:', page);
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? null;
+    console.log('[useRecipeFinder] fetchBrowsePage — user_id:', userId ?? 'anonymous');
     const { data, error } = await supabase.functions.invoke('recipe-finder', {
-      body: { type: 'browse', page },
+      body: { type: 'browse', page, user_id: userId },
     });
     if (error) throw new Error(error.message);
     console.log('[useRecipeFinder] fetchBrowsePage — page:', page, 'received:', data?.recipes?.length ?? 0, 'has_more:', data?.has_more);
