@@ -10,14 +10,23 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase/client';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?w=400' };
+  if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;
+}
+
+function RecipeImagePlaceholder({ style }: { style: any }) {
+  return (
+    <View style={[style, styles.imagePlaceholder]}>
+      <Ionicons name="restaurant-outline" size={28} color="#666" />
+    </View>
+  );
 }
 
 interface RecipeItem {
@@ -126,11 +135,15 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
       }}
       style={[styles.trendingCard, { backgroundColor: cardBg, borderColor }]}
     >
-      <Image
-        source={resolveImageSource(recipe.image_url ?? undefined)}
-        style={styles.trendingImage}
-        resizeMode="cover"
-      />
+      {recipe.image_url ? (
+        <Image
+          source={{ uri: recipe.image_url }}
+          style={styles.trendingImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <RecipeImagePlaceholder style={styles.trendingImage} />
+      )}
       <View style={styles.trendingBody}>
         <Text style={[styles.trendingName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
         <View style={styles.pillRow}>
@@ -175,11 +188,15 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
       }}
       style={[styles.popularCard, { backgroundColor: cardBg, borderColor }]}
     >
-      <Image
-        source={resolveImageSource(recipe.image_url ?? undefined)}
-        style={styles.popularImage}
-        resizeMode="cover"
-      />
+      {recipe.image_url ? (
+        <Image
+          source={{ uri: recipe.image_url }}
+          style={styles.popularImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <RecipeImagePlaceholder style={styles.popularImage} />
+      )}
       <View style={styles.popularBody}>
         <Text style={[styles.popularName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
         <View style={styles.pillRow}>
@@ -226,11 +243,15 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
       }}
       style={[styles.searchResultRow, { borderBottomColor: borderColor }]}
     >
-      <Image
-        source={resolveImageSource(recipe.image_url ?? undefined)}
-        style={styles.searchResultImage}
-        resizeMode="cover"
-      />
+      {recipe.image_url ? (
+        <Image
+          source={{ uri: recipe.image_url }}
+          style={styles.searchResultImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <RecipeImagePlaceholder style={styles.searchResultImage} />
+      )}
       <View style={styles.searchResultInfo}>
         <Text style={[styles.searchResultName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
         <Text style={[styles.searchResultMeta, { color: subColor }]}>{metaText}</Text>
@@ -621,4 +642,9 @@ const styles = StyleSheet.create({
   clickRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   fireEmoji: { fontSize: 11 },
   clickText: { fontSize: 11, fontWeight: '500' },
+  imagePlaceholder: {
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

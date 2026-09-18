@@ -35,6 +35,7 @@ import {
   ChevronLeft,
   Sparkles,
 } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
@@ -465,11 +466,20 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
         >
           {/* Hero image */}
-          <Image
-            source={{ uri: recipe.image_url || `https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?w=800` }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {recipe.image_url ? (
+            <Image
+              source={{ uri: recipe.image_url }}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.heroPlaceholder, { backgroundColor: '#1a1a2e' }]}>
+              <Ionicons name="restaurant-outline" size={48} color="#666" />
+              <Text style={[styles.heroPlaceholderText, { color: '#666', fontSize: 14, fontWeight: '400', marginTop: 8 }]}>
+                Generating image...
+              </Text>
+            </View>
+          )}
 
           {/* Header section */}
           <View style={[styles.section, { paddingTop: spacing.md }]}>
