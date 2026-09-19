@@ -3,23 +3,17 @@
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, Image,
+  View, Text, StyleSheet, Pressable,
   ActivityIndicator, RefreshControl, ScrollView, TextInput,
-  ImageSourcePropType, Animated,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X } from 'lucide-react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase/client';
-
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
+import { RecipeImage } from '@/components/RecipeImage';
 
 // ── Shimmer box ───────────────────────────────────────────────────────────────
 function ShimmerBox({ style, isDark }: { style: any; isDark: boolean }) {
@@ -37,14 +31,6 @@ function ShimmerBox({ style, isDark }: { style: any; isDark: boolean }) {
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
   const shimmerBg = isDark ? '#3a3a3a' : '#E5E7EB';
   return <Animated.View style={[style, { backgroundColor: shimmerBg, opacity }]} />;
-}
-
-function RecipeImagePlaceholder({ style }: { style: any }) {
-  return (
-    <View style={[style, styles.imagePlaceholder]}>
-      <Ionicons name="restaurant-outline" size={28} color="#666" />
-    </View>
-  );
 }
 
 interface RecipeItem {
@@ -188,14 +174,6 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
   const caloriesBg = colors.calories + '18';
   const proteinBg = colors.protein + '18';
 
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  const onLoad = useCallback(() => {
-    setImgLoaded(true);
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-  }, [fadeAnim]);
-
   return (
     <Pressable
       onPress={() => {
@@ -204,19 +182,12 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
       }}
       style={[styles.trendingCard, { backgroundColor: cardBg, borderColor }]}
     >
-      {recipe.image_url ? (
-        <View style={styles.trendingImage}>
-          {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
-          <Animated.Image
-            source={resolveImageSource(recipe.image_url)}
-            style={[styles.trendingImage, { opacity: fadeAnim }]}
-            resizeMode="cover"
-            onLoad={onLoad}
-          />
-        </View>
-      ) : (
-        <RecipeImagePlaceholder style={styles.trendingImage} />
-      )}
+      <RecipeImage
+        recipeId={recipe.id}
+        initialUrl={recipe.image_url}
+        style={styles.trendingImage}
+        iconSize={40}
+      />
       <View style={styles.trendingBody}>
         <Text style={[styles.trendingName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
         <View style={styles.pillRow}>
@@ -253,14 +224,6 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
   const caloriesBg = colors.calories + '18';
   const proteinBg = colors.protein + '18';
 
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  const onLoad = useCallback(() => {
-    setImgLoaded(true);
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-  }, [fadeAnim]);
-
   return (
     <Pressable
       onPress={() => {
@@ -269,19 +232,12 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
       }}
       style={[styles.popularCard, { backgroundColor: cardBg, borderColor }]}
     >
-      {recipe.image_url ? (
-        <View style={styles.popularImage}>
-          {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
-          <Animated.Image
-            source={resolveImageSource(recipe.image_url)}
-            style={[styles.popularImage, { opacity: fadeAnim }]}
-            resizeMode="cover"
-            onLoad={onLoad}
-          />
-        </View>
-      ) : (
-        <RecipeImagePlaceholder style={styles.popularImage} />
-      )}
+      <RecipeImage
+        recipeId={recipe.id}
+        initialUrl={recipe.image_url}
+        style={styles.popularImage}
+        iconSize={32}
+      />
       <View style={styles.popularBody}>
         <Text style={[styles.popularName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
         <View style={styles.pillRow}>
@@ -320,14 +276,6 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
   const sourceText = recipe.source_name ? ` · ${recipe.source_name}` : '';
   const metaText = caloriesText + sourceText;
 
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  const onLoad = useCallback(() => {
-    setImgLoaded(true);
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-  }, [fadeAnim]);
-
   return (
     <Pressable
       onPress={() => {
@@ -336,19 +284,12 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
       }}
       style={[styles.searchResultRow, { borderBottomColor: borderColor }]}
     >
-      {recipe.image_url ? (
-        <View style={styles.searchResultImage}>
-          {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
-          <Animated.Image
-            source={resolveImageSource(recipe.image_url)}
-            style={[styles.searchResultImage, { opacity: fadeAnim }]}
-            resizeMode="cover"
-            onLoad={onLoad}
-          />
-        </View>
-      ) : (
-        <RecipeImagePlaceholder style={styles.searchResultImage} />
-      )}
+      <RecipeImage
+        recipeId={recipe.id}
+        initialUrl={recipe.image_url}
+        style={{ width: 52, height: 52, borderRadius: borderRadius.sm }}
+        iconSize={24}
+      />
       <View style={styles.searchResultInfo}>
         <Text style={[styles.searchResultName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
         <Text style={[styles.searchResultMeta, { color: subColor }]}>{metaText}</Text>
@@ -732,7 +673,6 @@ const styles = StyleSheet.create({
   searchLoadingText: { fontSize: 14 },
   noResultsText: { padding: spacing.md, fontSize: 14, textAlign: 'center' },
   searchResultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderBottomWidth: 1 },
-  searchResultImage: { width: 52, height: 52, borderRadius: borderRadius.sm, overflow: 'hidden' },
   searchResultInfo: { flex: 1 },
   searchResultName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   searchResultMeta: { fontSize: 12 },
@@ -771,9 +711,4 @@ const styles = StyleSheet.create({
   clickRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   fireEmoji: { fontSize: 11 },
   clickText: { fontSize: 11, fontWeight: '500' },
-  imagePlaceholder: {
-    backgroundColor: '#1a1a2e',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

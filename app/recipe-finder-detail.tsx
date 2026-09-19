@@ -10,14 +10,12 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Image,
   Linking,
   ActivityIndicator,
   TextInput,
   Modal,
   Platform,
   Animated,
-  ImageSourcePropType,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,12 +40,7 @@ import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
 import { useChatbot, ChatMessage } from '@/hooks/useChatbot';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase } from '@/lib/supabase/client';
-
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
+import { RecipeImage } from '@/components/RecipeImage';
 
 // ── Shimmer box ───────────────────────────────────────────────────────────────
 function ShimmerBox({ style, isDark }: { style: any; isDark: boolean }) {
@@ -143,28 +136,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
   );
 }
 
-// ─── Hero image with shimmer ──────────────────────────────────────────────────
-function HeroImage({ imageUrl, isDark }: { imageUrl: string; isDark: boolean }) {
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const onLoad = useCallback(() => {
-    setImgLoaded(true);
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-  }, [fadeAnim]);
-
-  return (
-    <View style={styles.heroImage}>
-      {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
-      <Animated.Image
-        source={{ uri: imageUrl }}
-        style={[styles.heroImage, { opacity: fadeAnim }]}
-        resizeMode="cover"
-        onLoad={onLoad}
-      />
-    </View>
-  );
-}
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function RecipeFinderDetailScreen() {
@@ -507,16 +479,12 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
         >
           {/* Hero image */}
-          {recipe.image_url ? (
-            <HeroImage imageUrl={recipe.image_url} isDark={isDark} />
-          ) : (
-            <View style={[styles.heroPlaceholder, { backgroundColor: '#1a1a2e' }]}>
-              <Ionicons name="restaurant-outline" size={48} color="#666" />
-              <Text style={[styles.heroPlaceholderText, { color: '#666', fontSize: 14, fontWeight: '400', marginTop: 8 }]}>
-                Generating image...
-              </Text>
-            </View>
-          )}
+          <RecipeImage
+            recipeId={recipe.id}
+            initialUrl={recipe.image_url}
+            style={styles.heroImage}
+            iconSize={56}
+          />
 
           {/* Header section */}
           <View style={[styles.section, { paddingTop: spacing.md }]}>
@@ -881,19 +849,7 @@ const styles = StyleSheet.create({
     height: 250,
     overflow: 'hidden',
   },
-  heroPlaceholder: {
-    width: '100%',
-    height: 250,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  heroPlaceholderText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.primary,
-    textAlign: 'center',
-  },
+
   section: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
