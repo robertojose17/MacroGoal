@@ -13,6 +13,7 @@ interface RecipeImageProps {
 export function RecipeImage({ recipeId, initialUrl, style, iconSize = 32 }: RecipeImageProps) {
   const [url, setUrl] = useState<string | null>(initialUrl);
   const [loaded, setLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
   const shimmerOpacity = useRef(new Animated.Value(0.3)).current;
 
@@ -28,9 +29,9 @@ export function RecipeImage({ recipeId, initialUrl, style, iconSize = 32 }: Reci
     return () => anim.stop();
   }, [shimmerOpacity]);
 
-  // Generate image if null
+  // Generate image only if no url AND no error (prevents infinite loop)
   useEffect(() => {
-    if (!url && recipeId) {
+    if (!url && !hasError && recipeId) {
       console.log('[RecipeImage] No image for recipe', recipeId, '— triggering generation');
       ensureRecipeImage(recipeId).then(newUrl => {
         if (newUrl) {
@@ -39,12 +40,15 @@ export function RecipeImage({ recipeId, initialUrl, style, iconSize = 32 }: Reci
         }
       });
     }
-  }, [recipeId, url]);
+  }, [recipeId, url, hasError]);
 
   const handleLoad = () => {
     setLoaded(true);
     Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   };
+
+  const showIcon = (!url || hasError) && !loaded;
+  const showImage = !!url && !hasError;
 
   return (
     <View style={[styles.container, style]}>
@@ -52,21 +56,21 @@ export function RecipeImage({ recipeId, initialUrl, style, iconSize = 32 }: Reci
       {!loaded && (
         <Animated.View style={[StyleSheet.absoluteFill, styles.shimmer, { opacity: shimmerOpacity }]} />
       )}
-      {/* Chef icon when no URL yet */}
-      {!url && !loaded && (
+      {/* Chef icon when no URL or error */}
+      {showIcon && (
         <View style={styles.iconContainer}>
           <Ionicons name="restaurant-outline" size={iconSize} color="#555" />
         </View>
       )}
-      {/* Actual image */}
-      {url && (
+      {/* Actual image — only shown when url exists and no error */}
+      {showImage && (
         <Animated.Image
           source={{ uri: url, cache: 'force-cache' }}
           style={[StyleSheet.absoluteFill, styles.image, { opacity }]}
           onLoad={handleLoad}
           onError={() => {
-            console.warn('[RecipeImage] Image load error for recipe', recipeId, '— clearing url');
-            setUrl(null);
+            console.warn('[RecipeImage] Image load error for recipe', recipeId);
+            setHasError(true);
           }}
           resizeMode="cover"
         />

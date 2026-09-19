@@ -1,3 +1,4 @@
+import { SUPABASE_ANON_KEY } from '@/lib/supabase/client';
 import { supabase } from '@/lib/supabase/client';
 
 const RECIPE_FINDER_URL = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/recipe-finder';
@@ -12,18 +13,22 @@ export async function ensureRecipeImage(recipeId: string): Promise<string | null
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzZ3B0Zmlvb2ZhZWd1c2xndmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI0MjU2NTMsImV4cCI6MjA1ODAwMTY1M30.5omSMBLWMD5lFNMkMPSqHOBMpjHpDDa4434JHkpMpPk';
+    const anonKey = SUPABASE_ANON_KEY;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'apikey': anonKey,
+      'Authorization': session?.access_token ? `Bearer ${session.access_token}` : `Bearer ${anonKey}`,
     };
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    } else {
-      headers['Authorization'] = anonKey;
-    }
 
-    const res = await fetch(`${RECIPE_FINDER_URL}?type=generate-image&id=${recipeId}`, { headers });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const res = await fetch(`${RECIPE_FINDER_URL}?type=generate-image&id=${recipeId}`, {
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
     if (!res.ok) {
       console.warn('[RecipeImage] generate-image failed — status:', res.status, 'recipe:', recipeId);
       return null;
@@ -33,7 +38,11 @@ export async function ensureRecipeImage(recipeId: string): Promise<string | null
     console.log('[RecipeImage] Image generated successfully for recipe:', recipeId, '— url:', imageUrl);
     return imageUrl;
   } catch (e: any) {
-    console.warn('[RecipeImage] generate-image error for recipe:', recipeId, '—', e?.message);
+    if (e?.name === 'AbortError') {
+      console.warn('[RecipeImage] generate-image timed out for recipe:', recipeId);
+    } else {
+      console.warn('[RecipeImage] generate-image error for recipe:', recipeId, '—', e?.message);
+    }
     return null;
   } finally {
     inFlight.delete(recipeId);
