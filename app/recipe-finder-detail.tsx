@@ -468,9 +468,11 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           {/* Hero image */}
           {recipe.image_url ? (
             <Image
+              key={recipe.image_url}
               source={{ uri: recipe.image_url }}
               style={styles.heroImage}
               resizeMode="cover"
+              cache="reload"
             />
           ) : (
             <View style={[styles.heroPlaceholder, { backgroundColor: '#1a1a2e' }]}>

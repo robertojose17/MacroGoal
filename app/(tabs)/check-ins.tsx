@@ -113,7 +113,7 @@ function RecipeCard({
   const proteinText = `${Math.round(recipe.protein_per_serving)}g protein`;
   const carbsText = `${Math.round(recipe.carbs_per_serving)}g carbs`;
 
-  const imageSource = { uri: recipe.image_url || `https://picsum.photos/seed/${encodeURIComponent(recipe.name.replace(/\s+/g, '-').toLowerCase())}/400/300` };
+  const imageSource = recipe.image_url ? { uri: recipe.image_url } : null;
 
   return (
     <Pressable
@@ -129,11 +129,19 @@ function RecipeCard({
       accessibilityRole="button"
     >
       {/* Image */}
-      <Image
-        source={imageSource}
-        style={recipeStyles.recipeCardImage}
-        resizeMode="cover"
-      />
+      {imageSource ? (
+        <Image
+          key={imageSource.uri}
+          source={imageSource}
+          style={recipeStyles.recipeCardImage}
+          resizeMode="cover"
+          cache="reload"
+        />
+      ) : (
+        <View style={[recipeStyles.recipeCardImage, recipeStyles.recipeCardImagePlaceholder]}>
+          <ChefHat size={28} color="#666" />
+        </View>
+      )}
 
       {/* Tag badge */}
       {firstTag && tagColor && (
@@ -1103,6 +1111,11 @@ const recipeStyles = StyleSheet.create({
   recipeCardImage: {
     width: '100%',
     height: 160,
+  },
+  recipeCardImagePlaceholder: {
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tagBadge: {
     position: 'absolute',

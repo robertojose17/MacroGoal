@@ -137,9 +137,11 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
     >
       {recipe.image_url ? (
         <Image
+          key={recipe.image_url}
           source={{ uri: recipe.image_url }}
           style={styles.trendingImage}
           resizeMode="cover"
+          cache="reload"
         />
       ) : (
         <RecipeImagePlaceholder style={styles.trendingImage} />
@@ -190,9 +192,11 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
     >
       {recipe.image_url ? (
         <Image
+          key={recipe.image_url}
           source={{ uri: recipe.image_url }}
           style={styles.popularImage}
           resizeMode="cover"
+          cache="reload"
         />
       ) : (
         <RecipeImagePlaceholder style={styles.popularImage} />
@@ -245,9 +249,11 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
     >
       {recipe.image_url ? (
         <Image
+          key={recipe.image_url}
           source={{ uri: recipe.image_url }}
           style={styles.searchResultImage}
           resizeMode="cover"
+          cache="reload"
         />
       ) : (
         <RecipeImagePlaceholder style={styles.searchResultImage} />
