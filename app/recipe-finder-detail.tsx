@@ -49,6 +49,24 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+// ── Shimmer box ───────────────────────────────────────────────────────────────
+function ShimmerBox({ style, isDark }: { style: any; isDark: boolean }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
+  const shimmerBg = isDark ? '#3a3a3a' : '#E5E7EB';
+  return <Animated.View style={[style, { backgroundColor: shimmerBg, opacity }]} />;
+}
+
 // ─── Tag color map ────────────────────────────────────────────────────────────
 const TAG_COLORS: Record<string, string> = {
   'high-protein': colors.success,
@@ -122,6 +140,29 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
     <Animated.View style={[styles.toast, { opacity }]} pointerEvents="none">
       <Text style={styles.toastText}>{message}</Text>
     </Animated.View>
+  );
+}
+
+// ─── Hero image with shimmer ──────────────────────────────────────────────────
+function HeroImage({ imageUrl, isDark }: { imageUrl: string; isDark: boolean }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const onLoad = useCallback(() => {
+    setImgLoaded(true);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [fadeAnim]);
+
+  return (
+    <View style={styles.heroImage}>
+      {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
+      <Animated.Image
+        source={{ uri: imageUrl }}
+        style={[styles.heroImage, { opacity: fadeAnim }]}
+        resizeMode="cover"
+        onLoad={onLoad}
+      />
+    </View>
   );
 }
 
@@ -467,13 +508,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
         >
           {/* Hero image */}
           {recipe.image_url ? (
-            <Image
-              key={recipe.image_url}
-              source={{ uri: recipe.image_url }}
-              style={styles.heroImage}
-              resizeMode="cover"
-              cache="reload"
-            />
+            <HeroImage imageUrl={recipe.image_url} isDark={isDark} />
           ) : (
             <View style={[styles.heroPlaceholder, { backgroundColor: '#1a1a2e' }]}>
               <Ionicons name="restaurant-outline" size={48} color="#666" />
@@ -844,6 +879,7 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: 250,
+    overflow: 'hidden',
   },
   heroPlaceholder: {
     width: '100%',

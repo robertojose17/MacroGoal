@@ -5,7 +5,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Pressable, Image,
   ActivityIndicator, RefreshControl, ScrollView, TextInput,
-  ImageSourcePropType,
+  ImageSourcePropType, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +19,24 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;
+}
+
+// ── Shimmer box ───────────────────────────────────────────────────────────────
+function ShimmerBox({ style, isDark }: { style: any; isDark: boolean }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
+  const shimmerBg = isDark ? '#3a3a3a' : '#E5E7EB';
+  return <Animated.View style={[style, { backgroundColor: shimmerBg, opacity }]} />;
 }
 
 function RecipeImagePlaceholder({ style }: { style: any }) {
@@ -116,6 +134,49 @@ const FILTERS: FilterDef[] = [
   },
 ];
 
+// ── Skeleton cards ────────────────────────────────────────────────────────────
+function TrendingSkeletonCard({ isDark }: { isDark: boolean }) {
+  const skeletonBg = isDark ? '#2a2a2a' : '#F3F4F6';
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  return (
+    <View style={[styles.trendingCard, { backgroundColor: cardBg, borderColor }]}>
+      <ShimmerBox style={{ width: 200, height: 130 }} isDark={isDark} />
+      <View style={[styles.trendingBody, { gap: 8 }]}>
+        <ShimmerBox style={{ width: 160, height: 14, borderRadius: 4 }} isDark={isDark} />
+        <ShimmerBox style={{ width: 100, height: 12, borderRadius: 4 }} isDark={isDark} />
+      </View>
+    </View>
+  );
+}
+
+function PopularSkeletonCard({ isDark }: { isDark: boolean }) {
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  return (
+    <View style={[styles.popularCard, { backgroundColor: cardBg, borderColor }]}>
+      <ShimmerBox style={{ width: '100%', height: 150 }} isDark={isDark} />
+      <View style={[styles.popularBody, { gap: 8 }]}>
+        <ShimmerBox style={{ width: '80%', height: 14, borderRadius: 4 }} isDark={isDark} />
+        <ShimmerBox style={{ width: '60%', height: 12, borderRadius: 4 }} isDark={isDark} />
+      </View>
+    </View>
+  );
+}
+
+function SearchSkeletonRow({ isDark }: { isDark: boolean }) {
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  return (
+    <View style={[styles.searchResultRow, { borderBottomColor: borderColor }]}>
+      <ShimmerBox style={{ width: 52, height: 52, borderRadius: borderRadius.sm }} isDark={isDark} />
+      <View style={{ flex: 1, gap: 8 }}>
+        <ShimmerBox style={{ width: 200, height: 14, borderRadius: 4 }} isDark={isDark} />
+        <ShimmerBox style={{ width: 120, height: 12, borderRadius: 4 }} isDark={isDark} />
+      </View>
+    </View>
+  );
+}
+
 // ── Trending card (horizontal) ────────────────────────────────────────────────
 function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress: () => void; isDark: boolean }) {
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
@@ -127,6 +188,14 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
   const caloriesBg = colors.calories + '18';
   const proteinBg = colors.protein + '18';
 
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const onLoad = useCallback(() => {
+    setImgLoaded(true);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [fadeAnim]);
+
   return (
     <Pressable
       onPress={() => {
@@ -136,13 +205,15 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
       style={[styles.trendingCard, { backgroundColor: cardBg, borderColor }]}
     >
       {recipe.image_url ? (
-        <Image
-          key={recipe.image_url}
-          source={{ uri: recipe.image_url }}
-          style={styles.trendingImage}
-          resizeMode="cover"
-          cache="reload"
-        />
+        <View style={styles.trendingImage}>
+          {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
+          <Animated.Image
+            source={resolveImageSource(recipe.image_url)}
+            style={[styles.trendingImage, { opacity: fadeAnim }]}
+            resizeMode="cover"
+            onLoad={onLoad}
+          />
+        </View>
       ) : (
         <RecipeImagePlaceholder style={styles.trendingImage} />
       )}
@@ -182,6 +253,14 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
   const caloriesBg = colors.calories + '18';
   const proteinBg = colors.protein + '18';
 
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const onLoad = useCallback(() => {
+    setImgLoaded(true);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [fadeAnim]);
+
   return (
     <Pressable
       onPress={() => {
@@ -191,13 +270,15 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
       style={[styles.popularCard, { backgroundColor: cardBg, borderColor }]}
     >
       {recipe.image_url ? (
-        <Image
-          key={recipe.image_url}
-          source={{ uri: recipe.image_url }}
-          style={styles.popularImage}
-          resizeMode="cover"
-          cache="reload"
-        />
+        <View style={styles.popularImage}>
+          {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
+          <Animated.Image
+            source={resolveImageSource(recipe.image_url)}
+            style={[styles.popularImage, { opacity: fadeAnim }]}
+            resizeMode="cover"
+            onLoad={onLoad}
+          />
+        </View>
       ) : (
         <RecipeImagePlaceholder style={styles.popularImage} />
       )}
@@ -239,6 +320,14 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
   const sourceText = recipe.source_name ? ` · ${recipe.source_name}` : '';
   const metaText = caloriesText + sourceText;
 
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const onLoad = useCallback(() => {
+    setImgLoaded(true);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [fadeAnim]);
+
   return (
     <Pressable
       onPress={() => {
@@ -248,13 +337,15 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
       style={[styles.searchResultRow, { borderBottomColor: borderColor }]}
     >
       {recipe.image_url ? (
-        <Image
-          key={recipe.image_url}
-          source={{ uri: recipe.image_url }}
-          style={styles.searchResultImage}
-          resizeMode="cover"
-          cache="reload"
-        />
+        <View style={styles.searchResultImage}>
+          {!imgLoaded && <ShimmerBox style={StyleSheet.absoluteFill} isDark={isDark} />}
+          <Animated.Image
+            source={resolveImageSource(recipe.image_url)}
+            style={[styles.searchResultImage, { opacity: fadeAnim }]}
+            resizeMode="cover"
+            onLoad={onLoad}
+          />
+        </View>
       ) : (
         <RecipeImagePlaceholder style={styles.searchResultImage} />
       )}
@@ -329,7 +420,7 @@ export default function RecipesScreen() {
     fetchPopular(true);
   }, [fetchPopular]);
 
-  // Search with debounce
+  // Search with debounce — immediately show skeleton on typing
   const handleSearchChange = useCallback((text: string) => {
     setSearchText(text);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -338,6 +429,7 @@ export default function RecipesScreen() {
       setSearchLoading(false);
       return;
     }
+    // Show skeleton immediately so UI responds to typing
     setSearchLoading(true);
     searchDebounceRef.current = setTimeout(async () => {
       console.log('[Recipes] Search request fired, query:', text.trim());
@@ -407,15 +499,44 @@ export default function RecipesScreen() {
   const noFilterResults = activeFilter !== 'all' && filteredTrending.length === 0 && filteredPopular.length === 0;
   const emptyFilterMessage = `No ${activeFilterDef.label.replace(/^[^\w]+/, '')} recipes yet — search to add some!`;
 
+  const skeletonBg = isDark ? '#2a2a2a' : '#F3F4F6';
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: bg }]}>
         <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
           <Text style={[styles.headerTitle, { color: textColor }]}>Recipes</Text>
+          <Text style={[styles.headerSubtitle, { color: subColor }]}>Discover what people are cooking 🍳</Text>
         </View>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: subColor }]}>Loading recipes...</Text>
+
+        {/* Trending skeleton */}
+        <View style={styles.sectionHeader}>
+          <ShimmerBox style={{ width: 140, height: 18, borderRadius: 4 }} isDark={isDark} />
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.trendingList}
+          scrollEnabled={false}
+        >
+          {[0, 1, 2].map((i) => (
+            <TrendingSkeletonCard key={i} isDark={isDark} />
+          ))}
+        </ScrollView>
+
+        {/* Popular skeleton */}
+        <View style={[styles.sectionHeader, { marginTop: spacing.lg }]}>
+          <ShimmerBox style={{ width: 180, height: 18, borderRadius: 4 }} isDark={isDark} />
+        </View>
+        <View style={[styles.popularGrid, { paddingHorizontal: spacing.md }]}>
+          {[0, 1, 2, 3].map((i) => {
+            const gridItemStyle = i % 2 === 0 ? { paddingRight: 4 } : { paddingLeft: 4 };
+            return (
+              <View key={i} style={[styles.popularGridItem, gridItemStyle]}>
+                <PopularSkeletonCard isDark={isDark} />
+              </View>
+            );
+          })}
         </View>
       </View>
     );
@@ -466,9 +587,10 @@ export default function RecipesScreen() {
           {isSearchActive && (
             <View style={[styles.searchDropdown, { backgroundColor: cardBg, borderColor }]}>
               {searchLoading ? (
-                <View style={styles.searchLoadingRow}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.searchLoadingText, { color: subColor }]}>Searching the web...</Text>
+                <View style={styles.searchSkeletonContainer}>
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <SearchSkeletonRow key={i} isDark={isDark} />
+                  ))}
                 </View>
               ) : searchResults.length === 0 ? (
                 <Text style={[styles.noResultsText, { color: subColor }]}>No recipes found. Try a different search.</Text>
@@ -605,11 +727,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15, shadowRadius: 8, elevation: 8,
     overflow: 'hidden',
   },
+  searchSkeletonContainer: { padding: spacing.sm, gap: 4 },
   searchLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
   searchLoadingText: { fontSize: 14 },
   noResultsText: { padding: spacing.md, fontSize: 14, textAlign: 'center' },
   searchResultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderBottomWidth: 1 },
-  searchResultImage: { width: 52, height: 52, borderRadius: borderRadius.sm },
+  searchResultImage: { width: 52, height: 52, borderRadius: borderRadius.sm, overflow: 'hidden' },
   searchResultInfo: { flex: 1 },
   searchResultName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   searchResultMeta: { fontSize: 12 },
@@ -631,14 +754,14 @@ const styles = StyleSheet.create({
   emptySection: { paddingHorizontal: spacing.md, fontSize: 13, marginBottom: spacing.md },
   trendingList: { paddingHorizontal: spacing.md, gap: spacing.sm, paddingBottom: 4 },
   trendingCard: { width: 200, borderRadius: borderRadius.lg, borderWidth: 1, overflow: 'hidden' },
-  trendingImage: { width: '100%', height: 130 },
+  trendingImage: { width: 200, height: 130, overflow: 'hidden' },
   trendingBody: { padding: spacing.sm },
   trendingName: { fontSize: 13, fontWeight: '700', lineHeight: 18, marginBottom: 4 },
   trendingSource: { fontSize: 11, marginTop: 4 },
   popularGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   popularGridItem: { width: '50%', marginBottom: spacing.sm },
   popularCard: { borderRadius: borderRadius.lg, borderWidth: 1, overflow: 'hidden' },
-  popularImage: { width: '100%', height: 150 },
+  popularImage: { width: '100%', height: 150, overflow: 'hidden' },
   popularBody: { padding: spacing.sm },
   popularName: { fontSize: 13, fontWeight: '700', lineHeight: 18, marginBottom: 4 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
