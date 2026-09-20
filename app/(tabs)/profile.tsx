@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation, Switch, Image, ImageSourcePropType } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -15,6 +15,13 @@ import { Sex, ActivityLevel, GoalType } from '@/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTranslation } from 'react-i18next';
 import i18n, { supportedLanguages, setStoredLanguage } from '@/lib/i18n';
+import * as ImagePicker from 'expo-image-picker';
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 const PROTEIN_OPTIONS = ['Chicken', 'Turkey', 'Beef', 'Pork', 'Salmon', 'Tuna', 'Shrimp', 'Cod', 'Tilapia', 'Eggs', 'Greek Yogurt', 'Cottage Cheese', 'Whey Protein', 'Tofu', 'Tempeh', 'Edamame', 'Lentils', 'Chickpeas', 'Black Beans'];
 
@@ -83,8 +90,136 @@ export default function ProfileScreen() {
   // Admin state
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Avatar upload state
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
   // Adaptive TDEE state
   const [showAdjustmentDayModal, setShowAdjustmentDayModal] = useState(false);
+
+  const handleAvatarPress = () => {
+    console.log('[Profile] Avatar tapped — showing photo picker options');
+    Alert.alert(
+      'Profile Photo',
+      'Choose how to update your profile photo',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => {
+            console.log('[Profile] Take Photo selected');
+            pickImage('camera');
+          },
+        },
+        {
+          text: 'Choose from Library',
+          onPress: () => {
+            console.log('[Profile] Choose from Library selected');
+            pickImage('library');
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const pickImage = async (source: 'camera' | 'library') => {
+    try {
+      let result: ImagePicker.ImagePickerResult;
+
+      if (source === 'camera') {
+        console.log('[Profile] Requesting camera permissions');
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('[Profile] Camera permission denied');
+          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          return;
+        }
+        console.log('[Profile] Launching camera');
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      } else {
+        console.log('[Profile] Requesting media library permissions');
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('[Profile] Media library permission denied');
+          Alert.alert('Permission Required', 'Photo library access is needed to choose a photo.');
+          return;
+        }
+        console.log('[Profile] Launching image library');
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      }
+
+      if (result.canceled) {
+        console.log('[Profile] Image picker cancelled');
+        return;
+      }
+
+      const asset = result.assets[0];
+      console.log('[Profile] Image selected — uri:', asset.uri, 'width:', asset.width, 'height:', asset.height);
+      await uploadAvatar(asset.uri);
+    } catch (error: any) {
+      console.error('[Profile] Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    if (!user) return;
+    console.log('[Profile] Starting avatar upload — user_id:', user.id);
+    setAvatarUploading(true);
+    try {
+      const response = await fetch(uri);
+      if (!response.ok) throw new Error('Failed to read image file');
+      const blob = await response.blob();
+      const path = `${user.id}/avatar.jpg`;
+      console.log('[Profile] Uploading to Supabase Storage — path:', path, 'size:', blob.size);
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('[Profile] Storage upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('[Profile] Upload successful, getting public URL');
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      console.log('[Profile] Public URL:', publicUrl);
+
+      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
+      console.log('[Profile] Updating users table with avatar_url');
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ avatar_url: cacheBustedUrl, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('[Profile] DB update error:', updateError);
+        throw updateError;
+      }
+
+      console.log('[Profile] Avatar updated successfully');
+      setUser((prev: any) => ({ ...prev, avatar_url: cacheBustedUrl }));
+    } catch (error: any) {
+      console.error('[Profile] Avatar upload failed:', error);
+      Alert.alert('Upload Failed', error.message || 'Failed to upload photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -818,11 +953,38 @@ export default function ProfileScreen() {
       >
         {/* ── Avatar Card ─────────────────────────────────────────────────── */}
         <View style={[styles.profileCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={styles.avatarText}>
-              {user.name ? user.name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
-            </Text>
-          </View>
+          <TouchableOpacity
+            onPress={handleAvatarPress}
+            activeOpacity={0.8}
+            style={styles.avatarWrapper}
+            disabled={avatarUploading}
+          >
+            {user.avatar_url ? (
+              <Image
+                source={resolveImageSource(user.avatar_url)}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                <Text style={styles.avatarText}>
+                  {user.name ? user.name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
+                </Text>
+              </View>
+            )}
+            <View style={[styles.avatarCameraBadge, { backgroundColor: isDark ? colors.cardDark : '#fff' }]}>
+              {avatarUploading ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <IconSymbol
+                  ios_icon_name="camera.fill"
+                  android_material_icon_name="camera-alt"
+                  size={14}
+                  color={colors.primary}
+                />
+              )}
+            </View>
+          </TouchableOpacity>
 
           <Text style={[styles.userName, { color: isDark ? colors.textDark : colors.text }]}>
             {user.name || 'User'}
@@ -2259,13 +2421,40 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     elevation: 2,
   },
+  avatarWrapper: {
+    width: 80,
+    height: 80,
+    marginBottom: spacing.md,
+    position: 'relative',
+  },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+    borderWidth: 1.5,
+    borderColor: colors.primary + '40',
   },
   avatarText: {
     color: '#FFFFFF',

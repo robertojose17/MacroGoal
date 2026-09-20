@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Image, ImageSourcePropType } from 'react-native';
 
 function hashUsername(username: string): number {
   let hash = 0;
@@ -20,16 +20,37 @@ const AVATAR_COLORS = [
   '#10B981',
 ];
 
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
+
 interface AvatarProps {
   username: string;
   size?: number;
+  avatarUrl?: string | null;
 }
 
-export default function Avatar({ username, size = 40 }: AvatarProps) {
+export default function Avatar({ username, size = 40, avatarUrl }: AvatarProps) {
   const initial = (username ?? 'U').charAt(0).toUpperCase();
   const colorIndex = hashUsername(username ?? '') % AVATAR_COLORS.length;
   const bgColor = AVATAR_COLORS[colorIndex];
   const fontSize = size * 0.4;
+
+  if (avatarUrl) {
+    return (
+      <Image
+        source={resolveImageSource(avatarUrl)}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        }}
+        resizeMode="cover"
+      />
+    );
+  }
 
   return (
     <View

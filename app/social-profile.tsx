@@ -516,7 +516,7 @@ export default function SocialProfileScreen() {
         {/* ── Profile header ── */}
         <View style={styles.profileHeader}>
           <View style={styles.profileTopRow}>
-            <Avatar username={user.username} size={80} />
+            <Avatar username={user.username} size={80} avatarUrl={(user as any).avatar_url} />
             <View style={styles.profileStats}>
               <View style={styles.profileStatItem}>
                 <Text style={[styles.profileStatValue, { color: textColor }]}>{user.posts_count}</Text>

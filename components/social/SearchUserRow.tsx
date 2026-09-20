@@ -89,7 +89,7 @@ export default function SearchUserRow({
       ]}
     >
       <Pressable onPress={handleRowPress} style={styles.row} accessibilityRole="button">
-        <Avatar username={user.username} size={44} />
+        <Avatar username={user.username} size={44} avatarUrl={(user as any).avatar_url} />
         <View style={styles.info}>
           <Text style={[styles.username, { color: textColor }]} numberOfLines={1}>
             {user.username}
