@@ -110,8 +110,6 @@ function RecipeCard({
   const tagColor = firstTag ? (TAG_COLORS[firstTag] || colors.primary) : null;
   const prepText = recipe.prep_time_minutes != null ? `${recipe.prep_time_minutes} min` : null;
   const calText = `${Math.round(recipe.calories_per_serving)} cal`;
-  const proteinText = `${Math.round(recipe.protein_per_serving)}g protein`;
-  const carbsText = `${Math.round(recipe.carbs_per_serving)}g carbs`;
 
   const imageSource = recipe.image_url ? { uri: recipe.image_url } : null;
 
@@ -171,7 +169,7 @@ function RecipeCard({
           {recipe.name}
         </Text>
         <View style={recipeStyles.recipeCardMeta}>
-          <Text style={[recipeStyles.recipeCardSource, { color: subColor }]}>{recipe.source_name}</Text>
+          <Text style={[recipeStyles.recipeCardCal, { color: colors.calories }]}>{calText}</Text>
           {prepText && (
             <>
               <Text style={[recipeStyles.recipeCardDot, { color: subColor }]}>·</Text>
@@ -181,11 +179,11 @@ function RecipeCard({
           )}
         </View>
         <View style={recipeStyles.recipeCardMacros}>
-          <Text style={[recipeStyles.recipeCardCal, { color: colors.calories }]}>{calText}</Text>
+          <Text style={[recipeStyles.recipeCardMacroVal, { color: colors.protein }]}>{Math.round(recipe.protein_per_serving)}g P</Text>
           <Text style={[recipeStyles.recipeCardMacroSep, { color: subColor }]}>·</Text>
-          <Text style={[recipeStyles.recipeCardMacroVal, { color: colors.protein }]}>{proteinText}</Text>
+          <Text style={[recipeStyles.recipeCardMacroVal, { color: colors.carbs }]}>{Math.round(recipe.carbs_per_serving)}g C</Text>
           <Text style={[recipeStyles.recipeCardMacroSep, { color: subColor }]}>·</Text>
-          <Text style={[recipeStyles.recipeCardMacroVal, { color: colors.carbs }]}>{carbsText}</Text>
+          <Text style={[recipeStyles.recipeCardMacroVal, { color: colors.fat ?? '#EF4444' }]}>{Math.round(recipe.fat_per_serving)}g F</Text>
         </View>
       </View>
     </Pressable>
