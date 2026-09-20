@@ -169,57 +169,31 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
-  const carbs = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)) : null;
+  const cal = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
+  const prot = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)) : null;
+  const carb = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)) : null;
   const fat = recipe.fat_per_serving != null ? Math.round(Number(recipe.fat_per_serving)) : null;
 
   return (
     <Pressable
-      onPress={() => {
-        console.log('[Recipes] Trending card pressed:', recipe.name, recipe.id);
-        onPress();
-      }}
+      onPress={() => { console.log('[Recipes] Trending card pressed:', recipe.name, recipe.id); onPress(); }}
       style={[styles.trendingCard, { backgroundColor: cardBg, borderColor }]}
     >
-      <RecipeImage
-        recipeId={recipe.id}
-        initialUrl={recipe.image_url}
-        style={styles.trendingImage}
-        iconSize={40}
-      />
+      <RecipeImage recipeId={recipe.id} initialUrl={recipe.image_url} style={styles.trendingImage} iconSize={40} />
       <View style={styles.trendingBody}>
-        {/* updated */}
         <Text style={[styles.trendingName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
-        {/* Line 1: calories · time */}
         <View style={styles.metaLine}>
-          {calories != null && (
-            <Text style={[styles.metaChip, { color: colors.calories }]}>{calories} cal</Text>
-          )}
-          {calories != null && recipe.prep_time_minutes != null && (
-            <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
-          )}
-          {recipe.prep_time_minutes != null && (
-            <Text style={[styles.metaChip, { color: subColor }]}>⏱ {recipe.prep_time_minutes} min</Text>
-          )}
+          {cal != null && <Text style={[styles.metaChip, { color: colors.calories }]}>{cal} cal</Text>}
+          {cal != null && recipe.prep_time_minutes != null && <Text style={[styles.metaSep, { color: subColor }]}> · </Text>}
+          {recipe.prep_time_minutes != null && <Text style={[styles.metaChip, { color: subColor }]}>⏱ {recipe.prep_time_minutes} min</Text>}
         </View>
-        {/* Line 2: P · C · F */}
-        {(recipe.protein_per_serving != null || recipe.carbs_per_serving != null || recipe.fat_per_serving != null) && (
+        {(prot != null || carb != null || fat != null) && (
           <View style={styles.metaLine}>
-            {recipe.protein_per_serving != null && (
-              <Text style={[styles.macroChip, { color: colors.protein }]}>{Math.round(Number(recipe.protein_per_serving))}g P</Text>
-            )}
-            {recipe.protein_per_serving != null && recipe.carbs_per_serving != null && (
-              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
-            )}
-            {recipe.carbs_per_serving != null && (
-              <Text style={[styles.macroChip, { color: colors.carbs ?? '#F59E0B' }]}>{Math.round(Number(recipe.carbs_per_serving))}g C</Text>
-            )}
-            {recipe.carbs_per_serving != null && recipe.fat_per_serving != null && (
-              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
-            )}
-            {recipe.fat_per_serving != null && (
-              <Text style={[styles.macroChip, { color: colors.fat ?? '#EF4444' }]}>{Math.round(Number(recipe.fat_per_serving))}g F</Text>
-            )}
+            {prot != null && <Text style={[styles.macroChip, { color: colors.protein }]}>{prot}g P</Text>}
+            {prot != null && carb != null && <Text style={[styles.metaSep, { color: subColor }]}> · </Text>}
+            {carb != null && <Text style={[styles.macroChip, { color: colors.carbs ?? '#F59E0B' }]}>{carb}g C</Text>}
+            {carb != null && fat != null && <Text style={[styles.metaSep, { color: subColor }]}> · </Text>}
+            {fat != null && <Text style={[styles.macroChip, { color: colors.fat ?? '#EF4444' }]}>{fat}g F</Text>}
           </View>
         )}
       </View>
@@ -233,57 +207,32 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
-  const carbs = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)) : null;
+  const cal = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
+  const prot = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)) : null;
+  const carb = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)) : null;
   const fat = recipe.fat_per_serving != null ? Math.round(Number(recipe.fat_per_serving)) : null;
   const clickCount = recipe.click_count != null ? Number(recipe.click_count) : 0;
 
   return (
     <Pressable
-      onPress={() => {
-        console.log('[Recipes] Popular card pressed:', recipe.name, recipe.id);
-        onPress();
-      }}
+      onPress={() => { console.log('[Recipes] Popular card pressed:', recipe.name, recipe.id); onPress(); }}
       style={[styles.popularCard, { backgroundColor: cardBg, borderColor }]}
     >
-      <RecipeImage
-        recipeId={recipe.id}
-        initialUrl={recipe.image_url}
-        style={styles.popularImage}
-        iconSize={32}
-      />
+      <RecipeImage recipeId={recipe.id} initialUrl={recipe.image_url} style={styles.popularImage} iconSize={32} />
       <View style={styles.popularBody}>
         <Text style={[styles.popularName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
-        {/* Line 1: calories · time */}
         <View style={styles.metaLine}>
-          {calories != null && (
-            <Text style={[styles.metaChip, { color: colors.calories }]}>{calories} cal</Text>
-          )}
-          {calories != null && recipe.prep_time_minutes != null && (
-            <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
-          )}
-          {recipe.prep_time_minutes != null && (
-            <Text style={[styles.metaChip, { color: subColor }]}>⏱ {recipe.prep_time_minutes} min</Text>
-          )}
+          {cal != null && <Text style={[styles.metaChip, { color: colors.calories }]}>{cal} cal</Text>}
+          {cal != null && recipe.prep_time_minutes != null && <Text style={[styles.metaSep, { color: subColor }]}> · </Text>}
+          {recipe.prep_time_minutes != null && <Text style={[styles.metaChip, { color: subColor }]}>⏱ {recipe.prep_time_minutes} min</Text>}
         </View>
-        {/* Line 2: P · C · F */}
-        {(recipe.protein_per_serving != null || recipe.carbs_per_serving != null || recipe.fat_per_serving != null) && (
+        {(prot != null || carb != null || fat != null) && (
           <View style={styles.metaLine}>
-            {recipe.protein_per_serving != null && (
-              <Text style={[styles.macroChip, { color: colors.protein }]}>{Math.round(Number(recipe.protein_per_serving))}g P</Text>
-            )}
-            {recipe.protein_per_serving != null && recipe.carbs_per_serving != null && (
-              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
-            )}
-            {recipe.carbs_per_serving != null && (
-              <Text style={[styles.macroChip, { color: colors.carbs ?? '#F59E0B' }]}>{Math.round(Number(recipe.carbs_per_serving))}g C</Text>
-            )}
-            {recipe.carbs_per_serving != null && recipe.fat_per_serving != null && (
-              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
-            )}
-            {recipe.fat_per_serving != null && (
-              <Text style={[styles.macroChip, { color: colors.fat ?? '#EF4444' }]}>{Math.round(Number(recipe.fat_per_serving))}g F</Text>
-            )}
+            {prot != null && <Text style={[styles.macroChip, { color: colors.protein }]}>{prot}g P</Text>}
+            {prot != null && carb != null && <Text style={[styles.metaSep, { color: subColor }]}> · </Text>}
+            {carb != null && <Text style={[styles.macroChip, { color: colors.carbs ?? '#F59E0B' }]}>{carb}g C</Text>}
+            {carb != null && fat != null && <Text style={[styles.metaSep, { color: subColor }]}> · </Text>}
+            {fat != null && <Text style={[styles.macroChip, { color: colors.fat ?? '#EF4444' }]}>{fat}g F</Text>}
           </View>
         )}
         {clickCount > 0 && (
