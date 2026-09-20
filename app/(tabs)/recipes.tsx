@@ -316,6 +316,7 @@ export default function RecipesScreen() {
   const [searchText, setSearchText] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
@@ -366,6 +367,7 @@ export default function RecipesScreen() {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     if (!text.trim()) {
       setSearchResults([]);
+      setSearchError(null);
       setSearchLoading(false);
       return;
     }
@@ -374,21 +376,22 @@ export default function RecipesScreen() {
     searchDebounceRef.current = setTimeout(async () => {
       console.log('[Recipes] Search request fired, query:', text.trim());
       try {
-        const { data: { session } } = await supabase.auth.getSession();
         const { data, error: fnError } = await supabase.functions.invoke('recipe-finder', {
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
           body: { query: text.trim(), type: 'search' },
         });
         if (fnError) {
           console.error('[Recipes] search error:', fnError);
+          setSearchError(fnError.message || 'Search failed. Try again.');
           setSearchResults([]);
         } else {
+          setSearchError(null);
           const results = (data?.recipes ?? []).map(normalizeRecipe);
           console.log('[Recipes] Search results count:', results.length);
           setSearchResults(results);
         }
       } catch (e: any) {
         console.error('[Recipes] search error:', e?.message);
+        setSearchError(e?.message || 'Search failed. Try again.');
         setSearchResults([]);
       } finally {
         setSearchLoading(false);
@@ -422,6 +425,7 @@ export default function RecipesScreen() {
     console.log('[Recipes] Search cleared');
     setSearchText('');
     setSearchResults([]);
+    setSearchError(null);
   }, []);
 
   const handleFilterPress = useCallback((filterId: string) => {
@@ -531,7 +535,10 @@ export default function RecipesScreen() {
                   {[0, 1, 2, 3, 4].map((i) => (
                     <SearchSkeletonRow key={i} isDark={isDark} />
                   ))}
+                  <Text style={[styles.noResultsText, { color: subColor }]}>Searching the web for recipes...</Text>
                 </View>
+              ) : searchError ? (
+                <Text style={[styles.noResultsText, { color: '#EF4444' }]}>{searchError}</Text>
               ) : searchResults.length === 0 ? (
                 <Text style={[styles.noResultsText, { color: subColor }]}>No recipes found. Try a different search.</Text>
               ) : (
