@@ -332,7 +332,8 @@ export default function RecipesScreen() {
     try {
       console.log('[Recipes] popular-recipes request — invoking edge function');
       const { data, error: fnError } = await supabase.functions.invoke('popular-recipes', {
-        method: 'GET',
+        method: 'POST',
+        body: { action: 'get_popular' },
       });
       if (fnError) {
         console.error('[Recipes] popular-recipes error:', fnError);

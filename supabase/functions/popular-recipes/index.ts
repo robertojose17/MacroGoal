@@ -45,13 +45,17 @@ Deno.serve(async (req) => {
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       const id = body?.id;
+
+      // Click tracking
       if (id) {
         await supabase.rpc("increment_recipe_click", { recipe_id: id });
         console.log("[popular-recipes] Click tracked for:", id);
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+      // Fall through to trending/discover query logic (action: 'get_popular' or any POST without id)
     }
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
