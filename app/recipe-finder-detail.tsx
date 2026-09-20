@@ -26,7 +26,6 @@ import {
   BookmarkCheck,
   Star,
   Clock,
-  Users,
   ExternalLink,
   Minus,
   Plus,
@@ -492,33 +491,12 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
 
             {/* Source row */}
             <View style={styles.sourceRow}>
-              {recipe.source_url && recipe.url_verified !== false ? (
-                <Pressable
-                  onPress={() => {
-                    console.log('[RecipeDetail] Source link pressed — url:', recipe.source_url);
-                    if (recipe.source_url) Linking.openURL(recipe.source_url);
-                  }}
-                  style={styles.sourceLink}
-                  accessibilityRole="link"
-                >
-                  <Text style={[styles.sourceName, { color: colors.primary }]}>
-                    From {recipe.source_name}
-                  </Text>
-                  <ExternalLink size={13} color={colors.primary} />
-                </Pressable>
-              ) : (
-                <Text style={[styles.sourceName, { color: subColor }]}>From {recipe.source_name}</Text>
-              )}
               {prepTimeText && (
                 <View style={styles.metaItem}>
                   <Clock size={13} color={subColor} />
                   <Text style={[styles.metaText, { color: subColor }]}>{prepTimeText}</Text>
                 </View>
               )}
-              <View style={styles.metaItem}>
-                <Users size={13} color={subColor} />
-                <Text style={[styles.metaText, { color: subColor }]}>{recipe.servings} servings</Text>
-              </View>
             </View>
 
             {/* Tags */}
