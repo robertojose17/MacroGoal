@@ -103,7 +103,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen name="premium" options={{ href: null }} />
-        <Tabs.Screen name="recipes" options={{ href: null }} />
       </Tabs>
       <AdBannerFooter />
     </View>

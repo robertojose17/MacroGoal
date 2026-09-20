@@ -38,6 +38,7 @@ import type { SearchUser } from '@/utils/socialApi';
 import SearchUserRow from '@/components/social/SearchUserRow';
 import CreatePostSheet from '@/components/social/CreatePostSheet';
 import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
+import { useRecipeLimit } from '@/hooks/useRecipeLimit';
 import { supabase } from '@/lib/supabase/client';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -237,6 +238,7 @@ export default function CommunityScreen() {
     loadMoreBrowse,
     prefetchedRef,
   } = useRecipeFinder();
+  const { canOpen, recordOpen } = useRecipeLimit();
   const [recipeQuery, setRecipeQuery] = useState('');
   const recipesInitialized = useRef(false);
 
@@ -573,8 +575,16 @@ export default function CommunityScreen() {
     }
   }, [saveRecipe, unsaveRecipe]);
 
-  const handleRecipePress = useCallback((recipe: RecipeResult) => {
+  const handleRecipePress = useCallback(async (recipe: RecipeResult) => {
     console.log('[Community] Recipe card pressed — id:', recipe.id, 'name:', recipe.name || (recipe as any).title);
+    const allowed = await canOpen();
+    console.log('[Community] Recipe limit check — allowed:', allowed);
+    if (!allowed) {
+      console.log('[Community] Recipe daily limit reached — redirecting to subscription');
+      router.push('/subscription');
+      return;
+    }
+    await recordOpen();
     supabase.functions.invoke('popular-recipes', {
       body: { action: 'click', recipe_id: recipe.id, recipe_name: recipe.name },
     }).catch(() => {});
@@ -594,7 +604,7 @@ export default function CommunityScreen() {
     };
     console.log('[Community] Navigating to recipe detail — normalized name:', normalized.name, 'ingredients:', normalized.ingredients.length, 'instructions:', normalized.instructions.length);
     router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(normalized) } });
-  }, [router]);
+  }, [router, canOpen, recordOpen]);
 
   // ─── Render Recipes ───────────────────────────────────────────────────────────
   const renderRecipes = () => {
