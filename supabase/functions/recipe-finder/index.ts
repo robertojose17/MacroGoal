@@ -194,13 +194,39 @@ Deno.serve(async (req) => {
 
   try {
     if (!OPENROUTER_API_KEY) return new Response(JSON.stringify({ error: "Server configuration error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // Parse body first so we can check type before enforcing auth
+    const body = await req.json();
+    const { query, type, userGoals } = body;
+    console.log("[recipe-finder] POST type:", type, "query:", query);
+
+    // ── Browse: public, no auth required ──────────────────────────────────────
+    if (type === "browse") {
+      const page = Number(body.page ?? 0);
+      const limit = 12;
+      const offset = page * limit;
+      console.log("[recipe-finder] browse page:", page, "offset:", offset);
+      const { data: rows, error } = await supabase
+        .from("recipes")
+        .select("*")
+        .order("click_count", { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw new Error(error.message);
+      const recipes = (rows ?? []).map(mapRow);
+      const hasMore = recipes.length === limit;
+      console.log("[recipe-finder] browse — returned:", recipes.length, "has_more:", hasMore);
+      return new Response(
+        JSON.stringify({ recipes, has_more: hasMore, total: recipes.length, page }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── All other types require auth ──────────────────────────────────────────
     const auth = req.headers.get("Authorization") ?? "";
     const token = auth.replace("Bearer ", "");
     const { data: userData, error: authError } = await supabase.auth.getUser(token);
     if (authError || !userData?.user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const body = await req.json();
-    const { query, type, userGoals } = body;
-    console.log("[recipe-finder] POST type:", type, "query:", query, "user:", userData.user.id);
+    console.log("[recipe-finder] authed user:", userData.user.id);
     if (type === "search" && query?.trim()) {
       const cached = await searchLibrary(query);
       if (cached.length >= 3) {

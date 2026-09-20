@@ -38,7 +38,7 @@ import type { SearchUser } from '@/utils/socialApi';
 import SearchUserRow from '@/components/social/SearchUserRow';
 import CreatePostSheet from '@/components/social/CreatePostSheet';
 import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
-import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -293,47 +293,44 @@ export default function CommunityScreen() {
     }
   }, []);
 
-  // ─── Fetch popular-recipes via direct fetch (trending only) ──────────────────
-  const fetchPopularRecipesUrl = useCallback(async (
-    section: 'popular' | 'trending',
-    page: number,
-    limit: number,
-    filter: string,
-  ): Promise<{ recipes: RecipeResult[]; total: number; page: number; has_more: boolean }> => {
-    const base = `${SUPABASE_PROJECT_URL}/functions/v1/popular-recipes`;
-    const params = new URLSearchParams({ section, page: String(page), limit: String(limit) });
-    if (filter) params.set('filter', filter);
-    const url = `${base}?${params.toString()}`;
-    console.log('[Community] fetchPopularRecipesUrl — GET', url);
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`popular-recipes ${res.status}: ${text.slice(0, 200)}`);
-    }
-    const data = await res.json();
-    return {
-      recipes: Array.isArray(data?.recipes) ? data.recipes : [],
-      total: Number(data?.total ?? 0),
-      page: Number(data?.page ?? page),
-      has_more: Boolean(data?.has_more ?? false),
-    };
-  }, []);
+  // ─── Normalize popular-recipes response shape to RecipeResult ────────────────
+  const normalizeForCommunity = useCallback((r: any): RecipeResult => ({
+    id: r.id,
+    name: r.name ?? r.title ?? 'Recipe',
+    description: r.description ?? null,
+    image_url: r.image_url ?? null,
+    source_name: r.source_name ?? null,
+    source_url: r.source_url ?? null,
+    prep_time_minutes: r.prep_time_minutes ?? null,
+    servings: r.servings ?? null,
+    calories_per_serving: Number(r.calories_per_serving) || 0,
+    protein_per_serving: Number(r.protein_per_serving) || 0,
+    carbs_per_serving: Number(r.carbs_per_serving) || 0,
+    fat_per_serving: Number(r.fat_per_serving) || 0,
+    fiber_per_serving: Number(r.fiber_per_serving) || 0,
+    ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+    instructions: Array.isArray(r.instructions) ? r.instructions : [],
+    reviews: Array.isArray(r.reviews) ? r.reviews : [],
+    tags: Array.isArray(r.tags) ? r.tags : [],
+    click_count: r.click_count ?? 0,
+    is_saved: false,
+  }), []);
 
-  // ─── Load popular recipes (trending only) ─────────────────────────────────────
+  // ─── Load popular recipes via POST to popular-recipes edge function ───────────
   const loadPopularRecipes = useCallback(async () => {
-    console.log('[Community] loadPopularRecipes — fetching trending');
+    console.log('[Community] loadPopularRecipes — POSTing to popular-recipes edge function');
     setPopularLoading(true);
     setPopularError(null);
     try {
-      const trendingRes = await fetchPopularRecipesUrl('trending', 0, 5, '');
-      console.log('[Community] loadPopularRecipes — trending:', trendingRes.recipes.length);
-      setTrendingRecipes(trendingRes.recipes);
+      const { data, error } = await supabase.functions.invoke('popular-recipes', {
+        method: 'POST',
+        body: { action: 'get_popular' },
+      });
+      if (error) throw new Error(error.message);
+      const trending: RecipeResult[] = (data?.trending ?? []).map(normalizeForCommunity);
+      const popularThisWeek: RecipeResult[] = (data?.popular_this_week ?? []).map(normalizeForCommunity);
+      console.log('[Community] loadPopularRecipes — trending:', trending.length, 'popular_this_week:', popularThisWeek.length);
+      setTrendingRecipes(trending);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load trending recipes';
       console.error('[Community] loadPopularRecipes error:', msg);
@@ -341,7 +338,7 @@ export default function CommunityScreen() {
     } finally {
       setPopularLoading(false);
     }
-  }, [fetchPopularRecipesUrl]);
+  }, [normalizeForCommunity]);
 
   // ─── Load recipe suggestions ──────────────────────────────────────────────────
   const initRecipes = useCallback(async () => {
