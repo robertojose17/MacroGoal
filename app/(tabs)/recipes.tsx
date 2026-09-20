@@ -302,9 +302,7 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
-  const caloriesText = calories != null ? `${calories} cal` : '';
-  const sourceText = recipe.source_name ? ` · ${recipe.source_name}` : '';
-  const metaText = caloriesText + sourceText;
+  const hasMacros = recipe.protein_per_serving != null || recipe.carbs_per_serving != null || recipe.fat_per_serving != null;
 
   return (
     <Pressable
@@ -322,7 +320,38 @@ function SearchResultRow({ recipe, onPress, isDark }: { recipe: any; onPress: ()
       />
       <View style={styles.searchResultInfo}>
         <Text style={[styles.searchResultName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
-        <Text style={[styles.searchResultMeta, { color: subColor }]}>{metaText}</Text>
+        {/* Line 1: calories · time */}
+        <View style={styles.metaLine}>
+          {calories != null && (
+            <Text style={[styles.metaChip, { color: colors.calories }]}>{calories} cal</Text>
+          )}
+          {calories != null && recipe.prep_time_minutes != null && (
+            <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+          )}
+          {recipe.prep_time_minutes != null && (
+            <Text style={[styles.metaChip, { color: subColor }]}>⏱ {recipe.prep_time_minutes} min</Text>
+          )}
+        </View>
+        {/* Line 2: P · C · F */}
+        {hasMacros && (
+          <View style={styles.metaLine}>
+            {recipe.protein_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.protein }]}>{Math.round(Number(recipe.protein_per_serving))}g P</Text>
+            )}
+            {recipe.protein_per_serving != null && recipe.carbs_per_serving != null && (
+              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+            )}
+            {recipe.carbs_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.carbs ?? '#F59E0B' }]}>{Math.round(Number(recipe.carbs_per_serving))}g C</Text>
+            )}
+            {recipe.carbs_per_serving != null && recipe.fat_per_serving != null && (
+              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+            )}
+            {recipe.fat_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.fat ?? '#EF4444' }]}>{Math.round(Number(recipe.fat_per_serving))}g F</Text>
+            )}
+          </View>
+        )}
       </View>
     </Pressable>
   );
