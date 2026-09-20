@@ -194,7 +194,7 @@ export default function RecipeFinderDetailScreen() {
     }
   })();
 
-  const [servings, setServings] = useState(recipe?.servings ?? 1);
+  const [servings, setServings] = useState(1);
   const [isSaved, setIsSaved] = useState(recipe?.is_saved ?? false);
   const [ingredientsExpanded, setIngredientsExpanded] = useState(true);
   const [instructionsExpanded, setInstructionsExpanded] = useState(true);
@@ -202,7 +202,7 @@ export default function RecipeFinderDetailScreen() {
 
   // Log sheet state
   const [logSheetVisible, setLogSheetVisible] = useState(false);
-  const [logServings, setLogServings] = useState(recipe?.servings ?? 1);
+  const [logServings, setLogServings] = useState(1);
   const [logging, setLogging] = useState(false);
 
   // AI macro fit state
