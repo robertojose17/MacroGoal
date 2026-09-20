@@ -188,6 +188,7 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
         iconSize={40}
       />
       <View style={styles.trendingBody}>
+        {/* updated */}
         <Text style={[styles.trendingName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
         {/* Line 1: calories · time */}
         <View style={styles.metaLine}>
