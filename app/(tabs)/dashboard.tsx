@@ -11,7 +11,6 @@ import {
   RefreshControl,
   Pressable,
   Animated,
-  Linking,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,14 +26,11 @@ import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { useXpStatus } from '@/hooks/useXpStatus';
 import { useLeague } from '@/hooks/useLeague';
-import { usePremium } from '@/hooks/usePremium';
 import { emitXpRefresh } from '@/utils/xpEvents';
 import { useWidget } from '@/contexts/WidgetContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LeagueLeaderboard from '@/components/xp/LeagueLeaderboard';
 import { TIER_METADATA } from '@/types/leagues';
-
-const FEATURED_DISMISSED_KEY = 'featured_card_dismissed_v1';
 
 // ─── Local error boundary ─────────────────────────────────────────────────────
 interface CardErrorBoundaryState { hasError: boolean; }
@@ -168,82 +164,6 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
   );
 }
 
-// ─── FeaturedCard ─────────────────────────────────────────────────────────────
-function FeaturedCard({ isDark }: { isDark: boolean }) {
-  const { t } = useTranslation();
-  const [dismissed, setDismissed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    AsyncStorage.getItem(FEATURED_DISMISSED_KEY).then((val) => {
-      if (!val) {
-        setDismissed(false);
-        return;
-      }
-      // Check if dismissed today
-      try {
-        const { date } = JSON.parse(val);
-        const today = toLocalDateString(new Date());
-        setDismissed(date === today);
-      } catch {
-        setDismissed(false);
-      }
-    });
-  }, []);
-
-  const handleDismiss = () => {
-    console.log('[Dashboard] FeaturedCard dismissed');
-    const today = toLocalDateString(new Date());
-    AsyncStorage.setItem(FEATURED_DISMISSED_KEY, JSON.stringify({ date: today }));
-    setDismissed(true);
-  };
-
-  const handleLearnMore = () => {
-    console.log('[Dashboard] FeaturedCard "Learn More" tapped — opening https://macrogoal.app');
-    Linking.openURL('https://macrogoal.app');
-  };
-
-  if (dismissed === null || dismissed === true) return null;
-
-  const cardBg = isDark ? colors.cardDark : colors.card;
-  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
-  const textColor = isDark ? colors.textDark : colors.text;
-  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const logoBg = isDark ? '#2A2C40' : '#F3F4F6';
-
-  return (
-    <View style={[styles.featuredCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-      <View style={styles.featuredHeader}>
-        <View style={styles.featuredBadge}>
-          <Text style={styles.featuredBadgeText}>⭐ FEATURED</Text>
-        </View>
-        <TouchableOpacity
-          onPress={handleDismiss}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.featuredClose, { color: subColor }]}>✕</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.featuredBody}>
-        <View style={[styles.featuredLogo, { backgroundColor: logoBg }]}>
-          <Text style={styles.featuredLogoEmoji}>🏪</Text>
-        </View>
-        <View style={styles.featuredTextCol}>
-          <Text style={[styles.featuredTitle, { color: textColor }]}>{t('dashboard.featuredTitle')}</Text>
-          <Text style={[styles.featuredSub, { color: subColor }]}>{t('dashboard.featuredSub')}</Text>
-        </View>
-      </View>
-      <TouchableOpacity
-        style={styles.featuredCta}
-        onPress={handleLearnMore}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.featuredCtaText}>{t('dashboard.featuredCta')}</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 export default function DashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -256,7 +176,6 @@ export default function DashboardScreen() {
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
 
   const xp = useXpStatus();
-  const { isPremium } = usePremium();
   const { syncWidget } = useWidget();
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
@@ -453,13 +372,6 @@ export default function DashboardScreen() {
           </CardErrorBoundary>
         )}
 
-        {/* ── Featured Card (free users only) ── */}
-        {!isPremium && (
-          <CardErrorBoundary label="FeaturedCard">
-            <FeaturedCard isDark={isDark} />
-          </CardErrorBoundary>
-        )}
-
         {/* ── Share My Progress button ── */}
         <TouchableOpacity
           style={[
@@ -578,81 +490,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '300',
     marginLeft: 'auto' as any,
-  },
-  // ── Featured Card ─────────────────────────────────────────────────────────
-  featuredCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  featuredHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  featuredBadge: {
-    backgroundColor: colors.primary + '18',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: borderRadius.full,
-  },
-  featuredBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: 0.5,
-  },
-  featuredClose: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  featuredBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  featuredLogo: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredLogoEmoji: {
-    fontSize: 24,
-  },
-  featuredTextCol: {
-    flex: 1,
-  },
-  featuredTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  featuredSub: {
-    fontSize: 13,
-    fontWeight: '400',
-    lineHeight: 18,
-  },
-  featuredCta: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    alignSelf: 'flex-start',
-  },
-  featuredCtaText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
   },
   // ── Share progress button ─────────────────────────────────────────────────
   shareProgressButton: {
