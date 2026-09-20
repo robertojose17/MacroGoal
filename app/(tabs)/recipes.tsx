@@ -170,9 +170,8 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
-  const protein = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)) : null;
-  const caloriesBg = colors.calories + '18';
-  const proteinBg = colors.protein + '18';
+  const carbs = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)) : null;
+  const fat = recipe.fat_per_serving != null ? Math.round(Number(recipe.fat_per_serving)) : null;
 
   return (
     <Pressable
@@ -190,22 +189,37 @@ function TrendingCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress
       />
       <View style={styles.trendingBody}>
         <Text style={[styles.trendingName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
-        <View style={styles.pillRow}>
+        {/* Line 1: calories · time */}
+        <View style={styles.metaLine}>
           {calories != null && (
-            <View style={[styles.pill, { backgroundColor: caloriesBg }]}>
-              <Text style={[styles.pillText, { color: colors.calories }]}>{calories} cal</Text>
-            </View>
+            <Text style={[styles.metaChip, { color: colors.calories }]}>{calories} cal</Text>
           )}
-          {protein != null && (
-            <View style={[styles.pill, { backgroundColor: proteinBg }]}>
-              <Text style={[styles.pillText, { color: colors.protein }]}>{protein}g P</Text>
-            </View>
+          {calories != null && recipe.prep_time_minutes != null && (
+            <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+          )}
+          {recipe.prep_time_minutes != null && (
+            <Text style={[styles.metaChip, { color: subColor }]}>⏱ {recipe.prep_time_minutes} min</Text>
           )}
         </View>
-        {recipe.source_name && (
-          <Text style={[styles.trendingSource, { color: subColor }]} numberOfLines={1}>
-            {recipe.source_name}
-          </Text>
+        {/* Line 2: P · C · F */}
+        {(recipe.protein_per_serving != null || recipe.carbs_per_serving != null || recipe.fat_per_serving != null) && (
+          <View style={styles.metaLine}>
+            {recipe.protein_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.protein }]}>{Math.round(Number(recipe.protein_per_serving))}g P</Text>
+            )}
+            {recipe.protein_per_serving != null && recipe.carbs_per_serving != null && (
+              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+            )}
+            {recipe.carbs_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.carbs ?? '#F59E0B' }]}>{Math.round(Number(recipe.carbs_per_serving))}g C</Text>
+            )}
+            {recipe.carbs_per_serving != null && recipe.fat_per_serving != null && (
+              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+            )}
+            {recipe.fat_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.fat ?? '#EF4444' }]}>{Math.round(Number(recipe.fat_per_serving))}g F</Text>
+            )}
+          </View>
         )}
       </View>
     </Pressable>
@@ -219,10 +233,9 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const calories = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)) : null;
-  const protein = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)) : null;
+  const carbs = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)) : null;
+  const fat = recipe.fat_per_serving != null ? Math.round(Number(recipe.fat_per_serving)) : null;
   const clickCount = recipe.click_count != null ? Number(recipe.click_count) : 0;
-  const caloriesBg = colors.calories + '18';
-  const proteinBg = colors.protein + '18';
 
   return (
     <Pressable
@@ -240,20 +253,37 @@ function PopularCard({ recipe, onPress, isDark }: { recipe: RecipeItem; onPress:
       />
       <View style={styles.popularBody}>
         <Text style={[styles.popularName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
-        <View style={styles.pillRow}>
+        {/* Line 1: calories · time */}
+        <View style={styles.metaLine}>
           {calories != null && (
-            <View style={[styles.pill, { backgroundColor: caloriesBg }]}>
-              <Text style={[styles.pillText, { color: colors.calories }]}>{calories} cal</Text>
-            </View>
+            <Text style={[styles.metaChip, { color: colors.calories }]}>{calories} cal</Text>
           )}
-          {protein != null && (
-            <View style={[styles.pill, { backgroundColor: proteinBg }]}>
-              <Text style={[styles.pillText, { color: colors.protein }]}>{protein}g P</Text>
-            </View>
+          {calories != null && recipe.prep_time_minutes != null && (
+            <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+          )}
+          {recipe.prep_time_minutes != null && (
+            <Text style={[styles.metaChip, { color: subColor }]}>⏱ {recipe.prep_time_minutes} min</Text>
           )}
         </View>
-        {recipe.prep_time_minutes != null && (
-          <Text style={[styles.prepTime, { color: subColor }]}>{recipe.prep_time_minutes} min</Text>
+        {/* Line 2: P · C · F */}
+        {(recipe.protein_per_serving != null || recipe.carbs_per_serving != null || recipe.fat_per_serving != null) && (
+          <View style={styles.metaLine}>
+            {recipe.protein_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.protein }]}>{Math.round(Number(recipe.protein_per_serving))}g P</Text>
+            )}
+            {recipe.protein_per_serving != null && recipe.carbs_per_serving != null && (
+              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+            )}
+            {recipe.carbs_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.carbs ?? '#F59E0B' }]}>{Math.round(Number(recipe.carbs_per_serving))}g C</Text>
+            )}
+            {recipe.carbs_per_serving != null && recipe.fat_per_serving != null && (
+              <Text style={[styles.metaSep, { color: subColor }]}> · </Text>
+            )}
+            {recipe.fat_per_serving != null && (
+              <Text style={[styles.macroChip, { color: colors.fat ?? '#EF4444' }]}>{Math.round(Number(recipe.fat_per_serving))}g F</Text>
+            )}
+          </View>
         )}
         {clickCount > 0 && (
           <View style={styles.clickRow}>
@@ -703,17 +733,16 @@ const styles = StyleSheet.create({
   trendingImage: { width: 200, height: 130, overflow: 'hidden' },
   trendingBody: { padding: spacing.sm },
   trendingName: { fontSize: 13, fontWeight: '700', lineHeight: 18, marginBottom: 4 },
-  trendingSource: { fontSize: 11, marginTop: 4 },
   popularGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   popularGridItem: { width: '50%', marginBottom: spacing.sm },
   popularCard: { borderRadius: borderRadius.lg, borderWidth: 1, overflow: 'hidden' },
   popularImage: { width: '100%', height: 150, overflow: 'hidden' },
   popularBody: { padding: spacing.sm },
   popularName: { fontSize: 13, fontWeight: '700', lineHeight: 18, marginBottom: 4 },
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
-  pill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.sm },
-  pillText: { fontSize: 11, fontWeight: '600' },
-  prepTime: { fontSize: 11, marginBottom: 2 },
+  metaLine: { flexDirection: 'row', alignItems: 'center', marginTop: 3, flexWrap: 'wrap' },
+  metaChip: { fontSize: 12, fontWeight: '500' },
+  metaSep: { fontSize: 12 },
+  macroChip: { fontSize: 11, fontWeight: '500' },
   clickRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   fireEmoji: { fontSize: 11 },
   clickText: { fontSize: 11, fontWeight: '500' },
