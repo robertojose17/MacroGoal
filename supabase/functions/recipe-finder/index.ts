@@ -77,7 +77,7 @@ async function saveToLibrary(recipe: any): Promise<string | null> {
   try {
     const duplicateId = await findDuplicate(recipe.name ?? recipe.title ?? "");
     if (duplicateId) {
-      supabase.rpc("increment_recipe_search", { recipe_id: duplicateId }).catch(() => {});
+      supabase.rpc("increment_recipe_search", { recipe_id: duplicateId }).then(() => {}, () => {});
       return duplicateId;
     }
     const { data, error } = await supabase.from("recipes").insert({
@@ -221,16 +221,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── All other types require auth ──────────────────────────────────────────
+    // ── Extract user id from JWT if present (optional) ────────────────────────
     const auth = req.headers.get("Authorization") ?? "";
     const token = auth.replace("Bearer ", "");
-    const { data: userData, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !userData?.user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    console.log("[recipe-finder] authed user:", userData.user.id);
+    let userId: string | null = null;
+    try {
+      if (token && token.split(".").length === 3) {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        if (payload.sub && payload.role === "authenticated") userId = payload.sub;
+      }
+    } catch {}
+    console.log("[recipe-finder] user:", userId ?? "anonymous");
     if (type === "search" && query?.trim()) {
       const cached = await searchLibrary(query);
       if (cached.length >= 3) {
-        cached.forEach((r: any) => supabase.rpc("increment_recipe_search", { recipe_id: r.id }).catch(() => {}));
+        cached.forEach((r: any) => supabase.rpc("increment_recipe_search", { recipe_id: r.id }).then(() => {}, () => {}));
         return new Response(JSON.stringify({ recipes: cached.map(mapRow), duration_ms: Math.round(performance.now() - started), from_cache: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
