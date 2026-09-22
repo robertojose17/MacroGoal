@@ -154,7 +154,7 @@ const USDA_NUTRIENT_MAP: Record<number, string> = {
   1170: 'pantothenic_acid_mg',
 };
 
-const USDA_API_KEY = 'DN51vT8uB7dGinfwpljsxal93BOMtOJvgfEyP3Jx';
+const USDA_API_KEY = process.env.EXPO_PUBLIC_USDA_API_KEY ?? '';
 
 /**
  * Background enrichment: fetches full micronutrient data from USDA and updates

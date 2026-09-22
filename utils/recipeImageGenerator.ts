@@ -1,5 +1,6 @@
-import { SUPABASE_ANON_KEY } from '@/lib/supabase/client';
 import { supabase } from '@/lib/supabase/client';
+
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 const RECIPE_FINDER_URL = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/recipe-finder';
 

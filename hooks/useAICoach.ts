@@ -1,9 +1,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 // expo/fetch supports SSE streaming in React Native
 import { fetch as expoFetch } from 'expo/fetch';
 import i18n from '@/lib/i18n';
+
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 export type CoachMessage = {
   role: 'user' | 'assistant';

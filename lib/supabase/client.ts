@@ -25,7 +25,6 @@ console.log('[Supabase] Project ID:', SUPABASE_URL.split('//')[1]?.split('.')[0]
 // import { supabase } from "@/lib/supabase/client";
 
 export const SUPABASE_PROJECT_URL = SUPABASE_URL;
-export const SUPABASE_ANON_KEY = SUPABASE_PUBLISHABLE_KEY;
 export const supabasePublicKey = SUPABASE_PUBLISHABLE_KEY;
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
