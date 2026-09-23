@@ -720,19 +720,15 @@ function withKotlinVersion(config) {
   return withProjectBuildGradle(config, (cfg) => {
     let contents = cfg.modResults.contents;
 
-    if (contents.includes(MARKER)) {
-      console.log('[withKotlinVersion] Already patched — skipping.');
-      return cfg;
-    }
-
+    // Always replace — never skip — so stale cached values are always overwritten.
     // Replace any existing kotlinVersion / kotlin_version assignment in buildscript ext {}
     const extBlockRegex = /(buildscript\s*\{[^}]*ext\s*\{)([^}]*?)(\})/s;
     if (extBlockRegex.test(contents)) {
       contents = contents.replace(extBlockRegex, (match, open, body, close) => {
-        // Remove any existing kotlin version lines
+        // Remove any existing kotlin version lines (including previously injected marker lines)
         const cleaned = body
-          .replace(/\s*kotlinVersion\s*=\s*["'][^"']*["']\s*\n?/g, '')
-          .replace(/\s*kotlin_version\s*=\s*["'][^"']*["']\s*\n?/g, '');
+          .replace(/\s*kotlinVersion\s*=\s*["'][^"']*["'][^\n]*\n?/g, '')
+          .replace(/\s*kotlin_version\s*=\s*["'][^"']*["'][^\n]*\n?/g, '');
         const injection = `\n        kotlinVersion = "${KOTLIN_VERSION}" // ${MARKER}\n`;
         return open + cleaned + injection + close;
       });
