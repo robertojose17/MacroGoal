@@ -33,6 +33,7 @@
       }
     },
     "android": {
+      "minSdkVersion": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
         "backgroundColor": "#000000"
