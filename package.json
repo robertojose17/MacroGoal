@@ -40,7 +40,6 @@
     "expo-health-connect": "^0.1.1",
     "expo-image-manipulator": "^14.0.8",
     "expo-image-picker": "^17.0.7",
-    "expo-in-app-purchases": "^14.5.0",
     "expo-linear-gradient": "^15.0.6",
     "expo-linking": "^8.0.7",
     "expo-localization": "~17.0.9",
