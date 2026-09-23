@@ -14,12 +14,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.robertojose.macrogoal",
+      "bundleIdentifier": "com.robertojose17.macrogoal",
       "buildNumber": "358",
       "appleTeamId": "RQ6JHH38HA",
       "entitlements": {
         "com.apple.security.application-groups": [
-          "group.com.robertojose.macrogoal"
+          "group.com.robertojose17.macrogoal"
         ]
       },
       "infoPlist": {
