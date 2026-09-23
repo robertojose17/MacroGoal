@@ -2,7 +2,7 @@
   "expo": {
     "name": "Macro Goal",
     "slug": "macro-goal",
-    "version": "1.8.9",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -38,8 +38,9 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "versionCode": 10,
-      "package": "com.robertojose17.macrogoal",
+      "kotlinVersion": "2.3.0",
+      "versionCode": 2,
+      "package": "com.robertojose.macrogoal",
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.ACTIVITY_RECOGNITION",
