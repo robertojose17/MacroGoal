@@ -707,4 +707,54 @@ function withFollyCoroutineFix(config) {
   ]);
 }
 
-module.exports = withFollyCoroutineFix;
+/**
+ * Sets the Kotlin version in android/build.gradle to 2.3.0 so that
+ * play-services-ads 25.4.0 (compiled with Kotlin 2.3.0) can be linked
+ * without "Module was compiled with an incompatible version of Kotlin" errors.
+ */
+function withKotlinVersion(config) {
+  const { withProjectBuildGradle } = require('@expo/config-plugins');
+  const KOTLIN_VERSION = '2.3.0';
+  const MARKER = 'withKotlinVersion: set kotlin_version';
+
+  return withProjectBuildGradle(config, (cfg) => {
+    let contents = cfg.modResults.contents;
+
+    if (contents.includes(MARKER)) {
+      console.log('[withKotlinVersion] Already patched — skipping.');
+      return cfg;
+    }
+
+    // Replace any existing kotlinVersion / kotlin_version assignment in buildscript ext {}
+    const extBlockRegex = /(buildscript\s*\{[^}]*ext\s*\{)([^}]*?)(\})/s;
+    if (extBlockRegex.test(contents)) {
+      contents = contents.replace(extBlockRegex, (match, open, body, close) => {
+        // Remove any existing kotlin version lines
+        const cleaned = body
+          .replace(/\s*kotlinVersion\s*=\s*["'][^"']*["']\s*\n?/g, '')
+          .replace(/\s*kotlin_version\s*=\s*["'][^"']*["']\s*\n?/g, '');
+        const injection = `\n        kotlinVersion = "${KOTLIN_VERSION}" // ${MARKER}\n`;
+        return open + cleaned + injection + close;
+      });
+      console.log('[withKotlinVersion] Patched kotlinVersion inside buildscript ext {}.');
+    } else {
+      // Fallback: prepend a buildscript ext block
+      const injection = `// ${MARKER}\nbuildscript { ext { kotlinVersion = "${KOTLIN_VERSION}" } }\n\n`;
+      contents = injection + contents;
+      console.log('[withKotlinVersion] Prepended kotlinVersion buildscript block.');
+    }
+
+    cfg.modResults.contents = contents;
+    return cfg;
+  });
+}
+
+function withAndroidFixes(config) {
+  return withKotlinVersion(config);
+}
+
+module.exports = function withAllFixes(config) {
+  config = withFollyCoroutineFix(config);
+  config = withAndroidFixes(config);
+  return config;
+};
