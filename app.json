@@ -2,7 +2,7 @@
   "expo": {
     "name": "Macro Goal",
     "slug": "macro-goal",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -38,7 +38,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "versionCode": 2,
+      "versionCode": 3,
       "package": "com.robertojose.macrogoal",
       "permissions": [
         "android.permission.RECORD_AUDIO",
@@ -95,7 +95,6 @@
           "devTeam": "RQ6JHH38HA"
         }
       ],
-      "react-native-reanimated",
       "./plugins/withFollyCoroutineFix",
       "expo-localization",
       [
