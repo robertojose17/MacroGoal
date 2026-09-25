@@ -26,7 +26,7 @@ export function AdBannerProvider({
   // useSafeAreaInsets is safe here — SafeAreaProvider is always an ancestor
   // (mounted in app/_layout.tsx via expo-router's built-in SafeAreaProvider).
   const insets = useSafeAreaInsets();
-  const shouldShowAd = !isPremium && Platform.OS === 'ios' && isAdsAvailable;
+  const shouldShowAd = !isPremium && Platform.OS !== 'web' && isAdsAvailable;
   const adBannerHeight = shouldShowAd ? AD_BANNER_HEIGHT + insets.bottom : 0;
 
   return (

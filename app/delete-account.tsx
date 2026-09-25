@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -17,6 +17,7 @@ export default function DeleteAccountScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [deleting, setDeleting] = useState(false);
+  const insets = useSafeAreaInsets();
 
   console.log('[DeleteAccount] Screen loaded');
 
@@ -81,7 +82,7 @@ export default function DeleteAccountScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
+    paddingTop: 0,
     paddingBottom: spacing.md,
   },
   backButton: {

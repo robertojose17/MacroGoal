@@ -44,9 +44,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES",
-        "READ_MEDIA_IMAGES",
-        "CAMERA"
+        "android.permission.READ_MEDIA_IMAGES"
       ]
     },
     "web": {
@@ -97,6 +95,7 @@
           "devTeam": "RQ6JHH38HA"
         }
       ],
+      "react-native-reanimated",
       "./plugins/withFollyCoroutineFix",
       "expo-localization",
       [
