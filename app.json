@@ -82,7 +82,6 @@
           "background": true
         }
       ],
-
       "./plugins/withFollyCoroutineFix",
       "expo-localization",
       [
@@ -105,7 +104,7 @@
       "fooddataCentralApiKey": "2cILVFzO3AdhZSQjt8teTzmF0DMIdDTt0nHgGmCW",
       "revenueCat": {
         "iosApiKey": "appl_TZdEZxwrVNJdRUPcoavoXaVUCSE",
-        "androidApiKey": "",
+        "androidApiKey": "goog_uwoSQeEZUKgjjwHZDKXDoaoJqAk",
         "offeringIdentifier": "Monthly_MG",
         "entitlementIdentifier": "Macrogoal Pro",
         "projectId": "b374d7d3-6b24-4cc0-a0ff-07afeb17af36"
