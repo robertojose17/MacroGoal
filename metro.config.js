@@ -7,6 +7,11 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
+  'react-native-worklets': require.resolve('./stubs/react-native-worklets.js'),
+};
+
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
