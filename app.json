@@ -86,8 +86,8 @@
       [
         "react-native-google-mobile-ads",
         {
-          "android_app_id": "ca-app-pub-5592015069000241~8341063940",
-          "ios_app_id": "ca-app-pub-5592015069000241~8341063940"
+          "androidAppId": "ca-app-pub-5592015069000241~8341063940",
+          "iosAppId": "ca-app-pub-5592015069000241~5529470607"
         }
       ],
       "expo-localization",
