@@ -707,7 +707,57 @@ function withFollyCoroutineFix(config) {
   ]);
 }
 
+function withNeutralizeWorkletsAndroid(config) {
+  return withDangerousMod(config, [
+    'android',
+    (cfg) => {
+      const projectRoot =
+        (cfg._internal && cfg._internal.projectRoot) ||
+        cfg.modRequest.projectRoot ||
+        process.cwd();
+
+      // Neutralize react-native-worklets Android auto-linking.
+      // react-native-reanimated v4.x bundles worklets internally.
+      // Having both causes duplicate C++ symbols → SIGABRT on Android.
+      const ANDROID_WORKLETS_MARKER = 'patch-android-worklets: neutralized for reanimated 4.x';
+      const workletsPackageJsonPath = path.join(
+        projectRoot, 'node_modules/react-native-worklets/package.json'
+      );
+
+      if (fs.existsSync(workletsPackageJsonPath)) {
+        let workletsJson;
+        try {
+          workletsJson = JSON.parse(fs.readFileSync(workletsPackageJsonPath, 'utf8'));
+        } catch (e) {
+          console.warn('[withFollyCoroutineFix] Android worklets: Failed to parse package.json:', e.message);
+          return cfg;
+        }
+
+        if (workletsJson._patchAndroidWorklets === ANDROID_WORKLETS_MARKER) {
+          console.log('[withFollyCoroutineFix] Android worklets: already neutralized');
+          return cfg;
+        }
+
+        // Remove codegenConfig to prevent TurboModule registration
+        delete workletsJson.codegenConfig;
+        // Remove react-native config to prevent auto-linking
+        delete workletsJson['react-native'];
+        if (workletsJson.reactNativeConfig) delete workletsJson.reactNativeConfig;
+        workletsJson._patchAndroidWorklets = ANDROID_WORKLETS_MARKER;
+
+        fs.writeFileSync(workletsPackageJsonPath, JSON.stringify(workletsJson, null, 2) + '\n', 'utf8');
+        console.log('[withFollyCoroutineFix] Android worklets: neutralized react-native-worklets package.json');
+      } else {
+        console.log('[withFollyCoroutineFix] Android worklets: react-native-worklets/package.json not found (ok)');
+      }
+
+      return cfg;
+    },
+  ]);
+}
+
 module.exports = function withAllFixes(config) {
   config = withFollyCoroutineFix(config);
+  config = withNeutralizeWorkletsAndroid(config);
   return config;
 };

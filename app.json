@@ -83,6 +83,7 @@
         }
       ],
       "./plugins/withFollyCoroutineFix",
+      "./plugins/withExcludeWorkletsAndroid",
       "expo-localization",
       [
         "expo-build-properties",
