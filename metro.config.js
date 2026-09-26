@@ -7,10 +7,8 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
-// Stub out native-only packages that are not installed or cause issues on web/Android
 config.resolver.extraNodeModules = {
-  ...config.resolver.extraNodeModules,
-  'react-native-worklets': path.resolve(__dirname, 'stubs/react-native-worklets.js'),
+  'react-native-worklets': require.resolve('./stubs/react-native-worklets.js'),
 };
 
 // Use turborepo to restore the cache when possible

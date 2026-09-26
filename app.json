@@ -82,20 +82,7 @@
           "background": true
         }
       ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-5592015069000241~5529470607",
-          "iosAppId": "ca-app-pub-5592015069000241~5529470607"
-        }
-      ],
-      [
-        "onesignal-expo-plugin",
-        {
-          "mode": "production",
-          "devTeam": "RQ6JHH38HA"
-        }
-      ],
+
       "./plugins/withFollyCoroutineFix",
       "expo-localization",
       [
