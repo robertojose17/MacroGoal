@@ -2,7 +2,7 @@
   "expo": {
     "name": "Macro Goal",
     "slug": "macro-goal",
-    "version": "1.0.4",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -39,7 +39,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": false,
-      "versionCode": 5,
+      "versionCode": 7,
       "package": "com.robertojose.macrogoal",
       "permissions": [
         "android.permission.RECORD_AUDIO",
@@ -83,7 +83,13 @@
         }
       ],
       "./plugins/withFollyCoroutineFix",
-      "./plugins/withExcludeWorkletsAndroid",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "android_app_id": "ca-app-pub-3940256099942544~3347511713",
+          "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
       "expo-localization",
       [
         "expo-build-properties",
