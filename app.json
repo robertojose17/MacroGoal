@@ -6,13 +6,14 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+
     "splash": {
       "image": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
     "ios": {
+      "newArchEnabled": true,
       "supportsTablet": true,
       "bundleIdentifier": "com.robertojose17.macrogoal",
       "buildNumber": "358",
@@ -33,11 +34,12 @@
       }
     },
     "android": {
+      "newArchEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/72ae1849-bd62-45ba-89bf-c2232486e3a0.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "versionCode": 3,
       "package": "com.robertojose.macrogoal",
       "permissions": [
@@ -101,7 +103,8 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "newArchEnabled": false
           }
         }
       ]
@@ -116,7 +119,7 @@
       "fooddataCentralApiKey": "2cILVFzO3AdhZSQjt8teTzmF0DMIdDTt0nHgGmCW",
       "revenueCat": {
         "iosApiKey": "appl_TZdEZxwrVNJdRUPcoavoXaVUCSE",
-        "androidApiKey": "goog_YOUR_ANDROID_KEY_HERE",
+        "androidApiKey": "",
         "offeringIdentifier": "Monthly_MG",
         "entitlementIdentifier": "Macrogoal Pro",
         "projectId": "b374d7d3-6b24-4cc0-a0ff-07afeb17af36"
