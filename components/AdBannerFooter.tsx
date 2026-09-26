@@ -47,18 +47,21 @@ import { usePremium } from '@/hooks/usePremium';
 // Inline the constant to avoid module-evaluation-order issues in Hermes production builds.
 export const AD_BANNER_HEIGHT: number = 60;
 
-// Production Ad Unit ID (also used as test ID per user config):
-const PRODUCTION_AD_UNIT_ID = 'ca-app-pub-5592015069000241/7688730087';
+// Production Ad Unit IDs per platform:
+const PRODUCTION_AD_UNIT_ID = 'ca-app-pub-5592015069000241/7688730087'; // iOS
+const ANDROID_AD_UNIT_ID = 'ca-app-pub-5592015069000241/2517891620'; // Android
 
 export function AdBannerFooter() {
   const colorScheme = useColorScheme();
   const [adLoaded, setAdLoaded] = useState(false);
   const { isPremium } = usePremium();
 
-  if (Platform.OS !== 'ios' || !isBannerAdAvailable) return null;
+  if (Platform.OS === 'web' || !isBannerAdAvailable) return null;
   if (isPremium) return null;
 
-  const adUnitId = __DEV__ ? TestIds?.ADAPTIVE_BANNER : PRODUCTION_AD_UNIT_ID;
+  const adUnitId = __DEV__
+    ? TestIds?.ADAPTIVE_BANNER
+    : Platform.OS === 'android' ? ANDROID_AD_UNIT_ID : PRODUCTION_AD_UNIT_ID;
   const bgColor = colorScheme === 'dark' ? '#000000' : '#ffffff';
 
   const handleAdLoaded = () => {
@@ -96,6 +99,6 @@ export function AdBannerFooter() {
 }
 
 export function useAdBannerHeight(): number {
-  if (Platform.OS !== 'ios' || !isBannerAdAvailable) return 0;
+  if (Platform.OS === 'web' || !isBannerAdAvailable) return 0;
   return 60;
 }

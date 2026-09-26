@@ -7,13 +7,6 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
-// Stub out packages whose native modules are not linked on Android
-// (prevents pre-JS ContentProvider crashes from GMA SDK)
-config.resolver.extraNodeModules = {
-  ...config.resolver.extraNodeModules,
-  'react-native-google-mobile-ads': require.resolve('./stubs/react-native-google-mobile-ads.js'),
-};
-
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
