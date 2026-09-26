@@ -7,13 +7,6 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
-// Stub react-native-worklets — reanimated v4 bundles worklets internally.
-// This prevents JS-level imports from pulling in the real module.
-config.resolver.extraNodeModules = {
-  ...config.resolver.extraNodeModules,
-  'react-native-worklets': require.resolve('./stubs/react-native-worklets.js'),
-};
-
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
