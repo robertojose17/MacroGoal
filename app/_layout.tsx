@@ -7,6 +7,7 @@ import * as SplashScreen from "expo-splash-screen";
 import {
   AppState,
   AppStateStatus,
+  InteractionManager,
   Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
