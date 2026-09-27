@@ -1,6 +1,10 @@
 
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, Animated, Dimensions, ScrollView } from 'react-native';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  RefreshControl, Alert, ActivityIndicator, ScrollView,
+  Modal, TextInput, KeyboardAvoidingView, Animated, Dimensions,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
@@ -8,14 +12,29 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import ProgressCircle from '@/components/ProgressCircle';
 import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
-import { listMealPlans, type MealPlan as ApiMealPlan } from '@/utils/mealPlansApi';
+import {
+  listMealPlans,
+  deleteMealPlan,
+  createMealPlan,
+  type MealPlan,
+} from '@/utils/mealPlansApi';
+import { listTemplatePlans, type TemplatePlan } from '@/utils/templatePlansApi';
 import { formatServing } from '@/utils/servingFormat';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { usePremium } from '@/hooks/usePremium';
+import { useWidget } from '@/contexts/WidgetContext';
 import { calcMacros } from '@/utils/macros';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PLAN_COLORS = ['#14B8A6', '#8B5CF6', '#F59E0B', '#EF4444', '#3B82F6', '#10B981'];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -29,11 +48,14 @@ interface FoodItem {
   fiber: number;
   serving_description: string | null;
   grams: number | null;
+  logged_at?: string | null;
+  meal_type?: string;
   food_item_id?: string | null;
   food_name?: string | null;
   food_brand?: string | null;
   name?: string;
   brand?: string;
+  is_scheduled?: boolean;
   food_items?: {
     id: string;
     name: string;
@@ -53,36 +75,34 @@ interface MealData {
   label: string;
   items: FoodItem[];
   totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFats: number;
 }
 
-interface MealPlan {
-  id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  created_at: string;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getServingDisplayText = (item: FoodItem): string => {
   return formatFoodRowServing(item.serving_description, item.quantity ?? 1, item.grams ?? undefined);
 };
 
-const formatDateRange = (start: string, end: string): string => {
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', opts)}`;
-};
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { isPremium } = usePremium();
+  const { syncWidget } = useWidget();
   const { t } = useTranslation();
 
-  const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const screenWidth = Dimensions.get('window').width;
+  // Navigation readiness guard — prevents 'Cannot read property route of null'
+  // on the first render cycle before the navigation context is initialized.
+  const [navReady, setNavReady] = useState(false);
+  useEffect(() => {
+    console.log('[Home Android] Navigation context ready');
+    setNavReady(true);
+  }, []);
 
   // ── Streak Rescue ──
   const {
@@ -95,13 +115,24 @@ export default function HomeScreen() {
     refresh: refreshRescue,
   } = useStreakRescue();
 
+  // ── Adaptive TDEE banner state ──
+  const [adaptiveBannerDismissed, setAdaptiveBannerDismissed] = useState(false);
+  const [latestTdeeEstimate, setLatestTdeeEstimate] = useState<any>(null);
+
+  // Segmented control
+  const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const screenWidth = Dimensions.get('window').width;
+
+  // ── Tracking state ──
   const [goal, setGoal] = useState<any>(null);
   const [meals, setMeals] = useState<MealData[]>([
-    { type: 'breakfast', label: 'Breakfast', items: [], totalCalories: 0 },
-    { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0 },
-    { type: 'dinner', label: 'Dinner', items: [], totalCalories: 0 },
-    { type: 'snack', label: 'Snacks', items: [], totalCalories: 0 },
-  ]); // labels are overridden in render via t()
+    { type: 'breakfast', label: 'Breakfast', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
+    { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
+    { type: 'dinner', label: 'Dinner', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
+    { type: 'snack', label: 'Snack', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
+  ]);
+  const [allFoodItems, setAllFoodItems] = useState<(FoodItem & { meal_type: string })[]>([]);
   const [totalCalories, setTotalCalories] = useState(0);
   const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
   const [loading, setLoading] = useState(true);
@@ -109,10 +140,25 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [error, setError] = useState<string | null>(null);
 
+  // ── Planning state ──
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+  type DayKey = typeof DAYS[number];
+
   const [plans, setPlans] = useState<MealPlan[]>([]);
+  const [templatePlans, setTemplatePlans] = useState<TemplatePlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekPlans, setWeekPlans] = useState<Record<number, Record<DayKey, string | null>>>({
+    0: { Mon: null, Tue: null, Wed: null, Thu: null, Fri: null, Sat: null, Sun: null },
+  });
+  const [planMacros, setPlanMacros] = useState<Record<string, { calories: number; protein: number; carbs: number; fats: number }>>({});
+  const [newPlanModalVisible, setNewPlanModalVisible] = useState(false);
+  const [newPlanName, setNewPlanName] = useState('');
+  const [newPlanSaving, setNewPlanSaving] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
 
+  // ── Load tracking data ──
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -120,13 +166,13 @@ export default function HomeScreen() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
         console.error('[Home Android] Error getting user:', userError);
-        setError(t('home.failedToAuthenticate'));
+        setError('Failed to authenticate. Please try logging in again.');
         setLoading(false);
         return;
       }
       if (!user) {
         console.log('[Home Android] No user found');
-        setError(t('home.noUserSession'));
+        setError('No user session found. Please log in.');
         setLoading(false);
         return;
       }
@@ -142,12 +188,27 @@ export default function HomeScreen() {
 
       if (goalError) {
         console.error('[Home Android] Error loading goal:', goalError);
+        setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
       } else if (goalData) {
         console.log('[Home Android] Goal loaded:', goalData);
         setGoal(goalData);
       } else {
         console.log('[Home Android] No active goal found, using defaults');
         setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
+      }
+
+      const { data: tdeeData } = await supabase
+        .from('tdee_estimates')
+        .select('week_start, estimated_tdee, prescribed_calories, adjustment_amount, avg_calories_eaten, avg_weight_lbs, prev_avg_weight_lbs, data_days_count, adjustment_applied')
+        .eq('user_id', user.id)
+        .eq('adjustment_applied', true)
+        .order('week_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (tdeeData) {
+        console.log('[Home Android] Latest TDEE estimate loaded:', tdeeData);
+        setLatestTdeeEstimate(tdeeData);
       }
 
       const dateString = toLocalDateString(selectedDate);
@@ -171,8 +232,10 @@ export default function HomeScreen() {
             fiber,
             serving_description,
             grams,
+            logged_at,
             food_name,
             food_brand,
+            is_scheduled,
             food_items!meal_items_food_item_id_fkey (
               id,
               name,
@@ -192,8 +255,10 @@ export default function HomeScreen() {
 
       if (mealsError) {
         console.error('[Home Android] Error loading meals:', mealsError);
+        setError('Failed to load meals. Please try refreshing.');
+        setAllFoodItems([]);
       } else {
-        console.log('[Home Android] Meals loaded:', mealsData);
+        console.log('[Home Android] Meals loaded for', dateString, ':', mealsData?.length || 0, 'meals');
 
         const mealsByType: Record<MealType, FoodItem[]> = {
           breakfast: [], lunch: [], dinner: [], snack: [],
@@ -219,68 +284,151 @@ export default function HomeScreen() {
                   ...macros,
                   name: item.food_name ?? item.food_items?.name ?? 'Unknown Food',
                   brand: item.food_brand ?? item.food_items?.brand ?? undefined,
+                  meal_type: meal.meal_type,
+                  logged_at: item.logged_at ?? null,
+                  is_scheduled: item.is_scheduled ?? false,
                 };
                 mealsByType[meal.meal_type as MealType].push(enriched);
-                totalCals += macros.calories;
-                totalP    += macros.protein;
-                totalC    += macros.carbs;
-                totalF    += macros.fats;
-                totalFib  += macros.fiber;
+                // Exclude scheduled (not-yet-eaten) items from daily totals
+                if (!enriched.is_scheduled) {
+                  totalCals += macros.calories;
+                  totalP    += macros.protein;
+                  totalC    += macros.carbs;
+                  totalF    += macros.fats;
+                  totalFib  += macros.fiber;
+                }
               });
             }
           });
         }
 
-        const updatedMeals: MealData[] = [
-          { type: 'breakfast', label: 'Breakfast', items: [...mealsByType.breakfast], totalCalories: mealsByType.breakfast.reduce((sum, item) => sum + (item.calories || 0), 0) },
-          { type: 'lunch', label: 'Lunch', items: [...mealsByType.lunch], totalCalories: mealsByType.lunch.reduce((sum, item) => sum + (item.calories || 0), 0) },
-          { type: 'dinner', label: 'Dinner', items: [...mealsByType.dinner], totalCalories: mealsByType.dinner.reduce((sum, item) => sum + (item.calories || 0), 0) },
-          { type: 'snack', label: 'Snacks', items: [...mealsByType.snack], totalCalories: mealsByType.snack.reduce((sum, item) => sum + (item.calories || 0), 0) },
-        ];
+        const buildMeal = (type: MealType, label: string): MealData => {
+          const items = [...mealsByType[type]];
+          return {
+            type, label, items,
+            totalCalories: items.reduce((sum, item) => sum + (item.calories || 0), 0),
+            totalProtein: items.reduce((sum, item) => sum + (item.protein || 0), 0),
+            totalCarbs: items.reduce((sum, item) => sum + (item.carbs || 0), 0),
+            totalFats: items.reduce((sum, item) => sum + (item.fats || 0), 0),
+          };
+        };
 
-        setMeals(updatedMeals);
+        setMeals([
+          buildMeal('breakfast', 'Breakfast'),
+          buildMeal('lunch', 'Lunch'),
+          buildMeal('dinner', 'Dinner'),
+          buildMeal('snack', 'Snack'),
+        ]);
         setTotalCalories(totalCals);
         setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
+
+        // Sync widget after meals are loaded
+        console.log('[Home Android] Triggering widget sync after meal load');
+        syncWidget();
+
+        // Flatten all items into a single chronological list
+        const flat: (FoodItem & { meal_type: string })[] = [];
+        (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).forEach(type => {
+          mealsByType[type].forEach(item => flat.push({ ...item, meal_type: type }));
+        });
+        setAllFoodItems(flat);
       }
     } catch (err: any) {
       console.error('[Home Android] Error in loadData:', err);
-      setError(err?.message || t('home.unexpectedError'));
+      setError(err?.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
+  // ── Load plans ──
   const loadPlans = useCallback(async () => {
-    console.log('[Home Android] Loading meal plans');
+    console.log('[Home Android] Loading meal plans and template plans');
     setPlansLoading(true);
     setPlansError(null);
     try {
-      const data = await listMealPlans();
-      console.log('[Home Android] Meal plans loaded:', data.plans?.length || 0);
-      setPlans(data.plans || []);
+      const [plansData, templatesData] = await Promise.all([
+        listMealPlans().catch((err: any) => {
+          const msg: string = err?.message || '';
+          if (msg.includes('does not exist') || msg.includes('relation')) {
+            console.log('[Home Android] meal_plans table not yet created — showing empty state');
+            return { plans: [] };
+          }
+          throw err;
+        }),
+        listTemplatePlans().catch((err: any) => {
+          const msg: string = err?.message || '';
+          if (msg.includes('does not exist') || msg.includes('relation')) {
+            console.log('[Home Android] template_meal_plans table not yet created — showing empty state');
+            return [];
+          }
+          console.warn('[Home Android] Error loading template plans:', err);
+          return [];
+        }),
+      ]);
+      console.log('[Home Android] Meal plans loaded:', plansData.plans?.length || 0);
+      console.log('[Home Android] Template plans loaded:', Array.isArray(templatesData) ? templatesData.length : 0);
+      setPlans(plansData.plans || []);
+      setTemplatePlans(Array.isArray(templatesData) ? templatesData : []);
     } catch (err: any) {
       console.error('[Home Android] Error loading meal plans:', err);
-      setPlansError(t('home.failedToLoadPlans'));
+      setPlansError('Failed to load meal plans.');
     } finally {
       setPlansLoading(false);
     }
   }, []);
 
+  const fetchPlanMacros = async (planId: string) => {
+    if (planMacros[planId]) return;
+    try {
+      const { data, error } = await supabase
+        .from('meal_plan_items')
+        .select('calories, protein, carbs, fats')
+        .eq('plan_id', planId);
+      if (error || !data) return;
+      const totals = data.reduce(
+        (acc, item) => ({
+          calories: acc.calories + (item.calories || 0),
+          protein: acc.protein + (item.protein || 0),
+          carbs: acc.carbs + (item.carbs || 0),
+          fats: acc.fats + (item.fats || 0),
+        }),
+        { calories: 0, protein: 0, carbs: 0, fats: 0 }
+      );
+      setPlanMacros(prev => ({ ...prev, [planId]: totals }));
+    } catch (e) {
+      console.error('[Home Android] fetchPlanMacros error:', e);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       console.log('[Home Android] Screen focused, loading data');
-      // Auto-advance to today if the date has changed (e.g. app left open overnight)
+      // Auto-advance to today only if the stored date is in the future
       setSelectedDate(prev => {
         const today = new Date();
-        const prevStr = toLocalDateString(prev);
-        const todayStr = toLocalDateString(today);
-        return prevStr === todayStr ? prev : today;
+        const prevDate = new Date(prev);
+        prevDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        // Solo avanza a hoy si la fecha es futura (no resetea fechas pasadas)
+        return prevDate > today ? new Date() : prev;
       });
       loadData();
       loadPlans();
     }, [loadData, loadPlans])
   );
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    console.log('[Home Android] selectedDate changed — reloading data for:', toLocalDateString(selectedDate));
+    loadData();
+  }, [selectedDate, loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -288,9 +436,11 @@ export default function HomeScreen() {
     loadPlans();
   };
 
+  // ── Tracking handlers ──
   const handleAddFood = (mealType: MealType) => {
     console.log('[Home Android] Opening add food for meal:', mealType);
     const dateString = toLocalDateString(selectedDate);
+    console.log('[Home Android] Passing date to add-food:', dateString);
     router.push(`/add-food?meal=${mealType}&date=${dateString}`);
   };
 
@@ -317,11 +467,20 @@ export default function HomeScreen() {
           const itemToDelete = meal.items.find(i => i.id === itemId);
           if (itemToDelete) deletedItem = itemToDelete;
           const filteredItems = meal.items.filter(i => i.id !== itemId);
-          return { ...meal, items: filteredItems, totalCalories: filteredItems.reduce((sum, i) => sum + (i.calories || 0), 0) };
+          return {
+            ...meal,
+            items: filteredItems,
+            totalCalories: filteredItems.reduce((sum, i) => sum + (i.calories || 0), 0),
+            totalProtein: filteredItems.reduce((sum, i) => sum + (i.protein || 0), 0),
+            totalCarbs: filteredItems.reduce((sum, i) => sum + (i.carbs || 0), 0),
+            totalFats: filteredItems.reduce((sum, i) => sum + (i.fats || 0), 0),
+          };
         });
         console.log('[Home Android] UI state updated - item removed from list');
         return newMeals;
       });
+
+      setAllFoodItems(prev => prev.filter(i => i.id !== itemId));
 
       if (deletedItem) {
         setTotalCalories(prev => prev - ((deletedItem as FoodItem).calories || 0));
@@ -339,9 +498,9 @@ export default function HomeScreen() {
         throw error;
       }
       console.log('[Home Android] Successfully deleted from database');
-    } catch (error: any) {
-      console.error('[Home Android] Error in handleDeleteFood:', error);
-      Alert.alert(t('home.deleteFailed'), error?.message || t('home.failedToDeleteFood'), [{ text: t('common.ok') }]);
+    } catch (err: any) {
+      console.error('[Home Android] Error in handleDeleteFood:', err);
+      Alert.alert('Delete Failed', err?.message || 'Failed to delete food entry. Please try again.', [{ text: 'OK' }]);
       loadData();
     }
   }, [loadData]);
@@ -368,11 +527,11 @@ export default function HomeScreen() {
   const isToday = () => selectedDate.toDateString() === new Date().toDateString();
 
   const isTodayOrFuture = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selected = new Date(selectedDate);
-    selected.setHours(0, 0, 0, 0);
-    return selected >= today;
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    const s = new Date(selectedDate);
+    s.setHours(0, 0, 0, 0);
+    return s >= t;
   };
 
   const handleTabPress = (tab: 'tracking' | 'planning') => {
@@ -387,15 +546,269 @@ export default function HomeScreen() {
     }).start();
   };
 
-  const handlePlanPress = (plan: MealPlan) => {
-    console.log('[Home Android] Meal plan pressed:', plan.id, plan.name);
-    router.push({ pathname: '/meal-plan-detail', params: { planId: plan.id } });
+  // ── Planning helpers ──
+  const currentWeekPlan = weekPlans[weekOffset] ?? { Mon: null, Tue: null, Wed: null, Thu: null, Fri: null, Sat: null, Sun: null };
+
+  const setCurrentDayPlan = (day: DayKey, planId: string | null) => {
+    setWeekPlans(prev => ({
+      ...prev,
+      [weekOffset]: {
+        ...(prev[weekOffset] ?? { Mon: null, Tue: null, Wed: null, Thu: null, Fri: null, Sat: null, Sun: null }),
+        [day]: planId,
+      },
+    }));
   };
 
-  const handleCreatePlan = () => {
-    console.log('[Home Android] Create new meal plan pressed');
-    router.push('/meal-plan-create');
+  const handleCreateNewPlan = async () => {
+    if (!newPlanName.trim()) return;
+    console.log('[Home Android] Creating new meal plan:', newPlanName.trim());
+    setNewPlanSaving(true);
+    try {
+      const newPlan = await createMealPlan({ name: newPlanName.trim() });
+      setPlans(prev => [...prev, newPlan]);
+      setNewPlanModalVisible(false);
+      setNewPlanName('');
+      router.push({ pathname: '/meal-plan-detail', params: { planId: newPlan.id } });
+    } catch {
+      Alert.alert(t('common.error'), t('errors.failedToSave'));
+    } finally {
+      setNewPlanSaving(false);
+    }
   };
+
+  // Android-compatible replacement for ActionSheetIOS.showActionSheetWithOptions
+  const handleDayPlanPress = (day: DayKey) => {
+    console.log('[Home Android] Day plan pressed:', day);
+    const currentPlanId = currentWeekPlan[day];
+    const hasAssigned = currentPlanId != null;
+
+    const buttons: { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }[] = [
+      ...plans.map(p => ({
+        text: p.name,
+        onPress: () => {
+          console.log('[Home Android] Assigning plan', p.id, 'to day:', day);
+          setCurrentDayPlan(day, p.id);
+          fetchPlanMacros(p.id);
+        },
+      })),
+      ...(hasAssigned
+        ? [{
+            text: 'Remove plan',
+            style: 'destructive' as const,
+            onPress: () => {
+              console.log('[Home Android] Removing plan from day:', day);
+              setCurrentDayPlan(day, null);
+            },
+          }]
+        : []),
+      { text: 'Cancel', style: 'cancel' as const },
+    ];
+
+    Alert.alert(
+      day,
+      hasAssigned
+        ? `Current: ${plans.find(p => p.id === currentPlanId)?.name || ''}`
+        : 'Assign a plan to this day',
+      buttons
+    );
+  };
+
+  // ── Mark scheduled item as eaten ──
+  const handleMarkEaten = async (itemId: string) => {
+    console.log('[Home Android] Mark as eaten pressed for item:', itemId);
+    try {
+      const { error } = await supabase
+        .from('meal_items')
+        .update({ is_scheduled: false })
+        .eq('id', itemId);
+      if (error) {
+        console.error('[Home Android] Error marking item as eaten:', error);
+        throw error;
+      }
+      console.log('[Home Android] Item marked as eaten:', itemId);
+      await loadData();
+    } catch (err: any) {
+      console.error('[Home Android] handleMarkEaten error:', err);
+      Alert.alert('Error', 'Failed to mark item as eaten. Please try again.');
+    }
+  };
+
+  // ── Schedule this week's plan into Today's Food ──
+  const handleSchedulePlan = async () => {
+    console.log('[Home Android] handleSchedulePlan started');
+    setIsScheduling(true);
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error('[Home Android] handleSchedulePlan: no user', userError);
+        throw new Error('No authenticated user');
+      }
+
+      // Compute startOfWeek (same logic as renderPlanningContent)
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7) + weekOffset * 7);
+      weekStart.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < DAYS.length; i++) {
+        const day = DAYS[i];
+        const planId = currentWeekPlan[day];
+        if (!planId) continue;
+
+        // Compute the calendar date for this day (Mon=0 offset)
+        const dayDate = new Date(weekStart);
+        dayDate.setDate(weekStart.getDate() + i);
+        const yyyy = dayDate.getFullYear();
+        const mm = String(dayDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(dayDate.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        console.log('[Home Android] Scheduling day:', day, 'date:', dateStr, 'planId:', planId);
+
+        // Fetch meal plan items for this plan
+        const { data: planItems, error: planItemsError } = await supabase
+          .from('meal_plan_items')
+          .select('*')
+          .eq('plan_id', planId);
+
+        if (planItemsError) {
+          console.error('[Home Android] Error fetching meal_plan_items for plan:', planId, planItemsError);
+          continue;
+        }
+        if (!planItems || planItems.length === 0) {
+          console.log('[Home Android] No items in plan:', planId, 'for day:', day);
+          continue;
+        }
+
+        // Group by meal_type
+        const byMealType: Record<string, typeof planItems> = {};
+        planItems.forEach((pi: any) => {
+          const mt = pi.meal_type || 'snack';
+          if (!byMealType[mt]) byMealType[mt] = [];
+          byMealType[mt].push(pi);
+        });
+
+        for (const mealType of Object.keys(byMealType)) {
+          // Upsert meal row
+          let mealId: string | null = null;
+          const { data: upsertData, error: upsertError } = await supabase
+            .from('meals')
+            .upsert(
+              { user_id: user.id, date: dateStr, meal_type: mealType },
+              { onConflict: 'user_id,date,meal_type' }
+            )
+            .select('id')
+            .maybeSingle();
+
+          if (upsertError || !upsertData) {
+            console.warn('[Home Android] Upsert meals failed, falling back to select:', upsertError);
+            // Fallback: select existing
+            const { data: existingMeal } = await supabase
+              .from('meals')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('date', dateStr)
+              .eq('meal_type', mealType)
+              .maybeSingle();
+            mealId = existingMeal?.id ?? null;
+          } else {
+            mealId = upsertData.id;
+          }
+
+          if (!mealId) {
+            console.error('[Home Android] Could not get meal_id for', dateStr, mealType);
+            continue;
+          }
+
+          // Insert items, skipping duplicates by food_name
+          const { data: existingItems } = await supabase
+            .from('meal_items')
+            .select('food_name')
+            .eq('meal_id', mealId)
+            .eq('is_scheduled', true);
+
+          const existingNames = new Set((existingItems || []).map((e: any) => e.food_name?.toLowerCase()));
+
+          const itemsToInsert = byMealType[mealType]
+            .filter((pi: any) => !existingNames.has(pi.food_name?.toLowerCase()))
+            .map((pi: any) => ({
+              meal_id: mealId,
+              food_name: pi.food_name,
+              quantity: pi.quantity ?? 1,
+              grams: pi.grams ?? null,
+              serving_unit: pi.serving_unit ?? null,
+              serving_description: pi.serving_description ?? null,
+              calories: pi.calories ?? 0,
+              protein: pi.protein ?? 0,
+              carbs: pi.carbs ?? 0,
+              fats: pi.fats ?? 0,
+              fiber: pi.fiber ?? 0,
+              food_item_id: pi.food_item_id ?? null,
+              food_id: pi.food_id ?? null,
+              is_scheduled: true,
+            }));
+
+          if (itemsToInsert.length > 0) {
+            console.log('[Home Android] Inserting', itemsToInsert.length, 'scheduled items for', dateStr, mealType);
+            const { error: insertError } = await supabase
+              .from('meal_items')
+              .insert(itemsToInsert);
+            if (insertError) {
+              console.error('[Home Android] Error inserting scheduled meal_items:', insertError);
+              throw new Error(`Failed to insert meal items for ${dateStr} ${mealType}: ${insertError.message}`);
+            }
+          } else {
+            console.log('[Home Android] All items already scheduled for', dateStr, mealType);
+          }
+        }
+      }
+
+      console.log('[Home Android] handleSchedulePlan complete, refreshing data');
+      await loadData();
+      Alert.alert(t('home.scheduleDoneTitle'), t('home.scheduleDoneMessage'));
+    } catch (err: any) {
+      console.error('[Home Android] handleSchedulePlan error:', err);
+      Alert.alert('Error', 'Failed to schedule plan. Please try again.');
+    } finally {
+      setIsScheduling(false);
+    }
+  };
+
+  // ── Planning derived values ──
+  const assignedDays = DAYS.filter(d => currentWeekPlan[d] != null);
+  const avgMacros = assignedDays.length === 0 ? null : (() => {
+    const totals = assignedDays.reduce(
+      (acc, day) => {
+        const m = planMacros[currentWeekPlan[day]!];
+        if (!m) return acc;
+        return {
+          calories: acc.calories + m.calories,
+          protein: acc.protein + m.protein,
+          carbs: acc.carbs + m.carbs,
+          fats: acc.fats + m.fats,
+          count: acc.count + 1,
+        };
+      },
+      { calories: 0, protein: 0, carbs: 0, fats: 0, count: 0 }
+    );
+    if (totals.count === 0) return null;
+    return {
+      calories: Math.round(totals.calories / totals.count),
+      protein: Math.round(totals.protein / totals.count),
+      carbs: Math.round(totals.carbs / totals.count),
+      fats: Math.round(totals.fats / totals.count),
+    };
+  })();
+
+  // ── Derived values ──
+  const leftArrowDisabled = false;
+  const rightArrowDisabled = isTodayOrFuture();
+  const todayLabel = isToday() ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const dateDisplay = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // ── Render helpers ──
+
+  if (!navReady) return null;
 
   if (loading) {
     return (
@@ -420,11 +833,6 @@ export default function HomeScreen() {
       </SafeAreaView>
     );
   }
-
-  const caloriesRemaining = (goal?.daily_calories || 2000) - totalCalories;
-  const caloriesProgress = Math.min((totalCalories / (goal?.daily_calories || 2000)) * 100, 100);
-  const leftArrowDisabled = false;
-  const rightArrowDisabled = isTodayOrFuture();
 
   const renderFoodItem = ({ item }: { item: FoodItem }) => {
     const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? 'Unknown Food';
@@ -482,162 +890,723 @@ export default function HomeScreen() {
     );
   };
 
-  const renderTrackingContent = () => (
-    <View>
-      <View style={[styles.dateNavigation, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-        <TouchableOpacity onPress={goToPreviousDay} style={styles.dateButton} disabled={leftArrowDisabled} activeOpacity={leftArrowDisabled ? 1 : 0.7}>
-          <IconSymbol ios_icon_name="arrow.left" android_material_icon_name="arrow-back" size={24} color={isDark ? colors.textDark : colors.text} style={{ opacity: leftArrowDisabled ? 0.4 : 1 }} />
-        </TouchableOpacity>
-        <View style={styles.dateCenter}>
-          <Text style={[styles.dateLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {isToday() ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' })}
-          </Text>
-          <Text style={[styles.dateText, { color: isDark ? colors.textDark : colors.text }]}>
-            {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={goToNextDay} style={styles.dateButton} disabled={rightArrowDisabled} activeOpacity={rightArrowDisabled ? 1 : 0.7}>
-          <IconSymbol ios_icon_name="arrow.right" android_material_icon_name="arrow-forward" size={24} color={isDark ? colors.textDark : colors.text} style={{ opacity: rightArrowDisabled ? 0.4 : 1 }} />
-        </TouchableOpacity>
-      </View>
+  // ── Session grouping ──
+  const SESSION_GAP_MS = 20 * 60 * 1000; // 20 minutes
 
-      {!isToday() && (
-        <TouchableOpacity style={[styles.todayButton, { backgroundColor: colors.primary }]} onPress={goToToday}>
-          <Text style={styles.todayButtonText}>{t('home.goToToday')}</Text>
-        </TouchableOpacity>
-      )}
+  interface FoodSession {
+    sessionTime: Date;
+    items: (FoodItem & { meal_type: string; logged_at?: string | null })[];
+  }
 
-      <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.goal')}</Text>
-            <Text style={[styles.summaryValue, { color: isDark ? colors.textDark : colors.text }]}>{goal?.daily_calories || 2000}</Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.eaten')}</Text>
-            <Text style={[styles.summaryValue, { color: colors.calories }]}>{Math.round(totalCalories)}</Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.remaining')}</Text>
-            <Text style={[styles.summaryValue, { color: caloriesRemaining >= 0 ? colors.success : colors.error }]}>{Math.round(caloriesRemaining)}</Text>
-          </View>
-        </View>
-        <View style={[styles.progressBarContainer, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-          <View style={[styles.progressBarFill, { width: `${caloriesProgress}%`, backgroundColor: caloriesRemaining >= 0 ? colors.success : colors.error }]} />
-        </View>
-        <View style={styles.macrosSummary}>
-          <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.protein }]}>{Math.round(totalMacros.protein)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.protein')}</Text>
-          </View>
-          <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.carbs }]}>{Math.round(totalMacros.carbs)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.carbs')}</Text>
-          </View>
-          <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.fats }]}>{Math.round(totalMacros.fats)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.fats')}</Text>
-          </View>
-          <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.fiber }]}>{Math.round(totalMacros.fiber)}g</Text>
-            <Text style={[styles.macroLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('common.fiber')}</Text>
-          </View>
-        </View>
-      </View>
+  const groupIntoSessions = (items: (FoodItem & { meal_type: string; logged_at?: string | null })[]): FoodSession[] => {
+    if (items.length === 0) return [];
 
-      {meals.map((meal) => (
-        <View key={meal.type} style={[styles.mealCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <View style={styles.mealHeader}>
-            <View>
-              <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>{t(`home.${meal.type === 'snack' ? 'snacks' : meal.type}`)}</Text>
-              <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{Math.round(meal.totalCalories)} kcal</Text>
+    const sorted = [...items].sort((a, b) => {
+      if (!a.logged_at && !b.logged_at) return 0;
+      if (!a.logged_at) return 1;
+      if (!b.logged_at) return -1;
+      return new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime();
+    });
+
+    const sessions: FoodSession[] = [];
+    let currentSession: FoodSession | null = null;
+
+    sorted.forEach(item => {
+      const itemTime = item.logged_at ? new Date(item.logged_at) : new Date();
+
+      if (!currentSession) {
+        currentSession = { sessionTime: itemTime, items: [item] };
+      } else {
+        const lastItem = currentSession.items[currentSession.items.length - 1];
+        const lastTime = lastItem.logged_at ? new Date(lastItem.logged_at) : new Date();
+        const gap = itemTime.getTime() - lastTime.getTime();
+
+        if (gap <= SESSION_GAP_MS) {
+          currentSession.items.push(item);
+        } else {
+          sessions.push(currentSession);
+          currentSession = { sessionTime: itemTime, items: [item] };
+        }
+      }
+    });
+
+    if (currentSession) sessions.push(currentSession);
+    return sessions;
+  };
+
+  const formatSessionTime = (date: Date): string => {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const renderTrackingContent = () => {
+    const cardBg = isDark ? colors.cardDark : colors.card;
+    const textPrimary = isDark ? colors.textDark : colors.text;
+    const textSec = isDark ? colors.textSecondaryDark : colors.textSecondary;
+    const dividerColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+    const itemCount = allFoodItems.length;
+    const itemCountLabel = itemCount === 1 ? t('home.item') : t('home.items');
+    const sessions = groupIntoSessions(allFoodItems);
+
+    const lastUpdate = goal?.last_adaptive_update;
+    const showAdaptiveBanner = (() => {
+      if (adaptiveBannerDismissed || !lastUpdate) return false;
+      try {
+        const updateDate = new Date(lastUpdate + 'T00:00:00');
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const diffMs = now.getTime() - updateDate.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        return diffDays >= 0 && diffDays <= 2;
+      } catch {
+        return false;
+      }
+    })();
+    const adaptiveCalories = goal?.daily_calories ? Math.round(Number(goal.daily_calories)) : null;
+
+    const adjustmentAmount = latestTdeeEstimate?.adjustment_amount ? Math.round(Number(latestTdeeEstimate.adjustment_amount)) : null;
+    const adjustmentSign = adjustmentAmount && adjustmentAmount > 0 ? '+' : '';
+    const avgCalsEaten = latestTdeeEstimate?.avg_calories_eaten ? Math.round(Number(latestTdeeEstimate.avg_calories_eaten)) : null;
+    const prevWeightLbs = latestTdeeEstimate?.prev_avg_weight_lbs ? Number(latestTdeeEstimate.prev_avg_weight_lbs) : null;
+    const currWeightLbs = latestTdeeEstimate?.avg_weight_lbs ? Number(latestTdeeEstimate.avg_weight_lbs) : null;
+    const weightLost = (prevWeightLbs && currWeightLbs) ? Math.round((prevWeightLbs - currWeightLbs) * 10) / 10 : null;
+
+    const bannerSubtitle = adaptiveCalories !== null
+      ? (adjustmentAmount ? `${adaptiveCalories} kcal/day  •  ${adjustmentSign}${adjustmentAmount} kcal` : `${adaptiveCalories} kcal/day`)
+      : null;
+
+    const bannerWhyLine = avgCalsEaten !== null
+      ? (weightLost !== null && weightLost > 0
+        ? `You ate ~${avgCalsEaten} kcal/day and lost ${weightLost} lbs this week`
+        : weightLost !== null && weightLost < 0
+          ? `You ate ~${avgCalsEaten} kcal/day and gained ${Math.abs(weightLost)} lbs this week`
+          : `You ate ~${avgCalsEaten} kcal/day this week`)
+      : null;
+
+    return (
+      <View>
+        {/* Calories + macros summary card */}
+        <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
+          <View style={styles.caloriesContent}>
+            <ProgressCircle
+              current={totalCalories}
+              target={goal?.daily_calories || 2000}
+              size={140}
+              strokeWidth={12}
+              color={colors.calories}
+              label="kcal"
+            />
+            <View style={styles.macroSummaryCompact}>
+              <MacroSummaryRowCompact label={t('common.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
             </View>
-            <TouchableOpacity style={styles.addMealButton} onPress={() => handleAddFood(meal.type)}>
+          </View>
+        </View>
+
+        {/* ── Adaptive TDEE Banner ── */}
+        {showAdaptiveBanner && adaptiveCalories !== null && (
+          <View style={[styles.adaptiveBanner, { backgroundColor: isDark ? '#0D2420' : '#F0FAF5', borderColor: colors.primary + '30' }]}>
+            {/* Top row: icon + title + dismiss */}
+            <View style={styles.adaptiveBannerTopRow}>
+              <View style={styles.adaptiveBannerTitleRow}>
+                <View style={[styles.adaptiveBannerIconCircle, { backgroundColor: colors.primary + '20' }]}>
+                  <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={16} color={colors.primary} />
+                </View>
+                <Text style={[styles.adaptiveBannerTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  {t('adaptiveTdee.bannerTitle')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Home Android] Adaptive TDEE banner dismissed');
+                  setAdaptiveBannerDismissed(true);
+                }}
+                activeOpacity={0.7}
+                style={styles.adaptiveBannerClose}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={14} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Subtitle: new calories + adjustment */}
+            {bannerSubtitle !== null && (
+              <Text style={[styles.adaptiveBannerSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {bannerSubtitle}
+              </Text>
+            )}
+
+            {/* Why line */}
+            {bannerWhyLine !== null && (
+              <Text style={[styles.adaptiveBannerWhyLine, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {bannerWhyLine}
+              </Text>
+            )}
+
+            {/* See details link */}
+            <View style={styles.adaptiveBannerFooter}>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Home Android] Adaptive TDEE banner "See details" pressed');
+                  router.push('/adaptive-tdee-history');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.adaptiveBannerSeeWhyText, { color: colors.primary }]}>
+                  {'See details →'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Today's Food — session-grouped list */}
+        <View style={[styles.mealCard, { backgroundColor: cardBg }]}>
+          {/* Header */}
+          <View style={styles.mealHeader}>
+            <View style={styles.mealHeaderLeft}>
+              <Text style={[styles.mealTitle, { color: textPrimary }]}>{t('home.todaysFood')}</Text>
+              {itemCount > 0 && (
+                <Text style={[styles.mealCalories, { color: textSec }]}>
+                  {itemCount}
+                  {' '}
+                  {itemCountLabel}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.addMealButton}
+              onPress={() => {
+                const hour = new Date().getHours();
+                let mealType: MealType = 'snack';
+                if (hour >= 6 && hour < 10) mealType = 'breakfast';
+                else if (hour >= 10 && hour < 15) mealType = 'lunch';
+                else if (hour >= 15 && hour < 18) mealType = 'snack';
+                else if (hour >= 18 && hour < 22) mealType = 'dinner';
+                console.log('[Home Android] Add food pressed, smart meal type:', mealType);
+                handleAddFood(mealType);
+              }}
+            >
               <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add" size={28} color={colors.info} />
             </TouchableOpacity>
           </View>
 
-          {meal.items.length === 0 ? (
-            <TouchableOpacity style={styles.emptyMeal} onPress={() => handleAddFood(meal.type)}>
-              <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{t('home.tapToAddFood')}</Text>
+          {itemCount === 0 ? (
+            <TouchableOpacity
+              style={styles.emptyMeal}
+              onPress={() => {
+                console.log('[Home Android] Empty state tapped, adding breakfast');
+                handleAddFood('breakfast');
+              }}
+            >
+              <Text style={[styles.emptyMealText, { color: textSec }]}>{t('home.tapToAddFood')}</Text>
             </TouchableOpacity>
           ) : (
-            <FlatList
-              data={meal.items}
-              renderItem={renderFoodItem}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
-            />
+            <View>
+              {sessions.map((session, sessionIndex) => {
+                const sessionTimeLabel = formatSessionTime(session.sessionTime);
+                const isLastSession = sessionIndex === sessions.length - 1;
+                return (
+                  <View key={sessionIndex}>
+                    {/* Session time header */}
+                    <View style={styles.sessionHeader}>
+                      <Text style={[styles.sessionTime, { color: colors.primary }]}>
+                        {sessionTimeLabel}
+                      </Text>
+                      <View style={[styles.sessionLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+                    </View>
+                    {/* Items in this session */}
+                    {session.items.map((item, itemIndex) => {
+                      const isLastInSession = itemIndex === session.items.length - 1;
+                      const servingText = getServingDisplayText(item);
+                      const proteinRounded = Math.round(item.protein);
+                      const carbsRounded = Math.round(item.carbs);
+                      const fatsRounded = Math.round(item.fats);
+                      const calsRounded = Math.round(item.calories);
+                      const foodName = item.name ?? item.food_name ?? item.food_items?.name ?? (item as any).foods?.name ?? 'Unknown Food';
+                      const foodBrand = item.brand ?? item.food_brand ?? item.food_items?.brand ?? undefined;
+                      const isScheduledItem = item.is_scheduled === true;
+                      const contentOpacity = isScheduledItem ? 0.5 : 1;
+
+                      if (isScheduledItem) {
+                        // Scheduled (not-yet-eaten) item — checkmark on left, muted/italic style
+                        return (
+                          <View key={item.id}>
+                            <View style={[styles.foodItem, { flexDirection: 'row', alignItems: 'center' }]}>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  console.log('[Home Android] Mark as eaten tapped for item:', item.id, foodName);
+                                  handleMarkEaten(item.id);
+                                }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={{ marginRight: 10 }}
+                              >
+                                <Text style={{ fontSize: 22, color: '#14B8A6', lineHeight: 26 }}>{'○'}</Text>
+                              </TouchableOpacity>
+                              <View style={[styles.foodInfo, { opacity: contentOpacity, flex: 1 }]}>
+                                <Text style={[styles.foodName, { color: textPrimary, fontStyle: 'italic' }]}>
+                                  {foodName}
+                                </Text>
+                                {foodBrand && (
+                                  <Text style={[styles.foodBrand, { color: textSec, fontStyle: 'italic' }]}>
+                                    {foodBrand}
+                                  </Text>
+                                )}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {servingText}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {'  ·  '}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: colors.protein }]}>
+                                    {proteinRounded}
+                                    {'P'}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {'  '}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: colors.carbs }]}>
+                                    {carbsRounded}
+                                    {'C'}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: textSec }]}>
+                                    {'  '}
+                                  </Text>
+                                  <Text style={[styles.foodDetails, { color: colors.fats }]}>
+                                    {fatsRounded}
+                                    {'F'}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={[styles.foodCalories, { opacity: contentOpacity }]}>
+                                <Text style={[styles.foodCaloriesValue, { color: textSec }]}>
+                                  {calsRounded}
+                                </Text>
+                                <Text style={[styles.foodCaloriesLabel, { color: textSec }]}>
+                                  kcal
+                                </Text>
+                              </View>
+                            </View>
+                            {!isLastInSession && <View style={[styles.itemSeparator, { backgroundColor: dividerColor }]} />}
+                          </View>
+                        );
+                      }
+
+                      return (
+                        <View key={item.id}>
+                          <SwipeToDeleteRow onDelete={() => handleDeleteFood(item.id)}>
+                            {(isSwiping: boolean) => (
+                              <TouchableOpacity
+                                style={styles.foodItem}
+                                onPress={() => handleEditFood(item, isSwiping)}
+                                activeOpacity={0.7}
+                                disabled={isSwiping}
+                              >
+                                <View style={styles.foodInfo}>
+                                  <Text style={[styles.foodName, { color: textPrimary }]}>
+                                    {foodName}
+                                  </Text>
+                                  {foodBrand && (
+                                    <Text style={[styles.foodBrand, { color: textSec }]}>
+                                      {foodBrand}
+                                    </Text>
+                                  )}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {servingText}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {'  ·  '}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: colors.protein }]}>
+                                      {proteinRounded}
+                                      {'P'}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {'  '}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: colors.carbs }]}>
+                                      {carbsRounded}
+                                      {'C'}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: textSec }]}>
+                                      {'  '}
+                                    </Text>
+                                    <Text style={[styles.foodDetails, { color: colors.fats }]}>
+                                      {fatsRounded}
+                                      {'F'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <View style={styles.foodCalories}>
+                                  <Text style={[styles.foodCaloriesValue, { color: textPrimary }]}>
+                                    {calsRounded}
+                                  </Text>
+                                  <Text style={[styles.foodCaloriesLabel, { color: textSec }]}>
+                                    kcal
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            )}
+                          </SwipeToDeleteRow>
+                          {!isLastInSession && <View style={[styles.itemSeparator, { backgroundColor: dividerColor }]} />}
+                        </View>
+                      );
+                    })}
+                    {/* Gap between sessions */}
+                    {!isLastSession && <View style={{ height: 8 }} />}
+                  </View>
+                );
+              })}
+            </View>
           )}
         </View>
-      ))}
-    </View>
-  );
+
+      </View>
+    );
+  };
 
   const renderPlanningContent = () => {
     if (plansLoading) {
       return (
-        <View style={styles.plansLoadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#14B8A6" />
         </View>
       );
     }
-
     if (plansError) {
       return (
-        <View style={styles.plansEmptyContainer}>
-          <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {plansError}
-          </Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.md }]} onPress={loadPlans}>
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+        <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+          <Text style={{ color: isDark ? '#fff' : '#000', marginBottom: 12 }}>{plansError}</Text>
+          <TouchableOpacity onPress={loadPlans} style={{ backgroundColor: '#14B8A6', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 }}>
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
           </TouchableOpacity>
         </View>
       );
     }
 
+    const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
+    const textPrimary = isDark ? '#FFFFFF' : '#000000';
+    const textSecondary = isDark ? '#8E8E93' : '#6B7280';
+    const surfaceBg = isDark ? '#2C2C2E' : '#F5F5F5';
+
+    // Compute week start/end for selected weekOffset
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7) + weekOffset * 7);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    const weekLabel = weekOffset === 0
+      ? t('home.thisWeek')
+      : weekOffset === 1
+      ? t('home.nextWeek')
+      : weekOffset === -1
+      ? t('home.lastWeek')
+      : `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const weekDateRange = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+    // Grocery list for this week
+    const assignedPlanIds = [...new Set(DAYS.map(d => currentWeekPlan[d]).filter(Boolean))] as string[];
+    const allAssignedPlanIds = DAYS.map(d => currentWeekPlan[d]).filter(Boolean) as string[]; // with duplicates for counting
+
     return (
       <View>
+        {/* Week selector + macro card */}
+        <View style={{ backgroundColor: cardBg, borderRadius: 16, padding: 16, marginBottom: 12 }}>
+          {/* Week navigation */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Home Android] Week selector: previous week');
+                setWeekOffset(w => w - 1);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ padding: 4 }}
+            >
+              <Text style={{ fontSize: 22, color: '#14B8A6', fontWeight: '300' }}>‹</Text>
+            </TouchableOpacity>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: textPrimary }}>{weekLabel}</Text>
+              <Text style={{ fontSize: 12, color: textSecondary, marginTop: 1 }}>{weekDateRange}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Home Android] Week selector: next week');
+                setWeekOffset(w => w + 1);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ padding: 4 }}
+            >
+              <Text style={{ fontSize: 22, color: '#14B8A6', fontWeight: '300' }}>›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Horizontal day grid */}
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14 }}>
+            {DAYS.map(day => {
+              const assignedId = currentWeekPlan[day];
+              const assignedPlan = plans.find(p => p.id === assignedId);
+              const planColor = assignedPlan ? PLAN_COLORS[plans.indexOf(assignedPlan) % PLAN_COLORS.length] : null;
+              return (
+                <TouchableOpacity
+                  key={day}
+                  onPress={() => {
+                    console.log('[Home Android] Day cell pressed:', day);
+                    if (plans.length > 0) { handleDayPlanPress(day); } else { setNewPlanName(''); setNewPlanModalVisible(true); }
+                  }}
+                  activeOpacity={0.7}
+                  style={{
+                    flex: 1,
+                    alignItems: 'center',
+                    backgroundColor: planColor ? planColor + '22' : surfaceBg,
+                    borderRadius: 10,
+                    paddingVertical: 10,
+                    borderWidth: planColor ? 1.5 : 0,
+                    borderColor: planColor ?? 'transparent',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: textSecondary, marginBottom: 6 }}>{day}</Text>
+                  {planColor
+                    ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: planColor }} />
+                    : <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isDark ? '#3C3C3E' : '#D1D5DB' }} />
+                  }
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Goals vs Plan comparison */}
+          <View style={{ borderRadius: 12, overflow: 'hidden', marginTop: 4 }}>
+            {/* Goal row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, flexWrap: 'nowrap' }}>
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>{t('home.goal')}</Text>
+              <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{goal?.daily_calories || 2000}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
+              </View>
+              <View style={{ backgroundColor: '#3B82F622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{goal?.protein_g || 150}<Text style={{ fontSize: 11, fontWeight: '600' }}> P</Text></Text>
+              </View>
+              <View style={{ backgroundColor: '#F59E0B22', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{goal?.carbs_g || 200}<Text style={{ fontSize: 11, fontWeight: '600' }}> C</Text></Text>
+              </View>
+              <View style={{ backgroundColor: '#EF444422', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{goal?.fats_g || 65}<Text style={{ fontSize: 11, fontWeight: '600' }}> F</Text></Text>
+              </View>
+            </View>
+
+            {/* Thin divider */}
+            <View style={{ height: 1, backgroundColor: isDark ? '#2C2C2E' : '#E5E7EB' }} />
+
+            {/* Wk Avg row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, flexWrap: 'nowrap' }}>
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>{t('home.wkAvg')}</Text>
+              {avgMacros == null ? (
+                <Text style={{ fontSize: 13, color: textSecondary }}>{t('home.noPlansAssigned')}</Text>
+              ) : (
+                <>
+                  <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{avgMacros.calories}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
+                  </View>
+                  <View style={{ backgroundColor: '#3B82F622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{avgMacros.protein}<Text style={{ fontSize: 11, fontWeight: '600' }}> P</Text></Text>
+                  </View>
+                  <View style={{ backgroundColor: '#F59E0B22', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{avgMacros.carbs}<Text style={{ fontSize: 11, fontWeight: '600' }}> C</Text></Text>
+                  </View>
+                  <View style={{ backgroundColor: '#EF444422', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{avgMacros.fats}<Text style={{ fontSize: 11, fontWeight: '600' }}> F</Text></Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* Grocery list button */}
+          {assignedPlanIds.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                const planIdsStr = allAssignedPlanIds.join(',');
+                console.log('[Home Android] Grocery list button pressed, planIds:', planIdsStr);
+                router.push({ pathname: '/meal-plan-grocery', params: { planIds: planIdsStr, rangeLabel: weekLabel } });
+              }}
+              activeOpacity={0.8}
+              style={{
+                marginTop: 14,
+                backgroundColor: '#14B8A6',
+                borderRadius: 10,
+                paddingVertical: 11,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>🛒</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>{t('home.groceryList')}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Schedule This Plan button */}
+          {assignedPlanIds.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Home Android] Schedule This Plan button pressed');
+                Alert.alert(
+                  t('home.schedulePlanTitle'),
+                  t('home.schedulePlanMessage'),
+                  [
+                    { text: t('common.cancel'), style: 'cancel' },
+                    { text: t('home.schedule'), onPress: handleSchedulePlan },
+                  ]
+                );
+              }}
+              activeOpacity={0.8}
+              disabled={isScheduling}
+              style={{
+                marginTop: 8,
+                backgroundColor: 'transparent',
+                borderRadius: 10,
+                paddingVertical: 11,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                borderWidth: 1.5,
+                borderColor: '#14B8A6',
+                opacity: isScheduling ? 0.6 : 1,
+              }}
+            >
+              {isScheduling ? (
+                <ActivityIndicator size="small" color="#14B8A6" />
+              ) : (
+                <Text style={{ fontSize: 16 }}>📅</Text>
+              )}
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#14B8A6' }}>{t('home.scheduleThisPlan')}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* ── Available Plans (templates) ── */}
+        {templatePlans.length > 0 && (
+          <View>
+            <View style={styles.templateSectionHeader}>
+              <Text style={styles.templateSectionTitle}>{t('home.availablePlans')}</Text>
+            </View>
+            {templatePlans.map((tplan) => {
+              return (
+                <TouchableOpacity
+                  key={tplan.id}
+                  style={[styles.templateCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
+                  onPress={() => {
+                    console.log('[Home Android] Template plan pressed:', tplan.id, tplan.name);
+                    router.push({ pathname: '/template-plan-detail', params: { templateId: tplan.id } });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.templateCardContent}>
+                    <View style={styles.templateEmojiCircle}>
+                      <Text style={styles.templateEmoji}>{tplan.emoji}</Text>
+                    </View>
+                    <View style={styles.templateCardLeft}>
+                      <Text style={[styles.templateName, { color: isDark ? colors.textDark : colors.text }]}>
+                        {tplan.name}
+                      </Text>
+                    </View>
+                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* My Plans section */}
+        <Text style={{ fontSize: 13, fontWeight: '700', color: textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 }}>{t('home.myPlans')}</Text>
         {plans.length === 0 ? (
-          <View style={[styles.plansEmptyCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={40} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
-            <Text style={[styles.plansEmptyTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('home.noMealPlansYet')}</Text>
-            <Text style={[styles.plansEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {t('home.createFirstPlanShort')}
-            </Text>
+          <View style={{ backgroundColor: cardBg, borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: textPrimary, marginBottom: 8 }}>{t('home.noMealPlansYet')}</Text>
+            <Text style={{ fontSize: 14, color: textSecondary, textAlign: 'center' }}>{t('home.createFirstPlan')}</Text>
           </View>
         ) : (
-          plans.map((plan) => {
-            const dateRange = formatDateRange(plan.start_date, plan.end_date);
+          plans.map((plan, idx) => {
+            const dotColor = PLAN_COLORS[idx % PLAN_COLORS.length];
             return (
-              <TouchableOpacity
+              <SwipeToDeleteRow
                 key={plan.id}
-                style={[styles.planCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-                onPress={() => handlePlanPress(plan)}
-                activeOpacity={0.7}
+                onDelete={() => {
+                  console.log('[Home Android] Delete plan swiped, plan:', plan.id);
+                  Alert.alert(t('home.deletePlan'), t('home.deletePlanConfirm'), [
+                    { text: t('common.cancel'), style: 'cancel' },
+                    {
+                      text: t('common.delete'), style: 'destructive', onPress: async () => {
+                        console.log('[Home Android] Confirming delete for plan:', plan.id);
+                        try {
+                          await deleteMealPlan(plan.id);
+                          console.log('[Home Android] Plan deleted:', plan.id);
+                          setPlans(prev => prev.filter(p => p.id !== plan.id));
+                          setWeekPlans(prev => {
+                            const next = { ...prev };
+                            Object.keys(next).forEach(wk => {
+                              DAYS.forEach(d => { if (next[Number(wk)][d] === plan.id) next[Number(wk)][d] = null; });
+                            });
+                            return next;
+                          });
+                        } catch {
+                          Alert.alert(t('common.error'), t('errors.failedToDelete'));
+                        }
+                      },
+                    },
+                  ]);
+                }}
               >
-                <View style={styles.planCardContent}>
-                  <View style={styles.planCardLeft}>
-                    <Text style={[styles.planName, { color: isDark ? colors.textDark : colors.text }]}>{plan.name}</Text>
-                    <Text style={[styles.planDateRange, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>{dateRange}</Text>
-                  </View>
-                  <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
-                </View>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ backgroundColor: cardBg, borderRadius: 12, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}
+                  onPress={() => {
+                    console.log('[Home Android] Meal plan pressed:', plan.id, plan.name);
+                    router.push({ pathname: '/meal-plan-detail', params: { planId: plan.id } });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dotColor, marginRight: 12 }} />
+                  <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: textPrimary }}>{plan.name}</Text>
+                  <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={textSecondary} />
+                </TouchableOpacity>
+              </SwipeToDeleteRow>
             );
           })
         )}
 
+        {/* Generate with AI button */}
         <TouchableOpacity
-          style={[styles.createPlanButton, { backgroundColor: colors.primary }]}
-          onPress={handleCreatePlan}
+          style={{ backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 8, borderWidth: 1.5, borderColor: '#14B8A6' }}
+          onPress={() => {
+            console.log('[Home Android] Generate plan with AI pressed, isPremium:', isPremium);
+            if (!isPremium) {
+              router.push('/subscription');
+            } else {
+              router.push('/ai-meal-planner');
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color="#14B8A6" />
+          <Text style={{ color: '#14B8A6', fontSize: 16, fontWeight: '600' }}>{t('home.generateWithAI')}</Text>
+        </TouchableOpacity>
+
+        {/* Create plan button */}
+        <TouchableOpacity
+          style={{ backgroundColor: '#14B8A6', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 0, marginBottom: 16 }}
+          onPress={() => {
+            console.log('[Home Android] Create new meal plan pressed');
+            setNewPlanName('');
+            setNewPlanModalVisible(true);
+          }}
           activeOpacity={0.8}
         >
           <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={20} color="#fff" />
-          <Text style={styles.createPlanButtonText}>{t('home.createNewPlan')}</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>{t('home.createNewPlan')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -668,6 +1637,50 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Date navigation — only visible in Tracking mode */}
+      {activeTab === 'tracking' && (
+        <View style={[styles.stickyHeader, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
+          <TouchableOpacity
+            onPress={goToPreviousDay}
+            style={styles.dateButton}
+            disabled={leftArrowDisabled}
+            activeOpacity={leftArrowDisabled ? 1 : 0.7}
+          >
+            <IconSymbol
+              ios_icon_name="arrow.left"
+              android_material_icon_name="arrow-back"
+              size={22}
+              color={isDark ? colors.textDark : colors.text}
+              style={{ opacity: leftArrowDisabled ? 0.4 : 1 }}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.dateCenter} onPress={goToToday} activeOpacity={0.7}>
+            <Text style={[styles.dateLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {todayLabel}
+            </Text>
+            <Text style={[styles.dateText, { color: isDark ? colors.textDark : colors.text }]}>
+              {dateDisplay}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={goToNextDay}
+            style={styles.dateButton}
+            disabled={rightArrowDisabled}
+            activeOpacity={rightArrowDisabled ? 1 : 0.7}
+          >
+            <IconSymbol
+              ios_icon_name="arrow.right"
+              android_material_icon_name="arrow-forward"
+              size={22}
+              color={isDark ? colors.textDark : colors.text}
+              style={{ opacity: rightArrowDisabled ? 0.4 : 1 }}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={{ flex: 1, overflow: 'hidden' }}>
         <Animated.View
@@ -724,9 +1737,108 @@ export default function HomeScreen() {
         }}
       />
 
+      {/* New Plan Modal */}
+      <Modal
+        visible={newPlanModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNewPlanModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setNewPlanModalVisible(false)}
+        />
+        <KeyboardAvoidingView
+          behavior="position"
+          keyboardVerticalOffset={0}
+          style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+        >
+          <View style={{
+            backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            paddingHorizontal: 24,
+            paddingTop: 20,
+            paddingBottom: 40,
+          }}>
+            {/* Handle bar */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? '#3C3C3E' : '#D1D5DB', alignSelf: 'center', marginBottom: 20 }} />
+
+            <Text style={{ fontSize: 20, fontWeight: '700', color: isDark ? '#FFFFFF' : '#000000', marginBottom: 20 }}>
+              {t('home.newPlan')}
+            </Text>
+
+            <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#8E8E93' : '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+              {t('home.planName')}
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: isDark ? '#2C2C2E' : '#F5F5F5',
+                borderRadius: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                fontSize: 16,
+                color: isDark ? '#FFFFFF' : '#000000',
+                marginBottom: 24,
+              }}
+              value={newPlanName}
+              onChangeText={setNewPlanName}
+              placeholder={t('home.planNamePlaceholder')}
+              placeholderTextColor={isDark ? '#8E8E93' : '#9CA3AF'}
+              returnKeyType="done"
+              onSubmitEditing={handleCreateNewPlan}
+              autoFocus
+            />
+
+            <TouchableOpacity
+              onPress={handleCreateNewPlan}
+              disabled={newPlanSaving || !newPlanName.trim()}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: '#14B8A6',
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                opacity: (newPlanSaving || !newPlanName.trim()) ? 0.5 : 1,
+              }}
+            >
+              {newPlanSaving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ fontSize: 17, fontWeight: '600', color: '#fff' }}>{t('common.save')}</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
     </SafeAreaView>
   );
 }
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
+  const percentage = Math.min((eaten / goal) * 100, 100);
+  return (
+    <View style={styles.macroSummaryRowCompact}>
+      <Text style={[styles.macroSummaryLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        {label}
+      </Text>
+      <View style={styles.macroSummaryBarContainer}>
+        <View style={[styles.macroSummaryBarBackground, { backgroundColor: isDark ? colors.borderDark : colors.border }]}>
+          <View style={[styles.macroSummaryBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
+        </View>
+        <Text style={[styles.macroSummaryProgressCompact, { color: isDark ? colors.textDark : colors.text }]}>
+          {eaten} / {goal}g
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -736,10 +1848,21 @@ const styles = StyleSheet.create({
   errorText: { ...typography.body, textAlign: 'center', marginTop: spacing.md, marginBottom: spacing.lg },
   retryButton: { paddingVertical: spacing.md, paddingHorizontal: spacing.xl, borderRadius: borderRadius.md },
   retryButtonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
+  stickyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dateButton: { padding: spacing.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  dateCenter: { alignItems: 'center', flex: 1 },
+  dateLabel: { ...typography.caption, marginBottom: 2 },
+  dateText: { ...typography.h3 },
   segmentedControlWrapper: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   segmentedControl: {
     flexDirection: 'row',
@@ -756,50 +1879,34 @@ const styles = StyleSheet.create({
   segmentButtonText: { fontSize: 14, fontWeight: '600' },
 
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
-  dateNavigation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
-  },
-  dateButton: { padding: spacing.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  dateCenter: { alignItems: 'center', flex: 1 },
-  dateLabel: { ...typography.caption, marginBottom: 2 },
-  dateText: { ...typography.h3 },
-  todayButton: { borderRadius: borderRadius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, alignItems: 'center', marginBottom: spacing.md },
-  todayButtonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 14 },
-  summaryCard: {
+  caloriesCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: spacing.md },
-  summaryItem: { alignItems: 'center' },
-  summaryLabel: { ...typography.caption, marginBottom: spacing.xs },
-  summaryValue: { ...typography.h2 },
-  summaryDivider: { width: 1, backgroundColor: colors.border },
-  progressBarContainer: { height: 8, borderRadius: borderRadius.full, overflow: 'hidden', marginBottom: spacing.md },
-  progressBarFill: { height: '100%', borderRadius: borderRadius.full },
-  macrosSummary: { flexDirection: 'row', justifyContent: 'space-around' },
-  macroItem: { alignItems: 'center' },
-  macroValue: { ...typography.bodyBold, fontSize: 18 },
-  macroLabel: { ...typography.caption },
+  cardTitle: { ...typography.h3, marginBottom: spacing.md },
+  caloriesContent: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  macroSummaryCompact: { flex: 1, gap: spacing.sm },
+  macroSummaryRowCompact: { gap: 4 },
+  macroSummaryLabelCompact: { fontSize: 12, fontWeight: '500' },
+  macroSummaryBarContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  macroSummaryBarBackground: { flex: 1, height: 6, borderRadius: borderRadius.full, overflow: 'hidden' },
+  macroSummaryBarFill: { height: '100%', borderRadius: borderRadius.full },
+  macroSummaryProgressCompact: { fontSize: 11, fontWeight: '500', minWidth: 70, textAlign: 'right' },
   mealCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
   mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  mealHeaderLeft: { flex: 1, marginRight: 8 },
+  mealMacroRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', marginTop: 2 },
+  mealMacroDot: { fontSize: 11, fontWeight: '500' },
+  mealMacroValue: { fontSize: 11, fontWeight: '600' },
   mealTitle: { ...typography.h3 },
-  mealCalories: { ...typography.caption, marginTop: 2 },
+  mealCalories: { ...typography.caption },
   addMealButton: { padding: spacing.xs },
   emptyMeal: {
     paddingVertical: spacing.lg,
@@ -811,7 +1918,24 @@ const styles = StyleSheet.create({
   },
   emptyMealText: { ...typography.body },
   itemSeparator: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginVertical: spacing.xs },
-  foodItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
+  foodItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
+  sessionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: 4,
+    gap: 8,
+  },
+  sessionTime: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  sessionLine: {
+    flex: 1,
+    height: 1,
+  },
   foodInfo: { flex: 1 },
   foodName: { ...typography.bodyBold, marginBottom: 2 },
   foodBrand: { ...typography.caption, marginBottom: 2 },
@@ -820,40 +1944,126 @@ const styles = StyleSheet.create({
   foodCaloriesValue: { ...typography.bodyBold, fontSize: 18 },
   foodCaloriesLabel: { ...typography.caption },
   bottomSpacer: { height: 40 },
-  // Planning styles
-  plansLoadingContainer: { paddingVertical: spacing.xxl, alignItems: 'center' },
-  plansEmptyCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.md,
-    alignItems: 'center',
-    gap: spacing.sm,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
-  },
-  plansEmptyContainer: { paddingVertical: spacing.xl, alignItems: 'center' },
-  plansEmptyTitle: { ...typography.h3, marginTop: spacing.sm },
-  plansEmptyText: { ...typography.body, textAlign: 'center' },
-  planCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
-  },
-  planCardContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  planCardLeft: { flex: 1 },
-  planName: { ...typography.bodyBold, marginBottom: 2 },
-  planDateRange: { ...typography.caption },
-  createPlanButton: {
+  templateSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  templateSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: '#D4AF37',
+    textTransform: 'uppercase',
+  },
+  templateCard: {
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  templateCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  templateEmojiCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(212,175,55,0.12)',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+  },
+  templateEmoji: {
+    fontSize: 20,
+  },
+  templateCardLeft: {
+    flex: 1,
+  },
+  templateName: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  templateBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  templateGoalBadge: {
+    backgroundColor: 'rgba(212,175,55,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  templateGoalBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#D4AF37',
+  },
+  templateSubtitle: {
+    fontSize: 12,
+  },
+
+  // ── Adaptive TDEE Banner ──────────────────────────────────────────────────
+  adaptiveBanner: {
     borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    marginTop: spacing.sm,
+    borderWidth: 1,
+    padding: spacing.md,
     marginBottom: spacing.md,
   },
-  createPlanButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  adaptiveBannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  adaptiveBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  adaptiveBannerIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adaptiveBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  adaptiveBannerSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: spacing.xs,
+    marginLeft: 40,
+  },
+  adaptiveBannerWhyLine: {
+    fontSize: 12,
+    marginBottom: spacing.sm,
+    marginLeft: 40,
+    lineHeight: 17,
+  },
+  adaptiveBannerFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 2,
+  },
+  adaptiveBannerSeeWhyText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  adaptiveBannerClose: {
+    padding: 2,
+  },
 });
