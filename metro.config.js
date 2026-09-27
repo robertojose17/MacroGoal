@@ -273,10 +273,4 @@ config.server.enhanceMiddleware = (middleware) => {
   };
 };
 
-config.resolver.extraNodeModules = {
-  ...config.resolver.extraNodeModules,
-  'react-native-onesignal': require.resolve('./stubs/react-native-onesignal.js'),
-  'react-native-google-mobile-ads': require.resolve('./stubs/react-native-google-mobile-ads.js'),
-};
-
 module.exports = config;

@@ -90,7 +90,12 @@
           "iosAppId": "ca-app-pub-5592015069000241~5529470607"
         }
       ],
-      ["onesignal-expo-plugin", { "mode": "production" }],
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production"
+        }
+      ],
       "expo-localization",
       [
         "expo-build-properties",

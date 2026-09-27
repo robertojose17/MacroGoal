@@ -45,17 +45,8 @@ if (Platform.OS !== "web") {
   } catch {}
 }
 
-// OneSignal — native only, not available in Expo Go
+// isExpoGo — used by the deferred OneSignal click-listener below
 const isExpoGo = Constants.appOwnership === "expo";
-let OneSignal: any = null;
-if (Platform.OS !== "web" && !isExpoGo) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    OneSignal = require("react-native-onesignal").OneSignal;
-  } catch (e) {
-    console.warn("[OneSignal] Failed to load react-native-onesignal:", e);
-  }
-}
 
 const TIMEZONE_STORAGE_KEY = "user_timezone_synced";
 
@@ -402,24 +393,44 @@ export default function RootLayout() {
   }, [isReady, session]);
 
   // ─── OneSignal notification click handler ────────────────────────────────
+  // Deferred to ensure OneSignal.initialize() (called in NotificationContext)
+  // has completed before addEventListener is called — prevents the Android
+  // IllegalStateException: Must call 'initWithContext' before use crash.
   useEffect(() => {
-    if (Platform.OS === "web" || !OneSignal) return;
+    if (Platform.OS === "web" || isExpoGo) return;
 
-    const clickHandler = (event: any) => {
-      const data = event?.notification?.additionalData as
-        | { screen?: string; action?: string }
-        | undefined;
-      console.log("[OneSignal] Notification clicked — data:", data);
-      if (!data) return;
-      if (data.screen === "dashboard" || data.screen === "missions") {
-        console.log("[OneSignal] Deep linking to dashboard");
-        router.push("/(tabs)/dashboard");
-      }
-    };
+    let removeListener: (() => void) | null = null;
+    const task = InteractionManager.runAfterInteractions(() => {
+      const timer = setTimeout(() => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { OneSignal: OS } = require("react-native-onesignal");
+          const clickHandler = (event: any) => {
+            const data = event?.notification?.additionalData as
+              | { screen?: string; action?: string }
+              | undefined;
+            console.log("[OneSignal] Notification clicked — data:", data);
+            if (!data) return;
+            if (data.screen === "dashboard" || data.screen === "missions") {
+              console.log("[OneSignal] Deep linking to dashboard");
+              router.push("/(tabs)/dashboard");
+            }
+          };
+          OS.Notifications.addEventListener("click", clickHandler);
+          removeListener = () =>
+            OS.Notifications.removeEventListener("click", clickHandler);
+        } catch (e) {
+          console.warn("[OneSignal] click listener setup failed:", e);
+        }
+      }, 500);
+      // Store timer cleanup on the task so the outer cleanup can reach it
+      (task as any)._timer = timer;
+    });
 
-    OneSignal.Notifications.addEventListener("click", clickHandler);
     return () => {
-      OneSignal.Notifications.removeEventListener("click", clickHandler);
+      task.cancel();
+      clearTimeout((task as any)._timer);
+      removeListener?.();
     };
   }, []);
 
