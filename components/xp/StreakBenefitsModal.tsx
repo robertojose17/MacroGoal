@@ -93,7 +93,7 @@ export default function StreakBenefitsModal({
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <IconSymbol name="xmark" size={20} color={textColor} />
+            <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={20} color={textColor} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: textColor }]}>

@@ -115,7 +115,8 @@ export default function XpLevelsModal({
     if (status === 'completed') {
       return (
         <IconSymbol
-          name="checkmark.circle.fill"
+          ios_icon_name="checkmark.circle.fill"
+          android_material_icon_name="check-circle"
           size={20}
           color={colors.success}
         />
@@ -256,7 +257,7 @@ export default function XpLevelsModal({
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <IconSymbol name="xmark" size={20} color={textColor} />
+            <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={20} color={textColor} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: textColor }]}>
@@ -334,7 +335,8 @@ export default function XpLevelsModal({
             {collapsedLabel !== null && (
               <View style={[styles.collapsedBanner, { borderBottomColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
                 <IconSymbol
-                  name="checkmark.circle.fill"
+                  ios_icon_name="checkmark.circle.fill"
+                  android_material_icon_name="check-circle"
                   size={16}
                   color={colors.success}
                 />
