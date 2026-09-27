@@ -245,7 +245,7 @@ export default function BarcodeLookupScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <IconSymbol
               ios_icon_name="chevron.left"
-              android_material_icon_name="arrow_back"
+              android_material_icon_name="arrow-back"
               size={24}
               color={isDark ? colors.textDark : colors.text}
             />
@@ -276,7 +276,7 @@ export default function BarcodeLookupScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <IconSymbol
               ios_icon_name="chevron.left"
-              android_material_icon_name="arrow_back"
+              android_material_icon_name="arrow-back"
               size={24}
               color={isDark ? colors.textDark : colors.text}
             />
@@ -329,7 +329,7 @@ export default function BarcodeLookupScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <IconSymbol
               ios_icon_name="chevron.left"
-              android_material_icon_name="arrow_back"
+              android_material_icon_name="arrow-back"
               size={24}
               color={isDark ? colors.textDark : colors.text}
             />
@@ -396,7 +396,7 @@ export default function BarcodeLookupScreen() {
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+                android_material_icon_name="chevron-right"
                 size={20}
                 color={isDark ? colors.textSecondaryDark : colors.textSecondary}
               />
@@ -422,7 +422,7 @@ export default function BarcodeLookupScreen() {
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+                android_material_icon_name="chevron-right"
                 size={20}
                 color={isDark ? colors.textSecondaryDark : colors.textSecondary}
               />
@@ -448,7 +448,7 @@ export default function BarcodeLookupScreen() {
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+                android_material_icon_name="chevron-right"
                 size={20}
                 color={isDark ? colors.textSecondaryDark : colors.textSecondary}
               />
@@ -474,7 +474,7 @@ export default function BarcodeLookupScreen() {
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+                android_material_icon_name="chevron-right"
                 size={20}
                 color={isDark ? colors.textSecondaryDark : colors.textSecondary}
               />

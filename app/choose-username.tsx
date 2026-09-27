@@ -146,7 +146,7 @@ export default function ChooseUsernameScreen() {
           >
             <IconSymbol
               ios_icon_name="chevron.left"
-              android_material_icon_name="arrow_back"
+              android_material_icon_name="arrow-back"
               size={24}
               color={textColor}
             />
@@ -187,7 +187,7 @@ export default function ChooseUsernameScreen() {
               {checkState === 'available' && (
                 <IconSymbol
                   ios_icon_name="checkmark.circle.fill"
-                  android_material_icon_name="check_circle"
+                  android_material_icon_name="check-circle"
                   size={20}
                   color="#22C55E"
                 />

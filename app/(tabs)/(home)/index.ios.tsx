@@ -1589,7 +1589,7 @@ export default function HomeScreen() {
           }}
           activeOpacity={0.8}
         >
-          <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color="#14B8A6" />
+          <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={20} color="#14B8A6" />
           <Text style={{ color: '#14B8A6', fontSize: 16, fontWeight: '600' }}>{t('home.generateWithAI')}</Text>
         </TouchableOpacity>
 

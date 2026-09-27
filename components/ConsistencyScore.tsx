@@ -622,7 +622,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
                 >
                   <IconSymbol
                     ios_icon_name="calendar"
-                    android_material_icon_name="calendar_today"
+                    android_material_icon_name="calendar-today"
                     size={14}
                     color={colors.primary}
                   />

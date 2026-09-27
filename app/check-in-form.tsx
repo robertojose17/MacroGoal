@@ -569,7 +569,7 @@ export default function CheckInFormScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+            android_material_icon_name="arrow-back"
             size={24}
             color={isDark ? colors.textDark : colors.text}
           />
@@ -599,7 +599,7 @@ export default function CheckInFormScreen() {
           >
             <IconSymbol
               ios_icon_name="calendar"
-              android_material_icon_name="calendar_today"
+              android_material_icon_name="calendar-today"
               size={20}
               color={colors.primary}
             />
@@ -844,7 +844,7 @@ export default function CheckInFormScreen() {
             <View style={styles.modalIconCircle}>
               <IconSymbol
                 ios_icon_name="camera.fill"
-                android_material_icon_name="photo_camera"
+                android_material_icon_name="photo-camera"
                 size={28}
                 color={colors.primary}
               />
@@ -874,7 +874,7 @@ export default function CheckInFormScreen() {
                 ) : (
                   <IconSymbol
                     ios_icon_name="camera"
-                    android_material_icon_name="photo_camera"
+                    android_material_icon_name="photo-camera"
                     size={20}
                     color="#FFFFFF"
                   />

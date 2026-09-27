@@ -231,7 +231,7 @@ export default function FoodPhotoCaptureScreen() {
             console.log('[FoodPhotoCapture] Back button pressed (permission screen)');
             router.back();
           }}>
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={isDark ? colors.textDark : colors.text} />
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={isDark ? colors.textDark : colors.text} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>{t('foodPhotoCapture.cameraAccess')}</Text>
           <View style={{ width: 24 }} />
@@ -282,7 +282,7 @@ export default function FoodPhotoCaptureScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.centerContainer}>
-          <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check_circle" size={80} color="#4CAF50" />
+          <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={80} color="#4CAF50" />
           <Text style={[styles.h2, { color: isDark ? colors.textDark : colors.text, marginTop: spacing.lg }]}>
             {successTitle}
           </Text>
@@ -303,7 +303,7 @@ export default function FoodPhotoCaptureScreen() {
             console.log('[FoodPhotoCapture] Back button pressed (error screen)');
             router.back();
           }}>
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={isDark ? colors.textDark : colors.text} />
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={isDark ? colors.textDark : colors.text} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>{t('foodPhotoCapture.verificationFailed')}</Text>
           <View style={{ width: 24 }} />

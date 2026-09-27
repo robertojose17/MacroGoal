@@ -1507,7 +1507,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         }} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+            android_material_icon_name="arrow-back"
             size={24}
             color={isDark ? colors.textDark : colors.text}
           />
@@ -1515,7 +1515,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         <View style={styles.headerTitleContainer}>
           <IconSymbol
             ios_icon_name="sparkles"
-            android_material_icon_name="auto_awesome"
+            android_material_icon_name="auto-awesome"
             size={24}
             color={colors.primary}
           />
@@ -1957,7 +1957,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               >
                 <IconSymbol
                   ios_icon_name="plus.circle.fill"
-                  android_material_icon_name="add_circle"
+                  android_material_icon_name="add-circle"
                   size={24}
                   color="#FFFFFF"
                 />
@@ -2048,7 +2048,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
             >
               <IconSymbol
                 ios_icon_name="camera.fill"
-                android_material_icon_name="photo_camera"
+                android_material_icon_name="photo-camera"
                 size={24}
                 color={colors.primary}
               />

@@ -1145,13 +1145,13 @@ export default function AIMealPlannerScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <IconSymbol
               ios_icon_name="chevron.left"
-              android_material_icon_name="arrow_back"
+              android_material_icon_name="arrow-back"
               size={24}
               color={textColor}
             />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color={TEAL} />
+            <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={20} color={TEAL} />
             <Text style={[styles.headerTitle, { color: textColor }]}>{t('aiMealPlanner.title')}</Text>
           </View>
           <View style={styles.headerRight} />
@@ -1211,10 +1211,10 @@ export default function AIMealPlannerScreen() {
           }}
           style={styles.backBtn}
         >
-          <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={textColor} />
+          <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color={TEAL} />
+          <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={20} color={TEAL} />
           <Text style={[styles.headerTitle, { color: textColor }]}>{t('aiMealPlanner.title')}</Text>
         </View>
         <View style={styles.headerRight} />
@@ -1305,7 +1305,7 @@ export default function AIMealPlannerScreen() {
             disabled={!userGoals}
             activeOpacity={0.85}
           >
-            <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto_awesome" size={20} color="#fff" />
+            <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={20} color="#fff" />
             <Text style={styles.generateBtnText}>{t('aiMealPlanner.generateMyPlan')}</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -1394,7 +1394,7 @@ export default function AIMealPlannerScreen() {
               onPress={handleOpenSaveModal}
               activeOpacity={0.85}
             >
-              <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check_circle" size={18} color="#fff" />
+              <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={18} color="#fff" />
               <Text style={styles.saveBtnText}>{t('aiMealPlanner.saveAsPlan')}</Text>
             </TouchableOpacity>
           </View>

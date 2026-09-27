@@ -1246,7 +1246,7 @@ export default function AddFoodScreen() {
             <View style={styles.chevronContainer}>
               <IconSymbol
                 ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
+                android_material_icon_name="chevron-right"
                 size={20}
                 color={isDark ? colors.textSecondaryDark : colors.textSecondary}
               />
@@ -1804,7 +1804,7 @@ export default function AddFoodScreen() {
               {context === 'my_meals_builder' && (
                 <IconSymbol
                   ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron_right"
+                  android_material_icon_name="chevron-right"
                   size={20}
                   color={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 />
@@ -1905,7 +1905,7 @@ export default function AddFoodScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+            android_material_icon_name="arrow-back"
             size={24}
             color={isDark ? colors.textDark : colors.text}
           />
@@ -2052,7 +2052,7 @@ export default function AddFoodScreen() {
                   >
                     <IconSymbol
                       ios_icon_name="sparkles"
-                      android_material_icon_name="auto_awesome"
+                      android_material_icon_name="auto-awesome"
                       size={20}
                       color="#F59E0B"
                     />
@@ -2231,7 +2231,7 @@ export default function AddFoodScreen() {
           <View style={styles.banner}>
             <IconSymbol
               ios_icon_name="checkmark.circle.fill"
-              android_material_icon_name="check_circle"
+              android_material_icon_name="check-circle"
               size={20}
               color="#FFFFFF"
             />
@@ -2254,7 +2254,7 @@ export default function AddFoodScreen() {
           <View style={styles.banner}>
             <IconSymbol
               ios_icon_name="checkmark.circle.fill"
-              android_material_icon_name="check_circle"
+              android_material_icon_name="check-circle"
               size={20}
               color="#FFFFFF"
             />

@@ -456,7 +456,7 @@ export default function CoachMemoryScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
         <View style={[styles.header, { borderBottomColor: borderColor }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={textColor} />
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: textColor }]}>{t('coachMemory.title')}</Text>
           <View style={styles.headerRight} />
@@ -479,7 +479,7 @@ export default function CoachMemoryScreen() {
           }}
           style={styles.backButton}
         >
-          <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow_back" size={24} color={textColor} />
+          <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor }]}>{t('coachMemory.title')}</Text>
         <View style={styles.headerRight} />

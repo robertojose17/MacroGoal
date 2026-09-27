@@ -459,7 +459,7 @@ export default function CopyFromPreviousScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+            android_material_icon_name="arrow-back"
             size={24}
             color={isDark ? colors.textDark : colors.text}
           />
@@ -520,7 +520,7 @@ export default function CopyFromPreviousScreen() {
                 </View>
                 <IconSymbol
                   ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron_right"
+                  android_material_icon_name="chevron-right"
                   size={20}
                   color={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 />
@@ -561,7 +561,7 @@ export default function CopyFromPreviousScreen() {
                 </Text>
                 <IconSymbol
                   ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron_right"
+                  android_material_icon_name="chevron-right"
                   size={16}
                   color={colors.primary}
                 />

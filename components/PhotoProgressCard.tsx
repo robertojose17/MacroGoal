@@ -170,7 +170,7 @@ function DatePill({ label, isDark, onPress, weightLbs }: DatePillProps) {
       <Text style={[styles.datePillText, { color: colors.primary }]}>{pillLabel}</Text>
       <IconSymbol
         ios_icon_name="chevron.down"
-        android_material_icon_name="expand_more"
+        android_material_icon_name="expand-more"
         size={11}
         color={colors.primary}
       />
@@ -432,7 +432,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           >
             <IconSymbol
               ios_icon_name="plus.circle.fill"
-              android_material_icon_name="add_circle"
+              android_material_icon_name="add-circle"
               size={26}
               color={colors.primary}
             />
@@ -498,7 +498,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
         >
           <IconSymbol
             ios_icon_name="plus.circle.fill"
-            android_material_icon_name="add_circle"
+            android_material_icon_name="add-circle"
             size={26}
             color={colors.primary}
           />
@@ -515,7 +515,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
           <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? '#252740' : '#F0F2FF' }]}>
             <IconSymbol
               ios_icon_name="camera.fill"
-              android_material_icon_name="photo_camera"
+              android_material_icon_name="photo-camera"
               size={32}
               color={colors.primary}
             />
@@ -573,7 +573,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
             >
               <IconSymbol
                 ios_icon_name="camera"
-                android_material_icon_name="photo_camera"
+                android_material_icon_name="photo-camera"
                 size={28}
                 color={subtextColor}
               />

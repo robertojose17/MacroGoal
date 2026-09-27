@@ -33,7 +33,7 @@ export default function TermsOfUseEULAScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+            android_material_icon_name="arrow-back"
             size={24}
             color={isDark ? colors.textDark : colors.text}
           />
@@ -110,7 +110,7 @@ export default function TermsOfUseEULAScreen() {
             </Text>
             <IconSymbol
               ios_icon_name="arrow.up.right"
-              android_material_icon_name="open_in_new"
+              android_material_icon_name="open-in-new"
               size={16}
               color={colors.primary}
             />

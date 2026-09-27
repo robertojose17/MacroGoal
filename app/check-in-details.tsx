@@ -155,7 +155,7 @@ export default function CheckInDetailsScreen() {
         >
           <IconSymbol
             ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
+            android_material_icon_name="arrow-back"
             size={24}
             color={isDark ? colors.textDark : colors.text}
           />
@@ -179,7 +179,7 @@ export default function CheckInDetailsScreen() {
           <View style={styles.dateContainer}>
             <IconSymbol
               ios_icon_name="calendar"
-              android_material_icon_name="calendar_today"
+              android_material_icon_name="calendar-today"
               size={24}
               color={colors.primary}
             />
