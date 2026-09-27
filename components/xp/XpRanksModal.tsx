@@ -161,7 +161,8 @@ export default function XpRanksModal({
                     )}
                     {isCompleted && (
                       <IconSymbol
-                        name="checkmark.circle.fill"
+                        ios_icon_name="checkmark.circle.fill"
+                        android_material_icon_name="check-circle"
                         size={20}
                         color={colors.success}
                       />
