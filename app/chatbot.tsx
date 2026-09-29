@@ -1528,7 +1528,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView
@@ -1536,6 +1536,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {validMessages.length > 0 ? (
             validMessages.map((message) => {
