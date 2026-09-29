@@ -1,10 +1,14 @@
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, Alert, ActivityIndicator, ScrollView, ActionSheetIOS,
   Modal, TextInput, KeyboardAvoidingView, Animated, Dimensions,
+  Pressable, Image, Platform,
 } from 'react-native';
+import { useRecipeFinder, RecipeResult } from '@/hooks/useRecipeFinder';
+import { useRecipeLimit } from '@/hooks/useRecipeLimit';
+import { ChefHat, Clock, Bookmark, BookmarkCheck, Search } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useStreakRescue } from '@/hooks/useStreakRescue';
 import StreakRescueModal from '@/components/StreakRescueModal';
@@ -120,7 +124,7 @@ export default function HomeScreen() {
   const [latestTdeeEstimate, setLatestTdeeEstimate] = useState<any>(null);
 
   // Segmented control
-  const [activeTab, setActiveTab] = useState<'tracking' | 'planning'>('tracking');
+  const [activeTab, setActiveTab] = useState<'tracking' | 'planning' | 'recipes'>('tracking');
   const slideAnim = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
 
@@ -157,6 +161,35 @@ export default function HomeScreen() {
   const [newPlanName, setNewPlanName] = useState('');
   const [newPlanSaving, setNewPlanSaving] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
+
+  // ── Recipes state ──
+  const {
+    loadDailySuggestions,
+    savedRecipes,
+    saveRecipe,
+    unsaveRecipe,
+    loadSavedRecipes,
+    searchRecipes,
+    searchResults: recipeFinderResults,
+    searchLoading: recipeFinderLoading,
+    searchError: recipeFinderError,
+    hasMore: recipeFinderHasMore,
+    isLoadingMore: recipeFinderLoadingMore,
+    loadMore: recipeFinderLoadMore,
+    browseResults,
+    browseLoading,
+    browseLoadingMore,
+    browseHasMore,
+    initBrowse,
+    loadMoreBrowse,
+  } = useRecipeFinder();
+  const { canOpen, recordOpen } = useRecipeLimit();
+  const [recipeQuery, setRecipeQuery] = useState('');
+  const recipesInitialized = useRef(false);
+  const [trendingRecipes, setTrendingRecipes] = useState<RecipeResult[]>([]);
+  const [popularLoading, setPopularLoading] = useState(false);
+  const [popularError, setPopularError] = useState<string | null>(null);
+  const recipeDebounceRef2 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Load tracking data ──
   const loadData = useCallback(async () => {
@@ -534,9 +567,13 @@ export default function HomeScreen() {
     return s >= t;
   };
 
-  const handleTabPress = (tab: 'tracking' | 'planning') => {
+  const handleTabPress = (tab: 'tracking' | 'planning' | 'recipes') => {
     console.log('[Home iOS] Segmented control pressed:', tab);
     setActiveTab(tab);
+    if (tab === 'recipes') {
+      initRecipesFood();
+      return;
+    }
     Animated.spring(slideAnim, {
       toValue: tab === 'tracking' ? 0 : -screenWidth,
       damping: 20,
@@ -545,6 +582,129 @@ export default function HomeScreen() {
       useNativeDriver: true,
     }).start();
   };
+
+  // ── Recipe handlers ──
+  const normalizeRecipe = useCallback((r: any): RecipeResult => ({
+    id: r.id,
+    name: r.name ?? r.title ?? 'Recipe',
+    description: r.description ?? null,
+    image_url: r.image_url ?? null,
+    source_name: r.source_name ?? null,
+    source_url: r.source_url ?? null,
+    prep_time_minutes: r.prep_time_minutes ?? null,
+    servings: r.servings ?? null,
+    calories_per_serving: Number(r.calories_per_serving) || 0,
+    protein_per_serving: Number(r.protein_per_serving) || 0,
+    carbs_per_serving: Number(r.carbs_per_serving) || 0,
+    fat_per_serving: Number(r.fat_per_serving) || 0,
+    fiber_per_serving: Number(r.fiber_per_serving) || 0,
+    ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+    instructions: Array.isArray(r.instructions) ? r.instructions : [],
+    reviews: Array.isArray(r.reviews) ? r.reviews : [],
+    tags: Array.isArray(r.tags) ? r.tags : [],
+    click_count: r.click_count ?? 0,
+    is_saved: false,
+  }), []);
+
+  const loadPopularRecipesFood = useCallback(async () => {
+    setPopularLoading(true);
+    setPopularError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('popular-recipes', {
+        method: 'POST',
+        body: { action: 'get_popular' },
+      });
+      if (error) throw new Error(error.message);
+      setTrendingRecipes((data?.trending ?? []).map(normalizeRecipe));
+    } catch (e: unknown) {
+      setPopularError(e instanceof Error ? e.message : 'Failed to load trending recipes');
+    } finally {
+      setPopularLoading(false);
+    }
+  }, [normalizeRecipe]);
+
+  const initRecipesFood = useCallback(async () => {
+    if (recipesInitialized.current) return;
+    recipesInitialized.current = true;
+    console.log('[Home iOS] initRecipesFood — loading saved recipes, trending, and browse feed');
+    await Promise.all([loadSavedRecipes(), loadPopularRecipesFood(), initBrowse()]);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let goals = { calories: 2000, protein: 150, carbs: 200, fat: 65, remainingCalories: 2000 };
+      if (user) {
+        const [goalRes, mealsRes] = await Promise.all([
+          supabase.from('goals').select('daily_calories, protein_g, carbs_g, fat_g').eq('user_id', user.id).eq('is_active', true).maybeSingle(),
+          supabase.from('meals').select('meal_items(calories)').eq('user_id', user.id).eq('date', new Date().toISOString().split('T')[0]),
+        ]);
+        const g = goalRes.data;
+        if (g) {
+          let consumed = 0;
+          (mealsRes.data || []).forEach((m: any) => {
+            (m.meal_items || []).forEach((item: any) => { consumed += Number(item.calories) || 0; });
+          });
+          goals = {
+            calories: Number(g.daily_calories) || 2000,
+            protein: Number(g.protein_g) || 150,
+            carbs: Number(g.carbs_g) || 200,
+            fat: Number(g.fat_g) || 65,
+            remainingCalories: Math.max(0, (Number(g.daily_calories) || 2000) - consumed),
+          };
+        }
+      }
+      await loadDailySuggestions(goals);
+    } catch (e) {
+      console.warn('[Home iOS] initRecipesFood error:', e);
+    }
+  }, [loadSavedRecipes, loadPopularRecipesFood, initBrowse, loadDailySuggestions]);
+
+  const handleRecipeSearchChange = useCallback((text: string) => {
+    setRecipeQuery(text);
+    if (recipeDebounceRef2.current) clearTimeout(recipeDebounceRef2.current);
+    if (!text.trim()) return;
+    recipeDebounceRef2.current = setTimeout(() => {
+      console.log('[Home iOS] Recipe search — query:', text.trim());
+      searchRecipes(text.trim());
+    }, 500);
+  }, [searchRecipes]);
+
+  const handleRecipeSaveFood = useCallback(async (recipe: RecipeResult) => {
+    console.log('[Home iOS] Recipe save toggled — id:', recipe.id, 'saved:', recipe.is_saved);
+    if (recipe.is_saved) {
+      await unsaveRecipe(recipe.id);
+    } else {
+      await saveRecipe(recipe);
+    }
+  }, [saveRecipe, unsaveRecipe]);
+
+  const handleRecipePressFood = useCallback(async (recipe: RecipeResult) => {
+    console.log('[Home iOS] Recipe card pressed — id:', recipe.id, 'name:', recipe.name);
+    const allowed = await canOpen();
+    if (!allowed) {
+      console.log('[Home iOS] Recipe daily limit reached — redirecting to subscription');
+      router.push('/subscription');
+      return;
+    }
+    await recordOpen();
+    supabase.functions.invoke('popular-recipes', {
+      body: { action: 'click', recipe_id: recipe.id, recipe_name: recipe.name },
+    }).catch(() => {});
+    const normalizeInstruction = (s: any): string => {
+      if (typeof s === 'string') return s;
+      if (s && typeof s === 'object') return String(s.text ?? s.description ?? s.instruction ?? s.step_text ?? JSON.stringify(s));
+      return String(s ?? '');
+    };
+    const normalized = {
+      ...recipe,
+      name: recipe.name || (recipe as any).title || 'Recipe',
+      image_url: recipe.image_url || null,
+      tags: Array.isArray(recipe.tags) ? recipe.tags : [],
+      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+      instructions: Array.isArray(recipe.instructions) ? recipe.instructions.map(normalizeInstruction) : [],
+      reviews: Array.isArray(recipe.reviews) ? recipe.reviews : [],
+    };
+    console.log('[Home iOS] Navigating to recipe detail — name:', normalized.name);
+    router.push({ pathname: '/recipe-finder-detail', params: { recipe: JSON.stringify(normalized) } });
+  }, [router, canOpen, recordOpen]);
 
   // ── Planning helpers ──
   const currentWeekPlan = weekPlans[weekOffset] ?? { Mon: null, Tue: null, Wed: null, Thu: null, Fri: null, Sat: null, Sun: null };
@@ -1610,6 +1770,143 @@ export default function HomeScreen() {
     );
   };
 
+  const renderRecipesContent = () => {
+    const isSearchActive = recipeQuery.trim().length > 0;
+    const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+    const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+    const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+    return (
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={[recipeTabStyles.searchBar, { backgroundColor: cardBg, borderColor }]}>
+          <Search size={18} color={subColor} />
+          <TextInput
+            style={[recipeTabStyles.searchInput, { color: isDark ? colors.textDark : colors.text }]}
+            placeholder="Search recipes..."
+            placeholderTextColor={subColor}
+            value={recipeQuery}
+            onChangeText={handleRecipeSearchChange}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {recipeFinderLoading && <ActivityIndicator size="small" color={colors.primary} />}
+          {recipeQuery.length > 0 && !recipeFinderLoading && (
+            <Pressable onPress={() => { setRecipeQuery(''); if (recipeDebounceRef2.current) clearTimeout(recipeDebounceRef2.current); }}>
+              <Text style={{ color: subColor, fontSize: 18, lineHeight: 20 }}>×</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {isSearchActive ? (
+          recipeFinderLoading ? (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 120 }}>
+              {[0, 1, 2].map((i) => <RecipeCardSkeleton key={i} isDark={isDark} />)}
+            </ScrollView>
+          ) : recipeFinderError ? (
+            <View style={recipeTabStyles.emptyState}>
+              <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>Search failed</Text>
+              <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>{recipeFinderError}</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={recipeFinderResults}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={{ marginBottom: spacing.sm }}>
+                  <RecipeCardItem recipe={item} isDark={isDark} onPress={() => handleRecipePressFood(item)} onSave={() => handleRecipeSaveFood(item)} />
+                </View>
+              )}
+              contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 120 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              onEndReached={() => { if (recipeFinderHasMore && !recipeFinderLoadingMore) recipeFinderLoadMore(); }}
+              onEndReachedThreshold={0.3}
+              ListEmptyComponent={
+                <View style={recipeTabStyles.emptyState}>
+                  <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>No recipes found</Text>
+                  <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>Try a different search term</Text>
+                </View>
+              }
+              ListFooterComponent={
+                recipeFinderLoadingMore ? (
+                  <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+                ) : !recipeFinderHasMore && recipeFinderResults.length > 0 ? (
+                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>No more recipes</Text>
+                ) : null
+              }
+            />
+          )
+        ) : (
+          <FlatList
+            data={browseResults}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 120 }}
+            onEndReached={() => { if (browseHasMore && !browseLoadingMore) loadMoreBrowse(); }}
+            onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              <>
+                <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.sm }]}>
+                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>❤️ Saved Recipes</Text>
+                </View>
+                {savedRecipes.length === 0 ? (
+                  <View style={[recipeTabStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
+                    <Bookmark size={24} color={subColor} />
+                    <Text style={[recipeTabStyles.emptyHorizontalText, { color: subColor }]}>Save recipes you love to find them here</Text>
+                  </View>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={recipeTabStyles.horizontalList}>
+                    {savedRecipes.map((recipe) => (
+                      <RecipeCardItem key={recipe.id} recipe={recipe} isDark={isDark} horizontal onPress={() => handleRecipePressFood(recipe)} onSave={() => handleRecipeSaveFood(recipe)} />
+                    ))}
+                  </ScrollView>
+                )}
+                <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.lg }]}>
+                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>🔥 Trending Now</Text>
+                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>Most clicked in the last 48h</Text>
+                </View>
+                {popularLoading ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={recipeTabStyles.horizontalList}>
+                    {[0, 1, 2, 3].map((i) => <RecipeCardSkeleton key={i} isDark={isDark} horizontal />)}
+                  </ScrollView>
+                ) : trendingRecipes.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={recipeTabStyles.horizontalList}>
+                    {trendingRecipes.map((recipe) => (
+                      <RecipeCardItem key={recipe.id} recipe={recipe} isDark={isDark} horizontal onPress={() => handleRecipePressFood(recipe)} onSave={() => handleRecipeSaveFood(recipe)} />
+                    ))}
+                  </ScrollView>
+                ) : null}
+                <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.md }]}>
+                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>✨ Discover</Text>
+                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>Endless fitness recipes, just for you</Text>
+                </View>
+                {browseLoading && (
+                  <View style={{ paddingHorizontal: spacing.md }}>
+                    {[0, 1, 2].map((i) => <RecipeCardSkeleton key={i} isDark={isDark} />)}
+                  </View>
+                )}
+              </>
+            }
+            renderItem={({ item }) => (
+              <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.sm }}>
+                <RecipeCardItem recipe={item} isDark={isDark} onPress={() => handleRecipePressFood(item)} onSave={() => handleRecipeSaveFood(item)} />
+              </View>
+            )}
+            ListFooterComponent={
+              browseLoadingMore ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+              ) : !browseHasMore && browseResults.length > 0 ? (
+                <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>No more recipes</Text>
+              ) : null
+            }
+          />
+        )}
+      </KeyboardAvoidingView>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       {/* Top header: always-visible segmented control */}
@@ -1631,6 +1928,15 @@ export default function HomeScreen() {
           >
             <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
               {t('home.planning')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentButton, activeTab === 'recipes' && { backgroundColor: colors.primary }]}
+            onPress={() => handleTabPress('recipes')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.segmentButtonText, { color: activeTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              Recipes
             </Text>
           </TouchableOpacity>
         </View>
@@ -1681,34 +1987,38 @@ export default function HomeScreen() {
       )}
 
       <View style={{ flex: 1, overflow: 'hidden' }}>
-        <Animated.View
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            width: screenWidth * 2,
-            transform: [{ translateX: slideAnim }],
-          }}
-        >
-          {/* Tracking panel */}
-          <ScrollView
-            style={{ width: screenWidth }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            contentContainerStyle={styles.scrollContent}
+        {activeTab === 'recipes' ? (
+          renderRecipesContent()
+        ) : (
+          <Animated.View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              width: screenWidth * 2,
+              transform: [{ translateX: slideAnim }],
+            }}
           >
-            {renderTrackingContent()}
-            <View style={styles.bottomSpacer} />
-          </ScrollView>
-          {/* Planning panel */}
-          <ScrollView
-            style={{ width: screenWidth }}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {renderPlanningContent()}
-            <View style={styles.bottomSpacer} />
-          </ScrollView>
-        </Animated.View>
+            {/* Tracking panel */}
+            <ScrollView
+              style={{ width: screenWidth }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {renderTrackingContent()}
+              <View style={styles.bottomSpacer} />
+            </ScrollView>
+            {/* Planning panel */}
+            <ScrollView
+              style={{ width: screenWidth }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {renderPlanningContent()}
+              <View style={styles.bottomSpacer} />
+            </ScrollView>
+          </Animated.View>
+        )}
       </View>
 
       {/* Streak Rescue Modal */}
@@ -1814,6 +2124,177 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+// ─── Recipe helper components ─────────────────────────────────────────────────
+
+const RECIPE_TAG_COLORS: Record<string, string> = {
+  'high-protein': '#10B981',
+  'low-carb': '#14B8A6',
+  'low-calorie': '#8B5CF6',
+  'quick': '#F59E0B',
+  'vegetarian': '#10B981',
+  'vegan': '#059669',
+  'keto': '#F59E0B',
+  'high-fiber': '#6366F1',
+  'meal-prep': '#EC4899',
+};
+
+function RecipeCardSkeleton({ isDark, horizontal }: { isDark: boolean; horizontal?: boolean }) {
+  const opacity = React.useRef(new Animated.Value(0.3)).current;
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  const shimmer = isDark ? '#3A3C52' : '#E5E7EB';
+  const bg = isDark ? colors.cardDark : '#FFFFFF';
+  return (
+    <Animated.View style={[recipeTabStyles.recipeCard, { backgroundColor: bg, opacity, width: horizontal ? 220 : undefined }]}>
+      <View style={[recipeTabStyles.recipeCardImage, { backgroundColor: shimmer }]} />
+      <View style={{ padding: 10, gap: 6 }}>
+        <View style={{ height: 14, borderRadius: 4, backgroundColor: shimmer }} />
+        <View style={{ height: 10, borderRadius: 4, backgroundColor: shimmer, width: '70%' }} />
+      </View>
+    </Animated.View>
+  );
+}
+
+function RecipeCardItem({
+  recipe,
+  isDark,
+  horizontal,
+  onPress,
+  onSave,
+}: {
+  recipe: RecipeResult;
+  isDark: boolean;
+  horizontal?: boolean;
+  onPress: () => void;
+  onSave: () => void;
+}) {
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const firstTag = recipe.tags[0] || null;
+  const tagColor = firstTag ? (RECIPE_TAG_COLORS[firstTag] || colors.primary) : null;
+  const prepText = recipe.prep_time_minutes != null ? `${recipe.prep_time_minutes} min` : null;
+  const calText = `${Math.round(recipe.calories_per_serving)} cal`;
+  const imageSource = recipe.image_url ? { uri: recipe.image_url } : null;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[recipeTabStyles.recipeCard, { backgroundColor: cardBg, borderColor, width: horizontal ? 220 : undefined }]}
+      accessibilityRole="button"
+    >
+      {imageSource ? (
+        <Image source={imageSource} style={recipeTabStyles.recipeCardImage} resizeMode="cover" />
+      ) : (
+        <View style={[recipeTabStyles.recipeCardImage, recipeTabStyles.recipeCardImagePlaceholder]}>
+          <ChefHat size={28} color="#666" />
+        </View>
+      )}
+      {firstTag && tagColor && (
+        <View style={[recipeTabStyles.tagBadge, { backgroundColor: tagColor }]}>
+          <Text style={recipeTabStyles.tagBadgeText}>{firstTag.replace('-', ' ')}</Text>
+        </View>
+      )}
+      <Pressable
+        onPress={(e) => { e.stopPropagation(); onSave(); }}
+        style={recipeTabStyles.saveBtn}
+        accessibilityRole="button"
+      >
+        {recipe.is_saved
+          ? <BookmarkCheck size={16} color={colors.primary} fill={colors.primary} />
+          : <Bookmark size={16} color="#fff" />}
+      </Pressable>
+      <View style={recipeTabStyles.recipeCardInfo}>
+        <Text style={[recipeTabStyles.recipeCardName, { color: textColor }]} numberOfLines={2}>{recipe.name}</Text>
+        <View style={recipeTabStyles.recipeCardMeta}>
+          <Text style={[recipeTabStyles.recipeCardCal, { color: colors.calories }]}>{calText}</Text>
+          {prepText && (
+            <>
+              <Text style={[recipeTabStyles.recipeCardDot, { color: subColor }]}>·</Text>
+              <Clock size={11} color={subColor} />
+              <Text style={[recipeTabStyles.recipeCardSource, { color: subColor }]}>{prepText}</Text>
+            </>
+          )}
+        </View>
+        <View style={recipeTabStyles.recipeCardMacros}>
+          <Text style={[recipeTabStyles.recipeCardMacroVal, { color: colors.protein }]}>{Math.round(recipe.protein_per_serving)}g P</Text>
+          <Text style={[recipeTabStyles.recipeCardMacroSep, { color: subColor }]}>·</Text>
+          <Text style={[recipeTabStyles.recipeCardMacroVal, { color: colors.carbs }]}>{Math.round(recipe.carbs_per_serving)}g C</Text>
+          <Text style={[recipeTabStyles.recipeCardMacroSep, { color: subColor }]}>·</Text>
+          <Text style={[recipeTabStyles.recipeCardMacroVal, { color: colors.fats }]}>{Math.round(recipe.fat_per_serving)}g F</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+const recipeTabStyles = StyleSheet.create({
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 15 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingTop: 60 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  emptySubtitle: { fontSize: 14, lineHeight: 20, textAlign: 'center', maxWidth: 280 },
+  sectionHeader: { paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+  sectionTitle: { fontWeight: '700' },
+  sectionSubtitle: { fontSize: 13, marginTop: 2 },
+  horizontalList: { paddingHorizontal: spacing.md, gap: spacing.sm, paddingBottom: spacing.sm },
+  emptyHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+  },
+  emptyHorizontalText: { fontSize: 13, flex: 1 },
+  recipeCard: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+    elevation: 2,
+    marginBottom: spacing.sm,
+  },
+  recipeCardImage: { width: '100%', height: 140 },
+  recipeCardImagePlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6' },
+  tagBadge: {
+    position: 'absolute', top: 8, left: 8,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
+  },
+  tagBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
+  saveBtn: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  recipeCardInfo: { padding: 10, gap: 4 },
+  recipeCardName: { fontSize: 14, fontWeight: '600', lineHeight: 18 },
+  recipeCardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  recipeCardCal: { fontSize: 12, fontWeight: '600' },
+  recipeCardDot: { fontSize: 12 },
+  recipeCardSource: { fontSize: 11 },
+  recipeCardMacros: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  recipeCardMacroVal: { fontSize: 11, fontWeight: '600' },
+  recipeCardMacroSep: { fontSize: 11 },
+});
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
