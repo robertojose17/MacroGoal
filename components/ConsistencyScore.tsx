@@ -523,7 +523,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
           {!initialExpanded && (
             <IconSymbol
               ios_icon_name={showDetails ? 'chevron.up' : 'chevron.down'}
-              android_material_icon_name={showDetails ? 'expand_less' : 'expand_more'}
+              android_material_icon_name={showDetails ? 'expand-less' : 'expand-more'}
               size={24}
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />

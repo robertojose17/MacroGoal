@@ -1756,7 +1756,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                       >
                         <IconSymbol
                           ios_icon_name={ingredient.included ? 'checkmark.circle.fill' : 'circle'}
-                          android_material_icon_name={ingredient.included ? 'check_circle' : 'radio_button_unchecked'}
+                          android_material_icon_name={ingredient.included ? 'check-circle' : 'radio-button-unchecked'}
                           size={24}
                           color={
                             ingredient.included
@@ -1903,7 +1903,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                         >
                           <IconSymbol
                             ios_icon_name={ingredient.scale_verified ? 'checkmark.seal.fill' : 'checkmark.seal'}
-                            android_material_icon_name={ingredient.scale_verified ? 'verified' : 'verified_outlined'}
+                            android_material_icon_name={ingredient.scale_verified ? 'verified' : 'verified-user'}
                             size={16}
                             color={scaleVerifiedColor}
                           />

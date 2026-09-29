@@ -353,7 +353,7 @@ export default function MyFoodsCreateScreen() {
                   </Text>
                   <IconSymbol
                     ios_icon_name={showUnitDropdown ? 'chevron.up' : 'chevron.down'}
-                    android_material_icon_name={showUnitDropdown ? 'expand_less' : 'expand_more'}
+                    android_material_icon_name={showUnitDropdown ? 'expand-less' : 'expand-more'}
                     size={16}
                     color={isDark ? colors.textDark : colors.text}
                   />

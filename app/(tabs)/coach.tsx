@@ -39,15 +39,15 @@ type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: bo
 
 const QUICK_ACTION_CARDS = [
   { iosIcon: 'fork.knife', androidIcon: 'restaurant', titleKey: 'coach.prompt_1_title', subtitleKey: 'coach.prompt_1_sub', message: "I'm starving, what can I eat right now?" },
-  { iosIcon: 'flame.fill', androidIcon: 'local_fire_department', titleKey: 'coach.prompt_2_title', subtitleKey: 'coach.prompt_2_sub', message: "I messed up today, what do I do now?" },
-  { iosIcon: 'cart.fill', androidIcon: 'shopping_cart', titleKey: 'coach.prompt_3_title', subtitleKey: 'coach.prompt_3_sub', message: "I'm eating out tonight, how do I stay on track?" },
+  { iosIcon: 'flame.fill', androidIcon: 'local-fire-department', titleKey: 'coach.prompt_2_title', subtitleKey: 'coach.prompt_2_sub', message: "I messed up today, what do I do now?" },
+  { iosIcon: 'cart.fill', androidIcon: 'shopping-cart', titleKey: 'coach.prompt_3_title', subtitleKey: 'coach.prompt_3_sub', message: "I'm eating out tonight, how do I stay on track?" },
   { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', titleKey: 'coach.prompt_4_title', subtitleKey: 'coach.prompt_4_sub', message: "I'm not seeing results, is this even working?" },
   { iosIcon: 'moon.fill', androidIcon: 'nightlight', titleKey: 'coach.prompt_5_title', subtitleKey: 'coach.prompt_5_sub', message: "I can't stop eating, I keep snacking at night" },
   { iosIcon: 'bolt.fill', androidIcon: 'bolt', titleKey: 'coach.prompt_6_title', subtitleKey: 'coach.prompt_6_sub', message: "Give me something quick to eat, I only have 10 minutes" },
 ];
 
 const CRAVING_CHIPS = [
-  { label: "I'm starving", iosIcon: 'flame.fill', androidIcon: 'local_fire_department', message: "I'm starving, what can I eat right now?" },
+  { label: "I'm starving", iosIcon: 'flame.fill', androidIcon: 'local-fire-department', message: "I'm starving, what can I eat right now?" },
   { label: "I need something sweet", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I need something sweet, what are my options?" },
   { label: "I want pizza", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "I want pizza, can I fit it in my macros?" },
   { label: "I'm eating out", iosIcon: 'building.2.fill', androidIcon: 'store', message: "I'm eating out, what should I order?" },
