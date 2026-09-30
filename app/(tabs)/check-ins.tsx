@@ -1,6 +1,7 @@
 /**
- * Community Tab — Fitness Instagram
- * Sub-tabs: Discover | People | Members
+ * Community Tab — Feed + People (2-tab redesign)
+ * Feed: Everyone (discover) / Members (founder posts, premium-gated)
+ * People: Following/Followers + search
  */
 
 import React, {
@@ -25,7 +26,6 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import {
-  Users,
   Search,
   SquarePen,
   Lock,
@@ -33,42 +33,46 @@ import {
   Heart,
   Flame,
   Zap,
-  ThumbsUp,
   MessageCircle,
-  ChevronDown,
-  ChevronUp,
   ArrowUp,
+  Users,
   MessageSquare,
 } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import {
+  fetchFeed,
   fetchFollowing,
   fetchFollowers,
   searchUsers,
+  toggleLike,
 } from '@/utils/socialApi';
-import type { SearchUser } from '@/utils/socialApi';
+import type { SocialPost, SearchUser } from '@/utils/socialApi';
+import SocialPostCard from '@/components/social/SocialPostCard';
 import SearchUserRow from '@/components/social/SearchUserRow';
+import Avatar from '@/components/social/Avatar';
 import CreatePostSheet from '@/components/social/CreatePostSheet';
 import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 
-type SubTab = 'discover' | 'people' | 'members';
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type MainTab = 'feed' | 'people';
+type FeedToggle = 'everyone' | 'members';
 type PeopleSection = 'following' | 'followers';
-type MembersCategory = 'general' | 'ask_founder' | 'feature_requests' | 'wins';
+type MembersCategory = 'all' | 'general' | 'ask_founder';
 
 interface FounderPost {
   id: string;
   author_id: string;
   content: string;
-  image_url: string | null;
   category: MembersCategory;
   created_at: string;
-  updated_at: string;
-  reaction_count?: number;
-  comment_count?: number;
-  user_reaction?: string | null;
+  reaction_count: number;
+  comment_count: number;
+  user_reaction: string | null;
   comments?: FounderComment[];
+  commentsLoaded?: boolean;
 }
 
 interface FounderComment {
@@ -77,80 +81,91 @@ interface FounderComment {
   author_id: string;
   content: string;
   created_at: string;
-  author_username?: string;
-  author_avatar?: string | null;
+  author_username: string;
+  author_avatar: string | null;
 }
 
-// ─── Relative timestamp ───────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs}h`;
   const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  if (days < 7) return `${days}d`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const REACTION_EMOJIS: { key: string; Icon: React.ComponentType<{ size: number; color: string }> }[] = [
+const REACTION_ICONS: { key: string; Icon: React.ComponentType<{ size: number; color: string }> }[] = [
   { key: 'heart', Icon: Heart },
   { key: 'flame', Icon: Flame },
   { key: 'zap', Icon: Zap },
-  { key: 'thumbsup', Icon: ThumbsUp },
 ];
 
 const CATEGORY_LABELS: Record<MembersCategory, string> = {
+  all: 'All',
   general: 'General',
-  ask_founder: 'Ask the Founder',
-  feature_requests: 'Feature Requests',
-  wins: 'Wins',
+  ask_founder: 'Ask Founder',
 };
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+const FEED_PAGE_SIZE = 20;
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export default function CommunityScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { isPremium } = usePremium();
 
-  const [activeTab, setActiveTab] = useState<SubTab>('discover');
+  // ── Tab state
+  const [mainTab, setMainTab] = useState<MainTab>('feed');
+  const [feedToggle, setFeedToggle] = useState<FeedToggle>('everyone');
   const [peopleSection, setPeopleSection] = useState<PeopleSection>('following');
 
+  // ── UI
   const [showCreatePost, setShowCreatePost] = useState(false);
 
-  // Discover state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
-  const [discoverUsers, setDiscoverUsers] = useState<SearchUser[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [discoverLoading, setDiscoverLoading] = useState(false);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Feed state
+  const [feedPosts, setFeedPosts] = useState<SocialPost[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [feedRefreshing, setFeedRefreshing] = useState(false);
+  const [feedOffset, setFeedOffset] = useState(0);
+  const [feedHasMore, setFeedHasMore] = useState(true);
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false);
 
-  // People state
-  const [following, setFollowing] = useState<SearchUser[]>([]);
-  const [followers, setFollowers] = useState<SearchUser[]>([]);
-  const [peopleLoading, setPeopleLoading] = useState(false);
-  const [peopleRefreshing, setPeopleRefreshing] = useState(false);
-
-  // Members state
+  // ── Members state
   const [founderPosts, setFounderPosts] = useState<FounderPost[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersRefreshing, setMembersRefreshing] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<MembersCategory>('general');
-  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<MembersCategory>('all');
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // ── People state
+  const [following, setFollowing] = useState<SearchUser[]>([]);
+  const [followers, setFollowers] = useState<SearchUser[]>([]);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [peopleRefreshing, setPeopleRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Colors
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const dividerColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
 
-  // ─── Init current user ───────────────────────────────────────────────────────
+  // ─── Init current user ──────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
@@ -167,42 +182,80 @@ export default function CommunityScreen() {
     });
   }, []);
 
-  // ─── Load discover ───────────────────────────────────────────────────────────
-  const loadDiscover = useCallback(async () => {
-    console.log('[Community] loadDiscover');
-    setDiscoverLoading(true);
+  // ─── Load feed ──────────────────────────────────────────────────────────────
+  const loadFeed = useCallback(async (isRefresh = false) => {
+    console.log('[Community] loadFeed — isRefresh:', isRefresh);
+    if (isRefresh) {
+      setFeedRefreshing(true);
+      setFeedOffset(0);
+      setFeedHasMore(true);
+    } else {
+      setFeedLoading(true);
+    }
     try {
-      const results = await searchUsers('');
-      setDiscoverUsers(results);
+      const posts = await fetchFeed('discover', FEED_PAGE_SIZE, 0);
+      setFeedPosts(posts);
+      setFeedOffset(posts.length);
+      setFeedHasMore(posts.length === FEED_PAGE_SIZE);
+      console.log('[Community] loadFeed — loaded', posts.length, 'posts');
     } catch (e) {
-      console.error('[Community] loadDiscover error:', e);
+      console.error('[Community] loadFeed error:', e);
     } finally {
-      setDiscoverLoading(false);
+      setFeedLoading(false);
+      setFeedRefreshing(false);
     }
   }, []);
 
-  // ─── Load people ─────────────────────────────────────────────────────────────
-  const loadPeople = useCallback(async (isRefresh = false) => {
-    console.log('[Community] loadPeople — isRefresh:', isRefresh);
-    if (isRefresh) setPeopleRefreshing(true);
-    else setPeopleLoading(true);
+  const loadMoreFeed = useCallback(async () => {
+    if (feedLoadingMore || !feedHasMore) return;
+    console.log('[Community] loadMoreFeed — offset:', feedOffset);
+    setFeedLoadingMore(true);
     try {
-      const [followingData, followersData] = await Promise.all([
-        fetchFollowing(),
-        fetchFollowers(),
-      ]);
-      setFollowing(followingData);
-      setFollowers(followersData);
-      console.log('[Community] loadPeople — following:', followingData.length, 'followers:', followersData.length);
+      const posts = await fetchFeed('discover', FEED_PAGE_SIZE, feedOffset);
+      setFeedPosts((prev) => [...prev, ...posts]);
+      setFeedOffset((prev) => prev + posts.length);
+      setFeedHasMore(posts.length === FEED_PAGE_SIZE);
     } catch (e) {
-      console.error('[Community] loadPeople error:', e);
+      console.error('[Community] loadMoreFeed error:', e);
     } finally {
-      setPeopleLoading(false);
-      setPeopleRefreshing(false);
+      setFeedLoadingMore(false);
+    }
+  }, [feedLoadingMore, feedHasMore, feedOffset]);
+
+  // ─── Handle like ────────────────────────────────────────────────────────────
+  const handleLike = useCallback(async (postId: string) => {
+    console.log('[Community] handleLike — post_id:', postId);
+    // Optimistic update
+    setFeedPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+        const liked = !p.liked_by_me;
+        return {
+          ...p,
+          liked_by_me: liked,
+          likes_count: liked ? p.likes_count + 1 : Math.max(0, p.likes_count - 1),
+        };
+      }),
+    );
+    try {
+      await toggleLike(postId);
+    } catch (e) {
+      console.error('[Community] handleLike error — reverting:', e);
+      setFeedPosts((prev) =>
+        prev.map((p) => {
+          if (p.id !== postId) return p;
+          const liked = !p.liked_by_me;
+          return {
+            ...p,
+            liked_by_me: liked,
+            likes_count: liked ? p.likes_count + 1 : Math.max(0, p.likes_count - 1),
+          };
+        }),
+      );
     }
   }, []);
 
-  // ─── Load founder posts ──────────────────────────────────────────────────────
+  // ─── Load founder posts ─────────────────────────────────────────────────────
   const loadFounderPosts = useCallback(async (
     category: MembersCategory = activeCategory,
     isRefresh = false,
@@ -211,12 +264,17 @@ export default function CommunityScreen() {
     if (isRefresh) setMembersRefreshing(true);
     else setMembersLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('founder_posts')
-        .select(`*, founder_post_reactions(count), founder_post_comments(count)`)
-        .eq('category', category)
+        .select('*, founder_post_reactions(count), founder_post_comments(count)')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(30);
+
+      if (category !== 'all') {
+        query = query.eq('category', category);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('[Members] loadFounderPosts error:', error);
@@ -243,10 +301,8 @@ export default function CommunityScreen() {
             id: post.id as string,
             author_id: post.author_id as string,
             content: post.content as string,
-            image_url: (post.image_url as string | null) ?? null,
-            category: post.category as MembersCategory,
+            category: (post.category as MembersCategory) ?? 'general',
             created_at: post.created_at as string,
-            updated_at: post.updated_at as string,
             reaction_count: reactionsArr?.[0]?.count ?? 0,
             comment_count: commentsArr?.[0]?.count ?? 0,
             user_reaction: userReaction,
@@ -264,13 +320,13 @@ export default function CommunityScreen() {
     }
   }, [activeCategory, currentUserId]);
 
-  // ─── Load post comments ──────────────────────────────────────────────────────
+  // ─── Load post comments ─────────────────────────────────────────────────────
   const loadPostComments = useCallback(async (postId: string) => {
     console.log('[Members] loadPostComments — postId:', postId);
     try {
       const { data, error } = await supabase
         .from('founder_post_comments')
-        .select(`*, users(username, avatar_url)`)
+        .select('*, users(username, avatar_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
@@ -293,7 +349,7 @@ export default function CommunityScreen() {
       });
 
       setFounderPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, comments } : p)),
+        prev.map((p) => (p.id === postId ? { ...p, comments, commentsLoaded: true } : p)),
       );
     } catch (e) {
       console.error('[Members] loadPostComments exception:', e);
@@ -310,7 +366,6 @@ export default function CommunityScreen() {
 
     const isSameReaction = post.user_reaction === emoji;
 
-    // Optimistic update
     setFounderPosts((prev) =>
       prev.map((p) => {
         if (p.id !== postId) return p;
@@ -335,7 +390,6 @@ export default function CommunityScreen() {
           .eq('post_id', postId)
           .eq('user_id', currentUserId);
       } else {
-        // Remove old reaction if any, then insert new
         if (post.user_reaction) {
           await supabase
             .from('founder_post_reactions')
@@ -351,16 +405,15 @@ export default function CommunityScreen() {
       }
     } catch (e) {
       console.error('[Members] handleReact error:', e);
-      // Revert optimistic update on error
       loadFounderPosts(activeCategory, false);
     }
   }, [currentUserId, founderPosts, activeCategory, loadFounderPosts]);
 
-  // ─── Handle submit comment ───────────────────────────────────────────────────
+  // ─── Handle submit comment ──────────────────────────────────────────────────
   const handleSubmitComment = useCallback(async (postId: string) => {
     const text = (commentInputs[postId] ?? '').trim();
     if (!text || !currentUserId) return;
-    console.log('[Members] handleSubmitComment — postId:', postId, 'text:', text);
+    console.log('[Members] handleSubmitComment — postId:', postId, 'text length:', text.length);
 
     setSubmittingComment(postId);
     try {
@@ -376,7 +429,6 @@ export default function CommunityScreen() {
       }
 
       setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
-      // Update comment count optimistically
       setFounderPosts((prev) =>
         prev.map((p) =>
           p.id === postId ? { ...p, comment_count: (p.comment_count ?? 0) + 1 } : p,
@@ -390,28 +442,26 @@ export default function CommunityScreen() {
     }
   }, [commentInputs, currentUserId, loadPostComments]);
 
-  // ─── Tab switch ──────────────────────────────────────────────────────────────
-  const handleTabSwitch = useCallback((tab: SubTab) => {
-    console.log('[Community] Tab switched to:', tab);
-    setActiveTab(tab);
-    if (tab === 'discover' && discoverUsers.length === 0) {
-      loadDiscover();
+  // ─── Load people ─────────────────────────────────────────────────────────────
+  const loadPeople = useCallback(async (isRefresh = false) => {
+    console.log('[Community] loadPeople — isRefresh:', isRefresh);
+    if (isRefresh) setPeopleRefreshing(true);
+    else setPeopleLoading(true);
+    try {
+      const [followingData, followersData] = await Promise.all([
+        fetchFollowing(),
+        fetchFollowers(),
+      ]);
+      setFollowing(followingData);
+      setFollowers(followersData);
+      console.log('[Community] loadPeople — following:', followingData.length, 'followers:', followersData.length);
+    } catch (e) {
+      console.error('[Community] loadPeople error:', e);
+    } finally {
+      setPeopleLoading(false);
+      setPeopleRefreshing(false);
     }
-    if (tab === 'people' && following.length === 0 && followers.length === 0) {
-      loadPeople();
-    }
-    if (tab === 'members' && founderPosts.length === 0) {
-      loadFounderPosts(activeCategory, false);
-    }
-  }, [discoverUsers.length, following.length, followers.length, founderPosts.length, activeCategory, loadDiscover, loadPeople, loadFounderPosts]);
-
-  // ─── Category switch ─────────────────────────────────────────────────────────
-  const handleCategorySwitch = useCallback((cat: MembersCategory) => {
-    console.log('[Members] Category switched to:', cat);
-    setActiveCategory(cat);
-    setFounderPosts([]);
-    loadFounderPosts(cat, false);
-  }, [loadFounderPosts]);
+  }, []);
 
   // ─── Search ──────────────────────────────────────────────────────────────────
   const handleSearchChange = useCallback((text: string) => {
@@ -422,11 +472,12 @@ export default function CommunityScreen() {
       return;
     }
     searchDebounceRef.current = setTimeout(async () => {
-      console.log('[Community] Searching users — query:', text);
+      console.log('[Community] searchUsers — query:', text);
       setSearchLoading(true);
       try {
         const results = await searchUsers(text.trim());
         setSearchResults(results);
+        console.log('[Community] searchUsers — found', results.length, 'users');
       } catch (e) {
         console.error('[Community] searchUsers error:', e);
       } finally {
@@ -435,381 +486,392 @@ export default function CommunityScreen() {
     }, 400);
   }, []);
 
-  // ─── Render Discover ─────────────────────────────────────────────────────────
-  const renderDiscover = () => {
-    const displayUsers = searchQuery.trim() ? searchResults : discoverUsers;
-    const isLoading = searchQuery.trim() ? searchLoading : discoverLoading;
+  // ─── Tab switch ──────────────────────────────────────────────────────────────
+  const handleMainTabSwitch = useCallback((tab: MainTab) => {
+    console.log('[Community] Main tab switched to:', tab);
+    setMainTab(tab);
+    if (tab === 'feed' && feedPosts.length === 0) {
+      loadFeed();
+    }
+    if (tab === 'people' && following.length === 0 && followers.length === 0) {
+      loadPeople();
+    }
+  }, [feedPosts.length, following.length, followers.length, loadFeed, loadPeople]);
+
+  const handleFeedToggle = useCallback((toggle: FeedToggle) => {
+    console.log('[Community] Feed toggle switched to:', toggle);
+    setFeedToggle(toggle);
+    if (toggle === 'everyone' && feedPosts.length === 0) {
+      loadFeed();
+    }
+    if (toggle === 'members' && founderPosts.length === 0 && isPremium) {
+      loadFounderPosts(activeCategory, false);
+    }
+  }, [feedPosts.length, founderPosts.length, isPremium, activeCategory, loadFeed, loadFounderPosts]);
+
+  const handleCategorySwitch = useCallback((cat: MembersCategory) => {
+    console.log('[Members] Category switched to:', cat);
+    setActiveCategory(cat);
+    setFounderPosts([]);
+    loadFounderPosts(cat, false);
+  }, [loadFounderPosts]);
+
+  // ─── Initial load ────────────────────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadFeed(); }, []);
+
+  // ─── Render: Main tab bar ────────────────────────────────────────────────────
+  const renderTabBar = () => (
+    <View style={[styles.tabBar, { borderBottomColor: dividerColor }]}>
+      {(['feed', 'people'] as MainTab[]).map((tab) => {
+        const isActive = mainTab === tab;
+        const label = tab === 'feed' ? 'Feed' : 'People';
+        return (
+          <Pressable
+            key={tab}
+            onPress={() => handleMainTabSwitch(tab)}
+            style={styles.tabBarItem}
+            accessibilityRole="tab"
+          >
+            <Text style={[styles.tabBarLabel, { color: isActive ? colors.primary : subColor }]}>
+              {label}
+            </Text>
+            {isActive && <View style={[styles.tabBarUnderline, { backgroundColor: colors.primary }]} />}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  // ─── Render: Feed toggle ─────────────────────────────────────────────────────
+  const renderFeedToggle = () => (
+    <View style={[styles.feedToggleRow, { borderBottomColor: dividerColor }]}>
+      {(['everyone', 'members'] as FeedToggle[]).map((toggle) => {
+        const isActive = feedToggle === toggle;
+        const label = toggle === 'everyone' ? 'Everyone' : 'Members';
+        return (
+          <Pressable
+            key={toggle}
+            onPress={() => handleFeedToggle(toggle)}
+            style={[styles.feedToggleBtn, isActive && { backgroundColor: colors.primary + '18' }]}
+            accessibilityRole="button"
+          >
+            {toggle === 'members' && (
+              <Crown size={13} color={isActive ? colors.primary : subColor} />
+            )}
+            <Text style={[styles.feedToggleBtnText, { color: isActive ? colors.primary : subColor, fontWeight: isActive ? '700' : '500' }]}>
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  // ─── Render: Feed tab ────────────────────────────────────────────────────────
+  const renderFeedTab = () => {
+    if (feedToggle === 'everyone') {
+      return renderEveryoneFeed();
+    }
+    return renderMembersSection();
+  };
+
+  const renderEveryoneFeed = () => {
+    if (feedLoading) {
+      return (
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      );
+    }
 
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {/* Search bar */}
-        <View style={[styles.searchBarContainer, { backgroundColor: cardBg, borderColor }]}>
-          <Search size={18} color={subColor} />
-          <TextInput
-            style={[styles.searchInput, { color: textColor }]}
-            placeholder="Search by username..."
-            placeholderTextColor={subColor}
-            value={searchQuery}
-            onChangeText={handleSearchChange}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
+      <FlatList
+        data={feedPosts}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item, index }) => (
+          <SocialPostCard
+            post={item}
+            isDark={isDark}
+            onLike={handleLike}
+            index={index}
           />
-          {isLoading && <ActivityIndicator size="small" color={colors.primary} />}
-        </View>
-
-        {!searchQuery.trim() && !discoverLoading && discoverUsers.length === 0 ? (
+        )}
+        contentContainerStyle={[
+          styles.feedList,
+          feedPosts.length === 0 && styles.feedListEmpty,
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={feedRefreshing}
+            onRefresh={() => {
+              console.log('[Community] Feed pull-to-refresh');
+              loadFeed(true);
+            }}
+            tintColor={colors.primary}
+          />
+        }
+        onEndReached={loadMoreFeed}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={
+          feedLoadingMore ? (
+            <View style={styles.loadMoreIndicator}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
-              <Search size={32} color={colors.primary} />
+              <MessageSquare size={32} color={colors.primary} />
             </View>
-            <Text style={[styles.emptyTitle, { color: textColor }]}>Find people</Text>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>No posts yet</Text>
             <Text style={[styles.emptySubtitle, { color: subColor }]}>
-              Search by username to find and follow others
+              Be the first to share something with the community.
             </Text>
           </View>
-        ) : searchQuery.trim() && !searchLoading && searchResults.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: textColor }]}>No users found</Text>
-            <Text style={[styles.emptySubtitle, { color: subColor }]}>Try a different username</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={displayUsers}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => (
-              <SearchUserRow
-                user={item}
-                isDark={isDark}
-                index={index}
-              />
-            )}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          />
-        )}
-      </KeyboardAvoidingView>
+        }
+      />
     );
   };
 
-  // ─── Render People ───────────────────────────────────────────────────────────
-  const renderPeople = () => {
-    const data = peopleSection === 'following' ? following : followers;
-
-    return (
-      <View style={{ flex: 1 }}>
-        {/* Section toggle */}
-        <View style={[styles.peopleSectionToggle, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor }]}>
-          {(['following', 'followers'] as PeopleSection[]).map((section) => {
-            const isActive = peopleSection === section;
-            const label = section === 'following' ? 'Following' : 'Followers';
-            return (
-              <Pressable
-                key={section}
-                onPress={() => {
-                  console.log('[Community] People section switched to:', section);
-                  setPeopleSection(section);
-                }}
-                style={[
-                  styles.peopleSectionBtn,
-                  isActive && { backgroundColor: colors.primary },
-                ]}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.peopleSectionBtnText, { color: isActive ? '#fff' : subColor }]}>
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {peopleLoading ? (
-          <View style={styles.loadingCenter}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={data}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => (
-              <SearchUserRow
-                user={item}
-                isDark={isDark}
-                index={index}
-              />
-            )}
-            contentContainerStyle={[styles.listContent, data.length === 0 && styles.listContentEmpty]}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
-                  <Users size={32} color={colors.primary} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: textColor }]}>
-                  {peopleSection === 'following' ? 'Not following anyone yet' : 'No followers yet'}
-                </Text>
-                <Text style={[styles.emptySubtitle, { color: subColor }]}>
-                  {peopleSection === 'following'
-                    ? 'Discover people in the Discover tab'
-                    : 'Share your profile to get followers'}
-                </Text>
-              </View>
-            }
-            refreshControl={
-              <RefreshControl
-                refreshing={peopleRefreshing}
-                onRefresh={() => {
-                  console.log('[Community] People pull-to-refresh');
-                  loadPeople(true);
-                }}
-                tintColor={colors.primary}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
-    );
-  };
-
-  // ─── Render Members ──────────────────────────────────────────────────────────
-  const renderMembers = () => {
-    // Premium gate
+  // ─── Render: Members section ─────────────────────────────────────────────────
+  const renderMembersSection = () => {
     if (!isPremium) {
       return (
-        <View style={membersStyles.premiumGate}>
-          <View style={[membersStyles.premiumGateIconWrap, { backgroundColor: colors.primary + '18' }]}>
-            <Lock size={40} color={colors.primary} />
+        <View style={styles.premiumGate}>
+          <View style={[styles.premiumGateIconWrap, { backgroundColor: '#F59E0B18' }]}>
+            <Crown size={44} color="#F59E0B" />
           </View>
-          <Text style={[membersStyles.premiumGateTitle, { color: textColor }]}>
-            Members Club
-          </Text>
-          <Text style={[membersStyles.premiumGateSubtitle, { color: subColor }]}>
-            Join the inner circle. Connect directly with the founder, request features, and share your wins with fellow premium members.
+          <Text style={[styles.premiumGateTitle, { color: textColor }]}>Members Club</Text>
+          <Text style={[styles.premiumGateSubtitle, { color: subColor }]}>
+            Connect directly with the founder, get early access to features, and join the inner circle of premium members.
           </Text>
           <Pressable
-            style={membersStyles.premiumGateBtn}
+            style={styles.premiumGateBtn}
             onPress={() => {
-              console.log('[Members] Upgrade to Premium button pressed');
+              console.log('[Members] Upgrade button pressed');
               router.push('/subscription');
             }}
             accessibilityRole="button"
           >
-            <Text style={membersStyles.premiumGateBtnText}>Upgrade to Premium</Text>
+            <Text style={styles.premiumGateBtnText}>Upgrade to Premium</Text>
           </Pressable>
         </View>
       );
     }
 
-    const renderPostItem = ({ item }: { item: FounderPost }) => {
-      const isExpanded = expandedPostId === item.id;
+    const renderFounderPostItem = ({ item }: { item: FounderPost }) => {
       const commentCount = item.comment_count ?? 0;
       const reactionCount = item.reaction_count ?? 0;
       const postTimestamp = timeAgo(item.created_at);
+      const inlineComments = (item.comments ?? []).slice(0, 3);
+      const hasMoreComments = commentCount > 3;
+      const commentInputValue = commentInputs[item.id] ?? '';
 
       return (
         <View style={[membersStyles.postCard, { backgroundColor: cardBg, borderColor }]}>
           {/* Header */}
           <View style={membersStyles.postHeader}>
-            <View style={membersStyles.postFounderBadge}>
-              <Crown size={14} color="#F59E0B" />
-              <Text style={membersStyles.postFounderLabel}>Founder</Text>
+            <View style={[membersStyles.founderAvatarWrap, { backgroundColor: '#F59E0B28' }]}>
+              <Crown size={16} color="#F59E0B" />
             </View>
-            <Text style={[membersStyles.postTimestamp, { color: subColor }]}>
-              {postTimestamp}
-            </Text>
+            <View style={membersStyles.postHeaderInfo}>
+              <View style={membersStyles.postFounderRow}>
+                <Text style={membersStyles.postFounderLabel}>Founder</Text>
+                <View style={[membersStyles.categoryBadge, { backgroundColor: colors.primary + '18' }]}>
+                  <Text style={[membersStyles.categoryBadgeText, { color: colors.primary }]}>
+                    {CATEGORY_LABELS[item.category] ?? 'General'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={[membersStyles.postTimestamp, { color: subColor }]}>{postTimestamp}</Text>
+            </View>
           </View>
 
           {/* Content */}
-          <Text style={[membersStyles.postContent, { color: textColor }]}>
-            {item.content}
-          </Text>
+          <Text style={[membersStyles.postContent, { color: textColor }]}>{item.content}</Text>
 
           {/* Reaction bar */}
-          <View style={membersStyles.reactionBar}>
-            {REACTION_EMOJIS.map(({ key, Icon }) => {
+          <View style={[membersStyles.reactionBar, { borderTopColor: dividerColor }]}>
+            {REACTION_ICONS.map(({ key, Icon }) => {
               const isActive = item.user_reaction === key;
-              const reactionBg = isActive ? colors.primary + '18' : 'transparent';
-              const iconColor = isActive ? colors.primary : subColor;
               return (
                 <Pressable
                   key={key}
-                  style={[membersStyles.reactionBtn, { backgroundColor: reactionBg }]}
+                  style={[
+                    membersStyles.reactionBtn,
+                    isActive && { backgroundColor: colors.primary + '18' },
+                  ]}
                   onPress={() => {
                     console.log('[Members] Reaction pressed — postId:', item.id, 'emoji:', key);
                     handleReact(item.id, key);
                   }}
                   accessibilityRole="button"
                 >
-                  <Icon size={18} color={iconColor} />
-                  {isActive && (
-                    <Text style={[membersStyles.reactionCount, { color: colors.primary }]}>
-                      {reactionCount}
-                    </Text>
-                  )}
+                  <Icon size={18} color={isActive ? colors.primary : subColor} />
                 </Pressable>
               );
             })}
             <View style={{ flex: 1 }} />
-            <Text style={[membersStyles.totalReactions, { color: subColor }]}>
-              {reactionCount > 0 ? `${reactionCount} reaction${reactionCount !== 1 ? 's' : ''}` : ''}
-            </Text>
+            {reactionCount > 0 && (
+              <Text style={[membersStyles.reactionCountText, { color: subColor }]}>
+                {reactionCount}
+                {' '}
+                {reactionCount === 1 ? 'reaction' : 'reactions'}
+              </Text>
+            )}
           </View>
 
-          {/* Comments toggle */}
-          <Pressable
-            style={[membersStyles.commentsToggle, { borderTopColor: borderColor }]}
-            onPress={() => {
-              const nextExpanded = isExpanded ? null : item.id;
-              console.log('[Members] Comments toggle — postId:', item.id, 'expanding:', !isExpanded);
-              setExpandedPostId(nextExpanded);
-              if (!isExpanded && !item.comments) {
-                loadPostComments(item.id);
-              }
-            }}
-            accessibilityRole="button"
-          >
-            <MessageCircle size={15} color={subColor} />
-            <Text style={[membersStyles.commentsToggleText, { color: subColor }]}>
-              {commentCount === 0 ? 'No comments yet' : `${commentCount} comment${commentCount !== 1 ? 's' : ''}`}
-            </Text>
-            <View style={{ flex: 1 }} />
-            {isExpanded
-              ? <ChevronUp size={15} color={subColor} />
-              : <ChevronDown size={15} color={subColor} />
-            }
-          </Pressable>
+          {/* Inline comments */}
+          {(item.commentsLoaded || commentCount > 0) && (
+            <View style={[membersStyles.commentsSection, { borderTopColor: dividerColor }]}>
+              {!item.commentsLoaded && commentCount > 0 && (
+                <Pressable
+                  onPress={() => {
+                    console.log('[Members] Load comments pressed — postId:', item.id);
+                    loadPostComments(item.id);
+                  }}
+                  accessibilityRole="button"
+                >
+                  <Text style={[membersStyles.viewAllComments, { color: subColor }]}>
+                    View
+                    {' '}
+                    {commentCount}
+                    {' '}
+                    {commentCount === 1 ? 'comment' : 'comments'}
+                  </Text>
+                </Pressable>
+              )}
 
-          {/* Expanded comments */}
-          {isExpanded && (
-            <View style={membersStyles.commentsSection}>
-              {/* Comment list */}
-              {item.comments && item.comments.length > 0 ? (
-                item.comments.map((comment) => {
-                  const commentTime = timeAgo(comment.created_at);
-                  return (
-                    <View key={comment.id} style={membersStyles.commentRow}>
-                      <View style={[membersStyles.commentAvatar, { backgroundColor: colors.primary + '28' }]}>
-                        {comment.author_avatar ? (
-                          <Image
-                            source={{ uri: comment.author_avatar }}
-                            style={membersStyles.commentAvatarImg}
-                          />
-                        ) : (
-                          <Text style={[membersStyles.commentAvatarInitial, { color: colors.primary }]}>
-                            {(comment.author_username ?? 'M')[0].toUpperCase()}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={membersStyles.commentBody}>
-                        <View style={membersStyles.commentMeta}>
-                          <Text style={[membersStyles.commentAuthor, { color: textColor }]}>
-                            {comment.author_username ?? 'Member'}
-                          </Text>
-                          <Text style={[membersStyles.commentTime, { color: subColor }]}>
-                            {commentTime}
-                          </Text>
-                        </View>
-                        <Text style={[membersStyles.commentContent, { color: textColor }]}>
-                          {comment.content}
+              {item.commentsLoaded && inlineComments.map((comment) => {
+                const commentTime = timeAgo(comment.created_at);
+                return (
+                  <View key={comment.id} style={membersStyles.commentRow}>
+                    <Avatar username={comment.author_username} size={28} avatarUrl={comment.author_avatar} />
+                    <View style={membersStyles.commentBubble}>
+                      <View style={membersStyles.commentMeta}>
+                        <Text style={[membersStyles.commentAuthor, { color: textColor }]}>
+                          {comment.author_username}
                         </Text>
+                        <Text style={[membersStyles.commentTime, { color: subColor }]}>{commentTime}</Text>
                       </View>
+                      <Text style={[membersStyles.commentContent, { color: textColor }]}>
+                        {comment.content}
+                      </Text>
                     </View>
-                  );
-                })
-              ) : (
-                <Text style={[membersStyles.noCommentsText, { color: subColor }]}>
-                  Be the first to comment.
+                  </View>
+                );
+              })}
+
+              {item.commentsLoaded && hasMoreComments && (
+                <Text style={[membersStyles.viewAllComments, { color: subColor }]}>
+                  View all
+                  {' '}
+                  {commentCount}
+                  {' '}
+                  comments
                 </Text>
               )}
 
-              {/* Comment input */}
-              <View style={[membersStyles.commentInputRow, { borderTopColor: borderColor }]}>
-                <TextInput
-                  style={[membersStyles.commentInput, { color: textColor, borderColor }]}
-                  placeholder="Add a comment..."
-                  placeholderTextColor={subColor}
-                  value={commentInputs[item.id] ?? ''}
-                  onChangeText={(text) => {
-                    setCommentInputs((prev) => ({ ...prev, [item.id]: text }));
-                  }}
-                  multiline={false}
-                  returnKeyType="send"
-                  onSubmitEditing={() => {
-                    console.log('[Members] Comment submit via keyboard — postId:', item.id);
-                    handleSubmitComment(item.id);
-                  }}
-                />
-                <Pressable
-                  style={[
-                    membersStyles.commentSendBtn,
-                    { backgroundColor: (commentInputs[item.id] ?? '').trim() ? colors.primary : colors.primary + '40' },
-                  ]}
-                  onPress={() => {
-                    console.log('[Members] Comment send button pressed — postId:', item.id);
-                    handleSubmitComment(item.id);
-                  }}
-                  disabled={submittingComment === item.id || !(commentInputs[item.id] ?? '').trim()}
-                  accessibilityRole="button"
-                >
-                  {submittingComment === item.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <ArrowUp size={16} color="#fff" />
-                  )}
-                </Pressable>
-              </View>
+              {item.commentsLoaded && inlineComments.length === 0 && (
+                <Text style={[membersStyles.noCommentsText, { color: subColor }]}>
+                  No comments yet. Be the first.
+                </Text>
+              )}
             </View>
           )}
+
+          {/* Comment input */}
+          <View style={[membersStyles.commentInputRow, { borderTopColor: dividerColor }]}>
+            <TextInput
+              style={[membersStyles.commentInput, { color: textColor, backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor }]}
+              placeholder="Add a comment..."
+              placeholderTextColor={subColor}
+              value={commentInputValue}
+              onChangeText={(text) => {
+                setCommentInputs((prev) => ({ ...prev, [item.id]: text }));
+              }}
+              onFocus={() => {
+                if (!item.commentsLoaded) {
+                  loadPostComments(item.id);
+                }
+              }}
+              returnKeyType="send"
+              onSubmitEditing={() => {
+                console.log('[Members] Comment submit via keyboard — postId:', item.id);
+                handleSubmitComment(item.id);
+              }}
+            />
+            <Pressable
+              style={[
+                membersStyles.commentSendBtn,
+                { backgroundColor: commentInputValue.trim() ? colors.primary : colors.primary + '40' },
+              ]}
+              onPress={() => {
+                console.log('[Members] Comment send button pressed — postId:', item.id);
+                handleSubmitComment(item.id);
+              }}
+              disabled={submittingComment === item.id || !commentInputValue.trim()}
+              accessibilityRole="button"
+            >
+              {submittingComment === item.id ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <ArrowUp size={15} color="#fff" />
+              )}
+            </Pressable>
+          </View>
         </View>
       );
     };
 
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {/* Category filter bar */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={membersStyles.categoryBar}
-          style={membersStyles.categoryBarScroll}
-        >
-          {(Object.keys(CATEGORY_LABELS) as MembersCategory[]).map((cat) => {
-            const isActive = activeCategory === cat;
-            return (
-              <Pressable
-                key={cat}
-                style={[
-                  membersStyles.categoryPill,
-                  isActive
-                    ? { backgroundColor: colors.primary }
-                    : { backgroundColor: 'transparent', borderColor },
-                ]}
-                onPress={() => handleCategorySwitch(cat)}
-                accessibilityRole="button"
-              >
-                <Text
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Category pills + optional new post button */}
+        <View style={[membersStyles.categoryHeader, { borderBottomColor: dividerColor }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={membersStyles.categoryBar}
+          >
+            {(Object.keys(CATEGORY_LABELS) as MembersCategory[]).map((cat) => {
+              const isActive = activeCategory === cat;
+              return (
+                <Pressable
+                  key={cat}
                   style={[
-                    membersStyles.categoryPillText,
-                    { color: isActive ? '#fff' : subColor },
-                    isActive && { fontWeight: '700' },
+                    membersStyles.categoryPill,
+                    isActive
+                      ? { backgroundColor: colors.primary }
+                      : { backgroundColor: 'transparent', borderColor },
                   ]}
+                  onPress={() => handleCategorySwitch(cat)}
+                  accessibilityRole="button"
                 >
-                  {CATEGORY_LABELS[cat]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Text style={[membersStyles.categoryPillText, { color: isActive ? '#fff' : subColor }]}>
+                    {CATEGORY_LABELS[cat]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {isAdmin && (
+            <Pressable
+              style={[membersStyles.newPostBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                console.log('[Members] New post button pressed (admin)');
+                setShowCreatePost(true);
+              }}
+              accessibilityRole="button"
+            >
+              <SquarePen size={14} color="#fff" />
+              <Text style={membersStyles.newPostBtnText}>Post</Text>
+            </Pressable>
+          )}
+        </View>
 
-        {/* Posts list */}
         {membersLoading ? (
           <View style={styles.loadingCenter}>
             <ActivityIndicator color={colors.primary} />
@@ -818,10 +880,10 @@ export default function CommunityScreen() {
           <FlatList
             data={founderPosts}
             keyExtractor={(item) => item.id}
-            renderItem={renderPostItem}
+            renderItem={renderFounderPostItem}
             contentContainerStyle={[
               membersStyles.postsList,
-              founderPosts.length === 0 && styles.listContentEmpty,
+              founderPosts.length === 0 && styles.feedListEmpty,
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
@@ -836,15 +898,13 @@ export default function CommunityScreen() {
               />
             }
             ListEmptyComponent={
-              <View style={membersStyles.emptyPosts}>
-                <View style={[membersStyles.emptyPostsIcon, { backgroundColor: colors.primary + '18' }]}>
-                  <MessageSquare size={36} color={colors.primary} />
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
+                  <MessageCircle size={32} color={colors.primary} />
                 </View>
-                <Text style={[membersStyles.emptyPostsTitle, { color: textColor }]}>
-                  No posts yet
-                </Text>
-                <Text style={[membersStyles.emptyPostsSubtitle, { color: subColor }]}>
-                  Be the first to start the conversation.
+                <Text style={[styles.emptyTitle, { color: textColor }]}>No posts yet</Text>
+                <Text style={[styles.emptySubtitle, { color: subColor }]}>
+                  Check back soon for updates from the founder.
                 </Text>
               </View>
             }
@@ -854,12 +914,129 @@ export default function CommunityScreen() {
     );
   };
 
-  const SUB_TABS: { key: SubTab; label: string }[] = [
-    { key: 'discover', label: 'Discover' },
-    { key: 'people', label: 'People' },
-    { key: 'members', label: 'Members' },
-  ];
+  // ─── Render: People tab ──────────────────────────────────────────────────────
+  const renderPeopleTab = () => {
+    const isSearching = searchQuery.trim().length > 0;
+    const listData = isSearching ? searchResults : (peopleSection === 'following' ? following : followers);
+    const isLoading = isSearching ? searchLoading : peopleLoading;
 
+    const followingCount = following.length;
+    const followersCount = followers.length;
+
+    return (
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Search bar */}
+        <View style={[styles.searchBarWrap, { borderBottomColor: dividerColor }]}>
+          <View style={[styles.searchBar, { backgroundColor: isDark ? colors.cardDark : '#F0F2F7', borderColor }]}>
+            <Search size={16} color={subColor} />
+            <TextInput
+              style={[styles.searchInput, { color: textColor }]}
+              placeholder="Search by username..."
+              placeholderTextColor={subColor}
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {searchLoading && <ActivityIndicator size="small" color={colors.primary} />}
+          </View>
+        </View>
+
+        {/* Following / Followers toggle — only when not searching */}
+        {!isSearching && (
+          <View style={[styles.peopleSectionToggle, { borderBottomColor: dividerColor }]}>
+            {(['following', 'followers'] as PeopleSection[]).map((section) => {
+              const isActive = peopleSection === section;
+              const count = section === 'following' ? followingCount : followersCount;
+              const label = section === 'following' ? 'Following' : 'Followers';
+              return (
+                <Pressable
+                  key={section}
+                  onPress={() => {
+                    console.log('[Community] People section switched to:', section);
+                    setPeopleSection(section);
+                    if (following.length === 0 && followers.length === 0) {
+                      loadPeople();
+                    }
+                  }}
+                  style={styles.peopleSectionBtn}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.peopleSectionLabel, { color: isActive ? textColor : subColor, fontWeight: isActive ? '700' : '500' }]}>
+                    {label}
+                  </Text>
+                  <Text style={[styles.peopleSectionCount, { color: isActive ? colors.primary : subColor }]}>
+                    {count}
+                  </Text>
+                  {isActive && <View style={[styles.peopleSectionUnderline, { backgroundColor: colors.primary }]} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {isLoading ? (
+          <View style={styles.loadingCenter}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={listData}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <SearchUserRow user={item} isDark={isDark} index={index} />
+            )}
+            contentContainerStyle={[
+              styles.peopleList,
+              listData.length === 0 && styles.feedListEmpty,
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              !isSearching ? (
+                <RefreshControl
+                  refreshing={peopleRefreshing}
+                  onRefresh={() => {
+                    console.log('[Community] People pull-to-refresh');
+                    loadPeople(true);
+                  }}
+                  tintColor={colors.primary}
+                />
+              ) : undefined
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '18' }]}>
+                  {isSearching ? (
+                    <Search size={32} color={colors.primary} />
+                  ) : (
+                    <Users size={32} color={colors.primary} />
+                  )}
+                </View>
+                <Text style={[styles.emptyTitle, { color: textColor }]}>
+                  {isSearching
+                    ? 'No users found'
+                    : peopleSection === 'following'
+                    ? 'Not following anyone yet'
+                    : 'No followers yet'}
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: subColor }]}>
+                  {isSearching
+                    ? 'Try a different username'
+                    : peopleSection === 'following'
+                    ? 'Search for people to follow'
+                    : 'Share your profile to get followers'}
+                </Text>
+              </View>
+            }
+          />
+        )}
+      </KeyboardAvoidingView>
+    );
+  };
+
+  // ─── Root render ─────────────────────────────────────────────────────────────
   return (
     <>
       <Stack.Screen
@@ -887,35 +1064,19 @@ export default function CommunityScreen() {
       />
 
       <View style={[styles.container, { backgroundColor: bg }]}>
-        {/* Sub-tab switcher */}
-        <View style={[styles.segmentedControl, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor }]}>
-          {SUB_TABS.map(({ key, label }) => {
-            const isActive = activeTab === key;
-            return (
-              <Pressable
-                key={key}
-                onPress={() => handleTabSwitch(key)}
-                style={[styles.segmentBtn, isActive && { backgroundColor: colors.primary }]}
-                accessibilityLabel={label}
-                accessibilityRole="tab"
-              >
-                <Text style={[styles.segmentBtnText, { color: isActive ? '#fff' : subColor }, isActive && { fontWeight: '700' }]}>
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {renderTabBar()}
 
-        {/* Tab content */}
         <View style={{ flex: 1 }}>
-          {activeTab === 'discover' && renderDiscover()}
-          {activeTab === 'people' && renderPeople()}
-          {activeTab === 'members' && renderMembers()}
+          {mainTab === 'feed' && (
+            <>
+              {renderFeedToggle()}
+              {renderFeedTab()}
+            </>
+          )}
+          {mainTab === 'people' && renderPeopleTab()}
         </View>
       </View>
 
-      {/* Create Post Sheet */}
       <CreatePostSheet
         visible={showCreatePost}
         isDark={isDark}
@@ -924,12 +1085,15 @@ export default function CommunityScreen() {
           setShowCreatePost(false);
         }}
         onPosted={() => {
-          console.log('[Community] Post created');
+          console.log('[Community] Post created — refreshing feed');
+          loadFeed(true);
         }}
       />
     </>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -941,33 +1105,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentedControl: {
+
+  // Main tab bar (underline style)
+  tabBar: {
     flexDirection: 'row',
-    marginHorizontal: spacing.md,
-    marginTop: 8,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: 3,
-    gap: 2,
+    borderBottomWidth: 1,
   },
-  segmentBtn: {
+  tabBarItem: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: borderRadius.md,
     alignItems: 'center',
+    paddingVertical: 12,
+    position: 'relative',
   },
-  segmentBtnText: {
+  tabBarLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  tabBarUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: '20%',
+    right: '20%',
+    height: 2,
+    borderRadius: 1,
+  },
+
+  // Feed toggle (Everyone / Members)
+  feedToggleRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  feedToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: borderRadius.full,
+  },
+  feedToggleBtnText: {
     fontSize: 13,
-    fontWeight: '500',
   },
-  listContent: {
+
+  // Feed list
+  feedList: {
     paddingBottom: 120,
   },
-  listContentEmpty: {
+  feedListEmpty: {
     flex: 1,
     justifyContent: 'center',
   },
+  loadingCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreIndicator: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+
+  // Empty state
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -994,67 +1196,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
     maxWidth: 280,
-    marginBottom: spacing.md,
   },
-  retryBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary,
-  },
-  retryBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    gap: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    paddingVertical: 0,
-  },
-  peopleSectionToggle: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: 3,
-    gap: 2,
-  },
-  peopleSectionBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  peopleSectionBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  loadingCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  skeletonLine: {
-    height: 13,
-    borderRadius: 6,
-  },
-});
 
-// ─── Members Club styles ──────────────────────────────────────────────────────
-const membersStyles = StyleSheet.create({
   // Premium gate
   premiumGate: {
     flex: 1,
@@ -1098,36 +1241,109 @@ const membersStyles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Category bar
-  categoryBarScroll: {
-    flexGrow: 0,
-    marginBottom: spacing.sm,
+  // People tab
+  searchBarWrap: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+  peopleSectionToggle: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+  },
+  peopleSectionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+    position: 'relative',
+  },
+  peopleSectionLabel: {
+    fontSize: 14,
+  },
+  peopleSectionCount: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  peopleSectionUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: '20%',
+    right: '20%',
+    height: 2,
+    borderRadius: 1,
+  },
+  peopleList: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: 120,
+  },
+});
+
+// ─── Members styles ───────────────────────────────────────────────────────────
+
+const membersStyles = StyleSheet.create({
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    paddingRight: spacing.md,
   },
   categoryBar: {
     paddingHorizontal: spacing.md,
+    paddingVertical: 10,
     gap: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
   },
   categoryPill: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: borderRadius.full,
     borderWidth: 1,
   },
   categoryPillText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  newPostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: borderRadius.md,
+    flexShrink: 0,
+  },
+  newPostBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
-  // Posts list
   postsList: {
     paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
     paddingBottom: 120,
     gap: spacing.md,
   },
 
-  // Post card
   postCard: {
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -1138,29 +1354,50 @@ const membersStyles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
+    gap: 10,
   },
-  postFounderBadge: {
+  founderAvatarWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  postHeaderInfo: {
+    flex: 1,
+  },
+  postFounderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 7,
   },
   postFounderLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#F59E0B',
-    letterSpacing: 0.2,
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+  },
+  categoryBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   postTimestamp: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 'auto',
+    fontSize: 11,
+    marginTop: 2,
   },
+
   postContent: {
     fontSize: 15,
     lineHeight: 22,
@@ -1168,79 +1405,45 @@ const membersStyles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
 
-  // Reaction bar
   reactionBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.xs,
-  },
-  reactionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-  },
-  reactionCount: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  totalReactions: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  // Comments toggle
-  commentsToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
     paddingVertical: 10,
     borderTopWidth: 1,
+    gap: 4,
   },
-  commentsToggleText: {
-    fontSize: 13,
+  reactionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reactionCountText: {
+    fontSize: 12,
     fontWeight: '500',
   },
 
-  // Comments section
   commentsSection: {
     paddingHorizontal: spacing.md,
+    paddingTop: 10,
     paddingBottom: spacing.sm,
+    borderTopWidth: 1,
+    gap: 8,
   },
   commentRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    gap: 8,
+    alignItems: 'flex-start',
   },
-  commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  commentAvatarImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  commentAvatarInitial: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  commentBody: {
+  commentBubble: {
     flex: 1,
   },
   commentMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
     marginBottom: 2,
   },
   commentAuthor: {
@@ -1249,26 +1452,27 @@ const membersStyles = StyleSheet.create({
   },
   commentTime: {
     fontSize: 11,
-    fontWeight: '500',
   },
   commentContent: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 19,
+  },
+  viewAllComments: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   noCommentsText: {
     fontSize: 13,
     fontStyle: 'italic',
-    paddingVertical: spacing.sm,
   },
 
-  // Comment input
   commentInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
     borderTopWidth: 1,
-    marginTop: spacing.xs,
   },
   commentInput: {
     flex: 1,
@@ -1285,34 +1489,5 @@ const membersStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-  },
-
-  // Empty posts
-  emptyPosts: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyPostsIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  emptyPostsTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-    textAlign: 'center',
-  },
-  emptyPostsSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    maxWidth: 260,
   },
 });
