@@ -22,13 +22,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
+  Modal,
+  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import {
   Search,
   SquarePen,
-  Lock,
   Crown,
   Heart,
   Flame,
@@ -37,6 +38,9 @@ import {
   ArrowUp,
   Users,
   MessageSquare,
+  Plus,
+  MoreHorizontal,
+  X,
 } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
@@ -60,7 +64,7 @@ import { supabase } from '@/lib/supabase/client';
 type MainTab = 'feed' | 'people';
 type FeedToggle = 'everyone' | 'members';
 type PeopleSection = 'following' | 'followers';
-type MembersCategory = 'all' | 'general' | 'ask_founder';
+type MembersCategory = 'all' | 'general' | 'ask_founder' | 'report_bug';
 
 interface FounderPost {
   id: string;
@@ -71,8 +75,8 @@ interface FounderPost {
   reaction_count: number;
   comment_count: number;
   user_reaction: string | null;
-  comments?: FounderComment[];
-  commentsLoaded?: boolean;
+  comments: FounderComment[];
+  commentsLoaded: boolean;
 }
 
 interface FounderComment {
@@ -109,7 +113,14 @@ const CATEGORY_LABELS: Record<MembersCategory, string> = {
   all: 'All',
   general: 'General',
   ask_founder: 'Ask Founder',
+  report_bug: 'Report a Bug',
 };
+
+const FOUNDER_POST_CATEGORIES: { value: Exclude<MembersCategory, 'all'>; label: string }[] = [
+  { value: 'general', label: 'General' },
+  { value: 'ask_founder', label: 'Ask Founder' },
+  { value: 'report_bug', label: 'Report a Bug' },
+];
 
 const FEED_PAGE_SIZE = 20;
 
@@ -147,6 +158,19 @@ export default function CommunityScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // ── Founder post creation modal (admin)
+  const [showFounderModal, setShowFounderModal] = useState(false);
+  const [founderModalContent, setFounderModalContent] = useState('');
+  const [founderModalCategory, setFounderModalCategory] = useState<Exclude<MembersCategory, 'all'>>('general');
+  const [founderModalSubmitting, setFounderModalSubmitting] = useState(false);
+  const [founderModalError, setFounderModalError] = useState<string | null>(null);
+
+  // ── Edit founder post modal (admin)
+  const [editingPost, setEditingPost] = useState<FounderPost | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editCategory, setEditCategory] = useState<Exclude<MembersCategory, 'all'>>('general');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   // ── People state
   const [following, setFollowing] = useState<SearchUser[]>([]);
   const [followers, setFollowers] = useState<SearchUser[]>([]);
@@ -164,6 +188,7 @@ export default function CommunityScreen() {
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const dividerColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const inputBg = isDark ? '#1E2035' : (colors.card ?? '#F5F5F5');
 
   // ─── Init current user ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -225,7 +250,6 @@ export default function CommunityScreen() {
   // ─── Handle like ────────────────────────────────────────────────────────────
   const handleLike = useCallback(async (postId: string) => {
     console.log('[Community] handleLike — post_id:', postId);
-    // Optimistic update
     setFeedPosts((prev) =>
       prev.map((p) => {
         if (p.id !== postId) return p;
@@ -255,7 +279,21 @@ export default function CommunityScreen() {
     }
   }, []);
 
-  // ─── Load founder posts ─────────────────────────────────────────────────────
+  // ─── Helper: fetch usernames for a list of user IDs ────────────────────────
+  const fetchUsernames = useCallback(async (userIds: string[]): Promise<Record<string, { username: string; avatar_url: string | null }>> => {
+    if (userIds.length === 0) return {};
+    const { data } = await supabase
+      .from('users')
+      .select('id, username, avatar_url')
+      .in('id', userIds);
+    const map: Record<string, { username: string; avatar_url: string | null }> = {};
+    for (const u of data ?? []) {
+      map[u.id] = { username: u.username ?? 'Member', avatar_url: u.avatar_url ?? null };
+    }
+    return map;
+  }, []);
+
+  // ─── Load founder posts (with comments fetched separately) ──────────────────
   const loadFounderPosts = useCallback(async (
     category: MembersCategory = activeCategory,
     isRefresh = false,
@@ -266,7 +304,7 @@ export default function CommunityScreen() {
     try {
       let query = supabase
         .from('founder_posts')
-        .select('*, founder_post_reactions(count), founder_post_comments(count)')
+        .select('*, founder_post_reactions(count)')
         .order('created_at', { ascending: false })
         .limit(30);
 
@@ -281,6 +319,37 @@ export default function CommunityScreen() {
         return;
       }
 
+      const postIds = (data ?? []).map((p: Record<string, unknown>) => p.id as string);
+
+      // Fetch all comments for these posts in one query
+      const { data: allCommentRows } = await supabase
+        .from('founder_post_comments')
+        .select('id, content, created_at, author_id, post_id')
+        .in('post_id', postIds.length > 0 ? postIds : ['__none__'])
+        .order('created_at', { ascending: true });
+
+      // Batch-fetch usernames for all comment authors
+      const authorIds = [...new Set((allCommentRows ?? []).map((c: Record<string, unknown>) => c.author_id as string))];
+      const usernameMap = await fetchUsernames(authorIds);
+
+      // Group comments by post_id
+      const commentsByPost: Record<string, FounderComment[]> = {};
+      for (const c of allCommentRows ?? []) {
+        const row = c as Record<string, unknown>;
+        const pid = row.post_id as string;
+        if (!commentsByPost[pid]) commentsByPost[pid] = [];
+        const authorInfo = usernameMap[row.author_id as string];
+        commentsByPost[pid].push({
+          id: row.id as string,
+          post_id: pid,
+          author_id: row.author_id as string,
+          content: row.content as string,
+          created_at: row.created_at as string,
+          author_username: authorInfo?.username ?? 'Member',
+          author_avatar: authorInfo?.avatar_url ?? null,
+        });
+      }
+
       const posts: FounderPost[] = await Promise.all(
         (data ?? []).map(async (post: Record<string, unknown>) => {
           let userReaction: string | null = null;
@@ -288,14 +357,14 @@ export default function CommunityScreen() {
             const { data: myReaction } = await supabase
               .from('founder_post_reactions')
               .select('emoji')
-              .eq('post_id', post.id)
+              .eq('post_id', post.id as string)
               .eq('user_id', currentUserId)
-              .single();
+              .maybeSingle();
             userReaction = myReaction?.emoji ?? null;
           }
 
           const reactionsArr = post.founder_post_reactions as { count: number }[] | undefined;
-          const commentsArr = post.founder_post_comments as { count: number }[] | undefined;
+          const comments = commentsByPost[post.id as string] ?? [];
 
           return {
             id: post.id as string,
@@ -304,8 +373,10 @@ export default function CommunityScreen() {
             category: (post.category as MembersCategory) ?? 'general',
             created_at: post.created_at as string,
             reaction_count: reactionsArr?.[0]?.count ?? 0,
-            comment_count: commentsArr?.[0]?.count ?? 0,
+            comment_count: comments.length,
             user_reaction: userReaction,
+            comments,
+            commentsLoaded: true,
           };
         }),
       );
@@ -318,43 +389,44 @@ export default function CommunityScreen() {
       setMembersLoading(false);
       setMembersRefreshing(false);
     }
-  }, [activeCategory, currentUserId]);
+  }, [activeCategory, currentUserId, fetchUsernames]);
 
-  // ─── Load post comments ─────────────────────────────────────────────────────
-  const loadPostComments = useCallback(async (postId: string) => {
-    console.log('[Members] loadPostComments — postId:', postId);
+  // ─── Reload post comments after submit ──────────────────────────────────────
+  const reloadPostComments = useCallback(async (postId: string) => {
+    console.log('[Members] reloadPostComments — postId:', postId);
     try {
       const { data, error } = await supabase
         .from('founder_post_comments')
-        .select('*, users(username, avatar_url)')
+        .select('id, content, created_at, author_id, post_id')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
-      if (error) {
-        console.error('[Members] loadPostComments error:', error);
-        return;
-      }
+      if (error) return;
 
-      const comments: FounderComment[] = (data ?? []).map((c: Record<string, unknown>) => {
-        const user = c.users as { username?: string; avatar_url?: string | null } | null;
+      const rows = (data ?? []) as Record<string, unknown>[];
+      const authorIds = [...new Set(rows.map((c) => c.author_id as string))];
+      const usernameMap = await fetchUsernames(authorIds);
+
+      const comments: FounderComment[] = rows.map((c) => {
+        const authorInfo = usernameMap[c.author_id as string];
         return {
           id: c.id as string,
-          post_id: c.post_id as string,
+          post_id: postId,
           author_id: c.author_id as string,
           content: c.content as string,
           created_at: c.created_at as string,
-          author_username: user?.username ?? 'Member',
-          author_avatar: user?.avatar_url ?? null,
+          author_username: authorInfo?.username ?? 'Member',
+          author_avatar: authorInfo?.avatar_url ?? null,
         };
       });
 
       setFounderPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, comments, commentsLoaded: true } : p)),
+        prev.map((p) => p.id === postId ? { ...p, comments, comment_count: comments.length } : p),
       );
     } catch (e) {
-      console.error('[Members] loadPostComments exception:', e);
+      console.error('[Members] reloadPostComments error:', e);
     }
-  }, []);
+  }, [fetchUsernames]);
 
   // ─── Handle react ────────────────────────────────────────────────────────────
   const handleReact = useCallback(async (postId: string, emoji: string) => {
@@ -429,18 +501,135 @@ export default function CommunityScreen() {
       }
 
       setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
-      setFounderPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId ? { ...p, comment_count: (p.comment_count ?? 0) + 1 } : p,
-        ),
-      );
-      await loadPostComments(postId);
+      await reloadPostComments(postId);
     } catch (e) {
       console.error('[Members] handleSubmitComment exception:', e);
     } finally {
       setSubmittingComment(null);
     }
-  }, [commentInputs, currentUserId, loadPostComments]);
+  }, [commentInputs, currentUserId, reloadPostComments]);
+
+  // ─── Handle feed post more options ──────────────────────────────────────────
+  const handleFeedPostMoreOptions = useCallback((postId: string, authorId: string) => {
+    console.log('[Community] handleFeedPostMoreOptions — postId:', postId, 'authorId:', authorId);
+    if (authorId !== currentUserId) return;
+    Alert.alert('Post Options', undefined, [
+      {
+        text: 'Delete post',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert('Delete post', 'This cannot be undone.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                console.log('[Community] Deleting feed post — postId:', postId);
+                try {
+                  await supabase.from('social_posts').delete().eq('id', postId).eq('user_id', currentUserId!);
+                  setFeedPosts((prev) => prev.filter((p) => p.id !== postId));
+                } catch (e) {
+                  console.error('[Community] delete feed post error:', e);
+                }
+              },
+            },
+          ]);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [currentUserId]);
+
+  // ─── Handle founder post more options ───────────────────────────────────────
+  const handleFounderPostMoreOptions = useCallback((post: FounderPost) => {
+    console.log('[Members] handleFounderPostMoreOptions — postId:', post.id);
+    Alert.alert('Post Options', undefined, [
+      {
+        text: 'Edit post',
+        onPress: () => {
+          console.log('[Members] Edit post pressed — postId:', post.id);
+          setEditingPost(post);
+          setEditContent(post.content);
+          setEditCategory(post.category === 'all' ? 'general' : post.category as Exclude<MembersCategory, 'all'>);
+        },
+      },
+      {
+        text: 'Delete post',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert('Delete post', 'This cannot be undone.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                console.log('[Members] Deleting founder post — postId:', post.id);
+                try {
+                  await supabase.from('founder_posts').delete().eq('id', post.id);
+                  setFounderPosts((prev) => prev.filter((p) => p.id !== post.id));
+                } catch (e) {
+                  console.error('[Members] delete founder post error:', e);
+                }
+              },
+            },
+          ]);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, []);
+
+  // ─── Handle save edit ───────────────────────────────────────────────────────
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingPost || !editContent.trim()) return;
+    console.log('[Members] handleSaveEdit — postId:', editingPost.id);
+    setEditSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('founder_posts')
+        .update({ content: editContent.trim(), category: editCategory })
+        .eq('id', editingPost.id);
+      if (error) {
+        console.error('[Members] edit error:', error);
+        return;
+      }
+      setFounderPosts((prev) =>
+        prev.map((p) => p.id === editingPost.id ? { ...p, content: editContent.trim(), category: editCategory } : p),
+      );
+      setEditingPost(null);
+    } catch (e) {
+      console.error('[Members] handleSaveEdit exception:', e);
+    } finally {
+      setEditSubmitting(false);
+    }
+  }, [editingPost, editContent, editCategory]);
+
+  // ─── Handle create founder post ─────────────────────────────────────────────
+  const handleCreateFounderPost = useCallback(async () => {
+    if (!founderModalContent.trim() || !currentUserId) return;
+    console.log('[Members] handleCreateFounderPost — category:', founderModalCategory);
+    setFounderModalSubmitting(true);
+    setFounderModalError(null);
+    try {
+      const { error } = await supabase.from('founder_posts').insert({
+        content: founderModalContent.trim(),
+        category: founderModalCategory,
+        author_id: currentUserId,
+      });
+      if (error) {
+        setFounderModalError(error.message);
+        return;
+      }
+      setFounderModalContent('');
+      setFounderModalCategory('general');
+      setShowFounderModal(false);
+      loadFounderPosts(activeCategory, true);
+    } catch (e: unknown) {
+      setFounderModalError(e instanceof Error ? e.message : 'Failed to post.');
+    } finally {
+      setFounderModalSubmitting(false);
+    }
+  }, [founderModalContent, founderModalCategory, currentUserId, activeCategory, loadFounderPosts]);
 
   // ─── Load people ─────────────────────────────────────────────────────────────
   const loadPeople = useCallback(async (isRefresh = false) => {
@@ -594,6 +783,7 @@ export default function CommunityScreen() {
             post={item}
             isDark={isDark}
             onLike={handleLike}
+            onMoreOptions={handleFeedPostMoreOptions}
             index={index}
           />
         )}
@@ -663,11 +853,8 @@ export default function CommunityScreen() {
     }
 
     const renderFounderPostItem = ({ item }: { item: FounderPost }) => {
-      const commentCount = item.comment_count ?? 0;
       const reactionCount = item.reaction_count ?? 0;
       const postTimestamp = timeAgo(item.created_at);
-      const inlineComments = (item.comments ?? []).slice(0, 3);
-      const hasMoreComments = commentCount > 3;
       const commentInputValue = commentInputs[item.id] ?? '';
 
       return (
@@ -688,6 +875,20 @@ export default function CommunityScreen() {
               </View>
               <Text style={[membersStyles.postTimestamp, { color: subColor }]}>{postTimestamp}</Text>
             </View>
+            {isAdmin && (
+              <Pressable
+                style={membersStyles.moreBtn}
+                onPress={() => {
+                  console.log('[Members] More options pressed — postId:', item.id);
+                  handleFounderPostMoreOptions(item);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Post options"
+                hitSlop={8}
+              >
+                <MoreHorizontal size={20} color={subColor} />
+              </Pressable>
+            )}
           </View>
 
           {/* Content */}
@@ -724,64 +925,34 @@ export default function CommunityScreen() {
             )}
           </View>
 
-          {/* Inline comments */}
-          {(item.commentsLoaded || commentCount > 0) && (
-            <View style={[membersStyles.commentsSection, { borderTopColor: dividerColor }]}>
-              {!item.commentsLoaded && commentCount > 0 && (
-                <Pressable
-                  onPress={() => {
-                    console.log('[Members] Load comments pressed — postId:', item.id);
-                    loadPostComments(item.id);
-                  }}
-                  accessibilityRole="button"
-                >
-                  <Text style={[membersStyles.viewAllComments, { color: subColor }]}>
-                    View
-                    {' '}
-                    {commentCount}
-                    {' '}
-                    {commentCount === 1 ? 'comment' : 'comments'}
-                  </Text>
-                </Pressable>
-              )}
-
-              {item.commentsLoaded && inlineComments.map((comment) => {
-                const commentTime = timeAgo(comment.created_at);
-                return (
-                  <View key={comment.id} style={membersStyles.commentRow}>
-                    <Avatar username={comment.author_username} size={28} avatarUrl={comment.author_avatar} />
-                    <View style={membersStyles.commentBubble}>
-                      <View style={membersStyles.commentMeta}>
-                        <Text style={[membersStyles.commentAuthor, { color: textColor }]}>
-                          {comment.author_username}
-                        </Text>
-                        <Text style={[membersStyles.commentTime, { color: subColor }]}>{commentTime}</Text>
-                      </View>
-                      <Text style={[membersStyles.commentContent, { color: textColor }]}>
-                        {comment.content}
+          {/* Inline comments — always visible */}
+          <View style={[membersStyles.commentsSection, { borderTopColor: dividerColor }]}>
+            {item.comments.map((comment) => {
+              const commentTime = timeAgo(comment.created_at);
+              return (
+                <View key={comment.id} style={membersStyles.commentRow}>
+                  <Avatar username={comment.author_username} size={28} avatarUrl={comment.author_avatar} />
+                  <View style={membersStyles.commentBubble}>
+                    <View style={membersStyles.commentMeta}>
+                      <Text style={[membersStyles.commentAuthor, { color: textColor }]}>
+                        {comment.author_username}
                       </Text>
+                      <Text style={[membersStyles.commentTime, { color: subColor }]}>{commentTime}</Text>
                     </View>
+                    <Text style={[membersStyles.commentContent, { color: textColor }]}>
+                      {comment.content}
+                    </Text>
                   </View>
-                );
-              })}
+                </View>
+              );
+            })}
 
-              {item.commentsLoaded && hasMoreComments && (
-                <Text style={[membersStyles.viewAllComments, { color: subColor }]}>
-                  View all
-                  {' '}
-                  {commentCount}
-                  {' '}
-                  comments
-                </Text>
-              )}
-
-              {item.commentsLoaded && inlineComments.length === 0 && (
-                <Text style={[membersStyles.noCommentsText, { color: subColor }]}>
-                  No comments yet. Be the first.
-                </Text>
-              )}
-            </View>
-          )}
+            {item.comments.length === 0 && (
+              <Text style={[membersStyles.noCommentsText, { color: subColor }]}>
+                No comments yet. Be the first.
+              </Text>
+            )}
+          </View>
 
           {/* Comment input */}
           <View style={[membersStyles.commentInputRow, { borderTopColor: dividerColor }]}>
@@ -792,11 +963,6 @@ export default function CommunityScreen() {
               value={commentInputValue}
               onChangeText={(text) => {
                 setCommentInputs((prev) => ({ ...prev, [item.id]: text }));
-              }}
-              onFocus={() => {
-                if (!item.commentsLoaded) {
-                  loadPostComments(item.id);
-                }
               }}
               returnKeyType="send"
               onSubmitEditing={() => {
@@ -829,7 +995,7 @@ export default function CommunityScreen() {
 
     return (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* Category pills + optional new post button */}
+        {/* Category pills only — no admin Post button here */}
         <View style={[membersStyles.categoryHeader, { borderBottomColor: dividerColor }]}>
           <ScrollView
             horizontal
@@ -857,19 +1023,6 @@ export default function CommunityScreen() {
               );
             })}
           </ScrollView>
-          {isAdmin && (
-            <Pressable
-              style={[membersStyles.newPostBtn, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                console.log('[Members] New post button pressed (admin)');
-                setShowCreatePost(true);
-              }}
-              accessibilityRole="button"
-            >
-              <SquarePen size={14} color="#fff" />
-              <Text style={membersStyles.newPostBtnText}>Post</Text>
-            </Pressable>
-          )}
         </View>
 
         {membersLoading ? (
@@ -1047,19 +1200,19 @@ export default function CommunityScreen() {
           headerStyle: { backgroundColor: isDark ? colors.backgroundDark : colors.background },
           headerTintColor: isDark ? colors.textDark : colors.text,
           headerTitleStyle: { fontWeight: '700', fontSize: 18 },
-          headerRight: () => (
+          headerRight: isAdmin ? () => (
             <Pressable
               onPress={() => {
-                console.log('[Community] Create post button pressed');
-                setShowCreatePost(true);
+                console.log('[Community] Create founder post button pressed');
+                setShowFounderModal(true);
               }}
               style={styles.headerCreateBtn}
-              accessibilityLabel="Create post"
+              accessibilityLabel="Create founder post"
               accessibilityRole="button"
             >
               <SquarePen size={22} color={colors.primary} />
             </Pressable>
-          ),
+          ) : undefined,
         }}
       />
 
@@ -1077,6 +1230,21 @@ export default function CommunityScreen() {
         </View>
       </View>
 
+      {/* FAB for regular users on Everyone feed */}
+      {!isAdmin && mainTab === 'feed' && feedToggle === 'everyone' && (
+        <Pressable
+          style={styles.fab}
+          onPress={() => {
+            console.log('[Community] FAB create post pressed');
+            setShowCreatePost(true);
+          }}
+          accessibilityLabel="Create post"
+          accessibilityRole="button"
+        >
+          <Plus size={24} color="#fff" />
+        </Pressable>
+      )}
+
       <CreatePostSheet
         visible={showCreatePost}
         isDark={isDark}
@@ -1089,6 +1257,178 @@ export default function CommunityScreen() {
           loadFeed(true);
         }}
       />
+
+      {/* Founder post creation modal (admin) */}
+      <Modal
+        visible={showFounderModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFounderModal(false)}
+      >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowFounderModal(false)} />
+          <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.backgroundDark : '#fff' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>New Post</Text>
+              <Pressable
+                onPress={() => {
+                  console.log('[Community] Founder modal closed');
+                  setShowFounderModal(false);
+                }}
+                style={styles.modalCloseBtn}
+                accessibilityRole="button"
+              >
+                <X size={22} color={subColor} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.modalSectionLabel, { color: subColor }]}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalCategoryRow}>
+              {FOUNDER_POST_CATEGORIES.map((opt) => {
+                const isActive = founderModalCategory === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={[
+                      styles.modalCategoryPill,
+                      isActive
+                        ? { backgroundColor: colors.primary }
+                        : { backgroundColor: 'transparent', borderColor },
+                    ]}
+                    onPress={() => {
+                      console.log('[Community] Founder modal category selected:', opt.value);
+                      setFounderModalCategory(opt.value);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.modalCategoryPillText, { color: isActive ? '#fff' : subColor }]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={[styles.modalSectionLabel, { color: subColor }]}>Content</Text>
+            <TextInput
+              style={[styles.modalTextInput, { backgroundColor: inputBg, borderColor, color: textColor }]}
+              placeholder="Share something with your members..."
+              placeholderTextColor={subColor}
+              value={founderModalContent}
+              onChangeText={setFounderModalContent}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              maxLength={1000}
+            />
+
+            {founderModalError ? (
+              <Text style={styles.modalError}>{founderModalError}</Text>
+            ) : null}
+
+            <Pressable
+              style={[styles.modalPublishBtn, { opacity: founderModalSubmitting || !founderModalContent.trim() ? 0.6 : 1 }]}
+              onPress={() => {
+                console.log('[Community] Publish founder post pressed');
+                handleCreateFounderPost();
+              }}
+              disabled={founderModalSubmitting || !founderModalContent.trim()}
+              accessibilityRole="button"
+            >
+              {founderModalSubmitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.modalPublishBtnText}>Publish</Text>
+              )}
+            </Pressable>
+            <View style={{ height: 20 }} />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit founder post modal (admin) */}
+      <Modal
+        visible={!!editingPost}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingPost(null)}
+      >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditingPost(null)} />
+          <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.backgroundDark : '#fff' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>Edit Post</Text>
+              <Pressable
+                onPress={() => {
+                  console.log('[Community] Edit modal closed');
+                  setEditingPost(null);
+                }}
+                style={styles.modalCloseBtn}
+                accessibilityRole="button"
+              >
+                <X size={22} color={subColor} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.modalSectionLabel, { color: subColor }]}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalCategoryRow}>
+              {FOUNDER_POST_CATEGORIES.map((opt) => {
+                const isActive = editCategory === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={[
+                      styles.modalCategoryPill,
+                      isActive
+                        ? { backgroundColor: colors.primary }
+                        : { backgroundColor: 'transparent', borderColor },
+                    ]}
+                    onPress={() => {
+                      console.log('[Community] Edit modal category selected:', opt.value);
+                      setEditCategory(opt.value);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.modalCategoryPillText, { color: isActive ? '#fff' : subColor }]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={[styles.modalSectionLabel, { color: subColor }]}>Content</Text>
+            <TextInput
+              style={[styles.modalTextInput, { backgroundColor: inputBg, borderColor, color: textColor }]}
+              placeholder="Share something with your members..."
+              placeholderTextColor={subColor}
+              value={editContent}
+              onChangeText={setEditContent}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              maxLength={1000}
+            />
+
+            <Pressable
+              style={[styles.modalPublishBtn, { opacity: editSubmitting || !editContent.trim() ? 0.6 : 1 }]}
+              onPress={() => {
+                console.log('[Community] Save edit pressed');
+                handleSaveEdit();
+              }}
+              disabled={editSubmitting || !editContent.trim()}
+              accessibilityRole="button"
+            >
+              {editSubmitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.modalPublishBtnText}>Save changes</Text>
+              )}
+            </Pressable>
+            <View style={{ height: 20 }} />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }
@@ -1104,6 +1444,100 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: 100,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 100,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  modalCategoryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  modalCategoryPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  modalCategoryPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modalTextInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    minHeight: 120,
+    marginBottom: 16,
+  },
+  modalError: {
+    color: '#EF4444',
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  modalPublishBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalPublishBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 
   // Main tab bar (underline style)
@@ -1335,6 +1769,13 @@ const membersStyles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '600',
+  },
+  moreBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 
   postsList: {

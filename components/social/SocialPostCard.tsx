@@ -40,6 +40,7 @@ interface SocialPostCardProps {
   onLike: (postId: string) => void;
   onComment?: (postId: string) => void;
   onPressUser?: (userId: string) => void;
+  onMoreOptions?: (postId: string, authorId: string) => void;
   index?: number;
   hideCommentButton?: boolean;
 }
@@ -50,6 +51,7 @@ export default function SocialPostCard({
   onLike,
   onComment,
   onPressUser,
+  onMoreOptions,
   index = 0,
   hideCommentButton = false,
 }: SocialPostCardProps) {
@@ -276,7 +278,13 @@ export default function SocialPostCard({
           <Text style={[styles.timestamp, { color: subColor }]}>{timeAgoText}</Text>
         </View>
         <Pressable
-          onPress={() => console.log('[SocialPostCard] More options pressed — post_id:', post.id)}
+          onPress={() => {
+            if (onMoreOptions) {
+              onMoreOptions(post.id, post.author?.id ?? '');
+            } else {
+              console.log('[SocialPostCard] More options pressed — post_id:', post.id);
+            }
+          }}
           style={styles.moreBtn}
           accessibilityLabel="More options"
           accessibilityRole="button"
