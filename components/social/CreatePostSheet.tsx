@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,57 +6,18 @@ import {
   Modal,
   TextInput,
   Pressable,
-  ScrollView,
-  Switch,
   ActivityIndicator,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  ScrollView,
 } from 'react-native';
-import { X, Trophy, Flame, Camera, Type, ChartBar } from 'lucide-react-native';
+import { X, Trophy, Flame, Camera, ChartBar, Lock, Unlock } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { createPost } from '@/utils/socialApi';
-import type { PostType } from '@/utils/socialApi';
-
-type PostTypeOption = {
-  type: PostType;
-  label: string;
-  description: string;
-  icon: React.ReactNode;
-};
-
-const POST_TYPES: PostTypeOption[] = [
-  {
-    type: 'text',
-    label: 'Text',
-    icon: <Type size={20} color={colors.primary} />,
-    description: 'Share your thoughts',
-  },
-  {
-    type: 'streak',
-    label: 'Streak',
-    icon: <Flame size={20} color="#EF4444" />,
-    description: 'Celebrate your streak',
-  },
-  {
-    type: 'milestone',
-    label: 'Milestone',
-    icon: <Trophy size={20} color="#F59E0B" />,
-    description: 'Announce an achievement',
-  },
-  {
-    type: 'stats',
-    label: 'Stats',
-    icon: <ChartBar size={20} color={colors.calories} />,
-    description: 'Share your macros',
-  },
-  {
-    type: 'photo',
-    label: 'Photo',
-    icon: <Camera size={20} color={colors.primary} />,
-    description: 'Post a progress photo',
-  },
-];
+import { supabase } from '@/lib/supabase/client';
 
 const MILESTONE_TYPES = [
   'Weight goal reached',
@@ -66,10 +27,13 @@ const MILESTONE_TYPES = [
   'Other',
 ];
 
+const MAX_CHARS = 500;
+
 interface CreatePostSheetProps {
   visible: boolean;
   isDark: boolean;
   currentStreak?: number;
+  currentUserId?: string | null;
   onClose: () => void;
   onPosted: () => void;
 }
@@ -78,53 +42,137 @@ export default function CreatePostSheet({
   visible,
   isDark,
   currentStreak = 0,
+  currentUserId,
   onClose,
   onPosted,
 }: CreatePostSheetProps) {
-  const [selectedType, setSelectedType] = useState<PostType>('text');
   const [content, setContent] = useState('');
   const [isPublic, setIsPublic] = useState(true);
-  const [milestoneType, setMilestoneType] = useState(MILESTONE_TYPES[0]);
+  const [showStreakBadge, setShowStreakBadge] = useState(false);
+  const [showStatsBadge, setShowStatsBadge] = useState(false);
+  const [showMilestonePicker, setShowMilestonePicker] = useState(false);
+  const [selectedMilestone, setSelectedMilestone] = useState<string | null>(null);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const bg = isDark ? colors.backgroundDark : '#FFFFFF';
-  const cardBg = isDark ? colors.cardDark : colors.card;
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const inputBg = isDark ? '#1E2035' : colors.card;
+  const dividerColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const toolbarBg = isDark ? colors.cardDark : '#FAFAFA';
 
-  const handleTypeSelect = useCallback((type: PostType) => {
-    console.log('[CreatePostSheet] Post type selected:', type);
-    setSelectedType(type);
-    setError(null);
+  const charCount = content.length;
+  const charLimitReached = charCount >= MAX_CHARS * 0.9;
+  const charColor = charCount > MAX_CHARS ? colors.error : charLimitReached ? colors.warning : subColor;
+  const canPost = content.trim().length > 0 && charCount <= MAX_CHARS && !posting;
+
+  // Derive initials for avatar
+  const userInitial = currentUserId ? currentUserId.charAt(0).toUpperCase() : 'U';
+
+  const handlePickImage = useCallback(async () => {
+    console.log('[CreatePostSheet] Image picker button pressed');
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        console.log('[CreatePostSheet] Image selected — uri:', uri);
+        setSelectedImageUri(uri);
+      }
+    } catch (e) {
+      console.error('[CreatePostSheet] Image picker error:', e);
+    }
   }, []);
 
+  const handleRemoveImage = useCallback(() => {
+    console.log('[CreatePostSheet] Image removed');
+    setSelectedImageUri(null);
+  }, []);
+
+  const uploadImage = useCallback(async (uri: string): Promise<string | null> => {
+    console.log('[CreatePostSheet] Uploading image to social-images bucket');
+    setUploadingImage(true);
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `posts/${currentUserId ?? 'anon'}/${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('social-images')
+        .upload(path, blob, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+
+      if (uploadError) {
+        console.error('[CreatePostSheet] Image upload error:', uploadError.message);
+        if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('bucket')) {
+          console.warn('[CreatePostSheet] social-images bucket not found — skipping image');
+          return null;
+        }
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage.from('social-images').getPublicUrl(path);
+      const publicUrl = urlData?.publicUrl ?? null;
+      console.log('[CreatePostSheet] Image uploaded — public URL:', publicUrl);
+      return publicUrl;
+    } catch (e) {
+      console.error('[CreatePostSheet] Image upload exception:', e);
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [currentUserId]);
+
   const handlePost = useCallback(async () => {
-    console.log('[CreatePostSheet] Post button pressed — type:', selectedType, 'public:', isPublic, 'content length:', content.trim().length);
+    console.log('[CreatePostSheet] Post button pressed — content length:', content.trim().length, 'public:', isPublic, 'hasImage:', !!selectedImageUri, 'streak:', showStreakBadge, 'stats:', showStatsBadge, 'milestone:', selectedMilestone);
     if (!content.trim()) {
       setError('Please write something to share.');
       return;
     }
-    if (content.trim().length > 280) {
-      setError('Post must be 280 characters or less.');
+    if (charCount > MAX_CHARS) {
+      setError(`Post must be ${MAX_CHARS} characters or less.`);
       return;
     }
     setPosting(true);
     setError(null);
+
+    let imageUrl: string | null = null;
+    if (selectedImageUri) {
+      imageUrl = await uploadImage(selectedImageUri);
+    }
+
+    // Determine post type
+    let postType: 'text' | 'streak' | 'milestone' | 'stats' | 'photo' = 'text';
+    if (imageUrl) postType = 'photo';
+    else if (showStreakBadge) postType = 'streak';
+    else if (selectedMilestone) postType = 'milestone';
+    else if (showStatsBadge) postType = 'stats';
+
     try {
       await createPost({
-        post_type: selectedType,
+        post_type: postType,
         content: content.trim(),
-        streak_days: selectedType === 'streak' ? currentStreak : undefined,
-        milestone_type: selectedType === 'milestone' ? milestoneType : undefined,
+        streak_days: showStreakBadge ? currentStreak : undefined,
+        milestone_type: selectedMilestone ?? undefined,
         is_public: isPublic,
+        image_url: imageUrl ?? undefined,
       });
-      console.log('[CreatePostSheet] Post created successfully');
+      console.log('[CreatePostSheet] Post created successfully — type:', postType);
+      // Reset state
       setContent('');
-      setSelectedType('text');
       setIsPublic(true);
+      setShowStreakBadge(false);
+      setShowStatsBadge(false);
+      setShowMilestonePicker(false);
+      setSelectedMilestone(null);
+      setSelectedImageUri(null);
       onPosted();
       onClose();
     } catch (e: unknown) {
@@ -134,18 +182,60 @@ export default function CreatePostSheet({
     } finally {
       setPosting(false);
     }
-  }, [selectedType, content, isPublic, milestoneType, currentStreak, onPosted, onClose]);
+  }, [content, charCount, isPublic, selectedImageUri, showStreakBadge, showStatsBadge, selectedMilestone, currentStreak, uploadImage, onPosted, onClose]);
 
   const handleClose = useCallback(() => {
     console.log('[CreatePostSheet] Sheet closed');
     setContent('');
     setError(null);
+    setSelectedImageUri(null);
+    setShowStreakBadge(false);
+    setShowStatsBadge(false);
+    setShowMilestonePicker(false);
+    setSelectedMilestone(null);
     onClose();
   }, [onClose]);
 
-  const charCount = content.length;
-  const charLimitReached = charCount >= 260;
-  const charColor = charCount > 280 ? colors.error : charLimitReached ? colors.warning : subColor;
+  const handleToggleStreak = useCallback(() => {
+    const next = !showStreakBadge;
+    console.log('[CreatePostSheet] Streak badge toggled:', next);
+    setShowStreakBadge(next);
+    if (next) {
+      setShowStatsBadge(false);
+      setShowMilestonePicker(false);
+      setSelectedMilestone(null);
+    }
+  }, [showStreakBadge]);
+
+  const handleToggleMilestone = useCallback(() => {
+    const next = !showMilestonePicker;
+    console.log('[CreatePostSheet] Milestone picker toggled:', next);
+    setShowMilestonePicker(next);
+    if (next) {
+      setShowStreakBadge(false);
+      setShowStatsBadge(false);
+    }
+  }, [showMilestonePicker]);
+
+  const handleToggleStats = useCallback(() => {
+    const next = !showStatsBadge;
+    console.log('[CreatePostSheet] Stats badge toggled:', next);
+    setShowStatsBadge(next);
+    if (next) {
+      setShowStreakBadge(false);
+      setShowMilestonePicker(false);
+      setSelectedMilestone(null);
+    }
+  }, [showStatsBadge]);
+
+  const handleTogglePublic = useCallback(() => {
+    const next = !isPublic;
+    console.log('[CreatePostSheet] Public toggle pressed — isPublic:', next);
+    setIsPublic(next);
+  }, [isPublic]);
+
+  const streakBadgeText = `🔥 ${currentStreak} day streak`;
+  const charCountDisplay = `${charCount}/${MAX_CHARS}`;
 
   return (
     <Modal
@@ -160,162 +250,194 @@ export default function CreatePostSheet({
       >
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={handleClose} />
         <View style={[styles.sheet, { backgroundColor: bg }]}>
-          {/* Header */}
+          {/* Header row */}
           <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: textColor }]}>Create post</Text>
+            {/* Avatar */}
+            <View style={[styles.avatarCircle, { backgroundColor: colors.primary + '28' }]}>
+              <Text style={[styles.avatarInitial, { color: colors.primary }]}>{userInitial}</Text>
+            </View>
+
+            <View style={{ flex: 1 }} />
+
+            {/* Post button */}
+            <Pressable
+              onPress={handlePost}
+              disabled={!canPost}
+              style={[styles.postPill, { backgroundColor: canPost ? colors.primary : colors.primary + '40' }]}
+              accessibilityLabel="Post"
+              accessibilityRole="button"
+            >
+              {posting || uploadingImage ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.postPillText}>Post</Text>
+              )}
+            </Pressable>
+
+            {/* Close */}
             <Pressable
               onPress={handleClose}
               style={styles.closeBtn}
               accessibilityLabel="Close"
               accessibilityRole="button"
             >
-              <X size={22} color={subColor} />
+              <X size={20} color={subColor} />
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* Post type selector */}
-            <Text style={[styles.sectionLabel, { color: subColor }]}>Post type</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.typeRow}
-            >
-              {POST_TYPES.map((pt) => {
-                const isSelected = selectedType === pt.type;
-                return (
-                  <Pressable
-                    key={pt.type}
-                    onPress={() => handleTypeSelect(pt.type)}
-                    style={[
-                      styles.typeChip,
-                      {
-                        backgroundColor: isSelected ? colors.primary + '18' : cardBg,
-                        borderColor: isSelected ? colors.primary : borderColor,
-                      },
-                    ]}
-                    accessibilityLabel={pt.label}
-                    accessibilityRole="button"
-                  >
-                    {pt.icon}
-                    <Text style={[styles.typeChipLabel, { color: isSelected ? colors.primary : textColor }]}>
-                      {pt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Streak info */}
-            {selectedType === 'streak' && (
-              <View style={[styles.infoBox, { backgroundColor: '#FEE2E2' }]}>
-                <Flame size={18} color="#EF4444" />
-                <Text style={styles.infoBoxText}>
-                  Current streak:
-                  {' '}
-                  <Text style={{ fontWeight: '700' }}>
-                    {currentStreak}
-                    {' '}
-                    days
-                  </Text>
-                </Text>
-              </View>
-            )}
-
-            {/* Milestone type picker */}
-            {selectedType === 'milestone' && (
-              <View style={styles.milestoneSection}>
-                <Text style={[styles.sectionLabel, { color: subColor }]}>Milestone type</Text>
-                {MILESTONE_TYPES.map((mt) => (
-                  <Pressable
-                    key={mt}
-                    onPress={() => {
-                      console.log('[CreatePostSheet] Milestone type selected:', mt);
-                      setMilestoneType(mt);
-                    }}
-                    style={[
-                      styles.milestoneOption,
-                      {
-                        borderColor: milestoneType === mt ? colors.primary : borderColor,
-                        backgroundColor: milestoneType === mt ? colors.primary + '10' : 'transparent',
-                      },
-                    ]}
-                    accessibilityLabel={mt}
-                    accessibilityRole="button"
-                  >
-                    <Text style={[styles.milestoneOptionText, { color: milestoneType === mt ? colors.primary : textColor }]}>
-                      {mt}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-
-            {/* Content input */}
-            <Text style={[styles.sectionLabel, { color: subColor }]}>
-              {selectedType === 'text' ? "What's on your mind?" : 'Caption'}
-            </Text>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Main text input */}
             <TextInput
-              style={[styles.textInput, { backgroundColor: inputBg, borderColor, color: textColor }]}
-              placeholder={
-                selectedType === 'text'
-                  ? 'Share your progress, thoughts, or tips...'
-                  : 'Add a caption...'
-              }
+              ref={inputRef}
+              style={[styles.mainInput, { color: textColor }]}
+              placeholder="What's on your mind?"
               placeholderTextColor={subColor}
               value={content}
               onChangeText={setContent}
               multiline
-              numberOfLines={4}
+              autoFocus
               textAlignVertical="top"
-              maxLength={300}
+              maxLength={MAX_CHARS + 10}
             />
-            <Text style={[styles.charCount, { color: charColor }]}>
-              {charCount}
-              /280
-            </Text>
 
-            {/* Public toggle */}
-            <View style={[styles.toggleRow, { borderColor }]}>
-              <View style={styles.toggleInfo}>
-                <Text style={[styles.toggleLabel, { color: textColor }]}>Public post</Text>
-                <Text style={[styles.toggleDesc, { color: subColor }]}>
-                  {isPublic ? 'Visible to everyone' : 'Only your followers'}
-                </Text>
+            {/* Inline badges */}
+            {showStreakBadge && (
+              <View style={[styles.inlineBadge, { backgroundColor: '#FEE2E2' }]}>
+                <Text style={styles.inlineBadgeText}>{streakBadgeText}</Text>
               </View>
-              <Switch
-                value={isPublic}
-                onValueChange={(val) => {
-                  console.log('[CreatePostSheet] Public toggle changed:', val);
-                  setIsPublic(val);
-                }}
-                trackColor={{ false: colors.border, true: colors.primary + '88' }}
-                thumbColor={isPublic ? colors.primary : '#f4f3f4'}
-              />
-            </View>
+            )}
+
+            {showStatsBadge && (
+              <View style={[styles.inlineBadge, { backgroundColor: colors.primary + '18' }]}>
+                <Text style={[styles.inlineBadgeText, { color: colors.primary }]}>📊 Sharing my macros today</Text>
+              </View>
+            )}
+
+            {/* Milestone picker */}
+            {showMilestonePicker && (
+              <View style={[styles.milestonePicker, { borderColor }]}>
+                {MILESTONE_TYPES.map((mt) => {
+                  const isSelected = selectedMilestone === mt;
+                  return (
+                    <Pressable
+                      key={mt}
+                      onPress={() => {
+                        console.log('[CreatePostSheet] Milestone selected:', mt);
+                        setSelectedMilestone(isSelected ? null : mt);
+                      }}
+                      style={[
+                        styles.milestoneOption,
+                        {
+                          borderColor: isSelected ? colors.primary : borderColor,
+                          backgroundColor: isSelected ? colors.primary + '10' : 'transparent',
+                        },
+                      ]}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.milestoneOptionText, { color: isSelected ? colors.primary : textColor }]}>
+                        {mt}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Image preview */}
+            {selectedImageUri && (
+              <View style={styles.imagePreviewWrap}>
+                <Image
+                  source={{ uri: selectedImageUri }}
+                  style={styles.imagePreview}
+                  resizeMode="cover"
+                />
+                <Pressable
+                  style={styles.imageRemoveBtn}
+                  onPress={handleRemoveImage}
+                  accessibilityLabel="Remove image"
+                  accessibilityRole="button"
+                >
+                  <X size={14} color="#fff" />
+                </Pressable>
+              </View>
+            )}
 
             {/* Error */}
             {error ? (
               <Text style={styles.errorText}>{error}</Text>
             ) : null}
+          </ScrollView>
 
-            {/* Post button */}
+          {/* Bottom toolbar */}
+          <View style={[styles.toolbar, { borderTopColor: dividerColor, backgroundColor: toolbarBg }]}>
+            {/* Image picker */}
             <Pressable
-              onPress={handlePost}
-              disabled={posting}
-              style={[styles.postBtn, { opacity: posting ? 0.7 : 1 }]}
-              accessibilityLabel="Publish post"
+              onPress={handlePickImage}
+              style={[styles.toolbarBtn, selectedImageUri ? { backgroundColor: colors.primary + '18' } : {}]}
+              accessibilityLabel="Add image"
               accessibilityRole="button"
+              hitSlop={8}
             >
-              {posting ? (
-                <ActivityIndicator color="#fff" size="small" />
+              <Camera size={22} color={selectedImageUri ? colors.primary : subColor} />
+            </Pressable>
+
+            {/* Streak */}
+            <Pressable
+              onPress={handleToggleStreak}
+              style={[styles.toolbarBtn, showStreakBadge ? { backgroundColor: '#FEE2E2' } : {}]}
+              accessibilityLabel="Add streak"
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Flame size={22} color={showStreakBadge ? '#EF4444' : subColor} />
+            </Pressable>
+
+            {/* Milestone */}
+            <Pressable
+              onPress={handleToggleMilestone}
+              style={[styles.toolbarBtn, showMilestonePicker ? { backgroundColor: '#FEF3C7' } : {}]}
+              accessibilityLabel="Add milestone"
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Trophy size={22} color={showMilestonePicker ? '#F59E0B' : subColor} />
+            </Pressable>
+
+            {/* Stats */}
+            <Pressable
+              onPress={handleToggleStats}
+              style={[styles.toolbarBtn, showStatsBadge ? { backgroundColor: colors.primary + '18' } : {}]}
+              accessibilityLabel="Share stats"
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <ChartBar size={22} color={showStatsBadge ? colors.primary : subColor} />
+            </Pressable>
+
+            {/* Lock / public toggle */}
+            <Pressable
+              onPress={handleTogglePublic}
+              style={styles.toolbarBtn}
+              accessibilityLabel={isPublic ? 'Public post' : 'Private post'}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              {isPublic ? (
+                <Unlock size={20} color={subColor} />
               ) : (
-                <Text style={styles.postBtnText}>Publish post</Text>
+                <Lock size={20} color={colors.warning} />
               )}
             </Pressable>
 
-            <View style={{ height: 40 }} />
-          </ScrollView>
+            <View style={{ flex: 1 }} />
+
+            {/* Char count */}
+            <Text style={[styles.charCount, { color: charColor }]}>{charCountDisplay}</Text>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -330,127 +452,128 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
     maxHeight: '90%',
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
-  sheetTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  closeBtn: {
-    width: 40,
-    height: 40,
+  avatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionLabel: {
-    fontSize: 12,
+  avatarInitial: {
+    fontSize: 14,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
   },
-  typeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingBottom: 4,
-  },
-  typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
+  postPill: {
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
   },
-  typeChipLabel: {
+  postPillText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  mainInput: {
+    fontSize: 17,
+    lineHeight: 25,
+    minHeight: 90,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  inlineBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.sm,
+  },
+  inlineBadgeText: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
-  },
-  infoBoxText: {
-    fontSize: 14,
     color: '#991B1B',
   },
-  milestoneSection: {
-    gap: spacing.xs,
+  milestonePicker: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginBottom: spacing.sm,
   },
   milestoneOption: {
-    paddingVertical: 12,
+    paddingVertical: 11,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
-    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   milestoneOptionText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  textInput: {
-    borderWidth: 1,
+  imagePreviewWrap: {
+    position: 'relative',
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  imagePreview: {
+    width: 120,
+    height: 120,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: 15,
-    lineHeight: 22,
-    minHeight: 100,
   },
-  charCount: {
-    fontSize: 12,
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  toggleRow: {
-    flexDirection: 'row',
+  imageRemoveBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    marginTop: spacing.md,
-    gap: spacing.md,
-  },
-  toggleInfo: {
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  toggleDesc: {
-    fontSize: 13,
-    marginTop: 2,
+    justifyContent: 'center',
   },
   errorText: {
     color: colors.error,
     fontSize: 13,
     marginTop: spacing.sm,
   },
-  postBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: 14,
+  toolbar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    gap: 4,
   },
-  postBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  toolbarBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  charCount: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
