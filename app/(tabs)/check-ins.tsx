@@ -67,13 +67,13 @@ import { supabase } from '@/lib/supabase/client';
 type MainTab = 'feed' | 'people';
 type FeedToggle = 'everyone' | 'members' | 'report_bug';
 type PeopleSection = 'following' | 'followers';
-type MembersCategory = 'all' | 'general' | 'ask_founder';
+type MembersCategory = 'all' | 'general' | 'ask_founder' | 'report_bug';
 
 interface FounderPost {
   id: string;
   author_id: string;
   content: string;
-  category: MembersCategory | 'report_bug';
+  category: MembersCategory;
   created_at: string;
   reaction_count: number;
   comment_count: number;
@@ -81,6 +81,7 @@ interface FounderPost {
   comments: FounderComment[];
   commentsLoaded: boolean;
   image_url?: string;
+  author_username?: string;
 }
 
 interface FounderComment {
@@ -117,6 +118,7 @@ const CATEGORY_LABELS: Record<MembersCategory, string> = {
   all: 'All',
   general: 'General',
   ask_founder: 'Ask Founder',
+  report_bug: '🐛 Bug Reports',
 };
 
 const FOUNDER_POST_CATEGORIES: { value: MembersCategory; label: string }[] = [
@@ -184,6 +186,8 @@ export default function CommunityScreen() {
   const [bugSteps, setBugSteps] = useState('');
   const [bugSubmitting, setBugSubmitting] = useState(false);
   const [bugSuccess, setBugSuccess] = useState(false);
+  const [bugImageUri, setBugImageUri] = useState<string | null>(null);
+  const [bugImageUploading, setBugImageUploading] = useState(false);
 
   // ── People state
   const [following, setFollowing] = useState<SearchUser[]>([]);
@@ -309,7 +313,7 @@ export default function CommunityScreen() {
 
   // ─── Load founder posts ──────────────────────────────────────────────────────
   const loadFounderPosts = useCallback(async (
-    category: MembersCategory = activeCategory,
+    category: MembersCategory | 'all' = activeCategory,
     isRefresh = false,
   ) => {
     console.log('[Members] loadFounderPosts — category:', category, 'isRefresh:', isRefresh);
@@ -364,6 +368,10 @@ export default function CommunityScreen() {
         });
       }
 
+      // Batch-fetch author usernames for all posts (needed for bug report cards)
+      const postAuthorIds = [...new Set((data ?? []).map((p: Record<string, unknown>) => p.author_id as string))];
+      const postAuthorMap = await fetchUsernames(postAuthorIds);
+
       const posts: FounderPost[] = await Promise.all(
         (data ?? []).map(async (post: Record<string, unknown>) => {
           let userReaction: string | null = null;
@@ -379,6 +387,7 @@ export default function CommunityScreen() {
 
           const reactionsArr = post.founder_post_reactions as { count: number }[] | undefined;
           const comments = commentsByPost[post.id as string] ?? [];
+          const authorInfo = postAuthorMap[post.author_id as string];
 
           return {
             id: post.id as string,
@@ -392,6 +401,7 @@ export default function CommunityScreen() {
             comments,
             commentsLoaded: true,
             image_url: post.image_url as string | undefined,
+            author_username: authorInfo?.username,
           };
         }),
       );
@@ -605,7 +615,7 @@ export default function CommunityScreen() {
           console.log('[Members] Edit post pressed — postId:', post.id);
           setEditingPost(post);
           setEditContent(post.content);
-          const cat = post.category === 'report_bug' || post.category === 'all' ? 'general' : post.category as MembersCategory;
+          const cat: MembersCategory = (post.category === 'report_bug' || post.category === 'all') ? 'general' : post.category as MembersCategory;
           setEditCategory(cat);
         },
       },
@@ -747,17 +757,45 @@ export default function CommunityScreen() {
   const handleSubmitBugReport = useCallback(async () => {
     const desc = bugDescription.trim();
     if (!desc || !currentUserId) return;
-    console.log('[Community] handleSubmitBugReport — description length:', desc.length, 'steps length:', bugSteps.trim().length);
+    console.log('[Community] handleSubmitBugReport — description length:', desc.length, 'steps length:', bugSteps.trim().length, 'hasImage:', !!bugImageUri);
     setBugSubmitting(true);
     try {
       const content = bugSteps.trim()
         ? `${desc}\n\nSteps to reproduce:\n${bugSteps.trim()}`
         : desc;
-      const { error } = await supabase.from('founder_posts').insert({
+
+      let imageUrl: string | undefined;
+      if (bugImageUri) {
+        console.log('[Community] handleSubmitBugReport — uploading screenshot');
+        setBugImageUploading(true);
+        try {
+          const ext = bugImageUri.split('.').pop() ?? 'jpg';
+          const path = `bug-reports/${currentUserId}-${Date.now()}.${ext}`;
+          const response = await fetch(bugImageUri);
+          const blob = await response.blob();
+          const { error: uploadError } = await supabase.storage
+            .from('social-images')
+            .upload(path, blob, { contentType: `image/${ext}` });
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage.from('social-images').getPublicUrl(path);
+            imageUrl = urlData.publicUrl;
+            console.log('[Community] handleSubmitBugReport — screenshot uploaded:', imageUrl);
+          } else {
+            console.error('[Community] handleSubmitBugReport — screenshot upload error:', uploadError.message);
+          }
+        } finally {
+          setBugImageUploading(false);
+        }
+      }
+
+      const payload: Record<string, unknown> = {
         content,
         category: 'report_bug',
         author_id: currentUserId,
-      });
+      };
+      if (imageUrl) payload.image_url = imageUrl;
+
+      const { error } = await supabase.from('founder_posts').insert(payload);
       if (error) {
         console.error('[Community] handleSubmitBugReport error:', error);
         return;
@@ -765,6 +803,7 @@ export default function CommunityScreen() {
       console.log('[Community] Bug report submitted successfully');
       setBugDescription('');
       setBugSteps('');
+      setBugImageUri(null);
       setBugSuccess(true);
       setTimeout(() => setBugSuccess(false), 5000);
     } catch (e) {
@@ -772,7 +811,7 @@ export default function CommunityScreen() {
     } finally {
       setBugSubmitting(false);
     }
-  }, [bugDescription, bugSteps, currentUserId]);
+  }, [bugDescription, bugSteps, bugImageUri, currentUserId]);
 
   // ─── Load people ─────────────────────────────────────────────────────────────
   const loadPeople = useCallback(async (isRefresh = false) => {
@@ -1019,19 +1058,66 @@ export default function CommunityScreen() {
               textAlignVertical="top"
             />
 
+            {/* Screenshot attachment */}
+            {bugImageUri ? (
+              <View style={bugStyles.screenshotPreviewRow}>
+                <Image
+                  source={{ uri: bugImageUri }}
+                  style={bugStyles.screenshotThumb}
+                  resizeMode="cover"
+                />
+                <Pressable
+                  style={bugStyles.screenshotRemoveBtn}
+                  onPress={() => {
+                    console.log('[Community] Bug report screenshot removed');
+                    setBugImageUri(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove screenshot"
+                >
+                  <X size={12} color="#fff" />
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={[bugStyles.attachBtn, { borderColor: colors.primary }]}
+                onPress={async () => {
+                  console.log('[Community] Attach screenshot button pressed');
+                  try {
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                      quality: 0.7,
+                    });
+                    if (!result.canceled && result.assets.length > 0) {
+                      const uri = result.assets[0].uri;
+                      console.log('[Community] Bug report screenshot selected — uri:', uri);
+                      setBugImageUri(uri);
+                    }
+                  } catch (e) {
+                    console.error('[Community] Bug report image picker error:', e);
+                  }
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={[bugStyles.attachBtnText, { color: colors.primary }]}>
+                  📎 Attach Screenshot (optional)
+                </Text>
+              </Pressable>
+            )}
+
             <Pressable
               style={[
                 bugStyles.submitBtn,
-                { opacity: bugSubmitting || !bugDescription.trim() ? 0.6 : 1 },
+                { opacity: bugSubmitting || bugImageUploading || !bugDescription.trim() ? 0.6 : 1 },
               ]}
               onPress={() => {
                 console.log('[Community] Submit bug report button pressed');
                 handleSubmitBugReport();
               }}
-              disabled={bugSubmitting || !bugDescription.trim()}
+              disabled={bugSubmitting || bugImageUploading || !bugDescription.trim()}
               accessibilityRole="button"
             >
-              {bugSubmitting ? (
+              {bugSubmitting || bugImageUploading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <Text style={bugStyles.submitBtnText}>Submit Report</Text>
@@ -1070,6 +1156,69 @@ export default function CommunityScreen() {
     }
 
     const renderFounderPostItem = ({ item }: { item: FounderPost }) => {
+      // ── Bug report card (admin view) ──────────────────────────────────────
+      if (item.category === 'report_bug') {
+        const bugTimestamp = timeAgo(item.created_at);
+        const reporterName = item.author_username ?? 'Member';
+        return (
+          <View style={[membersStyles.postCard, { backgroundColor: cardBg, borderColor }]}>
+            {/* Header */}
+            <View style={membersStyles.postHeader}>
+              <View style={[membersStyles.founderAvatarWrap, { backgroundColor: '#EF444418' }]}>
+                <Text style={{ fontSize: 18 }}>🐛</Text>
+              </View>
+              <View style={membersStyles.postHeaderInfo}>
+                <View style={membersStyles.postFounderRow}>
+                  <Text style={[membersStyles.postFounderLabel, { color: '#EF4444' }]}>Bug Report</Text>
+                  <Text style={[membersStyles.categoryBadgeText, { color: subColor }]}>{reporterName}</Text>
+                </View>
+                <Text style={[membersStyles.postTimestamp, { color: subColor }]}>{bugTimestamp}</Text>
+              </View>
+            </View>
+
+            {/* Content */}
+            <Text style={[membersStyles.postContent, { color: textColor }]}>{item.content}</Text>
+
+            {/* Screenshot (if present) */}
+            {item.image_url ? (
+              <Image
+                source={{ uri: item.image_url }}
+                style={[membersStyles.postImage, { marginHorizontal: 12, marginBottom: 8 }]}
+                resizeMode="cover"
+              />
+            ) : null}
+
+            {/* Mark Resolved button */}
+            <View style={[membersStyles.bugResolveRow, { borderTopColor: dividerColor }]}>
+              <Pressable
+                style={membersStyles.bugResolveBtn}
+                onPress={async () => {
+                  console.log('[Members] Mark Resolved pressed — postId:', item.id);
+                  try {
+                    const { error } = await supabase
+                      .from('founder_posts')
+                      .delete()
+                      .eq('id', item.id);
+                    if (error) {
+                      console.error('[Members] Mark Resolved error:', error);
+                      return;
+                    }
+                    setFounderPosts((prev) => prev.filter((p) => p.id !== item.id));
+                    console.log('[Members] Bug report resolved — postId:', item.id);
+                  } catch (e) {
+                    console.error('[Members] Mark Resolved exception:', e);
+                  }
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={membersStyles.bugResolveBtnText}>✓ Mark Resolved</Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+      }
+
+      // ── Normal founder post card ──────────────────────────────────────────
       const reactionCount = item.reaction_count ?? 0;
       const postTimestamp = timeAgo(item.created_at);
       const commentInputValue = commentInputs[item.id] ?? '';
@@ -1288,26 +1437,28 @@ export default function CommunityScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={membersStyles.categoryBar}
           >
-            {(Object.keys(CATEGORY_LABELS) as MembersCategory[]).map((cat) => {
-              const isActive = activeCategory === cat;
-              return (
-                <Pressable
-                  key={cat}
-                  style={[
-                    membersStyles.categoryPill,
-                    isActive
-                      ? { backgroundColor: colors.primary }
-                      : { backgroundColor: 'transparent', borderColor },
-                  ]}
-                  onPress={() => handleCategorySwitch(cat)}
-                  accessibilityRole="button"
-                >
-                  <Text style={[membersStyles.categoryPillText, { color: isActive ? '#fff' : subColor }]}>
-                    {CATEGORY_LABELS[cat]}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {(Object.keys(CATEGORY_LABELS) as MembersCategory[])
+              .filter((cat) => cat !== 'report_bug' || isAdmin)
+              .map((cat) => {
+                const isActive = activeCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    style={[
+                      membersStyles.categoryPill,
+                      isActive
+                        ? { backgroundColor: colors.primary }
+                        : { backgroundColor: 'transparent', borderColor },
+                    ]}
+                    onPress={() => handleCategorySwitch(cat)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[membersStyles.categoryPillText, { color: isActive ? '#fff' : subColor }]}>
+                      {CATEGORY_LABELS[cat]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
           </ScrollView>
         </View>
 
@@ -1821,6 +1972,40 @@ const bugStyles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  attachBtn: {
+    height: 80,
+    borderRadius: 12,
+    borderStyle: 'dashed',
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+  },
+  attachBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  screenshotPreviewRow: {
+    marginTop: spacing.md,
+    position: 'relative',
+    alignSelf: 'flex-start',
+  },
+  screenshotThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+  },
+  screenshotRemoveBtn: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -2383,5 +2568,26 @@ const membersStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+
+  // Bug report card
+  bugResolveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  bugResolveBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: '#22C55E',
+  },
+  bugResolveBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#22C55E',
   },
 });
