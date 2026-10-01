@@ -156,7 +156,7 @@ export default function CommunityScreen() {
   const [founderPosts, setFounderPosts] = useState<FounderPost[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersRefreshing, setMembersRefreshing] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<MembersCategory>('all');
+  const [activeCategory, setActiveCategory] = useState<MembersCategory>('general');
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -326,12 +326,8 @@ export default function CommunityScreen() {
         .order('created_at', { ascending: false })
         .limit(30);
 
-      if (category !== 'all') {
-        query = query.eq('category', category);
-      } else {
-        // Exclude report_bug from Members feed — those go to the Report a Bug tab
-        query = query.neq('category', 'report_bug');
-      }
+      // Always filter by the selected category (no 'all' option in pills)
+      query = query.eq('category', category);
 
       const { data, error } = await query;
 
@@ -1438,7 +1434,7 @@ export default function CommunityScreen() {
             contentContainerStyle={membersStyles.categoryBar}
           >
             {(Object.keys(CATEGORY_LABELS) as MembersCategory[])
-              .filter((cat) => cat !== 'report_bug' || isAdmin)
+              .filter((cat) => cat !== 'all' && cat !== 'report_bug')
               .map((cat) => {
                 const isActive = activeCategory === cat;
                 return (
