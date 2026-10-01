@@ -118,6 +118,7 @@ export default function ProfileScreen() {
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
   const [showRangePicker, setShowRangePicker] = useState(false);
   const [rangeDayCount, setRangeDayCount] = useState(1);
+  const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -468,13 +469,6 @@ export default function ProfileScreen() {
         ? `Daily average over ${rangeDayCount} day${rangeDayCount !== 1 ? 's' : ''}`
         : '';
 
-  const rangePills: { key: NutritionRange; label: string }[] = [
-    { key: 'today', label: 'Today' },
-    { key: '7d', label: '7 Days' },
-    { key: '30d', label: '30 Days' },
-    { key: 'custom', label: 'Custom' },
-  ];
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
       {/* Top bar */}
@@ -610,61 +604,71 @@ export default function ProfileScreen() {
         </ScrollView>
 
         {/* ── Nutrition Card ──────────────────────────────────────────────── */}
-        <View style={[styles.nutritionCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-          <Text style={[styles.nutritionCardTitle, { color: textColor }]}>My Nutrition</Text>
-
-          {/* Range pill selector */}
-          <View style={styles.rangeSelector}>
-            {rangePills.map((pill) => {
-              const isActive = nutritionRange === pill.key;
-              return (
-                <TouchableOpacity
-                  key={pill.key}
-                  style={[
-                    styles.rangePill,
-                    {
-                      backgroundColor: isActive ? colors.primary : 'transparent',
-                      borderColor: isActive ? colors.primary : borderColor,
-                    },
-                  ]}
-                  onPress={() => handleRangeChange(pill.key)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.rangePillText,
-                      { color: isActive ? '#FFFFFF' : secondaryText },
-                    ]}
-                  >
-                    {pill.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+        <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
+          {/* Top-left dropdown button */}
+          <View style={styles.rangeDropdownRow}>
+            <TouchableOpacity
+              style={[styles.rangeDropdownBtn, { borderColor: borderColor }]}
+              onPress={() => {
+                console.log('[Profile] range dropdown toggled, currently open:', rangeDropdownOpen);
+                setRangeDropdownOpen(v => !v);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.rangeDropdownLabel, { color: secondaryText }]}>
+                {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7 Days' : nutritionRange === '30d' ? '30 Days' : 'Custom'}
+              </Text>
+              <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="expand_more" size={12} color={secondaryText} />
+            </TouchableOpacity>
+            {isMultiDay && (
+              <Text style={[styles.avgLabel, { color: secondaryText }]}>{averageLabelText}</Text>
+            )}
           </View>
 
-          <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
-            <View style={styles.caloriesContent}>
-              <ProgressCircle
-                current={totalCaloriesRounded}
-                target={goal?.daily_calories || 2000}
-                size={140}
-                strokeWidth={12}
-                color={colors.calories}
-                label="kcal"
-              />
-              <View style={styles.macroSummaryCompact}>
-                <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-                <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
-              </View>
+          {/* Dropdown menu — shown inline below the button when open */}
+          {rangeDropdownOpen && (
+            <View style={[styles.rangeDropdownMenu, { backgroundColor: cardBg, borderColor: borderColor }]}>
+              {(['today', '7d', '30d', 'custom'] as NutritionRange[]).map((key) => {
+                const label = key === 'today' ? 'Today' : key === '7d' ? '7 Days' : key === '30d' ? '30 Days' : 'Custom';
+                const isActive = nutritionRange === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.rangeDropdownItem, isActive && { backgroundColor: colors.primary + '15' }]}
+                    onPress={() => {
+                      console.log('[Profile] range dropdown item pressed:', key);
+                      setRangeDropdownOpen(false);
+                      handleRangeChange(key);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.rangeDropdownItemText, { color: isActive ? colors.primary : (isDark ? colors.textDark : colors.text) }]}>
+                      {label}
+                    </Text>
+                    {isActive && <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={12} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* The actual macro content */}
+          <View style={styles.caloriesContent}>
+            <ProgressCircle
+              current={totalCaloriesRounded}
+              target={goal?.daily_calories || 2000}
+              size={140}
+              strokeWidth={12}
+              color={colors.calories}
+              label="kcal"
+            />
+            <View style={styles.macroSummaryCompact}>
+              <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+              <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+              <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+              <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
             </View>
           </View>
-
-          {isMultiDay ? (
-            <Text style={[styles.averageLabel, { color: secondaryText }]}>{averageLabelText}</Text>
-          ) : null}
         </View>
 
         {/* ── Posts Feed ──────────────────────────────────────────────────── */}
@@ -984,58 +988,61 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Nutrition card wrapper
-  nutritionCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  nutritionCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-
-  // Range pill selector
-  rangeSelector: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 10,
-  },
-  rangePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  rangePillText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  // Average label
-  averageLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
-
   // ProgressCircle card (matches home tab exactly)
   caloriesCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
+    marginHorizontal: spacing.md,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   } as any,
+
+  // Range dropdown
+  rangeDropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  rangeDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  rangeDropdownLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  rangeDropdownMenu: {
+    position: 'absolute',
+    top: 36,
+    left: 0,
+    zIndex: 100,
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: 'hidden',
+    minWidth: 120,
+  },
+  rangeDropdownItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rangeDropdownItemText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  avgLabel: {
+    fontSize: 11,
+    fontWeight: '400',
+  },
   caloriesContent: {
     flexDirection: 'row',
     alignItems: 'center',
