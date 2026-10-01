@@ -12,6 +12,7 @@ import {
   Image,
   FlatList,
   ImageSourcePropType,
+  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -224,6 +225,39 @@ export default function ProfileScreen() {
     router.push('/settings');
   };
 
+  const handleDeletePost = async (postId: string) => {
+    console.log('[Profile] handleDeletePost — trash button pressed, postId:', postId);
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post?',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[Profile] handleDeletePost — cancelled') },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('[Profile] handleDeletePost — confirmed, deleting postId:', postId);
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) return;
+            const { error } = await supabase
+              .from('social_posts')
+              .delete()
+              .eq('id', postId)
+              .eq('user_id', authUser.id);
+            if (error) {
+              console.error('[Profile] handleDeletePost — error:', error.message);
+              Alert.alert('Error', 'Could not delete post');
+            } else {
+              console.log('[Profile] handleDeletePost — deleted successfully, postId:', postId);
+              setPosts(prev => prev.filter(p => p.id !== postId));
+              setPostsCount(prev => prev - 1);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -409,18 +443,35 @@ export default function ProfileScreen() {
                   key={post.id}
                   style={[styles.postCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}
                 >
-                  <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
-                  <View style={styles.postMeta}>
-                    <Text style={[styles.postTime, { color: secondaryText }]}>{postTime}</Text>
-                    <View style={styles.postLikesRow}>
+                  <View style={styles.postCardHeader}>
+                    <View style={styles.postCardBody}>
+                      <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
+                      <View style={styles.postMeta}>
+                        <Text style={[styles.postTime, { color: secondaryText }]}>{postTime}</Text>
+                        <View style={styles.postLikesRow}>
+                          <IconSymbol
+                            ios_icon_name="heart.fill"
+                            android_material_icon_name="favorite"
+                            size={13}
+                            color={colors.error}
+                          />
+                          <Text style={[styles.postLikes, { color: secondaryText }]}>{postLikes}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleDeletePost(post.id)}
+                      activeOpacity={0.7}
+                      style={styles.postDeleteButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
                       <IconSymbol
-                        ios_icon_name="heart.fill"
-                        android_material_icon_name="favorite"
-                        size={13}
+                        ios_icon_name="trash"
+                        android_material_icon_name="delete"
+                        size={16}
                         color={colors.error}
                       />
-                      <Text style={[styles.postLikes, { color: secondaryText }]}>{postLikes}</Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -682,6 +733,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: spacing.md,
     marginBottom: spacing.sm,
+  },
+  postCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  postCardBody: {
+    flex: 1,
+  },
+  postDeleteButton: {
+    padding: 4,
   },
   postContent: {
     ...typography.body,
