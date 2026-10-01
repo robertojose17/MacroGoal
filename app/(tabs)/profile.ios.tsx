@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { usePremium } from '@/hooks/usePremium';
 import ProgressCircle from '@/components/ProgressCircle';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { calcMacros } from '@/utils/macros';
+import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -54,6 +55,7 @@ type FollowUser = {
 };
 
 type FollowModalType = 'followers' | 'following' | null;
+type NutritionRange = 'today' | '7d' | '30d' | 'custom';
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
   const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
@@ -105,10 +107,17 @@ export default function ProfileScreen() {
   const [followModalUsers, setFollowModalUsers] = useState<FollowUser[]>([]);
   const [followModalLoading, setFollowModalLoading] = useState(false);
 
-  // Nutrition card (today only, food-tab style)
+  // Nutrition card
   const [totalCalories, setTotalCalories] = useState(0);
   const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
   const [goal, setGoal] = useState<any>(null);
+
+  // Range selector
+  const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
+  const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  const [showRangePicker, setShowRangePicker] = useState(false);
+  const [rangeDayCount, setRangeDayCount] = useState(1);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -116,6 +125,100 @@ export default function ProfileScreen() {
   const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
   const cardBorderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  // Fetch nutrition data for a given date range
+  const loadNutritionData = async (
+    userId: string,
+    range: NutritionRange,
+    customStart?: Date,
+    customEnd?: Date,
+  ) => {
+    const today = new Date();
+    let startDateStr: string;
+    let endDateStr: string;
+    let dayCount = 1;
+
+    if (range === 'today') {
+      startDateStr = toLocalDateString(today);
+      endDateStr = startDateStr;
+      dayCount = 1;
+    } else if (range === '7d') {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 6);
+      startDateStr = toLocalDateString(start);
+      endDateStr = toLocalDateString(today);
+      dayCount = 7;
+    } else if (range === '30d') {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      startDateStr = toLocalDateString(start);
+      endDateStr = toLocalDateString(today);
+      dayCount = 30;
+    } else {
+      // custom
+      const s = customStart ?? customStartDate;
+      const e = customEnd ?? customEndDate;
+      startDateStr = toLocalDateString(s);
+      endDateStr = toLocalDateString(e);
+      const msPerDay = 1000 * 60 * 60 * 24;
+      dayCount = Math.max(1, Math.round((e.getTime() - s.getTime()) / msPerDay) + 1);
+    }
+
+    console.log('[Profile] loadNutritionData — range:', range, 'start:', startDateStr, 'end:', endDateStr, 'days:', dayCount);
+
+    const query = supabase
+      .from('meals')
+      .select(`
+        id, meal_type, date,
+        meal_items (
+          id, food_id, food_item_id, quantity, calories, protein, carbs, fats, fiber,
+          serving_description, grams, logged_at, food_name, food_brand, is_scheduled,
+          food_items!meal_items_food_item_id_fkey (
+            id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per
+          )
+        )
+      `)
+      .eq('user_id', userId)
+      .gte('date', startDateStr)
+      .lte('date', endDateStr);
+
+    const { data: mealsData, error: mealsError } = await query;
+    console.log('[Profile] loadNutritionData — meals query:', mealsError ? mealsError.message : `${mealsData?.length ?? 0} meals`);
+
+    let totalCals = 0, totalP = 0, totalC = 0, totalF = 0, totalFib = 0;
+    mealsData?.forEach((meal: any) => {
+      meal.meal_items?.forEach((item: any) => {
+        const hasStoredMacros = item.calories != null && item.calories > 0;
+        const fi = item.food_items;
+        const grams = item.grams ?? 0;
+        const macros = hasStoredMacros
+          ? { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 }
+          : fi
+            ? (() => { const r = calcMacros(fi, grams); return { calories: r.calories, protein: r.protein, carbs: r.carbs, fats: r.fat, fiber: r.fiber }; })()
+            : { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+        if (!item.is_scheduled) {
+          totalCals += macros.calories;
+          totalP    += macros.protein;
+          totalC    += macros.carbs;
+          totalF    += macros.fats;
+          totalFib  += macros.fiber;
+        }
+      });
+    });
+
+    // Divide by day count for averages
+    const avgCals = totalCals / dayCount;
+    const avgP    = totalP / dayCount;
+    const avgC    = totalC / dayCount;
+    const avgF    = totalF / dayCount;
+    const avgFib  = totalFib / dayCount;
+
+    console.log('[Profile] loadNutritionData — totals: calories:', avgCals, 'protein:', avgP, 'carbs:', avgC, 'fats:', avgF, 'fiber:', avgFib, '(daily avg over', dayCount, 'days)');
+
+    setTotalCalories(avgCals);
+    setTotalMacros({ protein: avgP, carbs: avgC, fats: avgF, fiber: avgFib });
+    setRangeDayCount(dayCount);
+  };
 
   const loadData = async () => {
     console.log('[Profile] loadData — starting');
@@ -129,9 +232,6 @@ export default function ProfileScreen() {
       }
       console.log('[Profile] loadData — fetching data for user:', authUser.id);
 
-      const dateString = toLocalDateString(new Date());
-      console.log('[Profile] loadData — today dateString:', dateString);
-
       const [
         userResult,
         postsResult,
@@ -140,7 +240,6 @@ export default function ProfileScreen() {
         xpResult,
         mealsResult,
         goalsResult,
-        todayMealsResult,
       ] = await Promise.all([
         supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', authUser.id),
@@ -149,20 +248,6 @@ export default function ProfileScreen() {
         supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', authUser.id).maybeSingle(),
         supabase.from('meals').select('logged_date').eq('user_id', authUser.id),
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
-        supabase
-          .from('meals')
-          .select(`
-            id, meal_type, date,
-            meal_items (
-              id, food_id, food_item_id, quantity, calories, protein, carbs, fats, fiber,
-              serving_description, grams, logged_at, food_name, food_brand, is_scheduled,
-              food_items!meal_items_food_item_id_fkey (
-                id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per
-              )
-            )
-          `)
-          .eq('user_id', authUser.id)
-          .eq('date', dateString),
       ]);
 
       console.log('[Profile] loadData — user result:', userResult.error ? userResult.error.message : 'ok');
@@ -172,7 +257,6 @@ export default function ProfileScreen() {
       console.log('[Profile] loadData — xp result:', xpResult.error ? xpResult.error.message : 'ok', xpResult.data);
       console.log('[Profile] loadData — meals result:', mealsResult.error ? mealsResult.error.message : 'ok');
       console.log('[Profile] loadData — goals result:', goalsResult.error ? goalsResult.error.message : 'ok');
-      console.log('[Profile] loadData — today meals result:', todayMealsResult.error ? todayMealsResult.error.message : `${todayMealsResult.data?.length ?? 0} meals`);
 
       if (userResult.data) {
         setUser({ ...authUser, ...userResult.data });
@@ -195,35 +279,12 @@ export default function ProfileScreen() {
         setTotalDaysLogged(uniqueDates.size);
       }
 
-      // Set goal
       if (goalsResult.data) {
         setGoal(goalsResult.data);
       }
 
-      // Sum today's macros exactly like the food tab
-      let totalCals = 0, totalP = 0, totalC = 0, totalF = 0, totalFib = 0;
-      todayMealsResult.data?.forEach((meal: any) => {
-        meal.meal_items?.forEach((item: any) => {
-          const hasStoredMacros = item.calories != null && item.calories > 0;
-          const fi = item.food_items;
-          const grams = item.grams ?? 0;
-          const macros = hasStoredMacros
-            ? { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 }
-            : fi
-              ? (() => { const r = calcMacros(fi, grams); return { calories: r.calories, protein: r.protein, carbs: r.carbs, fats: r.fat, fiber: r.fiber }; })()
-              : { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
-          if (!item.is_scheduled) {
-            totalCals += macros.calories;
-            totalP    += macros.protein;
-            totalC    += macros.carbs;
-            totalF    += macros.fats;
-            totalFib  += macros.fiber;
-          }
-        });
-      });
-      setTotalCalories(totalCals);
-      setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
-      console.log('[Profile] loadData — today totals: calories:', totalCals, 'protein:', totalP, 'carbs:', totalC, 'fats:', totalF, 'fiber:', totalFib);
+      // Load nutrition for current range
+      await loadNutritionData(authUser.id, nutritionRange, customStartDate, customEndDate);
 
       // Load posts feed
       const { data: postsData, error: postsError } = await supabase
@@ -254,6 +315,28 @@ export default function ProfileScreen() {
     console.log('[Profile] pull-to-refresh triggered');
     setRefreshing(true);
     loadData();
+  };
+
+  const handleRangeChange = async (range: NutritionRange) => {
+    console.log('[Profile] handleRangeChange — range pill pressed:', range);
+    if (range === 'custom') {
+      setShowRangePicker(true);
+      return;
+    }
+    setNutritionRange(range);
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+    await loadNutritionData(authUser.id, range);
+  };
+
+  const handleCustomRangeSelect = async (startDate: Date, endDate: Date) => {
+    console.log('[Profile] handleCustomRangeSelect — start:', toLocalDateString(startDate), 'end:', toLocalDateString(endDate));
+    setCustomStartDate(startDate);
+    setCustomEndDate(endDate);
+    setNutritionRange('custom');
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+    await loadNutritionData(authUser.id, 'custom', startDate, endDate);
   };
 
   const openFollowModal = async (type: FollowModalType) => {
@@ -375,6 +458,22 @@ export default function ProfileScreen() {
   const followingCountDisplay = String(followingCount);
 
   const totalCaloriesRounded = Math.round(totalCalories);
+
+  const isMultiDay = nutritionRange !== 'today';
+  const averageLabelText = nutritionRange === '7d'
+    ? 'Daily average over 7 days'
+    : nutritionRange === '30d'
+      ? 'Daily average over 30 days'
+      : nutritionRange === 'custom'
+        ? `Daily average over ${rangeDayCount} day${rangeDayCount !== 1 ? 's' : ''}`
+        : '';
+
+  const rangePills: { key: NutritionRange; label: string }[] = [
+    { key: 'today', label: 'Today' },
+    { key: '7d', label: '7 Days' },
+    { key: '30d', label: '30 Days' },
+    { key: 'custom', label: 'Custom' },
+  ];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -510,9 +609,40 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
 
-        {/* ── Nutrition Card (Today, food-tab style) ──────────────────────── */}
+        {/* ── Nutrition Card ──────────────────────────────────────────────── */}
         <View style={[styles.nutritionCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
           <Text style={[styles.nutritionCardTitle, { color: textColor }]}>My Nutrition</Text>
+
+          {/* Range pill selector */}
+          <View style={styles.rangeSelector}>
+            {rangePills.map((pill) => {
+              const isActive = nutritionRange === pill.key;
+              return (
+                <TouchableOpacity
+                  key={pill.key}
+                  style={[
+                    styles.rangePill,
+                    {
+                      backgroundColor: isActive ? colors.primary : 'transparent',
+                      borderColor: isActive ? colors.primary : borderColor,
+                    },
+                  ]}
+                  onPress={() => handleRangeChange(pill.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.rangePillText,
+                      { color: isActive ? '#FFFFFF' : secondaryText },
+                    ]}
+                  >
+                    {pill.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
             <View style={styles.caloriesContent}>
               <ProgressCircle
@@ -531,6 +661,10 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
+
+          {isMultiDay ? (
+            <Text style={[styles.averageLabel, { color: secondaryText }]}>{averageLabelText}</Text>
+          ) : null}
         </View>
 
         {/* ── Posts Feed ──────────────────────────────────────────────────── */}
@@ -669,6 +803,20 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* ── Custom Range Picker ─────────────────────────────────────────────── */}
+      <CalendarDateRangePicker
+        visible={showRangePicker}
+        onClose={() => {
+          console.log('[Profile] CalendarDateRangePicker closed');
+          setShowRangePicker(false);
+        }}
+        onSelectRange={handleCustomRangeSelect}
+        initialStartDate={customStartDate}
+        initialEndDate={customEndDate}
+        maxDate={new Date()}
+        title="Select Date Range"
+      />
     </SafeAreaView>
   );
 }
@@ -855,50 +1003,74 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
-  // ProgressCircle card (matches home tab)
-  caloriesCard: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 0,
+  // Range pill selector
+  rangeSelector: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
   },
+  rangePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  rangePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Average label
+  averageLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+
+  // ProgressCircle card (matches home tab exactly)
+  caloriesCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  } as any,
   caloriesContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: spacing.lg,
   },
   macroSummaryCompact: {
     flex: 1,
-    gap: 8,
+    gap: spacing.sm,
   },
   macroSummaryRowCompact: {
-    marginBottom: 4,
+    gap: 4,
   },
   macroSummaryLabelCompact: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 3,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    fontSize: 12,
+    fontWeight: '500',
   },
   macroSummaryBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
   },
   macroSummaryBarBackground: {
     flex: 1,
-    height: 5,
-    borderRadius: 3,
+    height: 6,
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
   macroSummaryBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: borderRadius.full,
   },
   macroSummaryProgressCompact: {
     fontSize: 11,
     fontWeight: '500',
-    minWidth: 60,
+    minWidth: 70,
     textAlign: 'right',
   },
 
