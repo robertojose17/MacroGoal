@@ -883,7 +883,22 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      <View style={styles.header}>
+      <View style={[styles.header, { flexDirection: 'row', alignItems: 'center' }]}>
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[Settings iOS] Back button pressed');
+            router.back();
+          }}
+          activeOpacity={0.7}
+          style={{ padding: spacing.xs, marginRight: spacing.sm }}
+        >
+          <IconSymbol
+            ios_icon_name="chevron.left"
+            android_material_icon_name="arrow_back"
+            size={22}
+            color={isDark ? colors.textDark : colors.text}
+          />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
           {t('profile.title')}
         </Text>
