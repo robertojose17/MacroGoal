@@ -13,6 +13,9 @@ import {
   FlatList,
   ImageSourcePropType,
   Alert,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -42,6 +45,10 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function formatDateISO(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
 type FollowUser = {
   id: string;
   username: string | null;
@@ -50,6 +57,68 @@ type FollowUser = {
 };
 
 type FollowModalType = 'followers' | 'following' | null;
+type NutritionRange = 'today' | '7d' | '30d';
+
+interface NutritionData {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}
+
+interface GoalData {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}
+
+function MacroBar({
+  label,
+  value,
+  goal,
+  color,
+  isDark,
+  textColor,
+  secondaryText,
+}: {
+  label: string;
+  value: number;
+  goal: number;
+  color: string;
+  isDark: boolean;
+  textColor: string;
+  secondaryText: string;
+}) {
+  const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
+  const pctDisplay = goal > 0 ? Math.round((value / goal) * 100) : 0;
+  const valueDisplay = Math.round(value).toString();
+  const goalDisplay = Math.round(goal).toString();
+  const pctStr = pctDisplay.toString() + '%';
+
+  return (
+    <View style={macroBarStyles.row}>
+      <Text style={[macroBarStyles.label, { color: secondaryText }]}>{label}</Text>
+      <View style={[macroBarStyles.track, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
+        <View style={[macroBarStyles.fill, { width: `${pct * 100}%` as any, backgroundColor: color }]} />
+      </View>
+      <View style={macroBarStyles.numbers}>
+        <Text style={[macroBarStyles.value, { color: textColor }]}>{valueDisplay}g</Text>
+        <Text style={[macroBarStyles.pct, { color: secondaryText }]}>{pctStr}</Text>
+      </View>
+    </View>
+  );
+}
+
+const macroBarStyles = StyleSheet.create({
+  row: { marginBottom: 10 },
+  label: { fontSize: 12, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 },
+  track: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: 3 },
+  fill: { height: '100%', borderRadius: 3 },
+  numbers: { flexDirection: 'row', justifyContent: 'space-between' },
+  value: { fontSize: 12, fontWeight: '600' },
+  pct: { fontSize: 12 },
+});
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -79,11 +148,98 @@ export default function ProfileScreen() {
   const [followModalUsers, setFollowModalUsers] = useState<FollowUser[]>([]);
   const [followModalLoading, setFollowModalLoading] = useState(false);
 
+  // Edit profile modal
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Nutrition card
+  const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
+  const [nutritionData, setNutritionData] = useState<NutritionData | null>(null);
+  const [goalData, setGoalData] = useState<GoalData | null>(null);
+  const [nutritionLoading, setNutritionLoading] = useState(false);
+
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const cardBg = isDark ? colors.cardDark : colors.card;
   const textColor = isDark ? colors.textDark : colors.text;
   const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
+  const cardBorderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const loadNutrition = async (userId: string, range: NutritionRange) => {
+    console.log('[Profile] loadNutrition — userId:', userId, 'range:', range);
+    setNutritionLoading(true);
+    try {
+      const today = new Date();
+      let startDate: string;
+      let endDate: string = formatDateISO(today);
+
+      if (range === 'today') {
+        startDate = formatDateISO(today);
+      } else if (range === '7d') {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 6);
+        startDate = formatDateISO(d);
+      } else {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 29);
+        startDate = formatDateISO(d);
+      }
+
+      const [mealsRes, goalsRes] = await Promise.all([
+        supabase
+          .from('meals')
+          .select('meal_items (calories, protein, carbs, fats, fiber)')
+          .eq('user_id', userId)
+          .gte('date', startDate)
+          .lte('date', endDate),
+        supabase
+          .from('goals')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .maybeSingle(),
+      ]);
+
+      console.log('[Profile] loadNutrition — meals:', mealsRes.error?.message ?? 'ok', 'goals:', goalsRes.error?.message ?? 'ok');
+
+      let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0;
+      if (mealsRes.data) {
+        for (const meal of mealsRes.data) {
+          const items = (meal as any).meal_items ?? [];
+          for (const item of items) {
+            totalCal += Number(item.calories ?? 0);
+            totalProt += Number(item.protein ?? 0);
+            totalCarbs += Number(item.carbs ?? 0);
+            totalFats += Number(item.fats ?? 0);
+          }
+        }
+      }
+
+      const days = range === 'today' ? 1 : range === '7d' ? 7 : 30;
+      setNutritionData({
+        calories: range === 'today' ? totalCal : totalCal / days,
+        protein: range === 'today' ? totalProt : totalProt / days,
+        carbs: range === 'today' ? totalCarbs : totalCarbs / days,
+        fats: range === 'today' ? totalFats : totalFats / days,
+      });
+
+      if (goalsRes.data) {
+        setGoalData({
+          calories: Number(goalsRes.data.calories ?? goalsRes.data.calorie_goal ?? 2000),
+          protein: Number(goalsRes.data.protein ?? goalsRes.data.protein_goal ?? 150),
+          carbs: Number(goalsRes.data.carbs ?? goalsRes.data.carbs_goal ?? 200),
+          fats: Number(goalsRes.data.fats ?? goalsRes.data.fat_goal ?? 65),
+        });
+      }
+    } catch (err) {
+      console.error('[Profile] loadNutrition — error:', err);
+    } finally {
+      setNutritionLoading(false);
+    }
+  };
 
   const loadData = async () => {
     console.log('[Profile] loadData — starting');
@@ -151,6 +307,9 @@ export default function ProfileScreen() {
 
       console.log('[Profile] loadData — posts feed:', postsError ? postsError.message : `${postsData?.length ?? 0} posts`);
       setPosts(postsData ?? []);
+
+      // Load nutrition
+      await loadNutrition(authUser.id, nutritionRange);
     } catch (err) {
       console.error('[Profile] loadData — unexpected error:', err);
     } finally {
@@ -225,6 +384,40 @@ export default function ProfileScreen() {
     router.push('/settings');
   };
 
+  const handleEditProfilePress = () => {
+    console.log('[Profile] Edit Profile button pressed');
+    const displayName = user?.full_name || user?.name || '';
+    setEditName(displayName);
+    setEditUsername(user?.username || '');
+    setEditBio(user?.bio || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    console.log('[Profile] handleSaveProfile — saving name:', editName, 'username:', editUsername, 'bio length:', editBio.length);
+    setEditSaving(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ name: editName.trim(), username: editUsername.trim(), bio: editBio.trim() })
+        .eq('id', user.id);
+      if (error) {
+        console.error('[Profile] handleSaveProfile — error:', error.message);
+        Alert.alert('Error', 'Could not save profile. Please try again.');
+      } else {
+        console.log('[Profile] handleSaveProfile — saved successfully');
+        setUser((prev: any) => ({ ...prev, name: editName.trim(), full_name: editName.trim(), username: editUsername.trim(), bio: editBio.trim() }));
+        setEditModalVisible(false);
+      }
+    } catch (err) {
+      console.error('[Profile] handleSaveProfile — unexpected error:', err);
+      Alert.alert('Error', 'Could not save profile.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const handleDeletePost = async (postId: string) => {
     console.log('[Profile] handleDeletePost — trash button pressed, postId:', postId);
     Alert.alert(
@@ -258,6 +451,14 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleNutritionRangeChange = async (range: NutritionRange) => {
+    console.log('[Profile] nutrition range changed to:', range);
+    setNutritionRange(range);
+    if (user) {
+      await loadNutrition(user.id, range);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -281,6 +482,7 @@ export default function ProfileScreen() {
   const displayName = user.full_name || user.name || 'User';
   const initials = displayName.charAt(0).toUpperCase();
   const isPremiumUser = user.user_type === 'premium' || isPremium;
+  const bioText = user.bio || '';
 
   const currentStreakDisplay = String(currentStreak);
   const bestStreakDisplay = String(bestStreak);
@@ -288,6 +490,10 @@ export default function ProfileScreen() {
   const postsCountDisplay = String(postsCount);
   const followersCountDisplay = String(followersCount);
   const followingCountDisplay = String(followingCount);
+
+  const nutritionTitle = nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7-Day Avg' : '30-Day Avg';
+  const caloriesDisplay = nutritionData ? Math.round(nutritionData.calories).toString() : '—';
+  const caloriesGoalDisplay = goalData ? Math.round(goalData.calories).toString() : '—';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -320,78 +526,90 @@ export default function ProfileScreen() {
           />
         }
       >
-        {/* ── Header / Avatar ─────────────────────────────────────────────── */}
-        <View style={[styles.headerCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-          {/* Avatar */}
-          <View style={[styles.avatarRing, { borderColor: colors.primary }]}>
-            {user.avatar_url ? (
-              <Image
-                source={resolveImageSource(user.avatar_url)}
-                style={styles.avatarImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[styles.avatarFallback, { backgroundColor: colors.primary }]}>
-                <Text style={styles.avatarInitials}>{initials}</Text>
+        {/* ── Instagram-style Header Card ─────────────────────────────────── */}
+        <View style={[styles.headerCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
+          {/* Top row: avatar left, name/username/bio right */}
+          <View style={styles.headerTopRow}>
+            {/* Avatar */}
+            <View style={[styles.avatarRing, { borderColor: colors.primary }]}>
+              {user.avatar_url ? (
+                <Image
+                  source={resolveImageSource(user.avatar_url)}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.avatarFallback, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Name / username / bio */}
+            <View style={styles.headerInfo}>
+              <View style={styles.nameRow}>
+                <Text style={[styles.displayName, { color: textColor }]} numberOfLines={1}>{displayName}</Text>
+                {isPremiumUser && (
+                  <View style={styles.eliteBadge}>
+                    <Text style={styles.eliteBadgeText}>ELITE</Text>
+                  </View>
+                )}
               </View>
-            )}
+              {user.username ? (
+                <Text style={[styles.username, { color: secondaryText }]}>
+                  {'@'}
+                  {user.username}
+                </Text>
+              ) : null}
+              {bioText.length > 0 ? (
+                <Text style={[styles.bioText, { color: textColor }]} numberOfLines={3}>{bioText}</Text>
+              ) : null}
+            </View>
           </View>
 
-          {/* Name row */}
-          <View style={styles.nameRow}>
-            <Text style={[styles.displayName, { color: textColor }]}>{displayName}</Text>
-            {isPremiumUser && (
-              <View style={styles.eliteBadge}>
-                <Text style={styles.eliteBadgeText}>ELITE</Text>
-              </View>
-            )}
+          {/* Stats row */}
+          <View style={[styles.statsRow, { borderTopColor: borderColor, borderBottomColor: borderColor }]}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: textColor }]}>{postsCountDisplay}</Text>
+              <Text style={[styles.statLabel, { color: secondaryText }]}>Posts</Text>
+            </View>
+
+            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
+
+            <TouchableOpacity
+              style={styles.statItem}
+              onPress={() => {
+                console.log('[Profile] Followers stat tapped');
+                openFollowModal('followers');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.statNumber, { color: textColor }]}>{followersCountDisplay}</Text>
+              <Text style={[styles.statLabel, { color: secondaryText }]}>Followers</Text>
+            </TouchableOpacity>
+
+            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
+
+            <TouchableOpacity
+              style={styles.statItem}
+              onPress={() => {
+                console.log('[Profile] Following stat tapped');
+                openFollowModal('following');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.statNumber, { color: textColor }]}>{followingCountDisplay}</Text>
+              <Text style={[styles.statLabel, { color: secondaryText }]}>Following</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Username */}
-          {user.username ? (
-            <Text style={[styles.username, { color: secondaryText }]}>
-              {'@'}
-              {user.username}
-            </Text>
-          ) : null}
-        </View>
-
-        {/* ── Stats Row ───────────────────────────────────────────────────── */}
-        <View style={[styles.statsCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-          {/* Posts */}
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: textColor }]}>{postsCountDisplay}</Text>
-            <Text style={[styles.statLabel, { color: secondaryText }]}>Posts</Text>
-          </View>
-
-          <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
-
-          {/* Followers */}
+          {/* Edit Profile button */}
           <TouchableOpacity
-            style={styles.statItem}
-            onPress={() => {
-              console.log('[Profile] Followers stat tapped');
-              openFollowModal('followers');
-            }}
+            style={[styles.editProfileBtn, { borderColor: borderColor }]}
+            onPress={handleEditProfilePress}
             activeOpacity={0.7}
           >
-            <Text style={[styles.statNumber, { color: textColor }]}>{followersCountDisplay}</Text>
-            <Text style={[styles.statLabel, { color: secondaryText }]}>Followers</Text>
-          </TouchableOpacity>
-
-          <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
-
-          {/* Following */}
-          <TouchableOpacity
-            style={styles.statItem}
-            onPress={() => {
-              console.log('[Profile] Following stat tapped');
-              openFollowModal('following');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.statNumber, { color: textColor }]}>{followingCountDisplay}</Text>
-            <Text style={[styles.statLabel, { color: secondaryText }]}>Following</Text>
+            <Text style={[styles.editProfileBtnText, { color: textColor }]}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
 
@@ -401,34 +619,138 @@ export default function ProfileScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.achievementsStrip}
         >
-          {/* Current Streak */}
-          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
+          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
             <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={20} color={colors.primary} />
             <Text style={[styles.achievementNumber, { color: textColor }]}>{currentStreakDisplay}</Text>
             <Text style={[styles.achievementLabel, { color: secondaryText }]}>Streak</Text>
           </View>
 
-          {/* Best Streak */}
-          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
+          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
             <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={20} color="#F59E0B" />
             <Text style={[styles.achievementNumber, { color: textColor }]}>{bestStreakDisplay}</Text>
             <Text style={[styles.achievementLabel, { color: secondaryText }]}>Best Streak</Text>
           </View>
 
-          {/* Total Days */}
-          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
+          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar_today" size={20} color={colors.primary} />
             <Text style={[styles.achievementNumber, { color: textColor }]}>{totalDaysDisplay}</Text>
             <Text style={[styles.achievementLabel, { color: secondaryText }]}>Days Logged</Text>
           </View>
         </ScrollView>
 
+        {/* ── Nutrition Card ──────────────────────────────────────────────── */}
+        <View style={[styles.nutritionCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
+          {/* Header row */}
+          <View style={styles.nutritionCardHeader}>
+            <Text style={[styles.nutritionCardTitle, { color: textColor }]}>My Nutrition</Text>
+            <View style={styles.nutritionRangePills}>
+              {(['today', '7d', '30d'] as NutritionRange[]).map((r) => {
+                const isActive = nutritionRange === r;
+                const label = r === 'today' ? 'Today' : r === '7d' ? '7 Days' : '30 Days';
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    onPress={() => handleNutritionRangeChange(r)}
+                    style={[
+                      styles.nutritionRangePill,
+                      {
+                        backgroundColor: isActive ? colors.primary : 'transparent',
+                        borderColor: isActive ? colors.primary : borderColor,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.nutritionRangePillText, { color: isActive ? '#fff' : secondaryText }]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {nutritionLoading ? (
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.md }} />
+          ) : (
+            <>
+              {/* Calories */}
+              <View style={styles.caloriesRow}>
+                <View>
+                  <Text style={[styles.caloriesLabel, { color: secondaryText }]}>{nutritionTitle}</Text>
+                  <View style={styles.caloriesValueRow}>
+                    <Text style={[styles.caloriesValue, { color: colors.calories }]}>{caloriesDisplay}</Text>
+                    <Text style={[styles.caloriesUnit, { color: secondaryText }]}>kcal</Text>
+                  </View>
+                </View>
+                {goalData && (
+                  <View style={styles.caloriesGoalBadge}>
+                    <Text style={[styles.caloriesGoalText, { color: secondaryText }]}>Goal</Text>
+                    <Text style={[styles.caloriesGoalValue, { color: textColor }]}>{caloriesGoalDisplay}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Calorie progress bar */}
+              {goalData && nutritionData && (
+                <View style={[styles.calorieTrack, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
+                  <View
+                    style={[
+                      styles.calorieFill,
+                      {
+                        width: `${Math.min((nutritionData.calories / goalData.calories) * 100, 100)}%` as any,
+                        backgroundColor: colors.calories,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
+
+              {/* Macro bars */}
+              {nutritionData && goalData && (
+                <View style={styles.macroBarsContainer}>
+                  <MacroBar
+                    label="Protein"
+                    value={nutritionData.protein}
+                    goal={goalData.protein}
+                    color={colors.protein}
+                    isDark={isDark}
+                    textColor={textColor}
+                    secondaryText={secondaryText}
+                  />
+                  <MacroBar
+                    label="Carbs"
+                    value={nutritionData.carbs}
+                    goal={goalData.carbs}
+                    color={colors.carbs}
+                    isDark={isDark}
+                    textColor={textColor}
+                    secondaryText={secondaryText}
+                  />
+                  <MacroBar
+                    label="Fat"
+                    value={nutritionData.fats}
+                    goal={goalData.fats}
+                    color={colors.fats}
+                    isDark={isDark}
+                    textColor={textColor}
+                    secondaryText={secondaryText}
+                  />
+                </View>
+              )}
+
+              {!nutritionData && (
+                <Text style={[styles.noNutritionText, { color: secondaryText }]}>No nutrition data for this period</Text>
+              )}
+            </>
+          )}
+        </View>
+
         {/* ── Posts Feed ──────────────────────────────────────────────────── */}
         <View style={styles.feedSection}>
           <Text style={[styles.feedSectionTitle, { color: textColor }]}>Posts</Text>
 
           {posts.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
+            <View style={[styles.emptyState, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
               <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={40} color={colors.textSecondary} />
               <Text style={[styles.emptyStateText, { color: secondaryText }]}>
                 Your achievements will appear here
@@ -441,7 +763,7 @@ export default function ProfileScreen() {
               return (
                 <View
                   key={post.id}
-                  style={[styles.postCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}
+                  style={[styles.postCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}
                 >
                   <View style={styles.postCardHeader}>
                     <View style={styles.postCardBody}>
@@ -496,7 +818,6 @@ export default function ProfileScreen() {
             style={[styles.modalSheet, { backgroundColor: cardBg }]}
             activeOpacity={1}
           >
-            {/* Modal header */}
             <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
               <Text style={[styles.modalTitle, { color: textColor }]}>
                 {followModalType === 'followers' ? 'Followers' : 'Following'}
@@ -560,6 +881,119 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* ── Edit Profile Modal ───────────────────────────────────────────────── */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('[Profile] Edit Profile modal dismissed');
+          setEditModalVisible(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => {
+              console.log('[Profile] Edit Profile modal backdrop tapped — closing');
+              setEditModalVisible(false);
+            }}
+          />
+          <View style={[styles.editModalSheet, { backgroundColor: cardBg }]}>
+            {/* Handle */}
+            <View style={[styles.editModalHandle, { backgroundColor: borderColor }]} />
+
+            {/* Header */}
+            <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>Edit Profile</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Profile] Edit Profile modal close button pressed');
+                  setEditModalVisible(false);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={20}
+                  color={secondaryText}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.editModalContent} keyboardShouldPersistTaps="handled">
+              {/* Full Name */}
+              <Text style={[styles.editFieldLabel, { color: secondaryText }]}>Full Name</Text>
+              <TextInput
+                style={[styles.editInput, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor: borderColor, color: textColor }]}
+                value={editName}
+                onChangeText={(v) => {
+                  console.log('[Profile] Edit name changed');
+                  setEditName(v);
+                }}
+                placeholder="Your full name"
+                placeholderTextColor={secondaryText}
+                returnKeyType="next"
+              />
+
+              {/* Username */}
+              <Text style={[styles.editFieldLabel, { color: secondaryText }]}>Username</Text>
+              <TextInput
+                style={[styles.editInput, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor: borderColor, color: textColor }]}
+                value={editUsername}
+                onChangeText={(v) => {
+                  console.log('[Profile] Edit username changed');
+                  setEditUsername(v);
+                }}
+                placeholder="username"
+                placeholderTextColor={secondaryText}
+                autoCapitalize="none"
+                returnKeyType="next"
+              />
+
+              {/* Bio */}
+              <View style={styles.editBioLabelRow}>
+                <Text style={[styles.editFieldLabel, { color: secondaryText }]}>Bio</Text>
+                <Text style={[styles.editBioCount, { color: secondaryText }]}>{editBio.length}/150</Text>
+              </View>
+              <TextInput
+                style={[styles.editBioInput, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor: borderColor, color: textColor }]}
+                value={editBio}
+                onChangeText={(v) => {
+                  console.log('[Profile] Edit bio changed, length:', v.length);
+                  if (v.length <= 150) setEditBio(v);
+                }}
+                placeholder="Tell people about yourself..."
+                placeholderTextColor={secondaryText}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                maxLength={150}
+              />
+
+              {/* Save button */}
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: editSaving ? 0.7 : 1 }]}
+                onPress={handleSaveProfile}
+                disabled={editSaving}
+                activeOpacity={0.8}
+              >
+                {editSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Save Changes</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -591,22 +1025,32 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
 
-  // Header card
+  // ── Instagram Header Card ──────────────────────────────────────────────────
   headerCard: {
     margin: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    padding: spacing.lg,
-    alignItems: 'center',
+    padding: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   avatarRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     borderWidth: 3,
     overflow: 'hidden',
-    marginBottom: spacing.md,
+    flexShrink: 0,
   },
   avatarImage: {
     width: '100%',
@@ -619,18 +1063,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  headerInfo: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingTop: 4,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: 3,
   },
   displayName: {
-    ...typography.h3,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+    flexShrink: 1,
   },
   eliteBadge: {
     backgroundColor: '#F59E0B',
@@ -645,35 +1098,56 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   username: {
-    ...typography.caption,
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  bioText: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
   },
 
-  // Stats card
-  statsCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
+  // Stats row inside header card
+  statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    lineHeight: 28,
+    lineHeight: 26,
   },
   statLabel: {
-    ...typography.small,
-    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '400',
+    marginTop: 1,
   },
   statDivider: {
     width: StyleSheet.hairlineWidth,
     height: 32,
+  },
+
+  // Edit Profile button
+  editProfileBtn: {
+    borderWidth: 1.5,
+    borderRadius: borderRadius.md,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editProfileBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // Achievements strip
@@ -690,19 +1164,115 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 90,
   },
-  achievementIcon: {
-    fontSize: 22,
-    marginBottom: spacing.xs,
-  },
   achievementNumber: {
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 26,
   },
   achievementLabel: {
-    ...typography.small,
+    fontSize: 12,
+    fontWeight: '400',
     marginTop: 2,
     textAlign: 'center',
+  },
+
+  // Nutrition card
+  nutritionCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  nutritionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  nutritionCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  nutritionRangePills: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  nutritionRangePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  nutritionRangePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  caloriesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  caloriesLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  caloriesValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  caloriesValue: {
+    fontSize: 36,
+    fontWeight: '800',
+    lineHeight: 42,
+  },
+  caloriesUnit: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginBottom: 4,
+  },
+  caloriesGoalBadge: {
+    alignItems: 'flex-end',
+  },
+  caloriesGoalText: {
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  caloriesGoalValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  calorieTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  calorieFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  macroBarsContainer: {
+    marginTop: 4,
+  },
+  noNutritionText: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
 
   // Feed
@@ -720,13 +1290,10 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     alignItems: 'center',
   },
-  emptyStateIcon: {
-    fontSize: 36,
-    marginBottom: spacing.sm,
-  },
   emptyStateText: {
     ...typography.body,
     textAlign: 'center',
+    marginTop: spacing.sm,
   },
   postCard: {
     borderRadius: borderRadius.md,
@@ -838,5 +1405,69 @@ const styles = StyleSheet.create({
   followUserUsername: {
     ...typography.small,
     marginTop: 1,
+  },
+
+  // Edit Profile modal
+  editModalSheet: {
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '85%',
+  },
+  editModalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    marginBottom: 4,
+  },
+  editModalContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  editFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: spacing.md,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: 11,
+    paddingHorizontal: spacing.md,
+    fontSize: 16,
+  },
+  editBioLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    marginBottom: 6,
+  },
+  editBioCount: {
+    fontSize: 12,
+  },
+  editBioInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: 11,
+    paddingHorizontal: spacing.md,
+    fontSize: 16,
+    minHeight: 100,
+  },
+  saveBtn: {
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.lg,
+  },
+  saveBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

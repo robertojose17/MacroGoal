@@ -3,7 +3,7 @@
  * Route: /social-profile?user_id=X
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   RefreshControl,
   FlatList,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -23,10 +24,10 @@ import {
   TrendingUp,
   Flame,
   Trophy,
-  ChevronLeft,
 } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
+import { supabase } from '@/lib/supabase/client';
 import {
   fetchProfile,
   followUser,
@@ -62,12 +63,76 @@ function defaultToDate(): string {
 
 type ProfileTab = 'posts' | 'stats';
 type DateRange = '7d' | '30d' | '90d';
+type NutritionRange = 'today' | '7d' | '30d';
 
 const DATE_RANGES: { key: DateRange; label: string; days: number }[] = [
   { key: '7d', label: '7d', days: 7 },
   { key: '30d', label: '30d', days: 30 },
   { key: '90d', label: '90d', days: 90 },
 ];
+
+interface NutritionData {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}
+
+interface GoalData {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}
+
+function formatDateISO(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+function NutritionMacroBar({
+  label,
+  value,
+  goal,
+  color,
+  isDark,
+  textColor,
+  secondaryText,
+}: {
+  label: string;
+  value: number;
+  goal: number;
+  color: string;
+  isDark: boolean;
+  textColor: string;
+  secondaryText: string;
+}) {
+  const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
+  const pctDisplay = goal > 0 ? Math.round((value / goal) * 100) : 0;
+  const valueDisplay = Math.round(value).toString();
+  const pctStr = pctDisplay.toString() + '%';
+  return (
+    <View style={macroBarStyles.row}>
+      <Text style={[macroBarStyles.label, { color: secondaryText }]}>{label}</Text>
+      <View style={[macroBarStyles.track, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
+        <View style={[macroBarStyles.fill, { width: `${pct * 100}%` as any, backgroundColor: color }]} />
+      </View>
+      <View style={macroBarStyles.numbers}>
+        <Text style={[macroBarStyles.value, { color: textColor }]}>{valueDisplay}g</Text>
+        <Text style={[macroBarStyles.pct, { color: secondaryText }]}>{pctStr}</Text>
+      </View>
+    </View>
+  );
+}
+
+const macroBarStyles = StyleSheet.create({
+  row: { marginBottom: 10 },
+  label: { fontSize: 12, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 },
+  track: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: 3 },
+  fill: { height: '100%', borderRadius: 3 },
+  numbers: { flexDirection: 'row', justifyContent: 'space-between' },
+  value: { fontSize: 12, fontWeight: '600' },
+  pct: { fontSize: 12 },
+});
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_ITEM_SIZE = (SCREEN_WIDTH - spacing.md * 2 - 4) / 3;
@@ -120,6 +185,12 @@ export default function SocialProfileScreen() {
   const [followLoading, setFollowLoading] = useState(false);
   const [posts, setPosts] = useState<SocialPost[]>([]);
 
+  // Nutrition card state
+  const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
+  const [nutritionData, setNutritionData] = useState<NutritionData | null>(null);
+  const [goalData, setGoalData] = useState<GoalData | null>(null);
+  const [nutritionLoading, setNutritionLoading] = useState(false);
+
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -138,6 +209,8 @@ export default function SocialProfileScreen() {
       setProfile(data);
       setPosts(data.posts ?? []);
       console.log('[SocialProfile] Loaded profile — is_own:', data.is_own_profile, 'is_mutual:', data.is_mutual, 'posts:', data.posts?.length ?? 0);
+      // Load nutrition for this user
+      loadNutrition(user_id, nutritionRange);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load profile';
       console.error('[SocialProfile] loadProfile error:', msg);
@@ -147,6 +220,79 @@ export default function SocialProfileScreen() {
       setRefreshing(false);
     }
   }, [user_id]);
+
+  const loadNutrition = useCallback(async (targetUserId: string, range: NutritionRange) => {
+    console.log('[SocialProfile] loadNutrition — targetUserId:', targetUserId, 'range:', range);
+    setNutritionLoading(true);
+    try {
+      const today = new Date();
+      let startDate: string;
+      const endDate: string = formatDateISO(today);
+
+      if (range === 'today') {
+        startDate = formatDateISO(today);
+      } else if (range === '7d') {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 6);
+        startDate = formatDateISO(d);
+      } else {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 29);
+        startDate = formatDateISO(d);
+      }
+
+      const [mealsRes, goalsRes] = await Promise.all([
+        supabase
+          .from('meals')
+          .select('meal_items (calories, protein, carbs, fats, fiber)')
+          .eq('user_id', targetUserId)
+          .gte('date', startDate)
+          .lte('date', endDate),
+        supabase
+          .from('goals')
+          .select('*')
+          .eq('user_id', targetUserId)
+          .eq('is_active', true)
+          .maybeSingle(),
+      ]);
+
+      console.log('[SocialProfile] loadNutrition — meals:', mealsRes.error?.message ?? 'ok', 'goals:', goalsRes.error?.message ?? 'ok');
+
+      let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0;
+      if (mealsRes.data) {
+        for (const meal of mealsRes.data) {
+          const items = (meal as any).meal_items ?? [];
+          for (const item of items) {
+            totalCal += Number(item.calories ?? 0);
+            totalProt += Number(item.protein ?? 0);
+            totalCarbs += Number(item.carbs ?? 0);
+            totalFats += Number(item.fats ?? 0);
+          }
+        }
+      }
+
+      const days = range === 'today' ? 1 : range === '7d' ? 7 : 30;
+      setNutritionData({
+        calories: range === 'today' ? totalCal : totalCal / days,
+        protein: range === 'today' ? totalProt : totalProt / days,
+        carbs: range === 'today' ? totalCarbs : totalCarbs / days,
+        fats: range === 'today' ? totalFats : totalFats / days,
+      });
+
+      if (goalsRes.data) {
+        setGoalData({
+          calories: Number(goalsRes.data.calories ?? goalsRes.data.calorie_goal ?? 2000),
+          protein: Number(goalsRes.data.protein ?? goalsRes.data.protein_goal ?? 150),
+          carbs: Number(goalsRes.data.carbs ?? goalsRes.data.carbs_goal ?? 200),
+          fats: Number(goalsRes.data.fats ?? goalsRes.data.fat_goal ?? 65),
+        });
+      }
+    } catch (err) {
+      console.error('[SocialProfile] loadNutrition — error:', err);
+    } finally {
+      setNutritionLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadProfile(fromDate, toDate);
@@ -165,6 +311,14 @@ export default function SocialProfileScreen() {
     console.log('[SocialProfile] Pull-to-refresh');
     loadProfile(fromDate, toDate, true);
   }, [fromDate, toDate, loadProfile]);
+
+  const handleNutritionRangeChange = useCallback((range: NutritionRange) => {
+    console.log('[SocialProfile] Nutrition range changed to:', range);
+    setNutritionRange(range);
+    if (user_id) {
+      loadNutrition(user_id, range);
+    }
+  }, [user_id, loadNutrition]);
 
   // ─── Follow / Unfollow ───────────────────────────────────────────────────────
   const handleFollowToggle = useCallback(async () => {
@@ -439,6 +593,111 @@ export default function SocialProfileScreen() {
             </ScrollView>
           </View>
         ) : null}
+
+        {/* Nutrition Progress Card */}
+        <View style={[styles.nutritionCard, { backgroundColor: cardBg, borderColor }]}>
+          <View style={styles.nutritionCardHeader}>
+            <Text style={[styles.nutritionCardTitle, { color: textColor }]}>Nutrition Progress</Text>
+            <View style={styles.nutritionRangePills}>
+              {(['today', '7d', '30d'] as NutritionRange[]).map((r) => {
+                const isActive = nutritionRange === r;
+                const label = r === 'today' ? 'Today' : r === '7d' ? '7 Days' : '30 Days';
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    onPress={() => handleNutritionRangeChange(r)}
+                    style={[
+                      styles.nutritionRangePill,
+                      {
+                        backgroundColor: isActive ? colors.primary : 'transparent',
+                        borderColor: isActive ? colors.primary : borderColor,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.nutritionRangePillText, { color: isActive ? '#fff' : subColor }]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {nutritionLoading ? (
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.md }} />
+          ) : nutritionData ? (
+            <>
+              <View style={styles.nutritionCaloriesRow}>
+                <View>
+                  <Text style={[styles.nutritionCaloriesLabel, { color: subColor }]}>
+                    {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7-Day Avg' : '30-Day Avg'}
+                  </Text>
+                  <View style={styles.nutritionCaloriesValueRow}>
+                    <Text style={[styles.nutritionCaloriesValue, { color: colors.calories }]}>
+                      {Math.round(nutritionData.calories).toString()}
+                    </Text>
+                    <Text style={[styles.nutritionCaloriesUnit, { color: subColor }]}>kcal</Text>
+                  </View>
+                </View>
+                {goalData && (
+                  <View style={styles.nutritionGoalBadge}>
+                    <Text style={[styles.nutritionGoalLabel, { color: subColor }]}>Goal</Text>
+                    <Text style={[styles.nutritionGoalValue, { color: textColor }]}>
+                      {Math.round(goalData.calories).toString()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {goalData && (
+                <View style={[styles.nutritionCalorieTrack, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
+                  <View
+                    style={[
+                      styles.nutritionCalorieFill,
+                      {
+                        width: `${Math.min((nutritionData.calories / goalData.calories) * 100, 100)}%` as any,
+                        backgroundColor: colors.calories,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
+
+              <View style={{ marginTop: 4 }}>
+                <NutritionMacroBar
+                  label="Protein"
+                  value={nutritionData.protein}
+                  goal={goalData?.protein ?? 150}
+                  color={colors.protein}
+                  isDark={isDark}
+                  textColor={textColor}
+                  secondaryText={subColor}
+                />
+                <NutritionMacroBar
+                  label="Carbs"
+                  value={nutritionData.carbs}
+                  goal={goalData?.carbs ?? 200}
+                  color={colors.carbs}
+                  isDark={isDark}
+                  textColor={textColor}
+                  secondaryText={subColor}
+                />
+                <NutritionMacroBar
+                  label="Fat"
+                  value={nutritionData.fats}
+                  goal={goalData?.fats ?? 65}
+                  color={colors.fats}
+                  isDark={isDark}
+                  textColor={textColor}
+                  secondaryText={subColor}
+                />
+              </View>
+            </>
+          ) : (
+            <Text style={[styles.nutritionEmpty, { color: subColor }]}>No nutrition data for this period</Text>
+          )}
+        </View>
       </View>
     );
   };
@@ -892,5 +1151,100 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Nutrition card
+  nutritionCard: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  nutritionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  nutritionCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  nutritionRangePills: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  nutritionRangePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  nutritionRangePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  nutritionCaloriesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  nutritionCaloriesLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  nutritionCaloriesValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  nutritionCaloriesValue: {
+    fontSize: 36,
+    fontWeight: '800',
+    lineHeight: 42,
+  },
+  nutritionCaloriesUnit: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginBottom: 4,
+  },
+  nutritionGoalBadge: {
+    alignItems: 'flex-end',
+  },
+  nutritionGoalLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  nutritionGoalValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  nutritionCalorieTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  nutritionCalorieFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  nutritionEmpty: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
 });
