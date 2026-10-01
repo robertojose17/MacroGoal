@@ -126,7 +126,7 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
         <View style={styles.pillRow}>
           {streak > 0 && (
             <View style={styles.pillSegment}>
-              <Text style={styles.pillEmoji}>🔥</Text>
+              <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={16} color={colors.primary} />
               <Text style={[styles.pillText, { color: textColor }]}>
                 {streak}
               </Text>
@@ -140,7 +140,7 @@ function StreakLeaguePill({ isDark }: { isDark: boolean }) {
           )}
           {leagueLabel && (
             <View style={styles.pillSegment}>
-              <Text style={styles.pillEmoji}>{tierMeta?.emoji ?? '🏆'}</Text>
+              <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={16} color={colors.primary} />
               <Text style={[styles.pillText, { color: textColor }]}>{leagueLabel}</Text>
               {leaguePosition != null && (
                 <Text style={[styles.pillSubText, { color: subColor }]}>

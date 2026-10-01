@@ -22,13 +22,13 @@ export async function autoShareStreak(streakDays: number): Promise<void> {
   console.log('[autoShare] autoShareStreak — streakDays:', streakDays);
   if (!(await isAutoShareEnabled())) return;
   const messages: Record<number, string> = {
-    7:   '🔥 7-day streak! Consistency is everything. #MacroGoal',
-    14:  '🔥 14 days straight! Two weeks of showing up. #MacroGoal',
-    30:  '🔥 30-day streak! A full month of discipline. #MacroGoal',
-    60:  '🔥 60 days strong! Habits are forming. #MacroGoal',
-    90:  '🔥 90-day streak! Three months of consistency. #MacroGoal',
-    180: '🔥 180 days! Half a year of showing up every day. #MacroGoal',
-    365: '🔥 365-day streak! A full year of discipline. Legend. #MacroGoal',
+    7:   '7-day streak! Consistency is everything. #MacroGoal',
+    14:  '14 days straight! Two weeks of showing up. #MacroGoal',
+    30:  '30-day streak! A full month of discipline. #MacroGoal',
+    60:  '60 days strong! Habits are forming. #MacroGoal',
+    90:  '90-day streak! Three months of consistency. #MacroGoal',
+    180: '180 days! Half a year of showing up every day. #MacroGoal',
+    365: '365-day streak! A full year of discipline. Legend. #MacroGoal',
   };
   const content = messages[streakDays];
   if (!content) return; // Only post at milestone numbers
@@ -46,9 +46,9 @@ export async function autoShareCalorieGoal(): Promise<void> {
   console.log('[autoShare] autoShareCalorieGoal triggered');
   if (!(await isAutoShareEnabled())) return;
   const messages = [
-    '✅ Hit my calorie goal today! Dialed in. #MacroGoal',
-    '✅ Nailed my calories today. Every day counts. #MacroGoal',
-    '✅ On target with calories today! #MacroGoal',
+    'Hit my calorie goal today! Dialed in. #MacroGoal',
+    'Nailed my calories today. Every day counts. #MacroGoal',
+    'On target with calories today! #MacroGoal',
   ];
   const content = messages[Math.floor(Math.random() * messages.length)];
   console.log('[autoShare] posting calorie goal achievement');
@@ -65,9 +65,9 @@ export async function autoShareProteinGoal(): Promise<void> {
   console.log('[autoShare] autoShareProteinGoal triggered');
   if (!(await isAutoShareEnabled())) return;
   const messages = [
-    '💪 Hit my protein goal today! Gains incoming. #MacroGoal',
-    '💪 Protein on point today. #MacroGoal',
-    '💪 Crushed my protein target today! #MacroGoal',
+    'Hit my protein goal today! Gains incoming. #MacroGoal',
+    'Protein on point today. #MacroGoal',
+    'Crushed my protein target today! #MacroGoal',
   ];
   const content = messages[Math.floor(Math.random() * messages.length)];
   console.log('[autoShare] posting protein goal achievement');
@@ -92,7 +92,7 @@ export async function autoShareWeightCheckin(weightKg: number): Promise<void> {
     .eq('user_id', user.id);
   console.log('[autoShare] weight check-in count:', count);
   if (!count || count % 5 !== 0) return; // Post on 5th, 10th, 15th... check-in
-  const content = `📊 Just logged check-in #${count}! Tracking progress one day at a time. #MacroGoal`;
+  const content = `Just logged check-in #${count}! Tracking progress one day at a time. #MacroGoal`;
   console.log('[autoShare] posting weight check-in milestone #', count);
   try {
     await createPost({ post_type: 'milestone', content, is_public: true });

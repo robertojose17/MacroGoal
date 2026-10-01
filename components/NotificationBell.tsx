@@ -26,6 +26,8 @@ import {
   Linking,
 } from "react-native";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { IconSymbol } from "@/components/IconSymbol";
+import { useColorScheme } from "@/hooks/useColorScheme";
 
 interface NotificationBellProps {
   /** Button style variant */
@@ -41,6 +43,8 @@ export function NotificationBell({
   const { t } = useTranslation();
   const { hasPermission, permissionDenied, loading, isWeb, requestPermission } =
     useNotifications();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   if (loading || isWeb) return null;
 
@@ -79,9 +83,7 @@ export function NotificationBell({
   if (variant === "compact") {
     return (
       <TouchableOpacity onPress={handlePress} style={styles.compactButton}>
-        <Text style={[styles.bellIcon, { fontSize: size * 0.75 }]}>
-          {hasPermission ? "🔔" : "🔕"}
-        </Text>
+        <IconSymbol ios_icon_name={hasPermission ? "bell.fill" : "bell.slash.fill"} android_material_icon_name={hasPermission ? "notifications" : "notifications_off"} size={size * 0.75} color={isDark ? '#FFFFFF' : '#000000'} />
       </TouchableOpacity>
     );
   }
@@ -89,9 +91,7 @@ export function NotificationBell({
   return (
     <TouchableOpacity onPress={handlePress} style={styles.button}>
       <View style={styles.bellContainer}>
-        <Text style={[styles.bellIcon, { fontSize: size }]}>
-          {hasPermission ? "🔔" : "🔕"}
-        </Text>
+        <IconSymbol ios_icon_name={hasPermission ? "bell.fill" : "bell.slash.fill"} android_material_icon_name={hasPermission ? "notifications" : "notifications_off"} size={size} color={isDark ? '#FFFFFF' : '#000000'} />
         {!hasPermission && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>!</Text>

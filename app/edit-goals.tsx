@@ -351,7 +351,7 @@ export default function EditGoalsScreen() {
                 ]}
                 onPress={() => setGoalType('lose')}
               >
-                <Text style={styles.goalIcon}>📉</Text>
+                <IconSymbol ios_icon_name="arrow.down.circle.fill" android_material_icon_name="trending_down" size={28} color="#EF4444" />
                 <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'lose' && { color: '#FFFFFF' }]}>
                   {t('editGoals.loseWeight')}
                 </Text>
@@ -377,7 +377,7 @@ export default function EditGoalsScreen() {
                 ]}
                 onPress={() => setGoalType('gain')}
               >
-                <Text style={styles.goalIcon}>📈</Text>
+                <IconSymbol ios_icon_name="arrow.up.circle.fill" android_material_icon_name="trending_up" size={28} color="#22C55E" />
                 <Text style={[styles.goalText, { color: isDark ? colors.textDark : colors.text }, goalType === 'gain' && { color: '#FFFFFF' }]}>
                   {t('editGoals.gainWeight')}
                 </Text>

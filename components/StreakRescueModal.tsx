@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useTranslation } from 'react-i18next';
+import { IconSymbol } from '@/components/IconSymbol';
 
 interface Props {
   visible: boolean;
@@ -46,7 +47,7 @@ export default function StreakRescueModal({
         <View style={styles.card}>
           {/* Flame icon */}
           <View style={styles.iconContainer}>
-            <Text style={styles.flameEmoji}>🔥</Text>
+            <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={40} color={colors.primary} />
           </View>
 
           {/* Title */}

@@ -13,6 +13,7 @@ import { MessageCircle, Trophy, Flame, TrendingUp, MoreHorizontal } from 'lucide
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import type { SocialPost } from '@/utils/socialApi';
 import Avatar from '@/components/social/Avatar';
+import { IconSymbol } from '@/components/IconSymbol';
 
 function resolveImageSource(
   source: string | number | ImageSourcePropType | undefined
@@ -313,11 +314,9 @@ export default function SocialPostCard({
           accessibilityLabel="Like post"
           accessibilityRole="button"
         >
-          <Animated.Text
-            style={[styles.likeEmoji, { transform: [{ scale: likeScale }], opacity: likeActive ? 1 : 0.45 }]}
-          >
-            🔥
-          </Animated.Text>
+          <Animated.View style={{ transform: [{ scale: likeScale }], opacity: likeActive ? 1 : 0.45 }}>
+            <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={14} color={colors.primary} />
+          </Animated.View>
           <Text style={[styles.actionCount, { color: likeActive ? colors.warning : subColor }]}>
             {likesCount}
           </Text>

@@ -183,7 +183,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
         .maybeSingle();
       const code = rc?.custom_code || rc?.code || '';
       await Share.share({
-        message: `I've been tracking my macros with Macro Goal. Join with my code ${code} and we both earn 1,000 XP 💪`,
+        message: `I've been tracking my macros with Macro Goal. Join with my code ${code} and we both earn 1,000 XP`,
       });
     } catch (e) {
       console.warn('[FlashChallengesCard] share failed:', e);

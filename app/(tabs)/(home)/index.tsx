@@ -1684,7 +1684,10 @@ export default function HomeScreen() {
             ListHeaderComponent={
               <>
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.sm }]}>
-                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>❤️ Saved Recipes</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <IconSymbol ios_icon_name="heart.fill" android_material_icon_name="favorite" size={18} color="#EF4444" />
+                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>Saved Recipes</Text>
+                  </View>
                 </View>
                 {savedRecipes.length === 0 ? (
                   <View style={[recipeTabStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
@@ -1699,7 +1702,10 @@ export default function HomeScreen() {
                   </ScrollView>
                 )}
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.lg }]}>
-                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>🔥 Trending Now</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={18} color={colors.primary} />
+                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>Trending Now</Text>
+                  </View>
                   <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>Most clicked in the last 48h</Text>
                 </View>
                 {popularLoading ? (

@@ -32,6 +32,7 @@ import i18n from '@/lib/i18n';
 import { useFlashChallenges } from '@/hooks/useFlashChallenges';
 import { acceptChallenge } from '@/utils/flashChallengesApi';
 import type { FlashChallenge } from '@/utils/flashChallengesApi';
+import { IconSymbol } from '@/components/IconSymbol';
 
 interface LeagueLeaderboardProps {
   visible: boolean;
@@ -232,7 +233,7 @@ function FlashChallengesSection({ isDark }: FlashChallengesSectionProps) {
     <View style={[styles.flashSection, { borderTopColor: dividerColor }]}>
       {/* Section header */}
       <View style={styles.earnHeader}>
-        <Text style={styles.earnHeaderIcon}>{'⚡'}</Text>
+        <IconSymbol ios_icon_name="bolt.fill" android_material_icon_name="bolt" size={16} color="#F59E0B" />
         <Text style={[styles.earnHeaderTitle, { color: textPrimary }]}>
           {'Flash Challenges'}
         </Text>
@@ -320,7 +321,7 @@ interface EarnCategory {
 
 const EARN_CATEGORIES: EarnCategory[] = [
   {
-    title: '🍽️ Nutrition',
+    title: 'Nutrition',
     rows: [
       { emoji: '🍽️', label: 'Log a meal', xp: '+10 XP' },
       { emoji: '🎯', label: 'Hit calorie goal', xp: '+15 XP' },
@@ -339,7 +340,7 @@ const EARN_CATEGORIES: EarnCategory[] = [
     ],
   },
   {
-    title: '🏃 Activity',
+    title: 'Activity',
     rows: [
       { emoji: '🏋️', label: 'Workout', xp: '+75 XP' },
       { emoji: '👟', label: 'Steps 5,000+', xp: '+100 XP' },
@@ -349,7 +350,7 @@ const EARN_CATEGORIES: EarnCategory[] = [
     ],
   },
   {
-    title: '⚡ Flash Challenges',
+    title: 'Flash Challenges',
     rows: [
       { emoji: '⚡', label: 'Complete a Flash Challenge', xp: '+500 XP' },
     ],
@@ -378,7 +379,7 @@ function EarnXpSection({ isDark }: EarnSectionProps) {
     <View style={[styles.earnSection, { borderTopColor: dividerColor }]}>
       {/* Section header */}
       <View style={styles.earnHeader}>
-        <Text style={styles.earnHeaderIcon}>{'⚡'}</Text>
+        <IconSymbol ios_icon_name="bolt.fill" android_material_icon_name="bolt" size={16} color="#F59E0B" />
         <Text style={[styles.earnHeaderTitle, { color: textPrimary }]}>
           {'How to Earn XP'}
         </Text>
@@ -394,7 +395,21 @@ function EarnXpSection({ isDark }: EarnSectionProps) {
             return (
               <View key={rowIdx}>
                 <View style={styles.earnRow}>
-                  <Text style={styles.earnRowEmoji}>{row.emoji}</Text>
+                  <View style={styles.earnRowEmoji}>
+                    {row.emoji === '🍽️' && <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={16} color={colors.primary} />}
+                    {row.emoji === '🎯' && <IconSymbol ios_icon_name="target" android_material_icon_name="gps_fixed" size={16} color={colors.primary} />}
+                    {row.emoji === '💪' && <IconSymbol ios_icon_name="bolt.fill" android_material_icon_name="bolt" size={16} color={colors.primary} />}
+                    {row.emoji === '🥑' && <IconSymbol ios_icon_name="leaf.fill" android_material_icon_name="eco" size={16} color={colors.primary} />}
+                    {row.emoji === '🧈' && <IconSymbol ios_icon_name="drop.fill" android_material_icon_name="water_drop" size={16} color={colors.primary} />}
+                    {row.emoji === '⚖️' && <IconSymbol ios_icon_name="scalemass.fill" android_material_icon_name="monitor_weight" size={16} color={colors.primary} />}
+                    {row.emoji === '📸' && <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera_alt" size={16} color={colors.primary} />}
+                    {row.emoji === '🖼️' && <IconSymbol ios_icon_name="photo.fill" android_material_icon_name="photo" size={16} color={colors.primary} />}
+                    {row.emoji === '📣' && <IconSymbol ios_icon_name="megaphone.fill" android_material_icon_name="campaign" size={16} color={colors.primary} />}
+                    {row.emoji === '🏋️' && <IconSymbol ios_icon_name="dumbbell.fill" android_material_icon_name="fitness_center" size={16} color={colors.primary} />}
+                    {row.emoji === '👟' && <IconSymbol ios_icon_name="figure.run" android_material_icon_name="directions_run" size={16} color={colors.primary} />}
+                    {row.emoji === '⚡' && <IconSymbol ios_icon_name="bolt.fill" android_material_icon_name="bolt" size={16} color={colors.primary} />}
+                    {row.emoji === '🤝' && <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="group" size={16} color={colors.primary} />}
+                  </View>
                   <Text style={[styles.earnRowLabel, { color: textPrimary }]}>
                     {row.label}
                   </Text>
@@ -411,15 +426,16 @@ function EarnXpSection({ isDark }: EarnSectionProps) {
 
       {/* Streak Multipliers card */}
       <View style={[styles.multiplierCard, { backgroundColor: multiplierBg, borderColor: multiplierBorder }]}>
-        <Text style={[styles.multiplierTitle, { color: textPrimary }]}>
-          {'🔥 Streak Multipliers'}
-        </Text>
+        <View style={[styles.multiplierTitle, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+          <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={14} color={colors.primary} />
+          <Text style={{ color: textPrimary, fontSize: 13, fontWeight: '700' }}>{' Streak Multipliers'}</Text>
+        </View>
         {[
           { label: '7+ day streak', value: '1.1×' },
           { label: '30+ day streak', value: '1.25×' },
           { label: '90+ day streak', value: '1.5×' },
           { label: '365+ day streak', value: '2.0×' },
-          { label: '⭐ Premium', value: '1.5× bonus' },
+          { label: 'Premium', value: '1.5× bonus' },
         ].map((item, idx) => (
           <View key={idx} style={styles.multiplierRow}>
             <Text style={[styles.multiplierLabel, { color: textSecondary }]}>
@@ -607,9 +623,10 @@ export default function LeagueLeaderboard({ visible, onClose }: LeagueLeaderboar
                 }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.accordionTitle, { color: textPrimary }]}>
-                  {'🏆 Leaderboard'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={14} color="#F59E0B" />
+                  <Text style={[styles.accordionTitle, { color: textPrimary }]}>{' Leaderboard'}</Text>
+                </View>
                 <View style={styles.accordionHeaderRight}>
                   <Text
                     style={[
@@ -1031,9 +1048,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   earnRowEmoji: {
-    fontSize: 16,
     width: 24,
-    textAlign: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   earnRowLabel: {
     flex: 1,

@@ -369,21 +369,21 @@ export default function ProfileScreen() {
         >
           {/* Current Streak */}
           <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-            <Text style={styles.achievementIcon}>{'🔥'}</Text>
+            <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={20} color={colors.primary} />
             <Text style={[styles.achievementNumber, { color: textColor }]}>{currentStreakDisplay}</Text>
             <Text style={[styles.achievementLabel, { color: secondaryText }]}>Streak</Text>
           </View>
 
           {/* Best Streak */}
           <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-            <Text style={styles.achievementIcon}>{'🏆'}</Text>
+            <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={20} color="#F59E0B" />
             <Text style={[styles.achievementNumber, { color: textColor }]}>{bestStreakDisplay}</Text>
             <Text style={[styles.achievementLabel, { color: secondaryText }]}>Best Streak</Text>
           </View>
 
           {/* Total Days */}
           <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-            <Text style={styles.achievementIcon}>{'📅'}</Text>
+            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar_today" size={20} color={colors.primary} />
             <Text style={[styles.achievementNumber, { color: textColor }]}>{totalDaysDisplay}</Text>
             <Text style={[styles.achievementLabel, { color: secondaryText }]}>Days Logged</Text>
           </View>
@@ -395,7 +395,7 @@ export default function ProfileScreen() {
 
           {posts.length === 0 ? (
             <View style={[styles.emptyState, { backgroundColor: cardBg, borderColor: isDark ? colors.cardBorderDark : colors.cardBorder }]}>
-              <Text style={styles.emptyStateIcon}>{'🌟'}</Text>
+              <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={40} color={colors.textSecondary} />
               <Text style={[styles.emptyStateText, { color: secondaryText }]}>
                 Your achievements will appear here
               </Text>

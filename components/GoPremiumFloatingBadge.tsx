@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePremium } from '@/hooks/usePremium';
 import { useTranslation } from 'react-i18next';
+import { IconSymbol } from '@/components/IconSymbol';
 
 export default function GoPremiumFloatingBadge() {
   const router = useRouter();
@@ -45,7 +46,7 @@ export default function GoPremiumFloatingBadge() {
           onPress={handlePress}
           activeOpacity={0.85}
         >
-          <Text style={styles.crown}>👑</Text>
+          <IconSymbol ios_icon_name="crown.fill" android_material_icon_name="workspace_premium" size={20} color="#FFD700" />
           <Text style={styles.label}>{t('premium.goPremium')}</Text>
         </TouchableOpacity>
         <TouchableOpacity

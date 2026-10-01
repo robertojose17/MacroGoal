@@ -168,9 +168,7 @@ export default function XpRanksModal({
                       />
                     )}
                     {isLocked && (
-                      <Text style={styles.lockIcon}>
-                        {'🔒'}
-                      </Text>
+                      <IconSymbol ios_icon_name="lock.fill" android_material_icon_name="lock" size={16} color={colors.textSecondary} />
                     )}
                   </View>
                 </View>

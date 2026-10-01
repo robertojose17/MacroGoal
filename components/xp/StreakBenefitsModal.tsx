@@ -114,9 +114,7 @@ export default function StreakBenefitsModal({
           {/* ── Sub-hero ── */}
           <View style={[styles.heroCard, { backgroundColor: cardBg }]}>
             <View style={styles.heroRow}>
-              <Text style={styles.heroFlame}>
-                {'🔥'}
-              </Text>
+              <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={24} color={colors.primary} />
               <Text style={[styles.heroStreak, { color: textColor }]}>
                 {streakDisplay}
               </Text>

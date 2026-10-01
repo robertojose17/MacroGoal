@@ -570,7 +570,7 @@ export default function AffiliateWelcomeScreen() {
             </Animated.View>
 
             <Text style={styles.headline}>
-              {"You're In! 🎉"}
+              {"You're In!"}
             </Text>
 
             <Text style={styles.subheadline}>

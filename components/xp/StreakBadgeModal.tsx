@@ -18,6 +18,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -232,20 +234,17 @@ export default function StreakBadgeModal({ visible, streakDays, onDismiss }: Str
             </Text>
 
             {/* Flame with glow */}
-            <Animated.Text
+            <Animated.View
               style={[
                 styles.flameEmoji,
                 {
                   transform: [{ scale }],
                   opacity,
-                  textShadowColor: config.glowColor,
-                  textShadowRadius: config.isLegendary ? 30 : config.isElite ? 24 : 16,
-                  textShadowOffset: { width: 0, height: 0 },
                 },
               ]}
             >
-              🔥
-            </Animated.Text>
+              <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={32} color={colors.primary} />
+            </Animated.View>
 
             {/* Streak count */}
             <Text

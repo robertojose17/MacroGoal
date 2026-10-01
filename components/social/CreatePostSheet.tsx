@@ -234,7 +234,7 @@ export default function CreatePostSheet({
     setIsPublic(next);
   }, [isPublic]);
 
-  const streakBadgeText = `🔥 ${currentStreak} day streak`;
+  const streakBadgeText = `${currentStreak} day streak`;
   const charCountDisplay = `${charCount}/${MAX_CHARS}`;
 
   return (
@@ -313,7 +313,7 @@ export default function CreatePostSheet({
 
             {showStatsBadge && (
               <View style={[styles.inlineBadge, { backgroundColor: colors.primary + '18' }]}>
-                <Text style={[styles.inlineBadgeText, { color: colors.primary }]}>📊 Sharing my macros today</Text>
+                <Text style={[styles.inlineBadgeText, { color: colors.primary }]}>Sharing my macros today</Text>
               </View>
             )}
 

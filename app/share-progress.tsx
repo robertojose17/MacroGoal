@@ -363,8 +363,8 @@ export default function ShareProgressScreen() {
     weightLost: number,
     dayStreak: number
   ): string => {
-    if (dayStreak >= 14) return 'Still showing up 💪';
-    if (consistencyScore >= 90) return 'One step closer 🔥';
+    if (dayStreak >= 14) return 'Still showing up';
+    if (consistencyScore >= 90) return 'One step closer';
     if (weightLost >= 5) return 'Progress over perfection';
     return 'Small wins add up';
   };
@@ -528,7 +528,7 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] After weight (lbs):', afterWeightLbs);
 
       // Fetch leaderboard phrase
-      const fallbackPhrase = "Keep going — you're building momentum 📈";
+      const fallbackPhrase = "Keep going — you're building momentum";
       let leaderboardPhrase = fallbackPhrase;
       try {
         const { data: { session } } = await supabase.auth.getSession();

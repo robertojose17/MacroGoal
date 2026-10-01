@@ -19,6 +19,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
 
 // react-native-view-shot — lazy import so Expo Go doesn't hang
 let ViewShot: any = null;
@@ -181,9 +183,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
 
             {/* Streak display */}
             <View style={styles.streakDisplay}>
-              <Text style={styles.streakFlame}>
-                {'🔥'}
-              </Text>
+              <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={20} color={colors.primary} />
               <Text style={styles.streakNumber}>
                 {streakDisplay}
               </Text>
@@ -199,7 +199,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
             <View style={styles.statsRow}>
               {/* Streak */}
               <View style={styles.statBox}>
-                <Text style={styles.statEmoji}>🔥</Text>
+                <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={20} color={colors.primary} />
                 <Text style={[styles.statValue, { color: CARD_ACCENT_TEXT }]}>
                   {streakDisplay}
                 </Text>
@@ -211,7 +211,7 @@ const XpShareCard = forwardRef<XpShareCardHandle, XpShareCardProps>(
 
               {/* Consistency */}
               <View style={styles.statBox}>
-                <Text style={styles.statEmoji}>📊</Text>
+                <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar_chart" size={20} color={colors.primary} />
                 <Text style={[styles.statValue, { color: CARD_ACCENT_TEXT }]}>
                   {consistencyDisplay}
                   <Text style={styles.statUnit}>%</Text>

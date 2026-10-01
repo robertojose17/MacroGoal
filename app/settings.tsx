@@ -866,7 +866,7 @@ export default function SettingsScreen() {
   const hasAnyPrefs = proteinCount > 0 || recipeStyleCount > 0;
   const foodPrefsSummaryParts: string[] = [];
   if (hasAnyPrefs) {
-    if (proteinCount > 0) foodPrefsSummaryParts.push(`🥩 ${t('profile.proteins_one', { count: proteinCount }).replace('_one', '').replace('_other', '')}`);
+    if (proteinCount > 0) foodPrefsSummaryParts.push(`${t('profile.proteins_one', { count: proteinCount }).replace('_one', '').replace('_other', '')}`);
     if (recipeStyleCount > 0) foodPrefsSummaryParts.push(`🍳 ${t('profile.styles_one', { count: recipeStyleCount }).replace('_one', '').replace('_other', '')}`);
   }
   const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : t('profile.noPreferencesSet');
@@ -924,11 +924,11 @@ export default function SettingsScreen() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const getCoachActionIcon = (actionType: string) => {
-    if (actionType === 'adjust_macros') return '🎯';
-    if (actionType === 'update_goal_weight') return '⚖️';
-    if (actionType === 'update_step_goal') return '👟';
-    return '🤖';
+  const getCoachActionIcon = (actionType: string): { ios: string; android: string } => {
+    if (actionType === 'adjust_macros') return { ios: 'target', android: 'gps_fixed' };
+    if (actionType === 'update_goal_weight') return { ios: 'scalemass.fill', android: 'monitor_weight' };
+    if (actionType === 'update_step_goal') return { ios: 'figure.walk', android: 'directions_walk' };
+    return { ios: 'cpu', android: 'smart_toy' };
   };
 
   const handleCoachBadgePress = (fieldLabel: string) => {
@@ -1047,7 +1047,7 @@ export default function SettingsScreen() {
           {user.challenger_badge && (
             <View style={styles.badgeRow}>
               <View style={styles.challengerBadgePill}>
-                <Text style={styles.badgeIcon}>{'🏅'}</Text>
+                <IconSymbol ios_icon_name="medal.fill" android_material_icon_name="military_tech" size={20} color="#F59E0B" />
                 <Text style={styles.badgeLabel}>{t('profile.challenger')}</Text>
               </View>
             </View>
@@ -1746,7 +1746,7 @@ export default function SettingsScreen() {
 
             {coachActions.length === 0 ? (
               <View style={styles.coachHistoryEmpty}>
-                <Text style={styles.coachHistoryEmptyIcon}>{'💬'}</Text>
+                <IconSymbol ios_icon_name="bubble.left.fill" android_material_icon_name="chat" size={40} color={colors.textSecondary} />
                 <Text style={[styles.coachHistoryEmptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                   {t('profile.coachNoChanges')}
                 </Text>
@@ -1760,7 +1760,7 @@ export default function SettingsScreen() {
                   <View key={action.id}>
                     <View style={styles.coachActionRow}>
                       <View style={styles.coachActionIconWrap}>
-                        <Text style={styles.coachActionIcon}>{actionIcon}</Text>
+                        <IconSymbol ios_icon_name={actionIcon.ios} android_material_icon_name={actionIcon.android} size={16} color={colors.primary} />
                       </View>
                       <View style={styles.coachActionContent}>
                         <Text style={[styles.coachActionSummary, { color: isDark ? colors.textDark : colors.text }]}>

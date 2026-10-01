@@ -61,6 +61,7 @@ import Avatar from '@/components/social/Avatar';
 import CreatePostSheet from '@/components/social/CreatePostSheet';
 import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
+import { IconSymbol } from '@/components/IconSymbol';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ const CATEGORY_LABELS: Record<MembersCategory, string> = {
   all: 'All',
   general: 'General',
   ask_founder: 'Ask Founder',
-  report_bug: '🐛 Bug Reports',
+  report_bug: 'Bug Reports',
 };
 
 const FOUNDER_POST_CATEGORIES: { value: MembersCategory; label: string }[] = [
@@ -1096,7 +1097,7 @@ export default function CommunityScreen() {
                 accessibilityRole="button"
               >
                 <Text style={[bugStyles.attachBtnText, { color: colors.primary }]}>
-                  📎 Attach Screenshot (optional)
+                  Attach Screenshot (optional)
                 </Text>
               </Pressable>
             )}
@@ -1161,7 +1162,7 @@ export default function CommunityScreen() {
             {/* Header */}
             <View style={membersStyles.postHeader}>
               <View style={[membersStyles.founderAvatarWrap, { backgroundColor: '#EF444418' }]}>
-                <Text style={{ fontSize: 18 }}>🐛</Text>
+                <IconSymbol ios_icon_name="ant.fill" android_material_icon_name="bug_report" size={18} color="#EF4444" />
               </View>
               <View style={membersStyles.postHeaderInfo}>
                 <View style={membersStyles.postFounderRow}>

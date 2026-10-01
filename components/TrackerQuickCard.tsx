@@ -21,6 +21,7 @@ import {
   LayoutAnimation,
   Platform,
 } from 'react-native';
+import { IconSymbol } from '@/components/IconSymbol';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
@@ -426,7 +427,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.rowEmoji}>🏋️</Text>
+            <IconSymbol ios_icon_name="dumbbell.fill" android_material_icon_name="fitness_center" size={20} color={colors.primary} />
             <Text style={[styles.rowLabel, { color: textColor }]}>{t('common.gym')}</Text>
           </TouchableOpacity>
 
@@ -467,7 +468,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
           activeOpacity={0.7}
         >
           <View style={styles.labelCol}>
-            <Text style={styles.rowEmoji}>🍎</Text>
+            <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={20} color={colors.primary} />
             <Text style={[styles.rowLabel, { color: textColor }]}>{t('common.calories')}</Text>
           </View>
           <View style={styles.actionCol}>
@@ -486,7 +487,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
         activeOpacity={0.7}
       >
         <View style={styles.labelCol}>
-          <Text style={styles.rowEmoji}>💪</Text>
+          <IconSymbol ios_icon_name="bolt.fill" android_material_icon_name="bolt" size={20} color={colors.primary} />
           <Text style={[styles.rowLabel, { color: textColor }]}>{t('common.protein')}</Text>
         </View>
         <View style={styles.actionCol}>

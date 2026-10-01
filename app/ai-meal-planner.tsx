@@ -425,15 +425,6 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
   const hasDisliked = !!userPreferences?.disliked_foods;
   const hasAny = hasRestrictions || hasProteins || hasRecipeStyles || hasDisliked;
 
-  const restrictionEmojis: Record<string, string> = {
-    vegetarian: '🥗',
-    vegan: '🌱',
-    'gluten-free': '🌾',
-    'dairy-free': '🥛',
-    halal: '☪️',
-    'nut-free': '🥜',
-  };
-
   if (!hasAny) {
     return (
       <View style={[styles.prefsHintCard, { backgroundColor: cardBg }]}>
@@ -451,30 +442,19 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
   const chips: string[] = [];
   if (hasRestrictions) {
     userPreferences!.dietary_restrictions!.forEach(r => {
-      const emoji = restrictionEmojis[r] || '✓';
       const label = r.charAt(0).toUpperCase() + r.slice(1);
-      chips.push(`${emoji} ${label}`);
+      chips.push(label);
     });
   }
   if (hasProteins) {
     userPreferences!.protein_preferences!.forEach(p => {
-      chips.push(`🥩 ${p}`);
+      chips.push(p);
     });
   }
   if (hasRecipeStyles) {
     userPreferences!.recipe_styles!.forEach(s => {
-      const styleEmojis: Record<string, string> = {
-        'air-fryer': '🌬️',
-        'meal-prep': '📦',
-        'under-30-minutes': '⏱️',
-        'one-pan-meals': '🍳',
-        'slow-cooker': '🫕',
-        'instant-pot': '⚡',
-        'easy-recipes': '✅',
-        'freezer-friendly': '❄️',
-      };
       const label = RECIPE_STYLE_OPTIONS.find(o => o.value === s)?.label || s;
-      chips.push(`${styleEmojis[s] || '🍽️'} ${label}`);
+      chips.push(label);
     });
   }
 
@@ -1316,7 +1296,7 @@ export default function AIMealPlannerScreen() {
       {step === 'generating' && (
         <View style={styles.generatingContainer}>
           <View style={[styles.generatingCard, { backgroundColor: cardBg }]}>
-            <Text style={styles.generatingEmoji}>🍽️</Text>
+            <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={48} color={colors.primary} />
             <Text style={[styles.generatingTitle, { color: textColor }]}>{t('aiMealPlanner.generatingTitle')}</Text>
             <Text style={[styles.generatingSubtitle, { color: secondaryColor }]}>
               {t('aiMealPlanner.generatingSubtitle')}
@@ -1630,7 +1610,15 @@ function MealSectionCard({
       {/* 1. Meal header */}
       <View style={styles.mealCardHeader}>
         <View style={styles.mealCardHeaderLeft}>
-          <Text style={styles.mealEmoji}>{section.emoji}</Text>
+          {section.emoji === '☀️' ? (
+            <IconSymbol ios_icon_name="sun.max.fill" android_material_icon_name="wb_sunny" size={16} color="#F59E0B" />
+          ) : section.emoji === '🌙' ? (
+            <IconSymbol ios_icon_name="moon.fill" android_material_icon_name="nightlight" size={16} color="#6366F1" />
+          ) : section.emoji === '🍎' ? (
+            <IconSymbol ios_icon_name="leaf.fill" android_material_icon_name="eco" size={16} color="#22C55E" />
+          ) : (
+            <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={16} color={colors.primary} />
+          )}
           <Text style={[styles.mealLabel, { color: textColor }]}>{section.label}</Text>
         </View>
         <View style={styles.mealCardHeaderRight}>

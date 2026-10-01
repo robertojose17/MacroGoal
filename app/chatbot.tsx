@@ -1722,7 +1722,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                     : null;
                   const sourceUrl = ingredient.nutrition_source?.source_url ?? null;
                   const sourceName = ingredient.nutrition_source?.source_name ?? null;
-                  const confidenceDetailText = `🔍 ID: ${ingredient.id_confidence} · ⚖️ Portion: ${ingredient.model_portion_confidence} · 📊 Nutrition: ${ingredient.nutrition_confidence}`;
+                  const confidenceDetailText = `ID: ${ingredient.id_confidence} · Portion: ${ingredient.model_portion_confidence} · Nutrition: ${ingredient.nutrition_confidence}`;
 
                   // Build unit options for this ingredient
                   const unitOptions: { key: string; label: string; gramsPerUnit: number }[] = [];
@@ -1859,7 +1859,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                         {/* Nutrition source label */}
                         {sourceName !== null && (
                           <Text style={[styles.sourceLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                            {'📊 '}
+                            <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar_chart" size={14} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
                             {sourceName}
                           </Text>
                         )}

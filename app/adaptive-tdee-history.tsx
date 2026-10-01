@@ -247,7 +247,7 @@ export default function AdaptiveTdeeHistoryScreen() {
 
         {estimates.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: cardBg }]}>
-            <Text style={styles.emptyIcon}>{'📊'}</Text>
+            <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar_chart" size={40} color={colors.textSecondary} />
             <Text style={[styles.emptyTitle, { color: textColor }]}>
               {t('adaptiveTdee.emptyTitle')}
             </Text>

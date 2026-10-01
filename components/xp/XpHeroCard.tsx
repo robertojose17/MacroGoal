@@ -16,6 +16,8 @@ import {
   Platform,
   Pressable,
 } from 'react-native';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import StreakBenefitsModal from '@/components/xp/StreakBenefitsModal';
@@ -220,7 +222,7 @@ export default function XpHeroCard({ status, isDark }: XpHeroCardProps) {
             style={({ pressed }) => [styles.statBlock, { backgroundColor: statChipBg, opacity: pressed ? 0.7 : 1 }]}
           >
             <View style={styles.statValueRow}>
-              <Animated.Text style={[styles.statEmoji, { opacity: streakAtRisk ? pulseAnim : 1 }]}>{'🔥'}</Animated.Text>
+              <Animated.View style={{ opacity: streakAtRisk ? pulseAnim : 1 }}><IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={24} color={colors.primary} /></Animated.View>
               <Text style={[styles.statValue, { color: textPrimary }]}>{streakDisplay}</Text>
             </View>
           </Pressable>

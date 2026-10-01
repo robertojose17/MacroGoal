@@ -840,7 +840,7 @@ export default function SettingsScreen() {
   const hasAnyPrefs = proteinCount > 0 || recipeStyleCount > 0;
   const foodPrefsSummaryParts: string[] = [];
   if (hasAnyPrefs) {
-    if (proteinCount > 0) foodPrefsSummaryParts.push(`🥩 ${proteinCount} ${proteinCount !== 1 ? t('profile.proteins_other', { count: proteinCount }).replace(`${proteinCount} `, '') : t('profile.proteins_one', { count: proteinCount }).replace(`${proteinCount} `, '')}`);
+    if (proteinCount > 0) foodPrefsSummaryParts.push(`${proteinCount} ${proteinCount !== 1 ? t('profile.proteins_other', { count: proteinCount }).replace(`${proteinCount} `, '') : t('profile.proteins_one', { count: proteinCount }).replace(`${proteinCount} `, '')}`);
     if (recipeStyleCount > 0) foodPrefsSummaryParts.push(`🍳 ${recipeStyleCount} ${recipeStyleCount !== 1 ? t('profile.styles_other', { count: recipeStyleCount }).replace(`${recipeStyleCount} `, '') : t('profile.styles_one', { count: recipeStyleCount }).replace(`${recipeStyleCount} `, '')}`);
   }
   const foodPrefsSummary = foodPrefsSummaryParts.length > 0 ? foodPrefsSummaryParts.join(' · ') : t('profile.noPreferencesSet');
@@ -987,7 +987,7 @@ export default function SettingsScreen() {
           {user.challenger_badge && (
             <View style={styles.badgeRow}>
               <View style={styles.challengerBadgePill}>
-                <Text style={styles.badgeIcon}>{'🏅'}</Text>
+                <IconSymbol ios_icon_name="medal.fill" android_material_icon_name="military_tech" size={20} color="#F59E0B" />
                 <Text style={styles.badgeLabel}>{t('profile.challenger')}</Text>
               </View>
             </View>

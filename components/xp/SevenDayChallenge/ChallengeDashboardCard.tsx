@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import type { SevenDayChallenge } from '@/types/challenge';
 import { translateDynamic } from '@/utils/translateDynamic';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -317,7 +318,7 @@ export default function ChallengeDashboardCard({
       {/* Footer reward hint */}
       {!isTodayDone && (
         <View style={[styles.footer, { backgroundColor: footerBg }]}>
-          <Text style={styles.footerMedal}>{'🏅'}</Text>
+          <IconSymbol ios_icon_name="medal.fill" android_material_icon_name="military_tech" size={20} color="#F59E0B" />
           <Text style={[styles.footerLine, { color: titleColor }]}>
             <Text style={{ fontWeight: '800' }}>{xpAmount}</Text>
             <Text style={[styles.footerLineMuted, { color: mutedColor }]}>{'  ·  '}{challengerBadgeOnDay7Text}</Text>

@@ -15,10 +15,9 @@ import { fetchLeaderboard, type LeaderboardEntry, type LeaderboardResponse, type
 import { Trophy } from 'lucide-react-native';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { useTranslation } from 'react-i18next';
+import { IconSymbol } from '@/components/IconSymbol';
 
 type Tab = 'steps';
-
-const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
 function formatShortDate(date: Date): string {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -59,8 +58,8 @@ function LeaderboardRow({
   const { t } = useTranslation();
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const medal = MEDAL[entry.rank];
-  const rankLabel = medal ?? String(entry.rank);
+  const hasMedal = entry.rank <= 3;
+  const rankLabel = hasMedal ? null : String(entry.rank);
   const valueFormatted = entry.totalValue.toLocaleString('en-US');
   const youSuffix = entry.isYou ? ` · ${t('leaderboard.you')}` : '';
   const rowBg = entry.isYou
@@ -77,9 +76,14 @@ function LeaderboardRow({
         !isLast && { borderBottomWidth: 1, borderBottomColor: isDark ? colors.borderDark : colors.border },
       ]}
     >
-      <Text style={[styles.rankText, { color: medal ? undefined : subColor, fontSize: medal ? 18 : 14 }]}>
-        {rankLabel}
-      </Text>
+      {entry.rank === 1 && <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={20} color="#FFD700" />}
+      {entry.rank === 2 && <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={20} color="#C0C0C0" />}
+      {entry.rank === 3 && <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={20} color="#CD7F32" />}
+      {!hasMedal && (
+        <Text style={[styles.rankText, { color: subColor, fontSize: 14 }]}>
+          {rankLabel}
+        </Text>
+      )}
       <View style={styles.leaderNameCol}>
         <Text style={[styles.leaderName, { color: textColor }]} numberOfLines={1}>
           {entry.username}

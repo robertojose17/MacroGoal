@@ -411,7 +411,15 @@ export default function TemplatePlanDetailScreen() {
               {/* Meal header */}
               <View style={styles.mealHeader}>
                 <View style={styles.mealHeaderLeft}>
-                  <Text style={styles.mealEmoji}>{mealDef.emoji}</Text>
+                  {mealDef.emoji === '☀️' ? (
+                    <IconSymbol ios_icon_name="sun.max.fill" android_material_icon_name="wb_sunny" size={18} color="#F59E0B" />
+                  ) : mealDef.emoji === '🌙' ? (
+                    <IconSymbol ios_icon_name="moon.fill" android_material_icon_name="nightlight" size={18} color="#6366F1" />
+                  ) : mealDef.emoji === '🍎' ? (
+                    <IconSymbol ios_icon_name="leaf.fill" android_material_icon_name="eco" size={18} color="#22C55E" />
+                  ) : (
+                    <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={18} color={colors.primary} />
+                  )}
                   <Text style={[styles.mealTitle, { color: textColor }]}>{mealDef.label}</Text>
                 </View>
                 {items.length > 0 && (

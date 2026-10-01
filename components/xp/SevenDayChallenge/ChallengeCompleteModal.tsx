@@ -18,6 +18,7 @@ import {
   Share,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { IconSymbol } from '@/components/IconSymbol';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -177,7 +178,7 @@ export default function ChallengeCompleteModal({
     try {
       await Share.share({
         message:
-          "I just completed the 7-Day Challenge on Macro Goal! 🏅 Built a 7-day nutrition habit. #MacroGoal #7DayChallenge",
+          "I just completed the 7-Day Challenge on Macro Goal! Built a 7-day nutrition habit. #MacroGoal #7DayChallenge",
       });
     } catch (err) {
       console.error('[ChallengeCompleteModal] Share failed:', err);
@@ -215,11 +216,11 @@ export default function ChallengeCompleteModal({
         {/* Content */}
         <View style={styles.content}>
           {/* Medal */}
-          <Animated.Text
+          <Animated.View
             style={[styles.medal, { transform: [{ scale: medalScale }] }]}
           >
-            {'🏅'}
-          </Animated.Text>
+            <IconSymbol ios_icon_name="medal.fill" android_material_icon_name="military_tech" size={28} color="#F59E0B" />
+          </Animated.View>
 
           <Animated.View style={{ opacity: contentOpacity, alignItems: 'center', width: '100%' }}>
             {/* Title */}
@@ -233,7 +234,7 @@ export default function ChallengeCompleteModal({
             {/* Glass badge card */}
             <View style={styles.glassCard}>
               <View style={styles.glassRow}>
-                <Text style={styles.glassIcon}>{'🏅'}</Text>
+                <IconSymbol ios_icon_name="medal.fill" android_material_icon_name="military_tech" size={32} color="#F59E0B" />
                 <View style={styles.glassTextBlock}>
                   <Text style={styles.glassTitle}>{badgeNameText}</Text>
                   <Text style={styles.glassSubtitle}>{unlockedForeverText}</Text>

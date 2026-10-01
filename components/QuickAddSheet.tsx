@@ -14,6 +14,8 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useTranslation } from 'react-i18next';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
 
 interface QuickAddSheetProps {
   visible: boolean;
@@ -21,10 +23,10 @@ interface QuickAddSheetProps {
 }
 
 const ACTION_DEFS = [
-  { id: 'barcode', labelKey: 'quickAdd.scanBarcode', icon: '📷', route: '/barcode-scanner' },
-  { id: 'search', labelKey: 'quickAdd.searchFood', icon: '🔍', route: '/food-search' },
-  { id: 'ai', labelKey: 'quickAdd.aiEstimate', icon: '🤖', route: '/chatbot' },
-  { id: 'quick', labelKey: 'quickAdd.createFood', icon: '✏️', route: '/my-foods-create' },
+  { id: 'barcode', labelKey: 'quickAdd.scanBarcode', route: '/barcode-scanner' },
+  { id: 'search', labelKey: 'quickAdd.searchFood', route: '/food-search' },
+  { id: 'ai', labelKey: 'quickAdd.aiEstimate', route: '/chatbot' },
+  { id: 'quick', labelKey: 'quickAdd.createFood', route: '/my-foods-create' },
 ];
 
 function getSmartMealType(): string {
@@ -141,7 +143,7 @@ export default function QuickAddSheet({ visible, onClose }: QuickAddSheetProps) 
                 <Text style={[styles.rowLabel, { color: textPrimary }]}>
                   {actionLabel}
                 </Text>
-                <Text style={styles.rowIcon}>{action.icon}</Text>
+                <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={20} color={colors.primary} />
               </TouchableOpacity>
               {!isLast && (
                 <View style={[styles.divider, { backgroundColor: divider }]} />

@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
+import { IconSymbol } from '@/components/IconSymbol';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import Constants from 'expo-constants';
@@ -635,6 +636,31 @@ function Step0({ onNext }: { onNext: () => void }) {
   );
 }
 
+// ─── ICON HELPER ─────────────────────────────────────────────────────────────
+
+const renderOnboardingIcon = (iconValue: string, size = 24) => {
+  const iconMap: Record<string, { ios: string; android: string; color: string }> = {
+    '📊': { ios: 'chart.bar.fill', android: 'bar_chart', color: colors.primary },
+    '🔄': { ios: 'arrow.clockwise', android: 'refresh', color: colors.primary },
+    '⚡': { ios: 'bolt.fill', android: 'bolt', color: '#F59E0B' },
+    '❤️': { ios: 'heart.fill', android: 'favorite', color: '#EF4444' },
+    '📉': { ios: 'arrow.down.circle.fill', android: 'trending_down', color: '#EF4444' },
+    '⚖️': { ios: 'scalemass.fill', android: 'balance', color: colors.primary },
+    '📈': { ios: 'arrow.up.circle.fill', android: 'trending_up', color: '#22C55E' },
+    '🚶': { ios: 'figure.walk', android: 'directions_walk', color: colors.primary },
+    '🏃': { ios: 'figure.run', android: 'directions_run', color: colors.primary },
+    '💪': { ios: 'bolt.fill', android: 'bolt', color: colors.primary },
+    '🪑': { ios: 'chair.fill', android: 'chair', color: colors.primary },
+    '😩': { ios: 'face.dashed', android: 'sentiment_dissatisfied', color: colors.primary },
+    '😍': { ios: 'face.smiling', android: 'sentiment_very_satisfied', color: colors.primary },
+    '👕': { ios: 'tshirt.fill', android: 'checkroom', color: colors.primary },
+    '🧒': { ios: 'figure.child', android: 'child_care', color: colors.primary },
+  };
+  const icon = iconMap[iconValue];
+  if (!icon) return null;
+  return <IconSymbol ios_icon_name={icon.ios} android_material_icon_name={icon.android} size={size} color={icon.color} />;
+};
+
 // ─── STEP 1 — PAIN ───────────────────────────────────────────────────────────
 
 const PAIN_CARDS = [
@@ -706,7 +732,7 @@ function Step1({
                   setPainPoint(idx);
                 }}
               >
-                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                {renderOnboardingIcon(card.emoji)}
                 <View style={styles.cardTextBlock}>
                   <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>{card.title}</Text>
                   <Text style={[styles.cardSubtitle, selected && styles.cardSubtitleSelected]}>{card.subtitle}</Text>
@@ -786,7 +812,7 @@ function Step2({
                 key={idx}
                 style={[styles.hopeBullet, { opacity, transform: [{ translateY }] }]}
               >
-                <Text style={styles.hopeBulletIcon}>{bullet.icon}</Text>
+                {renderOnboardingIcon(bullet.icon)}
                 <View style={styles.hopeBulletText}>
                   <Text style={styles.hopeBulletTitle}>{bullet.title}</Text>
                 </View>
@@ -1126,7 +1152,7 @@ function Step5({
                   setGoalType(card.value);
                 }}
               >
-                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                {renderOnboardingIcon(card.emoji)}
                 <View style={styles.cardTextBlock}>
                   <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>{card.title}</Text>
                   <Text style={[styles.cardSubtitle, selected && styles.cardSubtitleSelected]}>{card.subtitle}</Text>
@@ -1222,7 +1248,7 @@ function Step6({
                   setActivityLevel(card.value);
                 }}
               >
-                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                {renderOnboardingIcon(card.emoji)}
                 <View style={styles.cardTextBlock}>
                   <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>{card.title}</Text>
                   <Text style={[styles.cardSubtitle, selected && styles.cardSubtitleSelected]}>{card.subtitle}</Text>
@@ -1485,13 +1511,13 @@ function Step9({
 
               <View style={styles.s9Grid}>
                 <View style={styles.s9StatCard}>
-                  <Text style={styles.s9StatEmoji}>🔥</Text>
+                  <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={24} color={colors.primary} />
                   <Text style={styles.s9StatValue}>{calories.toLocaleString()}</Text>
                   <Text style={styles.s9StatUnit}>kcal</Text>
                   <Text style={styles.s9StatLabel}>{t('onboarding.dailyCalories')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
-                  <Text style={styles.s9StatEmoji}>🥩</Text>
+                  <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={24} color={colors.primary} />
                   <Text style={styles.s9StatValue}>{protein}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
                   <Text style={styles.s9StatLabel}>{t('common.protein')}</Text>

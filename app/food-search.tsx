@@ -385,7 +385,7 @@ export default function FoodSearchScreen() {
     if (searchQuery.trim().length > 0 && searchQuery.trim().length < 2) {
       return (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>✏️</Text>
+          <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={40} color={colors.textSecondary} />
           <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
             {t('foodSearch.keepTyping')}
           </Text>
@@ -398,7 +398,7 @@ export default function FoodSearchScreen() {
 
     return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>🍎</Text>
+        <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={40} color={colors.textSecondary} />
         <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
           {t('foodSearch.searchForFoods')}
         </Text>

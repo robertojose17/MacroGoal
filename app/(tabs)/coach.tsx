@@ -718,20 +718,20 @@ type CoachRecommendation = {
   recommendation_text: string;
 };
 
-function getStatusInfo(userStatus: string): { icon: string; label: string } {
-  const map: Record<string, { icon: string; label: string }> = {
-    on_track: { icon: '✅', label: i18n.t('coach.statusOnTrack') },
-    faster_than_expected: { icon: '🚀', label: i18n.t('coach.statusFaster') },
-    slower_than_expected: { icon: '📉', label: i18n.t('coach.statusSlower') },
-    possible_plateau: { icon: '⚠️', label: i18n.t('coach.statusPlateau') },
-    low_adherence: { icon: '📋', label: i18n.t('coach.statusLowAdherence') },
-    incomplete_logging: { icon: '📝', label: i18n.t('coach.statusIncompleteLogging') },
-    approaching_goal: { icon: '🎯', label: i18n.t('coach.statusApproachingGoal') },
-    goal_achieved: { icon: '🏆', label: i18n.t('coach.statusGoalAchieved') },
-    insufficient_data: { icon: '🔍', label: i18n.t('coach.statusGatheringData') },
-    at_risk_of_quitting: { icon: '💪', label: i18n.t('coach.statusGetBackOnTrack') },
+function getStatusInfo(userStatus: string): { iconName: { ios: string; android: string }; iconColor: string; label: string } {
+  const map: Record<string, { iconName: { ios: string; android: string }; iconColor: string; label: string }> = {
+    on_track: { iconName: { ios: 'checkmark.circle.fill', android: 'check_circle' }, iconColor: '#22C55E', label: i18n.t('coach.statusOnTrack') },
+    faster_than_expected: { iconName: { ios: 'arrow.up.circle.fill', android: 'trending_up' }, iconColor: '#22C55E', label: i18n.t('coach.statusFaster') },
+    slower_than_expected: { iconName: { ios: 'arrow.down.circle.fill', android: 'trending_down' }, iconColor: '#EF4444', label: i18n.t('coach.statusSlower') },
+    possible_plateau: { iconName: { ios: 'exclamationmark.triangle.fill', android: 'warning' }, iconColor: '#F59E0B', label: i18n.t('coach.statusPlateau') },
+    low_adherence: { iconName: { ios: 'pencil.circle.fill', android: 'edit' }, iconColor: '#F59E0B', label: i18n.t('coach.statusLowAdherence') },
+    incomplete_logging: { iconName: { ios: 'pencil.circle.fill', android: 'edit' }, iconColor: '#F59E0B', label: i18n.t('coach.statusIncompleteLogging') },
+    approaching_goal: { iconName: { ios: 'target', android: 'gps_fixed' }, iconColor: '#3B82F6', label: i18n.t('coach.statusApproachingGoal') },
+    goal_achieved: { iconName: { ios: 'trophy.fill', android: 'emoji_events' }, iconColor: '#F59E0B', label: i18n.t('coach.statusGoalAchieved') },
+    insufficient_data: { iconName: { ios: 'chart.bar.fill', android: 'bar_chart' }, iconColor: colors.textSecondary, label: i18n.t('coach.statusGatheringData') },
+    at_risk_of_quitting: { iconName: { ios: 'exclamationmark.triangle.fill', android: 'warning' }, iconColor: '#EF4444', label: i18n.t('coach.statusGetBackOnTrack') },
   };
-  return map[userStatus] ?? { icon: '📊', label: 'Status Unknown' };
+  return map[userStatus] ?? { iconName: { ios: 'chart.bar.fill', android: 'bar_chart' }, iconColor: colors.textSecondary, label: 'Status Unknown' };
 }
 
 function getEvidenceBadge(strength: string): { label: string; color: string; bg: string } {
@@ -799,7 +799,7 @@ function StatusCard({
       activeOpacity={0.8}
     >
       <View style={styles.statusCardHeader}>
-        <Text style={styles.statusCardIcon}>{statusInfo.icon}</Text>
+        <IconSymbol ios_icon_name={statusInfo.iconName.ios} android_material_icon_name={statusInfo.iconName.android} size={24} color={statusInfo.iconColor} />
         <View style={styles.statusCardTitleCol}>
           <Text style={[styles.statusCardTitle, { color: textColor }]}>{statusInfo.label}</Text>
           {relativeTime ? (
@@ -1746,7 +1746,7 @@ export default function CoachScreen() {
           const successMsg: MessageWithId = {
             id: genId(),
             role: 'assistant',
-            content: `✅ Your meal plan "${plan.name}" has been created! It covers ${uniqueDays} day${uniqueDays !== 1 ? 's' : ''} with ${totalMeals} meal${totalMeals !== 1 ? 's' : ''}. Opening it now...`,
+            content: `Your meal plan "${plan.name}" has been created! It covers ${uniqueDays} day${uniqueDays !== 1 ? 's' : ''} with ${totalMeals} meal${totalMeals !== 1 ? 's' : ''}. Opening it now...`,
             timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, successMsg]);
@@ -1834,7 +1834,7 @@ export default function CoachScreen() {
 
         const foodName = String(proposal.food_name ?? 'food');
         const calories = Number(proposal.calories ?? 0);
-        const successContent = `✅ Added **${foodName}** (${calories} cal) to your ${mealType} on ${date}.`;
+        const successContent = `Added **${foodName}** (${calories} cal) to your ${mealType} on ${date}.`;
         console.log('[AICoach] Food added to diary successfully:', foodName);
         setMessages((prev) => [
           ...prev,
@@ -1904,7 +1904,7 @@ export default function CoachScreen() {
           return;
         }
 
-        const successContent = `✅ Your daily calorie goal has been updated to **${newCalories} kcal**.`;
+        const successContent = `Your daily calorie goal has been updated to **${newCalories} kcal**.`;
         console.log('[AICoach] Goal updated successfully, new daily_calories:', newCalories);
         setMessages((prev) => [
           ...prev,
@@ -2072,9 +2072,7 @@ export default function CoachScreen() {
                 {t('coach.coachInsightLabel')}
               </Text>
               <View style={styles.insightCardRow}>
-                <Text style={styles.insightCardEmoji}>
-                  {'💡'}
-                </Text>
+                <IconSymbol ios_icon_name="lightbulb.fill" android_material_icon_name="lightbulb" size={16} color="#F59E0B" />
                 <Text style={[styles.insightCardText, { color: isDark ? colors.textDark : colors.text }]}>
                   {proactiveInsight.text}
                 </Text>

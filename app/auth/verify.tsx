@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { IconSymbol } from '@/components/IconSymbol';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -171,7 +172,7 @@ export default function VerifyScreen() {
         {status === 'success' && (
           <>
             <View style={styles.successIcon}>
-              <Text style={styles.successEmoji}>✅</Text>
+              <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check_circle" size={48} color="#22C55E" />
             </View>
             <Text style={[styles.message, { color: isDark ? colors.textDark : colors.text }]}>
               {message}
@@ -182,7 +183,7 @@ export default function VerifyScreen() {
         {status === 'error' && (
           <>
             <View style={styles.errorIcon}>
-              <Text style={styles.errorEmoji}>❌</Text>
+              <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={48} color="#EF4444" />
             </View>
             <Text style={[styles.message, { color: isDark ? colors.textDark : colors.text }]}>
               {message}

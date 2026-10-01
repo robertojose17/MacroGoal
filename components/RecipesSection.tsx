@@ -112,7 +112,7 @@ function RecipeCard({ recipe, isDark, onPress }: RecipeCardProps) {
 
         {/* Rating row */}
         <View style={rcStyles.ratingRow}>
-          <Text style={rcStyles.starIcon}>⭐</Text>
+          <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={14} color="#F59E0B" />
           <Text style={[rcStyles.ratingValue, { color: colors.fats }]}>{ratingDisplay}</Text>
           <Text style={[rcStyles.reviewCount, { color: secondaryColor }]}>
             {'('}

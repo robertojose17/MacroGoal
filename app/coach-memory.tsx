@@ -518,7 +518,7 @@ export default function CoachMemoryScreen() {
         {/* ── Memory Categories ── */}
         {categoryKeys.length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: cardBg, borderColor }]}>
-            <Text style={styles.emptyStateEmoji}>🧠</Text>
+            <IconSymbol ios_icon_name="brain.head.profile" android_material_icon_name="psychology" size={48} color={colors.textSecondary} />
             <Text style={[styles.emptyStateTitle, { color: textColor }]}>{t('coachMemory.noMemoriesYet')}</Text>
             <Text style={[styles.emptyStateSubtitle, { color: secondaryColor }]}>
               {t('coachMemory.startChatting')}
