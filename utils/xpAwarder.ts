@@ -15,6 +15,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase } from '@/lib/supabase/client';
 import { emitXpRefresh, emitLeagueRefresh } from '@/utils/xpEvents';
 import type { AwardXpResult } from '@/types/xp';
+import { autoShareCalorieGoal, autoShareProteinGoal } from '@/utils/autoShareAchievements';
 
 // ─── Internal helper ──────────────────────────────────────────────────────────
 
@@ -175,6 +176,7 @@ export async function evaluateDailyGoals(date: string): Promise<void> {
       })
         .then((result) => handleResult(result, 'protein_goal'))
         .catch((err) => console.warn('[xpAwarder] protein_goal award failed (non-fatal):', err?.message ?? err));
+      autoShareProteinGoal();
     }
 
     // Award calorie_goal if within 90–110% of target (within 10%)
@@ -187,6 +189,7 @@ export async function evaluateDailyGoals(date: string): Promise<void> {
       })
         .then((result) => handleResult(result, 'calorie_goal'))
         .catch((err) => console.warn('[xpAwarder] calorie_goal award failed (non-fatal):', err?.message ?? err));
+      autoShareCalorieGoal();
     }
   } catch (err) {
     // Never throw — this is always fire-and-forget

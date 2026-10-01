@@ -25,6 +25,7 @@ import { listTrackers, logEntry as logTrackerEntry } from '@/utils/trackersApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { tryAwardWorkout, tryAwardWeightCheckin, tryAwardProgressPhoto } from '@/utils/xpAwarder';
+import { autoShareWeightCheckin } from '@/utils/autoShareAchievements';
 import { emitXpRefresh } from '@/utils/xpEvents';
 import { useTranslation } from 'react-i18next';
 import { invalidatePIECache } from '@/hooks/useProgressIntelligence';
@@ -340,6 +341,8 @@ export default function CheckInFormScreen() {
         if (checkInType === 'weight' && checkInData.weight != null) {
           console.log('[CheckInForm] awarding weight_checkin XP for check-in:', savedCheckInId);
           await tryAwardWeightCheckin(savedCheckInId, checkInData.weight as number);
+          console.log('[CheckInForm] triggering autoShareWeightCheckin (fire-and-forget)');
+          autoShareWeightCheckin(checkInData.weight as number);
         }
       }
 

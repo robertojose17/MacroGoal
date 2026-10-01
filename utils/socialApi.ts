@@ -35,7 +35,7 @@ export interface SocialPost {
   likes_count: number;
   comments_count: number;
   created_at: string;
-  author: { id: string; username: string; name: string | null };
+  author: { id: string; username: string; name: string | null; user_type?: string | null; is_premium?: boolean | null };
   liked_by_me: boolean;
 }
 

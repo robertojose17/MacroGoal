@@ -96,6 +96,9 @@ export default function ProfileScreen() {
   // Adaptive TDEE state
   const [showAdjustmentDayModal, setShowAdjustmentDayModal] = useState(false);
 
+  // Community sharing toggle
+  const [autoShare, setAutoShare] = useState(true);
+
   const handleAvatarPress = () => {
     console.log('[Profile] Avatar tapped — showing photo picker options');
     Alert.alert(
@@ -259,6 +262,8 @@ export default function ProfileScreen() {
       } else if (userResult.data) {
         console.log('[Profile] User data loaded:', userResult.data);
         setUser({ ...authUser, ...userResult.data });
+        // Sync auto_share_achievements toggle (default true if null)
+        setAutoShare(userResult.data.auto_share_achievements !== false);
         if (userResult.data.onboarding_completed && !userResult.data.goal_weight) {
           console.log('[Profile] Goal weight is missing, showing prompt');
           setShowGoalWeightPrompt(true);
@@ -1794,6 +1799,47 @@ export default function ProfileScreen() {
               color={isDark ? colors.textSecondaryDark : colors.textSecondary}
             />
           </TouchableOpacity>
+
+          {/* Community Sharing */}
+          <View style={[styles.sectionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />
+          <View style={styles.actionRow}>
+            <View style={styles.actionRowLeft}>
+              <IconSymbol
+                ios_icon_name="person.2.fill"
+                android_material_icon_name="group"
+                size={18}
+                color={colors.primary}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                  Community Sharing
+                </Text>
+                <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: 1 }}>
+                  Auto-share achievements to the community feed
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={autoShare}
+              onValueChange={async (newValue) => {
+                console.log('[Profile] Community Sharing toggle pressed — new value:', newValue);
+                setAutoShare(newValue);
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                if (!authUser) return;
+                const { error } = await supabase
+                  .from('users')
+                  .update({ auto_share_achievements: newValue })
+                  .eq('id', authUser.id);
+                if (error) {
+                  console.error('[Profile] Failed to update auto_share_achievements:', error);
+                } else {
+                  console.log('[Profile] auto_share_achievements updated to:', newValue);
+                }
+              }}
+              trackColor={{ false: isDark ? colors.borderDark : colors.border, true: colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
 
           {/* Language */}
           <View style={[styles.sectionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '20' }]} />

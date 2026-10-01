@@ -116,6 +116,7 @@ export default function SocialPostCard({
   const authorUsername = post.author?.username ?? 'Unknown';
   const authorName = post.author?.name ?? null;
   const captionText = post.content ?? null;
+  const isElite = post.author?.user_type === 'premium' || post.author?.is_premium === true;
 
   // Derived display values
   const caloriesDisplay = post.calories != null ? Math.round(Number(post.calories)).toString() : null;
@@ -267,9 +268,16 @@ export default function SocialPostCard({
       <Pressable onPress={handlePressUser} style={styles.header} accessibilityRole="button">
         <Avatar username={authorUsername} size={40} />
         <View style={styles.headerInfo}>
-          <Text style={[styles.username, { color: textColor }]} numberOfLines={1}>
-            {authorUsername}
-          </Text>
+          <View style={styles.usernameRow}>
+            <Text style={[styles.username, { color: textColor }]} numberOfLines={1}>
+              {authorUsername}
+            </Text>
+            {isElite ? (
+              <View style={styles.eliteBadge}>
+                <Text style={styles.eliteBadgeText}>ELITE</Text>
+              </View>
+            ) : null}
+          </View>
           {authorName ? (
             <Text style={[styles.authorName, { color: subColor }]} numberOfLines={1}>
               {authorName}
@@ -389,9 +397,26 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
   },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   username: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  eliteBadge: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginLeft: 4,
+  },
+  eliteBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   authorName: {
     fontSize: 12,
