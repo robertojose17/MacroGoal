@@ -26,6 +26,8 @@ import ProgressCircle from '@/components/ProgressCircle';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { calcMacros } from '@/utils/macros';
 import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
+import { useXpStatus } from '@/hooks/useXpStatus';
+import { calcDailyScore } from '@/utils/consistencyMath';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -57,6 +59,25 @@ type FollowUser = {
 type FollowModalType = 'followers' | 'following' | null;
 type NutritionRange = 'today' | '7d' | '30d' | 'custom';
 
+const TOOLTIP_CONTENT: Record<string, { title: string; description: string }> = {
+  streak: {
+    title: 'Current Streak',
+    description: "The number of consecutive days you've logged your food. Keep it going!",
+  },
+  best: {
+    title: 'Best Streak',
+    description: 'Your longest streak ever. This is your personal record for consecutive days logged.',
+  },
+  score: {
+    title: 'Consistency Score (30 days)',
+    description: 'A score from 0–100 measuring how consistently you\'ve tracked your calories and protein over the last 30 days. 80+ is Locked In, 60+ is On Track.',
+  },
+  member: {
+    title: 'Member Since',
+    description: 'The date you joined Macro Goal. Welcome to the journey!',
+  },
+};
+
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
   const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
@@ -84,6 +105,11 @@ export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isPremium } = usePremium();
+  const { status: xpStatus } = useXpStatus();
+
+  // Streaks derived from useXpStatus (same source as dashboard)
+  const currentStreak = xpStatus?.current_streak ?? 0;
+  const bestStreak = xpStatus?.longest_streak ?? 0;
 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -94,10 +120,8 @@ export default function ProfileScreen() {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
 
-  // Achievements
-  const [currentStreak, setCurrentStreak] = useState(0);
-  const [bestStreak, setBestStreak] = useState(0);
-  const [totalDaysLogged, setTotalDaysLogged] = useState(0);
+  // Consistency score (30-day)
+  const [consistencyScore, setConsistencyScore] = useState(0);
 
   // Posts feed
   const [posts, setPosts] = useState<any[]>([]);
@@ -119,6 +143,9 @@ export default function ProfileScreen() {
   const [showRangePicker, setShowRangePicker] = useState(false);
   const [rangeDayCount, setRangeDayCount] = useState(1);
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
+
+  // Tooltip
+  const [tooltipKey, setTooltipKey] = useState<string | null>(null);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -221,6 +248,69 @@ export default function ProfileScreen() {
     setRangeDayCount(dayCount);
   };
 
+  const loadConsistencyScore = async (userId: string) => {
+    console.log('[Profile] loadConsistencyScore — starting 30-day calculation for user:', userId);
+    try {
+      const today = new Date();
+      const start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      const startStr = toLocalDateString(start);
+      const endStr = toLocalDateString(today);
+
+      const [mealsRes, goalsRes] = await Promise.all([
+        supabase
+          .from('meals')
+          .select('date, meal_items(calories, protein, is_scheduled)')
+          .eq('user_id', userId)
+          .gte('date', startStr)
+          .lte('date', endStr),
+        supabase
+          .from('goals')
+          .select('daily_calories, protein_g')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .maybeSingle(),
+      ]);
+
+      console.log('[Profile] loadConsistencyScore — meals:', mealsRes.error ? mealsRes.error.message : `${mealsRes.data?.length ?? 0} meals`, 'goals:', goalsRes.error ? goalsRes.error.message : 'ok');
+
+      const calorieTarget = goalsRes.data?.daily_calories ?? 2000;
+      const proteinTarget = goalsRes.data?.protein_g ?? 150;
+
+      // Group meals by date
+      const byDate: Record<string, { calories: number; protein: number }> = {};
+      mealsRes.data?.forEach((meal: any) => {
+        const d = meal.date;
+        if (!byDate[d]) byDate[d] = { calories: 0, protein: 0 };
+        meal.meal_items?.forEach((item: any) => {
+          if (!item.is_scheduled) {
+            byDate[d].calories += item.calories ?? 0;
+            byDate[d].protein += item.protein ?? 0;
+          }
+        });
+      });
+
+      // Score each of the 30 days
+      let totalScore = 0;
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = toLocalDateString(d);
+        const dayData = byDate[key];
+        const hasTracking = !!dayData;
+        const dayCals = dayData?.calories ?? 0;
+        const dayProt = dayData?.protein ?? 0;
+        totalScore += calcDailyScore(hasTracking, dayCals, calorieTarget, dayProt, proteinTarget);
+      }
+
+      const avg = Math.round(totalScore / 30);
+      console.log('[Profile] loadConsistencyScore — 30-day avg score:', avg);
+      setConsistencyScore(avg);
+    } catch (err) {
+      console.error('[Profile] loadConsistencyScore — error:', err);
+    }
+  };
+
   const loadData = async () => {
     console.log('[Profile] loadData — starting');
     try {
@@ -238,16 +328,12 @@ export default function ProfileScreen() {
         postsResult,
         followersResult,
         followingResult,
-        xpResult,
-        mealsResult,
         goalsResult,
       ] = await Promise.all([
         supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', authUser.id),
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('following_id', authUser.id),
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', authUser.id),
-        supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', authUser.id).maybeSingle(),
-        supabase.from('meals').select('logged_date').eq('user_id', authUser.id),
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
       ]);
 
@@ -255,8 +341,6 @@ export default function ProfileScreen() {
       console.log('[Profile] loadData — posts count:', postsResult.count, postsResult.error?.message);
       console.log('[Profile] loadData — followers count:', followersResult.count, followersResult.error?.message);
       console.log('[Profile] loadData — following count:', followingResult.count, followingResult.error?.message);
-      console.log('[Profile] loadData — xp result:', xpResult.error ? xpResult.error.message : 'ok', xpResult.data);
-      console.log('[Profile] loadData — meals result:', mealsResult.error ? mealsResult.error.message : 'ok');
       console.log('[Profile] loadData — goals result:', goalsResult.error ? goalsResult.error.message : 'ok');
 
       if (userResult.data) {
@@ -269,23 +353,15 @@ export default function ProfileScreen() {
       setFollowersCount(followersResult.error ? 0 : (followersResult.count ?? 0));
       setFollowingCount(followingResult.error ? 0 : (followingResult.count ?? 0));
 
-      if (xpResult.data) {
-        setCurrentStreak(xpResult.data.current_streak ?? 0);
-        const best = (xpResult.data as any).longest_streak ?? xpResult.data.current_streak ?? 0;
-        setBestStreak(best);
-      }
-
-      if (!mealsResult.error && mealsResult.data) {
-        const uniqueDates = new Set(mealsResult.data.map((m: any) => m.logged_date ?? m.created_at?.slice(0, 10)));
-        setTotalDaysLogged(uniqueDates.size);
-      }
-
       if (goalsResult.data) {
         setGoal(goalsResult.data);
       }
 
-      // Load nutrition for current range
-      await loadNutritionData(authUser.id, nutritionRange, customStartDate, customEndDate);
+      // Load nutrition and consistency score in parallel
+      await Promise.all([
+        loadNutritionData(authUser.id, nutritionRange, customStartDate, customEndDate),
+        loadConsistencyScore(authUser.id),
+      ]);
 
       // Load posts feed
       const { data: postsData, error: postsError } = await supabase
@@ -453,7 +529,7 @@ export default function ProfileScreen() {
 
   const currentStreakDisplay = String(currentStreak);
   const bestStreakDisplay = String(bestStreak);
-  const totalDaysDisplay = String(totalDaysLogged);
+  const consistencyScoreDisplay = String(consistencyScore);
   const postsCountDisplay = String(postsCount);
   const followersCountDisplay = String(followersCount);
   const followingCountDisplay = String(followingCount);
@@ -472,6 +548,8 @@ export default function ProfileScreen() {
   const memberSinceDisplay = user.created_at
     ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).replace(' ', " '")
     : '—';
+
+  const activeTooltip = tooltipKey ? TOOLTIP_CONTENT[tooltipKey] : null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -577,38 +655,66 @@ export default function ProfileScreen() {
         {/* ── Stats Row ──────────────────────────────────────────────────── */}
         <View style={[styles.statsRowCard, { backgroundColor: cardBg }]}>
           {/* Streak */}
-          <View style={styles.statCol}>
+          <TouchableOpacity
+            style={styles.statCol}
+            activeOpacity={0.7}
+            onPress={() => {
+              console.log('[Profile] stat tooltip tapped: streak');
+              setTooltipKey('streak');
+            }}
+          >
             <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={16} color={colors.primary} />
             <Text style={[styles.statColValue, { color: textColor }]}>{currentStreakDisplay}</Text>
             <Text style={[styles.statColLabel, { color: secondaryText }]}>STREAK</Text>
-          </View>
+          </TouchableOpacity>
 
           <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
 
           {/* Best */}
-          <View style={styles.statCol}>
+          <TouchableOpacity
+            style={styles.statCol}
+            activeOpacity={0.7}
+            onPress={() => {
+              console.log('[Profile] stat tooltip tapped: best');
+              setTooltipKey('best');
+            }}
+          >
             <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={16} color="#F59E0B" />
             <Text style={[styles.statColValue, { color: textColor }]}>{bestStreakDisplay}</Text>
             <Text style={[styles.statColLabel, { color: secondaryText }]}>BEST</Text>
-          </View>
+          </TouchableOpacity>
 
           <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
 
-          {/* Logged */}
-          <View style={styles.statCol}>
-            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar_today" size={16} color={colors.primary} />
-            <Text style={[styles.statColValue, { color: textColor }]}>{totalDaysDisplay}</Text>
-            <Text style={[styles.statColLabel, { color: secondaryText }]}>LOGGED</Text>
-          </View>
+          {/* Consistency Score */}
+          <TouchableOpacity
+            style={styles.statCol}
+            activeOpacity={0.7}
+            onPress={() => {
+              console.log('[Profile] stat tooltip tapped: score');
+              setTooltipKey('score');
+            }}
+          >
+            <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar_chart" size={16} color={colors.primary} />
+            <Text style={[styles.statColValue, { color: colors.primary }]}>{consistencyScoreDisplay}</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>SCORE</Text>
+          </TouchableOpacity>
 
           <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
 
           {/* Member */}
-          <View style={styles.statCol}>
+          <TouchableOpacity
+            style={styles.statCol}
+            activeOpacity={0.7}
+            onPress={() => {
+              console.log('[Profile] stat tooltip tapped: member');
+              setTooltipKey('member');
+            }}
+          >
             <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={16} color="#8B5CF6" />
             <Text style={[styles.statColValue, { color: textColor }]}>{memberSinceDisplay}</Text>
             <Text style={[styles.statColLabel, { color: secondaryText }]}>SINCE</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* ── Nutrition Card ──────────────────────────────────────────────── */}
@@ -816,6 +922,53 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* ── Tooltip Modal ───────────────────────────────────────────────────── */}
+      <Modal
+        visible={tooltipKey !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          console.log('[Profile] tooltip modal dismissed via back button');
+          setTooltipKey(null);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.tooltipOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            console.log('[Profile] tooltip overlay tapped — closing');
+            setTooltipKey(null);
+          }}
+        >
+          <TouchableOpacity
+            style={[styles.tooltipCard, { backgroundColor: cardBg }]}
+            activeOpacity={1}
+          >
+            <TouchableOpacity
+              style={styles.tooltipCloseBtn}
+              onPress={() => {
+                console.log('[Profile] tooltip close button pressed, key:', tooltipKey);
+                setTooltipKey(null);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={18}
+                color={secondaryText}
+              />
+            </TouchableOpacity>
+            <Text style={[styles.tooltipTitle, { color: secondaryText }]}>
+              {activeTooltip?.title ?? ''}
+            </Text>
+            <Text style={[styles.tooltipDescription, { color: textColor }]}>
+              {activeTooltip?.description ?? ''}
+            </Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ── Custom Range Picker ─────────────────────────────────────────────── */}
       <CalendarDateRangePicker
         visible={showRangePicker}
@@ -963,6 +1116,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 4,
   },
   statDivider: {
     width: 1,
@@ -1202,5 +1356,44 @@ const styles = StyleSheet.create({
   followUserUsername: {
     ...typography.small,
     marginTop: 1,
+  },
+
+  // Tooltip modal
+  tooltipOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  tooltipCard: {
+    borderRadius: 20,
+    padding: 24,
+    maxWidth: 320,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  tooltipCloseBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 4,
+  },
+  tooltipTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    marginRight: 28,
+  },
+  tooltipDescription: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
   },
 });
