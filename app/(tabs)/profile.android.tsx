@@ -500,82 +500,74 @@ export default function ProfileScreen() {
           />
         }
       >
-        {/* ── Instagram-style Header Card ─────────────────────────────────── */}
-        <View style={[styles.headerCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-          {/* Top row: avatar left, name/username/bio right */}
-          <View style={styles.headerTopRow}>
+        {/* ── Instagram-style Header ─────────────────────────────────── */}
+        <View style={styles.igHeader}>
+          {/* Row: avatar + info */}
+          <View style={styles.igHeaderRow}>
             {/* Avatar */}
-            <View style={[styles.avatarRing, { borderColor: colors.primary }]}>
+            <View style={[styles.igAvatarRing, { borderColor: colors.primary }]}>
               {user.avatar_url ? (
-                <Image
-                  source={resolveImageSource(user.avatar_url)}
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                />
+                <Image source={resolveImageSource(user.avatar_url)} style={styles.igAvatarImage} resizeMode="cover" />
               ) : (
-                <View style={[styles.avatarFallback, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.avatarInitials}>{initials}</Text>
+                <View style={[styles.igAvatarFallback, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.igAvatarInitials}>{initials}</Text>
                 </View>
               )}
             </View>
 
-            {/* Name / username / bio */}
-            <View style={styles.headerInfo}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.displayName, { color: textColor }]} numberOfLines={1}>{displayName}</Text>
+            {/* Info column */}
+            <View style={styles.igInfoCol}>
+              {/* Username + badge */}
+              <View style={styles.igNameRow}>
+                <Text style={[styles.igUsername, { color: textColor }]} numberOfLines={1}>
+                  {user.username || displayName}
+                </Text>
                 {isPremiumUser && (
-                  <View style={styles.eliteBadge}>
-                    <Text style={styles.eliteBadgeText}>ELITE</Text>
+                  <View style={[styles.igEliteBadge, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.igEliteBadgeText}>ELITE</Text>
                   </View>
                 )}
               </View>
-              {user.username ? (
-                <Text style={[styles.username, { color: secondaryText }]}>
-                  {'@'}
-                  {user.username}
-                </Text>
-              ) : null}
-              {bioText.length > 0 ? (
-                <Text style={[styles.bioText, { color: textColor }]} numberOfLines={3}>{bioText}</Text>
-              ) : null}
+              {/* Full name */}
+              <Text style={[styles.igFullName, { color: secondaryText }]} numberOfLines={1}>
+                {displayName}
+              </Text>
+              {/* Stats row */}
+              <View style={styles.igStatsRow}>
+                <TouchableOpacity onPress={() => {}} activeOpacity={0.7} style={styles.igStatItem}>
+                  <Text style={[styles.igStatNumber, { color: textColor }]}>{postsCountDisplay}</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> posts</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[Profile] Followers stat tapped');
+                    openFollowModal('followers');
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.igStatItem}
+                >
+                  <Text style={[styles.igStatNumber, { color: textColor }]}>{followersCountDisplay}</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> followers</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[Profile] Following stat tapped');
+                    openFollowModal('following');
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.igStatItem}
+                >
+                  <Text style={[styles.igStatNumber, { color: textColor }]}>{followingCountDisplay}</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> following</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
-          {/* Stats row — full-width below avatar+name */}
-          <View style={[styles.statsRow, { borderTopColor: borderColor, borderBottomColor: borderColor }]}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: textColor }]}>{postsCountDisplay}</Text>
-              <Text style={[styles.statLabel, { color: secondaryText }]}>Posts</Text>
-            </View>
-
-            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
-
-            <TouchableOpacity
-              style={styles.statItem}
-              onPress={() => {
-                console.log('[Profile] Followers stat tapped');
-                openFollowModal('followers');
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.statNumber, { color: textColor }]}>{followersCountDisplay}</Text>
-              <Text style={[styles.statLabel, { color: secondaryText }]}>Followers</Text>
-            </TouchableOpacity>
-
-            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
-
-            <TouchableOpacity
-              style={styles.statItem}
-              onPress={() => {
-                console.log('[Profile] Following stat tapped');
-                openFollowModal('following');
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.statNumber, { color: textColor }]}>{followingCountDisplay}</Text>
-              <Text style={[styles.statLabel, { color: secondaryText }]}>Following</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Bio — full width below */}
+          {bioText.length > 0 && (
+            <Text style={[styles.igBio, { color: textColor }]}>{bioText}</Text>
+          )}
         </View>
 
         {/* ── Achievements Strip ──────────────────────────────────────────── */}
@@ -852,114 +844,92 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
 
-  // ── Instagram Header Card ──────────────────────────────────────────────────
-  headerCard: {
-    margin: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+  // ── Instagram Header (flat, no card) ──────────────────────────────────────
+  igHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  headerTopRow: {
+  igHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    marginBottom: spacing.md,
   },
-  avatarRing: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    borderWidth: 3,
+  igAvatarRing: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 2,
     overflow: 'hidden',
-    flexShrink: 0,
   },
-  avatarImage: {
+  igAvatarImage: {
     width: '100%',
     height: '100%',
   },
-  avatarFallback: {
+  igAvatarFallback: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitials: {
+  igAvatarInitials: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#fff',
   },
-  headerInfo: {
+  igInfoCol: {
     flex: 1,
     justifyContent: 'center',
-    paddingTop: 4,
+    gap: 4,
   },
-  nameRow: {
+  igNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: 3,
   },
-  displayName: {
+  igUsername: {
     fontSize: 18,
     fontWeight: '700',
-    lineHeight: 24,
     flexShrink: 1,
   },
-  eliteBadge: {
-    backgroundColor: '#F59E0B',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
+  igEliteBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 5,
     paddingVertical: 2,
   },
-  eliteBadgeText: {
-    fontSize: 10,
+  igEliteBadgeText: {
+    color: '#fff',
+    fontSize: 9,
     fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
   },
-  username: {
+  igFullName: {
     fontSize: 14,
     fontWeight: '400',
-    lineHeight: 20,
-    marginBottom: 4,
   },
-  bioText: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-
-  // Stats row inside header card
-  statsRow: {
+  igStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingVertical: spacing.sm,
+    gap: 16,
+    marginTop: 4,
   },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
+  igStatItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
-  statNumber: {
-    fontSize: 20,
+  igStatNumber: {
+    fontSize: 14,
     fontWeight: '700',
-    lineHeight: 26,
   },
-  statLabel: {
-    fontSize: 12,
+  igStatLabel: {
+    fontSize: 13,
     fontWeight: '400',
-    marginTop: 1,
   },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 32,
+  igBio: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.sm,
   },
 
   // Achievements strip
