@@ -23,6 +23,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { usePremium } from '@/hooks/usePremium';
 import ProgressCircle from '@/components/ProgressCircle';
+import { toLocalDateString } from '@/utils/dateUtils';
+import { calcMacros } from '@/utils/macros';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -44,10 +46,6 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function formatDateISO(d: Date): string {
-  return d.toISOString().split('T')[0];
-}
-
 type FollowUser = {
   id: string;
   username: string | null;
@@ -56,36 +54,19 @@ type FollowUser = {
 };
 
 type FollowModalType = 'followers' | 'following' | null;
-type NutritionRange = 'today' | '7d' | '30d';
-
-interface NutritionData {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-  fiber: number;
-}
-
-interface GoalData {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-  fiber: number;
-}
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
   const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
-    <View style={macroRowStyles.row}>
-      <Text style={[macroRowStyles.label, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+    <View style={styles.macroSummaryRowCompact}>
+      <Text style={[styles.macroSummaryLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
         {label}
       </Text>
-      <View style={macroRowStyles.barContainer}>
-        <View style={[macroRowStyles.barBackground, { backgroundColor: isDark ? colors.borderDark : colors.border }]}>
-          <View style={[macroRowStyles.barFill, { width: `${percentage}%` as any, backgroundColor: color }]} />
+      <View style={styles.macroSummaryBarContainer}>
+        <View style={[styles.macroSummaryBarBackground, { backgroundColor: isDark ? colors.borderDark : colors.border }]}>
+          <View style={[styles.macroSummaryBarFill, { width: `${percentage}%` as any, backgroundColor: color }]} />
         </View>
-        <Text style={[macroRowStyles.progress, { color: isDark ? colors.textDark : colors.text }]}>
+        <Text style={[styles.macroSummaryProgressCompact, { color: isDark ? colors.textDark : colors.text }]}>
           {eaten}
           {' / '}
           {goal}
@@ -95,15 +76,6 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
     </View>
   );
 }
-
-const macroRowStyles = StyleSheet.create({
-  row: { gap: 4 },
-  label: { fontSize: 12, fontWeight: '500' },
-  barContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  barBackground: { flex: 1, height: 6, borderRadius: borderRadius.full, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: borderRadius.full },
-  progress: { fontSize: 11, fontWeight: '500', minWidth: 70, textAlign: 'right' },
-});
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -133,11 +105,10 @@ export default function ProfileScreen() {
   const [followModalUsers, setFollowModalUsers] = useState<FollowUser[]>([]);
   const [followModalLoading, setFollowModalLoading] = useState(false);
 
-  // Nutrition card
-  const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
-  const [nutritionData, setNutritionData] = useState<NutritionData | null>(null);
-  const [goalData, setGoalData] = useState<GoalData | null>(null);
-  const [nutritionLoading, setNutritionLoading] = useState(false);
+  // Nutrition card (today only, food-tab style)
+  const [totalCalories, setTotalCalories] = useState(0);
+  const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
+  const [goal, setGoal] = useState<any>(null);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -145,82 +116,6 @@ export default function ProfileScreen() {
   const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
   const cardBorderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
-
-  const loadNutrition = async (userId: string, range: NutritionRange) => {
-    console.log('[Profile] loadNutrition — userId:', userId, 'range:', range);
-    setNutritionLoading(true);
-    try {
-      const today = new Date();
-      let startDate: string;
-      let endDate: string = formatDateISO(today);
-
-      if (range === 'today') {
-        startDate = formatDateISO(today);
-      } else if (range === '7d') {
-        const d = new Date(today);
-        d.setDate(d.getDate() - 6);
-        startDate = formatDateISO(d);
-      } else {
-        const d = new Date(today);
-        d.setDate(d.getDate() - 29);
-        startDate = formatDateISO(d);
-      }
-
-      const [mealsRes, goalsRes] = await Promise.all([
-        supabase
-          .from('meals')
-          .select('meal_items (calories, protein, carbs, fats, fiber)')
-          .eq('user_id', userId)
-          .gte('date', startDate)
-          .lte('date', endDate),
-        supabase
-          .from('goals')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .maybeSingle(),
-      ]);
-
-      console.log('[Profile] loadNutrition — meals:', mealsRes.error?.message ?? 'ok', 'goals:', goalsRes.error?.message ?? 'ok');
-
-      let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0, totalFiber = 0;
-      if (mealsRes.data) {
-        for (const meal of mealsRes.data) {
-          const items = (meal as any).meal_items ?? [];
-          for (const item of items) {
-            totalCal += Number(item.calories ?? 0);
-            totalProt += Number(item.protein ?? 0);
-            totalCarbs += Number(item.carbs ?? 0);
-            totalFats += Number(item.fats ?? 0);
-            totalFiber += Number(item.fiber ?? 0);
-          }
-        }
-      }
-
-      const days = range === 'today' ? 1 : range === '7d' ? 7 : 30;
-      setNutritionData({
-        calories: range === 'today' ? totalCal : totalCal / days,
-        protein: range === 'today' ? totalProt : totalProt / days,
-        carbs: range === 'today' ? totalCarbs : totalCarbs / days,
-        fats: range === 'today' ? totalFats : totalFats / days,
-        fiber: range === 'today' ? totalFiber : totalFiber / days,
-      });
-
-      if (goalsRes.data) {
-        setGoalData({
-          calories: Number(goalsRes.data.calories ?? goalsRes.data.calorie_goal ?? 2000),
-          protein: Number(goalsRes.data.protein ?? goalsRes.data.protein_goal ?? 150),
-          carbs: Number(goalsRes.data.carbs ?? goalsRes.data.carbs_goal ?? 200),
-          fats: Number(goalsRes.data.fats ?? goalsRes.data.fat_goal ?? 65),
-          fiber: Number(goalsRes.data.fiber ?? goalsRes.data.fiber_goal ?? 30),
-        });
-      }
-    } catch (err) {
-      console.error('[Profile] loadNutrition — error:', err);
-    } finally {
-      setNutritionLoading(false);
-    }
-  };
 
   const loadData = async () => {
     console.log('[Profile] loadData — starting');
@@ -234,6 +129,9 @@ export default function ProfileScreen() {
       }
       console.log('[Profile] loadData — fetching data for user:', authUser.id);
 
+      const dateString = toLocalDateString(new Date());
+      console.log('[Profile] loadData — today dateString:', dateString);
+
       const [
         userResult,
         postsResult,
@@ -241,6 +139,8 @@ export default function ProfileScreen() {
         followingResult,
         xpResult,
         mealsResult,
+        goalsResult,
+        todayMealsResult,
       ] = await Promise.all([
         supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', authUser.id),
@@ -248,6 +148,21 @@ export default function ProfileScreen() {
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', authUser.id),
         supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', authUser.id).maybeSingle(),
         supabase.from('meals').select('logged_date').eq('user_id', authUser.id),
+        supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
+        supabase
+          .from('meals')
+          .select(`
+            id, meal_type, date,
+            meal_items (
+              id, food_id, food_item_id, quantity, calories, protein, carbs, fats, fiber,
+              serving_description, grams, logged_at, food_name, food_brand, is_scheduled,
+              food_items!meal_items_food_item_id_fkey (
+                id, name, brand, calories, protein, carbs, fat, fiber, serving_size, macros_per
+              )
+            )
+          `)
+          .eq('user_id', authUser.id)
+          .eq('date', dateString),
       ]);
 
       console.log('[Profile] loadData — user result:', userResult.error ? userResult.error.message : 'ok');
@@ -256,6 +171,8 @@ export default function ProfileScreen() {
       console.log('[Profile] loadData — following count:', followingResult.count, followingResult.error?.message);
       console.log('[Profile] loadData — xp result:', xpResult.error ? xpResult.error.message : 'ok', xpResult.data);
       console.log('[Profile] loadData — meals result:', mealsResult.error ? mealsResult.error.message : 'ok');
+      console.log('[Profile] loadData — goals result:', goalsResult.error ? goalsResult.error.message : 'ok');
+      console.log('[Profile] loadData — today meals result:', todayMealsResult.error ? todayMealsResult.error.message : `${todayMealsResult.data?.length ?? 0} meals`);
 
       if (userResult.data) {
         setUser({ ...authUser, ...userResult.data });
@@ -278,6 +195,36 @@ export default function ProfileScreen() {
         setTotalDaysLogged(uniqueDates.size);
       }
 
+      // Set goal
+      if (goalsResult.data) {
+        setGoal(goalsResult.data);
+      }
+
+      // Sum today's macros exactly like the food tab
+      let totalCals = 0, totalP = 0, totalC = 0, totalF = 0, totalFib = 0;
+      todayMealsResult.data?.forEach((meal: any) => {
+        meal.meal_items?.forEach((item: any) => {
+          const hasStoredMacros = item.calories != null && item.calories > 0;
+          const fi = item.food_items;
+          const grams = item.grams ?? 0;
+          const macros = hasStoredMacros
+            ? { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 }
+            : fi
+              ? (() => { const r = calcMacros(fi, grams); return { calories: r.calories, protein: r.protein, carbs: r.carbs, fats: r.fat, fiber: r.fiber }; })()
+              : { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+          if (!item.is_scheduled) {
+            totalCals += macros.calories;
+            totalP    += macros.protein;
+            totalC    += macros.carbs;
+            totalF    += macros.fats;
+            totalFib  += macros.fiber;
+          }
+        });
+      });
+      setTotalCalories(totalCals);
+      setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
+      console.log('[Profile] loadData — today totals: calories:', totalCals, 'protein:', totalP, 'carbs:', totalC, 'fats:', totalF, 'fiber:', totalFib);
+
       // Load posts feed
       const { data: postsData, error: postsError } = await supabase
         .from('social_posts')
@@ -288,9 +235,6 @@ export default function ProfileScreen() {
 
       console.log('[Profile] loadData — posts feed:', postsError ? postsError.message : `${postsData?.length ?? 0} posts`);
       setPosts(postsData ?? []);
-
-      // Load nutrition
-      await loadNutrition(authUser.id, nutritionRange);
     } catch (err) {
       console.error('[Profile] loadData — unexpected error:', err);
     } finally {
@@ -398,14 +342,6 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleNutritionRangeChange = async (range: NutritionRange) => {
-    console.log('[Profile] nutrition range changed to:', range);
-    setNutritionRange(range);
-    if (user) {
-      await loadNutrition(user.id, range);
-    }
-  };
-
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -438,13 +374,7 @@ export default function ProfileScreen() {
   const followersCountDisplay = String(followersCount);
   const followingCountDisplay = String(followingCount);
 
-  const totalCalories = nutritionData?.calories ?? 0;
-  const totalMacros = {
-    protein: nutritionData?.protein ?? 0,
-    carbs: nutritionData?.carbs ?? 0,
-    fats: nutritionData?.fats ?? 0,
-    fiber: nutritionData?.fiber ?? 0,
-  };
+  const totalCaloriesRounded = Math.round(totalCalories);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -580,59 +510,27 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
 
-        {/* ── Nutrition Card ──────────────────────────────────────────────── */}
+        {/* ── Nutrition Card (Today, food-tab style) ──────────────────────── */}
         <View style={[styles.nutritionCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-          {/* Header row */}
-          <View style={styles.nutritionCardHeader}>
-            <Text style={[styles.nutritionCardTitle, { color: textColor }]}>My Nutrition</Text>
-            <View style={styles.nutritionRangePills}>
-              {(['today', '7d', '30d'] as NutritionRange[]).map((r) => {
-                const isActive = nutritionRange === r;
-                const label = r === 'today' ? 'Today' : r === '7d' ? '7 Days' : '30 Days';
-                return (
-                  <TouchableOpacity
-                    key={r}
-                    onPress={() => handleNutritionRangeChange(r)}
-                    style={[
-                      styles.nutritionRangePill,
-                      {
-                        backgroundColor: isActive ? colors.primary : 'transparent',
-                        borderColor: isActive ? colors.primary : borderColor,
-                      },
-                    ]}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.nutritionRangePillText, { color: isActive ? '#fff' : secondaryText }]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {nutritionLoading ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.md }} />
-          ) : (
-            <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
-              <View style={styles.caloriesContent}>
-                <ProgressCircle
-                  current={totalCalories}
-                  target={goalData?.calories ?? 2000}
-                  size={140}
-                  strokeWidth={12}
-                  color={colors.calories}
-                  label="kcal"
-                />
-                <View style={styles.macroSummaryCompact}>
-                  <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goalData?.protein ?? 150} color={colors.protein} isDark={isDark} />
-                  <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goalData?.carbs ?? 200} color={colors.carbs} isDark={isDark} />
-                  <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goalData?.fats ?? 65} color={colors.fats} isDark={isDark} />
-                  <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goalData?.fiber ?? 30} color={colors.fiber} isDark={isDark} />
-                </View>
+          <Text style={[styles.nutritionCardTitle, { color: textColor }]}>My Nutrition</Text>
+          <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
+            <View style={styles.caloriesContent}>
+              <ProgressCircle
+                current={totalCaloriesRounded}
+                target={goal?.daily_calories || 2000}
+                size={140}
+                strokeWidth={12}
+                color={colors.calories}
+                label="kcal"
+              />
+              <View style={styles.macroSummaryCompact}>
+                <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+                <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
               </View>
             </View>
-          )}
+          </View>
         </View>
 
         {/* ── Posts Feed ──────────────────────────────────────────────────── */}
@@ -951,31 +849,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  nutritionCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
   nutritionCardTitle: {
     fontSize: 16,
     fontWeight: '700',
-  },
-  nutritionRangePills: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  nutritionRangePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1.5,
-  },
-  nutritionRangePillText: {
-    fontSize: 12,
-    fontWeight: '600',
+    marginBottom: spacing.md,
   },
 
   // ProgressCircle card (matches home tab)
@@ -987,11 +864,42 @@ const styles = StyleSheet.create({
   caloriesContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
+    gap: 20,
   },
   macroSummaryCompact: {
     flex: 1,
-    gap: spacing.sm,
+    gap: 8,
+  },
+  macroSummaryRowCompact: {
+    marginBottom: 4,
+  },
+  macroSummaryLabelCompact: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  macroSummaryBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  macroSummaryBarBackground: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  macroSummaryBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  macroSummaryProgressCompact: {
+    fontSize: 11,
+    fontWeight: '500',
+    minWidth: 60,
+    textAlign: 'right',
   },
 
   // Feed
