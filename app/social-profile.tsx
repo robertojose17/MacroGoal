@@ -18,6 +18,7 @@ import {
   Dimensions,
   TouchableOpacity,
 } from 'react-native';
+import ProgressCircle from '@/components/ProgressCircle';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Lock,
@@ -76,6 +77,7 @@ interface NutritionData {
   protein: number;
   carbs: number;
   fats: number;
+  fiber: number;
 }
 
 interface GoalData {
@@ -83,55 +85,42 @@ interface GoalData {
   protein: number;
   carbs: number;
   fats: number;
+  fiber: number;
 }
 
 function formatDateISO(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function NutritionMacroBar({
-  label,
-  value,
-  goal,
-  color,
-  isDark,
-  textColor,
-  secondaryText,
-}: {
-  label: string;
-  value: number;
-  goal: number;
-  color: string;
-  isDark: boolean;
-  textColor: string;
-  secondaryText: string;
-}) {
-  const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
-  const pctDisplay = goal > 0 ? Math.round((value / goal) * 100) : 0;
-  const valueDisplay = Math.round(value).toString();
-  const pctStr = pctDisplay.toString() + '%';
+function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
+  const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
-    <View style={macroBarStyles.row}>
-      <Text style={[macroBarStyles.label, { color: secondaryText }]}>{label}</Text>
-      <View style={[macroBarStyles.track, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-        <View style={[macroBarStyles.fill, { width: `${pct * 100}%` as any, backgroundColor: color }]} />
-      </View>
-      <View style={macroBarStyles.numbers}>
-        <Text style={[macroBarStyles.value, { color: textColor }]}>{valueDisplay}g</Text>
-        <Text style={[macroBarStyles.pct, { color: secondaryText }]}>{pctStr}</Text>
+    <View style={macroRowStyles.row}>
+      <Text style={[macroRowStyles.label, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        {label}
+      </Text>
+      <View style={macroRowStyles.barContainer}>
+        <View style={[macroRowStyles.barBackground, { backgroundColor: isDark ? colors.borderDark : colors.border }]}>
+          <View style={[macroRowStyles.barFill, { width: `${percentage}%` as any, backgroundColor: color }]} />
+        </View>
+        <Text style={[macroRowStyles.progress, { color: isDark ? colors.textDark : colors.text }]}>
+          {eaten}
+          {' / '}
+          {goal}
+          {'g'}
+        </Text>
       </View>
     </View>
   );
 }
 
-const macroBarStyles = StyleSheet.create({
-  row: { marginBottom: 10 },
-  label: { fontSize: 12, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 },
-  track: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: 3 },
-  fill: { height: '100%', borderRadius: 3 },
-  numbers: { flexDirection: 'row', justifyContent: 'space-between' },
-  value: { fontSize: 12, fontWeight: '600' },
-  pct: { fontSize: 12 },
+const macroRowStyles = StyleSheet.create({
+  row: { gap: 4 },
+  label: { fontSize: 12, fontWeight: '500' },
+  barContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  barBackground: { flex: 1, height: 6, borderRadius: borderRadius.full, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: borderRadius.full },
+  progress: { fontSize: 11, fontWeight: '500', minWidth: 70, textAlign: 'right' },
 });
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -258,7 +247,7 @@ export default function SocialProfileScreen() {
 
       console.log('[SocialProfile] loadNutrition — meals:', mealsRes.error?.message ?? 'ok', 'goals:', goalsRes.error?.message ?? 'ok');
 
-      let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0;
+      let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0, totalFiber = 0;
       if (mealsRes.data) {
         for (const meal of mealsRes.data) {
           const items = (meal as any).meal_items ?? [];
@@ -267,6 +256,7 @@ export default function SocialProfileScreen() {
             totalProt += Number(item.protein ?? 0);
             totalCarbs += Number(item.carbs ?? 0);
             totalFats += Number(item.fats ?? 0);
+            totalFiber += Number(item.fiber ?? 0);
           }
         }
       }
@@ -277,6 +267,7 @@ export default function SocialProfileScreen() {
         protein: range === 'today' ? totalProt : totalProt / days,
         carbs: range === 'today' ? totalCarbs : totalCarbs / days,
         fats: range === 'today' ? totalFats : totalFats / days,
+        fiber: range === 'today' ? totalFiber : totalFiber / days,
       });
 
       if (goalsRes.data) {
@@ -285,6 +276,7 @@ export default function SocialProfileScreen() {
           protein: Number(goalsRes.data.protein ?? goalsRes.data.protein_goal ?? 150),
           carbs: Number(goalsRes.data.carbs ?? goalsRes.data.carbs_goal ?? 200),
           fats: Number(goalsRes.data.fats ?? goalsRes.data.fat_goal ?? 65),
+          fiber: Number(goalsRes.data.fiber ?? goalsRes.data.fiber_goal ?? 30),
         });
       }
     } catch (err) {
@@ -626,76 +618,23 @@ export default function SocialProfileScreen() {
 
           {nutritionLoading ? (
             <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.md }} />
-          ) : nutritionData ? (
-            <>
-              <View style={styles.nutritionCaloriesRow}>
-                <View>
-                  <Text style={[styles.nutritionCaloriesLabel, { color: subColor }]}>
-                    {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7-Day Avg' : '30-Day Avg'}
-                  </Text>
-                  <View style={styles.nutritionCaloriesValueRow}>
-                    <Text style={[styles.nutritionCaloriesValue, { color: colors.calories }]}>
-                      {Math.round(nutritionData.calories).toString()}
-                    </Text>
-                    <Text style={[styles.nutritionCaloriesUnit, { color: subColor }]}>kcal</Text>
-                  </View>
-                </View>
-                {goalData && (
-                  <View style={styles.nutritionGoalBadge}>
-                    <Text style={[styles.nutritionGoalLabel, { color: subColor }]}>Goal</Text>
-                    <Text style={[styles.nutritionGoalValue, { color: textColor }]}>
-                      {Math.round(goalData.calories).toString()}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {goalData && (
-                <View style={[styles.nutritionCalorieTrack, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-                  <View
-                    style={[
-                      styles.nutritionCalorieFill,
-                      {
-                        width: `${Math.min((nutritionData.calories / goalData.calories) * 100, 100)}%` as any,
-                        backgroundColor: colors.calories,
-                      },
-                    ]}
-                  />
-                </View>
-              )}
-
-              <View style={{ marginTop: 4 }}>
-                <NutritionMacroBar
-                  label="Protein"
-                  value={nutritionData.protein}
-                  goal={goalData?.protein ?? 150}
-                  color={colors.protein}
-                  isDark={isDark}
-                  textColor={textColor}
-                  secondaryText={subColor}
-                />
-                <NutritionMacroBar
-                  label="Carbs"
-                  value={nutritionData.carbs}
-                  goal={goalData?.carbs ?? 200}
-                  color={colors.carbs}
-                  isDark={isDark}
-                  textColor={textColor}
-                  secondaryText={subColor}
-                />
-                <NutritionMacroBar
-                  label="Fat"
-                  value={nutritionData.fats}
-                  goal={goalData?.fats ?? 65}
-                  color={colors.fats}
-                  isDark={isDark}
-                  textColor={textColor}
-                  secondaryText={subColor}
-                />
-              </View>
-            </>
           ) : (
-            <Text style={[styles.nutritionEmpty, { color: subColor }]}>No nutrition data for this period</Text>
+            <View style={styles.caloriesContent}>
+              <ProgressCircle
+                current={nutritionData?.calories ?? 0}
+                target={goalData?.calories ?? 2000}
+                size={140}
+                strokeWidth={12}
+                color={colors.calories}
+                label="kcal"
+              />
+              <View style={styles.macroSummaryCompact}>
+                <MacroSummaryRowCompact label="Protein" eaten={Math.round(nutritionData?.protein ?? 0)} goal={goalData?.protein ?? 150} color={colors.protein} isDark={isDark} />
+                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(nutritionData?.carbs ?? 0)} goal={goalData?.carbs ?? 200} color={colors.carbs} isDark={isDark} />
+                <MacroSummaryRowCompact label="Fats" eaten={Math.round(nutritionData?.fats ?? 0)} goal={goalData?.fats ?? 65} color={colors.fats} isDark={isDark} />
+                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(nutritionData?.fiber ?? 0)} goal={goalData?.fiber ?? 30} color={colors.fiber} isDark={isDark} />
+              </View>
+            </View>
           )}
         </View>
       </View>
@@ -1191,60 +1130,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  nutritionCaloriesRow: {
+  caloriesContent: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.lg,
   },
-  nutritionCaloriesLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  nutritionCaloriesValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  nutritionCaloriesValue: {
-    fontSize: 36,
-    fontWeight: '800',
-    lineHeight: 42,
-  },
-  nutritionCaloriesUnit: {
-    fontSize: 14,
-    fontWeight: '400',
-    marginBottom: 4,
-  },
-  nutritionGoalBadge: {
-    alignItems: 'flex-end',
-  },
-  nutritionGoalLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  nutritionGoalValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  nutritionCalorieTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
-  },
-  nutritionCalorieFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  nutritionEmpty: {
-    fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: spacing.md,
+  macroSummaryCompact: {
+    flex: 1,
+    gap: spacing.sm,
   },
 });

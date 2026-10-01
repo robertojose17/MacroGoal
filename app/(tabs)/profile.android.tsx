@@ -13,8 +13,6 @@ import {
   FlatList,
   ImageSourcePropType,
   Alert,
-  TextInput,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -24,6 +22,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { usePremium } from '@/hooks/usePremium';
+import ProgressCircle from '@/components/ProgressCircle';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -64,6 +63,7 @@ interface NutritionData {
   protein: number;
   carbs: number;
   fats: number;
+  fiber: number;
 }
 
 interface GoalData {
@@ -71,53 +71,38 @@ interface GoalData {
   protein: number;
   carbs: number;
   fats: number;
+  fiber: number;
 }
 
-function MacroBar({
-  label,
-  value,
-  goal,
-  color,
-  isDark,
-  textColor,
-  secondaryText,
-}: {
-  label: string;
-  value: number;
-  goal: number;
-  color: string;
-  isDark: boolean;
-  textColor: string;
-  secondaryText: string;
-}) {
-  const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
-  const pctDisplay = goal > 0 ? Math.round((value / goal) * 100) : 0;
-  const valueDisplay = Math.round(value).toString();
-  const goalDisplay = Math.round(goal).toString();
-  const pctStr = pctDisplay.toString() + '%';
-
+function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
+  const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
-    <View style={macroBarStyles.row}>
-      <Text style={[macroBarStyles.label, { color: secondaryText }]}>{label}</Text>
-      <View style={[macroBarStyles.track, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-        <View style={[macroBarStyles.fill, { width: `${pct * 100}%` as any, backgroundColor: color }]} />
-      </View>
-      <View style={macroBarStyles.numbers}>
-        <Text style={[macroBarStyles.value, { color: textColor }]}>{valueDisplay}g</Text>
-        <Text style={[macroBarStyles.pct, { color: secondaryText }]}>{pctStr}</Text>
+    <View style={macroRowStyles.row}>
+      <Text style={[macroRowStyles.label, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        {label}
+      </Text>
+      <View style={macroRowStyles.barContainer}>
+        <View style={[macroRowStyles.barBackground, { backgroundColor: isDark ? colors.borderDark : colors.border }]}>
+          <View style={[macroRowStyles.barFill, { width: `${percentage}%` as any, backgroundColor: color }]} />
+        </View>
+        <Text style={[macroRowStyles.progress, { color: isDark ? colors.textDark : colors.text }]}>
+          {eaten}
+          {' / '}
+          {goal}
+          {'g'}
+        </Text>
       </View>
     </View>
   );
 }
 
-const macroBarStyles = StyleSheet.create({
-  row: { marginBottom: 10 },
-  label: { fontSize: 12, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 },
-  track: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: 3 },
-  fill: { height: '100%', borderRadius: 3 },
-  numbers: { flexDirection: 'row', justifyContent: 'space-between' },
-  value: { fontSize: 12, fontWeight: '600' },
-  pct: { fontSize: 12 },
+const macroRowStyles = StyleSheet.create({
+  row: { gap: 4 },
+  label: { fontSize: 12, fontWeight: '500' },
+  barContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  barBackground: { flex: 1, height: 6, borderRadius: borderRadius.full, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: borderRadius.full },
+  progress: { fontSize: 11, fontWeight: '500', minWidth: 70, textAlign: 'right' },
 });
 
 export default function ProfileScreen() {
@@ -147,13 +132,6 @@ export default function ProfileScreen() {
   const [followModalType, setFollowModalType] = useState<FollowModalType>(null);
   const [followModalUsers, setFollowModalUsers] = useState<FollowUser[]>([]);
   const [followModalLoading, setFollowModalLoading] = useState(false);
-
-  // Edit profile modal
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editUsername, setEditUsername] = useState('');
-  const [editBio, setEditBio] = useState('');
-  const [editSaving, setEditSaving] = useState(false);
 
   // Nutrition card
   const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
@@ -205,7 +183,7 @@ export default function ProfileScreen() {
 
       console.log('[Profile] loadNutrition — meals:', mealsRes.error?.message ?? 'ok', 'goals:', goalsRes.error?.message ?? 'ok');
 
-      let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0;
+      let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0, totalFiber = 0;
       if (mealsRes.data) {
         for (const meal of mealsRes.data) {
           const items = (meal as any).meal_items ?? [];
@@ -214,6 +192,7 @@ export default function ProfileScreen() {
             totalProt += Number(item.protein ?? 0);
             totalCarbs += Number(item.carbs ?? 0);
             totalFats += Number(item.fats ?? 0);
+            totalFiber += Number(item.fiber ?? 0);
           }
         }
       }
@@ -224,6 +203,7 @@ export default function ProfileScreen() {
         protein: range === 'today' ? totalProt : totalProt / days,
         carbs: range === 'today' ? totalCarbs : totalCarbs / days,
         fats: range === 'today' ? totalFats : totalFats / days,
+        fiber: range === 'today' ? totalFiber : totalFiber / days,
       });
 
       if (goalsRes.data) {
@@ -232,6 +212,7 @@ export default function ProfileScreen() {
           protein: Number(goalsRes.data.protein ?? goalsRes.data.protein_goal ?? 150),
           carbs: Number(goalsRes.data.carbs ?? goalsRes.data.carbs_goal ?? 200),
           fats: Number(goalsRes.data.fats ?? goalsRes.data.fat_goal ?? 65),
+          fiber: Number(goalsRes.data.fiber ?? goalsRes.data.fiber_goal ?? 30),
         });
       }
     } catch (err) {
@@ -384,40 +365,6 @@ export default function ProfileScreen() {
     router.push('/settings');
   };
 
-  const handleEditProfilePress = () => {
-    console.log('[Profile] Edit Profile button pressed');
-    const displayName = user?.full_name || user?.name || '';
-    setEditName(displayName);
-    setEditUsername(user?.username || '');
-    setEditBio(user?.bio || '');
-    setEditModalVisible(true);
-  };
-
-  const handleSaveProfile = async () => {
-    if (!user) return;
-    console.log('[Profile] handleSaveProfile — saving name:', editName, 'username:', editUsername, 'bio length:', editBio.length);
-    setEditSaving(true);
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ name: editName.trim(), username: editUsername.trim(), bio: editBio.trim() })
-        .eq('id', user.id);
-      if (error) {
-        console.error('[Profile] handleSaveProfile — error:', error.message);
-        Alert.alert('Error', 'Could not save profile. Please try again.');
-      } else {
-        console.log('[Profile] handleSaveProfile — saved successfully');
-        setUser((prev: any) => ({ ...prev, name: editName.trim(), full_name: editName.trim(), username: editUsername.trim(), bio: editBio.trim() }));
-        setEditModalVisible(false);
-      }
-    } catch (err) {
-      console.error('[Profile] handleSaveProfile — unexpected error:', err);
-      Alert.alert('Error', 'Could not save profile.');
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
   const handleDeletePost = async (postId: string) => {
     console.log('[Profile] handleDeletePost — trash button pressed, postId:', postId);
     Alert.alert(
@@ -491,9 +438,13 @@ export default function ProfileScreen() {
   const followersCountDisplay = String(followersCount);
   const followingCountDisplay = String(followingCount);
 
-  const nutritionTitle = nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7-Day Avg' : '30-Day Avg';
-  const caloriesDisplay = nutritionData ? Math.round(nutritionData.calories).toString() : '—';
-  const caloriesGoalDisplay = goalData ? Math.round(goalData.calories).toString() : '—';
+  const totalCalories = nutritionData?.calories ?? 0;
+  const totalMacros = {
+    protein: nutritionData?.protein ?? 0,
+    carbs: nutritionData?.carbs ?? 0,
+    fats: nutritionData?.fats ?? 0,
+    fiber: nutritionData?.fiber ?? 0,
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -567,7 +518,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Stats row */}
+          {/* Stats row — full-width below avatar+name */}
           <View style={[styles.statsRow, { borderTopColor: borderColor, borderBottomColor: borderColor }]}>
             <View style={styles.statItem}>
               <Text style={[styles.statNumber, { color: textColor }]}>{postsCountDisplay}</Text>
@@ -602,15 +553,6 @@ export default function ProfileScreen() {
               <Text style={[styles.statLabel, { color: secondaryText }]}>Following</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Edit Profile button */}
-          <TouchableOpacity
-            style={[styles.editProfileBtn, { borderColor: borderColor }]}
-            onPress={handleEditProfilePress}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.editProfileBtnText, { color: textColor }]}>Edit Profile</Text>
-          </TouchableOpacity>
         </View>
 
         {/* ── Achievements Strip ──────────────────────────────────────────── */}
@@ -672,76 +614,24 @@ export default function ProfileScreen() {
           {nutritionLoading ? (
             <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.md }} />
           ) : (
-            <>
-              {/* Calories */}
-              <View style={styles.caloriesRow}>
-                <View>
-                  <Text style={[styles.caloriesLabel, { color: secondaryText }]}>{nutritionTitle}</Text>
-                  <View style={styles.caloriesValueRow}>
-                    <Text style={[styles.caloriesValue, { color: colors.calories }]}>{caloriesDisplay}</Text>
-                    <Text style={[styles.caloriesUnit, { color: secondaryText }]}>kcal</Text>
-                  </View>
+            <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
+              <View style={styles.caloriesContent}>
+                <ProgressCircle
+                  current={totalCalories}
+                  target={goalData?.calories ?? 2000}
+                  size={140}
+                  strokeWidth={12}
+                  color={colors.calories}
+                  label="kcal"
+                />
+                <View style={styles.macroSummaryCompact}>
+                  <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goalData?.protein ?? 150} color={colors.protein} isDark={isDark} />
+                  <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goalData?.carbs ?? 200} color={colors.carbs} isDark={isDark} />
+                  <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goalData?.fats ?? 65} color={colors.fats} isDark={isDark} />
+                  <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goalData?.fiber ?? 30} color={colors.fiber} isDark={isDark} />
                 </View>
-                {goalData && (
-                  <View style={styles.caloriesGoalBadge}>
-                    <Text style={[styles.caloriesGoalText, { color: secondaryText }]}>Goal</Text>
-                    <Text style={[styles.caloriesGoalValue, { color: textColor }]}>{caloriesGoalDisplay}</Text>
-                  </View>
-                )}
               </View>
-
-              {/* Calorie progress bar */}
-              {goalData && nutritionData && (
-                <View style={[styles.calorieTrack, { backgroundColor: isDark ? '#3A3C52' : '#E5E7EB' }]}>
-                  <View
-                    style={[
-                      styles.calorieFill,
-                      {
-                        width: `${Math.min((nutritionData.calories / goalData.calories) * 100, 100)}%` as any,
-                        backgroundColor: colors.calories,
-                      },
-                    ]}
-                  />
-                </View>
-              )}
-
-              {/* Macro bars */}
-              {nutritionData && goalData && (
-                <View style={styles.macroBarsContainer}>
-                  <MacroBar
-                    label="Protein"
-                    value={nutritionData.protein}
-                    goal={goalData.protein}
-                    color={colors.protein}
-                    isDark={isDark}
-                    textColor={textColor}
-                    secondaryText={secondaryText}
-                  />
-                  <MacroBar
-                    label="Carbs"
-                    value={nutritionData.carbs}
-                    goal={goalData.carbs}
-                    color={colors.carbs}
-                    isDark={isDark}
-                    textColor={textColor}
-                    secondaryText={secondaryText}
-                  />
-                  <MacroBar
-                    label="Fat"
-                    value={nutritionData.fats}
-                    goal={goalData.fats}
-                    color={colors.fats}
-                    isDark={isDark}
-                    textColor={textColor}
-                    secondaryText={secondaryText}
-                  />
-                </View>
-              )}
-
-              {!nutritionData && (
-                <Text style={[styles.noNutritionText, { color: secondaryText }]}>No nutrition data for this period</Text>
-              )}
-            </>
+            </View>
           )}
         </View>
 
@@ -881,119 +771,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-
-      {/* ── Edit Profile Modal ───────────────────────────────────────────────── */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          console.log('[Profile] Edit Profile modal dismissed');
-          setEditModalVisible(false);
-        }}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => {
-              console.log('[Profile] Edit Profile modal backdrop tapped — closing');
-              setEditModalVisible(false);
-            }}
-          />
-          <View style={[styles.editModalSheet, { backgroundColor: cardBg }]}>
-            {/* Handle */}
-            <View style={[styles.editModalHandle, { backgroundColor: borderColor }]} />
-
-            {/* Header */}
-            <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
-              <Text style={[styles.modalTitle, { color: textColor }]}>Edit Profile</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[Profile] Edit Profile modal close button pressed');
-                  setEditModalVisible(false);
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <IconSymbol
-                  ios_icon_name="xmark"
-                  android_material_icon_name="close"
-                  size={20}
-                  color={secondaryText}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.editModalContent} keyboardShouldPersistTaps="handled">
-              {/* Full Name */}
-              <Text style={[styles.editFieldLabel, { color: secondaryText }]}>Full Name</Text>
-              <TextInput
-                style={[styles.editInput, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor: borderColor, color: textColor }]}
-                value={editName}
-                onChangeText={(v) => {
-                  console.log('[Profile] Edit name changed');
-                  setEditName(v);
-                }}
-                placeholder="Your full name"
-                placeholderTextColor={secondaryText}
-                returnKeyType="next"
-              />
-
-              {/* Username */}
-              <Text style={[styles.editFieldLabel, { color: secondaryText }]}>Username</Text>
-              <TextInput
-                style={[styles.editInput, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor: borderColor, color: textColor }]}
-                value={editUsername}
-                onChangeText={(v) => {
-                  console.log('[Profile] Edit username changed');
-                  setEditUsername(v);
-                }}
-                placeholder="username"
-                placeholderTextColor={secondaryText}
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-
-              {/* Bio */}
-              <View style={styles.editBioLabelRow}>
-                <Text style={[styles.editFieldLabel, { color: secondaryText }]}>Bio</Text>
-                <Text style={[styles.editBioCount, { color: secondaryText }]}>{editBio.length}/150</Text>
-              </View>
-              <TextInput
-                style={[styles.editBioInput, { backgroundColor: isDark ? '#1A1C2E' : '#F7F8FC', borderColor: borderColor, color: textColor }]}
-                value={editBio}
-                onChangeText={(v) => {
-                  console.log('[Profile] Edit bio changed, length:', v.length);
-                  if (v.length <= 150) setEditBio(v);
-                }}
-                placeholder="Tell people about yourself..."
-                placeholderTextColor={secondaryText}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                maxLength={150}
-              />
-
-              {/* Save button */}
-              <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: editSaving ? 0.7 : 1 }]}
-                onPress={handleSaveProfile}
-                disabled={editSaving}
-                activeOpacity={0.8}
-              >
-                {editSaving ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Save Changes</Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1114,9 +891,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: spacing.sm,
-    marginBottom: spacing.sm,
   },
   statItem: {
     flex: 1,
@@ -1135,19 +910,6 @@ const styles = StyleSheet.create({
   statDivider: {
     width: StyleSheet.hairlineWidth,
     height: 32,
-  },
-
-  // Edit Profile button
-  editProfileBtn: {
-    borderWidth: 1.5,
-    borderRadius: borderRadius.md,
-    paddingVertical: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editProfileBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
   },
 
   // Achievements strip
@@ -1176,7 +938,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Nutrition card
+  // Nutrition card wrapper
   nutritionCard: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
@@ -1215,64 +977,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  caloriesRow: {
+
+  // ProgressCircle card (matches home tab)
+  caloriesCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 0,
+  },
+  caloriesContent: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.lg,
   },
-  caloriesLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  caloriesValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  caloriesValue: {
-    fontSize: 36,
-    fontWeight: '800',
-    lineHeight: 42,
-  },
-  caloriesUnit: {
-    fontSize: 14,
-    fontWeight: '400',
-    marginBottom: 4,
-  },
-  caloriesGoalBadge: {
-    alignItems: 'flex-end',
-  },
-  caloriesGoalText: {
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  caloriesGoalValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  calorieTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
-  },
-  calorieFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  macroBarsContainer: {
-    marginTop: 4,
-  },
-  noNutritionText: {
-    fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: spacing.md,
+  macroSummaryCompact: {
+    flex: 1,
+    gap: spacing.sm,
   },
 
   // Feed
@@ -1405,69 +1124,5 @@ const styles = StyleSheet.create({
   followUserUsername: {
     ...typography.small,
     marginTop: 1,
-  },
-
-  // Edit Profile modal
-  editModalSheet: {
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '85%',
-  },
-  editModalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: spacing.sm,
-    marginBottom: 4,
-  },
-  editModalContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
-  },
-  editFieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-    marginTop: spacing.md,
-  },
-  editInput: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: 11,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-  },
-  editBioLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    marginBottom: 6,
-  },
-  editBioCount: {
-    fontSize: 12,
-  },
-  editBioInput: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: 11,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    minHeight: 100,
-  },
-  saveBtn: {
-    borderRadius: borderRadius.md,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-  },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 });
