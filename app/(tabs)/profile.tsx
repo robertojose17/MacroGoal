@@ -26,8 +26,6 @@ import ProgressCircle from '@/components/ProgressCircle';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { calcMacros } from '@/utils/macros';
 import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
-import { calcDailyScore, getLabel, getLabelColor } from '@/utils/consistencyMath';
-import { IconCircle } from '@/components/IconCircle';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -100,10 +98,6 @@ export default function ProfileScreen() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [totalDaysLogged, setTotalDaysLogged] = useState(0);
-
-  // KPI stats
-  const [consistencyScore, setConsistencyScore] = useState<number>(0);
-  const [consistencyLabel, setConsistencyLabel] = useState<string>('');
 
   // Posts feed
   const [posts, setPosts] = useState<any[]>([]);
@@ -227,77 +221,6 @@ export default function ProfileScreen() {
     setRangeDayCount(dayCount);
   };
 
-  const loadKpiData = async (userId: string) => {
-    console.log('[Profile] loadKpiData — starting for user:', userId);
-    try {
-      const today = new Date();
-      const start = new Date(today);
-      start.setDate(start.getDate() - 29);
-      const startDateStr = toLocalDateString(start);
-      const endDateStr = toLocalDateString(today);
-
-      const [mealsResult, goalResult] = await Promise.all([
-        supabase
-          .from('meals')
-          .select('date, meal_items(calories, protein, is_scheduled)')
-          .eq('user_id', userId)
-          .gte('date', startDateStr)
-          .lte('date', endDateStr),
-        supabase
-          .from('goals')
-          .select('daily_calories, protein_g')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .maybeSingle(),
-      ]);
-
-      console.log('[Profile] loadKpiData — meals:', mealsResult.error?.message ?? `${mealsResult.data?.length ?? 0} meals`);
-      console.log('[Profile] loadKpiData — goal:', goalResult.error?.message ?? 'ok');
-
-      const calorieTarget = goalResult.data?.daily_calories ?? 2000;
-      const proteinTarget = goalResult.data?.protein_g ?? 150;
-
-      // Group meals by date
-      const byDate: Record<string, { calories: number; protein: number }> = {};
-      mealsResult.data?.forEach((meal: any) => {
-        const d = meal.date;
-        if (!byDate[d]) byDate[d] = { calories: 0, protein: 0 };
-        meal.meal_items?.forEach((item: any) => {
-          if (!item.is_scheduled) {
-            byDate[d].calories += item.calories ?? 0;
-            byDate[d].protein += item.protein ?? 0;
-          }
-        });
-      });
-
-      // Score each of the 30 days
-      let totalScore = 0;
-      for (let i = 0; i < 30; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const key = toLocalDateString(d);
-        const dayData = byDate[key];
-        const hasTracking = !!dayData && (dayData.calories > 0 || dayData.protein > 0);
-        const dayScore = calcDailyScore(
-          hasTracking,
-          dayData?.calories ?? 0,
-          calorieTarget,
-          dayData?.protein ?? 0,
-          proteinTarget,
-        );
-        totalScore += dayScore;
-      }
-
-      const avgScore = Math.round(totalScore / 30);
-      const label = getLabel(avgScore);
-      console.log('[Profile] loadKpiData — consistency score:', avgScore, 'label:', label);
-      setConsistencyScore(avgScore);
-      setConsistencyLabel(label);
-    } catch (err) {
-      console.error('[Profile] loadKpiData — error:', err);
-    }
-  };
-
   const loadData = async () => {
     console.log('[Profile] loadData — starting');
     try {
@@ -361,11 +284,8 @@ export default function ProfileScreen() {
         setGoal(goalsResult.data);
       }
 
-      // Load nutrition for current range and KPI data in parallel
-      await Promise.all([
-        loadNutritionData(authUser.id, nutritionRange, customStartDate, customEndDate),
-        loadKpiData(authUser.id),
-      ]);
+      // Load nutrition for current range
+      await loadNutritionData(authUser.id, nutritionRange, customStartDate, customEndDate);
 
       // Load posts feed
       const { data: postsData, error: postsError } = await supabase
@@ -549,6 +469,10 @@ export default function ProfileScreen() {
         ? `Daily average over ${rangeDayCount} day${rangeDayCount !== 1 ? 's' : ''}`
         : '';
 
+  const memberSinceDisplay = user.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).replace(' ', " '")
+    : '—';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
       {/* Top bar */}
@@ -650,30 +574,42 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Achievements Strip ──────────────────────────────────────────── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.achievementsStrip}
-        >
-          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-            <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={20} color={colors.primary} />
-            <Text style={[styles.achievementNumber, { color: textColor }]}>{currentStreakDisplay}</Text>
-            <Text style={[styles.achievementLabel, { color: secondaryText }]}>Streak</Text>
+        {/* ── Stats Row ──────────────────────────────────────────────────── */}
+        <View style={[styles.statsRowCard, { backgroundColor: cardBg }]}>
+          {/* Streak */}
+          <View style={styles.statCol}>
+            <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={16} color={colors.primary} />
+            <Text style={[styles.statColValue, { color: textColor }]}>{currentStreakDisplay}</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>STREAK</Text>
           </View>
 
-          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-            <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={20} color="#F59E0B" />
-            <Text style={[styles.achievementNumber, { color: textColor }]}>{bestStreakDisplay}</Text>
-            <Text style={[styles.achievementLabel, { color: secondaryText }]}>Best Streak</Text>
+          <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
+
+          {/* Best */}
+          <View style={styles.statCol}>
+            <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={16} color="#F59E0B" />
+            <Text style={[styles.statColValue, { color: textColor }]}>{bestStreakDisplay}</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>BEST</Text>
           </View>
 
-          <View style={[styles.achievementCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
-            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar_today" size={20} color={colors.primary} />
-            <Text style={[styles.achievementNumber, { color: textColor }]}>{totalDaysDisplay}</Text>
-            <Text style={[styles.achievementLabel, { color: secondaryText }]}>Days Logged</Text>
+          <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
+
+          {/* Logged */}
+          <View style={styles.statCol}>
+            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar_today" size={16} color={colors.primary} />
+            <Text style={[styles.statColValue, { color: textColor }]}>{totalDaysDisplay}</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>LOGGED</Text>
           </View>
-        </ScrollView>
+
+          <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
+
+          {/* Member */}
+          <View style={styles.statCol}>
+            <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={16} color="#8B5CF6" />
+            <Text style={[styles.statColValue, { color: textColor }]}>{memberSinceDisplay}</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>SINCE</Text>
+          </View>
+        </View>
 
         {/* ── Nutrition Card ──────────────────────────────────────────────── */}
         <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
@@ -742,53 +678,6 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
-
-        {/* ── KPI Stats Grid ──────────────────────────────────────────────── */}
-        {(() => {
-          const kpiBg = isDark ? '#1C1C1E' : '#F7F8FF';
-          const memberSinceText = user.created_at
-            ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-            : '—';
-          const consistencyLabelColor = getLabelColor(getLabel(consistencyScore));
-          const consistencyValueText = String(consistencyScore);
-          const bestStreakValueText = bestStreak + ' days';
-          const currentStreakValueText = currentStreak + ' days';
-          return (
-            <View style={styles.kpiSection}>
-              <Text style={[styles.kpiSectionTitle, { color: textColor }]}>Stats</Text>
-              <View style={styles.kpiGrid}>
-                {/* Consistency Score */}
-                <View style={[styles.kpiCard, { backgroundColor: kpiBg }]}>
-                  <IconCircle emoji="🎯" backgroundColor={colors.primary + '22'} size={40} />
-                  <Text style={[styles.kpiValue, { color: colors.primary }]}>{consistencyValueText}</Text>
-                  <Text style={[styles.kpiLabel, { color: secondaryText }]}>CONSISTENCY</Text>
-                  <Text style={[styles.kpiSubLabel, { color: consistencyLabelColor }]}>{consistencyLabel}</Text>
-                </View>
-
-                {/* Member Since */}
-                <View style={[styles.kpiCard, { backgroundColor: kpiBg }]}>
-                  <IconCircle emoji="📅" backgroundColor={'#FF950022'} size={40} />
-                  <Text style={[styles.kpiValue, { color: '#FF9500' }]}>{memberSinceText}</Text>
-                  <Text style={[styles.kpiLabel, { color: secondaryText }]}>MEMBER SINCE</Text>
-                </View>
-
-                {/* Best Streak */}
-                <View style={[styles.kpiCard, { backgroundColor: kpiBg }]}>
-                  <IconCircle emoji="🔥" backgroundColor={'#FF3B3022'} size={40} />
-                  <Text style={[styles.kpiValue, { color: '#FF3B30' }]}>{bestStreakValueText}</Text>
-                  <Text style={[styles.kpiLabel, { color: secondaryText }]}>BEST STREAK</Text>
-                </View>
-
-                {/* Current Streak */}
-                <View style={[styles.kpiCard, { backgroundColor: kpiBg }]}>
-                  <IconCircle emoji="⚡" backgroundColor={'#34C75922'} size={40} />
-                  <Text style={[styles.kpiValue, { color: '#34C759' }]}>{currentStreakValueText}</Text>
-                  <Text style={[styles.kpiLabel, { color: secondaryText }]}>CURRENT STREAK</Text>
-                </View>
-              </View>
-            </View>
-          );
-        })()}
 
         {/* ── Posts Feed ──────────────────────────────────────────────────── */}
         <View style={styles.feedSection}>
@@ -1059,30 +948,35 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
 
-  // Achievements strip
-  achievementsStrip: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  achievementCard: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+  // Stats row (unified card with 4 columns)
+  statsRowCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 90,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
+  } as any,
+  statCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
   },
-  achievementNumber: {
-    fontSize: 20,
+  statDivider: {
+    width: 1,
+    height: 32,
+  },
+  statColValue: {
+    fontSize: 18,
     fontWeight: '700',
-    lineHeight: 26,
   },
-  achievementLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    marginTop: 2,
-    textAlign: 'center',
+  statColLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 
   // ProgressCircle card (matches home tab exactly)
@@ -1176,46 +1070,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     minWidth: 70,
     textAlign: 'right',
-  },
-
-  // KPI Stats Grid
-  kpiSection: {
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  kpiSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: '45%' as any,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'flex-start',
-    gap: 4,
-  },
-  kpiValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    lineHeight: 34,
-    marginTop: spacing.xs,
-  },
-  kpiLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  kpiSubLabel: {
-    fontSize: 11,
-    fontWeight: '500',
   },
 
   // Feed
