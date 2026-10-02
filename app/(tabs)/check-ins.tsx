@@ -601,7 +601,18 @@ function CreatePostSheet({
 
           {/* Author row */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-            <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName} size={40} />
+            {currentUserAvatar ? (
+              <Image
+                key={currentUserAvatar}
+                source={{ uri: currentUserAvatar }}
+                style={{ width: 40, height: 40, borderRadius: 20 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
+              </View>
+            )}
             <TextInput
               style={[styles.composeInput, { color: textColor, flex: 1 }]}
               placeholder={section === 'club' ? 'Ask a question or share what worked...' : 'Share a win or ask for help...'}
@@ -1287,7 +1298,18 @@ export default function CommunityScreen() {
 
               {/* Compose row */}
               <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor }]}>
-                <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName || 'u'} size={36} />
+                {currentUserAvatar ? (
+                  <Image
+                    key={currentUserAvatar}
+                    source={{ uri: currentUserAvatar }}
+                    style={{ width: 36, height: 36, borderRadius: 18 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
+                  </View>
+                )}
                 <TouchableOpacity
                   style={[styles.composePlaceholder, { borderColor }]}
                   onPress={() => {
@@ -1448,7 +1470,18 @@ export default function CommunityScreen() {
 
                 {/* My progress */}
                 <View style={styles.progressRow}>
-                  <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName || 'u'} size={36} />
+                  {currentUserAvatar ? (
+                    <Image
+                      key={currentUserAvatar}
+                      source={{ uri: currentUserAvatar }}
+                      style={{ width: 36, height: 36, borderRadius: 18 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
+                    </View>
+                  )}
                   <View style={{ flex: 1, marginLeft: spacing.sm }}>
                     <Text style={[styles.progressName, { color: textColor }]}>You</Text>
                     <Text style={[styles.progressDays, { color: secondaryColor }]}>{myMealDays} / {targetDays} days</Text>
@@ -1637,7 +1670,18 @@ export default function CommunityScreen() {
 
               {/* Club compose row */}
               <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor }]}>
-                <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName || 'u'} size={36} />
+                {currentUserAvatar ? (
+                  <Image
+                    key={currentUserAvatar}
+                    source={{ uri: currentUserAvatar }}
+                    style={{ width: 36, height: 36, borderRadius: 18 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
+                  </View>
+                )}
                 <TouchableOpacity
                   style={[styles.composePlaceholder, { borderColor }]}
                   onPress={() => {
