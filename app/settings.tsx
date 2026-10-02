@@ -176,49 +176,54 @@ export default function SettingsScreen() {
 
   const uploadAvatar = async (uri: string) => {
     if (!user) return;
-    console.log('[Profile] Starting avatar upload — user_id:', user.id);
+    console.log('[Avatar] Starting upload for user:', user.id);
     setAvatarUploading(true);
     try {
-      const response = await fetch(uri);
-      if (!response.ok) throw new Error('Failed to read image file');
-      const blob = await response.blob();
+      // Step 1: Read image as blob
+      const imageResponse = await fetch(uri);
+      if (!imageResponse.ok) throw new Error('Failed to read image file');
+      const blob = await imageResponse.blob();
+      console.log('[Avatar] Blob size:', blob.size);
+      if (blob.size === 0) throw new Error('Image file is empty');
+
+      // Step 2: Get a signed upload URL from Supabase Storage
       const path = `${user.id}/avatar.jpg`;
-      console.log('[Profile] Uploading to Supabase Storage — path:', path, 'size:', blob.size);
-
-      const { error: uploadError } = await supabase.storage
+      const { data: signedData, error: signedError } = await supabase.storage
         .from('avatars')
-        .upload(path, blob, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
+        .createSignedUploadUrl(path);
+      if (signedError) throw signedError;
+      console.log('[Avatar] Got signed upload URL');
 
-      if (uploadError) {
-        console.error('[Profile] Storage upload error:', uploadError);
-        throw uploadError;
+      // Step 3: PUT binary directly to the signed URL (same as checkInPhotoUpload)
+      const putResponse = await fetch(signedData.signedUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: { 'Content-Type': 'image/jpeg' },
+      });
+      if (!putResponse.ok) {
+        const text = await putResponse.text();
+        throw new Error(`Upload failed: ${putResponse.status} ${text}`);
       }
+      console.log('[Avatar] Upload successful');
 
-      console.log('[Profile] Upload successful, getting public URL');
+      // Step 4: Get the public URL (clean, no cache-buster)
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
       const publicUrl = urlData.publicUrl;
-      console.log('[Profile] Public URL:', publicUrl);
+      console.log('[Avatar] Public URL:', publicUrl);
 
-      console.log('[Profile] Updating users table with avatar_url');
+      // Step 5: Save clean URL to DB
       const { error: updateError } = await supabase
         .from('users')
         .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
         .eq('id', user.id);
+      if (updateError) throw updateError;
 
-      if (updateError) {
-        console.error('[Profile] DB update error:', updateError);
-        throw updateError;
-      }
-
-      console.log('[Profile] Avatar updated successfully');
-      // Use cache-busted URL only in local state so the image refreshes immediately on this screen
+      // Step 6: Update local state with cache-busted URL so image refreshes immediately
       const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
       setUser((prev: any) => ({ ...prev, avatar_url: cacheBustedUrl }));
+      console.log('[Avatar] Done — avatar updated successfully');
     } catch (error: any) {
-      console.error('[Profile] Avatar upload failed:', error);
+      console.error('[Avatar] Upload failed:', error);
       Alert.alert('Upload Failed', error.message || 'Failed to upload photo. Please try again.');
     } finally {
       setAvatarUploading(false);
