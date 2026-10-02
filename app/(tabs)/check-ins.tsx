@@ -814,6 +814,35 @@ export default function CommunityScreen() {
     loadUser();
   }, []); // empty — run once on mount only
 
+  // ── Reload avatar on every tab focus so stale/null avatar is refreshed ──
+  const reloadAvatar = useCallback(async () => {
+    console.log('[Community] reloadAvatar: checking for updated avatar on focus');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    const uid = session.user.id;
+    const { data: profile } = await supabase
+      .from('users')
+      .select('avatar_url')
+      .eq('id', uid)
+      .single();
+    if (profile?.avatar_url) {
+      if (String(profile.avatar_url).startsWith('http')) {
+        setCurrentUserAvatar(`${profile.avatar_url.split('?')[0]}?t=${Date.now()}`);
+        console.log('[Community] reloadAvatar: avatar refreshed (direct):', profile.avatar_url);
+      } else {
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(profile.avatar_url);
+        setCurrentUserAvatar(`${urlData.publicUrl}?t=${Date.now()}`);
+        console.log('[Community] reloadAvatar: avatar refreshed (storage):', urlData.publicUrl);
+      }
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      reloadAvatar();
+    }, [reloadAvatar])
+  );
+
   // ── Trigger initial data load once currentUserId is set ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
