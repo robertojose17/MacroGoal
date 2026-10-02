@@ -982,7 +982,7 @@ export default function SettingsScreen() {
           >
             {user.avatar_url ? (
               <Image
-                source={resolveImageSource(user.avatar_url)}
+                source={{ uri: user.avatar_url }}
                 style={styles.avatarImage}
                 resizeMode="cover"
               />
