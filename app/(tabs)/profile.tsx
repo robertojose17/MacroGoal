@@ -346,7 +346,12 @@ export default function ProfileScreen() {
       console.log('[Profile] loadData — goals result:', goalsResult.error ? goalsResult.error.message : 'ok');
 
       if (userResult.data) {
-        setUser({ ...authUser, ...userResult.data });
+        const userData = userResult.data;
+        if (userData.avatar_url) {
+          console.log('[Profile] loadData — busting avatar cache for URL:', userData.avatar_url);
+          userData.avatar_url = `${userData.avatar_url.split('?')[0]}?t=${Date.now()}`;
+        }
+        setUser({ ...authUser, ...userData });
       } else {
         setUser(authUser);
       }
