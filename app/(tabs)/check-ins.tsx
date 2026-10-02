@@ -199,7 +199,7 @@ function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
   const isEmpty = (!name || !name.trim()) && (!username || !username.trim());
   const initials = getInitials(name, username);
-  const bgColor = getAvatarColor(username);
+  const bgColor = name ? '#5B9AA8' : getAvatarColor(username);
   if (url && !hasError) {
     return (
       <Image
@@ -1283,7 +1283,7 @@ export default function CommunityScreen() {
 
               {/* Compose row */}
               <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor }]}>
-                <UserAvatar url={currentUserAvatar} name={null} username={currentUserName || 'u'} size={36} />
+                <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName || 'u'} size={36} />
                 <TouchableOpacity
                   style={[styles.composePlaceholder, { borderColor }]}
                   onPress={() => {
@@ -1444,7 +1444,7 @@ export default function CommunityScreen() {
 
                 {/* My progress */}
                 <View style={styles.progressRow}>
-                  <UserAvatar url={currentUserAvatar} name={null} username={currentUserName || 'u'} size={36} />
+                  <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName || 'u'} size={36} />
                   <View style={{ flex: 1, marginLeft: spacing.sm }}>
                     <Text style={[styles.progressName, { color: textColor }]}>You</Text>
                     <Text style={[styles.progressDays, { color: secondaryColor }]}>{myMealDays} / {targetDays} days</Text>
@@ -1633,7 +1633,7 @@ export default function CommunityScreen() {
 
               {/* Club compose row */}
               <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor }]}>
-                <UserAvatar url={currentUserAvatar} name={null} username={currentUserName || 'u'} size={36} />
+                <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName || 'u'} size={36} />
                 <TouchableOpacity
                   style={[styles.composePlaceholder, { borderColor }]}
                   onPress={() => {
