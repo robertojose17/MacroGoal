@@ -16,6 +16,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import i18n, { supportedLanguages, setStoredLanguage } from '@/lib/i18n';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -171,31 +172,24 @@ export default function SettingsScreen() {
     console.log('[Avatar Android] Starting upload for user:', user.id);
     setAvatarUploading(true);
     try {
-      // Step 1: Read image as blob
-      const imageResponse = await fetch(uri);
-      if (!imageResponse.ok) throw new Error('Failed to read image file');
-      const blob = await imageResponse.blob();
-      console.log('[Avatar Android] Blob size:', blob.size);
-      if (blob.size === 0) throw new Error('Image file is empty');
-
-      // Step 2: Get a signed upload URL from Supabase Storage
-      const path = `${user.id}/avatar.jpg`;
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('avatars')
-        .createSignedUploadUrl(path);
-      if (signedError) throw signedError;
-      console.log('[Avatar Android] Got signed upload URL');
-
-      // Step 3: PUT binary directly to the signed URL (same as checkInPhotoUpload)
-      const putResponse = await fetch(signedData.signedUrl, {
-        method: 'PUT',
-        body: blob,
-        headers: { 'Content-Type': 'image/jpeg' },
+      // Step 1: Read file as base64 (fetch(uri).blob() produces 0 bytes in React Native)
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
-      if (!putResponse.ok) {
-        const text = await putResponse.text();
-        throw new Error(`Upload failed: ${putResponse.status} ${text}`);
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
+      console.log('[Avatar Android] File size (bytes):', bytes.length);
+      if (bytes.length === 0) throw new Error('Image file is empty');
+
+      // Step 2: Upload directly to Supabase Storage
+      const path = `${user.id}/avatar.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
       console.log('[Avatar Android] Upload successful');
 
       // Step 4: Get the public URL (clean, no cache-buster)
