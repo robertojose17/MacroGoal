@@ -592,9 +592,11 @@ export default function ProfileScreen() {
             <View style={[styles.igAvatarRing, { borderColor: colors.primary }]}>
               {user.avatar_url ? (
                 <Image
-                  source={resolveImageSource(user.avatar_url)}
+                  key={user.avatar_url}
+                  source={{ uri: user.avatar_url }}
                   style={styles.igAvatarImage}
                   resizeMode="cover"
+                  onError={(e) => console.warn('[Profile] Avatar image load error:', e.nativeEvent.error, 'URL:', user.avatar_url)}
                 />
               ) : (
                 <View style={[styles.igAvatarFallback, { backgroundColor: colors.primary }]}>

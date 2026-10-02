@@ -202,11 +202,10 @@ export default function SettingsScreen() {
       const publicUrl = urlData.publicUrl;
       console.log('[Profile] Public URL:', publicUrl);
 
-      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
       console.log('[Profile] Updating users table with avatar_url');
       const { error: updateError } = await supabase
         .from('users')
-        .update({ avatar_url: cacheBustedUrl, updated_at: new Date().toISOString() })
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
       if (updateError) {
@@ -215,6 +214,8 @@ export default function SettingsScreen() {
       }
 
       console.log('[Profile] Avatar updated successfully');
+      // Use cache-busted URL only in local state so the image refreshes immediately on this screen
+      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
       setUser((prev: any) => ({ ...prev, avatar_url: cacheBustedUrl }));
     } catch (error: any) {
       console.error('[Profile] Avatar upload failed:', error);

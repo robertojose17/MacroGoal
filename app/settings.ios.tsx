@@ -53,8 +53,7 @@ export default function SettingsScreen() {
 
   // Avatar upload state
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarError, setAvatarError] = useState(false);
-  useEffect(() => { setAvatarError(false); }, [user?.avatar_url]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -195,11 +194,10 @@ export default function SettingsScreen() {
       const publicUrl = urlData.publicUrl;
       console.log('[Profile iOS] Public URL:', publicUrl);
 
-      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
       console.log('[Profile iOS] Updating users table with avatar_url');
       const { error: updateError } = await supabase
         .from('users')
-        .update({ avatar_url: cacheBustedUrl, updated_at: new Date().toISOString() })
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
       if (updateError) {
@@ -208,6 +206,8 @@ export default function SettingsScreen() {
       }
 
       console.log('[Profile iOS] Avatar updated successfully');
+      // Use cache-busted URL only in local state so the image refreshes immediately on this screen
+      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
       setUser((prev: any) => ({ ...prev, avatar_url: cacheBustedUrl }));
     } catch (error: any) {
       console.error('[Profile iOS] Avatar upload failed:', error);
@@ -921,15 +921,13 @@ export default function SettingsScreen() {
             style={styles.avatarWrapper}
             disabled={avatarUploading}
           >
-            {user.avatar_url && !avatarError ? (
+            {user.avatar_url ? (
               <Image
-                source={resolveImageSource(user.avatar_url)}
+                key={user.avatar_url}
+                source={{ uri: user.avatar_url }}
                 style={styles.avatarImage}
                 resizeMode="cover"
-                onError={() => {
-                  console.log('[Settings] Avatar image failed to load, falling back to initials', { url: user.avatar_url });
-                  setAvatarError(true);
-                }}
+                onError={(e) => console.warn('[Settings iOS] Avatar image load error:', e.nativeEvent.error, 'URL:', user.avatar_url)}
               />
             ) : (
               <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
