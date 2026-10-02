@@ -761,6 +761,7 @@ export default function CommunityScreen() {
   const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [following, setFollowing] = useState<FollowingUser[]>([]);
+  const [followingCount, setFollowingCount] = useState(0);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [friendsLoading, setFriendsLoading] = useState(false);
   const [friendsRefreshing, setFriendsRefreshing] = useState(false);
@@ -951,14 +952,15 @@ export default function CommunityScreen() {
     try {
       const weekStart = getMondayOfWeek(new Date());
       // Step 1: get following IDs
-      const { data: followData } = await supabase
+      const { data: followData, count: rawFollowCount } = await supabase
         .from('social_follows')
-        .select('following_id')
+        .select('following_id', { count: 'exact' })
         .eq('follower_id', uid);
       console.log('[Community] fetchFriendsData — followData:', followData);
 
       const followingIdList = (followData || []).map((f: { following_id: string }) => f.following_id);
       console.log('[Community] Following IDs count:', followingIdList.length);
+      setFollowingCount(rawFollowCount ?? followingIdList.length);
 
       // Step 2: if any, fetch user profiles
       let followingList: FollowingUser[] = [];
@@ -1574,7 +1576,7 @@ export default function CommunityScreen() {
           {/* Following list */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: spacing.lg }}>
             <Text style={[styles.sectionTitle, { color: textColor }]}>Following</Text>
-            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{following.length} people</Text>
+            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{followingCount} people</Text>
           </View>
 
           {following.length === 0 ? (
