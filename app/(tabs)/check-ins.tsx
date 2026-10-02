@@ -197,6 +197,10 @@ interface AvatarProps {
 
 function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
+  useEffect(() => {
+    console.log('[UserAvatar] url changed, resetting hasError. url:', url);
+    setHasError(false);
+  }, [url]);
   const isEmpty = (!name || !name.trim()) && (!username || !username.trim());
   const initials = getInitials(name, username);
   const bgColor = name ? '#5B9AA8' : getAvatarColor(username);
