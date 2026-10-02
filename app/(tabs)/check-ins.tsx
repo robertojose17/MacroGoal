@@ -758,7 +758,7 @@ export default function CommunityScreen() {
   const [pinnedClubPost, setPinnedClubPost] = useState<CommunityPost | null>(null);
   const [activeChallenge, setActiveChallenge] = useState<CommunityChallenge | null>(null);
 
-  // ── Load current user ──
+  // ── Load current user (run once on mount) ──
   useEffect(() => {
     const loadUser = async () => {
       console.log('[Community] Loading current user session');
@@ -780,8 +780,6 @@ export default function CommunityScreen() {
         const fname = profile.full_name?.split(' ')[0] || uname;
         setCurrentUserName(uname);
         setCurrentUserFirstName(fname);
-        // Resolve avatar URL: if it's already a full URL use it directly,
-        // otherwise generate a public URL from Supabase Storage
         if (profile.avatar_url) {
           if (String(profile.avatar_url).startsWith('http')) {
             setCurrentUserAvatar(profile.avatar_url);
@@ -793,20 +791,26 @@ export default function CommunityScreen() {
           }
         }
         console.log('[Community] User profile loaded:', uname);
-        // Trigger initial data load immediately with uid (avoids race condition
-        // where useFocusEffect fires before currentUserId state is set)
-        setFeedLoading(true);
-        fetchFeedPosts(uid).finally(() => setFeedLoading(false));
-        setFriendsLoading(true);
-        fetchFriendsData(uid).finally(() => setFriendsLoading(false));
-        setClubLoading(true);
-        fetchClubPosts(uid).finally(() => setClubLoading(false));
       }
     };
     loadUser();
-  }, [fetchFeedPosts, fetchFriendsData, fetchClubPosts]);
+  }, []); // empty — run once on mount only
+
+  // ── Trigger initial data load once currentUserId is set ──
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!currentUserId) return;
+    console.log('[Community] currentUserId set, loading all tabs data:', currentUserId);
+    setFeedLoading(true);
+    fetchFeedPosts(currentUserId).finally(() => setFeedLoading(false));
+    setFriendsLoading(true);
+    fetchFriendsData(currentUserId).finally(() => setFriendsLoading(false));
+    setClubLoading(true);
+    fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
+  }, [currentUserId]); // runs once when currentUserId is first set
 
   // ── Fetch feed posts ──
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFeedPosts = useCallback(async (overrideUserId?: string) => {
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
@@ -835,9 +839,10 @@ export default function CommunityScreen() {
     } catch (e) {
       console.log('[Community] fetchFeedPosts error:', e);
     }
-  }, [currentUserId]);
+  }, []); // empty deps — uid always passed as parameter
 
   // ── Fetch club posts ──
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchClubPosts = useCallback(async (overrideUserId?: string) => {
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
@@ -888,9 +893,10 @@ export default function CommunityScreen() {
     } catch (e) {
       console.log('[Community] fetchClubPosts error:', e);
     }
-  }, [currentUserId]);
+  }, []); // empty deps — uid always passed as parameter
 
   // ── Fetch friends data ──
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFriendsData = useCallback(async (overrideUserId?: string) => {
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
@@ -964,40 +970,41 @@ export default function CommunityScreen() {
     } catch (e) {
       console.log('[Community] fetchFriendsData error:', e);
     }
-  }, [currentUserId]);
+  }, []); // empty deps — uid always passed as parameter
 
   // ── Focus effect: refresh data for active tab on re-focus ──
   useFocusEffect(
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback(() => {
-      // If userId not yet loaded, loadUser (in useEffect) will handle the initial fetch
       if (!currentUserId) return;
       console.log('[Community] Screen focused, refreshing tab:', activeTab);
       if (activeTab === 'feed') {
         setFeedLoading(true);
-        fetchFeedPosts().finally(() => setFeedLoading(false));
+        fetchFeedPosts(currentUserId).finally(() => setFeedLoading(false));
       } else if (activeTab === 'friends') {
         setFriendsLoading(true);
-        fetchFriendsData().finally(() => setFriendsLoading(false));
+        fetchFriendsData(currentUserId).finally(() => setFriendsLoading(false));
       } else if (activeTab === 'club') {
         setClubLoading(true);
-        fetchClubPosts().finally(() => setClubLoading(false));
+        fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
       }
-    }, [activeTab, currentUserId, fetchFeedPosts, fetchFriendsData, fetchClubPosts])
+    }, [activeTab, currentUserId])
   );
 
   // ── Tab switch: reload data ──
   const handleTabSwitch = (tab: CommunityTab) => {
     console.log('[Community] Tab switched to:', tab);
     setActiveTab(tab);
-    if (tab === 'feed' && currentUserId) {
+    if (!currentUserId) return;
+    if (tab === 'feed') {
       setFeedLoading(true);
-      fetchFeedPosts().finally(() => setFeedLoading(false));
-    } else if (tab === 'friends' && currentUserId) {
+      fetchFeedPosts(currentUserId).finally(() => setFeedLoading(false));
+    } else if (tab === 'friends') {
       setFriendsLoading(true);
-      fetchFriendsData().finally(() => setFriendsLoading(false));
-    } else if (tab === 'club' && currentUserId) {
+      fetchFriendsData(currentUserId).finally(() => setFriendsLoading(false));
+    } else if (tab === 'club') {
       setClubLoading(true);
-      fetchClubPosts().finally(() => setClubLoading(false));
+      fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
     }
   };
 
@@ -1150,21 +1157,21 @@ export default function CommunityScreen() {
   const handleFeedRefresh = async () => {
     console.log('[Community] Feed pull-to-refresh triggered');
     setFeedRefreshing(true);
-    await fetchFeedPosts();
+    await fetchFeedPosts(currentUserId);
     setFeedRefreshing(false);
   };
 
   const handleFriendsRefresh = async () => {
     console.log('[Community] Friends pull-to-refresh triggered');
     setFriendsRefreshing(true);
-    await fetchFriendsData();
+    await fetchFriendsData(currentUserId);
     setFriendsRefreshing(false);
   };
 
   const handleClubRefresh = async () => {
     console.log('[Community] Club pull-to-refresh triggered');
     setClubRefreshing(true);
-    await fetchClubPosts();
+    await fetchClubPosts(currentUserId);
     setClubRefreshing(false);
   };
 
@@ -1702,8 +1709,8 @@ export default function CommunityScreen() {
         visible={showCreatePost}
         onClose={() => setShowCreatePost(false)}
         onPosted={() => {
-          if (activeTab === 'feed') fetchFeedPosts();
-          else fetchClubPosts();
+          if (activeTab === 'feed') fetchFeedPosts(currentUserId);
+          else fetchClubPosts(currentUserId);
         }}
         section={activeTab === 'club' ? 'club' : 'feed'}
         isDark={isDark}
