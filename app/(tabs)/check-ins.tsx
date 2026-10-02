@@ -196,14 +196,19 @@ interface AvatarProps {
 }
 
 function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
+  const [hasError, setHasError] = useState(false);
   const isEmpty = (!name || !name.trim()) && (!username || !username.trim());
   const initials = getInitials(name, username);
   const bgColor = getAvatarColor(username);
-  if (url) {
+  if (url && !hasError) {
     return (
       <Image
         source={resolveImageSource(url)}
         style={{ width: size, height: size, borderRadius: size / 2 }}
+        onError={() => {
+          console.log('[UserAvatar] Image load error for url:', url);
+          setHasError(true);
+        }}
       />
     );
   }
@@ -775,17 +780,37 @@ export default function CommunityScreen() {
         const fname = profile.full_name?.split(' ')[0] || uname;
         setCurrentUserName(uname);
         setCurrentUserFirstName(fname);
-        setCurrentUserAvatar(profile.avatar_url);
+        // Resolve avatar URL: if it's already a full URL use it directly,
+        // otherwise generate a public URL from Supabase Storage
+        if (profile.avatar_url) {
+          if (String(profile.avatar_url).startsWith('http')) {
+            setCurrentUserAvatar(profile.avatar_url);
+            console.log('[Community] Avatar URL (direct):', profile.avatar_url);
+          } else {
+            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(profile.avatar_url);
+            setCurrentUserAvatar(urlData.publicUrl);
+            console.log('[Community] Avatar URL (resolved from storage):', urlData.publicUrl);
+          }
+        }
         console.log('[Community] User profile loaded:', uname);
+        // Trigger initial data load immediately with uid (avoids race condition
+        // where useFocusEffect fires before currentUserId state is set)
+        setFeedLoading(true);
+        fetchFeedPosts(uid).finally(() => setFeedLoading(false));
+        setFriendsLoading(true);
+        fetchFriendsData(uid).finally(() => setFriendsLoading(false));
+        setClubLoading(true);
+        fetchClubPosts(uid).finally(() => setClubLoading(false));
       }
     };
     loadUser();
-  }, []);
+  }, [fetchFeedPosts, fetchFriendsData, fetchClubPosts]);
 
   // ── Fetch feed posts ──
-  const fetchFeedPosts = useCallback(async () => {
-    if (!currentUserId) return;
-    console.log('[Community] Fetching feed posts for user:', currentUserId);
+  const fetchFeedPosts = useCallback(async (overrideUserId?: string) => {
+    const uid = overrideUserId || currentUserId;
+    if (!uid) return;
+    console.log('[Community] Fetching feed posts for user:', uid);
     try {
       const [postsRes, likesRes] = await Promise.all([
         supabase
@@ -798,7 +823,7 @@ export default function CommunityScreen() {
         supabase
           .from('community_likes')
           .select('post_id')
-          .eq('user_id', currentUserId),
+          .eq('user_id', uid),
       ]);
       console.log('[Community] Feed posts fetched:', postsRes.data?.length ?? 0, 'likes:', likesRes.data?.length ?? 0);
       const likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
@@ -813,9 +838,10 @@ export default function CommunityScreen() {
   }, [currentUserId]);
 
   // ── Fetch club posts ──
-  const fetchClubPosts = useCallback(async () => {
-    if (!currentUserId) return;
-    console.log('[Community] Fetching club posts for user:', currentUserId);
+  const fetchClubPosts = useCallback(async (overrideUserId?: string) => {
+    const uid = overrideUserId || currentUserId;
+    if (!uid) return;
+    console.log('[Community] Fetching club posts for user:', uid);
     try {
       const [postsRes, likesRes, commentsRes, challengeRes] = await Promise.all([
         supabase
@@ -828,7 +854,7 @@ export default function CommunityScreen() {
         supabase
           .from('community_likes')
           .select('post_id')
-          .eq('user_id', currentUserId),
+          .eq('user_id', uid),
         supabase
           .from('community_comments')
           .select('id, post_id, content, author:users!community_comments_user_id_fkey(id, username, full_name, avatar_url, user_type)')
@@ -865,28 +891,29 @@ export default function CommunityScreen() {
   }, [currentUserId]);
 
   // ── Fetch friends data ──
-  const fetchFriendsData = useCallback(async () => {
-    if (!currentUserId) return;
-    console.log('[Community] Fetching friends data for user:', currentUserId);
+  const fetchFriendsData = useCallback(async (overrideUserId?: string) => {
+    const uid = overrideUserId || currentUserId;
+    if (!uid) return;
+    console.log('[Community] Fetching friends data for user:', uid);
     try {
       const weekStart = getMondayOfWeek(new Date());
       // Step 1: get following IDs
       const { data: followData } = await supabase
         .from('social_follows')
         .select('following_id')
-        .eq('follower_id', currentUserId);
+        .eq('follower_id', uid);
       console.log('[Community] fetchFriendsData — followData:', followData);
 
-      const followingIds = (followData || []).map((f: { following_id: string }) => f.following_id);
-      console.log('[Community] Following IDs count:', followingIds.length);
+      const followingIdList = (followData || []).map((f: { following_id: string }) => f.following_id);
+      console.log('[Community] Following IDs count:', followingIdList.length);
 
       // Step 2: if any, fetch user profiles
       let followingList: FollowingUser[] = [];
-      if (followingIds.length > 0) {
+      if (followingIdList.length > 0) {
         const { data: usersData } = await supabase
           .from('users')
           .select('id, username, full_name, avatar_url')
-          .in('id', followingIds);
+          .in('id', followingIdList);
         console.log('[Community] Following users fetched:', usersData?.length ?? 0);
         followingList = (usersData || []).map((u: any) => ({
           id: u.id,
@@ -902,7 +929,7 @@ export default function CommunityScreen() {
         supabase
           .from('community_commitments')
           .select('*, partner:users!community_commitments_partner_id_fkey(id, username, full_name, avatar_url), requester:users!community_commitments_user_id_fkey(id, username, full_name, avatar_url)')
-          .or(`user_id.eq.${currentUserId},partner_id.eq.${currentUserId}`)
+          .or(`user_id.eq.${uid},partner_id.eq.${uid}`)
           .eq('week_start', weekStart)
           .in('status', ['active', 'pending'])
           .limit(1),
@@ -913,12 +940,12 @@ export default function CommunityScreen() {
         setCommitment(c);
         console.log('[Community] Commitment found:', c.id, 'status:', c.status);
         // Fetch meal days for both users
-        const partnerId = c.user_id === currentUserId ? c.partner_id : c.user_id;
+        const partnerId = c.user_id === uid ? c.partner_id : c.user_id;
         const [myMeals, partnerMeals] = await Promise.all([
           supabase
             .from('meals')
             .select('date')
-            .eq('user_id', currentUserId)
+            .eq('user_id', uid)
             .gte('date', weekStart),
           supabase
             .from('meals')
@@ -939,10 +966,12 @@ export default function CommunityScreen() {
     }
   }, [currentUserId]);
 
-  // ── Focus effect: load data for active tab ──
+  // ── Focus effect: refresh data for active tab on re-focus ──
   useFocusEffect(
     useCallback(() => {
+      // If userId not yet loaded, loadUser (in useEffect) will handle the initial fetch
       if (!currentUserId) return;
+      console.log('[Community] Screen focused, refreshing tab:', activeTab);
       if (activeTab === 'feed') {
         setFeedLoading(true);
         fetchFeedPosts().finally(() => setFeedLoading(false));
