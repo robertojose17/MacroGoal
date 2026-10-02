@@ -52,6 +52,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from 'react-i18next';
+import { IconSymbol } from '@/components/IconSymbol';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,12 +144,13 @@ function getRelativeTime(dateStr: string): string {
 }
 
 function getInitials(name: string | null, username: string): string {
-  if (name) {
+  if (name && name.trim()) {
     const parts = name.trim().split(' ');
     if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
     return parts[0].slice(0, 2).toUpperCase();
   }
-  return username.slice(0, 2).toUpperCase();
+  if (username && username.trim()) return username.slice(0, 2).toUpperCase();
+  return '?';
 }
 
 function getAvatarColor(username: string): string {
@@ -194,6 +196,7 @@ interface AvatarProps {
 }
 
 function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
+  const isEmpty = (!name || !name.trim()) && (!username || !username.trim());
   const initials = getInitials(name, username);
   const bgColor = getAvatarColor(username);
   if (url) {
@@ -202,6 +205,27 @@ function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
         source={resolveImageSource(url)}
         style={{ width: size, height: size, borderRadius: size / 2 }}
       />
+    );
+  }
+  if (isEmpty) {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: '#9CA3AF',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <IconSymbol
+          ios_icon_name="person.fill"
+          android_material_icon_name="person"
+          size={size * 0.5}
+          color="#fff"
+        />
+      </View>
     );
   }
   return (
@@ -846,11 +870,35 @@ export default function CommunityScreen() {
     console.log('[Community] Fetching friends data for user:', currentUserId);
     try {
       const weekStart = getMondayOfWeek(new Date());
-      const [followRes, commitRes] = await Promise.all([
-        supabase
-          .from('social_follows')
-          .select('following_id, users!social_follows_following_id_fkey(id, username, full_name, avatar_url)')
-          .eq('follower_id', currentUserId),
+      // Step 1: get following IDs
+      const { data: followData } = await supabase
+        .from('social_follows')
+        .select('following_id')
+        .eq('follower_id', currentUserId);
+      console.log('[Community] fetchFriendsData — followData:', followData);
+
+      const followingIds = (followData || []).map((f: { following_id: string }) => f.following_id);
+      console.log('[Community] Following IDs count:', followingIds.length);
+
+      // Step 2: if any, fetch user profiles
+      let followingList: FollowingUser[] = [];
+      if (followingIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('users')
+          .select('id, username, full_name, avatar_url')
+          .in('id', followingIds);
+        console.log('[Community] Following users fetched:', usersData?.length ?? 0);
+        followingList = (usersData || []).map((u: any) => ({
+          id: u.id,
+          username: u.username,
+          full_name: u.full_name,
+          avatar_url: u.avatar_url,
+        }));
+      }
+      setFollowing(followingList);
+      setFollowingIds(new Set(followingList.map((u) => u.id)));
+
+      const [commitRes] = await Promise.all([
         supabase
           .from('community_commitments')
           .select('*, partner:users!community_commitments_partner_id_fkey(id, username, full_name, avatar_url), requester:users!community_commitments_user_id_fkey(id, username, full_name, avatar_url)')
@@ -859,18 +907,6 @@ export default function CommunityScreen() {
           .in('status', ['active', 'pending'])
           .limit(1),
       ]);
-      console.log('[Community] Following count:', followRes.data?.length ?? 0);
-      const followingList: FollowingUser[] = (followRes.data || []).map((f: Record<string, unknown>) => {
-        const u = f.users as Record<string, unknown>;
-        return {
-          id: u?.id as string,
-          username: u?.username as string,
-          full_name: u?.full_name as string | null,
-          avatar_url: u?.avatar_url as string | null,
-        };
-      });
-      setFollowing(followingList);
-      setFollowingIds(new Set(followingList.map((u) => u.id)));
 
       if (commitRes.data && commitRes.data.length > 0) {
         const c = commitRes.data[0] as Commitment;
