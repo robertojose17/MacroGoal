@@ -203,7 +203,8 @@ function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
   if (url && !hasError) {
     return (
       <Image
-        source={resolveImageSource(url)}
+        source={{ uri: url }}
+        key={url}
         style={{ width: size, height: size, borderRadius: size / 2 }}
         onError={() => {
           console.log('[UserAvatar] Image load error for url:', url);
@@ -594,7 +595,7 @@ function CreatePostSheet({
 
           {/* Author row */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-            <UserAvatar url={currentUserAvatar} name={null} username={currentUserName} size={40} />
+            <UserAvatar url={currentUserAvatar} name={currentUserFirstName} username={currentUserName} size={40} />
             <TextInput
               style={[styles.composeInput, { color: textColor, flex: 1 }]}
               placeholder={section === 'club' ? 'Ask a question or share what worked...' : 'Share a win or ask for help...'}
@@ -782,11 +783,11 @@ export default function CommunityScreen() {
         setCurrentUserFirstName(fname);
         if (profile.avatar_url) {
           if (String(profile.avatar_url).startsWith('http')) {
-            setCurrentUserAvatar(profile.avatar_url);
+            setCurrentUserAvatar(`${profile.avatar_url.split('?')[0]}?t=${Date.now()}`);
             console.log('[Community] Avatar URL (direct):', profile.avatar_url);
           } else {
             const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(profile.avatar_url);
-            setCurrentUserAvatar(urlData.publicUrl);
+            setCurrentUserAvatar(`${urlData.publicUrl}?t=${Date.now()}`);
             console.log('[Community] Avatar URL (resolved from storage):', urlData.publicUrl);
           }
         }
