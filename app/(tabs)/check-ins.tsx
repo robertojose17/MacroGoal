@@ -468,6 +468,7 @@ interface CreatePostSheetProps {
   isDark: boolean;
   currentUserId: string;
   currentUserName: string;
+  currentUserFirstName: string;
   currentUserAvatar: string | null;
 }
 
@@ -481,6 +482,7 @@ function CreatePostSheet({
   isDark,
   currentUserId,
   currentUserName,
+  currentUserFirstName,
   currentUserAvatar,
 }: CreatePostSheetProps) {
   const [category, setCategory] = useState<PostCategory>('general');
@@ -1717,6 +1719,7 @@ export default function CommunityScreen() {
         isDark={isDark}
         currentUserId={currentUserId}
         currentUserName={currentUserName}
+        currentUserFirstName={currentUserFirstName}
         currentUserAvatar={currentUserAvatar}
       />
 
