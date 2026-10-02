@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -146,6 +146,10 @@ export default function ProfileScreen() {
 
   // Tooltip
   const [tooltipKey, setTooltipKey] = useState<string | null>(null);
+
+  // Avatar error fallback
+  const [avatarError, setAvatarError] = useState(false);
+  useEffect(() => { setAvatarError(false); }, [user?.avatar_url]);
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -588,8 +592,16 @@ export default function ProfileScreen() {
           <View style={styles.igHeaderRow}>
             {/* Avatar */}
             <View style={[styles.igAvatarRing, { borderColor: colors.primary }]}>
-              {user.avatar_url ? (
-                <Image source={resolveImageSource(user.avatar_url)} style={styles.igAvatarImage} resizeMode="cover" />
+              {user.avatar_url && !avatarError ? (
+                <Image
+                  source={resolveImageSource(user.avatar_url)}
+                  style={styles.igAvatarImage}
+                  resizeMode="cover"
+                  onError={() => {
+                    console.log('[Profile] Avatar image failed to load, falling back to initials', { url: user.avatar_url });
+                    setAvatarError(true);
+                  }}
+                />
               ) : (
                 <View style={[styles.igAvatarFallback, { backgroundColor: colors.primary }]}>
                   <Text style={styles.igAvatarInitials}>{initials}</Text>

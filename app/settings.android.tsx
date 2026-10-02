@@ -53,6 +53,8 @@ export default function SettingsScreen() {
 
   // Avatar upload state
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  useEffect(() => { setAvatarError(false); }, [user?.avatar_url]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -919,11 +921,15 @@ export default function SettingsScreen() {
             style={styles.avatarWrapper}
             disabled={avatarUploading}
           >
-            {user.avatar_url ? (
+            {user.avatar_url && !avatarError ? (
               <Image
                 source={resolveImageSource(user.avatar_url)}
                 style={styles.avatarImage}
                 resizeMode="cover"
+                onError={() => {
+                  console.log('[Settings] Avatar image failed to load, falling back to initials', { url: user.avatar_url });
+                  setAvatarError(true);
+                }}
               />
             ) : (
               <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
