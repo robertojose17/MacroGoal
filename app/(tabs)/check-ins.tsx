@@ -1025,6 +1025,9 @@ export default function CommunityScreen() {
     useCallback(() => {
       if (!currentUserId) return;
       console.log('[Community] Screen focused, refreshing tab:', activeTab);
+      // Always refresh friends/following data so count stays in sync with profile tab
+      fetchFriendsData(currentUserId);
+      // Also refresh the active tab's content
       if (activeTab === 'feed') {
         setFeedLoading(true);
         fetchFeedPosts(currentUserId).finally(() => setFeedLoading(false));
