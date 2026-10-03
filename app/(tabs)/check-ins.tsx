@@ -1595,7 +1595,7 @@ export default function CommunityScreen() {
                         <Text style={{ fontSize: 12, color: secondaryColor, fontStyle: 'italic' }}>Sin actividad</Text>
                       ) : (
                         <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor }}>
-                          {entry.score}%
+                          {entry.score}
                         </Text>
                       )}
                     </TouchableOpacity>
