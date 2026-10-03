@@ -134,7 +134,7 @@ export default function SocialProfileViewScreen() {
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
         supabase.from('social_follows').select('id').eq('follower_id', myId).eq('following_id', userId).maybeSingle(),
         supabase.from('social_posts').select('id, content, created_at, likes_count, post_type').eq('user_id', userId).eq('is_public', true).order('created_at', { ascending: false }).limit(20),
-        supabase.from('xp_status').select('current_streak, longest_streak, consistency_score').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', userId).maybeSingle(),
       ]);
 
       console.log('[SocialProfileView] loadData — profile:', profileRes.error ? profileRes.error.message : 'ok');
@@ -143,7 +143,7 @@ export default function SocialProfileViewScreen() {
       console.log('[SocialProfileView] loadData — following:', followingRes.count, followingRes.error?.message);
       console.log('[SocialProfileView] loadData — isFollowing:', !!isFollowingRes.data, isFollowingRes.error?.message);
       console.log('[SocialProfileView] loadData — posts:', postsRes.data?.length ?? 0, postsRes.error?.message);
-      console.log('[SocialProfileView] loadData — xpStatus:', xpRes.error ? xpRes.error.message : 'ok');
+      console.log('[SocialProfileView] loadData — userXp:', xpRes.error ? xpRes.error.message : 'ok');
 
       setProfile(profileRes.data ?? null);
       setPostsCount(postsCountRes.count ?? 0);
@@ -155,7 +155,6 @@ export default function SocialProfileViewScreen() {
       if (xpRes.data) {
         setCurrentStreak(xpRes.data.current_streak ?? 0);
         setBestStreak(xpRes.data.longest_streak ?? 0);
-        setConsistencyScore(xpRes.data.consistency_score ?? 0);
       }
     } catch (err) {
       console.error('[SocialProfileView] loadData — unexpected error:', err);
@@ -500,10 +499,7 @@ export default function SocialProfileViewScreen() {
 
             {/* Info column */}
             <View style={styles.igInfoCol}>
-              <Text style={[styles.igUsername, { color: textColor }]} numberOfLines={1}>
-                {profile.username || displayName}
-              </Text>
-              <Text style={[styles.igFullName, { color: secondaryText }]} numberOfLines={1}>
+              <Text style={[styles.igFullName, { color: textColor }]} numberOfLines={1}>
                 {displayName}
               </Text>
               {/* Stats row */}
