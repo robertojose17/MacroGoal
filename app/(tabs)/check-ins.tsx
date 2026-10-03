@@ -1379,14 +1379,6 @@ export default function CommunityScreen() {
           }
           ListHeaderComponent={
             <View>
-              {/* Welcome row */}
-              <Text style={[styles.welcomeTitle, { color: textColor }]}>
-                Welcome, {currentUserFirstName || 'there'}
-              </Text>
-              <Text style={[styles.welcomeSubtitle, { color: secondaryColor }]}>
-                Small wins. Real support.
-              </Text>
-
               {/* Better with a friend banner */}
               {showInviteBanner && (
                 <View style={[styles.inviteBanner, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '30' }]}>
@@ -1410,41 +1402,6 @@ export default function CommunityScreen() {
                   </TouchableOpacity>
                 </View>
               )}
-
-              {/* Compose row */}
-              <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor }]}>
-                {currentUserAvatar ? (
-                  <Image
-                    key={currentUserAvatar}
-                    source={{ uri: currentUserAvatar }}
-                    style={{ width: 36, height: 36, borderRadius: 18 }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={[styles.composePlaceholder, { borderColor }]}
-                  onPress={() => {
-                    console.log('[Community] Compose placeholder tapped');
-                    setShowCreatePost(true);
-                  }}
-                >
-                  <Text style={[styles.composePlaceholderText, { color: secondaryColor }]}>
-                    Share a win or ask for help...
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[Community] Compose plus button tapped');
-                    setShowCreatePost(true);
-                  }}
-                >
-                  <Plus size={22} color={secondaryColor} />
-                </TouchableOpacity>
-              </View>
             </View>
           }
           ListEmptyComponent={
