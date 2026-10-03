@@ -19,6 +19,10 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import { calcDailyScore } from '@/utils/consistencyMath';
+import { calcMacros } from '@/utils/macros';
+import { toLocalDateString } from '@/utils/dateUtils';
+import ProgressCircle from '@/components/ProgressCircle';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -49,6 +53,28 @@ type FollowUser = {
 
 type FollowModalType = 'followers' | 'following' | null;
 
+function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
+  const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
+  const percentageStr = `${percentage}%` as any;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+      <Text style={{ width: 52, fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>{label}</Text>
+      <View style={{ flex: 1, height: 6, backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 3, marginHorizontal: 8 }}>
+        <View style={{ width: percentageStr, height: 6, backgroundColor: color, borderRadius: 3 }} />
+      </View>
+      <Text style={{ fontSize: 12, color: isDark ? '#F9FAFB' : '#111827', minWidth: 60, textAlign: 'right' }}>
+        {eaten}
+      </Text>
+      <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+        {' / '}
+      </Text>
+      <Text style={{ fontSize: 12, color: isDark ? '#F9FAFB' : '#111827' }}>
+        {goal}g
+      </Text>
+    </View>
+  );
+}
+
 export default function SocialProfileViewScreen() {
   const router = useRouter();
   const { userId } = useLocalSearchParams<{ userId: string }>();
@@ -78,6 +104,9 @@ export default function SocialProfileViewScreen() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [consistencyScore, setConsistencyScore] = useState(0);
+  const [totalCalories, setTotalCalories] = useState(0);
+  const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
+  const [goal, setGoal] = useState<any>(null);
 
   // UI state
   const [followLoading, setFollowLoading] = useState(false);
@@ -87,6 +116,104 @@ export default function SocialProfileViewScreen() {
   const [followModalType, setFollowModalType] = useState<FollowModalType>(null);
   const [followModalUsers, setFollowModalUsers] = useState<FollowUser[]>([]);
   const [followModalLoading, setFollowModalLoading] = useState(false);
+
+  const loadConsistencyScore = async (targetUserId: string) => {
+    try {
+      console.log('[SocialProfileView] loadConsistencyScore — start for userId:', targetUserId);
+      const today = new Date();
+      const start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      const startStr = toLocalDateString(start);
+      const endStr = toLocalDateString(today);
+
+      const [mealsRes, goalsRes] = await Promise.all([
+        supabase.from('meals').select('date, meal_items(calories, protein, is_scheduled)').eq('user_id', targetUserId).gte('date', startStr).lte('date', endStr),
+        supabase.from('goals').select('daily_calories, protein_g').eq('user_id', targetUserId).eq('is_active', true).maybeSingle(),
+      ]);
+
+      console.log('[SocialProfileView] loadConsistencyScore — meals:', mealsRes.data?.length ?? 0, mealsRes.error?.message);
+      console.log('[SocialProfileView] loadConsistencyScore — goals:', goalsRes.data ? 'ok' : 'none', goalsRes.error?.message);
+
+      const calorieTarget = goalsRes.data?.daily_calories ?? 2000;
+      const proteinTarget = goalsRes.data?.protein_g ?? 150;
+
+      const byDate: Record<string, { calories: number; protein: number }> = {};
+      mealsRes.data?.forEach((meal: any) => {
+        const d = meal.date;
+        if (!byDate[d]) byDate[d] = { calories: 0, protein: 0 };
+        meal.meal_items?.forEach((item: any) => {
+          if (!item.is_scheduled) {
+            byDate[d].calories += item.calories ?? 0;
+            byDate[d].protein += item.protein ?? 0;
+          }
+        });
+      });
+
+      let totalScore = 0;
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = toLocalDateString(d);
+        const dayData = byDate[key];
+        const hasTracking = !!dayData;
+        const dayCals = dayData?.calories ?? 0;
+        const dayProt = dayData?.protein ?? 0;
+        totalScore += calcDailyScore(hasTracking, dayCals, calorieTarget, dayProt, proteinTarget);
+      }
+      const score = Math.round(totalScore / 30);
+      console.log('[SocialProfileView] loadConsistencyScore — computed score:', score);
+      setConsistencyScore(score);
+    } catch (e) {
+      console.warn('[SocialProfileView] loadConsistencyScore error:', e);
+    }
+  };
+
+  const loadNutritionData = async (targetUserId: string) => {
+    try {
+      console.log('[SocialProfileView] loadNutritionData — start for userId:', targetUserId);
+      const today = new Date();
+      const startStr = toLocalDateString(today);
+      const endStr = startStr;
+
+      const { data: mealsData } = await supabase
+        .from('meals')
+        .select(`id, meal_type, date, meal_items(id, calories, protein, carbs, fats, fiber, is_scheduled, grams, food_item_id, food_items:meal_items_food_item_id_fkey(id, name, calories, protein, carbs, fat, fiber, serving_size, macros_per))`)
+        .eq('user_id', targetUserId)
+        .gte('date', startStr)
+        .lte('date', endStr);
+
+      console.log('[SocialProfileView] nutrition meals:', mealsData?.length ?? 0, 'for userId:', targetUserId);
+
+      const { data: goalsData } = await supabase.from('goals').select('*').eq('user_id', targetUserId).eq('is_active', true).maybeSingle();
+      if (goalsData) setGoal(goalsData);
+
+      let totalCals = 0, totalP = 0, totalC = 0, totalF = 0, totalFib = 0;
+      mealsData?.forEach((meal: any) => {
+        meal.meal_items?.forEach((item: any) => {
+          if (item.is_scheduled) return;
+          const hasStoredMacros = item.calories != null && item.calories > 0;
+          const fi = item.food_items;
+          const grams = item.grams ?? 0;
+          const macros = hasStoredMacros
+            ? { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 }
+            : fi
+              ? (() => { const r = calcMacros(fi, grams); return { calories: r.calories, protein: r.protein, carbs: r.carbs, fats: r.fat, fiber: r.fiber }; })()
+              : { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+          totalCals += macros.calories;
+          totalP += macros.protein;
+          totalC += macros.carbs;
+          totalF += macros.fats;
+          totalFib += macros.fiber;
+        });
+      });
+
+      console.log('[SocialProfileView] loadNutritionData — totalCals:', totalCals, 'protein:', totalP);
+      setTotalCalories(totalCals);
+      setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
+    } catch (e) {
+      console.warn('[SocialProfileView] loadNutritionData error:', e);
+    }
+  };
 
   const loadData = useCallback(async () => {
     if (!userId) return;
@@ -156,6 +283,12 @@ export default function SocialProfileViewScreen() {
         setCurrentStreak(xpRes.data.current_streak ?? 0);
         setBestStreak(xpRes.data.longest_streak ?? 0);
       }
+
+      // Load consistency score and nutrition in parallel
+      await Promise.all([
+        loadConsistencyScore(userId),
+        loadNutritionData(userId),
+      ]);
     } catch (err) {
       console.error('[SocialProfileView] loadData — unexpected error:', err);
     } finally {
@@ -610,6 +743,31 @@ export default function SocialProfileViewScreen() {
           StatsContent
         )}
 
+        {/* ── Nutrition Card (only when following) ───────────────────────── */}
+        {isFollowing && (
+          <View style={[styles.caloriesCard, { backgroundColor: cardBg, borderColor }]}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryText, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Today's Nutrition
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <ProgressCircle
+                current={Math.round(totalCalories)}
+                target={goal?.daily_calories || 2000}
+                size={120}
+                strokeWidth={10}
+                color="#F97316"
+                label="kcal"
+              />
+              <View style={{ flex: 1 }}>
+                <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color="#3B82F6" isDark={isDark} />
+                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color="#10B981" isDark={isDark} />
+                <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color="#F59E0B" isDark={isDark} />
+                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color="#8B5CF6" isDark={isDark} />
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* ── Posts feed (blurred when not following) ────────────────────── */}
         {!isFollowing ? (
           <View style={styles.lockedSection}>
@@ -970,6 +1128,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Calories / nutrition card
+  caloriesCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: spacing.md,
+    marginBottom: 16,
+    borderWidth: 1,
   },
 
   // Feed
