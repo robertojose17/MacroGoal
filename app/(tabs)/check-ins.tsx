@@ -951,16 +951,22 @@ export default function CommunityScreen() {
     console.log('[Community] Fetching friends data for user:', uid);
     try {
       const weekStart = getMondayOfWeek(new Date());
-      // Step 1: get following IDs
-      const { data: followData, count: rawFollowCount } = await supabase
+      // Step 1: get following count (same as profile tab)
+      const { count: rawFollowCount } = await supabase
         .from('social_follows')
-        .select('following_id', { count: 'exact' })
+        .select('id', { count: 'exact', head: true })
+        .eq('follower_id', uid);
+      setFollowingCount(rawFollowCount ?? 0);
+
+      // Step 1b: get following IDs for profile list
+      const { data: followData } = await supabase
+        .from('social_follows')
+        .select('following_id')
         .eq('follower_id', uid);
       console.log('[Community] fetchFriendsData — followData:', followData);
 
       const followingIdList = (followData || []).map((f: { following_id: string }) => f.following_id);
       console.log('[Community] Following IDs count:', followingIdList.length);
-      setFollowingCount(rawFollowCount ?? followingIdList.length);
 
       // Step 2: if any, fetch user profiles
       let followingList: FollowingUser[] = [];
