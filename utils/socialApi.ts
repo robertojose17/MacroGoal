@@ -50,6 +50,8 @@ export interface SocialPost {
   meal_protein?: number | null;
   meal_carbs?: number | null;
   meal_fat?: number | null;
+  meal_recipe_id?: string | null;
+  meal_recipe_data?: any | null;
   progress_stats?: Record<string, unknown> | null;
   progress_photo_url?: string | null;
   is_pinned?: boolean | null;
@@ -125,6 +127,8 @@ export interface CreatePostInput {
   meal_protein?: number;
   meal_carbs?: number;
   meal_fat?: number;
+  meal_recipe_id?: string;
+  meal_recipe_data?: any;
   progress_stats?: Record<string, unknown>;
   progress_photo_url?: string;
   is_pinned?: boolean;

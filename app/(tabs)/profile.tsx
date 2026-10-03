@@ -373,7 +373,7 @@ export default function ProfileScreen() {
       // Load posts feed
       const { data: postsData, error: postsError } = await supabase
         .from('social_posts')
-        .select('id, content, created_at, likes_count')
+        .select('id, user_id, content, image_url, created_at, likes_count, comments_count, is_public, post_type, post_type_v2, meal_photo_url, meal_calories, meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id, meal_recipe_data, question_title, progress_stats, is_pinned, is_founder_post, saves_count')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
         .limit(50);

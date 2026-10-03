@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Pressable,
   Image,
   ImageSourcePropType,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -18,11 +19,14 @@ import {
   Bookmark,
   HelpCircle,
   Pin,
+  ExternalLink,
+  BookmarkCheck,
 } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import type { SocialPost } from '@/utils/socialApi';
 import Avatar from '@/components/social/Avatar';
 import { IconSymbol } from '@/components/IconSymbol';
+import { supabase } from '@/lib/supabase/client';
 
 function resolveImageSource(
   source: string | number | ImageSourcePropType | undefined
@@ -30,6 +34,194 @@ function resolveImageSource(
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;
+}
+
+// ─── MealV2Body sub-component ─────────────────────────────────────────────────
+
+interface MealV2BodyProps {
+  post: SocialPost;
+  isDark: boolean;
+  textColor: string;
+  subColor: string;
+  mealPhotoUrl: string | null;
+  recipeName: string | null;
+  captionDiffersFromName: boolean;
+  captionText: string | null;
+  mealCalDisplay: string | null;
+  mealProtDisplay: string | null;
+  mealCarbDisplay: string | null;
+  mealFatDisplay: string | null;
+  servingsDisplay: string | null;
+  onSaveMeal: ((post: SocialPost) => void) | null;
+  router: ReturnType<typeof useRouter>;
+}
+
+function MealV2Body({
+  post,
+  isDark,
+  textColor,
+  subColor,
+  mealPhotoUrl,
+  recipeName,
+  captionDiffersFromName,
+  captionText,
+  mealCalDisplay,
+  mealProtDisplay,
+  mealCarbDisplay,
+  mealFatDisplay,
+  servingsDisplay,
+  onSaveMeal,
+  router,
+}: MealV2BodyProps) {
+  const [recipeSaved, setRecipeSaved] = useState(false);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+
+  const handleViewRecipe = useCallback(() => {
+    console.log('[SocialPostCard] View Recipe pressed — post_id:', post.id, 'recipe_id:', post.meal_recipe_id);
+    if (post.meal_recipe_id) {
+      router.push(`/recipe-finder-detail?recipe_id=${post.meal_recipe_id}`);
+    }
+  }, [post.id, post.meal_recipe_id, router]);
+
+  const handleSaveToFavorites = useCallback(async () => {
+    const recipeData = post.meal_recipe_data;
+    if (!recipeData) {
+      console.log('[SocialPostCard] Save to Favorites — no recipe_data on post:', post.id);
+      return;
+    }
+    console.log('[SocialPostCard] Save to Favorites pressed — post_id:', post.id, 'recipe_id:', recipeData.id);
+    setSavingRecipe(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('[SocialPostCard] Save to Favorites — no auth user');
+        return;
+      }
+      const { error } = await supabase.from('saved_recipes').upsert({
+        id: recipeData.id,
+        user_id: user.id,
+        recipe_data: recipeData,
+        created_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.error('[SocialPostCard] Save to Favorites error:', error.message);
+        Alert.alert('Error', 'Could not save recipe. Please try again.');
+      } else {
+        console.log('[SocialPostCard] Recipe saved to favorites — recipe_id:', recipeData.id);
+        setRecipeSaved(true);
+      }
+    } catch (e) {
+      console.error('[SocialPostCard] Save to Favorites exception:', e);
+    } finally {
+      setSavingRecipe(false);
+    }
+  }, [post.id, post.meal_recipe_data]);
+
+  const hasMacros = mealCalDisplay || mealProtDisplay || mealCarbDisplay || mealFatDisplay;
+
+  return (
+    <View>
+      {mealPhotoUrl ? (
+        <Image
+          source={resolveImageSource(mealPhotoUrl)}
+          style={styles.mealPhoto}
+          resizeMode="cover"
+        />
+      ) : null}
+      {recipeName ? (
+        <Text style={[styles.mealName, { color: textColor }]}>{recipeName}</Text>
+      ) : null}
+      {hasMacros ? (
+        <View style={styles.mealMacroPills}>
+          {mealCalDisplay ? (
+            <View style={[styles.macroPill, { backgroundColor: colors.calories + '18' }]}>
+              <Text style={[styles.macroPillText, { color: colors.calories }]}>
+                {'🔥 '}
+                {mealCalDisplay}
+                {' kcal'}
+              </Text>
+            </View>
+          ) : null}
+          {mealProtDisplay ? (
+            <View style={[styles.macroPill, { backgroundColor: colors.protein + '18' }]}>
+              <Text style={[styles.macroPillText, { color: colors.protein }]}>
+                {'💪 '}
+                {mealProtDisplay}
+                {'g'}
+              </Text>
+            </View>
+          ) : null}
+          {mealCarbDisplay ? (
+            <View style={[styles.macroPill, { backgroundColor: colors.carbs + '18' }]}>
+              <Text style={[styles.macroPillText, { color: colors.carbs }]}>
+                {'🍞 '}
+                {mealCarbDisplay}
+                {'g'}
+              </Text>
+            </View>
+          ) : null}
+          {mealFatDisplay ? (
+            <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
+              <Text style={[styles.macroPillText, { color: colors.fats }]}>
+                {'🥑 '}
+                {mealFatDisplay}
+                {'g'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {servingsDisplay ? (
+        <Text style={[styles.mealServings, { color: subColor }]}>
+          {servingsDisplay}
+          {' serving(s)'}
+        </Text>
+      ) : null}
+      {captionDiffersFromName && captionText ? (
+        <Text style={[styles.mealCaption, { color: textColor }]}>{captionText}</Text>
+      ) : null}
+      <View style={styles.mealActionRow}>
+        {post.meal_recipe_id ? (
+          <Pressable
+            style={[styles.mealActionBtn, { borderColor: colors.primary }]}
+            onPress={handleViewRecipe}
+            accessibilityRole="button"
+          >
+            <ExternalLink size={13} color={colors.primary} />
+            <Text style={[styles.mealActionBtnText, { color: colors.primary }]}>View Recipe</Text>
+          </Pressable>
+        ) : null}
+        {post.meal_recipe_data ? (
+          <Pressable
+            style={[styles.mealActionBtn, { borderColor: recipeSaved ? colors.success : subColor, opacity: savingRecipe ? 0.6 : 1 }]}
+            onPress={handleSaveToFavorites}
+            disabled={savingRecipe || recipeSaved}
+            accessibilityRole="button"
+          >
+            {recipeSaved ? (
+              <BookmarkCheck size={13} color={colors.success} />
+            ) : (
+              <Bookmark size={13} color={subColor} />
+            )}
+            <Text style={[styles.mealActionBtnText, { color: recipeSaved ? colors.success : subColor }]}>
+              {recipeSaved ? 'Saved ✓' : 'Save to Favorites'}
+            </Text>
+          </Pressable>
+        ) : onSaveMeal ? (
+          <Pressable
+            style={[styles.saveMealBtn, { borderColor: colors.primary }]}
+            onPress={() => {
+              console.log('[SocialPostCard] Save to Food pressed — post_id:', post.id);
+              onSaveMeal(post);
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save to Food</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 export function timeAgo(dateStr: string): string {
@@ -185,65 +377,29 @@ export default function SocialPostCard({
 
     if (typeV2 === 'meal') {
       const mealPhotoUrl = post.meal_photo_url ?? post.image_url;
+      const recipeData = post.meal_recipe_data;
+      const recipeName = recipeData?.name ?? captionText;
+      const servingsDisplay = post.meal_servings != null ? String(post.meal_servings) : null;
+      const captionDiffersFromName = captionText && recipeData?.name && captionText !== recipeData.name;
+
       return (
-        <View>
-          {mealPhotoUrl ? (
-            <Image
-              source={resolveImageSource(mealPhotoUrl)}
-              style={styles.mealPhoto}
-              resizeMode="cover"
-            />
-          ) : null}
-          {captionText ? (
-            <Text style={[styles.mealName, { color: textColor }]}>{captionText}</Text>
-          ) : null}
-          <View style={styles.mealMacroPills}>
-            {mealCalDisplay ? (
-              <View style={[styles.macroPill, { backgroundColor: colors.calories + '18' }]}>
-                <Text style={[styles.macroPillText, { color: colors.calories }]}>
-                  {mealCalDisplay}
-                  {' kcal'}
-                </Text>
-              </View>
-            ) : null}
-            {mealProtDisplay ? (
-              <View style={[styles.macroPill, { backgroundColor: colors.protein + '18' }]}>
-                <Text style={[styles.macroPillText, { color: colors.protein }]}>
-                  {mealProtDisplay}
-                  {'g P'}
-                </Text>
-              </View>
-            ) : null}
-            {mealCarbDisplay ? (
-              <View style={[styles.macroPill, { backgroundColor: colors.carbs + '18' }]}>
-                <Text style={[styles.macroPillText, { color: colors.carbs }]}>
-                  {mealCarbDisplay}
-                  {'g C'}
-                </Text>
-              </View>
-            ) : null}
-            {mealFatDisplay ? (
-              <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
-                <Text style={[styles.macroPillText, { color: colors.fats }]}>
-                  {mealFatDisplay}
-                  {'g F'}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          {onSaveMeal ? (
-            <Pressable
-              style={[styles.saveMealBtn, { borderColor: colors.primary }]}
-              onPress={() => {
-                console.log('[SocialPostCard] Save to Food pressed — post_id:', post.id);
-                onSaveMeal(post);
-              }}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save to Food</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <MealV2Body
+          post={post}
+          isDark={isDark}
+          textColor={textColor}
+          subColor={subColor}
+          mealPhotoUrl={mealPhotoUrl ?? null}
+          recipeName={recipeName ?? null}
+          captionDiffersFromName={captionDiffersFromName ?? false}
+          captionText={captionText}
+          mealCalDisplay={mealCalDisplay}
+          mealProtDisplay={mealProtDisplay}
+          mealCarbDisplay={mealCarbDisplay}
+          mealFatDisplay={mealFatDisplay}
+          servingsDisplay={servingsDisplay}
+          onSaveMeal={onSaveMeal ?? null}
+          router={router}
+        />
       );
     }
 
@@ -774,6 +930,8 @@ const styles = StyleSheet.create({
   mealPhoto: {
     width: '100%',
     height: 200,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   mealName: {
     fontSize: 15,
@@ -788,6 +946,37 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  mealServings: {
+    fontSize: 12,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 4,
+  },
+  mealCaption: {
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 4,
+  },
+  mealActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  mealActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  mealActionBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   saveMealBtn: {
     borderWidth: 1,

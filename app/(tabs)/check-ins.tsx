@@ -110,6 +110,8 @@ interface CommunityPost {
   meal_protein?: number | null;
   meal_carbs?: number | null;
   meal_fat?: number | null;
+  meal_recipe_id?: string | null;
+  meal_recipe_data?: any | null;
   progress_stats?: Record<string, unknown> | null;
   auto_post_type?: string | null;
 }
@@ -145,17 +147,39 @@ interface Commitment {
   requester?: FollowingUser | null;
 }
 
-interface MealIngredient {
-  name: string;
-  amount: string;
-}
-
 interface ProgressStat {
   key: string;
   label: string;
   emoji: string;
   value: string | number;
   selected: boolean;
+}
+
+interface RecipeResult {
+  id: string;
+  name: string;
+  description?: string | null;
+  image_url?: string | null;
+  source_name?: string | null;
+  source_url?: string | null;
+  prep_time_minutes?: number | null;
+  servings?: number | null;
+  calories_per_serving?: number | null;
+  protein_per_serving?: number | null;
+  carbs_per_serving?: number | null;
+  fat_per_serving?: number | null;
+  fiber_per_serving?: number | null;
+  ingredients?: string[] | null;
+  instructions?: string[] | null;
+  reviews?: unknown[] | null;
+  tags?: string[] | null;
+  is_saved?: boolean;
+}
+
+interface SavedRecipeRow {
+  id: string;
+  recipe_data: RecipeResult;
+  created_at: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -256,6 +280,155 @@ function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bgColor, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ color: '#fff', fontSize: size * 0.35, fontWeight: '700' }}>{initials}</Text>
+    </View>
+  );
+}
+
+// ─── MealPostCardBody sub-component ──────────────────────────────────────────
+
+interface MealPostCardBodyProps {
+  post: CommunityPost;
+  isDark: boolean;
+  textColor: string;
+  secondaryColor: string;
+  mealPhotoUrl: string | null;
+  recipeName: string | null;
+  captionDiffersFromName: boolean;
+  calDisplay: string | null;
+  protDisplay: string | null;
+  carbDisplay: string | null;
+  fatDisplay: string | null;
+  servingsDisplay: string | null;
+  router: ReturnType<typeof useRouter>;
+}
+
+function MealPostCardBody({
+  post,
+  isDark,
+  textColor,
+  secondaryColor,
+  mealPhotoUrl,
+  recipeName,
+  captionDiffersFromName,
+  calDisplay,
+  protDisplay,
+  carbDisplay,
+  fatDisplay,
+  servingsDisplay,
+  router,
+}: MealPostCardBodyProps) {
+  const [recipeSaved, setRecipeSaved] = useState(false);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+
+  const handleViewRecipe = () => {
+    console.log('[Community] View Recipe pressed — post_id:', post.id, 'recipe_id:', post.meal_recipe_id);
+    if (post.meal_recipe_id) {
+      router.push(`/recipe-finder-detail?recipe_id=${post.meal_recipe_id}`);
+    }
+  };
+
+  const handleSaveToFavorites = async () => {
+    const recipeData = post.meal_recipe_data;
+    if (!recipeData) {
+      console.log('[Community] Save to Favorites — no recipe_data on post:', post.id);
+      return;
+    }
+    console.log('[Community] Save to Favorites pressed — post_id:', post.id, 'recipe_id:', recipeData.id);
+    setSavingRecipe(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.from('saved_recipes').upsert({
+        id: recipeData.id,
+        user_id: user.id,
+        recipe_data: recipeData,
+        created_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.error('[Community] Save to Favorites error:', error.message);
+        Alert.alert('Error', 'Could not save recipe.');
+      } else {
+        console.log('[Community] Recipe saved to favorites — recipe_id:', recipeData.id);
+        setRecipeSaved(true);
+      }
+    } catch (e) {
+      console.error('[Community] Save to Favorites exception:', e);
+    } finally {
+      setSavingRecipe(false);
+    }
+  };
+
+  const hasMacros = calDisplay || protDisplay || carbDisplay || fatDisplay;
+
+  return (
+    <View>
+      {mealPhotoUrl ? (
+        <Image
+          source={resolveImageSource(mealPhotoUrl)}
+          style={{ width: '100%', height: 200, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
+          resizeMode="cover"
+        />
+      ) : null}
+      {recipeName ? (
+        <Text style={{ fontSize: 15, fontWeight: '600', color: textColor, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 4 }}>
+          {recipeName}
+        </Text>
+      ) : null}
+      {hasMacros ? (
+        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+          {calDisplay ? (
+            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.calories + '18' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.calories }}>{'🔥 '}{calDisplay}{' kcal'}</Text>
+            </View>
+          ) : null}
+          {protDisplay ? (
+            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.protein + '18' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.protein }}>{'💪 '}{protDisplay}{'g'}</Text>
+            </View>
+          ) : null}
+          {carbDisplay ? (
+            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.carbs + '18' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.carbs }}>{'🍞 '}{carbDisplay}{'g'}</Text>
+            </View>
+          ) : null}
+          {fatDisplay ? (
+            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.fats + '18' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.fats }}>{'🥑 '}{fatDisplay}{'g'}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {servingsDisplay ? (
+        <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: spacing.md, paddingBottom: 4 }}>
+          {servingsDisplay}{' serving(s)'}
+        </Text>
+      ) : null}
+      {captionDiffersFromName && post.content ? (
+        <Text style={{ fontSize: 13, color: textColor, paddingHorizontal: spacing.md, paddingBottom: 4, lineHeight: 18 }}>
+          {post.content}
+        </Text>
+      ) : null}
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: spacing.md, paddingBottom: spacing.sm, flexWrap: 'wrap' }}>
+        {post.meal_recipe_id ? (
+          <TouchableOpacity
+            style={[styles.mealActionBtn, { borderColor: colors.primary }]}
+            onPress={handleViewRecipe}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>View Recipe</Text>
+          </TouchableOpacity>
+        ) : null}
+        {post.meal_recipe_data ? (
+          <TouchableOpacity
+            style={[styles.mealActionBtn, { borderColor: recipeSaved ? colors.success : secondaryColor, opacity: savingRecipe ? 0.6 : 1 }]}
+            onPress={handleSaveToFavorites}
+            disabled={savingRecipe || recipeSaved}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '600', color: recipeSaved ? colors.success : secondaryColor }}>
+              {recipeSaved ? 'Saved ✓' : 'Save to Favorites'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -368,44 +541,26 @@ function PostCard({
       const protDisplay = post.meal_protein != null ? Math.round(Number(post.meal_protein)).toString() : null;
       const carbDisplay = post.meal_carbs != null ? Math.round(Number(post.meal_carbs)).toString() : null;
       const fatDisplay = post.meal_fat != null ? Math.round(Number(post.meal_fat)).toString() : null;
+      const recipeData = post.meal_recipe_data;
+      const recipeName = recipeData?.name ?? post.content;
+      const servingsDisplay = post.meal_servings != null ? String(post.meal_servings) : null;
+      const captionDiffersFromName = post.content && recipeData?.name && post.content !== recipeData.name;
       return (
-        <View>
-          {mealPhotoUrl ? (
-            <Image source={resolveImageSource(mealPhotoUrl)} style={{ width: '100%', height: 200 }} resizeMode="cover" />
-          ) : null}
-          {post.content ? (
-            <Text style={{ fontSize: 15, fontWeight: '600', color: textColor, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 4 }}>
-              {post.content}
-            </Text>
-          ) : null}
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
-            {calDisplay ? (
-              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.calories + '18' }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.calories }}>{calDisplay}{' kcal'}</Text>
-              </View>
-            ) : null}
-            {protDisplay ? (
-              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.protein + '18' }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.protein }}>{protDisplay}{'g P'}</Text>
-              </View>
-            ) : null}
-            {carbDisplay ? (
-              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.carbs + '18' }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.carbs }}>{carbDisplay}{'g C'}</Text>
-              </View>
-            ) : null}
-            {fatDisplay ? (
-              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.fats + '18' }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.fats }}>{fatDisplay}{'g F'}</Text>
-              </View>
-            ) : null}
-          </View>
-          {showSaveMeal ? (
-            <TouchableOpacity style={[styles.saveMealBtn, { borderColor: colors.primary }]} onPress={handleSaveMealPress}>
-              <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save to Food</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        <MealPostCardBody
+          post={post}
+          isDark={isDark}
+          textColor={textColor}
+          secondaryColor={secondaryColor}
+          mealPhotoUrl={mealPhotoUrl ?? null}
+          recipeName={recipeName ?? null}
+          captionDiffersFromName={captionDiffersFromName ?? false}
+          calDisplay={calDisplay}
+          protDisplay={protDisplay}
+          carbDisplay={carbDisplay}
+          fatDisplay={fatDisplay}
+          servingsDisplay={servingsDisplay}
+          router={router}
+        />
       );
     }
 
@@ -650,6 +805,7 @@ function ComposerSheet({
   currentUserFirstName,
   currentUserAvatar,
 }: ComposerSheetProps) {
+  const router = useRouter();
   const [composerType, setComposerType] = useState<ComposerType>('update');
   // Update fields
   const [updateText, setUpdateText] = useState('');
@@ -657,15 +813,11 @@ function ComposerSheet({
   // Question fields
   const [questionTitle, setQuestionTitle] = useState('');
   const [questionDetails, setQuestionDetails] = useState('');
-  // Meal fields
-  const [mealImageUri, setMealImageUri] = useState<string | null>(null);
-  const [mealName, setMealName] = useState('');
-  const [mealIngredients, setMealIngredients] = useState<MealIngredient[]>([{ name: '', amount: '' }]);
-  const [mealServings, setMealServings] = useState('1');
-  const [mealCalories, setMealCalories] = useState('');
-  const [mealProtein, setMealProtein] = useState('');
-  const [mealCarbs, setMealCarbs] = useState('');
-  const [mealFat, setMealFat] = useState('');
+  // Meal fields — recipe picker
+  const [savedRecipes, setSavedRecipes] = useState<SavedRecipeRow[]>([]);
+  const [savedRecipesLoading, setSavedRecipesLoading] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<RecipeResult | null>(null);
+  const [mealCaption, setMealCaption] = useState('');
   // Progress fields
   const [progressStats, setProgressStats] = useState<ProgressStat[]>([]);
   const [progressText, setProgressText] = useState('');
@@ -679,12 +831,37 @@ function ComposerSheet({
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
 
-  // Load progress stats when switching to progress tab
+  // Load data when switching composer tabs
   useEffect(() => {
     if (composerType === 'progress' && progressStats.length === 0) {
       loadProgressStats();
     }
+    if (composerType === 'meal' && savedRecipes.length === 0 && !savedRecipesLoading) {
+      loadSavedRecipes();
+    }
   }, [composerType]);
+
+  const loadSavedRecipes = async () => {
+    console.log('[Community] Loading saved recipes for meal composer, user:', currentUserId);
+    setSavedRecipesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('saved_recipes')
+        .select('id, recipe_data, created_at')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('[Community] loadSavedRecipes error:', error.message);
+      } else {
+        console.log('[Community] Saved recipes loaded:', data?.length ?? 0);
+        setSavedRecipes((data as SavedRecipeRow[]) ?? []);
+      }
+    } catch (e) {
+      console.error('[Community] loadSavedRecipes exception:', e);
+    } finally {
+      setSavedRecipesLoading(false);
+    }
+  };
 
   const loadProgressStats = async () => {
     console.log('[Community] Loading progress stats for composer');
@@ -743,20 +920,6 @@ function ComposerSheet({
     }
   };
 
-  const addIngredient = () => {
-    console.log('[Community] Add ingredient row pressed');
-    setMealIngredients(prev => [...prev, { name: '', amount: '' }]);
-  };
-
-  const removeIngredient = (idx: number) => {
-    console.log('[Community] Remove ingredient row pressed, index:', idx);
-    setMealIngredients(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const updateIngredient = (idx: number, field: 'name' | 'amount', value: string) => {
-    setMealIngredients(prev => prev.map((ing, i) => i === idx ? { ...ing, [field]: value } : ing));
-  };
-
   const toggleProgressStat = (key: string) => {
     console.log('[Community] Progress stat toggled:', key);
     setProgressStats(prev => prev.map(s => s.key === key ? { ...s, selected: !s.selected } : s));
@@ -765,7 +928,7 @@ function ComposerSheet({
   const canPost = () => {
     if (composerType === 'update') return updateText.trim().length > 0;
     if (composerType === 'question') return questionTitle.trim().length > 0;
-    if (composerType === 'meal') return mealImageUri !== null;
+    if (composerType === 'meal') return selectedRecipe !== null;
     if (composerType === 'progress') return progressStats.some(s => s.selected);
     return false;
   };
@@ -795,18 +958,20 @@ function ComposerSheet({
           is_public: true,
         };
       } else if (composerType === 'meal') {
-        const ingredients = mealIngredients.filter(i => i.name.trim());
+        if (!selectedRecipe) throw new Error('No recipe selected');
+        console.log('[Community] Posting meal with recipe:', selectedRecipe.id, selectedRecipe.name);
         postData = {
           post_type: 'meal',
           post_type_v2: 'meal',
-          content: mealName.trim() || 'Meal',
-          meal_photo_url: mealImageUri ?? undefined,
-          meal_ingredients: ingredients.map(i => `${i.amount} ${i.name}`.trim()),
-          meal_servings: mealServings ? Number(mealServings) : undefined,
-          meal_calories: mealCalories ? Number(mealCalories) : undefined,
-          meal_protein: mealProtein ? Number(mealProtein) : undefined,
-          meal_carbs: mealCarbs ? Number(mealCarbs) : undefined,
-          meal_fat: mealFat ? Number(mealFat) : undefined,
+          content: mealCaption.trim() || selectedRecipe.name,
+          meal_photo_url: selectedRecipe.image_url ?? undefined,
+          meal_servings: selectedRecipe.servings ?? undefined,
+          meal_calories: selectedRecipe.calories_per_serving ?? undefined,
+          meal_protein: selectedRecipe.protein_per_serving ?? undefined,
+          meal_carbs: selectedRecipe.carbs_per_serving ?? undefined,
+          meal_fat: selectedRecipe.fat_per_serving ?? undefined,
+          meal_recipe_id: selectedRecipe.id,
+          meal_recipe_data: selectedRecipe,
           is_public: true,
         };
       } else {
@@ -855,6 +1020,8 @@ function ComposerSheet({
         meal_protein: postData.meal_protein ?? null,
         meal_carbs: postData.meal_carbs ?? null,
         meal_fat: postData.meal_fat ?? null,
+        meal_recipe_id: (postData as any).meal_recipe_id ?? null,
+        meal_recipe_data: (postData as any).meal_recipe_data ?? null,
         progress_stats: (postData.progress_stats as Record<string, unknown>) ?? null,
       };
 
@@ -863,14 +1030,8 @@ function ComposerSheet({
       setUpdateImageUri(null);
       setQuestionTitle('');
       setQuestionDetails('');
-      setMealImageUri(null);
-      setMealName('');
-      setMealIngredients([{ name: '', amount: '' }]);
-      setMealServings('1');
-      setMealCalories('');
-      setMealProtein('');
-      setMealCarbs('');
-      setMealFat('');
+      setSelectedRecipe(null);
+      setMealCaption('');
       setProgressText('');
       setProgressStats(prev => prev.map(s => ({ ...s, selected: false })));
 
@@ -1017,103 +1178,113 @@ function ComposerSheet({
           {/* ── MEAL ── */}
           {composerType === 'meal' && (
             <View style={{ gap: spacing.sm }}>
-              {/* Photo picker */}
-              <TouchableOpacity
-                style={[styles.mealPhotoPicker, { borderColor, backgroundColor: isDark ? colors.cardDark : '#F9FAFB' }]}
-                onPress={() => handlePickImage(true)}
-              >
-                {mealImageUri ? (
-                  <View style={{ position: 'relative' }}>
-                    <Image source={resolveImageSource(mealImageUri)} style={{ width: '100%', height: 180, borderRadius: borderRadius.md }} resizeMode="cover" />
-                    <TouchableOpacity style={styles.removeImageBtn} onPress={() => {
-                      console.log('[Community] Meal image removed');
-                      setMealImageUri(null);
-                    }}>
-                      <X size={14} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={{ alignItems: 'center', gap: 8, paddingVertical: spacing.xl }}>
-                    <UtensilsCrossed size={32} color={secondaryColor} />
-                    <Text style={{ color: secondaryColor, fontSize: 14 }}>Add meal photo (required)</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* Meal name */}
-              <TextInput
-                style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]}
-                placeholder="Meal name..."
-                placeholderTextColor={secondaryColor}
-                value={mealName}
-                onChangeText={setMealName}
-              />
-
-              {/* Ingredients */}
-              <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryColor, marginTop: 4 }}>Ingredients</Text>
-              {mealIngredients.map((ing, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-                  <TextInput
-                    style={[styles.fieldInput, { flex: 1, color: textColor, borderColor, backgroundColor: cardBg }]}
-                    placeholder="Ingredient..."
-                    placeholderTextColor={secondaryColor}
-                    value={ing.name}
-                    onChangeText={v => updateIngredient(idx, 'name', v)}
-                  />
-                  <TextInput
-                    style={[styles.fieldInput, { width: 80, color: textColor, borderColor, backgroundColor: cardBg }]}
-                    placeholder="Amount"
-                    placeholderTextColor={secondaryColor}
-                    value={ing.amount}
-                    onChangeText={v => updateIngredient(idx, 'amount', v)}
-                  />
-                  {mealIngredients.length > 1 ? (
-                    <TouchableOpacity onPress={() => removeIngredient(idx)} hitSlop={8}>
-                      <X size={18} color={secondaryColor} />
-                    </TouchableOpacity>
+              <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }}>
+                Pick a saved recipe to share:
+              </Text>
+              {savedRecipesLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+              ) : savedRecipes.length === 0 ? (
+                <View style={{ alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl }}>
+                  <UtensilsCrossed size={40} color={secondaryColor} />
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: textColor, textAlign: 'center' }}>No saved recipes yet</Text>
+                  <Text style={{ fontSize: 13, color: secondaryColor, textAlign: 'center' }}>Save recipes from the Recipes tab to share them here.</Text>
+                  <TouchableOpacity
+                    style={[styles.browseRecipesBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => {
+                      console.log('[Community] Browse Recipes button pressed — navigating to (home) tab');
+                      onClose();
+                      router.push('/(tabs)/(home)');
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Browse Recipes</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  {savedRecipes.map((row) => {
+                    const recipe = row.recipe_data;
+                    const isSelected = selectedRecipe?.id === recipe.id;
+                    const calDisplay = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)).toString() : null;
+                    const protDisplay = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)).toString() : null;
+                    const carbDisplay = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)).toString() : null;
+                    const fatDisplay = recipe.fat_per_serving != null ? Math.round(Number(recipe.fat_per_serving)).toString() : null;
+                    return (
+                      <TouchableOpacity
+                        key={row.id}
+                        onPress={() => {
+                          console.log('[Community] Recipe card selected:', recipe.id, recipe.name);
+                          setSelectedRecipe(isSelected ? null : recipe);
+                        }}
+                        style={[
+                          styles.recipePickerCard,
+                          {
+                            borderColor: isSelected ? colors.primary : borderColor,
+                            backgroundColor: isSelected ? colors.primary + '10' : cardBg,
+                          },
+                        ]}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
+                          {recipe.image_url ? (
+                            <Image
+                              source={resolveImageSource(recipe.image_url)}
+                              style={{ width: 72, height: 72, borderRadius: borderRadius.md }}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={{ width: 72, height: 72, borderRadius: borderRadius.md, backgroundColor: isDark ? '#2A2A2A' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}>
+                              <UtensilsCrossed size={28} color={secondaryColor} />
+                            </View>
+                          )}
+                          <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: textColor }} numberOfLines={2}>{recipe.name}</Text>
+                            <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+                              {calDisplay ? (
+                                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.calories + '18' }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.calories }}>{calDisplay}{' kcal'}</Text>
+                                </View>
+                              ) : null}
+                              {protDisplay ? (
+                                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.protein + '18' }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.protein }}>{protDisplay}{'g P'}</Text>
+                                </View>
+                              ) : null}
+                              {carbDisplay ? (
+                                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.carbs + '18' }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.carbs }}>{carbDisplay}{'g C'}</Text>
+                                </View>
+                              ) : null}
+                              {fatDisplay ? (
+                                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.fats + '18' }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.fats }}>{fatDisplay}{'g F'}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            {recipe.servings != null ? (
+                              <Text style={{ fontSize: 11, color: secondaryColor }}>{String(recipe.servings)}{' serving(s)'}</Text>
+                            ) : null}
+                          </View>
+                          {isSelected ? (
+                            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                              <Check size={13} color="#fff" />
+                            </View>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {selectedRecipe ? (
+                    <TextInput
+                      style={[styles.composeInput, { color: textColor, borderColor, marginTop: spacing.sm }]}
+                      placeholder="Add a caption (optional)..."
+                      placeholderTextColor={secondaryColor}
+                      multiline
+                      value={mealCaption}
+                      onChangeText={setMealCaption}
+                    />
                   ) : null}
-                </View>
-              ))}
-              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }} onPress={addIngredient}>
-                <Plus size={16} color={colors.primary} />
-                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>Add ingredient</Text>
-              </TouchableOpacity>
-
-              {/* Servings */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 4 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryColor, width: 80 }}>Servings</Text>
-                <TextInput
-                  style={[styles.fieldInput, { flex: 1, color: textColor, borderColor, backgroundColor: cardBg }]}
-                  placeholder="1"
-                  placeholderTextColor={secondaryColor}
-                  keyboardType="decimal-pad"
-                  value={mealServings}
-                  onChangeText={setMealServings}
-                />
-              </View>
-
-              {/* Macros */}
-              <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryColor, marginTop: 4 }}>Nutrition (optional)</Text>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Calories</Text>
-                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealCalories} onChangeText={setMealCalories} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Protein (g)</Text>
-                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealProtein} onChangeText={setMealProtein} />
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Carbs (g)</Text>
-                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealCarbs} onChangeText={setMealCarbs} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Fat (g)</Text>
-                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealFat} onChangeText={setMealFat} />
-                </View>
-              </View>
+                </>
+              )}
             </View>
           )}
 
@@ -2728,6 +2899,24 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderRadius: borderRadius.md,
     overflow: 'hidden',
+  },
+  recipePickerCard: {
+    borderWidth: 1.5,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    overflow: 'hidden',
+  },
+  browseRecipesBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
+    alignSelf: 'center',
+  },
+  mealActionBtn: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
   },
   progressStatRow: {
     flexDirection: 'row',
