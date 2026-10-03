@@ -23,6 +23,7 @@ import { calcDailyScore } from '@/utils/consistencyMath';
 import { calcMacros } from '@/utils/macros';
 import { toLocalDateString } from '@/utils/dateUtils';
 import ProgressCircle from '@/components/ProgressCircle';
+import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -106,6 +107,9 @@ export default function SocialProfileViewScreen() {
   const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
   const [rangeDayCount, setRangeDayCount] = useState(1);
+  const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  const [showRangePicker, setShowRangePicker] = useState(false);
 
   // UI state
   const [followLoading, setFollowLoading] = useState(false);
@@ -167,7 +171,7 @@ export default function SocialProfileViewScreen() {
     }
   };
 
-  const loadNutritionData = async (targetUserId: string, range: NutritionRange = 'today') => {
+  const loadNutritionData = async (targetUserId: string, range: NutritionRange = 'today', customStart?: Date, customEnd?: Date) => {
     try {
       console.log('[SocialProfileView] loadNutritionData — start for userId:', targetUserId, 'range:', range);
       const today = new Date();
@@ -185,14 +189,21 @@ export default function SocialProfileViewScreen() {
         startDateStr = toLocalDateString(start);
         endDateStr = toLocalDateString(today);
         dayCount = 7;
-      } else {
+      } else if (range === '30d') {
         const start = new Date(today);
         start.setDate(start.getDate() - 29);
         startDateStr = toLocalDateString(start);
         endDateStr = toLocalDateString(today);
         dayCount = 30;
+      } else {
+        // custom
+        const s = customStart ?? customStartDate;
+        const e = customEnd ?? customEndDate;
+        startDateStr = toLocalDateString(s);
+        endDateStr = toLocalDateString(e);
+        const msPerDay = 1000 * 60 * 60 * 24;
+        dayCount = Math.max(1, Math.round((e.getTime() - s.getTime()) / msPerDay) + 1);
       }
-
       setRangeDayCount(dayCount);
 
       const { data: mealsData } = await supabase
@@ -243,8 +254,20 @@ export default function SocialProfileViewScreen() {
 
   const handleRangeChange = (range: NutritionRange) => {
     console.log('[SocialProfileView] handleRangeChange — range selected:', range);
+    if (range === 'custom') {
+      setShowRangePicker(true);
+      return;
+    }
     setNutritionRange(range);
     if (userId) loadNutritionData(userId, range);
+  };
+
+  const handleCustomRangeSelect = (startDate: Date, endDate: Date) => {
+    console.log('[SocialProfileView] handleCustomRangeSelect — startDate:', startDate, 'endDate:', endDate);
+    setCustomStartDate(startDate);
+    setCustomEndDate(endDate);
+    setNutritionRange('custom');
+    if (userId) loadNutritionData(userId, 'custom', startDate, endDate);
   };
 
   const loadData = useCallback(async () => {
@@ -789,21 +812,21 @@ export default function SocialProfileViewScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.rangeDropdownLabel, { color: secondaryText }]}>
-                  {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7 Days' : '30 Days'}
+                  {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7 Days' : nutritionRange === '30d' ? '30 Days' : 'Custom'}
                 </Text>
                 <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="expand_more" size={12} color={secondaryText} />
               </TouchableOpacity>
               {nutritionRange !== 'today' && (
                 <Text style={[styles.avgLabel, { color: secondaryText }]}>
-                  {nutritionRange === '7d' ? 'Daily average over 7 days' : 'Daily average over 30 days'}
+                  {nutritionRange === '7d' ? 'Daily average over 7 days' : nutritionRange === '30d' ? 'Daily average over 30 days' : `Daily average over ${rangeDayCount} day${rangeDayCount !== 1 ? 's' : ''}`}
                 </Text>
               )}
             </View>
 
             {rangeDropdownOpen && (
               <View style={[styles.rangeDropdownMenu, { backgroundColor: cardBg, borderColor }]}>
-                {(['today', '7d', '30d'] as NutritionRange[]).map((key) => {
-                  const label = key === 'today' ? 'Today' : key === '7d' ? '7 Days' : '30 Days';
+                {(['today', '7d', '30d', 'custom'] as NutritionRange[]).map((key) => {
+                  const label = key === 'today' ? 'Today' : key === '7d' ? '7 Days' : key === '30d' ? '30 Days' : 'Custom';
                   const isActive = nutritionRange === key;
                   return (
                     <TouchableOpacity
@@ -860,6 +883,14 @@ export default function SocialProfileViewScreen() {
           PostsContent
         )}
       </ScrollView>
+
+      <CalendarDateRangePicker
+        visible={showRangePicker}
+        onClose={() => setShowRangePicker(false)}
+        onSelect={handleCustomRangeSelect}
+        initialStartDate={customStartDate}
+        initialEndDate={customEndDate}
+      />
 
       {/* Dismiss dropdown overlay */}
       {showFollowingDropdown && (
