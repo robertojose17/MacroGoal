@@ -702,6 +702,10 @@ export default function RootLayout() {
                   }}
                 />
                 <Stack.Screen
+                  name="social-profile-view"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
                   name="social-post-detail"
                   options={{
                     headerShown: true,

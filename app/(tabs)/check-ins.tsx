@@ -334,17 +334,37 @@ function PostCard({
     >
       {/* Header */}
       <View style={styles.postHeader}>
-        <UserAvatar
-          url={post.author?.avatar_url ?? null}
-          name={post.author?.full_name ?? null}
-          username={post.author?.username ?? 'u'}
-          size={40}
-        />
+        <TouchableOpacity
+          onPress={() => {
+            if (post.user_id && post.user_id !== currentUserId) {
+              console.log('[Community] Post avatar tapped, navigating to profile:', post.user_id);
+              router.push({ pathname: '/social-profile-view', params: { userId: post.user_id } });
+            }
+          }}
+          disabled={!post.user_id || post.user_id === currentUserId}
+        >
+          <UserAvatar
+            url={post.author?.avatar_url ?? null}
+            name={post.author?.full_name ?? null}
+            username={post.author?.username ?? 'u'}
+            size={40}
+          />
+        </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-            <Text style={[styles.postAuthorName, { color: textColor }]}>
-              {authorName}
-            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (post.user_id && post.user_id !== currentUserId) {
+                  console.log('[Community] Post username tapped, navigating to profile:', post.user_id);
+                  router.push({ pathname: '/social-profile-view', params: { userId: post.user_id } });
+                }
+              }}
+              disabled={!post.user_id || post.user_id === currentUserId}
+            >
+              <Text style={[styles.postAuthorName, { color: textColor }]}>
+                {authorName}
+              </Text>
+            </TouchableOpacity>
             {post.is_founder_post && (
               <View style={styles.founderBadge}>
                 <Text style={styles.founderBadgeText}>Founder</Text>
@@ -1616,7 +1636,7 @@ export default function CommunityScreen() {
                   ]}
                   onPress={() => {
                     console.log('[Community] Following user tapped:', user.username);
-                    router.push({ pathname: '/social-profile', params: { userId: user.id } });
+                    router.push({ pathname: '/social-profile-view', params: { userId: user.id } });
                   }}
                 >
                   <UserAvatar url={user.avatar_url} name={user.name} username={user.username} size={44} />
