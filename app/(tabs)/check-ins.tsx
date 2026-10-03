@@ -25,7 +25,7 @@ import {
   Alert,
   TouchableOpacity,
   Image,
-  Share,
+  Switch,
   ImageSourcePropType,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -43,6 +43,16 @@ import {
   Lock,
   ChevronRight,
   Check,
+  Settings,
+  MessageSquare,
+  HelpCircle,
+  UtensilsCrossed,
+  TrendingUp,
+  Bookmark,
+  Trash2,
+  Flag,
+  UserX,
+  Pencil,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -54,12 +64,15 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { autoShareDailySummary } from '@/utils/autoShareAchievements';
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { createPost, savePost, unsavePost } from '@/utils/socialApi';
+import type { SocialPost } from '@/utils/socialApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type CommunityTab = 'feed' | 'friends' | 'club';
 type PostCategory = 'general' | 'small_win' | 'meal_idea' | 'question' | 'progress';
 type PostSection = 'feed' | 'club';
+type ComposerType = 'update' | 'question' | 'meal' | 'progress';
 
 interface PostAuthor {
   id: string;
@@ -82,10 +95,23 @@ interface CommunityPost {
   is_founder_post: boolean;
   likes_count: number;
   comments_count: number;
+  saves_count?: number;
   created_at: string;
   author: PostAuthor | null;
   liked_by_me: boolean;
+  saved_by_me?: boolean;
   top_comment?: TopComment | null;
+  // v2 fields
+  post_type_v2?: string | null;
+  question_title?: string | null;
+  question_details?: string | null;
+  meal_photo_url?: string | null;
+  meal_calories?: number | null;
+  meal_protein?: number | null;
+  meal_carbs?: number | null;
+  meal_fat?: number | null;
+  progress_stats?: Record<string, unknown> | null;
+  auto_post_type?: string | null;
 }
 
 interface TopComment {
@@ -117,6 +143,19 @@ interface Commitment {
   status: 'active' | 'pending' | 'completed';
   partner?: FollowingUser | null;
   requester?: FollowingUser | null;
+}
+
+interface MealIngredient {
+  name: string;
+  amount: string;
+}
+
+interface ProgressStat {
+  key: string;
+  label: string;
+  emoji: string;
+  value: string | number;
+  selected: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -192,7 +231,6 @@ interface AvatarProps {
 function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
   useEffect(() => {
-    console.log('[UserAvatar] url changed, resetting hasError. url:', url);
     setHasError(false);
   }, [url]);
   const isEmpty = (!name || !name.trim()) && (!username || !username.trim());
@@ -204,48 +242,20 @@ function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
         source={{ uri: url }}
         key={url}
         style={{ width: size, height: size, borderRadius: size / 2 }}
-        onError={() => {
-          console.log('[UserAvatar] Image load error for url:', url);
-          setHasError(true);
-        }}
+        onError={() => setHasError(true)}
       />
     );
   }
   if (isEmpty) {
     return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: '#9CA3AF',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <IconSymbol
-          ios_icon_name="person.fill"
-          android_material_icon_name="person"
-          size={size * 0.5}
-          color="#fff"
-        />
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#9CA3AF', alignItems: 'center', justifyContent: 'center' }}>
+        <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={size * 0.5} color="#fff" />
       </View>
     );
   }
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: bgColor,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ color: '#fff', fontSize: size * 0.35, fontWeight: '700' }}>
-        {initials}
-      </Text>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bgColor, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#fff', fontSize: size * 0.35, fontWeight: '700' }}>{initials}</Text>
     </View>
   );
 }
@@ -257,9 +267,11 @@ interface PostCardProps {
   isDark: boolean;
   currentUserId: string;
   onLike: (postId: string, liked: boolean) => void;
+  onSave: (postId: string, savedByMe: boolean) => void;
   onReport: (postId: string) => void;
   onBlock: (userId: string) => void;
   onDelete: (postId: string) => void;
+  onSaveMeal?: (post: CommunityPost) => void;
   showSaveMeal?: boolean;
   showTopReply?: boolean;
 }
@@ -269,12 +281,15 @@ function PostCard({
   isDark,
   currentUserId,
   onLike,
+  onSave,
   onReport,
   onBlock,
   onDelete,
+  onSaveMeal,
   showSaveMeal = false,
   showTopReply = false,
 }: PostCardProps) {
+  const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
@@ -285,15 +300,24 @@ function PostCard({
   const catColor = CATEGORY_COLORS[post.category] || '#6B7280';
   const catLabel = CATEGORY_LABELS[post.category] || post.category;
   const isOwn = post.user_id === currentUserId;
+  const isAutoPost = post.post_type_v2 === 'auto';
+
+  const autoCardBg = isDark ? '#1E2030' : '#F8F9FC';
+  const finalCardBg = isAutoPost ? autoCardBg : cardBg;
 
   const handleMenuPress = () => {
-    console.log('[Community] Three-dot menu opened for post:', post.id);
+    console.log('[Community] Three-dot menu opened for post:', post.id, 'isOwn:', isOwn);
     setMenuVisible(true);
   };
 
   const handleLike = () => {
     console.log('[Community] Like toggled for post:', post.id, 'currently liked:', post.liked_by_me);
     onLike(post.id, post.liked_by_me);
+  };
+
+  const handleSave = () => {
+    console.log('[Community] Save toggled for post:', post.id, 'currently saved:', post.saved_by_me);
+    onSave(post.id, post.saved_by_me ?? false);
   };
 
   const handleReport = () => {
@@ -314,18 +338,125 @@ function PostCard({
     onDelete(post.id);
   };
 
-  const handleSaveMeal = () => {
+  const handleSaveMealPress = () => {
     console.log('[Community] Save meal pressed for post:', post.id, 'food:', post.food_name);
-    Alert.alert('Meal saved!');
+    if (onSaveMeal) onSaveMeal(post);
+    else Alert.alert('Meal saved!');
+  };
+
+  const renderV2Body = () => {
+    if (post.post_type_v2 === 'question') {
+      return (
+        <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: 6 }}>
+          {post.question_title ? (
+            <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, lineHeight: 22 }}>
+              {post.question_title}
+            </Text>
+          ) : null}
+          {post.question_details ? (
+            <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }} numberOfLines={3}>
+              {post.question_details}
+            </Text>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (post.post_type_v2 === 'meal') {
+      const mealPhotoUrl = post.meal_photo_url ?? post.image_url;
+      const calDisplay = post.meal_calories != null ? Math.round(Number(post.meal_calories)).toString() : null;
+      const protDisplay = post.meal_protein != null ? Math.round(Number(post.meal_protein)).toString() : null;
+      const carbDisplay = post.meal_carbs != null ? Math.round(Number(post.meal_carbs)).toString() : null;
+      const fatDisplay = post.meal_fat != null ? Math.round(Number(post.meal_fat)).toString() : null;
+      return (
+        <View>
+          {mealPhotoUrl ? (
+            <Image source={resolveImageSource(mealPhotoUrl)} style={{ width: '100%', height: 200 }} resizeMode="cover" />
+          ) : null}
+          {post.content ? (
+            <Text style={{ fontSize: 15, fontWeight: '600', color: textColor, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 4 }}>
+              {post.content}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+            {calDisplay ? (
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.calories + '18' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.calories }}>{calDisplay}{' kcal'}</Text>
+              </View>
+            ) : null}
+            {protDisplay ? (
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.protein + '18' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.protein }}>{protDisplay}{'g P'}</Text>
+              </View>
+            ) : null}
+            {carbDisplay ? (
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.carbs + '18' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.carbs }}>{carbDisplay}{'g C'}</Text>
+              </View>
+            ) : null}
+            {fatDisplay ? (
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.fats + '18' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.fats }}>{fatDisplay}{'g F'}</Text>
+              </View>
+            ) : null}
+          </View>
+          {showSaveMeal ? (
+            <TouchableOpacity style={[styles.saveMealBtn, { borderColor: colors.primary }]} onPress={handleSaveMealPress}>
+              <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save to Food</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (post.post_type_v2 === 'progress') {
+      const stats = post.progress_stats;
+      return (
+        <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: spacing.md, gap: spacing.sm }}>
+          {post.content ? (
+            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>{post.content}</Text>
+          ) : null}
+          {stats ? (
+            <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+              {stats.streak_days != null ? (
+                <View style={{ borderRadius: borderRadius.md, padding: spacing.sm, alignItems: 'center', minWidth: 80, backgroundColor: isDark ? '#2A1A1A' : '#FEF2F2', gap: 2 }}>
+                  <Text style={{ fontSize: 20 }}>🔥</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#EF4444' }}>{String(stats.streak_days)}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor }}>day streak</Text>
+                </View>
+              ) : null}
+              {stats.consistency_score != null ? (
+                <View style={{ borderRadius: borderRadius.md, padding: spacing.sm, alignItems: 'center', minWidth: 80, backgroundColor: isDark ? '#1A2A1A' : '#F0FDF4', gap: 2 }}>
+                  <Text style={{ fontSize: 20 }}>📊</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: colors.success }}>{String(stats.consistency_score)}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor }}>consistency</Text>
+                </View>
+              ) : null}
+              {stats.weight_value != null ? (
+                <View style={{ borderRadius: borderRadius.md, padding: spacing.sm, alignItems: 'center', minWidth: 80, backgroundColor: isDark ? '#1A1A2A' : '#F5F3FF', gap: 2 }}>
+                  <Text style={{ fontSize: 20 }}>⚖️</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: colors.primary }}>{Number(stats.weight_value).toFixed(1)}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor }}>{String(stats.weight_unit ?? 'lbs')}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      );
+    }
+
+    return null;
   };
 
   return (
-    <View
-      style={[
-        styles.postCard,
-        { backgroundColor: cardBg, borderColor: cardBorder },
-      ]}
-    >
+    <View style={[styles.postCard, { backgroundColor: finalCardBg, borderColor: cardBorder, opacity: isAutoPost ? 0.92 : 1 }]}>
+      {/* Auto label */}
+      {isAutoPost ? (
+        <View style={{ position: 'absolute', top: 10, right: 48, backgroundColor: 'rgba(107,114,128,0.15)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, zIndex: 1 }}>
+          <Text style={{ fontSize: 10, fontWeight: '600', color: '#6B7280', letterSpacing: 0.3 }}>Auto</Text>
+        </View>
+      ) : null}
+
       {/* Header */}
       <View style={styles.postHeader}>
         <TouchableOpacity
@@ -337,12 +468,7 @@ function PostCard({
           }}
           disabled={!post.user_id || post.user_id === currentUserId}
         >
-          <UserAvatar
-            url={post.author?.avatar_url ?? null}
-            name={post.author?.full_name ?? null}
-            username={post.author?.username ?? 'u'}
-            size={40}
-          />
+          <UserAvatar url={post.author?.avatar_url ?? null} name={post.author?.full_name ?? null} username={post.author?.username ?? 'u'} size={40} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
@@ -355,24 +481,36 @@ function PostCard({
               }}
               disabled={!post.user_id || post.user_id === currentUserId}
             >
-              <Text style={[styles.postAuthorName, { color: textColor }]}>
-                {authorName}
-              </Text>
+              <Text style={[styles.postAuthorName, { color: textColor }]}>{authorName}</Text>
             </TouchableOpacity>
             {post.is_founder_post && (
-              <View style={styles.founderBadge}>
+              <View style={[styles.founderBadge, { backgroundColor: '#0D9488' }]}>
                 <Text style={styles.founderBadgeText}>Founder</Text>
               </View>
             )}
+            {post.post_type_v2 === 'question' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#3B82F618', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+                <HelpCircle size={10} color="#3B82F6" />
+                <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '700' }}>Question</Text>
+              </View>
+            ) : null}
+            {post.post_type_v2 === 'progress' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#8B5CF618', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+                <TrendingUp size={10} color="#8B5CF6" />
+                <Text style={{ color: '#8B5CF6', fontSize: 10, fontWeight: '700' }}>Progress</Text>
+              </View>
+            ) : null}
           </View>
           {post.is_pinned ? (
-            <Text style={[styles.pinnedLabel, { color: colors.primary }]}>
-              Pinned · Community
-            </Text>
+            <Text style={[styles.pinnedLabel, { color: colors.primary }]}>Pinned · Community</Text>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={[styles.postMeta, { color: catColor }]}>{catLabel}</Text>
-              <Text style={[styles.postMeta, { color: secondaryColor }]}>·</Text>
+              {!post.post_type_v2 || post.post_type_v2 === 'update' ? (
+                <Text style={[styles.postMeta, { color: catColor }]}>{catLabel}</Text>
+              ) : null}
+              {!post.post_type_v2 || post.post_type_v2 === 'update' ? (
+                <Text style={[styles.postMeta, { color: secondaryColor }]}>·</Text>
+              ) : null}
               <Text style={[styles.postMeta, { color: secondaryColor }]}>{relTime}</Text>
             </View>
           )}
@@ -382,52 +520,44 @@ function PostCard({
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
-      <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
-
-      {/* Food chip */}
-      {post.food_name ? (
-        <View style={styles.foodChip}>
-          <Check size={12} color="#fff" />
-          <Text style={styles.foodChipText}>
-            {post.food_name}
-            {post.food_calories ? ` · ${post.food_calories} kcal` : ''}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Image */}
-      {post.image_url ? (
-        <Image
-          source={resolveImageSource(post.image_url)}
-          style={styles.postImage}
-          resizeMode="cover"
-        />
-      ) : null}
+      {/* V2 body or legacy content */}
+      {post.post_type_v2 && post.post_type_v2 !== 'update' && post.post_type_v2 !== 'auto'
+        ? renderV2Body()
+        : (
+          <>
+            {post.content ? (
+              <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
+            ) : null}
+            {post.food_name ? (
+              <View style={styles.foodChip}>
+                <Check size={12} color="#fff" />
+                <Text style={styles.foodChipText}>
+                  {post.food_name}
+                  {post.food_calories ? ` · ${post.food_calories} kcal` : ''}
+                </Text>
+              </View>
+            ) : null}
+            {post.image_url ? (
+              <Image source={resolveImageSource(post.image_url)} style={styles.postImage} resizeMode="cover" />
+            ) : null}
+          </>
+        )
+      }
 
       {/* Save meal button (club only, meal_idea) */}
-      {showSaveMeal && post.category === 'meal_idea' ? (
-        <TouchableOpacity style={styles.saveMealBtn} onPress={handleSaveMeal}>
-          <Text style={styles.saveMealBtnText}>Save meal</Text>
+      {showSaveMeal && post.category === 'meal_idea' && post.post_type_v2 !== 'meal' ? (
+        <TouchableOpacity style={styles.saveMealBtn} onPress={handleSaveMealPress}>
+          <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save meal</Text>
         </TouchableOpacity>
       ) : null}
 
       {/* Top reply preview (club) */}
       {showTopReply && post.top_comment ? (
         <View style={[styles.topReplyRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-          <UserAvatar
-            url={post.top_comment.author?.avatar_url ?? null}
-            name={post.top_comment.author?.full_name ?? null}
-            username={post.top_comment.author?.username ?? 'u'}
-            size={24}
-          />
+          <UserAvatar url={post.top_comment.author?.avatar_url ?? null} name={post.top_comment.author?.full_name ?? null} username={post.top_comment.author?.username ?? 'u'} size={24} />
           <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={[styles.topReplyAuthor, { color: textColor }]}>
-              {post.top_comment.author?.full_name || post.top_comment.author?.username}
-            </Text>
-            <Text style={[styles.topReplyContent, { color: secondaryColor }]} numberOfLines={1}>
-              {post.top_comment.content}
-            </Text>
+            <Text style={[styles.topReplyAuthor, { color: textColor }]}>{post.top_comment.author?.full_name || post.top_comment.author?.username}</Text>
+            <Text style={[styles.topReplyContent, { color: secondaryColor }]} numberOfLines={1}>{post.top_comment.content}</Text>
           </View>
         </View>
       ) : null}
@@ -435,11 +565,7 @@ function PostCard({
       {/* Footer */}
       <View style={[styles.postFooter, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
         <TouchableOpacity style={styles.postAction} onPress={handleLike}>
-          <Heart
-            size={18}
-            color={post.liked_by_me ? '#EF4444' : secondaryColor}
-            fill={post.liked_by_me ? '#EF4444' : 'transparent'}
-          />
+          <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={18} color={post.liked_by_me ? '#EF4444' : secondaryColor} />
           <Text style={[styles.postActionText, { color: post.liked_by_me ? '#EF4444' : secondaryColor }]}>
             {post.likes_count > 0 ? String(post.likes_count) : ''}
             {post.likes_count > 0 ? ' ' : ''}Support
@@ -452,22 +578,45 @@ function PostCard({
             {post.comments_count > 0 ? ' ' : ''}Reply
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.postAction} onPress={handleSave}>
+          <Bookmark size={18} color={post.saved_by_me ? colors.primary : secondaryColor} fill={post.saved_by_me ? colors.primary : 'transparent'} />
+          {(post.saves_count ?? 0) > 0 ? (
+            <Text style={[styles.postActionText, { color: post.saved_by_me ? colors.primary : secondaryColor }]}>
+              {String(post.saves_count)}
+            </Text>
+          ) : null}
+        </TouchableOpacity>
       </View>
 
       {/* Three-dot menu modal */}
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
           <View style={[styles.menuSheet, { backgroundColor: isDark ? colors.cardDark : '#fff' }]}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
-              <Text style={[styles.menuItemText, { color: textColor }]}>Report</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={handleBlock}>
-              <Text style={[styles.menuItemText, { color: textColor }]}>Block user</Text>
-            </TouchableOpacity>
-            {isOwn && (
-              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                <Text style={[styles.menuItemText, { color: colors.error }]}>Delete</Text>
-              </TouchableOpacity>
+            {isOwn ? (
+              <>
+                <TouchableOpacity style={styles.menuItem} onPress={() => {
+                  console.log('[Community] Edit post pressed:', post.id);
+                  setMenuVisible(false);
+                }}>
+                  <Pencil size={18} color={textColor} />
+                  <Text style={[styles.menuItemText, { color: textColor }]}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                  <Trash2 size={18} color={colors.error} />
+                  <Text style={[styles.menuItemText, { color: colors.error }]}>Delete</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
+                  <Flag size={18} color={textColor} />
+                  <Text style={[styles.menuItemText, { color: textColor }]}>Report</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={handleBlock}>
+                  <UserX size={18} color={textColor} />
+                  <Text style={[styles.menuItemText, { color: textColor }]}>Block user</Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </Pressable>
@@ -476,12 +625,12 @@ function PostCard({
   );
 }
 
-// ─── Create Post Sheet ────────────────────────────────────────────────────────
+// ─── New Composer Sheet ───────────────────────────────────────────────────────
 
-interface CreatePostSheetProps {
+interface ComposerSheetProps {
   visible: boolean;
   onClose: () => void;
-  onPosted: () => void;
+  onPosted: (newPost?: CommunityPost) => void;
   section: PostSection;
   isDark: boolean;
   currentUserId: string;
@@ -490,9 +639,7 @@ interface CreatePostSheetProps {
   currentUserAvatar: string | null;
 }
 
-const POST_CATEGORIES: PostCategory[] = ['general', 'small_win', 'meal_idea', 'question', 'progress'];
-
-function CreatePostSheet({
+function ComposerSheet({
   visible,
   onClose,
   onPosted,
@@ -502,79 +649,273 @@ function CreatePostSheet({
   currentUserName,
   currentUserFirstName,
   currentUserAvatar,
-}: CreatePostSheetProps) {
-  const [category, setCategory] = useState<PostCategory>('general');
-  const [content, setContent] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
+}: ComposerSheetProps) {
+  const [composerType, setComposerType] = useState<ComposerType>('update');
+  // Update fields
+  const [updateText, setUpdateText] = useState('');
+  const [updateImageUri, setUpdateImageUri] = useState<string | null>(null);
+  // Question fields
+  const [questionTitle, setQuestionTitle] = useState('');
+  const [questionDetails, setQuestionDetails] = useState('');
+  // Meal fields
+  const [mealImageUri, setMealImageUri] = useState<string | null>(null);
+  const [mealName, setMealName] = useState('');
+  const [mealIngredients, setMealIngredients] = useState<MealIngredient[]>([{ name: '', amount: '' }]);
+  const [mealServings, setMealServings] = useState('1');
+  const [mealCalories, setMealCalories] = useState('');
+  const [mealProtein, setMealProtein] = useState('');
+  const [mealCarbs, setMealCarbs] = useState('');
+  const [mealFat, setMealFat] = useState('');
+  // Progress fields
+  const [progressStats, setProgressStats] = useState<ProgressStat[]>([]);
+  const [progressText, setProgressText] = useState('');
+  const [progressLoading, setProgressLoading] = useState(false);
+
   const [posting, setPosting] = useState(false);
+
   const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
   const cardBg = isDark ? colors.cardDark : '#fff';
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
 
-  const handlePickImage = async () => {
-    console.log('[Community] Image picker opened for post creation');
+  // Load progress stats when switching to progress tab
+  useEffect(() => {
+    if (composerType === 'progress' && progressStats.length === 0) {
+      loadProgressStats();
+    }
+  }, [composerType]);
+
+  const loadProgressStats = async () => {
+    console.log('[Community] Loading progress stats for composer');
+    setProgressLoading(true);
+    try {
+      const [xpRes, checkInsRes] = await Promise.all([
+        supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', currentUserId).maybeSingle(),
+        supabase.from('check_ins').select('weight, weight_unit, created_at').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(1),
+      ]);
+
+      const streak = xpRes.data?.current_streak ?? 0;
+      const latestCheckIn = checkInsRes.data?.[0];
+
+      // Calculate weekly consistency
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - daysFromMonday);
+      const mondayStr = toLocalDateString(monday);
+      const todayStr = toLocalDateString(today);
+
+      const mealsRes = await supabase.from('meals').select('date').eq('user_id', currentUserId).gte('date', mondayStr).lte('date', todayStr);
+      const trackedDays = new Set((mealsRes.data || []).map((m: { date: string }) => m.date)).size;
+      const daysElapsed = daysFromMonday + 1;
+      const consistencyScore = Math.round((trackedDays / daysElapsed) * 100);
+
+      const stats: ProgressStat[] = [];
+      if (streak > 0) {
+        stats.push({ key: 'streak_days', label: 'Current streak', emoji: '🔥', value: streak, selected: false });
+      }
+      stats.push({ key: 'consistency_score', label: 'Weekly consistency', emoji: '📊', value: consistencyScore, selected: false });
+      if (latestCheckIn?.weight) {
+        stats.push({ key: 'weight_value', label: 'Current weight', emoji: '⚖️', value: latestCheckIn.weight, selected: false });
+      }
+
+      console.log('[Community] Progress stats loaded:', stats.length, 'items');
+      setProgressStats(stats);
+    } catch (e) {
+      console.warn('[Community] Failed to load progress stats:', e);
+    } finally {
+      setProgressLoading(false);
+    }
+  };
+
+  const handlePickImage = async (forMeal = false) => {
+    console.log('[Community] Image picker opened, forMeal:', forMeal);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
       console.log('[Community] Image selected:', result.assets[0].uri);
-      setImageUri(result.assets[0].uri);
+      if (forMeal) setMealImageUri(result.assets[0].uri);
+      else setUpdateImageUri(result.assets[0].uri);
     }
   };
 
+  const addIngredient = () => {
+    console.log('[Community] Add ingredient row pressed');
+    setMealIngredients(prev => [...prev, { name: '', amount: '' }]);
+  };
+
+  const removeIngredient = (idx: number) => {
+    console.log('[Community] Remove ingredient row pressed, index:', idx);
+    setMealIngredients(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateIngredient = (idx: number, field: 'name' | 'amount', value: string) => {
+    setMealIngredients(prev => prev.map((ing, i) => i === idx ? { ...ing, [field]: value } : ing));
+  };
+
+  const toggleProgressStat = (key: string) => {
+    console.log('[Community] Progress stat toggled:', key);
+    setProgressStats(prev => prev.map(s => s.key === key ? { ...s, selected: !s.selected } : s));
+  };
+
+  const canPost = () => {
+    if (composerType === 'update') return updateText.trim().length > 0;
+    if (composerType === 'question') return questionTitle.trim().length > 0;
+    if (composerType === 'meal') return mealImageUri !== null;
+    if (composerType === 'progress') return progressStats.some(s => s.selected);
+    return false;
+  };
+
   const handlePost = async () => {
-    if (!content.trim()) return;
-    console.log('[Community] Posting to section:', section, 'category:', category, 'content length:', content.length);
+    if (!canPost()) return;
+    console.log('[Community] Posting — type:', composerType, 'section:', section);
     setPosting(true);
     try {
-      const { error } = await supabase.from('community_posts').insert({
+      let postData: Parameters<typeof createPost>[0];
+
+      if (composerType === 'update') {
+        postData = {
+          post_type: 'text',
+          post_type_v2: 'update',
+          content: updateText.trim(),
+          image_url: updateImageUri ?? undefined,
+          is_public: true,
+        };
+      } else if (composerType === 'question') {
+        postData = {
+          post_type: 'text',
+          post_type_v2: 'question',
+          content: questionTitle.trim(),
+          question_title: questionTitle.trim(),
+          question_details: questionDetails.trim() || undefined,
+          is_public: true,
+        };
+      } else if (composerType === 'meal') {
+        const ingredients = mealIngredients.filter(i => i.name.trim());
+        postData = {
+          post_type: 'meal',
+          post_type_v2: 'meal',
+          content: mealName.trim() || 'Meal',
+          meal_photo_url: mealImageUri ?? undefined,
+          meal_ingredients: ingredients.map(i => `${i.amount} ${i.name}`.trim()),
+          meal_servings: mealServings ? Number(mealServings) : undefined,
+          meal_calories: mealCalories ? Number(mealCalories) : undefined,
+          meal_protein: mealProtein ? Number(mealProtein) : undefined,
+          meal_carbs: mealCarbs ? Number(mealCarbs) : undefined,
+          meal_fat: mealFat ? Number(mealFat) : undefined,
+          is_public: true,
+        };
+      } else {
+        // progress
+        const selectedStats = progressStats.filter(s => s.selected);
+        const statsObj: Record<string, unknown> = {};
+        selectedStats.forEach(s => { statsObj[s.key] = s.value; });
+        const statLabels = selectedStats.map(s => `${s.emoji} ${s.value} ${s.label}`).join(', ');
+        postData = {
+          post_type: 'stats',
+          post_type_v2: 'progress',
+          content: progressText.trim() || statLabels,
+          progress_stats: statsObj,
+          is_public: true,
+        };
+      }
+
+      console.log('[Community] Network request: createPost, type:', postData.post_type_v2);
+      const result = await createPost(postData);
+      console.log('[Community] Post created successfully, id:', result?.id);
+
+      // Build optimistic post for immediate prepend
+      const optimisticPost: CommunityPost = {
+        id: result?.id ?? `temp_${Date.now()}`,
         user_id: currentUserId,
         section,
-        category,
-        content: content.trim(),
-        image_url: imageUri,
+        category: 'general',
+        content: postData.content ?? '',
+        image_url: postData.image_url ?? null,
+        food_name: null,
+        food_calories: null,
         is_pinned: false,
         is_founder_post: false,
         likes_count: 0,
         comments_count: 0,
-      });
-      if (error) {
-        console.log('[Community] Post insert error:', error.message);
-        Alert.alert('Error', 'Could not post. Please try again.');
-      } else {
-        console.log('[Community] Post created successfully');
-        setContent('');
-        setImageUri(null);
-        setCategory('general');
-        onPosted();
-        onClose();
-      }
+        saves_count: 0,
+        created_at: new Date().toISOString(),
+        author: null,
+        liked_by_me: false,
+        saved_by_me: false,
+        post_type_v2: postData.post_type_v2 ?? null,
+        question_title: postData.question_title ?? null,
+        question_details: postData.question_details ?? null,
+        meal_photo_url: postData.meal_photo_url ?? null,
+        meal_calories: postData.meal_calories ?? null,
+        meal_protein: postData.meal_protein ?? null,
+        meal_carbs: postData.meal_carbs ?? null,
+        meal_fat: postData.meal_fat ?? null,
+        progress_stats: (postData.progress_stats as Record<string, unknown>) ?? null,
+      };
+
+      // Reset form
+      setUpdateText('');
+      setUpdateImageUri(null);
+      setQuestionTitle('');
+      setQuestionDetails('');
+      setMealImageUri(null);
+      setMealName('');
+      setMealIngredients([{ name: '', amount: '' }]);
+      setMealServings('1');
+      setMealCalories('');
+      setMealProtein('');
+      setMealCarbs('');
+      setMealFat('');
+      setProgressText('');
+      setProgressStats(prev => prev.map(s => ({ ...s, selected: false })));
+
+      onPosted(optimisticPost);
+      onClose();
     } catch (e) {
-      console.log('[Community] Post exception:', e);
+      console.error('[Community] Post failed:', e);
+      Alert.alert('Error', 'Could not post. Please try again.');
     } finally {
       setPosting(false);
     }
   };
 
+  const composerTypes: { key: ComposerType; icon: React.ReactNode; label: string }[] = [
+    { key: 'update', icon: <MessageSquare size={20} color={composerType === 'update' ? '#fff' : colors.primary} />, label: 'Update' },
+    { key: 'question', icon: <HelpCircle size={20} color={composerType === 'question' ? '#fff' : '#3B82F6'} />, label: 'Question' },
+    { key: 'meal', icon: <UtensilsCrossed size={20} color={composerType === 'meal' ? '#fff' : '#FF8A5B'} />, label: 'Meal' },
+    { key: 'progress', icon: <TrendingUp size={20} color={composerType === 'progress' ? '#fff' : '#8B5CF6'} />, label: 'Progress' },
+  ];
+
+  const typeColors: Record<ComposerType, string> = {
+    update: colors.primary,
+    question: '#3B82F6',
+    meal: '#FF8A5B',
+    progress: '#8B5CF6',
+  };
+
+  const activeColor = typeColors[composerType];
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: bgColor }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: bgColor }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Sheet header */}
         <View style={[styles.sheetHeader, { borderBottomColor: borderColor }]}>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={() => {
+            console.log('[Community] Composer close button pressed');
+            onClose();
+          }}>
             <X size={22} color={secondaryColor} />
           </TouchableOpacity>
           <Text style={[styles.sheetTitle, { color: textColor }]}>New Post</Text>
           <TouchableOpacity
-            style={[styles.postBtn, { opacity: content.trim() ? 1 : 0.5 }]}
+            style={[styles.postBtn, { backgroundColor: activeColor, opacity: canPost() ? 1 : 0.5 }]}
             onPress={handlePost}
-            disabled={posting || !content.trim()}
+            disabled={posting || !canPost()}
           >
             {posting ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -584,81 +925,239 @@ function CreatePostSheet({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }}>
-          {/* Category pills */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
-            {POST_CATEGORIES.map((cat) => {
-              const isActive = category === cat;
-              const catColor = CATEGORY_COLORS[cat];
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => {
-                    console.log('[Community] Category selected:', cat);
-                    setCategory(cat);
-                  }}
-                  style={[
-                    styles.categoryPill,
-                    {
-                      backgroundColor: isActive ? catColor : 'transparent',
-                      borderColor: catColor,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.categoryPillText, { color: isActive ? '#fff' : catColor }]}>
-                    {CATEGORY_LABELS[cat]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+        {/* Type selector toolbar */}
+        <View style={[styles.composerToolbar, { borderBottomColor: borderColor }]}>
+          {composerTypes.map(({ key, icon, label }) => {
+            const isActive = composerType === key;
+            const tColor = typeColors[key];
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => {
+                  console.log('[Community] Composer type selected:', key);
+                  setComposerType(key);
+                }}
+                style={[styles.composerTypeBtn, isActive && { backgroundColor: tColor }]}
+              >
+                {icon}
+                <Text style={[styles.composerTypeBtnText, { color: isActive ? '#fff' : secondaryColor }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
           {/* Author row */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md }}>
             {currentUserAvatar ? (
-              <Image
-                key={currentUserAvatar}
-                source={{ uri: currentUserAvatar }}
-                style={{ width: 40, height: 40, borderRadius: 20 }}
-                resizeMode="cover"
-              />
+              <Image key={currentUserAvatar} source={{ uri: currentUserAvatar }} style={{ width: 40, height: 40, borderRadius: 20 }} resizeMode="cover" />
             ) : (
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
               </View>
             )}
-            <TextInput
-              style={[styles.composeInput, { color: textColor, flex: 1 }]}
-              placeholder={section === 'club' ? 'Ask a question or share what worked...' : 'Share a win or ask for help...'}
-              placeholderTextColor={secondaryColor}
-              multiline
-              value={content}
-              onChangeText={setContent}
-              autoFocus
-            />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: textColor }}>{currentUserName || 'You'}</Text>
+              <Text style={{ fontSize: 12, color: secondaryColor }}>Public</Text>
+            </View>
           </View>
 
-          {/* Image preview */}
-          {imageUri ? (
-            <View style={{ marginTop: spacing.md, position: 'relative' }}>
-              <Image source={resolveImageSource(imageUri)} style={{ width: '100%', height: 180, borderRadius: borderRadius.md }} resizeMode="cover" />
-              <TouchableOpacity
-                style={styles.removeImageBtn}
-                onPress={() => {
-                  console.log('[Community] Image removed from post');
-                  setImageUri(null);
-                }}
-              >
-                <X size={14} color="#fff" />
+          {/* ── UPDATE ── */}
+          {composerType === 'update' && (
+            <View>
+              <TextInput
+                style={[styles.composeInput, { color: textColor, borderColor }]}
+                placeholder="Share a win, struggle, or update..."
+                placeholderTextColor={secondaryColor}
+                multiline
+                value={updateText}
+                onChangeText={setUpdateText}
+                autoFocus
+              />
+              {updateImageUri ? (
+                <View style={{ marginTop: spacing.sm, position: 'relative' }}>
+                  <Image source={resolveImageSource(updateImageUri)} style={{ width: '100%', height: 180, borderRadius: borderRadius.md }} resizeMode="cover" />
+                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => {
+                    console.log('[Community] Update image removed');
+                    setUpdateImageUri(null);
+                  }}>
+                    <X size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <TouchableOpacity style={[styles.imagePickerBtn, { borderColor }]} onPress={() => handlePickImage(false)}>
+                <Plus size={16} color={colors.primary} />
+                <Text style={[styles.imagePickerText, { color: colors.primary }]}>Add photo</Text>
               </TouchableOpacity>
             </View>
-          ) : null}
+          )}
 
-          {/* Image picker */}
-          <TouchableOpacity style={[styles.imagePickerBtn, { borderColor }]} onPress={handlePickImage}>
-            <Plus size={16} color={colors.primary} />
-            <Text style={[styles.imagePickerText, { color: colors.primary }]}>Add photo</Text>
-          </TouchableOpacity>
+          {/* ── QUESTION ── */}
+          {composerType === 'question' && (
+            <View style={{ gap: spacing.sm }}>
+              <TextInput
+                style={[styles.composeInput, { color: textColor, borderColor, minHeight: 48, fontSize: 16, fontWeight: '600' }]}
+                placeholder="Ask the community..."
+                placeholderTextColor={secondaryColor}
+                value={questionTitle}
+                onChangeText={setQuestionTitle}
+                autoFocus
+              />
+              <TextInput
+                style={[styles.composeInput, { color: textColor, borderColor }]}
+                placeholder="Add more details (optional)..."
+                placeholderTextColor={secondaryColor}
+                multiline
+                value={questionDetails}
+                onChangeText={setQuestionDetails}
+              />
+            </View>
+          )}
+
+          {/* ── MEAL ── */}
+          {composerType === 'meal' && (
+            <View style={{ gap: spacing.sm }}>
+              {/* Photo picker */}
+              <TouchableOpacity
+                style={[styles.mealPhotoPicker, { borderColor, backgroundColor: isDark ? colors.cardDark : '#F9FAFB' }]}
+                onPress={() => handlePickImage(true)}
+              >
+                {mealImageUri ? (
+                  <View style={{ position: 'relative' }}>
+                    <Image source={resolveImageSource(mealImageUri)} style={{ width: '100%', height: 180, borderRadius: borderRadius.md }} resizeMode="cover" />
+                    <TouchableOpacity style={styles.removeImageBtn} onPress={() => {
+                      console.log('[Community] Meal image removed');
+                      setMealImageUri(null);
+                    }}>
+                      <X size={14} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ alignItems: 'center', gap: 8, paddingVertical: spacing.xl }}>
+                    <UtensilsCrossed size={32} color={secondaryColor} />
+                    <Text style={{ color: secondaryColor, fontSize: 14 }}>Add meal photo (required)</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Meal name */}
+              <TextInput
+                style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]}
+                placeholder="Meal name..."
+                placeholderTextColor={secondaryColor}
+                value={mealName}
+                onChangeText={setMealName}
+              />
+
+              {/* Ingredients */}
+              <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryColor, marginTop: 4 }}>Ingredients</Text>
+              {mealIngredients.map((ing, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.fieldInput, { flex: 1, color: textColor, borderColor, backgroundColor: cardBg }]}
+                    placeholder="Ingredient..."
+                    placeholderTextColor={secondaryColor}
+                    value={ing.name}
+                    onChangeText={v => updateIngredient(idx, 'name', v)}
+                  />
+                  <TextInput
+                    style={[styles.fieldInput, { width: 80, color: textColor, borderColor, backgroundColor: cardBg }]}
+                    placeholder="Amount"
+                    placeholderTextColor={secondaryColor}
+                    value={ing.amount}
+                    onChangeText={v => updateIngredient(idx, 'amount', v)}
+                  />
+                  {mealIngredients.length > 1 ? (
+                    <TouchableOpacity onPress={() => removeIngredient(idx)} hitSlop={8}>
+                      <X size={18} color={secondaryColor} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ))}
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }} onPress={addIngredient}>
+                <Plus size={16} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>Add ingredient</Text>
+              </TouchableOpacity>
+
+              {/* Servings */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 4 }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryColor, width: 80 }}>Servings</Text>
+                <TextInput
+                  style={[styles.fieldInput, { flex: 1, color: textColor, borderColor, backgroundColor: cardBg }]}
+                  placeholder="1"
+                  placeholderTextColor={secondaryColor}
+                  keyboardType="decimal-pad"
+                  value={mealServings}
+                  onChangeText={setMealServings}
+                />
+              </View>
+
+              {/* Macros */}
+              <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryColor, marginTop: 4 }}>Nutrition (optional)</Text>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Calories</Text>
+                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealCalories} onChangeText={setMealCalories} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Protein (g)</Text>
+                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealProtein} onChangeText={setMealProtein} />
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Carbs (g)</Text>
+                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealCarbs} onChangeText={setMealCarbs} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: secondaryColor, marginBottom: 3 }}>Fat (g)</Text>
+                  <TextInput style={[styles.fieldInput, { color: textColor, borderColor, backgroundColor: cardBg }]} placeholder="0" placeholderTextColor={secondaryColor} keyboardType="decimal-pad" value={mealFat} onChangeText={setMealFat} />
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ── PROGRESS ── */}
+          {composerType === 'progress' && (
+            <View style={{ gap: spacing.sm }}>
+              <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }}>
+                Select what to share from your real data:
+              </Text>
+              {progressLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+              ) : progressStats.length === 0 ? (
+                <Text style={{ color: secondaryColor, fontSize: 14 }}>No data available yet. Start tracking to share progress!</Text>
+              ) : (
+                progressStats.map(stat => (
+                  <TouchableOpacity
+                    key={stat.key}
+                    onPress={() => toggleProgressStat(stat.key)}
+                    style={[
+                      styles.progressStatRow,
+                      { borderColor: stat.selected ? colors.primary : borderColor, backgroundColor: stat.selected ? colors.primary + '12' : cardBg },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 22 }}>{stat.emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: stat.selected ? colors.primary : textColor }}>{String(stat.value)}</Text>
+                    </View>
+                    <View style={[styles.checkCircle, { borderColor: stat.selected ? colors.primary : borderColor, backgroundColor: stat.selected ? colors.primary : 'transparent' }]}>
+                      {stat.selected ? <Check size={14} color="#fff" /> : null}
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+              <TextInput
+                style={[styles.composeInput, { color: textColor, borderColor, marginTop: spacing.sm }]}
+                placeholder="Add a caption (optional)..."
+                placeholderTextColor={secondaryColor}
+                multiline
+                value={progressText}
+                onChangeText={setProgressText}
+              />
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -681,7 +1180,6 @@ function ReportModal({ visible, postId, onClose, isDark, currentUserId }: Report
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const textColor = isDark ? colors.textDark : colors.primaryText;
-  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const cardBg = isDark ? colors.cardDark : '#fff';
 
   const handleSubmit = async () => {
@@ -739,6 +1237,186 @@ function ReportModal({ visible, postId, onClose, isDark, currentUserId }: Report
   );
 }
 
+// ─── Auto-Share Settings Modal ────────────────────────────────────────────────
+
+interface AutoShareSettingsProps {
+  visible: boolean;
+  onClose: () => void;
+  isDark: boolean;
+  currentUserId: string;
+}
+
+function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: AutoShareSettingsProps) {
+  const [autoShareAll, setAutoShareAll] = useState(true);
+  const [autoShareStreaks, setAutoShareStreaks] = useState(true);
+  const [autoShareWeekly, setAutoShareWeekly] = useState(true);
+  const [audience, setAudience] = useState<'public' | 'followers'>('public');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const textColor = isDark ? colors.textDark : colors.primaryText;
+  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? colors.cardDark : '#fff';
+  const borderColor = isDark ? colors.borderDark : colors.border;
+  const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
+
+  useEffect(() => {
+    if (visible) loadSettings();
+  }, [visible]);
+
+  const loadSettings = async () => {
+    console.log('[Community] Loading auto-share settings for user:', currentUserId);
+    setLoading(true);
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('auto_share_achievements, auto_share_streaks, auto_share_weekly_recap, auto_share_audience')
+        .eq('id', currentUserId)
+        .single();
+      if (data) {
+        setAutoShareAll(data.auto_share_achievements !== false);
+        setAutoShareStreaks(data.auto_share_streaks !== false);
+        setAutoShareWeekly(data.auto_share_weekly_recap !== false);
+        setAudience(data.auto_share_audience === 'followers' ? 'followers' : 'public');
+        console.log('[Community] Auto-share settings loaded:', data);
+      }
+    } catch (e) {
+      console.warn('[Community] Failed to load auto-share settings:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveSettings = async (updates: Record<string, unknown>) => {
+    console.log('[Community] Saving auto-share settings:', updates);
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('users').update(updates).eq('id', currentUserId);
+      if (error) console.warn('[Community] Failed to save auto-share settings:', error.message);
+      else console.log('[Community] Auto-share settings saved');
+    } catch (e) {
+      console.warn('[Community] Save settings exception:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleAll = (val: boolean) => {
+    console.log('[Community] Disable all auto-sharing toggled:', !val);
+    setAutoShareAll(val);
+    saveSettings({ auto_share_achievements: val });
+  };
+
+  const handleToggleStreaks = (val: boolean) => {
+    console.log('[Community] Auto-share streaks toggled:', val);
+    setAutoShareStreaks(val);
+    saveSettings({ auto_share_streaks: val });
+  };
+
+  const handleToggleWeekly = (val: boolean) => {
+    console.log('[Community] Auto-share weekly recap toggled:', val);
+    setAutoShareWeekly(val);
+    saveSettings({ auto_share_weekly_recap: val });
+  };
+
+  const handleAudienceChange = (val: 'public' | 'followers') => {
+    console.log('[Community] Auto-share audience changed to:', val);
+    setAudience(val);
+    saveSettings({ auto_share_audience: val });
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: bgColor }}>
+        {/* Header */}
+        <View style={[styles.sheetHeader, { borderBottomColor: borderColor }]}>
+          <TouchableOpacity onPress={() => {
+            console.log('[Community] Auto-share settings closed');
+            onClose();
+          }}>
+            <X size={22} color={secondaryColor} />
+          </TouchableOpacity>
+          <Text style={[styles.sheetTitle, { color: textColor }]}>Auto-Share Settings</Text>
+          <View style={{ width: 36 }} />
+        </View>
+
+        {loading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+        ) : (
+          <ScrollView contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}>
+            {/* Disable all */}
+            <View style={[styles.settingsCard, { backgroundColor: cardBg, borderColor }]}>
+              <View style={styles.settingsRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>Enable auto-sharing</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Automatically share achievements to the community</Text>
+                </View>
+                <Switch
+                  value={autoShareAll}
+                  onValueChange={handleToggleAll}
+                  trackColor={{ false: borderColor, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+
+            {/* Individual toggles */}
+            <View style={[styles.settingsCard, { backgroundColor: cardBg, borderColor, opacity: autoShareAll ? 1 : 0.5 }]}>
+              <View style={[styles.settingsRow, { borderBottomWidth: 1, borderBottomColor: borderColor, paddingBottom: spacing.md, marginBottom: spacing.md }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>Streak milestones</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share when you hit 7, 14, 30, 60, 100 day streaks</Text>
+                </View>
+                <Switch
+                  value={autoShareStreaks && autoShareAll}
+                  onValueChange={handleToggleStreaks}
+                  disabled={!autoShareAll}
+                  trackColor={{ false: borderColor, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+              <View style={styles.settingsRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>Weekly recap</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share your weekly consistency score every Sunday</Text>
+                </View>
+                <Switch
+                  value={autoShareWeekly && autoShareAll}
+                  onValueChange={handleToggleWeekly}
+                  disabled={!autoShareAll}
+                  trackColor={{ false: borderColor, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+
+            {/* Audience */}
+            <View style={[styles.settingsCard, { backgroundColor: cardBg, borderColor }]}>
+              <Text style={[styles.settingsLabel, { color: textColor, marginBottom: spacing.sm }]}>Audience</Text>
+              {(['public', 'followers'] as const).map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => handleAudienceChange(opt)}
+                  style={[styles.audienceOption, { borderColor: audience === opt ? colors.primary : borderColor, backgroundColor: audience === opt ? colors.primary + '12' : 'transparent' }]}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: audience === opt ? colors.primary : textColor }}>
+                    {opt === 'public' ? 'Public' : 'Followers only'}
+                  </Text>
+                  {audience === opt ? <Check size={16} color={colors.primary} /> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {saving ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} />
+            ) : null}
+          </ScrollView>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function CommunityScreen() {
@@ -769,6 +1447,7 @@ export default function CommunityScreen() {
   const [feedRefreshing, setFeedRefreshing] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [reportPostId, setReportPostId] = useState<string | null>(null);
+  const [showAutoShareSettings, setShowAutoShareSettings] = useState(false);
 
   // ── Friends state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -829,38 +1508,29 @@ export default function CommunityScreen() {
         if (profile.avatar_url) {
           if (String(profile.avatar_url).startsWith('http')) {
             setCurrentUserAvatar(`${profile.avatar_url.split('?')[0]}?t=${Date.now()}`);
-            console.log('[Community] Avatar URL (direct):', profile.avatar_url);
           } else {
             const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(profile.avatar_url);
             setCurrentUserAvatar(`${urlData.publicUrl}?t=${Date.now()}`);
-            console.log('[Community] Avatar URL (resolved from storage):', urlData.publicUrl);
           }
         }
         console.log('[Community] User profile loaded:', uname);
       }
     };
     loadUser();
-  }, []); // empty — run once on mount only
+  }, []);
 
-  // ── Reload avatar on every tab focus so stale/null avatar is refreshed ──
+  // ── Reload avatar on every tab focus ──
   const reloadAvatar = useCallback(async () => {
-    console.log('[Community] reloadAvatar: checking for updated avatar on focus');
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     const uid = session.user.id;
-    const { data: profile } = await supabase
-      .from('users')
-      .select('avatar_url')
-      .eq('id', uid)
-      .single();
+    const { data: profile } = await supabase.from('users').select('avatar_url').eq('id', uid).single();
     if (profile?.avatar_url) {
       if (String(profile.avatar_url).startsWith('http')) {
         setCurrentUserAvatar(`${profile.avatar_url.split('?')[0]}?t=${Date.now()}`);
-        console.log('[Community] reloadAvatar: avatar refreshed (direct):', profile.avatar_url);
       } else {
         const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(profile.avatar_url);
         setCurrentUserAvatar(`${urlData.publicUrl}?t=${Date.now()}`);
-        console.log('[Community] reloadAvatar: avatar refreshed (storage):', urlData.publicUrl);
       }
     }
   }, []);
@@ -868,7 +1538,7 @@ export default function CommunityScreen() {
   useFocusEffect(
     useCallback(() => {
       reloadAvatar();
-      autoShareDailySummary(); // fire and forget
+      autoShareDailySummary();
     }, [reloadAvatar])
   );
 
@@ -883,7 +1553,7 @@ export default function CommunityScreen() {
     fetchFriendsData(currentUserId).finally(() => setFriendsLoading(false));
     setClubLoading(true);
     fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
-  }, [currentUserId]); // runs once when currentUserId is first set
+  }, [currentUserId]);
 
   // ── Fetch feed posts ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -892,7 +1562,7 @@ export default function CommunityScreen() {
     if (!uid) return;
     console.log('[Community] Fetching feed posts for user:', uid);
     try {
-      const [postsRes, likesRes] = await Promise.all([
+      const [postsRes, likesRes, savesRes] = await Promise.all([
         supabase
           .from('community_posts')
           .select('*, author:users!community_posts_user_id_fkey(id, username, full_name, avatar_url, user_type)')
@@ -900,22 +1570,22 @@ export default function CommunityScreen() {
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(30),
-        supabase
-          .from('community_likes')
-          .select('post_id')
-          .eq('user_id', uid),
+        supabase.from('community_likes').select('post_id').eq('user_id', uid),
+        supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
       ]);
-      console.log('[Community] Feed posts fetched:', postsRes.data?.length ?? 0, 'likes:', likesRes.data?.length ?? 0);
+      console.log('[Community] Feed posts fetched:', postsRes.data?.length ?? 0, 'likes:', likesRes.data?.length ?? 0, 'saves:', savesRes.data?.length ?? 0);
       const likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
+      const savedIds = new Set((savesRes.data || []).map((s: { post_id: string }) => s.post_id));
       const posts: CommunityPost[] = (postsRes.data || []).map((p: Record<string, unknown>) => ({
         ...(p as CommunityPost),
         liked_by_me: likedIds.has(p.id as string),
+        saved_by_me: savedIds.has(p.id as string),
       }));
       setFeedPosts(posts);
     } catch (e) {
       console.log('[Community] fetchFeedPosts error:', e);
     }
-  }, []); // empty deps — uid always passed as parameter
+  }, []);
 
   // ── Fetch club posts ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -924,7 +1594,7 @@ export default function CommunityScreen() {
     if (!uid) return;
     console.log('[Community] Fetching club posts for user:', uid);
     try {
-      const [postsRes, likesRes, commentsRes] = await Promise.all([
+      const [postsRes, likesRes, commentsRes, savesRes] = await Promise.all([
         supabase
           .from('community_posts')
           .select('*, author:users!community_posts_user_id_fkey(id, username, full_name, avatar_url, user_type)')
@@ -932,17 +1602,16 @@ export default function CommunityScreen() {
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(30),
-        supabase
-          .from('community_likes')
-          .select('post_id')
-          .eq('user_id', uid),
+        supabase.from('community_likes').select('post_id').eq('user_id', uid),
         supabase
           .from('community_comments')
           .select('id, post_id, content, author:users!community_comments_user_id_fkey(id, username, full_name, avatar_url, user_type)')
           .order('created_at', { ascending: true }),
+        supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
       ]);
       console.log('[Community] Club posts fetched:', postsRes.data?.length ?? 0);
       const likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
+      const savedIds = new Set((savesRes.data || []).map((s: { post_id: string }) => s.post_id));
       const commentsByPost: Record<string, TopComment> = {};
       for (const c of (commentsRes.data || [])) {
         if (!commentsByPost[c.post_id]) {
@@ -952,13 +1621,14 @@ export default function CommunityScreen() {
       const posts: CommunityPost[] = (postsRes.data || []).map((p: Record<string, unknown>) => ({
         ...(p as CommunityPost),
         liked_by_me: likedIds.has(p.id as string),
+        saved_by_me: savedIds.has(p.id as string),
         top_comment: commentsByPost[p.id as string] || null,
       }));
       setClubPosts(posts);
     } catch (e) {
       console.log('[Community] fetchClubPosts error:', e);
     }
-  }, []); // empty deps — uid always passed as parameter
+  }, []);
 
   // ── Fetch friends data ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -968,21 +1638,18 @@ export default function CommunityScreen() {
     console.log('[Community] Fetching friends data for user:', uid);
     try {
       const weekStart = getMondayOfWeek(new Date());
-      // Step 1: get following count (same as profile tab)
       const { count: rawFollowCount } = await supabase
         .from('social_follows')
         .select('id', { count: 'exact', head: true })
         .eq('follower_id', uid);
       setFollowingCount(rawFollowCount ?? 0);
 
-      // Step 1b: get following IDs for profile list
       const { data: followData, error: followDataError } = await supabase
         .from('social_follows')
         .select('following_id')
         .eq('follower_id', uid);
       console.log('[Community] followData result:', JSON.stringify(followData), 'error:', followDataError?.message, 'uid used:', uid);
 
-      // Fallback: if empty but count > 0, try with session uid
       let finalFollowData = followData;
       if ((!followData || followData.length === 0) && (rawFollowCount ?? 0) > 0) {
         const { data: { session } } = await supabase.auth.getSession();
@@ -999,7 +1666,6 @@ export default function CommunityScreen() {
       const followingIdList = (finalFollowData || []).map((f: { following_id: string }) => f.following_id);
       console.log('[Community] Following IDs count:', followingIdList.length);
 
-      // Step 2: if any, fetch user profiles
       let followingList: FollowingUser[] = [];
       if (followingIdList.length > 0) {
         const { data: usersData, error: usersError } = await supabase
@@ -1017,7 +1683,6 @@ export default function CommunityScreen() {
       setFollowing(followingList);
       setFollowingIds(new Set(followingList.map((u) => u.id)));
 
-      // Fetch weekly consistency leaderboard
       fetchWeeklyConsistency(uid, followingList);
 
       const [commitRes] = await Promise.all([
@@ -1034,19 +1699,10 @@ export default function CommunityScreen() {
         const c = commitRes.data[0] as Commitment;
         setCommitment(c);
         console.log('[Community] Commitment found:', c.id, 'status:', c.status);
-        // Fetch meal days for both users
         const partnerId = c.user_id === uid ? c.partner_id : c.user_id;
         const [myMeals, partnerMeals] = await Promise.all([
-          supabase
-            .from('meals')
-            .select('date')
-            .eq('user_id', uid)
-            .gte('date', weekStart),
-          supabase
-            .from('meals')
-            .select('date')
-            .eq('user_id', partnerId)
-            .gte('date', weekStart),
+          supabase.from('meals').select('date').eq('user_id', uid).gte('date', weekStart),
+          supabase.from('meals').select('date').eq('user_id', partnerId).gte('date', weekStart),
         ]);
         const myDays = new Set((myMeals.data || []).map((m: { date: string }) => m.date)).size;
         const partnerDays = new Set((partnerMeals.data || []).map((m: { date: string }) => m.date)).size;
@@ -1059,7 +1715,7 @@ export default function CommunityScreen() {
     } catch (e) {
       console.log('[Community] fetchFriendsData error:', e);
     }
-  }, []); // empty deps — uid always passed as parameter
+  }, []);
 
   // ── Fetch weekly consistency leaderboard ──
   const fetchWeeklyConsistency = useCallback(async (uid: string, followedUsers: FollowingUser[]) => {
@@ -1166,15 +1822,13 @@ export default function CommunityScreen() {
     }
   }, [currentUserFirstName, currentUserAvatar]);
 
-  // ── Focus effect: refresh data for active tab on re-focus ──
+  // ── Focus effect: always refresh feed on focus (fixes profile→feed sync) ──
   useFocusEffect(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback(() => {
       if (!currentUserId) return;
       console.log('[Community] Screen focused, refreshing tab:', activeTab);
-      // Always refresh friends/following data so count stays in sync with profile tab
       fetchFriendsData(currentUserId);
-      // Also refresh the active tab's content
       if (activeTab === 'feed') {
         setFeedLoading(true);
         fetchFeedPosts(currentUserId).finally(() => setFeedLoading(false));
@@ -1208,7 +1862,6 @@ export default function CommunityScreen() {
   // ── Like toggle ──
   const handleLike = useCallback(async (postId: string, liked: boolean) => {
     console.log('[Community] Network request: toggle like, postId:', postId, 'liked:', liked);
-    // Optimistic update
     const updatePosts = (posts: CommunityPost[]) =>
       posts.map((p) =>
         p.id === postId
@@ -1219,25 +1872,45 @@ export default function CommunityScreen() {
     else setClubPosts((prev) => updatePosts(prev));
 
     if (liked) {
-      const { error } = await supabase
-        .from('community_likes')
-        .delete()
-        .eq('post_id', postId)
-        .eq('user_id', currentUserId);
-      if (!error) {
-        await supabase
-          .from('community_posts')
-          .update({ likes_count: feedPosts.find((p) => p.id === postId)?.likes_count ?? 0 })
-          .eq('id', postId);
-      }
+      const { error } = await supabase.from('community_likes').delete().eq('post_id', postId).eq('user_id', currentUserId);
       console.log('[Community] Like removed, error:', error?.message ?? 'none');
     } else {
-      const { error } = await supabase
-        .from('community_likes')
-        .upsert({ post_id: postId, user_id: currentUserId });
+      const { error } = await supabase.from('community_likes').upsert({ post_id: postId, user_id: currentUserId });
       console.log('[Community] Like added, error:', error?.message ?? 'none');
     }
   }, [activeTab, currentUserId, feedPosts]);
+
+  // ── Save toggle ──
+  const handleSave = useCallback(async (postId: string, savedByMe: boolean) => {
+    console.log('[Community] Network request: toggle save, postId:', postId, 'savedByMe:', savedByMe);
+    const updatePosts = (posts: CommunityPost[]) =>
+      posts.map((p) =>
+        p.id === postId
+          ? { ...p, saved_by_me: !savedByMe, saves_count: savedByMe ? (p.saves_count ?? 1) - 1 : (p.saves_count ?? 0) + 1 }
+          : p
+      );
+    if (activeTab === 'feed') setFeedPosts((prev) => updatePosts(prev));
+    else setClubPosts((prev) => updatePosts(prev));
+
+    try {
+      if (savedByMe) {
+        await unsavePost(postId);
+      } else {
+        await savePost(postId);
+      }
+    } catch (e) {
+      console.warn('[Community] Save toggle failed (non-fatal):', e);
+      // Revert optimistic update on error
+      const revert = (posts: CommunityPost[]) =>
+        posts.map((p) =>
+          p.id === postId
+            ? { ...p, saved_by_me: savedByMe, saves_count: savedByMe ? (p.saves_count ?? 0) + 1 : (p.saves_count ?? 1) - 1 }
+            : p
+        );
+      if (activeTab === 'feed') setFeedPosts((prev) => revert(prev));
+      else setClubPosts((prev) => revert(prev));
+    }
+  }, [activeTab]);
 
   // ── Report ──
   const handleReport = (postId: string) => {
@@ -1248,22 +1921,21 @@ export default function CommunityScreen() {
   // ── Block ──
   const handleBlock = async (userId: string) => {
     console.log('[Community] Network request: block user:', userId);
-    const { error } = await supabase
-      .from('community_blocks')
-      .upsert({ blocker_id: currentUserId, blocked_id: userId });
+    const { error } = await supabase.from('community_blocks').upsert({ blocker_id: currentUserId, blocked_id: userId });
     console.log('[Community] Block result, error:', error?.message ?? 'none');
     Alert.alert('User blocked');
   };
 
   // ── Delete post ──
   const handleDelete = async (postId: string) => {
-    console.log('[Community] Network request: delete post:', postId);
+    console.log('[Community] Delete post pressed:', postId);
     Alert.alert('Delete post?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
+          console.log('[Community] Network request: delete post:', postId);
           const { error } = await supabase.from('community_posts').delete().eq('id', postId);
           console.log('[Community] Delete result, error:', error?.message ?? 'none');
           if (!error) {
@@ -1302,18 +1974,12 @@ export default function CommunityScreen() {
     const isFollowing = followingIds.has(userId);
     console.log('[Community] Network request:', isFollowing ? 'unfollow' : 'follow', 'user:', userId);
     if (isFollowing) {
-      const { error } = await supabase
-        .from('social_follows')
-        .delete()
-        .eq('follower_id', currentUserId)
-        .eq('following_id', userId);
+      const { error } = await supabase.from('social_follows').delete().eq('follower_id', currentUserId).eq('following_id', userId);
       console.log('[Community] Unfollow result, error:', error?.message ?? 'none');
       setFollowingIds((prev) => { const s = new Set(prev); s.delete(userId); return s; });
       setFollowing((prev) => prev.filter((u) => u.id !== userId));
     } else {
-      const { error } = await supabase
-        .from('social_follows')
-        .insert({ follower_id: currentUserId, following_id: userId });
+      const { error } = await supabase.from('social_follows').insert({ follower_id: currentUserId, following_id: userId });
       console.log('[Community] Follow result, error:', error?.message ?? 'none');
       setFollowingIds((prev) => new Set([...prev, userId]));
       const found = searchResults.find((u) => u.id === userId);
@@ -1325,10 +1991,7 @@ export default function CommunityScreen() {
   const handleAcceptCommitment = async () => {
     if (!commitment) return;
     console.log('[Community] Network request: accept commitment:', commitment.id);
-    const { error } = await supabase
-      .from('community_commitments')
-      .update({ status: 'active' })
-      .eq('id', commitment.id);
+    const { error } = await supabase.from('community_commitments').update({ status: 'active' }).eq('id', commitment.id);
     console.log('[Community] Accept commitment result, error:', error?.message ?? 'none');
     if (!error) setCommitment({ ...commitment, status: 'active' });
   };
@@ -1336,10 +1999,7 @@ export default function CommunityScreen() {
   const handleDeclineCommitment = async () => {
     if (!commitment) return;
     console.log('[Community] Network request: decline commitment:', commitment.id);
-    const { error } = await supabase
-      .from('community_commitments')
-      .delete()
-      .eq('id', commitment.id);
+    const { error } = await supabase.from('community_commitments').delete().eq('id', commitment.id);
     console.log('[Community] Decline commitment result, error:', error?.message ?? 'none');
     if (!error) setCommitment(null);
   };
@@ -1366,6 +2026,24 @@ export default function CommunityScreen() {
     setClubRefreshing(false);
   };
 
+  // ── Post created callback — optimistic prepend ──
+  const handlePosted = useCallback((newPost?: CommunityPost) => {
+    console.log('[Community] Post created callback, optimistic prepend:', newPost?.id);
+    if (newPost) {
+      if (activeTab === 'feed') {
+        setFeedPosts(prev => [newPost, ...prev]);
+      } else {
+        setClubPosts(prev => [newPost, ...prev]);
+      }
+    }
+    // Also refresh from server to get accurate data
+    if (activeTab === 'feed') {
+      fetchFeedPosts(currentUserId);
+    } else {
+      fetchClubPosts(currentUserId);
+    }
+  }, [activeTab, currentUserId, fetchFeedPosts, fetchClubPosts]);
+
   // ── Pill selector ──
   const tabLabels: { key: CommunityTab; label: string }[] = [
     { key: 'feed', label: 'Feed' },
@@ -1382,15 +2060,26 @@ export default function CommunityScreen() {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: borderColor }]}>
         <Text style={[styles.headerTitle, { color: textColor }]}>Community</Text>
-        <TouchableOpacity
-          onPress={() => {
-            console.log('[Community] Compose button pressed');
-            setShowCreatePost(true);
-          }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <SquarePen size={22} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Community] Auto-share settings button pressed');
+              setShowAutoShareSettings(true);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Settings size={20} color={secondaryColor} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Community] Compose button pressed');
+              setShowCreatePost(true);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <SquarePen size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Pill selector */}
@@ -1400,18 +2089,13 @@ export default function CommunityScreen() {
           return (
             <TouchableOpacity
               key={key}
-              style={[
-                styles.pill,
-                isActive && { backgroundColor: colors.primary },
-              ]}
+              style={[styles.pill, isActive && { backgroundColor: colors.primary }]}
               onPress={() => handleTabSwitch(key)}
             >
               {key === 'club' && (
                 <Crown size={13} color={isActive ? '#fff' : '#F59E0B'} style={{ marginRight: 4 }} />
               )}
-              <Text style={[styles.pillText, { color: isActive ? '#fff' : secondaryColor }]}>
-                {label}
-              </Text>
+              <Text style={[styles.pillText, { color: isActive ? '#fff' : secondaryColor }]}>{label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -1426,7 +2110,6 @@ export default function CommunityScreen() {
           refreshControl={
             <RefreshControl refreshing={feedRefreshing} onRefresh={handleFeedRefresh} tintColor={colors.primary} />
           }
-          ListHeaderComponent={null}
           ListEmptyComponent={
             feedLoading ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
@@ -1444,6 +2127,7 @@ export default function CommunityScreen() {
               isDark={isDark}
               currentUserId={currentUserId}
               onLike={handleLike}
+              onSave={handleSave}
               onReport={handleReport}
               onBlock={handleBlock}
               onDelete={handleDelete}
@@ -1489,10 +2173,7 @@ export default function CommunityScreen() {
                       <Text style={[styles.searchResultHandle, { color: secondaryColor }]}>@{user.username}</Text>
                     </View>
                     <TouchableOpacity
-                      style={[
-                        styles.followBtn,
-                        isFollowing && { backgroundColor: 'transparent', borderColor: colors.primary },
-                      ]}
+                      style={[styles.followBtn, isFollowing && { backgroundColor: 'transparent', borderColor: colors.primary }]}
                       onPress={() => handleFollow(user.id)}
                     >
                       <Text style={[styles.followBtnText, isFollowing && { color: colors.primary }]}>
@@ -1542,23 +2223,14 @@ export default function CommunityScreen() {
                         !isLast && { borderBottomWidth: 1, borderBottomColor: borderColor },
                       ]}
                     >
-                      {/* Rank */}
-                      <Text style={{ width: 28, fontSize: 13, fontWeight: '700', color: rankColor }}>
-                        #{entry.rank}
-                      </Text>
-
-                      {/* Avatar */}
+                      <Text style={{ width: 28, fontSize: 13, fontWeight: '700', color: rankColor }}>#{entry.rank}</Text>
                       {entry.avatarUrl ? (
                         <Image source={{ uri: entry.avatarUrl }} style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10 }} resizeMode="cover" />
                       ) : (
                         <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: entry.isMe ? colors.primary : '#6B7280', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
-                            {initial}
-                          </Text>
+                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{initial}</Text>
                         </View>
                       )}
-
-                      {/* Name */}
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 14, fontWeight: nameWeight, color: textColor }} numberOfLines={1}>
                           {entry.isMe ? 'You' : entry.name}
@@ -1567,14 +2239,10 @@ export default function CommunityScreen() {
                           <Text style={{ fontSize: 11, color: secondaryColor }}>@{entry.username}</Text>
                         ) : null}
                       </View>
-
-                      {/* Score */}
                       {entry.noActivity ? (
                         <Text style={{ fontSize: 12, color: secondaryColor, fontStyle: 'italic' }}>Sin actividad</Text>
                       ) : (
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor }}>
-                          {entry.score}
-                        </Text>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor }}>{entry.score}</Text>
                       )}
                     </TouchableOpacity>
                   );
@@ -1615,10 +2283,7 @@ export default function CommunityScreen() {
               {following.map((user, idx) => (
                 <TouchableOpacity
                   key={user.id}
-                  style={[
-                    styles.followingRow,
-                    idx < following.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor },
-                  ]}
+                  style={[styles.followingRow, idx < following.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor }]}
                   onPress={() => {
                     console.log('[Community] Following user tapped:', user.username);
                     router.push({ pathname: '/social-profile-view', params: { userId: user.id } });
@@ -1626,9 +2291,7 @@ export default function CommunityScreen() {
                 >
                   <UserAvatar url={user.avatar_url} name={user.name} username={user.username} size={44} />
                   <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                    <Text style={[styles.followingName, { color: textColor }]}>
-                      {user.name || user.username}
-                    </Text>
+                    <Text style={[styles.followingName, { color: textColor }]}>{user.name || user.username}</Text>
                     <Text style={[styles.followingHandle, { color: secondaryColor }]}>@{user.username}</Text>
                     <Text style={[styles.followingActivity, { color: secondaryColor }]}>Active recently</Text>
                   </View>
@@ -1675,26 +2338,19 @@ export default function CommunityScreen() {
           }
           ListHeaderComponent={
             <View>
-              {/* Club header */}
               <View style={[styles.clubHeader, { backgroundColor: cardBg, borderColor, borderWidth: 1, borderRadius: 16, padding: spacing.lg, marginBottom: spacing.md }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
                   <Lock size={18} color={colors.primary} />
                   <Text style={[styles.clubTitle, { color: textColor }]}>Premium Club</Text>
                 </View>
-                <Text style={[{ fontSize: 14, color: secondaryColor, lineHeight: 20 }]}>
+                <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }}>
                   You're here because you're committed to transforming your body. Let's share our progress, support each other, and reach our goals together.
                 </Text>
               </View>
 
-              {/* Compose row */}
               <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor, marginBottom: spacing.md }]}>
                 {currentUserAvatar ? (
-                  <Image
-                    key={currentUserAvatar}
-                    source={{ uri: currentUserAvatar }}
-                    style={{ width: 36, height: 36, borderRadius: 18 }}
-                    resizeMode="cover"
-                  />
+                  <Image key={currentUserAvatar} source={{ uri: currentUserAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} resizeMode="cover" />
                 ) : (
                   <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
@@ -1711,12 +2367,10 @@ export default function CommunityScreen() {
                     Share progress, a struggle, or encouragement...
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[Community] Club compose plus button tapped');
-                    setShowCreatePost(true);
-                  }}
-                >
+                <TouchableOpacity onPress={() => {
+                  console.log('[Community] Club compose plus button tapped');
+                  setShowCreatePost(true);
+                }}>
                   <Plus size={22} color={secondaryColor} />
                 </TouchableOpacity>
               </View>
@@ -1727,19 +2381,17 @@ export default function CommunityScreen() {
               <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
             ) : (
               <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>
-                  No posts yet. Start the conversation!
-                </Text>
+                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>No posts yet. Start the conversation!</Text>
               </View>
             )
           }
-          ListFooterComponent={null}
           renderItem={({ item }) => (
             <PostCard
               post={item}
               isDark={isDark}
               currentUserId={currentUserId}
               onLike={handleLike}
+              onSave={handleSave}
               onReport={handleReport}
               onBlock={handleBlock}
               onDelete={handleDelete}
@@ -1751,14 +2403,11 @@ export default function CommunityScreen() {
         />
       )}
 
-      {/* Create post sheet */}
-      <CreatePostSheet
+      {/* Composer sheet */}
+      <ComposerSheet
         visible={showCreatePost}
         onClose={() => setShowCreatePost(false)}
-        onPosted={() => {
-          if (activeTab === 'feed') fetchFeedPosts(currentUserId);
-          else fetchClubPosts(currentUserId);
-        }}
+        onPosted={handlePosted}
         section={activeTab === 'club' ? 'club' : 'feed'}
         isDark={isDark}
         currentUserId={currentUserId}
@@ -1772,6 +2421,14 @@ export default function CommunityScreen() {
         visible={reportPostId !== null}
         postId={reportPostId}
         onClose={() => setReportPostId(null)}
+        isDark={isDark}
+        currentUserId={currentUserId}
+      />
+
+      {/* Auto-share settings modal */}
+      <AutoShareSettingsModal
+        visible={showAutoShareSettings}
+        onClose={() => setShowAutoShareSettings(false)}
         isDark={isDark}
         currentUserId={currentUserId}
       />
@@ -1820,15 +2477,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  welcomeTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    marginBottom: spacing.md,
-  },
   inviteBtn: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
@@ -1864,30 +2512,30 @@ const styles = StyleSheet.create({
   postCard: {
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    padding: spacing.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
+    overflow: 'hidden',
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    padding: spacing.md,
+    paddingBottom: spacing.sm,
   },
   postAuthorName: {
     fontSize: 15,
     fontWeight: '700',
   },
   founderBadge: {
-    backgroundColor: colors.primary + '22',
     borderRadius: borderRadius.full,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
   founderBadgeText: {
-    color: colors.primary,
+    color: '#fff',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1902,7 +2550,8 @@ const styles = StyleSheet.create({
   postContent: {
     fontSize: 15,
     lineHeight: 22,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
   },
   foodChip: {
     flexDirection: 'row',
@@ -1913,6 +2562,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     alignSelf: 'flex-start',
     gap: 4,
+    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   foodChipText: {
@@ -1923,20 +2573,18 @@ const styles = StyleSheet.create({
   postImage: {
     width: '100%',
     height: 180,
-    borderRadius: 8,
     marginBottom: spacing.sm,
   },
   saveMealBtn: {
     borderWidth: 1,
-    borderColor: colors.primary,
     borderRadius: borderRadius.full,
     paddingVertical: 6,
     paddingHorizontal: spacing.md,
     alignSelf: 'flex-start',
+    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   saveMealBtnText: {
-    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -1945,6 +2593,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     paddingTop: spacing.sm,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   topReplyAuthor: {
@@ -1959,6 +2608,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
     gap: spacing.lg,
   },
   postAction: {
@@ -1981,6 +2632,9 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -2033,21 +2687,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  // Composer
+  composerToolbar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  composerTypeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: borderRadius.md,
+  },
+  composerTypeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   composeInput: {
     fontSize: 16,
     minHeight: 80,
     textAlignVertical: 'top',
-  },
-  categoryPill: {
     borderWidth: 1,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: spacing.sm,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
   },
-  categoryPillText: {
-    fontSize: 13,
-    fontWeight: '600',
+  fieldInput: {
+    fontSize: 14,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+  },
+  mealPhotoPicker: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  progressStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   removeImageBtn: {
     position: 'absolute',
@@ -2074,6 +2770,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  // Settings
+  settingsCard: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  settingsLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  settingsDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  audienceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  // Search
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

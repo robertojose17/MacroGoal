@@ -17,6 +17,37 @@ export async function isAutoShareEnabled(): Promise<boolean> {
   return enabled;
 }
 
+/** Returns true if the user has streak auto-sharing enabled */
+async function isStreakAutoShareEnabled(): Promise<boolean> {
+  console.log('[autoShare] checking isStreakAutoShareEnabled');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from('users')
+    .select('auto_share_streaks, auto_share_achievements')
+    .eq('id', user.id)
+    .single();
+  // auto_share_streaks defaults to true if null
+  const enabled = data?.auto_share_achievements !== false && data?.auto_share_streaks !== false;
+  console.log('[autoShare] isStreakAutoShareEnabled:', enabled);
+  return enabled;
+}
+
+/** Returns true if the user has weekly recap auto-sharing enabled */
+async function isWeeklyRecapAutoShareEnabled(): Promise<boolean> {
+  console.log('[autoShare] checking isWeeklyRecapAutoShareEnabled');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from('users')
+    .select('auto_share_weekly_recap, auto_share_achievements')
+    .eq('id', user.id)
+    .single();
+  const enabled = data?.auto_share_achievements !== false && data?.auto_share_weekly_recap !== false;
+  console.log('[autoShare] isWeeklyRecapAutoShareEnabled:', enabled);
+  return enabled;
+}
+
 /** Auto-post a streak milestone to the community feed */
 export async function autoShareStreak(streakDays: number): Promise<void> {
   console.log('[autoShare] autoShareStreak — streakDays:', streakDays);
@@ -38,6 +69,168 @@ export async function autoShareStreak(streakDays: number): Promise<void> {
     console.log('[autoShare] streak post succeeded');
   } catch (e) {
     console.warn('[autoShare] streak post failed (non-fatal):', e);
+  }
+}
+
+/**
+ * Auto-post a streak milestone (7, 14, 30, 60, 100 days).
+ * Uses AsyncStorage to avoid duplicate posts for the same milestone.
+ */
+export async function autoShareStreakMilestone(streakDays: number): Promise<void> {
+  console.log('[autoShare] autoShareStreakMilestone — streakDays:', streakDays);
+  const MILESTONE_DAYS = [7, 14, 30, 60, 100];
+  if (!MILESTONE_DAYS.includes(streakDays)) return;
+  if (!(await isStreakAutoShareEnabled())) return;
+
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const storageKey = `auto_share_streak_${streakDays}`;
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] streak milestone already posted for', streakDays, 'days, skipping');
+    return;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const messages: Record<number, string> = {
+    7:   '🔥 7-day streak! One week of showing up every day. #MacroGoal',
+    14:  '🔥 14-day streak! Two weeks of consistency. #MacroGoal',
+    30:  '🔥 30-day streak! A full month of discipline. #MacroGoal',
+    60:  '🔥 60-day streak! Two months strong. Habits are forming. #MacroGoal',
+    100: '🔥 100-day streak! Triple digits. Absolute legend. #MacroGoal',
+  };
+  const content = messages[streakDays] ?? `🔥 ${streakDays}-day streak! #MacroGoal`;
+
+  console.log('[autoShare] posting streak milestone:', streakDays, 'days');
+  try {
+    await createPost({
+      post_type: 'milestone',
+      post_type_v2: 'auto',
+      content,
+      streak_days: streakDays,
+      is_public: true,
+      auto_post_type: 'streak_milestone',
+      auto_post_date: today,
+    });
+    await AsyncStorage.setItem(storageKey, today);
+    console.log('[autoShare] streak milestone post succeeded');
+  } catch (e) {
+    console.warn('[autoShare] streak milestone post failed (non-fatal):', e);
+  }
+}
+
+/**
+ * Auto-post a new personal best streak.
+ * Combines with streak milestone if both happen on the same day.
+ */
+export async function autoShareNewPersonalBest(streakDays: number, previousBest: number): Promise<void> {
+  console.log('[autoShare] autoShareNewPersonalBest — streakDays:', streakDays, 'previousBest:', previousBest);
+  if (!(await isStreakAutoShareEnabled())) return;
+
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const today = new Date().toISOString().split('T')[0];
+  const storageKey = `auto_share_personal_best_${today}`;
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] personal best already posted today, skipping');
+    return;
+  }
+
+  // Check if a streak milestone was also posted today — if so, skip to avoid double-posting
+  const MILESTONE_DAYS = [7, 14, 30, 60, 100];
+  if (MILESTONE_DAYS.includes(streakDays)) {
+    const milestoneKey = `auto_share_streak_${streakDays}`;
+    const milestonePosted = await AsyncStorage.getItem(milestoneKey);
+    if (milestonePosted === today) {
+      console.log('[autoShare] streak milestone already posted today, skipping personal best to avoid duplicate');
+      return;
+    }
+  }
+
+  const content = `🏆 New personal best! ${streakDays}-day streak — beat my previous record of ${previousBest} days. #MacroGoal`;
+  console.log('[autoShare] posting personal best:', streakDays, 'days');
+  try {
+    await createPost({
+      post_type: 'milestone',
+      post_type_v2: 'auto',
+      content,
+      streak_days: streakDays,
+      is_public: true,
+      auto_post_type: 'personal_best',
+      auto_post_date: today,
+    });
+    await AsyncStorage.setItem(storageKey, today);
+    console.log('[autoShare] personal best post succeeded');
+  } catch (e) {
+    console.warn('[autoShare] personal best post failed (non-fatal):', e);
+  }
+}
+
+/**
+ * Auto-post a weekly recap (call on Sunday or Monday when opening app).
+ */
+export async function autoShareWeeklyRecap(weekScore: number, daysTracked: number): Promise<void> {
+  console.log('[autoShare] autoShareWeeklyRecap — weekScore:', weekScore, 'daysTracked:', daysTracked);
+  if (!(await isWeeklyRecapAutoShareEnabled())) return;
+
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const today = new Date().toISOString().split('T')[0];
+  const storageKey = `auto_share_weekly_recap_${today}`;
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] weekly recap already posted today, skipping');
+    return;
+  }
+
+  const scoreEmoji = weekScore >= 80 ? '🌟' : weekScore >= 60 ? '💪' : '📈';
+  const content = `${scoreEmoji} Weekly recap: ${daysTracked}/7 days tracked, consistency score ${weekScore}. Every week is a new chance to improve. #MacroGoal`;
+  console.log('[autoShare] posting weekly recap, score:', weekScore);
+  try {
+    await createPost({
+      post_type: 'stats',
+      post_type_v2: 'auto',
+      content,
+      is_public: true,
+      auto_post_type: 'weekly_recap',
+      auto_post_date: today,
+    });
+    await AsyncStorage.setItem(storageKey, today);
+    console.log('[autoShare] weekly recap post succeeded');
+  } catch (e) {
+    console.warn('[autoShare] weekly recap post failed (non-fatal):', e);
+  }
+}
+
+/**
+ * Auto-post when the user completes their first full tracked week.
+ */
+export async function autoShareFirstWeek(): Promise<void> {
+  console.log('[autoShare] autoShareFirstWeek triggered');
+  if (!(await isWeeklyRecapAutoShareEnabled())) return;
+
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const storageKey = 'auto_share_first_week_done';
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] first week already posted, skipping');
+    return;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const content = '🎉 Just completed my first full week of tracking! The journey starts here. #MacroGoal';
+  console.log('[autoShare] posting first week achievement');
+  try {
+    await createPost({
+      post_type: 'milestone',
+      post_type_v2: 'auto',
+      content,
+      is_public: true,
+      auto_post_type: 'first_week',
+      auto_post_date: today,
+    });
+    await AsyncStorage.setItem(storageKey, 'true');
+    console.log('[autoShare] first week post succeeded');
+  } catch (e) {
+    console.warn('[autoShare] first week post failed (non-fatal):', e);
   }
 }
 

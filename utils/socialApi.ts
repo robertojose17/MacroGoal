@@ -16,6 +16,7 @@ export interface SocialUser {
 }
 
 export type PostType = 'photo' | 'milestone' | 'streak' | 'stats' | 'meal' | 'text';
+export type PostTypeV2 = 'update' | 'question' | 'meal' | 'progress' | 'auto';
 
 export interface SocialPost {
   id: string;
@@ -37,6 +38,28 @@ export interface SocialPost {
   created_at: string;
   author: { id: string; username: string; name: string | null; user_type?: string | null; is_premium?: boolean | null };
   liked_by_me: boolean;
+  saved_by_me?: boolean;
+  // v2 fields
+  post_type_v2?: PostTypeV2 | null;
+  question_title?: string | null;
+  question_details?: string | null;
+  meal_photo_url?: string | null;
+  meal_ingredients?: string[] | null;
+  meal_servings?: number | null;
+  meal_calories?: number | null;
+  meal_protein?: number | null;
+  meal_carbs?: number | null;
+  meal_fat?: number | null;
+  progress_stats?: Record<string, unknown> | null;
+  progress_photo_url?: string | null;
+  is_pinned?: boolean | null;
+  poll_options?: string[] | null;
+  poll_votes?: Record<string, unknown> | null;
+  is_founder_post?: boolean | null;
+  audience?: string | null;
+  auto_post_type?: string | null;
+  auto_post_date?: string | null;
+  saves_count?: number | null;
 }
 
 export interface SocialProfile {
@@ -91,6 +114,26 @@ export interface CreatePostInput {
   streak_days?: number;
   milestone_type?: string;
   is_public?: boolean;
+  // v2 fields
+  post_type_v2?: PostTypeV2;
+  question_title?: string;
+  question_details?: string;
+  meal_photo_url?: string;
+  meal_ingredients?: string[];
+  meal_servings?: number;
+  meal_calories?: number;
+  meal_protein?: number;
+  meal_carbs?: number;
+  meal_fat?: number;
+  progress_stats?: Record<string, unknown>;
+  progress_photo_url?: string;
+  is_pinned?: boolean;
+  poll_options?: string[];
+  is_founder_post?: boolean;
+  audience?: string;
+  auto_post_type?: string;
+  auto_post_date?: string;
+  saves_count?: number;
 }
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -222,13 +265,14 @@ export async function fetchComments(post_id: string): Promise<Comment[]> {
   return data ?? [];
 }
 
-export async function createPost(post: CreatePostInput): Promise<void> {
-  console.log('[SocialApi] createPost — type:', post.post_type, 'public:', post.is_public);
-  await apiFetch('/social-post-actions/create', {
+export async function createPost(post: CreatePostInput): Promise<SocialPost> {
+  console.log('[SocialApi] createPost — type:', post.post_type, 'type_v2:', post.post_type_v2, 'public:', post.is_public);
+  const data = await apiFetch<SocialPost>('/social-post-actions/create', {
     method: 'POST',
     body: JSON.stringify(post),
   });
-  console.log('[SocialApi] createPost — success');
+  console.log('[SocialApi] createPost — success, id:', data?.id);
+  return data;
 }
 
 export async function deletePost(postId: string): Promise<void> {
@@ -237,6 +281,26 @@ export async function deletePost(postId: string): Promise<void> {
     method: 'DELETE',
   });
   console.log('[SocialApi] deletePost — success');
+}
+
+export async function savePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
+  console.log('[SocialApi] savePost — post_id:', post_id);
+  const data = await apiFetch<{ saved: boolean; saves_count: number }>(
+    '/social-post-actions/save',
+    { method: 'POST', body: JSON.stringify({ post_id }) }
+  );
+  console.log('[SocialApi] savePost — saved:', data.saved, 'count:', data.saves_count);
+  return data;
+}
+
+export async function unsavePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
+  console.log('[SocialApi] unsavePost — post_id:', post_id);
+  const data = await apiFetch<{ saved: boolean; saves_count: number }>(
+    `/social-post-actions/save?post_id=${encodeURIComponent(post_id)}`,
+    { method: 'DELETE' }
+  );
+  console.log('[SocialApi] unsavePost — saved:', data.saved, 'count:', data.saves_count);
+  return data;
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────

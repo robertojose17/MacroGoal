@@ -9,7 +9,16 @@ import {
   ImageSourcePropType,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MessageCircle, Trophy, Flame, TrendingUp, MoreHorizontal } from 'lucide-react-native';
+import {
+  MessageCircle,
+  Trophy,
+  Flame,
+  TrendingUp,
+  MoreHorizontal,
+  Bookmark,
+  HelpCircle,
+  Pin,
+} from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import type { SocialPost } from '@/utils/socialApi';
 import Avatar from '@/components/social/Avatar';
@@ -39,9 +48,11 @@ interface SocialPostCardProps {
   post: SocialPost;
   isDark: boolean;
   onLike: (postId: string) => void;
+  onSave?: (postId: string, savedByMe: boolean) => void;
   onComment?: (postId: string) => void;
   onPressUser?: (userId: string) => void;
   onMoreOptions?: (postId: string, authorId: string) => void;
+  onSaveMeal?: (post: SocialPost) => void;
   index?: number;
   hideCommentButton?: boolean;
 }
@@ -50,14 +61,17 @@ export default function SocialPostCard({
   post,
   isDark,
   onLike,
+  onSave,
   onComment,
   onPressUser,
   onMoreOptions,
+  onSaveMeal,
   index = 0,
   hideCommentButton = false,
 }: SocialPostCardProps) {
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
+  const saveScale = useRef(new Animated.Value(1)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(12)).current;
 
@@ -87,6 +101,15 @@ export default function SocialPostCard({
     onLike(post.id);
   }, [post.id, post.liked_by_me, onLike]);
 
+  const handleSave = useCallback(() => {
+    console.log('[SocialPostCard] Save (🔖) pressed — post_id:', post.id, 'currently saved:', post.saved_by_me);
+    Animated.sequence([
+      Animated.spring(saveScale, { toValue: 1.3, useNativeDriver: true, speed: 50, bounciness: 10 }),
+      Animated.spring(saveScale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }),
+    ]).start();
+    if (onSave) onSave(post.id, post.saved_by_me ?? false);
+  }, [post.id, post.saved_by_me, onSave]);
+
   const handleComment = useCallback(() => {
     console.log('[SocialPostCard] Comment pressed — post_id:', post.id);
     if (onComment) {
@@ -113,11 +136,16 @@ export default function SocialPostCard({
   const timeAgoText = timeAgo(post.created_at);
   const likesCount = post.likes_count;
   const commentsCount = post.comments_count;
+  const savesCount = post.saves_count ?? 0;
   const likeActive = post.liked_by_me;
+  const saveActive = post.saved_by_me ?? false;
   const authorUsername = post.author?.username ?? 'Unknown';
   const authorName = post.author?.name ?? null;
   const captionText = post.content ?? null;
   const isElite = post.author?.user_type === 'premium' || post.author?.is_premium === true;
+  const isFounder = post.is_founder_post === true;
+  const isPinned = post.is_pinned === true;
+  const isAutoPost = post.post_type_v2 === 'auto';
 
   // Derived display values
   const caloriesDisplay = post.calories != null ? Math.round(Number(post.calories)).toString() : null;
@@ -128,7 +156,157 @@ export default function SocialPostCard({
   const weightDisplay = post.weight_value != null ? Number(post.weight_value).toFixed(1) : null;
   const weightUnit = post.weight_unit ?? 'lbs';
 
+  // Meal v2 display values
+  const mealCalDisplay = post.meal_calories != null ? Math.round(Number(post.meal_calories)).toString() : caloriesDisplay;
+  const mealProtDisplay = post.meal_protein != null ? Math.round(Number(post.meal_protein)).toString() : proteinDisplay;
+  const mealCarbDisplay = post.meal_carbs != null ? Math.round(Number(post.meal_carbs)).toString() : carbsDisplay;
+  const mealFatDisplay = post.meal_fat != null ? Math.round(Number(post.meal_fat)).toString() : fatDisplay;
+
+  // Progress stats display
+  const progressStats = post.progress_stats as Record<string, unknown> | null | undefined;
+
+  const renderV2Body = () => {
+    const typeV2 = post.post_type_v2;
+
+    if (typeV2 === 'question') {
+      return (
+        <View style={styles.questionBody}>
+          {post.question_title ? (
+            <Text style={[styles.questionTitle, { color: textColor }]}>{post.question_title}</Text>
+          ) : null}
+          {post.question_details ? (
+            <Text style={[styles.questionDetails, { color: subColor }]} numberOfLines={3}>
+              {post.question_details}
+            </Text>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (typeV2 === 'meal') {
+      const mealPhotoUrl = post.meal_photo_url ?? post.image_url;
+      return (
+        <View>
+          {mealPhotoUrl ? (
+            <Image
+              source={resolveImageSource(mealPhotoUrl)}
+              style={styles.mealPhoto}
+              resizeMode="cover"
+            />
+          ) : null}
+          {captionText ? (
+            <Text style={[styles.mealName, { color: textColor }]}>{captionText}</Text>
+          ) : null}
+          <View style={styles.mealMacroPills}>
+            {mealCalDisplay ? (
+              <View style={[styles.macroPill, { backgroundColor: colors.calories + '18' }]}>
+                <Text style={[styles.macroPillText, { color: colors.calories }]}>
+                  {mealCalDisplay}
+                  {' kcal'}
+                </Text>
+              </View>
+            ) : null}
+            {mealProtDisplay ? (
+              <View style={[styles.macroPill, { backgroundColor: colors.protein + '18' }]}>
+                <Text style={[styles.macroPillText, { color: colors.protein }]}>
+                  {mealProtDisplay}
+                  {'g P'}
+                </Text>
+              </View>
+            ) : null}
+            {mealCarbDisplay ? (
+              <View style={[styles.macroPill, { backgroundColor: colors.carbs + '18' }]}>
+                <Text style={[styles.macroPillText, { color: colors.carbs }]}>
+                  {mealCarbDisplay}
+                  {'g C'}
+                </Text>
+              </View>
+            ) : null}
+            {mealFatDisplay ? (
+              <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
+                <Text style={[styles.macroPillText, { color: colors.fats }]}>
+                  {mealFatDisplay}
+                  {'g F'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          {onSaveMeal ? (
+            <Pressable
+              style={[styles.saveMealBtn, { borderColor: colors.primary }]}
+              onPress={() => {
+                console.log('[SocialPostCard] Save to Food pressed — post_id:', post.id);
+                onSaveMeal(post);
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save to Food</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (typeV2 === 'progress') {
+      return (
+        <View style={[styles.progressBody, { backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', borderColor: isDark ? '#2A3A4A' : '#DBEAFE' }]}>
+          {captionText ? (
+            <Text style={[styles.progressCaption, { color: textColor }]}>{captionText}</Text>
+          ) : null}
+          {progressStats ? (
+            <View style={styles.progressTiles}>
+              {progressStats.streak_days != null ? (
+                <View style={[styles.progressTile, { backgroundColor: isDark ? '#2A1A1A' : '#FEF2F2' }]}>
+                  <Text style={styles.progressTileEmoji}>🔥</Text>
+                  <Text style={[styles.progressTileValue, { color: '#EF4444' }]}>
+                    {String(progressStats.streak_days)}
+                  </Text>
+                  <Text style={[styles.progressTileLabel, { color: subColor }]}>day streak</Text>
+                </View>
+              ) : null}
+              {progressStats.consistency_score != null ? (
+                <View style={[styles.progressTile, { backgroundColor: isDark ? '#1A2A1A' : '#F0FDF4' }]}>
+                  <Text style={styles.progressTileEmoji}>📊</Text>
+                  <Text style={[styles.progressTileValue, { color: colors.success }]}>
+                    {String(progressStats.consistency_score)}
+                  </Text>
+                  <Text style={[styles.progressTileLabel, { color: subColor }]}>consistency</Text>
+                </View>
+              ) : null}
+              {progressStats.weight_value != null ? (
+                <View style={[styles.progressTile, { backgroundColor: isDark ? '#1A1A2A' : '#F5F3FF' }]}>
+                  <Text style={styles.progressTileEmoji}>⚖️</Text>
+                  <Text style={[styles.progressTileValue, { color: colors.primary }]}>
+                    {Number(progressStats.weight_value).toFixed(1)}
+                  </Text>
+                  <Text style={[styles.progressTileLabel, { color: subColor }]}>
+                    {String(progressStats.weight_unit ?? 'lbs')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {post.progress_photo_url ? (
+            <Image
+              source={resolveImageSource(post.progress_photo_url)}
+              style={styles.progressPhoto}
+              resizeMode="cover"
+            />
+          ) : null}
+        </View>
+      );
+    }
+
+    // update / auto / null — fall through to legacy renderPostBody
+    return null;
+  };
+
   const renderPostBody = () => {
+    // If v2 type is set and handled, use v2 renderer
+    if (post.post_type_v2 && post.post_type_v2 !== 'update' && post.post_type_v2 !== 'auto') {
+      return renderV2Body();
+    }
+
     switch (post.post_type) {
       case 'photo':
         return post.image_url ? (
@@ -186,7 +364,7 @@ export default function SocialPostCard({
                 <View style={[styles.macroPill, { backgroundColor: colors.protein + '18' }]}>
                   <Text style={[styles.macroPillText, { color: colors.protein }]}>
                     {proteinDisplay}
-                    g P
+                    {'g P'}
                   </Text>
                 </View>
               ) : null}
@@ -194,7 +372,7 @@ export default function SocialPostCard({
                 <View style={[styles.macroPill, { backgroundColor: colors.carbs + '18' }]}>
                   <Text style={[styles.macroPillText, { color: colors.carbs }]}>
                     {carbsDisplay}
-                    g C
+                    {'g C'}
                   </Text>
                 </View>
               ) : null}
@@ -202,7 +380,7 @@ export default function SocialPostCard({
                 <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
                   <Text style={[styles.macroPillText, { color: colors.fats }]}>
                     {fatDisplay}
-                    g F
+                    {'g F'}
                   </Text>
                 </View>
               ) : null}
@@ -226,7 +404,7 @@ export default function SocialPostCard({
                   <View style={[styles.macroPill, { backgroundColor: colors.protein + '18' }]}>
                     <Text style={[styles.macroPillText, { color: colors.protein }]}>
                       {proteinDisplay}
-                      g P
+                      {'g P'}
                     </Text>
                   </View>
                 ) : null}
@@ -234,7 +412,7 @@ export default function SocialPostCard({
                   <View style={[styles.macroPill, { backgroundColor: colors.carbs + '18' }]}>
                     <Text style={[styles.macroPillText, { color: colors.carbs }]}>
                       {carbsDisplay}
-                      g C
+                      {'g C'}
                     </Text>
                   </View>
                 ) : null}
@@ -242,7 +420,7 @@ export default function SocialPostCard({
                   <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
                     <Text style={[styles.macroPillText, { color: colors.fats }]}>
                       {fatDisplay}
-                      g F
+                      {'g F'}
                     </Text>
                   </View>
                 ) : null}
@@ -257,14 +435,32 @@ export default function SocialPostCard({
     }
   };
 
+  const cardStyle = isAutoPost
+    ? [styles.card, { backgroundColor: isDark ? '#1E2030' : '#F8F9FC', borderColor, opacity: 0.92 }]
+    : [styles.card, { backgroundColor: bg, borderColor }];
+
   return (
     <Animated.View
       style={[
-        styles.card,
-        { backgroundColor: bg, borderColor },
+        cardStyle,
         { opacity: cardOpacity, transform: [{ translateY: cardTranslateY }] },
       ]}
     >
+      {/* Pin indicator */}
+      {isPinned ? (
+        <View style={styles.pinnedRow}>
+          <Pin size={12} color={colors.primary} />
+          <Text style={[styles.pinnedText, { color: colors.primary }]}>Pinned</Text>
+        </View>
+      ) : null}
+
+      {/* Auto label */}
+      {isAutoPost ? (
+        <View style={styles.autoLabel}>
+          <Text style={styles.autoLabelText}>Auto</Text>
+        </View>
+      ) : null}
+
       {/* Header */}
       <Pressable onPress={handlePressUser} style={styles.header} accessibilityRole="button">
         <Avatar username={authorUsername} size={40} />
@@ -273,9 +469,26 @@ export default function SocialPostCard({
             <Text style={[styles.username, { color: textColor }]} numberOfLines={1}>
               {authorUsername}
             </Text>
-            {isElite ? (
+            {isFounder ? (
+              <View style={styles.founderBadge}>
+                <Text style={styles.founderBadgeText}>Founder</Text>
+              </View>
+            ) : null}
+            {isElite && !isFounder ? (
               <View style={styles.eliteBadge}>
                 <Text style={styles.eliteBadgeText}>ELITE</Text>
+              </View>
+            ) : null}
+            {post.post_type_v2 === 'question' ? (
+              <View style={styles.questionBadge}>
+                <HelpCircle size={10} color="#3B82F6" />
+                <Text style={styles.questionBadgeText}>Question</Text>
+              </View>
+            ) : null}
+            {post.post_type_v2 === 'progress' ? (
+              <View style={styles.progressBadge}>
+                <TrendingUp size={10} color="#8B5CF6" />
+                <Text style={styles.progressBadgeText}>Progress</Text>
               </View>
             ) : null}
           </View>
@@ -288,10 +501,9 @@ export default function SocialPostCard({
         </View>
         <Pressable
           onPress={() => {
+            console.log('[SocialPostCard] More options pressed — post_id:', post.id, 'author_id:', post.author?.id);
             if (onMoreOptions) {
               onMoreOptions(post.id, post.author?.id ?? '');
-            } else {
-              console.log('[SocialPostCard] More options pressed — post_id:', post.id);
             }
           }}
           style={styles.moreBtn}
@@ -306,22 +518,41 @@ export default function SocialPostCard({
       {/* Post body */}
       {renderPostBody()}
 
+      {/* Caption for update/auto/text posts */}
+      {captionText && (!post.post_type_v2 || post.post_type_v2 === 'update' || post.post_type_v2 === 'auto') ? (
+        <View style={styles.captionRow}>
+          <Text style={[styles.captionUsername, { color: textColor }]}>{authorUsername}</Text>
+          <Text style={[styles.captionText, { color: textColor }]}>{captionText}</Text>
+        </View>
+      ) : null}
+
+      {/* Image for update posts */}
+      {post.image_url && (!post.post_type_v2 || post.post_type_v2 === 'update' || post.post_type_v2 === 'auto') && post.post_type !== 'photo' && post.post_type !== 'meal' ? (
+        <Image
+          source={resolveImageSource(post.image_url)}
+          style={styles.updateImage}
+          resizeMode="cover"
+        />
+      ) : null}
+
       {/* Actions row */}
       <View style={[styles.actionsRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}>
+        {/* Like */}
         <Pressable
           onPress={handleLike}
           style={styles.actionBtn}
-          accessibilityLabel="Like post"
+          accessibilityLabel="Support post"
           accessibilityRole="button"
         >
           <Animated.View style={{ transform: [{ scale: likeScale }], opacity: likeActive ? 1 : 0.45 }}>
-            <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={14} color={colors.primary} />
+            <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={18} color={likeActive ? '#EF4444' : subColor} />
           </Animated.View>
-          <Text style={[styles.actionCount, { color: likeActive ? colors.warning : subColor }]}>
+          <Text style={[styles.actionCount, { color: likeActive ? '#EF4444' : subColor }]}>
             {likesCount}
           </Text>
         </Pressable>
 
+        {/* Comment */}
         {!hideCommentButton && (
           <Pressable
             onPress={handleComment}
@@ -329,10 +560,33 @@ export default function SocialPostCard({
             accessibilityLabel="View comments"
             accessibilityRole="button"
           >
-            <MessageCircle size={20} color={subColor} />
+            <MessageCircle size={18} color={subColor} />
             <Text style={[styles.actionCount, { color: subColor }]}>{commentsCount}</Text>
           </Pressable>
         )}
+
+        {/* Save */}
+        {onSave ? (
+          <Pressable
+            onPress={handleSave}
+            style={styles.actionBtn}
+            accessibilityLabel="Save post"
+            accessibilityRole="button"
+          >
+            <Animated.View style={{ transform: [{ scale: saveScale }] }}>
+              <Bookmark
+                size={18}
+                color={saveActive ? colors.primary : subColor}
+                fill={saveActive ? colors.primary : 'transparent'}
+              />
+            </Animated.View>
+            {savesCount > 0 ? (
+              <Text style={[styles.actionCount, { color: saveActive ? colors.primary : subColor }]}>
+                {savesCount}
+              </Text>
+            ) : null}
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Likes count */}
@@ -344,14 +598,6 @@ export default function SocialPostCard({
         </Text>
       ) : null}
 
-      {/* Caption */}
-      {captionText ? (
-        <View style={styles.captionRow}>
-          <Text style={[styles.captionUsername, { color: textColor }]}>{authorUsername}</Text>
-          <Text style={[styles.captionText, { color: textColor }]}>{captionText}</Text>
-        </View>
-      ) : null}
-
       {/* View comments link */}
       {commentsCount > 0 && !hideCommentButton ? (
         <Pressable
@@ -360,8 +606,7 @@ export default function SocialPostCard({
           accessibilityRole="button"
         >
           <Text style={[styles.viewCommentsText, { color: subColor }]}>
-            View all
-            {' '}
+            {'View all '}
             {commentsCount}
             {' '}
             {commentsCount === 1 ? 'comment' : 'comments'}
@@ -386,6 +631,35 @@ const styles = StyleSheet.create({
     elevation: 1,
     borderBottomWidth: 1,
   },
+  pinnedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingTop: 8,
+    paddingBottom: 2,
+  },
+  pinnedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  autoLabel: {
+    position: 'absolute',
+    top: 10,
+    right: 48,
+    backgroundColor: 'rgba(107,114,128,0.15)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    zIndex: 1,
+  },
+  autoLabelText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6B7280',
+    letterSpacing: 0.3,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -399,23 +673,64 @@ const styles = StyleSheet.create({
   usernameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
   },
   username: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  founderBadge: {
+    backgroundColor: '#0D9488',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  founderBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   eliteBadge: {
     backgroundColor: '#F59E0B',
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 2,
-    marginLeft: 4,
   },
   eliteBadgeText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  questionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#3B82F6' + '18',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  questionBadgeText: {
+    color: '#3B82F6',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  progressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#8B5CF6' + '18',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  progressBadgeText: {
+    color: '#8B5CF6',
+    fontSize: 10,
+    fontWeight: '700',
   },
   authorName: {
     fontSize: 12,
@@ -435,6 +750,100 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
   },
+  updateImage: {
+    width: '100%',
+    height: 200,
+    marginTop: 4,
+  },
+  // Question
+  questionBody: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: 6,
+  },
+  questionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  questionDetails: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  // Meal v2
+  mealPhoto: {
+    width: '100%',
+    height: 200,
+  },
+  mealName: {
+    fontSize: 15,
+    fontWeight: '600',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: 4,
+  },
+  mealMacroPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  saveMealBtn: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    alignSelf: 'flex-start',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  saveMealBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Progress v2
+  progressBody: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  progressCaption: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  progressTiles: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  progressTile: {
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    alignItems: 'center',
+    minWidth: 80,
+    gap: 2,
+  },
+  progressTileEmoji: {
+    fontSize: 20,
+  },
+  progressTileValue: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  progressTileLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  progressPhoto: {
+    width: '100%',
+    height: 180,
+    borderRadius: borderRadius.sm,
+  },
+  // Legacy
   specialCard: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
@@ -491,13 +900,6 @@ const styles = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
   },
-  mealMacroPills: {
-    flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
   macroPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -521,9 +923,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     minHeight: 36,
-  },
-  likeEmoji: {
-    fontSize: 22,
   },
   actionCount: {
     fontSize: 14,
