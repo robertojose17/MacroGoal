@@ -41,8 +41,6 @@ import {
   Plus,
   Users,
   Lock,
-  Trophy,
-  Pin,
   ChevronRight,
   Check,
 } from 'lucide-react-native';
@@ -119,13 +117,6 @@ interface Commitment {
   status: 'active' | 'pending' | 'completed';
   partner?: FollowingUser | null;
   requester?: FollowingUser | null;
-}
-
-interface CommunityChallenge {
-  id: string;
-  title: string;
-  description: string;
-  is_active: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -812,8 +803,6 @@ export default function CommunityScreen() {
   const [clubPosts, setClubPosts] = useState<CommunityPost[]>([]);
   const [clubLoading, setClubLoading] = useState(false);
   const [clubRefreshing, setClubRefreshing] = useState(false);
-  const [pinnedClubPost, setPinnedClubPost] = useState<CommunityPost | null>(null);
-  const [activeChallenge, setActiveChallenge] = useState<CommunityChallenge | null>(null);
 
   // ── Load current user (run once on mount) ──
   useEffect(() => {
@@ -935,7 +924,7 @@ export default function CommunityScreen() {
     if (!uid) return;
     console.log('[Community] Fetching club posts for user:', uid);
     try {
-      const [postsRes, likesRes, commentsRes, challengeRes] = await Promise.all([
+      const [postsRes, likesRes, commentsRes] = await Promise.all([
         supabase
           .from('community_posts')
           .select('*, author:users!community_posts_user_id_fkey(id, username, full_name, avatar_url, user_type)')
@@ -951,11 +940,6 @@ export default function CommunityScreen() {
           .from('community_comments')
           .select('id, post_id, content, author:users!community_comments_user_id_fkey(id, username, full_name, avatar_url, user_type)')
           .order('created_at', { ascending: true }),
-        supabase
-          .from('community_challenges')
-          .select('*')
-          .eq('is_active', true)
-          .limit(1),
       ]);
       console.log('[Community] Club posts fetched:', postsRes.data?.length ?? 0);
       const likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
@@ -970,13 +954,7 @@ export default function CommunityScreen() {
         liked_by_me: likedIds.has(p.id as string),
         top_comment: commentsByPost[p.id as string] || null,
       }));
-      const pinned = posts.find((p) => p.is_pinned) || null;
-      setPinnedClubPost(pinned);
       setClubPosts(posts);
-      if (challengeRes.data && challengeRes.data.length > 0) {
-        setActiveChallenge(challengeRes.data[0] as CommunityChallenge);
-        console.log('[Community] Active challenge found:', challengeRes.data[0].title);
-      }
     } catch (e) {
       console.log('[Community] fetchClubPosts error:', e);
     }
@@ -1698,59 +1676,18 @@ export default function CommunityScreen() {
           ListHeaderComponent={
             <View>
               {/* Club header */}
-              <View style={styles.clubHeader}>
-                <Lock size={20} color={colors.primary} />
-                <View style={{ marginLeft: spacing.sm }}>
-                  <Text style={[styles.clubTitle, { color: textColor }]}>Macro Goal Premium Club</Text>
-                  <Text style={[styles.clubMeta, { color: secondaryColor }]}>Private · Included with Premium</Text>
-                  <Text style={[styles.clubDesc, { color: secondaryColor }]}>
-                    Support, practical ideas, and progress together.
-                  </Text>
+              <View style={[styles.clubHeader, { backgroundColor: cardBg, borderColor, borderWidth: 1, borderRadius: 16, padding: spacing.lg, marginBottom: spacing.md }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+                  <Lock size={18} color={colors.primary} />
+                  <Text style={[styles.clubTitle, { color: textColor }]}>Premium Club</Text>
                 </View>
-              </View>
-
-              {/* Pinned weekly conversation */}
-              <View style={[styles.pinnedConvCard, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '30' }]}>
-                <View style={styles.pinnedConvHeader}>
-                  <Text style={[styles.pinnedConvLabel, { color: colors.primary }]}>THIS WEEK'S CONVERSATION</Text>
-                  <Pin size={14} color={colors.primary} />
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
-                  <UserAvatar
-                    url={pinnedClubPost?.author?.avatar_url ?? null}
-                    name={pinnedClubPost?.author?.full_name ?? 'Roberto Rivera'}
-                    username={pinnedClubPost?.author?.username ?? 'roberto'}
-                    size={36}
-                  />
-                  <Text style={[styles.pinnedConvAuthor, { color: textColor }]}>
-                    {pinnedClubPost?.author?.full_name || 'Roberto Rivera'}
-                  </Text>
-                  <View style={styles.founderBadge}>
-                    <Text style={styles.founderBadgeText}>Founder</Text>
-                  </View>
-                </View>
-                <Text style={[styles.pinnedConvQuestion, { color: textColor }]}>
-                  {pinnedClubPost?.content || "What's your biggest nutrition challenge this week?"}
+                <Text style={[{ fontSize: 14, color: secondaryColor, lineHeight: 20 }]}>
+                  You're here because you're committed to transforming your body. Let's share our progress, support each other, and reach our goals together.
                 </Text>
-                <View style={styles.pinnedConvFooter}>
-                  <TouchableOpacity
-                    style={styles.joinConvBtn}
-                    onPress={() => {
-                      console.log('[Community] Join conversation pressed');
-                      setShowCreatePost(true);
-                    }}
-                  >
-                    <MessageCircle size={14} color="#fff" />
-                    <Text style={styles.joinConvBtnText}>Join conversation</Text>
-                  </TouchableOpacity>
-                  <Text style={[styles.repliesText, { color: secondaryColor }]}>
-                    {pinnedClubPost?.comments_count ?? 0} replies
-                  </Text>
-                </View>
               </View>
 
-              {/* Club compose row */}
-              <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor }]}>
+              {/* Compose row */}
+              <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor, marginBottom: spacing.md }]}>
                 {currentUserAvatar ? (
                   <Image
                     key={currentUserAvatar}
@@ -1771,7 +1708,7 @@ export default function CommunityScreen() {
                   }}
                 >
                   <Text style={[styles.composePlaceholderText, { color: secondaryColor }]}>
-                    Ask a question or share what worked...
+                    Share progress, a struggle, or encouragement...
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1796,29 +1733,7 @@ export default function CommunityScreen() {
               </View>
             )
           }
-          ListFooterComponent={
-            activeChallenge ? (
-              <View style={[styles.challengeCard, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '30' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                  <Trophy size={24} color={colors.primary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.challengeLabel, { color: colors.primary }]}>OPTIONAL COMMUNITY CHALLENGE</Text>
-                    <Text style={[styles.challengeTitle, { color: textColor }]}>{activeChallenge.title}</Text>
-                    <Text style={[styles.challengeDesc, { color: secondaryColor }]}>{activeChallenge.description}</Text>
-                  </View>
-                  <ChevronRight size={18} color={secondaryColor} />
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[Community] View challenge pressed:', activeChallenge.id);
-                    Alert.alert(activeChallenge.title, activeChallenge.description);
-                  }}
-                >
-                  <Text style={[styles.viewChallengeLink, { color: colors.primary }]}>View challenge</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null
-          }
+          ListFooterComponent={null}
           renderItem={({ item }) => (
             <PostCard
               post={item}
@@ -2272,93 +2187,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   clubHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
   clubTitle: {
     fontSize: 18,
     fontWeight: '700',
-  },
-  clubMeta: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  clubDesc: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  pinnedConvCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  pinnedConvHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pinnedConvLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  pinnedConvAuthor: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  pinnedConvQuestion: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  pinnedConvFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  joinConvBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: 9,
-    paddingHorizontal: spacing.md,
-  },
-  joinConvBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  repliesText: {
-    fontSize: 14,
-  },
-  challengeCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-  },
-  challengeLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  challengeTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  challengeDesc: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  viewChallengeLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: spacing.sm,
   },
 });
