@@ -103,7 +103,6 @@ interface SearchUserResult {
 interface FollowingUser {
   id: string;
   username: string;
-  full_name: string | null;
   avatar_url: string | null;
 }
 
@@ -985,15 +984,14 @@ export default function CommunityScreen() {
       // Step 2: if any, fetch user profiles
       let followingList: FollowingUser[] = [];
       if (followingIdList.length > 0) {
-        const { data: usersData } = await supabase
+        const { data: usersData, error: usersError } = await supabase
           .from('users')
-          .select('id, username, full_name, avatar_url')
+          .select('id, username, avatar_url')
           .in('id', followingIdList);
-        console.log('[Community] Following users fetched:', usersData?.length ?? 0);
+        console.log('[Community] usersData:', JSON.stringify(usersData), 'error:', usersError?.message);
         followingList = (usersData || []).map((u: any) => ({
           id: u.id,
           username: u.username,
-          full_name: u.full_name,
           avatar_url: u.avatar_url,
         }));
       }
@@ -1619,10 +1617,10 @@ export default function CommunityScreen() {
                     router.push({ pathname: '/social-profile', params: { userId: user.id } });
                   }}
                 >
-                  <UserAvatar url={user.avatar_url} name={user.full_name} username={user.username} size={44} />
+                  <UserAvatar url={user.avatar_url} name={user.username} username={user.username} size={44} />
                   <View style={{ flex: 1, marginLeft: spacing.sm }}>
                     <Text style={[styles.followingName, { color: textColor }]}>
-                      {user.full_name || user.username}
+                      {user.username}
                     </Text>
                     <Text style={[styles.followingHandle, { color: secondaryColor }]}>@{user.username}</Text>
                     <Text style={[styles.followingActivity, { color: secondaryColor }]}>Active recently</Text>
