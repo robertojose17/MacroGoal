@@ -79,6 +79,54 @@ export async function autoShareProteinGoal(): Promise<void> {
   }
 }
 
+/**
+ * Auto-post a daily check-in summary once per day.
+ * Checks AsyncStorage to ensure it only posts once per calendar day.
+ * Posts the user's current streak + a motivational message.
+ */
+export async function autoShareDailySummary(): Promise<void> {
+  console.log('[autoShare] autoShareDailySummary triggered');
+  if (!(await isAutoShareEnabled())) return;
+
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const today = new Date().toISOString().split('T')[0];
+  const lastPosted = await AsyncStorage.getItem('daily_summary_post_date');
+  if (lastPosted === today) {
+    console.log('[autoShare] daily summary already posted today, skipping');
+    return;
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // Get streak
+  const { data: xpData } = await supabase
+    .from('user_xp')
+    .select('current_streak')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const streak = xpData?.current_streak ?? 0;
+
+  const messages = [
+    streak > 0
+      ? `Day ${streak} of my streak! Showing up every day. 💪 #MacroGoal`
+      : `Starting fresh today. Every day is a new chance. #MacroGoal`,
+    `Tracking my macros and staying consistent. Day ${streak > 0 ? streak : 1}. #MacroGoal`,
+    `Another day, another step toward my goal. Streak: ${streak} days. #MacroGoal`,
+    `Logged in and ready to crush today's goals. #MacroGoal`,
+  ];
+  const content = messages[Math.floor(Math.random() * messages.length)];
+
+  try {
+    await createPost({ post_type: 'stats', content, is_public: true });
+    await AsyncStorage.setItem('daily_summary_post_date', today);
+    console.log('[autoShare] daily summary posted successfully');
+  } catch (e) {
+    console.warn('[autoShare] daily summary post failed (non-fatal):', e);
+  }
+}
+
 /** Auto-post a weight check-in milestone */
 export async function autoShareWeightCheckin(weightKg: number): Promise<void> {
   console.log('[autoShare] autoShareWeightCheckin — weightKg:', weightKg);

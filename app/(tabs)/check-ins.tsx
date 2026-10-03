@@ -53,6 +53,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from 'react-i18next';
 import { IconSymbol } from '@/components/IconSymbol';
+import { autoShareDailySummary } from '@/utils/autoShareAchievements';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -790,43 +791,12 @@ export default function CommunityScreen() {
   const [partnerMealDays, setPartnerMealDays] = useState(0);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Invite banner state ──
-  const [showInviteBanner, setShowInviteBanner] = useState(false);
-
   // ── Club state ──
   const [clubPosts, setClubPosts] = useState<CommunityPost[]>([]);
   const [clubLoading, setClubLoading] = useState(false);
   const [clubRefreshing, setClubRefreshing] = useState(false);
   const [pinnedClubPost, setPinnedClubPost] = useState<CommunityPost | null>(null);
   const [activeChallenge, setActiveChallenge] = useState<CommunityChallenge | null>(null);
-
-  // ── Invite banner visibility (dismissed for the day) ──
-  useEffect(() => {
-    const checkBannerVisibility = async () => {
-      try {
-        const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
-        const dismissedDate = await AsyncStorage.getItem('invite_banner_dismissed_date');
-        const today = new Date().toISOString().split('T')[0];
-        console.log('[Community] Invite banner: dismissedDate=', dismissedDate, 'today=', today);
-        if (dismissedDate !== today) {
-          setShowInviteBanner(true);
-        }
-      } catch {
-        setShowInviteBanner(true);
-      }
-    };
-    checkBannerVisibility();
-  }, []);
-
-  const handleDismissInviteBanner = async () => {
-    console.log('[Community] User dismissed invite banner');
-    try {
-      const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
-      const today = new Date().toISOString().split('T')[0];
-      await AsyncStorage.setItem('invite_banner_dismissed_date', today);
-    } catch {}
-    setShowInviteBanner(false);
-  };
 
   // ── Load current user (run once on mount) ──
   useEffect(() => {
@@ -892,6 +862,7 @@ export default function CommunityScreen() {
   useFocusEffect(
     useCallback(() => {
       reloadAvatar();
+      autoShareDailySummary(); // fire and forget
     }, [reloadAvatar])
   );
 
@@ -1270,12 +1241,6 @@ export default function CommunityScreen() {
     if (!error) setCommitment(null);
   };
 
-  // ── Invite friend ──
-  const handleInvite = () => {
-    console.log('[Community] Invite friend button pressed');
-    Share.share({ message: 'Join me on Macro Goal!' });
-  };
-
   // ── Refresh handlers ──
   const handleFeedRefresh = async () => {
     console.log('[Community] Feed pull-to-refresh triggered');
@@ -1377,33 +1342,7 @@ export default function CommunityScreen() {
           refreshControl={
             <RefreshControl refreshing={feedRefreshing} onRefresh={handleFeedRefresh} tintColor={colors.primary} />
           }
-          ListHeaderComponent={
-            <View>
-              {/* Better with a friend banner */}
-              {showInviteBanner && (
-                <View style={[styles.inviteBanner, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '30' }]}>
-                  <TouchableOpacity
-                    onPress={handleDismissInviteBanner}
-                    style={{ position: 'absolute', top: 8, right: 8, zIndex: 1, padding: 4 }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    activeOpacity={0.7}
-                  >
-                    <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={14} color={secondaryColor} />
-                  </TouchableOpacity>
-                  <View style={styles.inviteBannerLeft}>
-                    <Users size={32} color={colors.primary} />
-                    <View style={{ marginLeft: spacing.sm, flex: 1 }}>
-                      <Text style={[styles.inviteBannerTitle, { color: textColor }]}>Better with a friend</Text>
-                      <Text style={[styles.inviteBannerSub, { color: secondaryColor }]}>Build consistency together.</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity style={styles.inviteBtn} onPress={handleInvite}>
-                    <Text style={styles.inviteBtnText}>Invite a friend</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          }
+          ListHeaderComponent={null}
           ListEmptyComponent={
             feedLoading ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
@@ -1481,20 +1420,6 @@ export default function CommunityScreen() {
               })}
             </View>
           )}
-
-          {/* Invite banner */}
-          <View style={[styles.inviteBanner, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '30', marginTop: spacing.sm }]}>
-            <View style={styles.inviteBannerLeft}>
-              <Users size={28} color={colors.primary} />
-              <View style={{ marginLeft: spacing.sm, flex: 1 }}>
-                <Text style={[styles.inviteBannerTitle, { color: textColor }]}>Bring a friend along</Text>
-                <Text style={[styles.inviteBannerSub, { color: secondaryColor }]}>Build consistency together.</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.inviteBtn} onPress={handleInvite}>
-              <Text style={styles.inviteBtnText}>Invite</Text>
-            </TouchableOpacity>
-          </View>
 
           {/* Together this week */}
           <Text style={[styles.sectionTitle, { color: textColor, marginTop: spacing.lg }]}>Together this week</Text>
@@ -1904,29 +1829,6 @@ const styles = StyleSheet.create({
   welcomeSubtitle: {
     fontSize: 14,
     marginBottom: spacing.md,
-  },
-  inviteBanner: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  inviteBannerLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  inviteBannerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  inviteBannerSub: {
-    fontSize: 13,
-    marginTop: 2,
   },
   inviteBtn: {
     backgroundColor: colors.primary,
