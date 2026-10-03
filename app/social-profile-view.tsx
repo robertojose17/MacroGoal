@@ -52,25 +52,19 @@ type FollowUser = {
 };
 
 type FollowModalType = 'followers' | 'following' | null;
+type NutritionRange = 'today' | '7d' | '30d' | 'custom';
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
   const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
-  const percentageStr = `${percentage}%` as any;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-      <Text style={{ width: 52, fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>{label}</Text>
-      <View style={{ flex: 1, height: 6, backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 3, marginHorizontal: 8 }}>
-        <View style={{ width: percentageStr, height: 6, backgroundColor: color, borderRadius: 3 }} />
+    <View style={{ gap: 4 }}>
+      <Text style={{ fontSize: 12, fontWeight: '500', color: isDark ? '#9CA3AF' : '#6B7280' }}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flex: 1, height: 6, borderRadius: 999, backgroundColor: isDark ? '#374151' : '#E5E7EB', overflow: 'hidden' }}>
+          <View style={{ width: `${percentage}%` as any, height: 6, backgroundColor: color, borderRadius: 999 }} />
+        </View>
+        <Text style={{ fontSize: 11, color: isDark ? '#F9FAFB' : '#111827' }}>{eaten} / {goal}g</Text>
       </View>
-      <Text style={{ fontSize: 12, color: isDark ? '#F9FAFB' : '#111827', minWidth: 60, textAlign: 'right' }}>
-        {eaten}
-      </Text>
-      <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
-        {' / '}
-      </Text>
-      <Text style={{ fontSize: 12, color: isDark ? '#F9FAFB' : '#111827' }}>
-        {goal}g
-      </Text>
     </View>
   );
 }
@@ -107,6 +101,11 @@ export default function SocialProfileViewScreen() {
   const [totalCalories, setTotalCalories] = useState(0);
   const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
   const [goal, setGoal] = useState<any>(null);
+
+  // Nutrition range selector
+  const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
+  const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
+  const [rangeDayCount, setRangeDayCount] = useState(1);
 
   // UI state
   const [followLoading, setFollowLoading] = useState(false);
@@ -168,21 +167,42 @@ export default function SocialProfileViewScreen() {
     }
   };
 
-  const loadNutritionData = async (targetUserId: string) => {
+  const loadNutritionData = async (targetUserId: string, range: NutritionRange = 'today') => {
     try {
-      console.log('[SocialProfileView] loadNutritionData — start for userId:', targetUserId);
+      console.log('[SocialProfileView] loadNutritionData — start for userId:', targetUserId, 'range:', range);
       const today = new Date();
-      const startStr = toLocalDateString(today);
-      const endStr = startStr;
+      let startDateStr: string;
+      let endDateStr: string;
+      let dayCount = 1;
+
+      if (range === 'today') {
+        startDateStr = toLocalDateString(today);
+        endDateStr = startDateStr;
+        dayCount = 1;
+      } else if (range === '7d') {
+        const start = new Date(today);
+        start.setDate(start.getDate() - 6);
+        startDateStr = toLocalDateString(start);
+        endDateStr = toLocalDateString(today);
+        dayCount = 7;
+      } else {
+        const start = new Date(today);
+        start.setDate(start.getDate() - 29);
+        startDateStr = toLocalDateString(start);
+        endDateStr = toLocalDateString(today);
+        dayCount = 30;
+      }
+
+      setRangeDayCount(dayCount);
 
       const { data: mealsData } = await supabase
         .from('meals')
         .select(`id, meal_type, date, meal_items(id, calories, protein, carbs, fats, fiber, is_scheduled, grams, food_item_id, food_items:meal_items_food_item_id_fkey(id, name, calories, protein, carbs, fat, fiber, serving_size, macros_per))`)
         .eq('user_id', targetUserId)
-        .gte('date', startStr)
-        .lte('date', endStr);
+        .gte('date', startDateStr)
+        .lte('date', endDateStr);
 
-      console.log('[SocialProfileView] nutrition meals:', mealsData?.length ?? 0, 'for userId:', targetUserId);
+      console.log('[SocialProfileView] nutrition meals:', mealsData?.length ?? 0, 'for userId:', targetUserId, 'range:', range);
 
       const { data: goalsData } = await supabase.from('goals').select('*').eq('user_id', targetUserId).eq('is_active', true).maybeSingle();
       if (goalsData) setGoal(goalsData);
@@ -207,12 +227,24 @@ export default function SocialProfileViewScreen() {
         });
       });
 
-      console.log('[SocialProfileView] loadNutritionData — totalCals:', totalCals, 'protein:', totalP);
-      setTotalCalories(totalCals);
-      setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
+      const avgCals = totalCals / dayCount;
+      const avgP = totalP / dayCount;
+      const avgC = totalC / dayCount;
+      const avgF = totalF / dayCount;
+      const avgFib = totalFib / dayCount;
+
+      console.log('[SocialProfileView] loadNutritionData — avgCals:', avgCals, 'protein:', avgP, '(daily avg over', dayCount, 'days)');
+      setTotalCalories(avgCals);
+      setTotalMacros({ protein: avgP, carbs: avgC, fats: avgF, fiber: avgFib });
     } catch (e) {
       console.warn('[SocialProfileView] loadNutritionData error:', e);
     }
+  };
+
+  const handleRangeChange = (range: NutritionRange) => {
+    console.log('[SocialProfileView] handleRangeChange — range selected:', range);
+    setNutritionRange(range);
+    if (userId) loadNutritionData(userId, range);
   };
 
   const loadData = useCallback(async () => {
@@ -287,7 +319,7 @@ export default function SocialProfileViewScreen() {
       // Load consistency score and nutrition in parallel
       await Promise.all([
         loadConsistencyScore(userId),
-        loadNutritionData(userId),
+        loadNutritionData(userId, nutritionRange),
       ]);
     } catch (err) {
       console.error('[SocialProfileView] loadData — unexpected error:', err);
@@ -745,24 +777,67 @@ export default function SocialProfileViewScreen() {
 
         {/* ── Nutrition Card (only when following) ───────────────────────── */}
         {isFollowing && (
-          <View style={[styles.caloriesCard, { backgroundColor: cardBg, borderColor }]}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: secondaryText, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Today's Nutrition
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
+            {/* Top-left dropdown button */}
+            <View style={styles.rangeDropdownRow}>
+              <TouchableOpacity
+                style={[styles.rangeDropdownBtn, { borderColor }]}
+                onPress={() => {
+                  console.log('[SocialProfileView] range dropdown toggled, currently open:', rangeDropdownOpen);
+                  setRangeDropdownOpen(v => !v);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.rangeDropdownLabel, { color: secondaryText }]}>
+                  {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7 Days' : '30 Days'}
+                </Text>
+                <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="expand_more" size={12} color={secondaryText} />
+              </TouchableOpacity>
+              {nutritionRange !== 'today' && (
+                <Text style={[styles.avgLabel, { color: secondaryText }]}>
+                  {nutritionRange === '7d' ? 'Daily average over 7 days' : 'Daily average over 30 days'}
+                </Text>
+              )}
+            </View>
+
+            {rangeDropdownOpen && (
+              <View style={[styles.rangeDropdownMenu, { backgroundColor: cardBg, borderColor }]}>
+                {(['today', '7d', '30d'] as NutritionRange[]).map((key) => {
+                  const label = key === 'today' ? 'Today' : key === '7d' ? '7 Days' : '30 Days';
+                  const isActive = nutritionRange === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.rangeDropdownItem, isActive && { backgroundColor: colors.primary + '15' }]}
+                      onPress={() => {
+                        console.log('[SocialProfileView] range dropdown item pressed:', key);
+                        setRangeDropdownOpen(false);
+                        handleRangeChange(key);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.rangeDropdownItemText, { color: isActive ? colors.primary : textColor }]}>{label}</Text>
+                      {isActive && <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={12} color={colors.primary} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            <View style={styles.caloriesContent}>
               <ProgressCircle
                 current={Math.round(totalCalories)}
                 target={goal?.daily_calories || 2000}
-                size={120}
-                strokeWidth={10}
-                color="#F97316"
+                size={140}
+                strokeWidth={12}
+                color={colors.calories}
                 label="kcal"
               />
-              <View style={{ flex: 1 }}>
-                <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color="#3B82F6" isDark={isDark} />
-                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color="#10B981" isDark={isDark} />
-                <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color="#F59E0B" isDark={isDark} />
-                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color="#8B5CF6" isDark={isDark} />
+              <View style={styles.macroSummaryCompact}>
+                <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+                <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
               </View>
             </View>
           </View>
@@ -1132,11 +1207,68 @@ const styles = StyleSheet.create({
 
   // Calories / nutrition card
   caloriesCard: {
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginHorizontal: spacing.md,
-    marginBottom: 16,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  rangeDropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  rangeDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     borderWidth: 1,
+  },
+  rangeDropdownLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  rangeDropdownMenu: {
+    position: 'absolute',
+    top: 36,
+    left: 0,
+    zIndex: 100,
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: 'hidden',
+    minWidth: 120,
+  },
+  rangeDropdownItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rangeDropdownItemText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  avgLabel: {
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  caloriesContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  macroSummaryCompact: {
+    flex: 1,
+    gap: 8,
   },
 
   // Feed
