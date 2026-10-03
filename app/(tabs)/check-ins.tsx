@@ -959,13 +959,27 @@ export default function CommunityScreen() {
       setFollowingCount(rawFollowCount ?? 0);
 
       // Step 1b: get following IDs for profile list
-      const { data: followData } = await supabase
+      const { data: followData, error: followDataError } = await supabase
         .from('social_follows')
         .select('following_id')
         .eq('follower_id', uid);
-      console.log('[Community] fetchFriendsData — followData:', followData);
+      console.log('[Community] followData result:', JSON.stringify(followData), 'error:', followDataError?.message, 'uid used:', uid);
 
-      const followingIdList = (followData || []).map((f: { following_id: string }) => f.following_id);
+      // Fallback: if empty but count > 0, try with session uid
+      let finalFollowData = followData;
+      if ((!followData || followData.length === 0) && (rawFollowCount ?? 0) > 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id && session.user.id !== uid) {
+          const { data: fallbackData } = await supabase
+            .from('social_follows')
+            .select('following_id')
+            .eq('follower_id', session.user.id);
+          console.log('[Community] fallback followData:', JSON.stringify(fallbackData));
+          finalFollowData = fallbackData;
+        }
+      }
+
+      const followingIdList = (finalFollowData || []).map((f: { following_id: string }) => f.following_id);
       console.log('[Community] Following IDs count:', followingIdList.length);
 
       // Step 2: if any, fetch user profiles
