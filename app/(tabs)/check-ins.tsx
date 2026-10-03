@@ -54,6 +54,8 @@ import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from 'react-i18next';
 import { IconSymbol } from '@/components/IconSymbol';
 import { autoShareDailySummary } from '@/utils/autoShareAchievements';
+import { calcDailyScore } from '@/utils/consistencyMath';
+import { toLocalDateString } from '@/utils/dateUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -791,6 +793,21 @@ export default function CommunityScreen() {
   const [partnerMealDays, setPartnerMealDays] = useState(0);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Leaderboard state ──
+  interface LeaderboardEntry {
+    userId: string;
+    name: string;
+    username: string;
+    avatarUrl: string | null;
+    score: number;
+    rank: number;
+    isMe: boolean;
+    noActivity: boolean;
+  }
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
+
   // ── Club state ──
   const [clubPosts, setClubPosts] = useState<CommunityPost[]>([]);
   const [clubLoading, setClubLoading] = useState(false);
@@ -1022,6 +1039,9 @@ export default function CommunityScreen() {
       setFollowing(followingList);
       setFollowingIds(new Set(followingList.map((u) => u.id)));
 
+      // Fetch weekly consistency leaderboard
+      fetchWeeklyConsistency(uid, followingList);
+
       const [commitRes] = await Promise.all([
         supabase
           .from('community_commitments')
@@ -1062,6 +1082,111 @@ export default function CommunityScreen() {
       console.log('[Community] fetchFriendsData error:', e);
     }
   }, []); // empty deps — uid always passed as parameter
+
+  // ── Fetch weekly consistency leaderboard ──
+  const fetchWeeklyConsistency = useCallback(async (uid: string, followedUsers: FollowingUser[]) => {
+    setLeaderboardLoading(true);
+    console.log('[Community] fetchWeeklyConsistency: starting for uid:', uid, 'followed:', followedUsers.length);
+    try {
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - daysFromMonday);
+      const mondayStr = toLocalDateString(monday);
+      const todayStr = toLocalDateString(today);
+      const daysElapsed = daysFromMonday + 1;
+
+      const allUsers = [
+        { id: uid, name: currentUserFirstName || 'You', username: '', avatarUrl: currentUserAvatar, isMe: true },
+        ...followedUsers.map(u => ({ id: u.id, name: u.name || u.username, username: u.username, avatarUrl: u.avatar_url, isMe: false })),
+      ];
+
+      const userIds = allUsers.map(u => u.id);
+      const { data: privacyData } = await supabase
+        .from('users')
+        .select('id, show_consistency_score')
+        .in('id', userIds);
+      const privacyMap = new Map((privacyData || []).map((r: any) => [r.id, r.show_consistency_score !== false]));
+
+      const { data: blockData } = await supabase
+        .from('blocked_users')
+        .select('blocker_id, blocked_id')
+        .or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
+      const blockedIds = new Set((blockData || []).flatMap((b: any) => [b.blocker_id, b.blocked_id]).filter((id: string) => id !== uid));
+
+      const visibleUsers = allUsers.filter(u => u.isMe || (privacyMap.get(u.id) !== false && !blockedIds.has(u.id)));
+      console.log('[Community] fetchWeeklyConsistency: visible users:', visibleUsers.length, 'week:', mondayStr, '-', todayStr);
+
+      const scores = await Promise.all(visibleUsers.map(async (u) => {
+        try {
+          const [mealsRes, goalsRes] = await Promise.all([
+            supabase.from('meals').select('date, meal_items(calories, protein, is_scheduled)').eq('user_id', u.id).gte('date', mondayStr).lte('date', todayStr),
+            supabase.from('goals').select('daily_calories, protein_g').eq('user_id', u.id).eq('is_active', true).maybeSingle(),
+          ]);
+
+          const calorieTarget = goalsRes.data?.daily_calories ?? 2000;
+          const proteinTarget = goalsRes.data?.protein_g ?? 150;
+
+          const byDate: Record<string, { calories: number; protein: number }> = {};
+          mealsRes.data?.forEach((meal: any) => {
+            const d = meal.date;
+            if (!byDate[d]) byDate[d] = { calories: 0, protein: 0 };
+            meal.meal_items?.forEach((item: any) => {
+              if (!item.is_scheduled) {
+                byDate[d].calories += item.calories ?? 0;
+                byDate[d].protein += item.protein ?? 0;
+              }
+            });
+          });
+
+          let totalScore = 0;
+          for (let i = 0; i < daysElapsed; i++) {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            const key = toLocalDateString(d);
+            const dayData = byDate[key];
+            const hasTracking = !!dayData;
+            const dayCals = dayData?.calories ?? 0;
+            const dayProt = dayData?.protein ?? 0;
+            totalScore += calcDailyScore(hasTracking, dayCals, calorieTarget, dayProt, proteinTarget);
+          }
+
+          const avgScore = Math.round(totalScore / daysElapsed);
+          const noActivity = Object.keys(byDate).length === 0;
+          return { userId: u.id, name: u.name, username: u.username, avatarUrl: u.avatarUrl, score: avgScore, isMe: u.isMe, noActivity };
+        } catch {
+          return { userId: u.id, name: u.name, username: u.username, avatarUrl: u.avatarUrl, score: 0, isMe: u.isMe, noActivity: true };
+        }
+      }));
+
+      const sorted = [...scores].sort((a, b) => b.score - a.score);
+      let rank = 1;
+      const ranked: LeaderboardEntry[] = sorted.map((entry, idx) => {
+        if (idx > 0 && entry.score < sorted[idx - 1].score) rank = idx + 1;
+        return { ...entry, rank };
+      });
+      console.log('[Community] fetchWeeklyConsistency: ranked entries:', ranked.length);
+      setLeaderboard(ranked);
+
+      const isSunday = today.getDay() === 0;
+      if (isSunday) {
+        const myScore = ranked.find(e => e.isMe);
+        if (myScore) {
+          await supabase.from('weekly_consistency_scores').upsert({
+            user_id: uid,
+            week_start: mondayStr,
+            score: myScore.score,
+          }, { onConflict: 'user_id,week_start' });
+          console.log('[Community] fetchWeeklyConsistency: Sunday snapshot saved, score:', myScore.score);
+        }
+      }
+    } catch (e) {
+      console.warn('[Community] fetchWeeklyConsistency error:', e);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, [currentUserFirstName, currentUserAvatar]);
 
   // ── Focus effect: refresh data for active tab on re-focus ──
   useFocusEffect(
@@ -1263,25 +1388,6 @@ export default function CommunityScreen() {
     setClubRefreshing(false);
   };
 
-  // ── Derived values ──
-  const daysOfWeek = 7;
-  const today = new Date();
-  const weekStart = getMondayOfWeek(today);
-  const dayOfWeek = today.getDay() === 0 ? 7 : today.getDay();
-  const daysLeft = 7 - dayOfWeek + 1;
-
-  const partnerUser = commitment
-    ? commitment.user_id === currentUserId
-      ? commitment.partner
-      : commitment.requester
-    : null;
-  const partnerName = partnerUser?.full_name?.split(' ')[0] || partnerUser?.username || 'Partner';
-  const targetDays = commitment?.target_days ?? 5;
-  const myProgress = Math.min(myMealDays / targetDays, 1);
-  const partnerProgress = Math.min(partnerMealDays / targetDays, 1);
-  const myProgressPct = Math.round(myProgress * 100);
-  const partnerProgressPct = Math.round(partnerProgress * 100);
-
   // ── Pill selector ──
   const tabLabels: { key: CommunityTab; label: string }[] = [
     { key: 'feed', label: 'Feed' },
@@ -1421,120 +1527,98 @@ export default function CommunityScreen() {
             </View>
           )}
 
-          {/* Together this week */}
-          <Text style={[styles.sectionTitle, { color: textColor, marginTop: spacing.lg }]}>Together this week</Text>
-
-          {friendsLoading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
-          ) : commitment ? (
-            commitment.status === 'pending' && commitment.partner_id === currentUserId ? (
-              // Pending — I need to accept
-              <View style={[styles.commitmentCard, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '30' }]}>
-                <Text style={[styles.commitmentLabel, { color: colors.primary }]}>PENDING INVITATION</Text>
-                <Text style={[styles.commitmentTitle, { color: textColor }]}>
-                  {commitment.requester?.full_name || commitment.requester?.username} invited you to commit
-                </Text>
-                <Text style={[styles.commitmentSub, { color: secondaryColor }]}>
-                  Log meals {commitment.target_days} days this week together
-                </Text>
-                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                  <TouchableOpacity
-                    style={[styles.inviteBtn, { flex: 1 }]}
-                    onPress={handleAcceptCommitment}
-                  >
-                    <Text style={styles.inviteBtnText}>Accept</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.declineBtn, { flex: 1, borderColor }]}
-                    onPress={handleDeclineCommitment}
-                  >
-                    <Text style={[styles.declineBtnText, { color: secondaryColor }]}>Decline</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : commitment.status === 'active' ? (
-              // Active commitment
-              <View style={[styles.commitmentCard, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '30' }]}>
-                <Text style={[styles.commitmentLabel, { color: colors.primary }]}>
-                  YOU + {partnerName.toUpperCase()}
-                </Text>
-                <Text style={[styles.commitmentTitle, { color: textColor }]}>
-                  Log meals {targetDays} days this week
-                </Text>
-                <Text style={[styles.commitmentSub, { color: secondaryColor }]}>
-                  Shared commitment · {daysLeft} days left
-                </Text>
-
-                {/* My progress */}
-                <View style={styles.progressRow}>
-                  {currentUserAvatar ? (
-                    <Image
-                      key={currentUserAvatar}
-                      source={{ uri: currentUserAvatar }}
-                      style={{ width: 36, height: 36, borderRadius: 18 }}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
-                    </View>
-                  )}
-                  <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                    <Text style={[styles.progressName, { color: textColor }]}>You</Text>
-                    <Text style={[styles.progressDays, { color: secondaryColor }]}>{myMealDays} / {targetDays} days</Text>
-                  </View>
-                  <View style={styles.progressBarContainer}>
-                    <View style={[styles.progressBarTrack, { backgroundColor: isDark ? colors.borderDark : '#E5E7EB' }]}>
-                      <View style={[styles.progressBarFill, { width: `${myProgressPct}%` as unknown as number }]} />
-                    </View>
-                  </View>
-                  <Text style={[styles.progressPct, { color: secondaryColor }]}>{myProgressPct}%</Text>
-                </View>
-
-                {/* Partner progress */}
-                <View style={styles.progressRow}>
-                  <UserAvatar url={partnerUser?.avatar_url ?? null} name={partnerUser?.full_name ?? null} username={partnerUser?.username ?? 'p'} size={36} />
-                  <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                    <Text style={[styles.progressName, { color: textColor }]}>{partnerName}</Text>
-                    <Text style={[styles.progressDays, { color: secondaryColor }]}>{partnerMealDays} / {targetDays} days</Text>
-                  </View>
-                  <View style={styles.progressBarContainer}>
-                    <View style={[styles.progressBarTrack, { backgroundColor: isDark ? colors.borderDark : '#E5E7EB' }]}>
-                      <View style={[styles.progressBarFill, { width: `${partnerProgressPct}%` as unknown as number }]} />
-                    </View>
-                  </View>
-                  <Text style={[styles.progressPct, { color: secondaryColor }]}>{partnerProgressPct}%</Text>
-                </View>
-
-                {/* Footer actions */}
-                <View style={[styles.commitmentFooter, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-                  <TouchableOpacity
-                    style={styles.commitmentAction}
-                    onPress={() => console.log('[Community] View week pressed')}
-                  >
-                    <Text style={[styles.commitmentActionText, { color: secondaryColor }]}>View week</Text>
-                  </TouchableOpacity>
-                  <View style={[styles.commitmentDivider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
-                  <TouchableOpacity
-                    style={styles.commitmentAction}
-                    onPress={() => {
-                      console.log('[Community] Send support pressed for partner:', partnerName);
-                      setShowCreatePost(true);
-                    }}
-                  >
-                    <MessageCircle size={14} color={secondaryColor} />
-                    <Text style={[styles.commitmentActionText, { color: secondaryColor }]}>Send support</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : null
-          ) : (
-            <View style={[styles.emptyCommitment, { backgroundColor: cardBg, borderColor }]}>
-              <Text style={[styles.emptyCommitmentText, { color: secondaryColor }]}>
-                Start a shared commitment with a friend to track progress together.
-              </Text>
+          {/* Weekly Consistency Leaderboard */}
+          <View style={{ marginTop: spacing.lg }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>Weekly Consistency</Text>
+              <Text style={{ fontSize: 11, color: secondaryColor }}>Mon – Today</Text>
             </View>
-          )}
+
+            {leaderboardLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+            ) : leaderboard.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>Follow people to see the leaderboard.</Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: cardBg, borderRadius: 16, borderWidth: 1, borderColor, overflow: 'hidden' }}>
+                {(showAllLeaderboard ? leaderboard : leaderboard.slice(0, 5)).map((entry, idx) => {
+                  const visibleCount = showAllLeaderboard ? leaderboard.length : Math.min(5, leaderboard.length);
+                  const isLast = idx === visibleCount - 1;
+                  const initial = (entry.name || entry.username || '?').charAt(0).toUpperCase();
+                  const rankColor = entry.rank <= 3 ? colors.primary : secondaryColor;
+                  const nameWeight = entry.isMe ? '700' : '500';
+                  const scoreColor = entry.rank === 1 ? colors.primary : textColor;
+                  const rowBg = entry.isMe ? colors.primary + '18' : 'transparent';
+                  return (
+                    <TouchableOpacity
+                      key={entry.userId}
+                      onPress={() => {
+                        if (entry.isMe) return;
+                        console.log('[Community] Leaderboard entry tapped:', entry.username);
+                        router.push({ pathname: '/social-profile-view', params: { userId: entry.userId } });
+                      }}
+                      activeOpacity={entry.isMe ? 1 : 0.7}
+                      style={[
+                        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, backgroundColor: rowBg },
+                        !isLast && { borderBottomWidth: 1, borderBottomColor: borderColor },
+                      ]}
+                    >
+                      {/* Rank */}
+                      <Text style={{ width: 28, fontSize: 13, fontWeight: '700', color: rankColor }}>
+                        #{entry.rank}
+                      </Text>
+
+                      {/* Avatar */}
+                      {entry.avatarUrl ? (
+                        <Image source={{ uri: entry.avatarUrl }} style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10 }} resizeMode="cover" />
+                      ) : (
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: entry.isMe ? colors.primary : '#6B7280', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+                            {initial}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Name */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: nameWeight, color: textColor }} numberOfLines={1}>
+                          {entry.isMe ? 'You' : entry.name}
+                        </Text>
+                        {!entry.isMe && entry.username ? (
+                          <Text style={{ fontSize: 11, color: secondaryColor }}>@{entry.username}</Text>
+                        ) : null}
+                      </View>
+
+                      {/* Score */}
+                      {entry.noActivity ? (
+                        <Text style={{ fontSize: 12, color: secondaryColor, fontStyle: 'italic' }}>Sin actividad</Text>
+                      ) : (
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor }}>
+                          {entry.score}%
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {leaderboard.length > 5 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('[Community] Leaderboard show all toggled:', !showAllLeaderboard);
+                      setShowAllLeaderboard(v => !v);
+                    }}
+                    style={{ paddingVertical: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: borderColor }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primary }}>
+                      {showAllLeaderboard ? 'Show less' : `View all (${leaderboard.length})`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
 
           {/* Following list */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: spacing.lg }}>
@@ -2128,103 +2212,6 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     fontSize: 14,
-  },
-  commitmentCard: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-  },
-  commitmentLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  commitmentTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  commitmentSub: {
-    fontSize: 13,
-    marginBottom: spacing.md,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  progressName: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  progressDays: {
-    fontSize: 12,
-  },
-  progressBarContainer: {
-    width: 100,
-    marginHorizontal: spacing.sm,
-  },
-  progressBarTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: 6,
-    backgroundColor: colors.primary,
-    borderRadius: 3,
-  },
-  progressPct: {
-    fontSize: 13,
-    fontWeight: '600',
-    width: 36,
-    textAlign: 'right',
-  },
-  commitmentFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  commitmentAction: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 4,
-  },
-  commitmentActionText: {
-    fontSize: 14,
-  },
-  commitmentDivider: {
-    width: 1,
-    height: 20,
-  },
-  declineBtn: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  declineBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyCommitment: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-  },
-  emptyCommitmentText: {
-    fontSize: 14,
-    textAlign: 'center',
   },
   followingCard: {
     borderRadius: borderRadius.lg,
