@@ -43,7 +43,7 @@ function relativeTime(dateStr: string): string {
 type FollowUser = {
   id: string;
   username: string | null;
-  full_name: string | null;
+  name: string | null;
   avatar_url: string | null;
 };
 
@@ -128,7 +128,7 @@ export default function SocialProfileViewScreen() {
         postsRes,
         xpRes,
       ] = await Promise.all([
-        supabase.from('users').select('id, name, username, avatar_url, bio, created_at, full_name').eq('id', userId).maybeSingle(),
+        supabase.from('users').select('id, name, username, avatar_url, bio, created_at').eq('id', userId).maybeSingle(),
         supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', userId),
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('following_id', userId),
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
@@ -282,7 +282,7 @@ export default function SocialProfileViewScreen() {
 
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, username, full_name, avatar_url')
+        .select('id, username, name, avatar_url')
         .in('id', ids);
       console.log('[SocialProfileView] openFollowModal — users query:', usersError ? usersError.message : `${usersData?.length ?? 0} users`);
       setFollowModalUsers(usersData ?? []);
@@ -376,7 +376,7 @@ export default function SocialProfileViewScreen() {
   }
 
   // ── Derived display values ─────────────────────────────────────────────────
-  const displayName = profile.full_name || profile.name || 'User';
+  const displayName = profile.name || 'User';
   const usernameDisplay = profile.username ? `@${profile.username}` : displayName;
   const initials = displayName.charAt(0).toUpperCase();
   const bioText = profile.bio || '';
@@ -688,7 +688,7 @@ export default function SocialProfileViewScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.modalList}
                 renderItem={({ item }) => {
-                  const itemName = item.full_name || item.username || 'User';
+                  const itemName = item.name || item.username || 'User';
                   const itemInitial = itemName.charAt(0).toUpperCase();
                   const itemUsername = item.username ? `@${item.username}` : '';
                   return (
