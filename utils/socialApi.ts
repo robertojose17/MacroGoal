@@ -52,7 +52,16 @@ export interface SocialPost {
   meal_fat?: number | null;
   meal_recipe_id?: string | null;
   meal_recipe_data?: any | null;
-  progress_stats?: Record<string, unknown> | null;
+  progress_stats?: {
+    streak_days?: number | null;
+    consistency_score?: number | null;
+    weight_value?: number | null;
+    weight_unit?: string | null;
+    weight_goal_pct?: number | null;
+    steps_today?: number | null;
+    steps_goal?: number | null;
+    gym_checked_in?: boolean | null;
+  } | Record<string, unknown> | null;
   progress_photo_url?: string | null;
   is_pinned?: boolean | null;
   poll_options?: string[] | null;
@@ -62,6 +71,18 @@ export interface SocialPost {
   auto_post_type?: string | null;
   auto_post_date?: string | null;
   saves_count?: number | null;
+  // weekly recap fields
+  weekly_recap_score?: number | null;
+  weekly_recap_days_tracked?: number | null;
+  weekly_recap_week_start?: string | null;
+  weekly_recap_day_flags?: boolean[] | null;
+  // weight goal
+  weight_goal_pct?: number | null;
+  // educational post fields
+  edu_headline?: string | null;
+  edu_body?: string | null;
+  edu_example?: string | null;
+  edu_week?: string | null;
 }
 
 export interface SocialProfile {
@@ -334,17 +355,44 @@ export async function addComment(post_id: string, content: string): Promise<Comm
   console.log('[SocialApi] addComment — post_id:', post_id, 'content length:', content.length);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) throw new Error('Not authenticated');
+  const userId = session.user.id;
 
   const { data, error } = await supabase
     .from('community_comments')
-    .insert({ post_id, user_id: session.user.id, content })
+    .insert({ post_id, user_id: userId, content })
     .select('*, author:users!user_id(id, username, full_name, avatar_url)')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[SocialApi] addComment insert error:', error.message, error.code);
+    throw error;
+  }
+
+  // Fallback: if FK join returned null author, fetch separately
+  const commentData = data as any;
+  if (!commentData.author) {
+    console.log('[SocialApi] addComment — author join returned null, fetching separately');
+    try {
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .eq('id', userId)
+        .maybeSingle();
+      if (userRow) {
+        commentData.author = userRow;
+      } else {
+        // Minimal fallback from session
+        commentData.author = { id: userId, username: session.user.email?.split('@')[0] ?? 'user', full_name: null, avatar_url: null };
+      }
+    } catch (fallbackErr) {
+      console.warn('[SocialApi] addComment author fallback failed (non-fatal):', fallbackErr);
+      commentData.author = { id: userId, username: session.user.email?.split('@')[0] ?? 'user', full_name: null, avatar_url: null };
+    }
+  }
+
   await supabase.rpc('increment_comments', { post_id });
-  console.log('[SocialApi] addComment — comment id:', (data as any)?.id);
-  return data as unknown as Comment;
+  console.log('[SocialApi] addComment — comment id:', commentData?.id);
+  return commentData as unknown as Comment;
 }
 
 export async function fetchComments(post_id: string): Promise<Comment[]> {

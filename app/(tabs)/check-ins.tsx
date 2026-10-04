@@ -9,6 +9,7 @@ import React, {
   useEffect,
   useRef,
 } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -115,7 +116,16 @@ interface CommunityPost {
   meal_recipe_id?: string | null;
   meal_recipe_data?: any | null;
   meal_servings?: number | null;
-  progress_stats?: Record<string, unknown> | null;
+  progress_stats?: {
+    streak_days?: number | null;
+    consistency_score?: number | null;
+    weight_value?: number | null;
+    weight_unit?: string | null;
+    weight_goal_pct?: number | null;
+    steps_today?: number | null;
+    steps_goal?: number | null;
+    gym_checked_in?: boolean | null;
+  } | Record<string, unknown> | null;
   auto_post_type?: string | null;
   streak_days?: number | null;
   weekly_recap_score?: number | null;
@@ -168,6 +178,7 @@ interface ProgressStat {
   emoji: string;
   value: string | number;
   selected: boolean;
+  meta?: Record<string, unknown>;
 }
 
 interface RecipeResult {
@@ -899,37 +910,45 @@ function PostCard({
     }
 
     if (post.post_type_v2 === 'progress') {
-      const stats = post.progress_stats;
+      const stats = post.progress_stats as Record<string, unknown> | null | undefined;
+      if (!stats) return null;
+
+      const progressCards = [
+        stats.streak_days != null ? { key: 'streak', emoji: '🔥', value: String(stats.streak_days), label: 'day streak', bg: isDark ? '#2A1A1A' : '#FEF2F2', color: '#EF4444' } : null,
+        stats.consistency_score != null ? { key: 'consistency', emoji: '📊', value: `${stats.consistency_score}%`, label: 'consistency', bg: isDark ? '#1A2A1A' : '#F0FDF4', color: colors.success } : null,
+        stats.weight_goal_pct != null ? { key: 'weight_goal', emoji: '🎯', value: `${stats.weight_goal_pct}%`, label: 'to goal', bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary } : null,
+        stats.steps_today != null ? { key: 'steps', emoji: '👟', value: String(stats.steps_today), label: `/ ${stats.steps_goal ?? 10000} steps`, bg: isDark ? '#1A2A2A' : '#F0FDFA', color: '#0D9488' } : null,
+        stats.gym_checked_in != null ? { key: 'gym', emoji: stats.gym_checked_in ? '💪' : '⏳', value: stats.gym_checked_in ? 'Trained' : 'Not yet', label: 'today', bg: isDark ? '#2A1A2A' : '#FDF4FF', color: '#9333EA' } : null,
+        stats.weight_value != null && stats.weight_goal_pct == null ? { key: 'weight', emoji: '⚖️', value: Number(stats.weight_value).toFixed(1), label: String(stats.weight_unit ?? 'lbs'), bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary } : null,
+      ].filter(Boolean) as Array<{ key: string; emoji: string; value: string; label: string; bg: string; color: string }>;
+
+      if (progressCards.length === 0) return null;
+
+      const isOne = progressCards.length === 1;
+      const isTwo = progressCards.length === 2;
+
       return (
-        <View style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: borderRadius.md, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: spacing.md, gap: spacing.sm }}>
+        <View style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: 12, gap: 8 }}>
           {post.content ? (
-            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>{post.content}</Text>
+            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: 4 }}>{post.content}</Text>
           ) : null}
-          {stats ? (
-            <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
-              {stats.streak_days != null ? (
-                <View style={{ borderRadius: borderRadius.md, padding: spacing.sm, alignItems: 'center', minWidth: 80, backgroundColor: isDark ? '#2A1A1A' : '#FEF2F2', gap: 2 }}>
-                  <Text style={{ fontSize: 20 }}>🔥</Text>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#EF4444' }}>{String(stats.streak_days)}</Text>
-                  <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor }}>day streak</Text>
-                </View>
-              ) : null}
-              {stats.consistency_score != null ? (
-                <View style={{ borderRadius: borderRadius.md, padding: spacing.sm, alignItems: 'center', minWidth: 80, backgroundColor: isDark ? '#1A2A1A' : '#F0FDF4', gap: 2 }}>
-                  <Text style={{ fontSize: 20 }}>📊</Text>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: colors.success }}>{String(stats.consistency_score)}</Text>
-                  <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor }}>consistency</Text>
-                </View>
-              ) : null}
-              {stats.weight_value != null ? (
-                <View style={{ borderRadius: borderRadius.md, padding: spacing.sm, alignItems: 'center', minWidth: 80, backgroundColor: isDark ? '#1A1A2A' : '#F5F3FF', gap: 2 }}>
-                  <Text style={{ fontSize: 20 }}>⚖️</Text>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: colors.primary }}>{Number(stats.weight_value).toFixed(1)}</Text>
-                  <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor }}>{String(stats.weight_unit ?? 'lbs')}</Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
+          <View style={{ flexDirection: 'row', flexWrap: isOne ? 'nowrap' : 'wrap', gap: 8 }}>
+            {progressCards.map(card => (
+              <View key={card.key} style={{
+                flex: isOne ? 1 : isTwo ? 1 : undefined,
+                width: isOne ? undefined : isTwo ? undefined : '47%',
+                borderRadius: 10,
+                padding: 12,
+                alignItems: 'center',
+                backgroundColor: card.bg,
+                gap: 2,
+              }}>
+                <Text style={{ fontSize: isOne ? 32 : 24 }}>{card.emoji}</Text>
+                <Text style={{ fontSize: isOne ? 28 : 22, fontWeight: '800', color: card.color }}>{card.value}</Text>
+                <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor, textAlign: 'center' }}>{card.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       );
     }
@@ -1246,6 +1265,9 @@ function CommentsModal({
   const [loading, setLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [sending, setSending] = useState(false);
+  const submittingRef = useRef(false);
+  const flatListRef = useRef<FlatList<Comment>>(null);
+  const insets = useSafeAreaInsets();
 
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -1280,19 +1302,29 @@ function CommentsModal({
 
   const handleSend = async () => {
     if (!post || !commentText.trim()) return;
+    // Duplicate prevention
+    if (submittingRef.current || sending) return;
+    submittingRef.current = true;
     console.log('[Community] Send comment pressed for post:', post.id, 'text length:', commentText.trim().length);
     setSending(true);
+    const textToSend = commentText.trim();
     try {
-      const newComment = await addComment(post.id, commentText.trim());
+      const newComment = await addComment(post.id, textToSend);
       console.log('[Community] Comment added, id:', newComment.id);
       setComments(prev => [...prev, newComment]);
       setCommentText('');
       onCommentAdded(post.id);
+      // Scroll to bottom after adding
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch (e) {
       console.warn('[Community] addComment error:', e);
+      // Preserve text on failure
       Alert.alert('Error', 'Could not post comment. Please try again.');
     } finally {
       setSending(false);
+      submittingRef.current = false;
     }
   };
 
@@ -1321,8 +1353,12 @@ function CommentsModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: bgColor }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* Header */}
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: bgColor }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        {/* Header — fixed */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
           <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Comments</Text>
           <TouchableOpacity
@@ -1337,11 +1373,13 @@ function CommentsModal({
           </TouchableOpacity>
         </View>
 
-        {/* Comments list */}
+        {/* Comments list — flex: 1 so it shrinks when keyboard appears */}
         {loading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 40, flex: 1 }} />
         ) : (
           <FlatList
+            ref={flatListRef}
+            style={{ flex: 1 }}
             data={comments}
             keyExtractor={(item) => item.id}
             renderItem={renderComment}
@@ -1351,39 +1389,45 @@ function CommentsModal({
               </View>
             }
             contentContainerStyle={{ paddingBottom: 16 }}
+            keyboardShouldPersistTaps="handled"
           />
         )}
 
-        {/* Bottom input bar */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: borderColor, backgroundColor: cardBg, gap: 10 }}>
-          {currentUserAvatar ? (
-            <Image source={{ uri: currentUserAvatar }} style={{ width: 32, height: 32, borderRadius: 16 }} resizeMode="cover" />
-          ) : (
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}</Text>
-            </View>
-          )}
-          <TextInput
-            style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
-            placeholder="Add a comment..."
-            placeholderTextColor={secondaryColor}
-            value={commentText}
-            onChangeText={setCommentText}
-            multiline
-            returnKeyType="send"
-            onSubmitEditing={handleSend}
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={!commentText.trim() || sending}
-            style={{ opacity: commentText.trim() && !sending ? 1 : 0.4 }}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+        {/* Input bar — sits above keyboard, respects home indicator */}
+        <View style={{ paddingBottom: insets.bottom, borderTopWidth: 1, borderTopColor: borderColor, backgroundColor: cardBg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 10 }}>
+            {currentUserAvatar ? (
+              <Image source={{ uri: currentUserAvatar }} style={{ width: 32, height: 32, borderRadius: 16 }} resizeMode="cover" />
             ) : (
-              <IconSymbol ios_icon_name="arrow.up.circle.fill" android_material_icon_name="send" size={32} color={colors.primary} />
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}</Text>
+              </View>
             )}
-          </TouchableOpacity>
+            <TextInput
+              style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
+              placeholder="Add a comment..."
+              placeholderTextColor={secondaryColor}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+            />
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Community] Send comment button tapped');
+                handleSend();
+              }}
+              disabled={!commentText.trim() || sending}
+              style={{ opacity: commentText.trim() && !sending ? 1 : 0.4 }}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <IconSymbol ios_icon_name="arrow.up.circle.fill" android_material_icon_name="send" size={32} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -1474,15 +1518,6 @@ function ComposerSheet({
     console.log('[Community] Loading progress stats for composer');
     setProgressLoading(true);
     try {
-      const [xpRes, checkInsRes] = await Promise.all([
-        supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', currentUserId).maybeSingle(),
-        supabase.from('check_ins').select('weight, weight_unit, created_at').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(1),
-      ]);
-
-      const streak = xpRes.data?.current_streak ?? 0;
-      const latestCheckIn = checkInsRes.data?.[0];
-
-      // Calculate weekly consistency
       const today = new Date();
       const dayOfWeek = today.getDay();
       const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -1491,7 +1526,15 @@ function ComposerSheet({
       const mondayStr = toLocalDateString(monday);
       const todayStr = toLocalDateString(today);
 
-      const mealsRes = await supabase.from('meals').select('date').eq('user_id', currentUserId).gte('date', mondayStr).lte('date', todayStr);
+      const [xpRes, checkInsRes, goalRes, mealsRes] = await Promise.all([
+        supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', currentUserId).maybeSingle(),
+        supabase.from('check_ins').select('weight, weight_unit, created_at').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(1),
+        supabase.from('goals').select('target_weight, starting_weight, weight_unit').eq('user_id', currentUserId).eq('is_active', true).maybeSingle(),
+        supabase.from('meals').select('date').eq('user_id', currentUserId).gte('date', mondayStr).lte('date', todayStr),
+      ]);
+
+      const streak = xpRes.data?.current_streak ?? 0;
+      const latestCheckIn = checkInsRes.data?.[0];
       const trackedDays = new Set((mealsRes.data || []).map((m: { date: string }) => m.date)).size;
       const daysElapsed = daysFromMonday + 1;
       const consistencyScore = Math.round((trackedDays / daysElapsed) * 100);
@@ -1501,8 +1544,71 @@ function ComposerSheet({
         stats.push({ key: 'streak_days', label: 'Current streak', emoji: '🔥', value: streak, selected: false });
       }
       stats.push({ key: 'consistency_score', label: 'Weekly consistency', emoji: '📊', value: consistencyScore, selected: false });
-      if (latestCheckIn?.weight) {
+
+      // Weight goal progress
+      const currentWeight = latestCheckIn?.weight;
+      const targetWeight = goalRes.data?.target_weight;
+      const startingWeight = goalRes.data?.starting_weight;
+      if (currentWeight != null && targetWeight != null && startingWeight != null && startingWeight !== targetWeight) {
+        const totalChange = Math.abs(targetWeight - startingWeight);
+        const currentChange = Math.abs(currentWeight - startingWeight);
+        const pct = Math.min(100, Math.round((currentChange / totalChange) * 100));
+        stats.push({ key: 'weight_goal_pct', label: 'Weight goal progress', emoji: '🎯', value: pct, selected: false });
+      } else if (latestCheckIn?.weight) {
+        // Fallback: show raw weight if no goal
         stats.push({ key: 'weight_value', label: 'Current weight', emoji: '⚖️', value: latestCheckIn.weight, selected: false });
+      }
+
+      // Today's steps — try health_metrics table
+      try {
+        const stepsRes = await supabase
+          .from('health_metrics')
+          .select('steps, steps_goal')
+          .eq('user_id', currentUserId)
+          .eq('date', todayStr)
+          .maybeSingle();
+        const steps = stepsRes.data?.steps;
+        const stepsGoal = stepsRes.data?.steps_goal ?? 10000;
+        if (steps != null && steps > 0) {
+          console.log('[Community] Steps today:', steps, 'goal:', stepsGoal);
+          stats.push({ key: 'steps_today', label: "Today's steps", emoji: '👟', value: steps, selected: false, meta: { steps_goal: stepsGoal } });
+        }
+      } catch (stepsErr) {
+        console.log('[Community] Steps data not available (non-fatal):', stepsErr);
+      }
+
+      // Today's gym check-in — check trackers table for gym-type tracker with entry today
+      try {
+        const gymTrackerRes = await supabase
+          .from('trackers')
+          .select('id')
+          .eq('user_id', currentUserId)
+          .ilike('name', '%gym%')
+          .maybeSingle();
+        let gymCheckedIn = false;
+        if (gymTrackerRes.data?.id) {
+          const gymEntryRes = await supabase
+            .from('tracker_entries')
+            .select('id, value')
+            .eq('tracker_id', gymTrackerRes.data.id)
+            .eq('user_id', currentUserId)
+            .eq('date', todayStr)
+            .maybeSingle();
+          gymCheckedIn = gymEntryRes.data != null && (gymEntryRes.data.value ?? 0) > 0;
+        } else {
+          // Fallback: check check_ins table for today
+          const checkInTodayRes = await supabase
+            .from('check_ins')
+            .select('id')
+            .eq('user_id', currentUserId)
+            .eq('date', todayStr)
+            .maybeSingle();
+          gymCheckedIn = checkInTodayRes.data != null;
+        }
+        console.log('[Community] Gym checked in today:', gymCheckedIn);
+        stats.push({ key: 'gym_checked_in', label: "Today's gym", emoji: gymCheckedIn ? '💪' : '⏳', value: gymCheckedIn ? 'Trained' : 'Not yet', selected: false });
+      } catch (gymErr) {
+        console.log('[Community] Gym data not available (non-fatal):', gymErr);
       }
 
       console.log('[Community] Progress stats loaded:', stats.length, 'items');
@@ -1575,7 +1681,12 @@ function ComposerSheet({
         // progress
         const selectedStats = progressStats.filter(s => s.selected);
         const statsObj: Record<string, unknown> = {};
-        selectedStats.forEach(s => { statsObj[s.key] = s.value; });
+        selectedStats.forEach(s => {
+          statsObj[s.key] = s.value;
+          if (s.key === 'steps_today' && s.meta?.steps_goal) {
+            statsObj['steps_goal'] = s.meta.steps_goal;
+          }
+        });
         const statLabels = selectedStats.map(s => `${s.emoji} ${s.value} ${s.label}`).join(', ');
         postData = {
           post_type: 'stats',
@@ -1873,7 +1984,10 @@ function ComposerSheet({
                 progressStats.map(stat => (
                   <TouchableOpacity
                     key={stat.key}
-                    onPress={() => toggleProgressStat(stat.key)}
+                    onPress={() => {
+                      console.log('[Community] Progress stat toggled:', stat.key, 'selected:', !stat.selected);
+                      toggleProgressStat(stat.key);
+                    }}
                     style={[
                       styles.progressStatRow,
                       { borderColor: stat.selected ? colors.primary : borderColor, backgroundColor: stat.selected ? colors.primary + '12' : cardBg },
@@ -1890,6 +2004,45 @@ function ComposerSheet({
                   </TouchableOpacity>
                 ))
               )}
+              {/* Live preview of selected stats */}
+              {progressStats.some(s => s.selected) ? (() => {
+                const selectedForPreview = progressStats.filter(s => s.selected);
+                const previewCards = selectedForPreview.map(s => {
+                  if (s.key === 'streak_days') return { key: s.key, emoji: '🔥', value: String(s.value), label: 'day streak', bg: isDark ? '#2A1A1A' : '#FEF2F2', color: '#EF4444' };
+                  if (s.key === 'consistency_score') return { key: s.key, emoji: '📊', value: `${s.value}%`, label: 'consistency', bg: isDark ? '#1A2A1A' : '#F0FDF4', color: colors.success };
+                  if (s.key === 'weight_goal_pct') return { key: s.key, emoji: '🎯', value: `${s.value}%`, label: 'to goal', bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary };
+                  if (s.key === 'steps_today') return { key: s.key, emoji: '👟', value: String(s.value), label: `/ ${s.meta?.steps_goal ?? 10000} steps`, bg: isDark ? '#1A2A2A' : '#F0FDFA', color: '#0D9488' };
+                  if (s.key === 'gym_checked_in') return { key: s.key, emoji: s.value === 'Trained' ? '💪' : '⏳', value: String(s.value), label: 'today', bg: isDark ? '#2A1A2A' : '#FDF4FF', color: '#9333EA' };
+                  if (s.key === 'weight_value') return { key: s.key, emoji: '⚖️', value: Number(s.value).toFixed(1), label: 'lbs', bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary };
+                  return null;
+                }).filter(Boolean) as Array<{ key: string; emoji: string; value: string; label: string; bg: string; color: string }>;
+                const isOnePreview = previewCards.length === 1;
+                const isTwoPreview = previewCards.length === 2;
+                return (
+                  <View style={{ opacity: 0.9, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: secondaryColor, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Preview</Text>
+                    <View style={{ borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: 10, gap: 6 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: isOnePreview ? 'nowrap' : 'wrap', gap: 6 }}>
+                        {previewCards.map(card => (
+                          <View key={card.key} style={{
+                            flex: isOnePreview ? 1 : isTwoPreview ? 1 : undefined,
+                            width: isOnePreview ? undefined : isTwoPreview ? undefined : '47%',
+                            borderRadius: 8,
+                            padding: 8,
+                            alignItems: 'center',
+                            backgroundColor: card.bg,
+                            gap: 2,
+                          }}>
+                            <Text style={{ fontSize: isOnePreview ? 22 : 16 }}>{card.emoji}</Text>
+                            <Text style={{ fontSize: isOnePreview ? 18 : 14, fontWeight: '800', color: card.color }}>{card.value}</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '500', color: secondaryColor, textAlign: 'center' }}>{card.label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })() : null}
               <TextInput
                 style={[styles.composeInput, { color: textColor, borderColor, marginTop: spacing.sm }]}
                 placeholder="Add a caption (optional)..."

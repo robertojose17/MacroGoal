@@ -3,7 +3,7 @@
  * Route: /social-profile?user_id=X
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,13 @@ import {
   FlatList,
   Dimensions,
   TouchableOpacity,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  TextInput,
+  Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProgressCircle from '@/components/ProgressCircle';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -25,6 +31,7 @@ import {
   TrendingUp,
   Flame,
   Trophy,
+  X,
 } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
@@ -34,10 +41,18 @@ import {
   followUser,
   unfollowUser,
   toggleLike,
+  addComment,
+  fetchComments,
+  deletePost,
+  savePost,
+  unsavePost,
 } from '@/utils/socialApi';
-import type { SocialProfile, SocialPost } from '@/utils/socialApi';
+import type { SocialProfile, SocialPost, Comment } from '@/utils/socialApi';
 import Avatar from '@/components/social/Avatar';
-import SocialPostCard from '@/components/social/SocialPostCard';
+import FeedPostCard from '@/components/social/FeedPostCard';
+import type { FeedPost } from '@/components/social/FeedPostCard';
+import { UserAvatar, getRelativeTime } from '@/components/social/FeedPostCard';
+import { IconSymbol } from '@/components/IconSymbol';
 
 
 function resolveImageSource(
@@ -173,6 +188,10 @@ export default function SocialProfileScreen() {
 
   const [followLoading, setFollowLoading] = useState(false);
   const [posts, setPosts] = useState<SocialPost[]>([]);
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState('');
+  const [commentsPost, setCommentsPost] = useState<FeedPost | null>(null);
 
   // Nutrition card state
   const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
@@ -290,6 +309,31 @@ export default function SocialProfileScreen() {
     loadProfile(fromDate, toDate);
   }, [user_id]);
 
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      setCurrentUserId(session.user.id);
+      const { data: profile } = await supabase
+        .from('users')
+        .select('username, avatar_url')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      if (profile) {
+        setCurrentUserName(profile.username ?? session.user.email?.split('@')[0] ?? 'user');
+        if (profile.avatar_url) {
+          if (String(profile.avatar_url).startsWith('http')) {
+            setCurrentUserAvatar(profile.avatar_url);
+          } else {
+            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(profile.avatar_url);
+            setCurrentUserAvatar(urlData.publicUrl);
+          }
+        }
+      }
+    };
+    loadCurrentUser();
+  }, []);
+
   const handleDateRangeChange = useCallback((range: DateRange) => {
     const days = DATE_RANGES.find((r) => r.key === range)?.days ?? 30;
     const newFrom = defaultFromDate(days);
@@ -365,12 +409,12 @@ export default function SocialProfileScreen() {
   }, [profile, user_id, fromDate, toDate, loadProfile]);
 
   // ─── Like ────────────────────────────────────────────────────────────────────
-  const handleLike = useCallback(async (postId: string) => {
-    console.log('[SocialProfile] Like pressed — post_id:', postId);
+  const handleLike = useCallback(async (postId: string, liked: boolean) => {
+    console.log('[SocialProfile] Like pressed — post_id:', postId, 'currently liked:', liked);
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
-          ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
+          ? { ...p, liked_by_me: !liked, likes_count: liked ? p.likes_count - 1 : p.likes_count + 1 }
           : p
       )
     );
@@ -382,6 +426,65 @@ export default function SocialProfileScreen() {
     } catch (e) {
       console.error('[SocialProfile] toggleLike failed:', e);
     }
+  }, []);
+
+  // ─── Save ────────────────────────────────────────────────────────────────────
+  const handleSave = useCallback(async (postId: string, savedByMe: boolean) => {
+    console.log('[SocialProfile] Save pressed — post_id:', postId, 'savedByMe:', savedByMe);
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? { ...p, saved_by_me: !savedByMe, saves_count: savedByMe ? (p.saves_count ?? 1) - 1 : (p.saves_count ?? 0) + 1 }
+          : p
+      )
+    );
+    try {
+      if (savedByMe) {
+        await unsavePost(postId);
+      } else {
+        await savePost(postId);
+      }
+    } catch (e) {
+      console.error('[SocialProfile] save toggle failed:', e);
+      // Revert
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? { ...p, saved_by_me: savedByMe, saves_count: savedByMe ? (p.saves_count ?? 0) + 1 : (p.saves_count ?? 1) - 1 }
+            : p
+        )
+      );
+    }
+  }, []);
+
+  // ─── Delete ──────────────────────────────────────────────────────────────────
+  const handleDelete = useCallback((postId: string) => {
+    console.log('[SocialProfile] Delete post pressed:', postId);
+    Alert.alert('Delete post?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          console.log('[SocialProfile] Network request: deletePost:', postId);
+          try {
+            await deletePost(postId);
+            setPosts((prev) => prev.filter((p) => p.id !== postId));
+            console.log('[SocialProfile] Post deleted:', postId);
+          } catch (e) {
+            console.error('[SocialProfile] deletePost failed:', e);
+            Alert.alert('Error', 'Could not delete post.');
+          }
+        },
+      },
+    ]);
+  }, []);
+
+  // ─── Comments ────────────────────────────────────────────────────────────────
+  const handleCommentAdded = useCallback((postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) => p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p)
+    );
   }, []);
 
   if (loading) {
@@ -442,8 +545,7 @@ export default function SocialProfileScreen() {
     followBtnBorderColor = borderColor;
   }
 
-  const photoPosts = posts.filter((p) => p.post_type === 'photo' && p.image_url);
-  const nonPhotoPosts = posts.filter((p) => p.post_type !== 'photo');
+  // Posts are now all rendered via FeedPostCard (no separate photo grid)
 
   const renderStatsTab = () => {
     if (!canViewStats) {
@@ -652,41 +754,25 @@ export default function SocialProfileScreen() {
 
     return (
       <View>
-        {/* Photo grid */}
-        {photoPosts.length > 0 ? (
-          <View style={styles.photoGrid}>
-            {photoPosts.map((post) => (
-              <Pressable
-                key={post.id}
-                onPress={() => {
-                  console.log('[SocialProfile] Photo grid item pressed — post_id:', post.id);
-                  router.push(`/social-post-detail?post_id=${post.id}`);
-                }}
-                style={styles.photoGridItem}
-                accessibilityRole="button"
-              >
-                <Image
-                  source={resolveImageSource(post.image_url ?? '')}
-                  style={styles.photoGridImage}
-                  resizeMode="cover"
-                />
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Non-photo posts */}
-        {nonPhotoPosts.map((post, index) => (
-          <SocialPostCard
+        {posts.map((post) => (
+          <FeedPostCard
             key={post.id}
-            post={post}
+            post={post as unknown as FeedPost}
             isDark={isDark}
+            currentUserId={currentUserId}
             onLike={handleLike}
-            onPressUser={(uid) => {
-              console.log('[SocialProfile] Post user pressed — user_id:', uid);
-              router.push(`/social-profile?user_id=${uid}`);
+            onSave={handleSave}
+            onReport={(postId) => {
+              console.log('[SocialProfile] Report pressed for post:', postId);
             }}
-            index={index}
+            onBlock={(userId) => {
+              console.log('[SocialProfile] Block pressed for user:', userId);
+            }}
+            onDelete={handleDelete}
+            onOpenComments={(p) => {
+              console.log('[SocialProfile] Open comments pressed for post:', p.id);
+              setCommentsPost(p);
+            }}
           />
         ))}
       </View>
@@ -799,7 +885,192 @@ export default function SocialProfileScreen() {
 
         <View style={{ height: 60 }} />
       </ScrollView>
+
+      {/* ── Comments Modal ── */}
+      <ProfileCommentsModal
+        visible={commentsPost != null}
+        post={commentsPost}
+        currentUserId={currentUserId}
+        currentUserAvatar={currentUserAvatar}
+        currentUserName={currentUserName}
+        isDark={isDark}
+        onClose={() => setCommentsPost(null)}
+        onCommentAdded={handleCommentAdded}
+      />
     </>
+  );
+}
+
+// ─── ProfileCommentsModal ─────────────────────────────────────────────────────
+
+interface ProfileCommentsModalProps {
+  visible: boolean;
+  post: FeedPost | null;
+  currentUserId: string;
+  currentUserAvatar: string | null;
+  currentUserName: string;
+  isDark: boolean;
+  onClose: () => void;
+  onCommentAdded: (postId: string) => void;
+}
+
+function ProfileCommentsModal({
+  visible,
+  post,
+  currentUserId,
+  currentUserAvatar,
+  currentUserName,
+  isDark,
+  onClose,
+  onCommentAdded,
+}: ProfileCommentsModalProps) {
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [sending, setSending] = useState(false);
+  const submittingRef = useRef(false);
+  const flatListRef = useRef<FlatList<Comment>>(null);
+  const insets = useSafeAreaInsets();
+
+  const textColor = isDark ? colors.textDark : colors.primaryText;
+  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
+  const cardBg = isDark ? colors.cardDark : '#fff';
+  const borderColor = isDark ? colors.borderDark : colors.border;
+
+  useEffect(() => {
+    if (visible && post) {
+      console.log('[SocialProfile] CommentsModal opened for post:', post.id);
+      setLoading(true);
+      fetchComments(post.id)
+        .then((data) => {
+          setComments(data);
+          console.log('[SocialProfile] Comments loaded:', data.length);
+        })
+        .catch((e) => console.warn('[SocialProfile] fetchComments error:', e))
+        .finally(() => setLoading(false));
+    } else {
+      setComments([]);
+      setCommentText('');
+    }
+  }, [visible, post?.id]);
+
+  const handleSend = async () => {
+    if (!post || !commentText.trim()) return;
+    if (submittingRef.current || sending) return;
+    submittingRef.current = true;
+    console.log('[SocialProfile] Send comment pressed for post:', post.id);
+    setSending(true);
+    try {
+      const newComment = await addComment(post.id, commentText.trim());
+      console.log('[SocialProfile] Comment added, id:', newComment.id);
+      setComments(prev => [...prev, newComment]);
+      setCommentText('');
+      onCommentAdded(post.id);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e) {
+      console.warn('[SocialProfile] addComment error:', e);
+      Alert.alert('Error', 'Could not post comment. Please try again.');
+    } finally {
+      setSending(false);
+      submittingRef.current = false;
+    }
+  };
+
+  const renderComment = ({ item }: { item: Comment }) => {
+    const commentUsername = item.author?.username || 'unknown';
+    const commentTime = getRelativeTime(item.created_at);
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 10, gap: 10 }}>
+        <UserAvatar url={item.author?.avatar_url ?? null} name={item.author?.full_name ?? null} username={commentUsername} size={32} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
+            <Text style={{ fontWeight: '700' }}>{commentUsername}</Text>
+            {'  '}{item.content}
+          </Text>
+          <Text style={{ fontSize: 11, color: secondaryColor, marginTop: 3 }}>{commentTime}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: bgColor }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Comments</Text>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[SocialProfile] CommentsModal close pressed');
+              onClose();
+            }}
+            style={{ position: 'absolute', right: 16 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <X size={22} color={secondaryColor} />
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 40, flex: 1 }} />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            style={{ flex: 1 }}
+            data={comments}
+            keyExtractor={(item) => item.id}
+            renderItem={renderComment}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+                <Text style={{ fontSize: 14, color: secondaryColor }}>No comments yet. Be the first!</Text>
+              </View>
+            }
+            contentContainerStyle={{ paddingBottom: 16 }}
+            keyboardShouldPersistTaps="handled"
+          />
+        )}
+
+        <View style={{ paddingBottom: insets.bottom, borderTopWidth: 1, borderTopColor: borderColor, backgroundColor: cardBg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 10 }}>
+            {currentUserAvatar ? (
+              <Image source={{ uri: currentUserAvatar }} style={{ width: 32, height: 32, borderRadius: 16 }} resizeMode="cover" />
+            ) : (
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}</Text>
+              </View>
+            )}
+            <TextInput
+              style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
+              placeholder="Add a comment..."
+              placeholderTextColor={secondaryColor}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+            />
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[SocialProfile] Send comment button tapped');
+                handleSend();
+              }}
+              disabled={!commentText.trim() || sending}
+              style={{ opacity: commentText.trim() && !sending ? 1 : 0.4 }}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <IconSymbol ios_icon_name="arrow.up.circle.fill" android_material_icon_name="send" size={32} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
