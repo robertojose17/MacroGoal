@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
+import { resetWeightMilestones } from '@/utils/autoShareAchievements';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useTranslation } from 'react-i18next';
 
@@ -266,6 +267,9 @@ export default function EditGoalsScreen() {
         .eq('id', userId);
 
       console.log('[EditGoals] ✅ Goals updated successfully');
+
+      // Reset weight milestones so they can be re-earned on the new goal
+      resetWeightMilestones().catch(console.warn);
 
       // Show success message
       Alert.alert(

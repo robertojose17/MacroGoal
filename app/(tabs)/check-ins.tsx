@@ -120,6 +120,9 @@ interface CommunityPost {
   weekly_recap_days_tracked?: number | null;
   weekly_recap_week_start?: string | null;
   weekly_recap_day_flags?: boolean[] | null;
+  weight_goal_pct?: number | null;
+  featured_recipe_id?: string | null;
+  featured_recipe_week?: string | null;
 }
 
 interface TopComment {
@@ -556,6 +559,66 @@ function WeeklyRecapCard({ score, daysTracked, weekStart, dayFlags, isDark }: We
   );
 }
 
+// ─── Weight Goal Card ─────────────────────────────────────────────────────────
+
+interface WeightGoalCardProps {
+  progressPct: number;
+  isDark: boolean;
+}
+
+function WeightGoalCard({ progressPct, isDark }: WeightGoalCardProps) {
+  const bgColor = isDark ? '#1A1A2A' : '#F5F3FF';
+  const borderColor = isDark ? '#2A2A4A' : '#DDD6FE';
+  const fillColor = '#5B9AA8';
+  const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB';
+
+  const milestoneLabel: Record<number, string> = {
+    25: '25% completed',
+    50: '50% completed',
+    75: '75% completed',
+    100: '100% completed',
+  };
+  const headlineLabel: Record<number, string> = {
+    25: '🎯 A quarter of the way there!',
+    50: '🎯 Halfway to my goal!',
+    75: '🎯 Almost there!',
+    100: '🎯 Goal reached!',
+  };
+
+  const headline = headlineLabel[progressPct] ?? `🎯 ${progressPct}% to my goal!`;
+  const subtitle = milestoneLabel[progressPct] ?? `${progressPct}% completed`;
+  const barWidth = `${progressPct}%` as `${number}%`;
+
+  return (
+    <View style={{
+      marginHorizontal: 0,
+      backgroundColor: bgColor,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor,
+      paddingVertical: 24,
+      paddingHorizontal: 20,
+      gap: 10,
+    }}>
+      <Text style={{ fontSize: 22, fontWeight: '800', color: isDark ? '#E0E7FF' : '#3730A3', letterSpacing: -0.3 }}>
+        {headline}
+      </Text>
+      <Text style={{ fontSize: 14, color: isDark ? '#A5B4FC' : '#6366F1', fontWeight: '600' }}>
+        {subtitle}
+      </Text>
+      {/* Progress bar */}
+      <View style={{ height: 8, borderRadius: 8, backgroundColor: trackBg, overflow: 'hidden', marginTop: 4 }}>
+        <View style={{
+          height: '100%',
+          width: barWidth,
+          backgroundColor: fillColor,
+          borderRadius: 8,
+        }} />
+      </View>
+    </View>
+  );
+}
+
 // ─── Post Card ────────────────────────────────────────────────────────────────
 
 interface PostCardProps {
@@ -650,6 +713,11 @@ function PostCard({
     // Streak milestone card
     if (post.auto_post_type === 'streak_milestone' && post.streak_days != null) {
       return <StreakMilestoneCard streakDays={post.streak_days} isDark={isDark} />;
+    }
+
+    // Weight goal milestone card
+    if (post.auto_post_type === 'weight_milestone' && post.weight_goal_pct != null) {
+      return <WeightGoalCard progressPct={post.weight_goal_pct} isDark={isDark} />;
     }
 
     // Weekly recap card
@@ -849,6 +917,45 @@ function PostCard({
             <Text style={{ fontWeight: '700' }}>{authorUsername}</Text>
             {'  '}{weeklyCaption}
           </Text>
+        </View>
+      );
+    }
+
+    if (post.auto_post_type === 'weight_milestone' && post.weight_goal_pct != null) {
+      const captions: Record<number, string> = {
+        25: 'One milestone closer to my goal!',
+        50: 'One milestone closer to my goal!',
+        75: 'Almost there — keeping the momentum!',
+        100: 'Goal achieved. On to the next one!',
+      };
+      const caption = captions[post.weight_goal_pct] ?? 'One milestone closer to my goal!';
+      return (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
+            <Text style={{ fontWeight: '700' }}>{authorUsername}</Text>
+            {'  '}{caption}
+          </Text>
+        </View>
+      );
+    }
+
+    if (post.auto_post_type === 'featured_recipe') {
+      const recipeName = post.meal_recipe_data?.name ?? post.content ?? 'Featured Recipe';
+      const cal = post.meal_calories != null ? Math.round(Number(post.meal_calories)) : null;
+      const prot = post.meal_protein != null ? Math.round(Number(post.meal_protein)) : null;
+      const macroLine = cal != null && prot != null ? `${cal} kcal · ${prot}g protein per serving` : null;
+      return (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4, gap: 2 }}>
+          <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
+            <Text style={{ fontWeight: '700' }}>Macro Goal</Text>
+            {'  '}
+            {`This week's featured recipe: ${recipeName}`}
+          </Text>
+          {macroLine ? (
+            <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', lineHeight: 18 }}>
+              {macroLine}
+            </Text>
+          ) : null}
         </View>
       );
     }
@@ -1787,6 +1894,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
   const [autoShareAll, setAutoShareAll] = useState(true);
   const [autoShareStreaks, setAutoShareStreaks] = useState(true);
   const [autoShareWeekly, setAutoShareWeekly] = useState(true);
+  const [autoShareWeight, setAutoShareWeight] = useState(true);
   const [audience, setAudience] = useState<'public' | 'followers'>('public');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1807,13 +1915,14 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
     try {
       const { data } = await supabase
         .from('users')
-        .select('auto_share_achievements, auto_share_streaks, auto_share_weekly_recap, auto_share_audience')
+        .select('auto_share_achievements, auto_share_streaks, auto_share_weekly_recap, auto_share_weight_milestones, auto_share_audience')
         .eq('id', currentUserId)
         .single();
       if (data) {
         setAutoShareAll(data.auto_share_achievements !== false);
         setAutoShareStreaks(data.auto_share_streaks !== false);
         setAutoShareWeekly(data.auto_share_weekly_recap !== false);
+        setAutoShareWeight(data.auto_share_weight_milestones !== false);
         setAudience(data.auto_share_audience === 'followers' ? 'followers' : 'public');
         console.log('[Community] Auto-share settings loaded:', data);
       }
@@ -1854,6 +1963,12 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
     console.log('[Community] Auto-share weekly recap toggled:', val);
     setAutoShareWeekly(val);
     saveSettings({ auto_share_weekly_recap: val });
+  };
+
+  const handleToggleWeight = (val: boolean) => {
+    console.log('[Community] Auto-share weight milestones toggled:', val);
+    setAutoShareWeight(val);
+    saveSettings({ auto_share_weight_milestones: val });
   };
 
   const handleAudienceChange = (val: 'public' | 'followers') => {
@@ -1912,7 +2027,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
                   thumbColor="#fff"
                 />
               </View>
-              <View style={styles.settingsRow}>
+              <View style={[styles.settingsRow, { borderBottomWidth: 1, borderBottomColor: borderColor, paddingBottom: spacing.md, marginBottom: spacing.md }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.settingsLabel, { color: textColor }]}>Weekly recap</Text>
                   <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share your weekly recap when consistency is 70% or higher</Text>
@@ -1920,6 +2035,19 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
                 <Switch
                   value={autoShareWeekly && autoShareAll}
                   onValueChange={handleToggleWeekly}
+                  disabled={!autoShareAll}
+                  trackColor={{ false: borderColor, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+              <View style={[styles.settingsRow, { borderTopWidth: 0, paddingTop: 0, marginTop: 0 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>Weight goal milestones</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share when you reach 25%, 50%, 75% and 100% of your weight goal</Text>
+                </View>
+                <Switch
+                  value={autoShareWeight && autoShareAll}
+                  onValueChange={handleToggleWeight}
                   disabled={!autoShareAll}
                   trackColor={{ false: borderColor, true: colors.primary }}
                   thumbColor="#fff"
@@ -2120,6 +2248,7 @@ export default function CommunityScreen() {
           is_pinned, is_founder_post, saves_count, auto_post_type, auto_post_date,
           streak_days, milestone_type, weight_value, weight_unit,
           weekly_recap_score, weekly_recap_days_tracked, weekly_recap_week_start, weekly_recap_day_flags,
+          weight_goal_pct, featured_recipe_id, featured_recipe_week,
           author:users!user_id(id, username, full_name, avatar_url, user_type)
         `)
         .eq('is_public', true)

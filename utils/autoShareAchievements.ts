@@ -148,6 +148,125 @@ export async function autoShareWeeklyRecap(
   }
 }
 
+/**
+ * Auto-post a weight goal milestone (25/50/75/100%).
+ * Uses the EXACT same progress calculation as GoalWeightCard.tsx.
+ * DB unique index prevents duplicates across devices.
+ */
+export async function autoShareWeightMilestone(): Promise<void> {
+  console.log('[autoShare] autoShareWeightMilestone — checking eligibility');
+  // Check master toggle + weight milestone toggle
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { data: prefs } = await supabase
+    .from('users')
+    .select('auto_share_achievements, auto_share_weight_milestones, auto_share_audience, goal_weight, current_weight, journey_start_weight')
+    .eq('id', user.id)
+    .single();
+
+  if (!prefs) return;
+  if (prefs.auto_share_achievements === false) return;
+  if (prefs.auto_share_weight_milestones === false) return;
+
+  const isPublic = prefs.auto_share_audience !== 'followers';
+
+  // ── Replicate GoalWeightCard progress calculation exactly ──
+  // Get latest weight from tracker_entries (lbs) or check_ins (kg)
+  const [checkInsRes, trackerRes] = await Promise.all([
+    supabase.from('check_ins').select('date, weight').eq('user_id', user.id).not('weight', 'is', null).order('date', { ascending: true }),
+    supabase.from('trackers').select('id').eq('user_id', user.id).eq('name', 'weight').eq('is_default', true).maybeSingle(),
+  ]);
+
+  const checkIns = (checkInsRes.data ?? []).map((c: any) => ({ date: c.date, weight: Number(c.weight) }));
+
+  let trackerEntries: { date: string; value: number }[] = [];
+  if (trackerRes.data?.id) {
+    const { data: entries } = await supabase
+      .from('tracker_entries')
+      .select('date, value')
+      .eq('tracker_id', trackerRes.data.id)
+      .eq('user_id', user.id)
+      .order('date', { ascending: true });
+    trackerEntries = (entries ?? []).map((e: any) => ({ date: e.date, value: Number(e.value) }));
+  }
+
+  const KG_TO_LBS = 2.20462;
+  const goalWeightKg = prefs.goal_weight != null ? Number(prefs.goal_weight) : null;
+  if (!goalWeightKg) return;
+
+  const lastCheckInKg = checkIns.length > 0 ? checkIns[checkIns.length - 1].weight : null;
+  const lastTrackerEntryKg = trackerEntries.length > 0 ? trackerEntries[trackerEntries.length - 1].value / KG_TO_LBS : null;
+  const activeWeightKg = lastTrackerEntryKg ?? lastCheckInKg ?? (prefs.current_weight != null ? Number(prefs.current_weight) : null);
+  if (!activeWeightKg) return;
+
+  // startKg: same priority as GoalWeightCard — current_weight from users, then earliest check-in
+  const startKg = prefs.current_weight != null
+    ? Number(prefs.current_weight)
+    : (checkIns.length > 0 ? checkIns[0].weight : activeWeightKg);
+
+  const totalRange = Math.abs(startKg - goalWeightKg) || 1;
+  const rawProgress = Math.abs(startKg - activeWeightKg) / totalRange;
+  const progressPct = Math.min(100, Math.max(0, Math.round(rawProgress * 100)));
+
+  console.log('[autoShare] autoShareWeightMilestone — progressPct:', progressPct, 'startKg:', startKg, 'activeWeightKg:', activeWeightKg, 'goalWeightKg:', goalWeightKg);
+
+  // Only post at 25/50/75/100
+  const MILESTONES = [25, 50, 75, 100];
+  // Find the highest milestone crossed
+  const crossed = MILESTONES.filter(m => progressPct >= m);
+  if (crossed.length === 0) {
+    console.log('[autoShare] autoShareWeightMilestone: no milestone crossed, skipping');
+    return;
+  }
+  const milestone = Math.max(...crossed);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  console.log('[autoShare] autoShareWeightMilestone: posting milestone:', milestone, '%, audience:', prefs.auto_share_audience);
+
+  try {
+    const { error } = await supabase.from('social_posts').upsert({
+      user_id: user.id,
+      post_type: 'milestone',
+      post_type_v2: 'auto',
+      auto_post_type: 'weight_milestone',
+      weight_goal_pct: milestone,
+      auto_post_date: today,
+      content: null,
+      is_public: isPublic,
+    }, { onConflict: 'user_id,auto_post_type,weight_goal_pct', ignoreDuplicates: true });
+
+    if (error) {
+      console.warn('[autoShare] weight milestone upsert error (non-fatal):', error.message);
+    } else {
+      console.log('[autoShare] weight milestone posted:', milestone, '%');
+    }
+  } catch (e) {
+    console.warn('[autoShare] weight milestone post failed (non-fatal):', e);
+  }
+}
+
+/**
+ * Call this when the user saves a new goal weight.
+ * Deletes existing weight_milestone posts so milestones can be re-earned.
+ */
+export async function resetWeightMilestones(): Promise<void> {
+  console.log('[autoShare] resetWeightMilestones — clearing weight milestone posts');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  try {
+    await supabase
+      .from('social_posts')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('auto_post_type', 'weight_milestone');
+    console.log('[autoShare] weight milestones reset for new goal');
+  } catch (e) {
+    console.warn('[autoShare] resetWeightMilestones failed (non-fatal):', e);
+  }
+}
+
 // ── Disabled no-op functions — kept for call-site compatibility ──
 
 /** @deprecated No-op. Use autoShareStreakMilestone instead. */
