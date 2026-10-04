@@ -1840,22 +1840,25 @@ export default function CommunityScreen() {
   // ── Fetch club member count (founder only) ──
   const fetchClubMemberCount = useCallback(async () => {
     if (!isFounder) return;
-    console.log('[Community] Fetching club member count (founder only)');
-    setMemberListLoading(true);
     try {
       const { data: countData, error: countError } = await supabase.rpc('get_premium_member_count');
-      if (!countError) setClubMemberCount(countData as number);
-      else console.warn('[Community] get_premium_member_count error:', countError.message);
+      if (countError) {
+        console.warn('[Community] get_premium_member_count error (expected for non-founders):', countError.message);
+        setClubMemberCount(null);
+        return;
+      }
+      setClubMemberCount(countData as number ?? null);
+      console.log('[Community] Premium member count:', countData);
 
       const { data: membersData, error: membersError } = await supabase.rpc('get_premium_members');
-      if (!membersError) setClubMembers(membersData ?? []);
-      else console.warn('[Community] get_premium_members error:', membersError.message);
-
-      console.log('[Community] Club member count:', countData, 'members:', membersData?.length);
+      if (membersError) {
+        console.warn('[Community] get_premium_members error:', membersError.message);
+        return;
+      }
+      setClubMembers((membersData as any[]) ?? []);
     } catch (e) {
-      console.warn('[Community] fetchClubMemberCount error:', e);
-    } finally {
-      setMemberListLoading(false);
+      console.warn('[Community] fetchClubMemberCount unexpected error:', e);
+      setClubMemberCount(null);
     }
   }, [isFounder]);
 
