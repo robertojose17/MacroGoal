@@ -1655,6 +1655,10 @@ export default function CommunityScreen() {
   const [clubPosts, setClubPosts] = useState<CommunityPost[]>([]);
   const [clubLoading, setClubLoading] = useState(false);
   const [clubRefreshing, setClubRefreshing] = useState(false);
+  const [clubMemberCount, setClubMemberCount] = useState<number | null>(null);
+  const [clubMembers, setClubMembers] = useState<{id: string; username: string; full_name: string | null; avatar_url: string | null}[]>([]);
+  const [showMemberList, setShowMemberList] = useState(false);
+  const [memberListLoading, setMemberListLoading] = useState(false);
 
   // ── Load current user (run once on mount) ──
   useEffect(() => {
@@ -1728,29 +1732,50 @@ export default function CommunityScreen() {
     fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
   }, [currentUserId]);
 
-  // ── Fetch feed posts ──
+  // ── Fetch feed posts (reads from social_posts — same table the composer writes to) ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFeedPosts = useCallback(async (overrideUserId?: string) => {
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
-    console.log('[Community] Fetching feed posts for user:', uid);
+    console.log('[Community] Fetching feed posts from social_posts for user:', uid);
     try {
-      const [postsRes, likesRes, savesRes] = await Promise.all([
-        supabase
-          .from('community_posts')
-          .select('*, author:users!community_posts_user_id_fkey(id, username, full_name, avatar_url, user_type)')
-          .eq('section', 'feed')
-          .order('is_pinned', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(30),
-        supabase.from('community_likes').select('post_id').eq('user_id', uid),
-        supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
-      ]);
-      console.log('[Community] Feed posts fetched:', postsRes.data?.length ?? 0, 'likes:', likesRes.data?.length ?? 0, 'saves:', savesRes.data?.length ?? 0);
-      const likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
-      const savedIds = new Set((savesRes.data || []).map((s: { post_id: string }) => s.post_id));
+      const postsRes = await supabase
+        .from('social_posts')
+        .select(`
+          id, user_id, content, image_url, created_at, likes_count, comments_count,
+          is_public, post_type, post_type_v2, meal_photo_url, meal_calories,
+          meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id,
+          meal_recipe_data, question_title, question_details, progress_stats,
+          is_pinned, is_founder_post, saves_count, auto_post_type, auto_post_date,
+          streak_days, milestone_type, weight_value, weight_unit,
+          author:users!social_posts_user_id_fkey(id, username, full_name, avatar_url, user_type)
+        `)
+        .eq('is_public', true)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50);
+      console.log('[Community] Feed posts fetched from social_posts:', postsRes.data?.length ?? 0, 'error:', postsRes.error?.message ?? 'none');
+
+      // Likes and saves — non-fatal if they fail
+      let likedIds = new Set<string>();
+      let savedIds = new Set<string>();
+      try {
+        const [likesRes, savesRes] = await Promise.all([
+          supabase.from('community_likes').select('post_id').eq('user_id', uid),
+          supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
+        ]);
+        likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
+        savedIds = new Set((savesRes.data || []).map((s: { post_id: string }) => s.post_id));
+      } catch (likesErr) {
+        console.log('[Community] Likes/saves fetch non-fatal error:', likesErr);
+      }
+
       const posts: CommunityPost[] = (postsRes.data || []).map((p: Record<string, unknown>) => ({
         ...(p as CommunityPost),
+        section: 'feed' as PostSection,
+        category: 'general' as PostCategory,
+        food_name: null,
+        food_calories: null,
         liked_by_me: likedIds.has(p.id as string),
         saved_by_me: savedIds.has(p.id as string),
       }));
@@ -1802,6 +1827,33 @@ export default function CommunityScreen() {
       console.log('[Community] fetchClubPosts error:', e);
     }
   }, []);
+
+  // ── Founder check (Rivera 76115 admin account) ──
+  const isFounder = currentUserName === 'Rivera 76115' ||
+    currentUserName === 'rivera76115' ||
+    (currentUserName?.toLowerCase().replace(/\s/g, '') === 'rivera76115');
+
+  // ── Fetch club member count (founder only) ──
+  const fetchClubMemberCount = useCallback(async () => {
+    if (!isFounder) return;
+    console.log('[Community] Fetching club member count (founder only)');
+    setMemberListLoading(true);
+    try {
+      const { data: countData, error: countError } = await supabase.rpc('get_premium_member_count');
+      if (!countError) setClubMemberCount(countData as number);
+      else console.warn('[Community] get_premium_member_count error:', countError.message);
+
+      const { data: membersData, error: membersError } = await supabase.rpc('get_premium_members');
+      if (!membersError) setClubMembers(membersData ?? []);
+      else console.warn('[Community] get_premium_members error:', membersError.message);
+
+      console.log('[Community] Club member count:', countData, 'members:', membersData?.length);
+    } catch (e) {
+      console.warn('[Community] fetchClubMemberCount error:', e);
+    } finally {
+      setMemberListLoading(false);
+    }
+  }, [isFounder]);
 
   // ── Fetch friends data ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2018,8 +2070,10 @@ export default function CommunityScreen() {
           console.log('[Community] Club tab focused — triggering one-time premium sync');
           syncPremiumMembership().catch(console.warn);
         }
+        // Fetch member count for founder
+        fetchClubMemberCount();
       }
-    }, [activeTab, currentUserId])
+    }, [activeTab, currentUserId, fetchClubMemberCount])
   );
 
   // ── Tab switch: reload data ──
@@ -2115,13 +2169,15 @@ export default function CommunityScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          console.log('[Community] Network request: delete post:', postId);
-          const { error } = await supabase.from('community_posts').delete().eq('id', postId);
-          console.log('[Community] Delete result, error:', error?.message ?? 'none');
-          if (!error) {
-            setFeedPosts((prev) => prev.filter((p) => p.id !== postId));
-            setClubPosts((prev) => prev.filter((p) => p.id !== postId));
-          }
+          console.log('[Community] Network request: delete post from both tables:', postId);
+          // Delete from both tables to handle legacy posts and new social_posts
+          const [r1, r2] = await Promise.all([
+            supabase.from('social_posts').delete().eq('id', postId).eq('user_id', currentUserId),
+            supabase.from('community_posts').delete().eq('id', postId).eq('user_id', currentUserId),
+          ]);
+          console.log('[Community] Delete result — social_posts:', r1.error?.message ?? 'ok', 'community_posts:', r2.error?.message ?? 'ok');
+          setFeedPosts((prev) => prev.filter((p) => p.id !== postId));
+          setClubPosts((prev) => prev.filter((p) => p.id !== postId));
         },
       },
     ]);
@@ -2206,22 +2262,25 @@ export default function CommunityScreen() {
     setClubRefreshing(false);
   };
 
-  // ── Post created callback — optimistic prepend ──
+  // ── Post created callback — optimistic prepend + delayed server refresh ──
   const handlePosted = useCallback((newPost?: CommunityPost) => {
-    console.log('[Community] Post created callback, optimistic prepend:', newPost?.id);
+    console.log('[Community] Post created callback, optimistic prepend:', newPost?.id, 'tab:', activeTab);
     if (newPost) {
       if (activeTab === 'feed') {
         setFeedPosts(prev => [newPost, ...prev]);
-      } else {
+      } else if (activeTab === 'club') {
         setClubPosts(prev => [newPost, ...prev]);
       }
     }
-    // Also refresh from server to get accurate data
-    if (activeTab === 'feed') {
-      fetchFeedPosts(currentUserId);
-    } else {
-      fetchClubPosts(currentUserId);
-    }
+    // Refresh from server after a short delay to get the real post with correct data
+    setTimeout(() => {
+      console.log('[Community] Delayed server refresh after post, tab:', activeTab);
+      if (activeTab === 'feed') {
+        fetchFeedPosts(currentUserId);
+      } else if (activeTab === 'club') {
+        fetchClubPosts(currentUserId);
+      }
+    }, 1500);
   }, [activeTab, currentUserId, fetchFeedPosts, fetchClubPosts]);
 
   // ── Pill selector ──
@@ -2534,6 +2593,37 @@ export default function CommunityScreen() {
                 </Text>
               </View>
 
+              {isFounder && clubMemberCount !== null && (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: isDark ? '#1A2A1A' : '#F0FDF4',
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: spacing.md,
+                    borderWidth: 1,
+                    borderColor: isDark ? '#2A4A2A' : '#BBF7D0',
+                  }}
+                  onPress={() => {
+                    console.log('[Community] Member list button pressed, count:', clubMemberCount);
+                    setShowMemberList(true);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Users size={18} color="#16A34A" />
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#4ADE80' : '#16A34A' }}>
+                      {clubMemberCount}
+                    </Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#4ADE80' : '#16A34A' }}>
+                      Premium Members
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color="#16A34A" />
+                </TouchableOpacity>
+              )}
+
               <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor, marginBottom: spacing.md }]}>
                 {currentUserAvatar ? (
                   <Image key={currentUserAvatar} source={{ uri: currentUserAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} resizeMode="cover" />
@@ -2618,6 +2708,60 @@ export default function CommunityScreen() {
         isDark={isDark}
         currentUserId={currentUserId}
       />
+
+      {/* Premium member list modal (founder only) */}
+      <Modal
+        visible={showMemberList}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowMemberList(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: isDark ? colors.backgroundDark : colors.primaryBackground }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? colors.borderDark : colors.border }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: isDark ? colors.textDark : colors.primaryText }}>
+              Premium Members
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: isDark ? colors.textDark : colors.primaryText }}>
+                ({clubMemberCount ?? 0})
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Community] Member list modal closed');
+                  setShowMemberList(false);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={22} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          {memberListLoading ? (
+            <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+          ) : (
+            <FlatList
+              data={clubMembers}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 16 }}
+              renderItem={({ item }) => (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+                  <UserAvatar url={item.avatar_url} name={item.full_name} username={item.username} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: isDark ? colors.textDark : colors.primaryText }}>
+                      {item.full_name || item.username}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                      @{item.username}
+                    </Text>
+                  </View>
+                  <Crown size={16} color="#F59E0B" />
+                </View>
+              )}
+              ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: isDark ? colors.borderDark : colors.border }} />}
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
