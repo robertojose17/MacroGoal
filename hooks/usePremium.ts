@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
+import { syncPremiumMembership } from '@/utils/premiumSync';
 
 function loadPurchases(): any {
   return isPurchasesAvailable ? Purchases : null;
@@ -256,6 +257,11 @@ export function usePremium(): UsePremiumReturn {
 
         console.log('[usePremium] - Premium Status:', hasActiveEntitlement);
         setIsPremium(hasActiveEntitlement);
+
+        if (hasActiveEntitlement) {
+          console.log('[usePremium] Active entitlement detected via listener — triggering premium sync');
+          syncPremiumMembership().catch(console.warn);
+        }
 
         if (premiumEntitlement?.expirationDate) {
           setExpirationDate(premiumEntitlement.expirationDate);

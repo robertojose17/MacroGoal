@@ -34,6 +34,7 @@ import { trackOnboardingEvent } from "@/utils/onboardingAnalytics";
 import { toLocalDateString } from "@/utils/dateUtils";
 import WelcomeBackModal from "@/components/WelcomeBackModal";
 import Purchases, { LOG_LEVEL, isPurchasesAvailable, loginRevenueCat, logoutRevenueCat } from "@/utils/purchases";
+import { syncPremiumMembership } from "@/utils/premiumSync";
 import { AFFILIATE_CODE_STORAGE_KEY, setRevenueCatAffiliateCode } from "@/utils/affiliateApi";
 import mobileAds from "@/utils/mobileAds";
 
@@ -122,6 +123,10 @@ export default function RootLayout() {
                     return setRevenueCatAffiliateCode(savedCode);
                   }
                 });
+              })
+              .then(() => {
+                console.log("[App] Triggering premium sync after cold-start RC login");
+                syncPremiumMembership().catch(console.warn);
               })
               .catch((e) => console.warn("[App] loginRevenueCat / affiliate attribute restore failed:", e));
           } else {
@@ -215,6 +220,10 @@ export default function RootLayout() {
           });
           if (apiKey && !apiKey.includes("YOUR")) {
             loginRevenueCat(newSession.user.id, apiKey, { email: newSession.user.email ?? undefined })
+              .then(() => {
+                console.log("[App] Triggering premium sync after SIGNED_IN RC login");
+                syncPremiumMembership().catch(console.warn);
+              })
               .catch((e) => console.warn("[App] loginRevenueCat (auth event) failed:", e));
           }
         }

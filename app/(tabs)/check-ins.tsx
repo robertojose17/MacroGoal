@@ -66,6 +66,7 @@ import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { createPost, savePost, unsavePost } from '@/utils/socialApi';
 import type { SocialPost } from '@/utils/socialApi';
+import { syncPremiumMembership } from '@/utils/premiumSync';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1595,7 +1596,8 @@ export default function CommunityScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { t } = useTranslation();
-  const { isPremium } = usePremium();
+  const { isPremium, loading: premiumLoading } = usePremium();
+  const clubSyncedRef = useRef(false);
 
   const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
@@ -2009,6 +2011,13 @@ export default function CommunityScreen() {
       } else if (activeTab === 'club') {
         setClubLoading(true);
         fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
+        // Sync premium membership once per session when club tab is focused
+        // so cross-device purchases are reflected without a restart.
+        if (!clubSyncedRef.current) {
+          clubSyncedRef.current = true;
+          console.log('[Community] Club tab focused — triggering one-time premium sync');
+          syncPremiumMembership().catch(console.warn);
+        }
       }
     }, [activeTab, currentUserId])
   );
@@ -2479,7 +2488,13 @@ export default function CommunityScreen() {
       )}
 
       {/* ── PREMIUM CLUB TAB ── */}
-      {activeTab === 'club' && !isPremium && (
+      {activeTab === 'club' && premiumLoading && (
+        <View style={[styles.gateContainer, { backgroundColor: bgColor }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
+
+      {activeTab === 'club' && !premiumLoading && !isPremium && (
         <View style={[styles.gateContainer, { backgroundColor: bgColor }]}>
           <Lock size={48} color={colors.primary} />
           <Text style={[styles.gateTitle, { color: textColor }]}>Macro Goal Premium Club</Text>

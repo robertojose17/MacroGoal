@@ -30,6 +30,7 @@ import { trackEvent } from '@/utils/analytics';
 import Constants from 'expo-constants';
 import Purchases, { LOG_LEVEL, isPurchasesAvailable } from '@/utils/purchases';
 import { validateAndAttributeCode } from '@/utils/affiliateApi';
+import { syncPremiumMembership } from '@/utils/premiumSync';
 
 function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
   if (!isPurchasesAvailable) return { Purchases: null, LOG_LEVEL: null };
@@ -397,6 +398,8 @@ export default function SubscriptionScreen() {
 
       if (hasActiveEntitlement) {
         console.log('[Subscription] ✅ Premium access granted');
+        console.log('[Subscription] Triggering premium membership sync after purchase');
+        syncPremiumMembership().catch(console.warn);
         setShowSuccessModal(true);
       } else {
         console.warn('[Subscription] ⚠️ Purchase completed but premium not active');
@@ -471,6 +474,8 @@ export default function SubscriptionScreen() {
       setIsPremium(hasActiveEntitlement);
 
       if (hasActiveEntitlement) {
+        console.log('[Subscription] Triggering premium membership sync after restore');
+        syncPremiumMembership().catch(console.warn);
         Alert.alert(
           t('common.success'),
           t('subscription.restoreSuccess')
