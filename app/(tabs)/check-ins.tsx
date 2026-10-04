@@ -1672,6 +1672,12 @@ export default function CommunityScreen() {
       const uid = session.user.id;
       setCurrentUserId(uid);
       console.log('[Community] Session user id:', uid);
+
+      // Check founder status via server-side RPC
+      const { data: founderData } = await supabase.rpc('is_founder_user');
+      setIsFounder(founderData === true);
+      console.log('[Community] isFounder:', founderData);
+
       const { data: profile } = await supabase
         .from('users')
         .select('username, full_name, avatar_url')
@@ -1748,7 +1754,7 @@ export default function CommunityScreen() {
           meal_recipe_data, question_title, question_details, progress_stats,
           is_pinned, is_founder_post, saves_count, auto_post_type, auto_post_date,
           streak_days, milestone_type, weight_value, weight_unit,
-          author:users!social_posts_user_id_fkey(id, username, full_name, avatar_url, user_type)
+          author:users!user_id(id, username, full_name, avatar_url, user_type)
         `)
         .eq('is_public', true)
         .order('is_pinned', { ascending: false })
@@ -1795,7 +1801,7 @@ export default function CommunityScreen() {
       const [postsRes, likesRes, commentsRes, savesRes] = await Promise.all([
         supabase
           .from('community_posts')
-          .select('*, author:users!community_posts_user_id_fkey(id, username, full_name, avatar_url, user_type)')
+          .select('*, author:users!user_id(id, username, full_name, avatar_url, user_type)')
           .eq('section', 'club')
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
@@ -1803,7 +1809,7 @@ export default function CommunityScreen() {
         supabase.from('community_likes').select('post_id').eq('user_id', uid),
         supabase
           .from('community_comments')
-          .select('id, post_id, content, author:users!community_comments_user_id_fkey(id, username, full_name, avatar_url, user_type)')
+          .select('id, post_id, content, author:users!user_id(id, username, full_name, avatar_url, user_type)')
           .order('created_at', { ascending: true }),
         supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
       ]);
@@ -1828,10 +1834,8 @@ export default function CommunityScreen() {
     }
   }, []);
 
-  // ── Founder check (Rivera 76115 admin account) ──
-  const isFounder = currentUserName === 'Rivera 76115' ||
-    currentUserName === 'rivera76115' ||
-    (currentUserName?.toLowerCase().replace(/\s/g, '') === 'rivera76115');
+  // ── Founder check (server-side RPC) ──
+  const [isFounder, setIsFounder] = useState(false);
 
   // ── Fetch club member count (founder only) ──
   const fetchClubMemberCount = useCallback(async () => {

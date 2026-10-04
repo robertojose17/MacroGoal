@@ -312,7 +312,14 @@ export async function autoShareDailySummary(): Promise<void> {
   const content = messages[Math.floor(Math.random() * messages.length)];
 
   try {
-    await createPost({ post_type: 'stats', content, is_public: true });
+    await createPost({
+      post_type: 'stats',
+      post_type_v2: 'auto',
+      content,
+      is_public: true,
+      auto_post_type: 'daily_summary',
+      auto_post_date: today,
+    });
     await AsyncStorage.setItem('daily_summary_post_date', today);
     console.log('[autoShare] daily summary posted successfully');
   } catch (e) {
