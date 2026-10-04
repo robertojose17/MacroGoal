@@ -29,6 +29,11 @@ import {
   Flag,
   UserX,
   Pencil,
+  Flame,
+  CalendarDays,
+  Target,
+  Footprints,
+  Dumbbell,
 } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase/client';
@@ -469,41 +474,153 @@ export default function FeedPostCard({
       const stats = post.progress_stats as Record<string, unknown> | null | undefined;
       if (!stats) return null;
 
-      const progressCards = [
-        stats.streak_days != null ? { key: 'streak', emoji: '🔥', value: String(stats.streak_days), label: 'day streak', bg: isDark ? '#2A1A1A' : '#FEF2F2', color: '#EF4444' } : null,
-        stats.consistency_score != null ? { key: 'consistency', emoji: '📊', value: `${stats.consistency_score}%`, label: 'consistency', bg: isDark ? '#1A2A1A' : '#F0FDF4', color: colors.success } : null,
-        stats.weight_goal_pct != null ? { key: 'weight_goal', emoji: '🎯', value: `${stats.weight_goal_pct}%`, label: 'to goal', bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary } : null,
-        stats.steps_today != null ? { key: 'steps', emoji: '👟', value: String(stats.steps_today), label: `/ ${stats.steps_goal ?? 10000} steps`, bg: isDark ? '#1A2A2A' : '#F0FDFA', color: '#0D9488' } : null,
-        stats.gym_checked_in != null ? { key: 'gym', emoji: stats.gym_checked_in ? '💪' : '⏳', value: stats.gym_checked_in ? 'Trained' : 'Not yet', label: 'today', bg: isDark ? '#2A1A2A' : '#FDF4FF', color: '#9333EA' } : null,
-        stats.weight_value != null && stats.weight_goal_pct == null ? { key: 'weight', emoji: '⚖️', value: Number(stats.weight_value).toFixed(1), label: String(stats.weight_unit ?? 'lbs'), bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary } : null,
-      ].filter(Boolean) as Array<{ key: string; emoji: string; value: string; label: string; bg: string; color: string }>;
+      const TEAL = '#2A9D8F';
+      const TEAL_BG = '#E8F5F5';
+      const TRACK_BG = isDark ? 'rgba(255,255,255,0.10)' : '#E5E7EB';
+      const cardBgColor = isDark ? '#1C2A2A' : '#FFFFFF';
+      const cardBorderColor = isDark ? '#2A3A4A' : '#E5E7EB';
+
+      type ProgressCardDef = {
+        key: string;
+        Icon: React.ComponentType<{ size: number; color: string }>;
+        value: string;
+        label: string;
+        barPct: number | null;
+        gymDone?: boolean;
+      };
+
+      const progressCards: ProgressCardDef[] = [
+        stats.streak_days != null ? {
+          key: 'streak',
+          Icon: Flame,
+          value: `${stats.streak_days} days`,
+          label: 'Current Streak',
+          barPct: Math.min(1, Number(stats.streak_days) / 100),
+        } : null,
+        stats.consistency_score != null ? {
+          key: 'consistency',
+          Icon: CalendarDays,
+          value: `${stats.consistency_score}%`,
+          label: 'Weekly Consistency',
+          barPct: Math.min(1, Number(stats.consistency_score) / 100),
+        } : null,
+        stats.weight_goal_pct != null ? {
+          key: 'weight_goal',
+          Icon: Target,
+          value: `${stats.weight_goal_pct}%`,
+          label: 'Weight Progress',
+          barPct: Math.min(1, Number(stats.weight_goal_pct) / 100),
+        } : null,
+        stats.steps_today != null ? {
+          key: 'steps',
+          Icon: Footprints,
+          value: Number(stats.steps_today).toLocaleString(),
+          label: `of ${Number(stats.steps_goal ?? 10000).toLocaleString()} steps`,
+          barPct: Math.min(1, Number(stats.steps_today) / Number(stats.steps_goal ?? 10000)),
+        } : null,
+        stats.gym_checked_in != null ? {
+          key: 'gym',
+          Icon: Dumbbell,
+          value: stats.gym_checked_in ? 'Workout complete' : 'Not yet',
+          label: "Today's Gym",
+          barPct: null,
+          gymDone: Boolean(stats.gym_checked_in),
+        } : null,
+        stats.weight_value != null && stats.weight_goal_pct == null ? {
+          key: 'weight',
+          Icon: Target,
+          value: `${Number(stats.weight_value).toFixed(1)} ${String(stats.weight_unit ?? 'lbs')}`,
+          label: 'Current Weight',
+          barPct: null,
+        } : null,
+      ].filter(Boolean) as ProgressCardDef[];
 
       if (progressCards.length === 0) return null;
 
-      const isOne = progressCards.length === 1;
-      const isTwo = progressCards.length === 2;
+      const count = progressCards.length;
 
-      return (
-        <View style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: 12, gap: 8 }}>
-          {post.content ? (
-            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: 4 }}>{post.content}</Text>
-          ) : null}
-          <View style={{ flexDirection: 'row', flexWrap: isOne ? 'nowrap' : 'wrap', gap: 8 }}>
-            {progressCards.map(card => (
-              <View key={card.key} style={{
-                flex: isOne ? 1 : isTwo ? 1 : undefined,
-                width: isOne ? undefined : isTwo ? undefined : '47%',
-                borderRadius: 10,
-                padding: 12,
-                alignItems: 'center',
-                backgroundColor: card.bg,
-                gap: 2,
-              }}>
-                <Text style={{ fontSize: isOne ? 32 : 24 }}>{card.emoji}</Text>
-                <Text style={{ fontSize: isOne ? 28 : 22, fontWeight: '800', color: card.color }}>{card.value}</Text>
-                <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor, textAlign: 'center' }}>{card.label}</Text>
+      const renderProgressCard = (card: ProgressCardDef, valueFontSize: number, labelFontSize: number) => {
+        const barFill = card.barPct != null ? `${Math.round(card.barPct * 100)}%` as `${number}%` : '0%';
+        return (
+          <View key={card.key} style={{ backgroundColor: cardBgColor, borderRadius: 12, borderWidth: 1, borderColor: cardBorderColor, padding: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: TEAL_BG, alignItems: 'center', justifyContent: 'center' }}>
+                <card.Icon size={20} color={TEAL} />
               </View>
-            ))}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: valueFontSize, fontWeight: '800', color: isDark ? '#E8F5F5' : '#1A2A2A', lineHeight: valueFontSize * 1.15 }}>{card.value}</Text>
+                <Text style={{ fontSize: labelFontSize, color: isDark ? '#94A3B8' : '#6B7280', marginTop: 1 }}>{card.label}</Text>
+              </View>
+              {card.key === 'gym' && card.gymDone ? (
+                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: TEAL, alignItems: 'center', justifyContent: 'center' }}>
+                  <Check size={14} color="#fff" />
+                </View>
+              ) : null}
+            </View>
+            {card.barPct != null ? (
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: TRACK_BG, overflow: 'hidden', marginTop: 8 }}>
+                <View style={{ height: '100%', width: barFill, backgroundColor: TEAL, borderRadius: 2 }} />
+              </View>
+            ) : null}
+          </View>
+        );
+      };
+
+      // Layout: 1=full, 2=side-by-side, 3=first full + 2 side, 4=2x2, 5=first full + 2x2
+      const outerBg = isDark ? '#111A1A' : '#F8FAFA';
+      const outerBorder = isDark ? '#2A3A4A' : '#E5E7EB';
+
+      if (count === 1) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12 }}>
+            {renderProgressCard(progressCards[0], 36, 14)}
+          </View>
+        );
+      }
+      if (count === 2) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}>{renderProgressCard(progressCards[0], 28, 12)}</View>
+            <View style={{ flex: 1 }}>{renderProgressCard(progressCards[1], 28, 12)}</View>
+          </View>
+        );
+      }
+      if (count === 3) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            {renderProgressCard(progressCards[0], 28, 12)}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>{renderProgressCard(progressCards[1], 24, 11)}</View>
+              <View style={{ flex: 1 }}>{renderProgressCard(progressCards[2], 24, 11)}</View>
+            </View>
+          </View>
+        );
+      }
+      if (count === 4) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[0], 24, 11)}</View>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[1], 24, 11)}</View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[2], 24, 11)}</View>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[3], 24, 11)}</View>
+            </View>
+          </View>
+        );
+      }
+      // 5 cards: first full, then 2x2
+      return (
+        <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+          {renderProgressCard(progressCards[0], 28, 12)}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[1], 22, 11)}</View>
+            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[2], 22, 11)}</View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[3], 22, 11)}</View>
+            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[4], 22, 11)}</View>
           </View>
         </View>
       );

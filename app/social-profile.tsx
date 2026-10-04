@@ -999,7 +999,7 @@ function ProfileCommentsModal({
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: bgColor }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
           <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Comments</Text>

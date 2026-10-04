@@ -53,6 +53,11 @@ import {
   Flag,
   UserX,
   Pencil,
+  Flame,
+  CalendarDays,
+  Target,
+  Footprints,
+  Dumbbell,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -913,41 +918,151 @@ function PostCard({
       const stats = post.progress_stats as Record<string, unknown> | null | undefined;
       if (!stats) return null;
 
-      const progressCards = [
-        stats.streak_days != null ? { key: 'streak', emoji: '🔥', value: String(stats.streak_days), label: 'day streak', bg: isDark ? '#2A1A1A' : '#FEF2F2', color: '#EF4444' } : null,
-        stats.consistency_score != null ? { key: 'consistency', emoji: '📊', value: `${stats.consistency_score}%`, label: 'consistency', bg: isDark ? '#1A2A1A' : '#F0FDF4', color: colors.success } : null,
-        stats.weight_goal_pct != null ? { key: 'weight_goal', emoji: '🎯', value: `${stats.weight_goal_pct}%`, label: 'to goal', bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary } : null,
-        stats.steps_today != null ? { key: 'steps', emoji: '👟', value: String(stats.steps_today), label: `/ ${stats.steps_goal ?? 10000} steps`, bg: isDark ? '#1A2A2A' : '#F0FDFA', color: '#0D9488' } : null,
-        stats.gym_checked_in != null ? { key: 'gym', emoji: stats.gym_checked_in ? '💪' : '⏳', value: stats.gym_checked_in ? 'Trained' : 'Not yet', label: 'today', bg: isDark ? '#2A1A2A' : '#FDF4FF', color: '#9333EA' } : null,
-        stats.weight_value != null && stats.weight_goal_pct == null ? { key: 'weight', emoji: '⚖️', value: Number(stats.weight_value).toFixed(1), label: String(stats.weight_unit ?? 'lbs'), bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary } : null,
-      ].filter(Boolean) as Array<{ key: string; emoji: string; value: string; label: string; bg: string; color: string }>;
+      const TEAL = '#2A9D8F';
+      const TEAL_BG = '#E8F5F5';
+      const TRACK_BG = isDark ? 'rgba(255,255,255,0.10)' : '#E5E7EB';
+      const pCardBg = isDark ? '#1C2A2A' : '#FFFFFF';
+      const pCardBorder = isDark ? '#2A3A4A' : '#E5E7EB';
+
+      type PCardDef = {
+        key: string;
+        Icon: React.ComponentType<{ size: number; color: string }>;
+        value: string;
+        label: string;
+        barPct: number | null;
+        gymDone?: boolean;
+      };
+
+      const progressCards: PCardDef[] = [
+        stats.streak_days != null ? {
+          key: 'streak',
+          Icon: Flame,
+          value: `${stats.streak_days} days`,
+          label: 'Current Streak',
+          barPct: Math.min(1, Number(stats.streak_days) / 100),
+        } : null,
+        stats.consistency_score != null ? {
+          key: 'consistency',
+          Icon: CalendarDays,
+          value: `${stats.consistency_score}%`,
+          label: 'Weekly Consistency',
+          barPct: Math.min(1, Number(stats.consistency_score) / 100),
+        } : null,
+        stats.weight_goal_pct != null ? {
+          key: 'weight_goal',
+          Icon: Target,
+          value: `${stats.weight_goal_pct}%`,
+          label: 'Weight Progress',
+          barPct: Math.min(1, Number(stats.weight_goal_pct) / 100),
+        } : null,
+        stats.steps_today != null ? {
+          key: 'steps',
+          Icon: Footprints,
+          value: Number(stats.steps_today).toLocaleString(),
+          label: `of ${Number(stats.steps_goal ?? 10000).toLocaleString()} steps`,
+          barPct: Math.min(1, Number(stats.steps_today) / Number(stats.steps_goal ?? 10000)),
+        } : null,
+        stats.gym_checked_in != null ? {
+          key: 'gym',
+          Icon: Dumbbell,
+          value: stats.gym_checked_in ? 'Workout complete' : 'Not yet',
+          label: "Today's Gym",
+          barPct: null,
+          gymDone: Boolean(stats.gym_checked_in),
+        } : null,
+        stats.weight_value != null && stats.weight_goal_pct == null ? {
+          key: 'weight',
+          Icon: Target,
+          value: `${Number(stats.weight_value).toFixed(1)} ${String(stats.weight_unit ?? 'lbs')}`,
+          label: 'Current Weight',
+          barPct: null,
+        } : null,
+      ].filter(Boolean) as PCardDef[];
 
       if (progressCards.length === 0) return null;
 
-      const isOne = progressCards.length === 1;
-      const isTwo = progressCards.length === 2;
-
-      return (
-        <View style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: 12, gap: 8 }}>
-          {post.content ? (
-            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, marginBottom: 4 }}>{post.content}</Text>
-          ) : null}
-          <View style={{ flexDirection: 'row', flexWrap: isOne ? 'nowrap' : 'wrap', gap: 8 }}>
-            {progressCards.map(card => (
-              <View key={card.key} style={{
-                flex: isOne ? 1 : isTwo ? 1 : undefined,
-                width: isOne ? undefined : isTwo ? undefined : '47%',
-                borderRadius: 10,
-                padding: 12,
-                alignItems: 'center',
-                backgroundColor: card.bg,
-                gap: 2,
-              }}>
-                <Text style={{ fontSize: isOne ? 32 : 24 }}>{card.emoji}</Text>
-                <Text style={{ fontSize: isOne ? 28 : 22, fontWeight: '800', color: card.color }}>{card.value}</Text>
-                <Text style={{ fontSize: 11, fontWeight: '500', color: secondaryColor, textAlign: 'center' }}>{card.label}</Text>
+      const renderPCard = (card: PCardDef, valueFontSize: number, labelFontSize: number) => {
+        const barFill = card.barPct != null ? `${Math.round(card.barPct * 100)}%` as `${number}%` : '0%';
+        return (
+          <View key={card.key} style={{ backgroundColor: pCardBg, borderRadius: 12, borderWidth: 1, borderColor: pCardBorder, padding: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: TEAL_BG, alignItems: 'center', justifyContent: 'center' }}>
+                <card.Icon size={20} color={TEAL} />
               </View>
-            ))}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: valueFontSize, fontWeight: '800', color: isDark ? '#E8F5F5' : '#1A2A2A', lineHeight: valueFontSize * 1.15 }}>{card.value}</Text>
+                <Text style={{ fontSize: labelFontSize, color: isDark ? '#94A3B8' : '#6B7280', marginTop: 1 }}>{card.label}</Text>
+              </View>
+              {card.key === 'gym' && card.gymDone ? (
+                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: TEAL, alignItems: 'center', justifyContent: 'center' }}>
+                  <Check size={14} color="#fff" />
+                </View>
+              ) : null}
+            </View>
+            {card.barPct != null ? (
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: TRACK_BG, overflow: 'hidden', marginTop: 8 }}>
+                <View style={{ height: '100%', width: barFill, backgroundColor: TEAL, borderRadius: 2 }} />
+              </View>
+            ) : null}
+          </View>
+        );
+      };
+
+      const count = progressCards.length;
+      const outerBg = isDark ? '#111A1A' : '#F8FAFA';
+      const outerBorder = isDark ? '#2A3A4A' : '#E5E7EB';
+
+      if (count === 1) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12 }}>
+            {renderPCard(progressCards[0], 36, 14)}
+          </View>
+        );
+      }
+      if (count === 2) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}>{renderPCard(progressCards[0], 28, 12)}</View>
+            <View style={{ flex: 1 }}>{renderPCard(progressCards[1], 28, 12)}</View>
+          </View>
+        );
+      }
+      if (count === 3) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            {renderPCard(progressCards[0], 28, 12)}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>{renderPCard(progressCards[1], 24, 11)}</View>
+              <View style={{ flex: 1 }}>{renderPCard(progressCards[2], 24, 11)}</View>
+            </View>
+          </View>
+        );
+      }
+      if (count === 4) {
+        return (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ width: '48%' }}>{renderPCard(progressCards[0], 24, 11)}</View>
+              <View style={{ width: '48%' }}>{renderPCard(progressCards[1], 24, 11)}</View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ width: '48%' }}>{renderPCard(progressCards[2], 24, 11)}</View>
+              <View style={{ width: '48%' }}>{renderPCard(progressCards[3], 24, 11)}</View>
+            </View>
+          </View>
+        );
+      }
+      // 5 cards: first full, then 2x2
+      return (
+        <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+          {renderPCard(progressCards[0], 28, 12)}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ width: '48%' }}>{renderPCard(progressCards[1], 22, 11)}</View>
+            <View style={{ width: '48%' }}>{renderPCard(progressCards[2], 22, 11)}</View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ width: '48%' }}>{renderPCard(progressCards[3], 22, 11)}</View>
+            <View style={{ width: '48%' }}>{renderPCard(progressCards[4], 22, 11)}</View>
           </View>
         </View>
       );
@@ -1267,6 +1382,7 @@ function CommentsModal({
   const [sending, setSending] = useState(false);
   const submittingRef = useRef(false);
   const flatListRef = useRef<FlatList<Comment>>(null);
+  const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
 
   const textColor = isDark ? colors.textDark : colors.primaryText;
@@ -1314,6 +1430,7 @@ function CommentsModal({
       setComments(prev => [...prev, newComment]);
       setCommentText('');
       onCommentAdded(post.id);
+      inputRef.current?.blur();
       // Scroll to bottom after adding
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -1356,7 +1473,7 @@ function CommentsModal({
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: bgColor }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
         {/* Header — fixed */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
@@ -1388,7 +1505,7 @@ function CommentsModal({
                 <Text style={{ fontSize: 14, color: secondaryColor }}>No comments yet. Be the first!</Text>
               </View>
             }
-            contentContainerStyle={{ paddingBottom: 16 }}
+            contentContainerStyle={{ paddingBottom: 8 }}
             keyboardShouldPersistTaps="handled"
           />
         )}
@@ -1404,6 +1521,7 @@ function CommentsModal({
               </View>
             )}
             <TextInput
+              ref={inputRef}
               style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
               placeholder="Add a comment..."
               placeholderTextColor={secondaryColor}
@@ -1526,27 +1644,69 @@ function ComposerSheet({
       const mondayStr = toLocalDateString(monday);
       const todayStr = toLocalDateString(today);
 
-      const [xpRes, checkInsRes, goalRes, mealsRes] = await Promise.all([
+      const [xpRes, checkInsRes, goalRes, mealsRes, trackerWeightRes] = await Promise.all([
         supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', currentUserId).maybeSingle(),
         supabase.from('check_ins').select('weight, weight_unit, created_at').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(1),
         supabase.from('goals').select('target_weight, starting_weight, weight_unit').eq('user_id', currentUserId).eq('is_active', true).maybeSingle(),
         supabase.from('meals').select('date').eq('user_id', currentUserId).gte('date', mondayStr).lte('date', todayStr),
+        supabase.from('tracker_entries').select('value, date').eq('user_id', currentUserId).order('date', { ascending: false }).limit(1),
       ]);
 
-      const streak = xpRes.data?.current_streak ?? 0;
+      // Streak — use user_xp, fallback to computing from check_ins
+      let streak = xpRes.data?.current_streak ?? null;
+      if (streak == null) {
+        try {
+          const recentCheckIns = await supabase
+            .from('check_ins')
+            .select('created_at')
+            .eq('user_id', currentUserId)
+            .order('created_at', { ascending: false })
+            .limit(30);
+          if (recentCheckIns.data && recentCheckIns.data.length > 0) {
+            const dates = recentCheckIns.data.map((r: { created_at: string }) => toLocalDateString(new Date(r.created_at)));
+            const uniqueDates = Array.from(new Set(dates)).sort().reverse();
+            let computedStreak = 0;
+            const todayDateStr = toLocalDateString(new Date());
+            for (let i = 0; i < uniqueDates.length; i++) {
+              const expected = new Date();
+              expected.setDate(expected.getDate() - i);
+              const expectedStr = toLocalDateString(expected);
+              if (uniqueDates[i] === expectedStr || (i === 0 && uniqueDates[0] === todayDateStr)) {
+                computedStreak++;
+              } else {
+                break;
+              }
+            }
+            streak = computedStreak;
+          }
+        } catch (streakFallbackErr) {
+          console.log('[Community] Streak fallback error (non-fatal):', streakFallbackErr);
+        }
+      }
+      const finalStreak = streak ?? 0;
+
       const latestCheckIn = checkInsRes.data?.[0];
       const trackedDays = new Set((mealsRes.data || []).map((m: { date: string }) => m.date)).size;
       const daysElapsed = daysFromMonday + 1;
       const consistencyScore = Math.round((trackedDays / daysElapsed) * 100);
 
       const stats: ProgressStat[] = [];
-      if (streak > 0) {
-        stats.push({ key: 'streak_days', label: 'Current streak', emoji: '🔥', value: streak, selected: false });
+      if (finalStreak > 0) {
+        stats.push({ key: 'streak_days', label: 'Current streak', emoji: '🔥', value: finalStreak, selected: false });
       }
       stats.push({ key: 'consistency_score', label: 'Weekly consistency', emoji: '📊', value: consistencyScore, selected: false });
 
-      // Weight goal progress
-      const currentWeight = latestCheckIn?.weight;
+      // Weight goal progress — prefer tracker_entries if more recent than check_in
+      const checkInWeight = latestCheckIn?.weight ?? null;
+      const checkInDate = latestCheckIn?.created_at ?? null;
+      const trackerEntryWeight = trackerWeightRes.data?.value ?? null;
+      const trackerEntryDate = trackerWeightRes.data?.date ?? null;
+      let currentWeight: number | null = checkInWeight;
+      if (trackerEntryWeight != null) {
+        if (checkInDate == null || (trackerEntryDate != null && trackerEntryDate >= checkInDate.split('T')[0])) {
+          currentWeight = trackerEntryWeight;
+        }
+      }
       const targetWeight = goalRes.data?.target_weight;
       const startingWeight = goalRes.data?.starting_weight;
       if (currentWeight != null && targetWeight != null && startingWeight != null && startingWeight !== targetWeight) {
@@ -1554,12 +1714,12 @@ function ComposerSheet({
         const currentChange = Math.abs(currentWeight - startingWeight);
         const pct = Math.min(100, Math.round((currentChange / totalChange) * 100));
         stats.push({ key: 'weight_goal_pct', label: 'Weight goal progress', emoji: '🎯', value: pct, selected: false });
-      } else if (latestCheckIn?.weight) {
+      } else if (currentWeight != null) {
         // Fallback: show raw weight if no goal
-        stats.push({ key: 'weight_value', label: 'Current weight', emoji: '⚖️', value: latestCheckIn.weight, selected: false });
+        stats.push({ key: 'weight_value', label: 'Current weight', emoji: '⚖️', value: currentWeight, selected: false });
       }
 
-      // Today's steps — try health_metrics table
+      // Today's steps — try health_metrics table; show even if 0
       try {
         const stepsRes = await supabase
           .from('health_metrics')
@@ -1569,7 +1729,7 @@ function ComposerSheet({
           .maybeSingle();
         const steps = stepsRes.data?.steps;
         const stepsGoal = stepsRes.data?.steps_goal ?? 10000;
-        if (steps != null && steps > 0) {
+        if (steps != null) {
           console.log('[Community] Steps today:', steps, 'goal:', stepsGoal);
           stats.push({ key: 'steps_today', label: "Today's steps", emoji: '👟', value: steps, selected: false, meta: { steps_goal: stepsGoal } });
         }
@@ -1981,65 +2141,148 @@ function ComposerSheet({
               ) : progressStats.length === 0 ? (
                 <Text style={{ color: secondaryColor, fontSize: 14 }}>No data available yet. Start tracking to share progress!</Text>
               ) : (
-                progressStats.map(stat => (
-                  <TouchableOpacity
-                    key={stat.key}
-                    onPress={() => {
-                      console.log('[Community] Progress stat toggled:', stat.key, 'selected:', !stat.selected);
-                      toggleProgressStat(stat.key);
-                    }}
-                    style={[
-                      styles.progressStatRow,
-                      { borderColor: stat.selected ? colors.primary : borderColor, backgroundColor: stat.selected ? colors.primary + '12' : cardBg },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 22 }}>{stat.emoji}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{stat.label}</Text>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: stat.selected ? colors.primary : textColor }}>{String(stat.value)}</Text>
-                    </View>
-                    <View style={[styles.checkCircle, { borderColor: stat.selected ? colors.primary : borderColor, backgroundColor: stat.selected ? colors.primary : 'transparent' }]}>
-                      {stat.selected ? <Check size={14} color="#fff" /> : null}
-                    </View>
-                  </TouchableOpacity>
-                ))
+                progressStats.map(stat => {
+                  let statValueDisplay = String(stat.value);
+                  let statSubLabel: string | null = null;
+                  if (stat.key === 'streak_days') {
+                    statValueDisplay = `${stat.value} days`;
+                  } else if (stat.key === 'consistency_score') {
+                    statValueDisplay = `${stat.value}%`;
+                  } else if (stat.key === 'weight_goal_pct') {
+                    statValueDisplay = `${stat.value}% toward goal`;
+                  } else if (stat.key === 'steps_today') {
+                    statValueDisplay = `${Number(stat.value).toLocaleString()} steps`;
+                    statSubLabel = `Goal: ${Number(stat.meta?.steps_goal ?? 10000).toLocaleString()}`;
+                  } else if (stat.key === 'gym_checked_in') {
+                    statValueDisplay = stat.value === 'Trained' ? 'Trained today ✓' : 'Not yet today';
+                  }
+                  return (
+                    <TouchableOpacity
+                      key={stat.key}
+                      onPress={() => {
+                        console.log('[Community] Progress stat toggled:', stat.key, 'selected:', !stat.selected);
+                        toggleProgressStat(stat.key);
+                      }}
+                      style={[
+                        styles.progressStatRow,
+                        { borderColor: stat.selected ? colors.primary : borderColor, backgroundColor: stat.selected ? colors.primary + '12' : cardBg },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 22 }}>{stat.emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{stat.label}</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: stat.selected ? colors.primary : textColor }}>{statValueDisplay}</Text>
+                        {statSubLabel ? <Text style={{ fontSize: 12, color: secondaryColor }}>{statSubLabel}</Text> : null}
+                      </View>
+                      <View style={[styles.checkCircle, { borderColor: stat.selected ? colors.primary : borderColor, backgroundColor: stat.selected ? colors.primary : 'transparent' }]}>
+                        {stat.selected ? <Check size={14} color="#fff" /> : null}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
               )}
               {/* Live preview of selected stats */}
               {progressStats.some(s => s.selected) ? (() => {
+                const TEAL = '#2A9D8F';
+                const TEAL_BG = '#E8F5F5';
+                const TRACK_BG = isDark ? 'rgba(255,255,255,0.10)' : '#E5E7EB';
+                const pvCardBg = isDark ? '#1C2A2A' : '#FFFFFF';
+                const pvCardBorder = isDark ? '#2A3A4A' : '#E5E7EB';
+                const pvOuterBg = isDark ? '#111A1A' : '#F8FAFA';
+                const pvOuterBorder = isDark ? '#2A3A4A' : '#E5E7EB';
+
+                type PvCard = {
+                  key: string;
+                  Icon: React.ComponentType<{ size: number; color: string }>;
+                  value: string;
+                  label: string;
+                  barPct: number | null;
+                  gymDone?: boolean;
+                };
+
                 const selectedForPreview = progressStats.filter(s => s.selected);
-                const previewCards = selectedForPreview.map(s => {
-                  if (s.key === 'streak_days') return { key: s.key, emoji: '🔥', value: String(s.value), label: 'day streak', bg: isDark ? '#2A1A1A' : '#FEF2F2', color: '#EF4444' };
-                  if (s.key === 'consistency_score') return { key: s.key, emoji: '📊', value: `${s.value}%`, label: 'consistency', bg: isDark ? '#1A2A1A' : '#F0FDF4', color: colors.success };
-                  if (s.key === 'weight_goal_pct') return { key: s.key, emoji: '🎯', value: `${s.value}%`, label: 'to goal', bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary };
-                  if (s.key === 'steps_today') return { key: s.key, emoji: '👟', value: String(s.value), label: `/ ${s.meta?.steps_goal ?? 10000} steps`, bg: isDark ? '#1A2A2A' : '#F0FDFA', color: '#0D9488' };
-                  if (s.key === 'gym_checked_in') return { key: s.key, emoji: s.value === 'Trained' ? '💪' : '⏳', value: String(s.value), label: 'today', bg: isDark ? '#2A1A2A' : '#FDF4FF', color: '#9333EA' };
-                  if (s.key === 'weight_value') return { key: s.key, emoji: '⚖️', value: Number(s.value).toFixed(1), label: 'lbs', bg: isDark ? '#1A1A2A' : '#F5F3FF', color: colors.primary };
+                const previewCards: PvCard[] = selectedForPreview.map(s => {
+                  if (s.key === 'streak_days') return { key: s.key, Icon: Flame, value: `${s.value} days`, label: 'Current Streak', barPct: Math.min(1, Number(s.value) / 100) };
+                  if (s.key === 'consistency_score') return { key: s.key, Icon: CalendarDays, value: `${s.value}%`, label: 'Weekly Consistency', barPct: Math.min(1, Number(s.value) / 100) };
+                  if (s.key === 'weight_goal_pct') return { key: s.key, Icon: Target, value: `${s.value}%`, label: 'Weight Progress', barPct: Math.min(1, Number(s.value) / 100) };
+                  if (s.key === 'steps_today') return { key: s.key, Icon: Footprints, value: Number(s.value).toLocaleString(), label: `of ${Number(s.meta?.steps_goal ?? 10000).toLocaleString()} steps`, barPct: Math.min(1, Number(s.value) / Number(s.meta?.steps_goal ?? 10000)) };
+                  if (s.key === 'gym_checked_in') return { key: s.key, Icon: Dumbbell, value: s.value === 'Trained' ? 'Workout complete' : 'Not yet', label: "Today's Gym", barPct: null, gymDone: s.value === 'Trained' };
+                  if (s.key === 'weight_value') return { key: s.key, Icon: Target, value: `${Number(s.value).toFixed(1)} lbs`, label: 'Current Weight', barPct: null };
                   return null;
-                }).filter(Boolean) as Array<{ key: string; emoji: string; value: string; label: string; bg: string; color: string }>;
-                const isOnePreview = previewCards.length === 1;
-                const isTwoPreview = previewCards.length === 2;
-                return (
-                  <View style={{ opacity: 0.9, marginTop: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: secondaryColor, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Preview</Text>
-                    <View style={{ borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: 10, gap: 6 }}>
-                      <View style={{ flexDirection: 'row', flexWrap: isOnePreview ? 'nowrap' : 'wrap', gap: 6 }}>
-                        {previewCards.map(card => (
-                          <View key={card.key} style={{
-                            flex: isOnePreview ? 1 : isTwoPreview ? 1 : undefined,
-                            width: isOnePreview ? undefined : isTwoPreview ? undefined : '47%',
-                            borderRadius: 8,
-                            padding: 8,
-                            alignItems: 'center',
-                            backgroundColor: card.bg,
-                            gap: 2,
-                          }}>
-                            <Text style={{ fontSize: isOnePreview ? 22 : 16 }}>{card.emoji}</Text>
-                            <Text style={{ fontSize: isOnePreview ? 18 : 14, fontWeight: '800', color: card.color }}>{card.value}</Text>
-                            <Text style={{ fontSize: 10, fontWeight: '500', color: secondaryColor, textAlign: 'center' }}>{card.label}</Text>
+                }).filter(Boolean) as PvCard[];
+
+                const renderPvCard = (card: PvCard, valueFontSize: number, labelFontSize: number) => {
+                  const barFill = card.barPct != null ? `${Math.round(card.barPct * 100)}%` as `${number}%` : '0%';
+                  return (
+                    <View key={card.key} style={{ backgroundColor: pvCardBg, borderRadius: 10, borderWidth: 1, borderColor: pvCardBorder, padding: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: TEAL_BG, alignItems: 'center', justifyContent: 'center' }}>
+                          <card.Icon size={16} color={TEAL} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: valueFontSize, fontWeight: '800', color: isDark ? '#E8F5F5' : '#1A2A2A', lineHeight: valueFontSize * 1.15 }}>{card.value}</Text>
+                          <Text style={{ fontSize: labelFontSize, color: isDark ? '#94A3B8' : '#6B7280', marginTop: 1 }}>{card.label}</Text>
+                        </View>
+                        {card.key === 'gym' && card.gymDone ? (
+                          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: TEAL, alignItems: 'center', justifyContent: 'center' }}>
+                            <Check size={11} color="#fff" />
                           </View>
-                        ))}
+                        ) : null}
                       </View>
+                      {card.barPct != null ? (
+                        <View style={{ height: 4, borderRadius: 2, backgroundColor: TRACK_BG, overflow: 'hidden', marginTop: 6 }}>
+                          <View style={{ height: '100%', width: barFill, backgroundColor: TEAL, borderRadius: 2 }} />
+                        </View>
+                      ) : null}
                     </View>
+                  );
+                };
+
+                const pvCount = previewCards.length;
+                return (
+                  <View style={{ opacity: 0.95, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: secondaryColor, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Preview</Text>
+                    {pvCount === 1 ? (
+                      <View style={{ backgroundColor: pvOuterBg, borderRadius: 12, borderWidth: 1, borderColor: pvOuterBorder, padding: 10 }}>
+                        {renderPvCard(previewCards[0], 26, 12)}
+                      </View>
+                    ) : pvCount === 2 ? (
+                      <View style={{ backgroundColor: pvOuterBg, borderRadius: 12, borderWidth: 1, borderColor: pvOuterBorder, padding: 10, flexDirection: 'row', gap: 6 }}>
+                        <View style={{ flex: 1 }}>{renderPvCard(previewCards[0], 20, 11)}</View>
+                        <View style={{ flex: 1 }}>{renderPvCard(previewCards[1], 20, 11)}</View>
+                      </View>
+                    ) : pvCount === 3 ? (
+                      <View style={{ backgroundColor: pvOuterBg, borderRadius: 12, borderWidth: 1, borderColor: pvOuterBorder, padding: 10, gap: 6 }}>
+                        {renderPvCard(previewCards[0], 20, 11)}
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <View style={{ flex: 1 }}>{renderPvCard(previewCards[1], 18, 10)}</View>
+                          <View style={{ flex: 1 }}>{renderPvCard(previewCards[2], 18, 10)}</View>
+                        </View>
+                      </View>
+                    ) : pvCount === 4 ? (
+                      <View style={{ backgroundColor: pvOuterBg, borderRadius: 12, borderWidth: 1, borderColor: pvOuterBorder, padding: 10, gap: 6 }}>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[0], 18, 10)}</View>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[1], 18, 10)}</View>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[2], 18, 10)}</View>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[3], 18, 10)}</View>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={{ backgroundColor: pvOuterBg, borderRadius: 12, borderWidth: 1, borderColor: pvOuterBorder, padding: 10, gap: 6 }}>
+                        {renderPvCard(previewCards[0], 20, 11)}
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[1], 16, 10)}</View>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[2], 16, 10)}</View>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[3], 16, 10)}</View>
+                          <View style={{ width: '48%' }}>{renderPvCard(previewCards[4], 16, 10)}</View>
+                        </View>
+                      </View>
+                    )}
                   </View>
                 );
               })() : null}
