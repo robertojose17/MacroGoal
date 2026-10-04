@@ -67,6 +67,8 @@ import { createPost, savePost, unsavePost, addComment, fetchComments } from '@/u
 import type { SocialPost, Comment } from '@/utils/socialApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 
+const COACH_AVATAR = require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg');
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type CommunityTab = 'feed' | 'friends' | 'club';
@@ -123,6 +125,10 @@ interface CommunityPost {
   weight_goal_pct?: number | null;
   featured_recipe_id?: string | null;
   featured_recipe_week?: string | null;
+  edu_headline?: string | null;
+  edu_body?: string | null;
+  edu_example?: string | null;
+  edu_week?: string | null;
 }
 
 interface TopComment {
@@ -619,6 +625,68 @@ function WeightGoalCard({ progressPct, isDark }: WeightGoalCardProps) {
   );
 }
 
+// ─── Educational Card ─────────────────────────────────────────────────────────
+
+interface EducationalCardProps {
+  headline: string;
+  body: string;
+  example?: string | null;
+  isDark: boolean;
+}
+
+function EducationalCard({ headline, body, example, isDark }: EducationalCardProps) {
+  const bgColor = isDark ? '#0A1A1A' : '#F0FDFA';
+  const borderColor = isDark ? '#134E4A' : '#99F6E4';
+  const headlineColor = isDark ? '#5EEAD4' : '#0F766E';
+  const bodyColor = isDark ? '#CCFBF1' : '#134E4A';
+  const exampleBg = isDark ? 'rgba(20,184,166,0.12)' : 'rgba(20,184,166,0.08)';
+
+  return (
+    <View style={{
+      marginHorizontal: 0,
+      backgroundColor: bgColor,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor,
+      paddingVertical: 20,
+      paddingHorizontal: 20,
+      gap: 10,
+    }}>
+      <View style={{ width: 32, height: 3, borderRadius: 2, backgroundColor: '#14B8A6' }} />
+      <Text style={{
+        fontSize: 20,
+        fontWeight: '800',
+        color: headlineColor,
+        lineHeight: 26,
+        letterSpacing: -0.3,
+      }}>
+        {headline}
+      </Text>
+      <Text style={{
+        fontSize: 14,
+        color: bodyColor,
+        lineHeight: 21,
+        fontWeight: '400',
+      }}>
+        {body}
+      </Text>
+      {example ? (
+        <View style={{
+          backgroundColor: exampleBg,
+          borderRadius: 10,
+          padding: 12,
+          borderLeftWidth: 3,
+          borderLeftColor: '#14B8A6',
+        }}>
+          <Text style={{ fontSize: 13, color: isDark ? '#99F6E4' : '#0F766E', lineHeight: 19, fontStyle: 'italic' }}>
+            {example}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // ─── Post Card ────────────────────────────────────────────────────────────────
 
 interface PostCardProps {
@@ -655,9 +723,15 @@ function PostCard({
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const authorUsername = post.author?.username || 'unknown';
+  const authorAvatarUri = post.author?.avatar_url ?? null;
   const relTime = getRelativeTime(post.created_at);
   const isOwn = post.user_id === currentUserId;
   const isAutoPost = post.post_type_v2 === 'auto';
+
+  // Educational posts always display as "Coach" with the Coach avatar
+  const isEduPost = post.auto_post_type === 'educational';
+  const displayName = isEduPost ? 'Coach' : (authorUsername ?? 'User');
+  const displayAvatar = isEduPost ? COACH_AVATAR : authorAvatarUri;
 
   const handleMenuPress = () => {
     console.log('[Community] Three-dot menu opened for post:', post.id, 'isOwn:', isOwn);
@@ -718,6 +792,18 @@ function PostCard({
     // Weight goal milestone card
     if (post.auto_post_type === 'weight_milestone' && post.weight_goal_pct != null) {
       return <WeightGoalCard progressPct={post.weight_goal_pct} isDark={isDark} />;
+    }
+
+    // Educational / Coach post
+    if (post.auto_post_type === 'educational') {
+      return (
+        <EducationalCard
+          headline={post.edu_headline ?? 'Did you know?'}
+          body={post.edu_body ?? post.content ?? ''}
+          example={post.edu_example}
+          isDark={isDark}
+        />
+      );
     }
 
     // Weekly recap card
@@ -960,6 +1046,11 @@ function PostCard({
       );
     }
 
+    if (post.auto_post_type === 'educational') {
+      // No separate caption — the card body IS the content.
+      return null;
+    }
+
     if (post.content) {
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
@@ -999,27 +1090,34 @@ function PostCard({
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 }}>
         <TouchableOpacity
           onPress={() => {
-            if (post.user_id && post.user_id !== currentUserId) {
+            if (!isEduPost && post.user_id && post.user_id !== currentUserId) {
               console.log('[Community] Post avatar tapped, navigating to profile:', post.user_id);
               router.push({ pathname: '/social-profile-view', params: { userId: post.user_id } });
             }
           }}
-          disabled={!post.user_id || post.user_id === currentUserId}
+          disabled={isEduPost || !post.user_id || post.user_id === currentUserId}
         >
-          <UserAvatar url={post.author?.avatar_url ?? null} name={post.author?.full_name ?? null} username={post.author?.username ?? 'u'} size={40} />
+          {isEduPost ? (
+            <Image
+              source={typeof displayAvatar === 'number' ? displayAvatar : { uri: displayAvatar as string }}
+              style={{ width: 40, height: 40, borderRadius: 20 }}
+            />
+          ) : (
+            <UserAvatar url={authorAvatarUri} name={post.author?.full_name ?? null} username={post.author?.username ?? 'u'} size={40} />
+          )}
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <TouchableOpacity
               onPress={() => {
-                if (post.user_id && post.user_id !== currentUserId) {
+                if (!isEduPost && post.user_id && post.user_id !== currentUserId) {
                   console.log('[Community] Post username tapped, navigating to profile:', post.user_id);
                   router.push({ pathname: '/social-profile-view', params: { userId: post.user_id } });
                 }
               }}
-              disabled={!post.user_id || post.user_id === currentUserId}
+              disabled={isEduPost || !post.user_id || post.user_id === currentUserId}
             >
-              <Text style={{ fontSize: 14, fontWeight: '700', color: textColor }}>{authorUsername}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: textColor }}>{displayName}</Text>
             </TouchableOpacity>
             {post.is_founder_post ? (
               <View style={[styles.founderBadge, { backgroundColor: '#0D9488' }]}>
@@ -2249,6 +2347,7 @@ export default function CommunityScreen() {
           streak_days, milestone_type, weight_value, weight_unit,
           weekly_recap_score, weekly_recap_days_tracked, weekly_recap_week_start, weekly_recap_day_flags,
           weight_goal_pct, featured_recipe_id, featured_recipe_week,
+          edu_headline, edu_body, edu_example, edu_week,
           author:users!user_id(id, username, full_name, avatar_url, user_type)
         `)
         .eq('is_public', true)
