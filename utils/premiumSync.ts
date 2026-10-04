@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 
-const SYNC_URL = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/sync-premium-membership';
+const SYNC_URL = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/sync-subscription';
 
 /**
  * Calls the sync-premium-membership Supabase edge function to reconcile
@@ -16,7 +16,7 @@ export async function syncPremiumMembership(): Promise<{ is_premium: boolean } |
       return null;
     }
 
-    console.log('[PremiumSync] POSTing to sync-premium-membership for user:', session.user.id);
+    console.log('[PremiumSync] POSTing to sync-subscription for user:', session.user.id);
     const response = await fetch(SYNC_URL, {
       method: 'POST',
       headers: {

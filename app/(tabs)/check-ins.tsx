@@ -113,6 +113,7 @@ interface CommunityPost {
   meal_fat?: number | null;
   meal_recipe_id?: string | null;
   meal_recipe_data?: any | null;
+  meal_servings?: number | null;
   progress_stats?: Record<string, unknown> | null;
   auto_post_type?: string | null;
 }
@@ -908,16 +909,15 @@ function ComposerSheet({
     }
   };
 
-  const handlePickImage = async (forMeal = false) => {
-    console.log('[Community] Image picker opened, forMeal:', forMeal);
+  const handlePickImage = async () => {
+    console.log('[Community] Image picker opened');
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
       console.log('[Community] Image selected:', result.assets[0].uri);
-      if (forMeal) setMealImageUri(result.assets[0].uri);
-      else setUpdateImageUri(result.assets[0].uri);
+      setUpdateImageUri(result.assets[0].uri);
     }
   };
 
@@ -1147,7 +1147,7 @@ function ComposerSheet({
                   </TouchableOpacity>
                 </View>
               ) : null}
-              <TouchableOpacity style={[styles.imagePickerBtn, { borderColor }]} onPress={() => handlePickImage(false)}>
+              <TouchableOpacity style={[styles.imagePickerBtn, { borderColor }]} onPress={() => handlePickImage()}>
                 <Plus size={16} color={colors.primary} />
                 <Text style={[styles.imagePickerText, { color: colors.primary }]}>Add photo</Text>
               </TouchableOpacity>
