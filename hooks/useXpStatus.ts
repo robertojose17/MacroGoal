@@ -12,7 +12,7 @@ import { AppState, AppStateStatus, DeviceEventEmitter } from 'react-native';
 import { getXpStatus } from '@/utils/xpApi';
 import { XP_EVENTS } from '@/utils/xpEvents';
 import type { XpStatus } from '@/types/xp';
-import { autoShareStreak } from '@/utils/autoShareAchievements';
+import { autoShareStreakMilestone } from '@/utils/autoShareAchievements';
 import { getPendingMilestone, markMilestoneCelebrated } from '@/utils/streakMilestones';
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -47,7 +47,7 @@ export function useXpStatus(): UseXpStatusResult {
             if (milestone !== null) {
               console.log('[useXpStatus] streak milestone reached:', milestone, '— marking celebrated and auto-sharing');
               markMilestoneCelebrated(milestone);
-              autoShareStreak(milestone);
+              autoShareStreakMilestone(milestone);
             }
           }).catch((e) => console.warn('[useXpStatus] streak milestone check failed (non-fatal):', e));
         }

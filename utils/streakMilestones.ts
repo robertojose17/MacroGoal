@@ -8,7 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = '@macro_goal/streak_milestones_seen';
-const MILESTONES = [7, 30, 90, 365];
+const MILESTONES = [7, 14, 30, 60, 100];
 
 export async function getCelebratedMilestones(): Promise<number[]> {
   try {

@@ -60,7 +60,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from 'react-i18next';
 import { IconSymbol } from '@/components/IconSymbol';
-import { autoShareDailySummary } from '@/utils/autoShareAchievements';
+
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { createPost, savePost, unsavePost, addComment, fetchComments } from '@/utils/socialApi';
@@ -115,6 +115,11 @@ interface CommunityPost {
   meal_servings?: number | null;
   progress_stats?: Record<string, unknown> | null;
   auto_post_type?: string | null;
+  streak_days?: number | null;
+  weekly_recap_score?: number | null;
+  weekly_recap_days_tracked?: number | null;
+  weekly_recap_week_start?: string | null;
+  weekly_recap_day_flags?: boolean[] | null;
 }
 
 interface TopComment {
@@ -434,6 +439,123 @@ function MealPostCardBody({
   );
 }
 
+// ─── Streak Milestone Card ────────────────────────────────────────────────────
+
+interface StreakMilestoneCardProps {
+  streakDays: number;
+  isDark: boolean;
+}
+
+function StreakMilestoneCard({ streakDays, isDark }: StreakMilestoneCardProps) {
+  const bgColor = isDark ? '#1A2A1A' : '#F0FDF4';
+  const borderColor = isDark ? '#2A4A2A' : '#BBF7D0';
+  const streakLabel = `${streakDays}-day streak`;
+  const streakSubtitle = `${streakDays} consecutive days of tracking`;
+  return (
+    <View style={{
+      marginHorizontal: 0,
+      backgroundColor: bgColor,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor,
+      paddingVertical: 24,
+      paddingHorizontal: 20,
+      alignItems: 'center',
+      gap: 6,
+    }}>
+      <Text style={{ fontSize: 40 }}>🔥</Text>
+      <Text style={{ fontSize: 28, fontWeight: '800', color: '#5CB97B', letterSpacing: -0.5 }}>
+        {streakLabel}
+      </Text>
+      <Text style={{ fontSize: 14, color: isDark ? '#86EFAC' : '#166534', fontWeight: '500' }}>
+        {streakSubtitle}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Weekly Recap Card ────────────────────────────────────────────────────────
+
+interface WeeklyRecapCardProps {
+  score: number;
+  daysTracked: number;
+  weekStart: string;
+  dayFlags: boolean[] | null;
+  isDark: boolean;
+}
+
+function WeeklyRecapCard({ score, daysTracked, weekStart, dayFlags, isDark }: WeeklyRecapCardProps) {
+  const bgColor = isDark ? '#0F1A2A' : '#F0F7FF';
+  const borderColor = isDark ? '#1E3A5A' : '#BFDBFE';
+  const scoreColor = score >= 80 ? '#5CB97B' : score >= 70 ? '#F59E0B' : '#EF4444';
+
+  const monday = new Date(weekStart + 'T00:00:00');
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmtMonday = monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtSunday = sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const weekLabel = `${fmtMonday} – ${fmtSunday}`;
+
+  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const flags = dayFlags && dayFlags.length === 7 ? dayFlags : Array(7).fill(false) as boolean[];
+
+  const scoreDisplay = `${score}%`;
+  const daysDisplay = `${daysTracked}/7`;
+
+  return (
+    <View style={{
+      marginHorizontal: 0,
+      backgroundColor: bgColor,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor,
+      paddingVertical: 20,
+      paddingHorizontal: 20,
+      gap: 12,
+    }}>
+      <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#E0F2FE' : '#1E3A5A' }}>
+        My week
+      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ gap: 4 }}>
+          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>Consistency</Text>
+          <Text style={{ fontSize: 26, fontWeight: '800', color: scoreColor }}>{scoreDisplay}</Text>
+        </View>
+        <View style={{ gap: 4, alignItems: 'flex-end' }}>
+          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>Days tracked</Text>
+          <Text style={{ fontSize: 26, fontWeight: '800', color: isDark ? '#E0F2FE' : '#1E3A5A' }}>{daysDisplay}</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
+        {flags.map((tracked, i) => {
+          const dotBg = tracked ? '#5CB97B' : (isDark ? '#1E2A3A' : '#E2E8F0');
+          const label = dayLabels[i];
+          return (
+            <View key={i} style={{ alignItems: 'center', gap: 3 }}>
+              <View style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: dotBg,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {tracked ? <Text style={{ fontSize: 14 }}>✓</Text> : null}
+              </View>
+              <Text style={{ fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', fontWeight: '600' }}>
+                {label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      <Text style={{ fontSize: 11, color: isDark ? '#475569' : '#94A3B8', textAlign: 'center' }}>
+        {weekLabel}
+      </Text>
+    </View>
+  );
+}
+
 // ─── Post Card ────────────────────────────────────────────────────────────────
 
 interface PostCardProps {
@@ -525,6 +647,28 @@ function PostCard({
 
   // ── Media zone ──
   const renderMedia = () => {
+    // Streak milestone card
+    if (post.auto_post_type === 'streak_milestone' && post.streak_days != null) {
+      return <StreakMilestoneCard streakDays={post.streak_days} isDark={isDark} />;
+    }
+
+    // Weekly recap card
+    if (post.auto_post_type === 'weekly_recap') {
+      const recapScore = post.weekly_recap_score ?? 0;
+      const recapDays = post.weekly_recap_days_tracked ?? 0;
+      const recapWeekStart = post.weekly_recap_week_start ?? new Date().toISOString().split('T')[0];
+      const recapDayFlags = post.weekly_recap_day_flags ?? null;
+      return (
+        <WeeklyRecapCard
+          score={recapScore}
+          daysTracked={recapDays}
+          weekStart={recapWeekStart}
+          dayFlags={recapDayFlags}
+          isDark={isDark}
+        />
+      );
+    }
+
     if (post.post_type_v2 === 'meal') {
       const mealPhotoUrl = post.meal_photo_url ?? post.image_url;
       const calDisplay = post.meal_calories != null ? Math.round(Number(post.meal_calories)).toString() : null;
@@ -676,6 +820,37 @@ function PostCard({
     if (post.post_type_v2 === 'meal') {
       // Caption already rendered inside renderMedia for meal posts
       return null;
+    }
+
+    if (post.auto_post_type === 'streak_milestone') {
+      const streakMsgs: Record<number, string> = {
+        7: 'Keeping the momentum going!',
+        14: 'Two weeks of showing up.',
+        30: 'A full month of discipline.',
+        60: 'Habits are forming.',
+        100: 'Triple digits. Absolute legend.',
+      };
+      const streakCaption = streakMsgs[post.streak_days ?? 0] ?? 'Staying consistent!';
+      return (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
+            <Text style={{ fontWeight: '700' }}>{authorUsername}</Text>
+            {'  '}{streakCaption}
+          </Text>
+        </View>
+      );
+    }
+
+    if (post.auto_post_type === 'weekly_recap') {
+      const weeklyCaption = 'Another week of showing up!';
+      return (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
+            <Text style={{ fontWeight: '700' }}>{authorUsername}</Text>
+            {'  '}{weeklyCaption}
+          </Text>
+        </View>
+      );
     }
 
     if (post.content) {
@@ -1740,7 +1915,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
               <View style={styles.settingsRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.settingsLabel, { color: textColor }]}>Weekly recap</Text>
-                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share your weekly consistency score every Sunday</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share your weekly recap when consistency is 70% or higher</Text>
                 </View>
                 <Switch
                   value={autoShareWeekly && autoShareAll}
@@ -1912,7 +2087,6 @@ export default function CommunityScreen() {
   useFocusEffect(
     useCallback(() => {
       reloadAvatar();
-      autoShareDailySummary();
     }, [reloadAvatar])
   );
 
@@ -1945,6 +2119,7 @@ export default function CommunityScreen() {
           meal_recipe_data, question_title, question_details, progress_stats,
           is_pinned, is_founder_post, saves_count, auto_post_type, auto_post_date,
           streak_days, milestone_type, weight_value, weight_unit,
+          weekly_recap_score, weekly_recap_days_tracked, weekly_recap_week_start, weekly_recap_day_flags,
           author:users!user_id(id, username, full_name, avatar_url, user_type)
         `)
         .eq('is_public', true)
@@ -2175,6 +2350,21 @@ export default function CommunityScreen() {
       const visibleUsers = allUsers.filter(u => u.isMe || (privacyMap.get(u.id) !== false && !blockedIds.has(u.id)));
       console.log('[Community] fetchWeeklyConsistency: visible users:', visibleUsers.length, 'week:', mondayStr, '-', todayStr);
 
+      // Compute current user's weekly data separately for auto-share
+      let myByDate: Record<string, boolean> = {};
+      try {
+        const myMealsRes = await supabase
+          .from('meals')
+          .select('date')
+          .eq('user_id', uid)
+          .gte('date', mondayStr)
+          .lte('date', todayStr);
+        (myMealsRes.data || []).forEach((m: any) => { myByDate[m.date] = true; });
+        console.log('[Community] fetchWeeklyConsistency: myByDate days:', Object.keys(myByDate).length);
+      } catch (e) {
+        console.warn('[Community] fetchWeeklyConsistency: myByDate fetch failed (non-fatal):', e);
+      }
+
       const scores = await Promise.all(visibleUsers.map(async (u) => {
         try {
           const [mealsRes, goalsRes] = await Promise.all([
@@ -2236,6 +2426,20 @@ export default function CommunityScreen() {
             score: myScore.score,
           }, { onConflict: 'user_id,week_start' });
           console.log('[Community] fetchWeeklyConsistency: Sunday snapshot saved, score:', myScore.score);
+
+          // Auto-share weekly recap if score >= 70%
+          if (myScore.score >= 70) {
+            const dayFlags: boolean[] = [];
+            for (let i = 0; i < 7; i++) {
+              const d = new Date(monday);
+              d.setDate(monday.getDate() + i);
+              dayFlags.push(!!myByDate[toLocalDateString(d)]);
+            }
+            const daysTracked = dayFlags.filter(Boolean).length;
+            console.log('[Community] fetchWeeklyConsistency: triggering autoShareWeeklyRecap, score:', myScore.score, 'daysTracked:', daysTracked);
+            const { autoShareWeeklyRecap } = await import('@/utils/autoShareAchievements');
+            autoShareWeeklyRecap(myScore.score, daysTracked, mondayStr, dayFlags).catch(console.warn);
+          }
         }
       }
     } catch (e) {
