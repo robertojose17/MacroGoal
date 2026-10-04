@@ -45,7 +45,6 @@ import {
   Check,
   Settings,
   MessageSquare,
-  HelpCircle,
   UtensilsCrossed,
   TrendingUp,
   Bookmark,
@@ -64,8 +63,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { autoShareDailySummary } from '@/utils/autoShareAchievements';
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { createPost, savePost, unsavePost } from '@/utils/socialApi';
-import type { SocialPost } from '@/utils/socialApi';
+import { createPost, savePost, unsavePost, addComment, fetchComments } from '@/utils/socialApi';
+import type { SocialPost, Comment } from '@/utils/socialApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -73,7 +72,7 @@ import { syncPremiumMembership } from '@/utils/premiumSync';
 type CommunityTab = 'feed' | 'friends' | 'club';
 type PostCategory = 'general' | 'small_win' | 'meal_idea' | 'question' | 'progress';
 type PostSection = 'feed' | 'club';
-type ComposerType = 'update' | 'question' | 'meal' | 'progress';
+type ComposerType = 'post' | 'meal' | 'progress';
 
 interface PostAuthor {
   id: string;
@@ -446,6 +445,7 @@ interface PostCardProps {
   onReport: (postId: string) => void;
   onBlock: (userId: string) => void;
   onDelete: (postId: string) => void;
+  onOpenComments: (post: CommunityPost) => void;
   onSaveMeal?: (post: CommunityPost) => void;
   showSaveMeal?: boolean;
   showTopReply?: boolean;
@@ -460,25 +460,19 @@ function PostCard({
   onReport,
   onBlock,
   onDelete,
+  onOpenComments,
   onSaveMeal,
   showSaveMeal = false,
-  showTopReply = false,
 }: PostCardProps) {
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
-  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
-  const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
+  const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const authorName = post.author?.full_name || post.author?.username || 'Unknown';
+  const authorUsername = post.author?.username || 'unknown';
   const relTime = getRelativeTime(post.created_at);
-  const catColor = CATEGORY_COLORS[post.category] || '#6B7280';
-  const catLabel = CATEGORY_LABELS[post.category] || post.category;
   const isOwn = post.user_id === currentUserId;
   const isAutoPost = post.post_type_v2 === 'auto';
-
-  const autoCardBg = isDark ? '#1E2030' : '#F8F9FC';
-  const finalCardBg = isAutoPost ? autoCardBg : cardBg;
 
   const handleMenuPress = () => {
     console.log('[Community] Three-dot menu opened for post:', post.id, 'isOwn:', isOwn);
@@ -486,13 +480,23 @@ function PostCard({
   };
 
   const handleLike = () => {
-    console.log('[Community] Like toggled for post:', post.id, 'currently liked:', post.liked_by_me);
+    console.log('[Community] Like button pressed for post:', post.id, 'currently liked:', post.liked_by_me);
     onLike(post.id, post.liked_by_me);
   };
 
   const handleSave = () => {
-    console.log('[Community] Save toggled for post:', post.id, 'currently saved:', post.saved_by_me);
+    console.log('[Community] Bookmark button pressed for post:', post.id, 'currently saved:', post.saved_by_me);
     onSave(post.id, post.saved_by_me ?? false);
+  };
+
+  const handleCommentPress = () => {
+    console.log('[Community] Comment button pressed for post:', post.id);
+    onOpenComments(post);
+  };
+
+  const handleViewAllComments = () => {
+    console.log('[Community] View all comments pressed for post:', post.id, 'count:', post.comments_count);
+    onOpenComments(post);
   };
 
   const handleReport = () => {
@@ -519,24 +523,8 @@ function PostCard({
     else Alert.alert('Meal saved!');
   };
 
-  const renderV2Body = () => {
-    if (post.post_type_v2 === 'question') {
-      return (
-        <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: 6 }}>
-          {post.question_title ? (
-            <Text style={{ fontSize: 16, fontWeight: '700', color: textColor, lineHeight: 22 }}>
-              {post.question_title}
-            </Text>
-          ) : null}
-          {post.question_details ? (
-            <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }} numberOfLines={3}>
-              {post.question_details}
-            </Text>
-          ) : null}
-        </View>
-      );
-    }
-
+  // ── Media zone ──
+  const renderMedia = () => {
     if (post.post_type_v2 === 'meal') {
       const mealPhotoUrl = post.meal_photo_url ?? post.image_url;
       const calDisplay = post.meal_calories != null ? Math.round(Number(post.meal_calories)).toString() : null;
@@ -546,30 +534,76 @@ function PostCard({
       const recipeData = post.meal_recipe_data;
       const recipeName = recipeData?.name ?? post.content;
       const servingsDisplay = post.meal_servings != null ? String(post.meal_servings) : null;
-      const captionDiffersFromName = post.content && recipeData?.name && post.content !== recipeData.name;
+      const captionDiffersFromName = !!(post.content && recipeData?.name && post.content !== recipeData.name);
       return (
-        <MealPostCardBody
-          post={post}
-          isDark={isDark}
-          textColor={textColor}
-          secondaryColor={secondaryColor}
-          mealPhotoUrl={mealPhotoUrl ?? null}
-          recipeName={recipeName ?? null}
-          captionDiffersFromName={captionDiffersFromName ?? false}
-          calDisplay={calDisplay}
-          protDisplay={protDisplay}
-          carbDisplay={carbDisplay}
-          fatDisplay={fatDisplay}
-          servingsDisplay={servingsDisplay}
-          router={router}
-        />
+        <View>
+          {mealPhotoUrl ? (
+            <Image
+              source={resolveImageSource(mealPhotoUrl)}
+              style={{ width: '100%', aspectRatio: 1.2 }}
+              resizeMode="cover"
+            />
+          ) : null}
+          {recipeName ? (
+            <Text style={{ fontSize: 15, fontWeight: '600', color: textColor, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
+              {recipeName}
+            </Text>
+          ) : null}
+          {(calDisplay || protDisplay || carbDisplay || fatDisplay) ? (
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', paddingHorizontal: 16, paddingBottom: 8 }}>
+              {calDisplay ? (
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.calories + '18' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.calories }}>{'🔥 '}{calDisplay}{' kcal'}</Text>
+                </View>
+              ) : null}
+              {protDisplay ? (
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.protein + '18' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.protein }}>{'💪 '}{protDisplay}{'g'}</Text>
+                </View>
+              ) : null}
+              {carbDisplay ? (
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.carbs + '18' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.carbs }}>{'🍞 '}{carbDisplay}{'g'}</Text>
+                </View>
+              ) : null}
+              {fatDisplay ? (
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.fats + '18' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.fats }}>{'🥑 '}{fatDisplay}{'g'}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {servingsDisplay ? (
+            <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: 16, paddingBottom: 4 }}>
+              {servingsDisplay}{' serving(s)'}
+            </Text>
+          ) : null}
+          {captionDiffersFromName && post.content ? (
+            <Text style={{ fontSize: 13, color: textColor, paddingHorizontal: 16, paddingBottom: 4, lineHeight: 18 }}>
+              {post.content}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8, flexWrap: 'wrap' }}>
+            {post.meal_recipe_id ? (
+              <TouchableOpacity
+                style={[styles.mealActionBtn, { borderColor: colors.primary }]}
+                onPress={() => {
+                  console.log('[Community] View Recipe pressed — post_id:', post.id, 'recipe_id:', post.meal_recipe_id);
+                  router.push(`/recipe-finder-detail?recipe_id=${post.meal_recipe_id}`);
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>View Recipe</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
       );
     }
 
     if (post.post_type_v2 === 'progress') {
       const stats = post.progress_stats;
       return (
-        <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: spacing.md, gap: spacing.sm }}>
+        <View style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: borderRadius.md, borderWidth: 1, borderColor: isDark ? '#2A3A4A' : '#DBEAFE', backgroundColor: isDark ? '#1E2A3A' : '#F0F7FF', padding: spacing.md, gap: spacing.sm }}>
           {post.content ? (
             <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>{post.content}</Text>
           ) : null}
@@ -602,20 +636,85 @@ function PostCard({
       );
     }
 
+    if (post.image_url) {
+      return (
+        <Image
+          source={resolveImageSource(post.image_url)}
+          style={{ width: '100%', aspectRatio: 1.2 }}
+          resizeMode="cover"
+        />
+      );
+    }
+
     return null;
   };
 
-  return (
-    <View style={[styles.postCard, { backgroundColor: finalCardBg, borderColor: cardBorder, opacity: isAutoPost ? 0.92 : 1 }]}>
-      {/* Auto label */}
-      {isAutoPost ? (
-        <View style={{ position: 'absolute', top: 10, right: 48, backgroundColor: 'rgba(107,114,128,0.15)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, zIndex: 1 }}>
-          <Text style={{ fontSize: 10, fontWeight: '600', color: '#6B7280', letterSpacing: 0.3 }}>Auto</Text>
-        </View>
-      ) : null}
+  // ── Caption text ──
+  const captionUsername = authorUsername;
+  const captionOpacity = isAutoPost ? 0.8 : 1;
 
-      {/* Header */}
-      <View style={styles.postHeader}>
+  const renderCaption = () => {
+    if (post.post_type_v2 === 'question') {
+      return (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          {post.question_title ? (
+            <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, opacity: captionOpacity }}>
+              <Text style={{ fontWeight: '700' }}>{captionUsername}</Text>
+              {'  '}
+              <Text style={{ fontWeight: '700' }}>{post.question_title}</Text>
+            </Text>
+          ) : null}
+          {post.question_details ? (
+            <Text style={{ fontSize: 13, color: secondaryColor, lineHeight: 18, marginTop: 2 }} numberOfLines={3}>
+              {post.question_details}
+            </Text>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (post.post_type_v2 === 'meal') {
+      // Caption already rendered inside renderMedia for meal posts
+      return null;
+    }
+
+    if (post.content) {
+      return (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <Text style={{ fontSize: 14, color: textColor, lineHeight: 20, opacity: captionOpacity }}>
+            <Text style={{ fontWeight: '700' }}>{captionUsername}</Text>
+            {'  '}
+            {post.content}
+          </Text>
+        </View>
+      );
+    }
+
+    if (post.food_name) {
+      return (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <View style={styles.foodChip}>
+            <Check size={12} color="#fff" />
+            <Text style={styles.foodChipText}>
+              {post.food_name}
+              {post.food_calories ? ` · ${post.food_calories} kcal` : ''}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  const commentsCountDisplay = post.comments_count > 0 ? String(post.comments_count) : '';
+  const likesCountDisplay = post.likes_count > 0 ? String(post.likes_count) : '';
+  const savesCountDisplay = (post.saves_count ?? 0) > 0 ? String(post.saves_count) : '';
+
+  return (
+    <View style={[styles.postCard, { backgroundColor: cardBg }]}>
+      {/* ── Header ── */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 }}>
         <TouchableOpacity
           onPress={() => {
             if (post.user_id && post.user_id !== currentUserId) {
@@ -627,8 +726,8 @@ function PostCard({
         >
           <UserAvatar url={post.author?.avatar_url ?? null} name={post.author?.full_name ?? null} username={post.author?.username ?? 'u'} size={40} />
         </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: spacing.sm }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <TouchableOpacity
               onPress={() => {
                 if (post.user_id && post.user_id !== currentUserId) {
@@ -638,114 +737,72 @@ function PostCard({
               }}
               disabled={!post.user_id || post.user_id === currentUserId}
             >
-              <Text style={[styles.postAuthorName, { color: textColor }]}>{authorName}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: textColor }}>{authorUsername}</Text>
             </TouchableOpacity>
-            {post.is_founder_post && (
+            {post.is_founder_post ? (
               <View style={[styles.founderBadge, { backgroundColor: '#0D9488' }]}>
                 <Text style={styles.founderBadgeText}>Founder</Text>
               </View>
-            )}
-            {post.post_type_v2 === 'question' ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#3B82F618', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
-                <HelpCircle size={10} color="#3B82F6" />
-                <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '700' }}>Question</Text>
-              </View>
             ) : null}
-            {post.post_type_v2 === 'progress' ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#8B5CF618', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
-                <TrendingUp size={10} color="#8B5CF6" />
-                <Text style={{ color: '#8B5CF6', fontSize: 10, fontWeight: '700' }}>Progress</Text>
-              </View>
+            {post.is_pinned ? (
+              <Text style={{ fontSize: 11, fontWeight: '500', color: colors.primary }}>Pinned</Text>
             ) : null}
           </View>
-          {post.is_pinned ? (
-            <Text style={[styles.pinnedLabel, { color: colors.primary }]}>Pinned · Community</Text>
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              {!post.post_type_v2 || post.post_type_v2 === 'update' ? (
-                <Text style={[styles.postMeta, { color: catColor }]}>{catLabel}</Text>
-              ) : null}
-              {!post.post_type_v2 || post.post_type_v2 === 'update' ? (
-                <Text style={[styles.postMeta, { color: secondaryColor }]}>·</Text>
-              ) : null}
-              <Text style={[styles.postMeta, { color: secondaryColor }]}>{relTime}</Text>
-            </View>
-          )}
         </View>
         <TouchableOpacity onPress={handleMenuPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <MoreHorizontal size={20} color={secondaryColor} />
         </TouchableOpacity>
       </View>
 
-      {/* V2 body or legacy content */}
-      {post.post_type_v2 && post.post_type_v2 !== 'update' && post.post_type_v2 !== 'auto'
-        ? renderV2Body()
-        : (
-          <>
-            {post.content ? (
-              <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
-            ) : null}
-            {post.food_name ? (
-              <View style={styles.foodChip}>
-                <Check size={12} color="#fff" />
-                <Text style={styles.foodChipText}>
-                  {post.food_name}
-                  {post.food_calories ? ` · ${post.food_calories} kcal` : ''}
-                </Text>
-              </View>
-            ) : null}
-            {post.image_url ? (
-              <Image source={resolveImageSource(post.image_url)} style={styles.postImage} resizeMode="cover" />
-            ) : null}
-          </>
-        )
-      }
+      {/* ── Media zone ── */}
+      {renderMedia()}
 
-      {/* Save meal button (club only, meal_idea) */}
+      {/* ── Action row ── */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleLike}>
+          <Heart size={22} color={post.liked_by_me ? '#EF4444' : textColor} fill={post.liked_by_me ? '#EF4444' : 'transparent'} />
+          {likesCountDisplay ? (
+            <Text style={{ fontSize: 14, fontWeight: '600', color: post.liked_by_me ? '#EF4444' : textColor }}>{likesCountDisplay}</Text>
+          ) : null}
+        </TouchableOpacity>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleCommentPress}>
+          <MessageCircle size={22} color={textColor} />
+          {commentsCountDisplay ? (
+            <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{commentsCountDisplay}</Text>
+          ) : null}
+        </TouchableOpacity>
+        <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={handleSave}>
+          <Bookmark size={22} color={post.saved_by_me ? colors.primary : textColor} fill={post.saved_by_me ? colors.primary : 'transparent'} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Caption area ── */}
+      {renderCaption()}
+
+      {/* ── Comment preview ── */}
+      {post.comments_count > 0 ? (
+        <TouchableOpacity onPress={handleViewAllComments} style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <Text style={{ fontSize: 13, color: secondaryColor }}>
+            {'View all '}
+            {commentsCountDisplay}
+            {' comments'}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {/* ── Timestamp ── */}
+      <Text style={{ fontSize: 11, color: secondaryColor, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>
+        {relTime}
+      </Text>
+
+      {/* ── Save meal button (club only) ── */}
       {showSaveMeal && post.category === 'meal_idea' && post.post_type_v2 !== 'meal' ? (
         <TouchableOpacity style={styles.saveMealBtn} onPress={handleSaveMealPress}>
           <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save meal</Text>
         </TouchableOpacity>
       ) : null}
 
-      {/* Top reply preview (club) */}
-      {showTopReply && post.top_comment ? (
-        <View style={[styles.topReplyRow, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-          <UserAvatar url={post.top_comment.author?.avatar_url ?? null} name={post.top_comment.author?.full_name ?? null} username={post.top_comment.author?.username ?? 'u'} size={24} />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={[styles.topReplyAuthor, { color: textColor }]}>{post.top_comment.author?.full_name || post.top_comment.author?.username}</Text>
-            <Text style={[styles.topReplyContent, { color: secondaryColor }]} numberOfLines={1}>{post.top_comment.content}</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {/* Footer */}
-      <View style={[styles.postFooter, { borderTopColor: isDark ? colors.borderDark : colors.border }]}>
-        <TouchableOpacity style={styles.postAction} onPress={handleLike}>
-          <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={18} color={post.liked_by_me ? '#EF4444' : secondaryColor} />
-          <Text style={[styles.postActionText, { color: post.liked_by_me ? '#EF4444' : secondaryColor }]}>
-            {post.likes_count > 0 ? String(post.likes_count) : ''}
-            {post.likes_count > 0 ? ' ' : ''}Support
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.postAction}>
-          <MessageCircle size={18} color={secondaryColor} />
-          <Text style={[styles.postActionText, { color: secondaryColor }]}>
-            {post.comments_count > 0 ? String(post.comments_count) : ''}
-            {post.comments_count > 0 ? ' ' : ''}Reply
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.postAction} onPress={handleSave}>
-          <Bookmark size={18} color={post.saved_by_me ? colors.primary : secondaryColor} fill={post.saved_by_me ? colors.primary : 'transparent'} />
-          {(post.saves_count ?? 0) > 0 ? (
-            <Text style={[styles.postActionText, { color: post.saved_by_me ? colors.primary : secondaryColor }]}>
-              {String(post.saves_count)}
-            </Text>
-          ) : null}
-        </TouchableOpacity>
-      </View>
-
-      {/* Three-dot menu modal */}
+      {/* ── Three-dot menu modal ── */}
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
           <View style={[styles.menuSheet, { backgroundColor: isDark ? colors.cardDark : '#fff' }]}>
@@ -782,6 +839,177 @@ function PostCard({
   );
 }
 
+// ─── Comments Modal ───────────────────────────────────────────────────────────
+
+interface CommentsModalProps {
+  visible: boolean;
+  post: CommunityPost | null;
+  currentUserId: string;
+  currentUserAvatar: string | null;
+  currentUserName: string;
+  isDark: boolean;
+  onClose: () => void;
+  onCommentAdded: (postId: string) => void;
+}
+
+function CommentsModal({
+  visible,
+  post,
+  currentUserId,
+  currentUserAvatar,
+  currentUserName,
+  isDark,
+  onClose,
+  onCommentAdded,
+}: CommentsModalProps) {
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const textColor = isDark ? colors.textDark : colors.primaryText;
+  const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
+  const cardBg = isDark ? colors.cardDark : '#fff';
+  const borderColor = isDark ? colors.borderDark : colors.border;
+
+  useEffect(() => {
+    if (visible && post) {
+      console.log('[Community] CommentsModal opened for post:', post.id);
+      loadComments();
+    } else {
+      setComments([]);
+      setCommentText('');
+    }
+  }, [visible, post?.id]);
+
+  const loadComments = async () => {
+    if (!post) return;
+    console.log('[Community] Network request: fetchComments for post:', post.id);
+    setLoading(true);
+    try {
+      const data = await fetchComments(post.id);
+      setComments(data);
+      console.log('[Community] Comments loaded:', data.length);
+    } catch (e) {
+      console.warn('[Community] fetchComments error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!post || !commentText.trim()) return;
+    console.log('[Community] Send comment pressed for post:', post.id, 'text length:', commentText.trim().length);
+    setSending(true);
+    try {
+      const newComment = await addComment(post.id, commentText.trim());
+      console.log('[Community] Comment added, id:', newComment.id);
+      setComments(prev => [...prev, newComment]);
+      setCommentText('');
+      onCommentAdded(post.id);
+    } catch (e) {
+      console.warn('[Community] addComment error:', e);
+      Alert.alert('Error', 'Could not post comment. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const renderComment = ({ item }: { item: Comment }) => {
+    const commentUsername = item.author?.username || 'unknown';
+    const commentTime = getRelativeTime(item.created_at);
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 10, gap: 10 }}>
+        <UserAvatar
+          url={item.author?.avatar_url ?? null}
+          name={item.author?.full_name ?? null}
+          username={commentUsername}
+          size={32}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
+            <Text style={{ fontWeight: '700' }}>{commentUsername}</Text>
+            {'  '}
+            {item.content}
+          </Text>
+          <Text style={{ fontSize: 11, color: secondaryColor, marginTop: 3 }}>{commentTime}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: bgColor }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Comments</Text>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Community] CommentsModal close button pressed');
+              onClose();
+            }}
+            style={{ position: 'absolute', right: 16 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <X size={22} color={secondaryColor} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Comments list */}
+        {loading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={comments}
+            keyExtractor={(item) => item.id}
+            renderItem={renderComment}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+                <Text style={{ fontSize: 14, color: secondaryColor }}>No comments yet. Be the first!</Text>
+              </View>
+            }
+            contentContainerStyle={{ paddingBottom: 16 }}
+          />
+        )}
+
+        {/* Bottom input bar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: borderColor, backgroundColor: cardBg, gap: 10 }}>
+          {currentUserAvatar ? (
+            <Image source={{ uri: currentUserAvatar }} style={{ width: 32, height: 32, borderRadius: 16 }} resizeMode="cover" />
+          ) : (
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}</Text>
+            </View>
+          )}
+          <TextInput
+            style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
+            placeholder="Add a comment..."
+            placeholderTextColor={secondaryColor}
+            value={commentText}
+            onChangeText={setCommentText}
+            multiline
+            returnKeyType="send"
+            onSubmitEditing={handleSend}
+          />
+          <TouchableOpacity
+            onPress={handleSend}
+            disabled={!commentText.trim() || sending}
+            style={{ opacity: commentText.trim() && !sending ? 1 : 0.4 }}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <IconSymbol ios_icon_name="arrow.up.circle.fill" android_material_icon_name="send" size={32} color={colors.primary} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ─── New Composer Sheet ───────────────────────────────────────────────────────
 
 interface ComposerSheetProps {
@@ -808,13 +1036,10 @@ function ComposerSheet({
   currentUserAvatar,
 }: ComposerSheetProps) {
   const router = useRouter();
-  const [composerType, setComposerType] = useState<ComposerType>('update');
-  // Update fields
-  const [updateText, setUpdateText] = useState('');
-  const [updateImageUri, setUpdateImageUri] = useState<string | null>(null);
-  // Question fields
-  const [questionTitle, setQuestionTitle] = useState('');
-  const [questionDetails, setQuestionDetails] = useState('');
+  const [composerType, setComposerType] = useState<ComposerType>('post');
+  // Post fields (merged update + question)
+  const [postText, setPostText] = useState('');
+  const [postImageUri, setPostImageUri] = useState<string | null>(null);
   // Meal fields — recipe picker
   const [savedRecipes, setSavedRecipes] = useState<SavedRecipeRow[]>([]);
   const [savedRecipesLoading, setSavedRecipesLoading] = useState(false);
@@ -917,7 +1142,7 @@ function ComposerSheet({
     });
     if (!result.canceled && result.assets[0]) {
       console.log('[Community] Image selected:', result.assets[0].uri);
-      setUpdateImageUri(result.assets[0].uri);
+      setPostImageUri(result.assets[0].uri);
     }
   };
 
@@ -927,8 +1152,7 @@ function ComposerSheet({
   };
 
   const canPost = () => {
-    if (composerType === 'update') return updateText.trim().length > 0;
-    if (composerType === 'question') return questionTitle.trim().length > 0;
+    if (composerType === 'post') return postText.trim().length > 0;
     if (composerType === 'meal') return selectedRecipe !== null;
     if (composerType === 'progress') return progressStats.some(s => s.selected);
     return false;
@@ -941,21 +1165,13 @@ function ComposerSheet({
     try {
       let postData: Parameters<typeof createPost>[0];
 
-      if (composerType === 'update') {
+      if (composerType === 'post') {
+        console.log('[Community] Network request: createPost type=post, text length:', postText.trim().length, 'hasImage:', !!postImageUri);
         postData = {
           post_type: 'text',
           post_type_v2: 'update',
-          content: updateText.trim(),
-          image_url: updateImageUri ?? undefined,
-          is_public: true,
-        };
-      } else if (composerType === 'question') {
-        postData = {
-          post_type: 'text',
-          post_type_v2: 'question',
-          content: questionTitle.trim(),
-          question_title: questionTitle.trim(),
-          question_details: questionDetails.trim() || undefined,
+          content: postText.trim(),
+          image_url: postImageUri ?? undefined,
           is_public: true,
         };
       } else if (composerType === 'meal') {
@@ -1014,8 +1230,8 @@ function ComposerSheet({
         liked_by_me: false,
         saved_by_me: false,
         post_type_v2: postData.post_type_v2 ?? null,
-        question_title: postData.question_title ?? null,
-        question_details: postData.question_details ?? null,
+        question_title: null,
+        question_details: null,
         meal_photo_url: postData.meal_photo_url ?? null,
         meal_calories: postData.meal_calories ?? null,
         meal_protein: postData.meal_protein ?? null,
@@ -1027,10 +1243,8 @@ function ComposerSheet({
       };
 
       // Reset form
-      setUpdateText('');
-      setUpdateImageUri(null);
-      setQuestionTitle('');
-      setQuestionDetails('');
+      setPostText('');
+      setPostImageUri(null);
       setSelectedRecipe(null);
       setMealCaption('');
       setProgressText('');
@@ -1047,15 +1261,13 @@ function ComposerSheet({
   };
 
   const composerTypes: { key: ComposerType; icon: React.ReactNode; label: string }[] = [
-    { key: 'update', icon: <MessageSquare size={20} color={composerType === 'update' ? '#fff' : colors.primary} />, label: 'Update' },
-    { key: 'question', icon: <HelpCircle size={20} color={composerType === 'question' ? '#fff' : '#3B82F6'} />, label: 'Question' },
-    { key: 'meal', icon: <UtensilsCrossed size={20} color={composerType === 'meal' ? '#fff' : '#FF8A5B'} />, label: 'Meal' },
+    { key: 'post', icon: <MessageSquare size={20} color={composerType === 'post' ? '#fff' : colors.primary} />, label: 'Post' },
+    { key: 'meal', icon: <UtensilsCrossed size={20} color={composerType === 'meal' ? '#fff' : '#FF8A5B'} />, label: 'Recipe' },
     { key: 'progress', icon: <TrendingUp size={20} color={composerType === 'progress' ? '#fff' : '#8B5CF6'} />, label: 'Progress' },
   ];
 
   const typeColors: Record<ComposerType, string> = {
-    update: colors.primary,
-    question: '#3B82F6',
+    post: colors.primary,
     meal: '#FF8A5B',
     progress: '#8B5CF6',
   };
@@ -1124,24 +1336,24 @@ function ComposerSheet({
             </View>
           </View>
 
-          {/* ── UPDATE ── */}
-          {composerType === 'update' && (
+          {/* ── POST ── */}
+          {composerType === 'post' && (
             <View>
               <TextInput
                 style={[styles.composeInput, { color: textColor, borderColor }]}
-                placeholder="Share a win, struggle, or update..."
+                placeholder="What's on your mind?"
                 placeholderTextColor={secondaryColor}
                 multiline
-                value={updateText}
-                onChangeText={setUpdateText}
+                value={postText}
+                onChangeText={setPostText}
                 autoFocus
               />
-              {updateImageUri ? (
+              {postImageUri ? (
                 <View style={{ marginTop: spacing.sm, position: 'relative' }}>
-                  <Image source={resolveImageSource(updateImageUri)} style={{ width: '100%', height: 180, borderRadius: borderRadius.md }} resizeMode="cover" />
+                  <Image source={resolveImageSource(postImageUri)} style={{ width: '100%', height: 180, borderRadius: borderRadius.md }} resizeMode="cover" />
                   <TouchableOpacity style={styles.removeImageBtn} onPress={() => {
-                    console.log('[Community] Update image removed');
-                    setUpdateImageUri(null);
+                    console.log('[Community] Post image removed');
+                    setPostImageUri(null);
                   }}>
                     <X size={14} color="#fff" />
                   </TouchableOpacity>
@@ -1151,28 +1363,6 @@ function ComposerSheet({
                 <Plus size={16} color={colors.primary} />
                 <Text style={[styles.imagePickerText, { color: colors.primary }]}>Add photo</Text>
               </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ── QUESTION ── */}
-          {composerType === 'question' && (
-            <View style={{ gap: spacing.sm }}>
-              <TextInput
-                style={[styles.composeInput, { color: textColor, borderColor, minHeight: 48, fontSize: 16, fontWeight: '600' }]}
-                placeholder="Ask the community..."
-                placeholderTextColor={secondaryColor}
-                value={questionTitle}
-                onChangeText={setQuestionTitle}
-                autoFocus
-              />
-              <TextInput
-                style={[styles.composeInput, { color: textColor, borderColor }]}
-                placeholder="Add more details (optional)..."
-                placeholderTextColor={secondaryColor}
-                multiline
-                value={questionDetails}
-                onChangeText={setQuestionDetails}
-              />
             </View>
           )}
 
@@ -1621,6 +1811,7 @@ export default function CommunityScreen() {
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [reportPostId, setReportPostId] = useState<string | null>(null);
   const [showAutoShareSettings, setShowAutoShareSettings] = useState(false);
+  const [commentsPost, setCommentsPost] = useState<CommunityPost | null>(null);
 
   // ── Friends state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -2190,6 +2381,20 @@ export default function CommunityScreen() {
     ]);
   };
 
+  // ── Comments ──
+  const handleOpenComments = useCallback((post: CommunityPost) => {
+    console.log('[Community] Opening comments for post:', post.id);
+    setCommentsPost(post);
+  }, []);
+
+  const handleCommentAdded = useCallback((postId: string) => {
+    console.log('[Community] Comment added, incrementing count for post:', postId);
+    const increment = (posts: CommunityPost[]) =>
+      posts.map(p => p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p);
+    setFeedPosts(prev => increment(prev));
+    setClubPosts(prev => increment(prev));
+  }, []);
+
   // ── Search users ──
   const handleSearchChange = (q: string) => {
     setSearchQuery(q);
@@ -2377,6 +2582,7 @@ export default function CommunityScreen() {
               onReport={handleReport}
               onBlock={handleBlock}
               onDelete={handleDelete}
+              onOpenComments={handleOpenComments}
             />
           )}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
@@ -2678,6 +2884,7 @@ export default function CommunityScreen() {
               onReport={handleReport}
               onBlock={handleBlock}
               onDelete={handleDelete}
+              onOpenComments={handleOpenComments}
               showSaveMeal
               showTopReply
             />
@@ -2714,6 +2921,21 @@ export default function CommunityScreen() {
         onClose={() => setShowAutoShareSettings(false)}
         isDark={isDark}
         currentUserId={currentUserId}
+      />
+
+      {/* Comments modal */}
+      <CommentsModal
+        visible={commentsPost !== null}
+        post={commentsPost}
+        currentUserId={currentUserId}
+        currentUserAvatar={currentUserAvatar}
+        currentUserName={currentUserName}
+        isDark={isDark}
+        onClose={() => {
+          console.log('[Community] CommentsModal closed');
+          setCommentsPost(null);
+        }}
+        onCommentAdded={handleCommentAdded}
       />
 
       {/* Premium member list modal (founder only) */}
@@ -2848,13 +3070,13 @@ const styles = StyleSheet.create({
   },
   postCard: {
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 2,
     overflow: 'hidden',
+    marginBottom: 8,
   },
   postHeader: {
     flexDirection: 'row',

@@ -63,9 +63,20 @@ export async function autoShareStreak(streakDays: number): Promise<void> {
   };
   const content = messages[streakDays];
   if (!content) return; // Only post at milestone numbers
+
+  // Dedup: skip if already posted for this streak milestone
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const storageKey = `auto_share_streak_milestone_${streakDays}`;
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] autoShareStreak already posted for streak:', streakDays, 'days, skipping');
+    return;
+  }
+
   console.log('[autoShare] posting streak milestone:', streakDays, 'days');
   try {
     await createPost({ post_type: 'streak', content, streak_days: streakDays, is_public: true });
+    await AsyncStorage.setItem(storageKey, new Date().toISOString().split('T')[0]);
     console.log('[autoShare] streak post succeeded');
   } catch (e) {
     console.warn('[autoShare] streak post failed (non-fatal):', e);
@@ -238,6 +249,17 @@ export async function autoShareFirstWeek(): Promise<void> {
 export async function autoShareCalorieGoal(): Promise<void> {
   console.log('[autoShare] autoShareCalorieGoal triggered');
   if (!(await isAutoShareEnabled())) return;
+
+  // Dedup: only post once per calendar day
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const today = new Date().toISOString().split('T')[0];
+  const storageKey = `auto_share_calorie_goal_${today}`;
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] calorie goal already posted today, skipping');
+    return;
+  }
+
   const messages = [
     'Hit my calorie goal today! Dialed in. #MacroGoal',
     'Nailed my calories today. Every day counts. #MacroGoal',
@@ -247,6 +269,7 @@ export async function autoShareCalorieGoal(): Promise<void> {
   console.log('[autoShare] posting calorie goal achievement');
   try {
     await createPost({ post_type: 'stats', content, is_public: true });
+    await AsyncStorage.setItem(storageKey, 'true');
     console.log('[autoShare] calorie goal post succeeded');
   } catch (e) {
     console.warn('[autoShare] calorie goal post failed (non-fatal):', e);
@@ -257,6 +280,17 @@ export async function autoShareCalorieGoal(): Promise<void> {
 export async function autoShareProteinGoal(): Promise<void> {
   console.log('[autoShare] autoShareProteinGoal triggered');
   if (!(await isAutoShareEnabled())) return;
+
+  // Dedup: only post once per calendar day
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const today = new Date().toISOString().split('T')[0];
+  const storageKey = `auto_share_protein_goal_${today}`;
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] protein goal already posted today, skipping');
+    return;
+  }
+
   const messages = [
     'Hit my protein goal today! Gains incoming. #MacroGoal',
     'Protein on point today. #MacroGoal',
@@ -266,6 +300,7 @@ export async function autoShareProteinGoal(): Promise<void> {
   console.log('[autoShare] posting protein goal achievement');
   try {
     await createPost({ post_type: 'stats', content, is_public: true });
+    await AsyncStorage.setItem(storageKey, 'true');
     console.log('[autoShare] protein goal post succeeded');
   } catch (e) {
     console.warn('[autoShare] protein goal post failed (non-fatal):', e);
@@ -340,10 +375,22 @@ export async function autoShareWeightCheckin(weightKg: number): Promise<void> {
     .eq('user_id', user.id);
   console.log('[autoShare] weight check-in count:', count);
   if (!count || count % 5 !== 0) return; // Post on 5th, 10th, 15th... check-in
+
+  // Dedup: only post once per calendar day
+  const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+  const today = new Date().toISOString().split('T')[0];
+  const storageKey = `auto_share_weight_checkin_${today}`;
+  const alreadyPosted = await AsyncStorage.getItem(storageKey);
+  if (alreadyPosted) {
+    console.log('[autoShare] weight check-in already posted today, skipping');
+    return;
+  }
+
   const content = `Just logged check-in #${count}! Tracking progress one day at a time. #MacroGoal`;
   console.log('[autoShare] posting weight check-in milestone #', count);
   try {
     await createPost({ post_type: 'milestone', content, is_public: true });
+    await AsyncStorage.setItem(storageKey, 'true');
     console.log('[autoShare] weight check-in post succeeded');
   } catch (e) {
     console.warn('[autoShare] weight checkin post failed (non-fatal):', e);
