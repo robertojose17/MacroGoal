@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 
 const BASE = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface SocialUser {
   id: string;
@@ -36,7 +36,7 @@ export interface SocialPost {
   likes_count: number;
   comments_count: number;
   created_at: string;
-  author: { id: string; username: string; name: string | null; user_type?: string | null; is_premium?: boolean | null };
+  author: { id: string; username: string; name: string | null; full_name?: string | null; user_type?: string | null; is_premium?: boolean | null; avatar_url?: string | null };
   liked_by_me: boolean;
   saved_by_me?: boolean;
   // v2 fields
@@ -91,7 +91,7 @@ export interface Comment {
   user_id: string;
   content: string;
   created_at: string;
-  author: { id: string; username: string; name: string | null };
+  author: { id: string; username: string; name: string | null; full_name?: string | null; avatar_url?: string | null };
 }
 
 export interface SearchUser {
@@ -116,7 +116,6 @@ export interface CreatePostInput {
   streak_days?: number;
   milestone_type?: string;
   is_public?: boolean;
-  // v2 fields
   post_type_v2?: PostTypeV2;
   question_title?: string;
   question_details?: string;
@@ -140,12 +139,10 @@ export interface CreatePostInput {
   saves_count?: number;
 }
 
-// ─── Auth helpers ─────────────────────────────────────────────────────────────
+// ─── Auth helpers (used by feed/profile/follows/search edge functions) ────────
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
   return {
     Authorization: `Bearer ${session?.access_token ?? ''}`,
     'Content-Type': 'application/json',
@@ -236,75 +233,155 @@ export async function fetchFollowers(userId?: string): Promise<SearchUser[]> {
   return data ?? [];
 }
 
-// ─── Post Actions ─────────────────────────────────────────────────────────────
+// ─── Post CRUD — direct Supabase (no edge function needed) ───────────────────
+
+export async function createPost(post: CreatePostInput): Promise<SocialPost> {
+  console.log('[SocialApi] createPost — type:', post.post_type, 'type_v2:', post.post_type_v2, 'public:', post.is_public);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('social_posts')
+    .insert({
+      user_id: session.user.id,
+      post_type: post.post_type ?? 'text',
+      post_type_v2: post.post_type_v2 ?? null,
+      content: post.content ?? null,
+      image_url: post.image_url ?? null,
+      is_public: post.is_public !== false,
+      question_title: post.question_title ?? null,
+      question_details: post.question_details ?? null,
+      meal_photo_url: post.meal_photo_url ?? null,
+      meal_servings: post.meal_servings ?? null,
+      meal_calories: post.meal_calories ?? null,
+      meal_protein: post.meal_protein ?? null,
+      meal_carbs: post.meal_carbs ?? null,
+      meal_fat: post.meal_fat ?? null,
+      meal_recipe_id: post.meal_recipe_id ?? null,
+      meal_recipe_data: post.meal_recipe_data ?? null,
+      progress_stats: post.progress_stats ?? null,
+      auto_post_type: post.auto_post_type ?? null,
+      auto_post_date: post.auto_post_date ?? null,
+      streak_days: post.streak_days ?? null,
+      milestone_type: post.milestone_type ?? null,
+      weight_value: post.weight_value ?? null,
+      weight_unit: post.weight_unit ?? null,
+      is_pinned: post.is_pinned ?? false,
+      is_founder_post: post.is_founder_post ?? false,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('[SocialApi] createPost error:', error.message, error.code);
+    throw error;
+  }
+  console.log('[SocialApi] createPost — success, id:', data?.id);
+  return data as unknown as SocialPost;
+}
+
+export async function deletePost(postId: string): Promise<void> {
+  console.log('[SocialApi] deletePost — post_id:', postId);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+
+  await Promise.all([
+    supabase.from('social_posts').delete().eq('id', postId).eq('user_id', session.user.id),
+    supabase.from('community_posts').delete().eq('id', postId).eq('user_id', session.user.id),
+  ]);
+  console.log('[SocialApi] deletePost — success');
+}
+
+// ─── Likes — direct Supabase + SECURITY DEFINER RPCs ─────────────────────────
 
 export async function toggleLike(
   post_id: string
 ): Promise<{ liked: boolean; likes_count: number }> {
   console.log('[SocialApi] toggleLike — post_id:', post_id);
-  const data = await apiFetch<{ liked: boolean; likes_count: number }>(
-    '/social-post-actions/like',
-    { method: 'POST', body: JSON.stringify({ post_id }) }
-  );
-  console.log('[SocialApi] toggleLike — liked:', data.liked, 'count:', data.likes_count);
-  return data;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+  const userId = session.user.id;
+
+  const { data: existing } = await supabase
+    .from('community_likes')
+    .select('id')
+    .eq('post_id', post_id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  let liked: boolean;
+  let likes_count: number;
+
+  if (existing) {
+    await supabase.from('community_likes').delete().eq('post_id', post_id).eq('user_id', userId);
+    const { data: newCount } = await supabase.rpc('decrement_likes', { post_id });
+    liked = false;
+    likes_count = (newCount as number) ?? 0;
+  } else {
+    await supabase.from('community_likes').upsert({ post_id, user_id: userId });
+    const { data: newCount } = await supabase.rpc('increment_likes', { post_id });
+    liked = true;
+    likes_count = (newCount as number) ?? 1;
+  }
+
+  console.log('[SocialApi] toggleLike — liked:', liked, 'count:', likes_count);
+  return { liked, likes_count };
 }
+
+// ─── Comments — direct Supabase ───────────────────────────────────────────────
 
 export async function addComment(post_id: string, content: string): Promise<Comment> {
   console.log('[SocialApi] addComment — post_id:', post_id, 'content length:', content.length);
-  const data = await apiFetch<Comment>('/social-post-actions/comment', {
-    method: 'POST',
-    body: JSON.stringify({ post_id, content }),
-  });
-  console.log('[SocialApi] addComment — comment id:', data.id);
-  return data;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('community_comments')
+    .insert({ post_id, user_id: session.user.id, content })
+    .select('*, author:users!user_id(id, username, full_name, avatar_url)')
+    .single();
+
+  if (error) throw error;
+  await supabase.rpc('increment_comments', { post_id });
+  console.log('[SocialApi] addComment — comment id:', (data as any)?.id);
+  return data as unknown as Comment;
 }
 
 export async function fetchComments(post_id: string): Promise<Comment[]> {
   console.log('[SocialApi] fetchComments — post_id:', post_id);
-  const data = await apiFetch<Comment[]>(
-    `/social-post-actions/comments?post_id=${encodeURIComponent(post_id)}`
-  );
+  const { data, error } = await supabase
+    .from('community_comments')
+    .select('*, author:users!user_id(id, username, full_name, avatar_url)')
+    .eq('post_id', post_id)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
   console.log('[SocialApi] fetchComments — received', data?.length ?? 0, 'comments');
-  return data ?? [];
+  return (data ?? []) as unknown as Comment[];
 }
 
-export async function createPost(post: CreatePostInput): Promise<SocialPost> {
-  console.log('[SocialApi] createPost — type:', post.post_type, 'type_v2:', post.post_type_v2, 'public:', post.is_public);
-  const data = await apiFetch<SocialPost>('/social-post-actions/create', {
-    method: 'POST',
-    body: JSON.stringify(post),
-  });
-  console.log('[SocialApi] createPost — success, id:', data?.id);
-  return data;
-}
-
-export async function deletePost(postId: string): Promise<void> {
-  console.log('[SocialApi] deletePost — post_id:', postId);
-  await apiFetch(`/social-post-actions/delete?post_id=${encodeURIComponent(postId)}`, {
-    method: 'DELETE',
-  });
-  console.log('[SocialApi] deletePost — success');
-}
+// ─── Saves — direct Supabase + SECURITY DEFINER RPCs ─────────────────────────
 
 export async function savePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
   console.log('[SocialApi] savePost — post_id:', post_id);
-  const data = await apiFetch<{ saved: boolean; saves_count: number }>(
-    '/social-post-actions/save',
-    { method: 'POST', body: JSON.stringify({ post_id }) }
-  );
-  console.log('[SocialApi] savePost — saved:', data.saved, 'count:', data.saves_count);
-  return data;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+
+  await supabase.from('social_post_saves').upsert({ post_id, user_id: session.user.id });
+  const { data: newCount } = await supabase.rpc('increment_saves', { post_id });
+  console.log('[SocialApi] savePost — saves_count:', newCount);
+  return { saved: true, saves_count: (newCount as number) ?? 1 };
 }
 
 export async function unsavePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
   console.log('[SocialApi] unsavePost — post_id:', post_id);
-  const data = await apiFetch<{ saved: boolean; saves_count: number }>(
-    `/social-post-actions/save?post_id=${encodeURIComponent(post_id)}`,
-    { method: 'DELETE' }
-  );
-  console.log('[SocialApi] unsavePost — saved:', data.saved, 'count:', data.saves_count);
-  return data;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+
+  await supabase.from('social_post_saves').delete().eq('post_id', post_id).eq('user_id', session.user.id);
+  const { data: newCount } = await supabase.rpc('decrement_saves', { post_id });
+  console.log('[SocialApi] unsavePost — saves_count:', newCount);
+  return { saved: false, saves_count: (newCount as number) ?? 0 };
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
