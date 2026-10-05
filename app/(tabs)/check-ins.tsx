@@ -2789,8 +2789,8 @@ export default function CommunityScreen() {
     try {
       const [postsRes, likesRes, commentsRes, savesRes] = await Promise.all([
         supabase
-          .from('community_posts')
-          .select('*, author:users!user_id(id, username, full_name, avatar_url, user_type)')
+          .from('social_posts')
+          .select('id, user_id, content, image_url, created_at, likes_count, comments_count, saves_count, is_public, is_pinned, is_founder_post, post_type, post_type_v2, meal_photo_url, meal_calories, meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id, meal_recipe_data, question_title, progress_stats, auto_post_type, streak_days, weekly_recap_score, weekly_recap_days_tracked, weekly_recap_week_start, weekly_recap_day_flags, weight_goal_pct, edu_headline, edu_body, edu_example, edu_week, section, author:users!user_id(id, username, full_name, avatar_url, user_type)')
           .eq('section', 'club')
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
@@ -3194,13 +3194,13 @@ export default function CommunityScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          console.log('[Community] Network request: delete post from both tables:', postId);
-          // Delete from both tables to handle legacy posts and new social_posts
-          const [r1, r2] = await Promise.all([
-            supabase.from('social_posts').delete().eq('id', postId).eq('user_id', currentUserId),
-            supabase.from('community_posts').delete().eq('id', postId).eq('user_id', currentUserId),
-          ]);
-          console.log('[Community] Delete result — social_posts:', r1.error?.message ?? 'ok', 'community_posts:', r2.error?.message ?? 'ok');
+          console.log('[Community] Network request: delete post from social_posts:', postId);
+          const { error: deleteError } = await supabase
+            .from('social_posts')
+            .delete()
+            .eq('id', postId)
+            .eq('user_id', currentUserId);
+          console.log('[Community] Delete result — social_posts:', deleteError?.message ?? 'ok');
           setFeedPosts((prev) => prev.filter((p) => p.id !== postId));
           setClubPosts((prev) => prev.filter((p) => p.id !== postId));
         },

@@ -306,10 +306,11 @@ export async function deletePost(postId: string): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) throw new Error('Not authenticated');
 
-  await Promise.all([
-    supabase.from('social_posts').delete().eq('id', postId).eq('user_id', session.user.id),
-    supabase.from('community_posts').delete().eq('id', postId).eq('user_id', session.user.id),
-  ]);
+  await supabase
+    .from('social_posts')
+    .delete()
+    .eq('id', postId)
+    .eq('user_id', session.user.id);
   console.log('[SocialApi] deletePost — success');
 }
 
