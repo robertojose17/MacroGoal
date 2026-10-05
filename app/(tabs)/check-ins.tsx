@@ -72,7 +72,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { createPost, savePost, unsavePost, addComment, fetchComments, updateComment, deleteComment } from '@/utils/socialApi';
+import { createPost, savePost, unsavePost, addComment, fetchComments, updateComment, deleteComment, toggleLike } from '@/utils/socialApi';
 import type { SocialPost, Comment } from '@/utils/socialApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 
@@ -3848,48 +3848,43 @@ export default function CommunityScreen() {
 
   // ── Like toggle ──
   const handleLike = useCallback(async (postId: string, liked: boolean) => {
-    console.log('[Community] Network request: toggle like, postId:', postId, 'liked:', liked);
+    console.log('[Community] handleLike pressed — postId:', postId, 'currentlyLiked:', liked);
+    // Optimistic update
     const updatePosts = (posts: CommunityPost[]) =>
       posts.map((p) =>
         p.id === postId
-          ? { ...p, liked_by_me: !liked, likes_count: liked ? p.likes_count - 1 : p.likes_count + 1 }
+          ? { ...p, liked_by_me: !liked, likes_count: Math.max(0, liked ? p.likes_count - 1 : p.likes_count + 1) }
           : p
       );
     if (activeTab === 'feed') setFeedPosts((prev) => updatePosts(prev));
     else setClubPosts((prev) => updatePosts(prev));
 
-    // Compute new count from current state before the optimistic update takes effect
-    const allPosts = activeTab === 'feed' ? feedPosts : clubPosts;
-    const post = allPosts.find((p) => p.id === postId);
-    const newCount = post ? (liked ? post.likes_count - 1 : post.likes_count + 1) : null;
-
     try {
-      if (liked) {
-        const { error } = await supabase.from('community_likes').delete().eq('post_id', postId).eq('user_id', currentUserId);
-        if (error) throw error;
-        console.log('[Community] Like removed successfully');
-      } else {
-        const { error } = await supabase.from('community_likes').upsert({ post_id: postId, user_id: currentUserId });
-        if (error) throw error;
-        console.log('[Community] Like added successfully');
-      }
-      // Persist the new count to the posts table so it survives refreshes
-      if (newCount !== null) {
-        await supabase.from('community_posts').update({ likes_count: Math.max(0, newCount) }).eq('id', postId);
-      }
+      console.log('[Community] Network request: toggleLike — postId:', postId);
+      const result = await toggleLike(postId);
+      console.log('[Community] toggleLike response:', result);
+      // Update with the authoritative count from the server
+      const syncPosts = (posts: CommunityPost[]) =>
+        posts.map((p) =>
+          p.id === postId
+            ? { ...p, liked_by_me: result.liked, likes_count: result.likes_count }
+            : p
+        );
+      if (activeTab === 'feed') setFeedPosts((prev) => syncPosts(prev));
+      else setClubPosts((prev) => syncPosts(prev));
     } catch (e) {
       console.warn('[Community] Like toggle failed, reverting:', e);
       // Revert optimistic update
       const revert = (posts: CommunityPost[]) =>
         posts.map((p) =>
           p.id === postId
-            ? { ...p, liked_by_me: liked, likes_count: liked ? p.likes_count + 1 : p.likes_count - 1 }
+            ? { ...p, liked_by_me: liked, likes_count: liked ? p.likes_count + 1 : Math.max(0, p.likes_count - 1) }
             : p
         );
       if (activeTab === 'feed') setFeedPosts((prev) => revert(prev));
       else setClubPosts((prev) => revert(prev));
     }
-  }, [activeTab, currentUserId, feedPosts, clubPosts]);
+  }, [activeTab]);
 
   // ── Save toggle ──
   const handleSave = useCallback(async (postId: string, savedByMe: boolean) => {
