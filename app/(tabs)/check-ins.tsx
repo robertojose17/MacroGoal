@@ -63,7 +63,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { usePremium } from '@/hooks/usePremium';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { useTranslation } from 'react-i18next';
 import { IconSymbol } from '@/components/IconSymbol';
 
@@ -1768,12 +1768,10 @@ function ComposerSheet({
       const mondayStr = toLocalDateString(monday);
       const todayStr = toLocalDateString(today);
 
-      const [xpRes, checkInsRes, goalRes, mealsRes, trackerWeightRes] = await Promise.all([
+      const [xpRes, checkInsRes, mealsRes] = await Promise.all([
         supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', currentUserId).maybeSingle(),
         supabase.from('check_ins').select('weight, weight_unit, created_at').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(1),
-        supabase.from('goals').select('target_weight, starting_weight, weight_unit').eq('user_id', currentUserId).eq('is_active', true).maybeSingle(),
         supabase.from('meals').select('date').eq('user_id', currentUserId).gte('date', mondayStr).lte('date', todayStr),
-        supabase.from('tracker_entries').select('value, date').eq('user_id', currentUserId).order('date', { ascending: false }).limit(1),
       ]);
 
       // Streak — use user_xp, fallback to computing from check_ins
@@ -1820,27 +1818,52 @@ function ComposerSheet({
       }
       stats.push({ key: 'consistency_score', label: 'Weekly consistency', emoji: '📊', value: consistencyScore, selected: false });
 
-      // Weight goal progress — prefer tracker_entries if more recent than check_in
-      const checkInWeight = latestCheckIn?.weight ?? null;
-      const checkInDate = latestCheckIn?.created_at ?? null;
-      const trackerEntryWeight = trackerWeightRes.data?.value ?? null;
-      const trackerEntryDate = trackerWeightRes.data?.date ?? null;
-      let currentWeight: number | null = checkInWeight;
-      if (trackerEntryWeight != null) {
-        if (checkInDate == null || (trackerEntryDate != null && trackerEntryDate >= checkInDate.split('T')[0])) {
-          currentWeight = trackerEntryWeight;
+      // Weight goal progress — mirror GoalWeightCard exactly
+      // Uses users.goal_weight as target, earliest check-in as start, latest tracker/check-in as current
+      try {
+        const [userRes, allCheckInsRes, weightTrackerRes] = await Promise.all([
+          supabase.from('users').select('goal_weight, current_weight').eq('id', currentUserId).maybeSingle(),
+          supabase.from('check_ins').select('date, weight').eq('user_id', currentUserId).not('weight', 'is', null).order('date', { ascending: true }),
+          supabase.from('trackers').select('id').eq('user_id', currentUserId).eq('name', 'weight').eq('is_default', true).maybeSingle(),
+        ]);
+
+        const goalWeightKg = userRes.data?.goal_weight != null ? Number(userRes.data.goal_weight) : null;
+        const checkInPoints = (allCheckInsRes.data ?? []).map((c: any) => ({ date: c.date, weight: Number(c.weight) }));
+
+        // Start weight = earliest check-in (same as Dashboard)
+        const startKg = checkInPoints.length > 0 ? checkInPoints[0].weight : null;
+
+        // Current weight = latest tracker entry OR latest check-in
+        let activeWeightKg: number | null = null;
+        if (weightTrackerRes.data?.id) {
+          const { data: latestEntry } = await supabase
+            .from('tracker_entries')
+            .select('value, date')
+            .eq('tracker_id', weightTrackerRes.data.id)
+            .eq('user_id', currentUserId)
+            .order('date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (latestEntry?.value != null) {
+            // tracker_entries stores lbs, convert to kg
+            activeWeightKg = Number(latestEntry.value) / 2.20462;
+          }
         }
-      }
-      const targetWeight = goalRes.data?.target_weight;
-      const startingWeight = goalRes.data?.starting_weight;
-      if (currentWeight != null && targetWeight != null && startingWeight != null && startingWeight !== targetWeight) {
-        const totalChange = Math.abs(targetWeight - startingWeight);
-        const currentChange = Math.abs(currentWeight - startingWeight);
-        const pct = Math.min(100, Math.round((currentChange / totalChange) * 100));
-        stats.push({ key: 'weight_goal_pct', label: 'Weight goal progress', emoji: '🎯', value: pct, selected: false });
-      } else if (currentWeight != null) {
-        // Fallback: show raw weight if no goal
-        stats.push({ key: 'weight_value', label: 'Current weight', emoji: '⚖️', value: currentWeight, selected: false });
+        if (activeWeightKg == null && checkInPoints.length > 0) {
+          activeWeightKg = checkInPoints[checkInPoints.length - 1].weight;
+        }
+
+        if (goalWeightKg != null && startKg != null && activeWeightKg != null && startKg !== goalWeightKg) {
+          const totalRange = Math.abs(startKg - goalWeightKg) || 1;
+          const progress = Math.min(1, Math.max(0, Math.abs(startKg - activeWeightKg) / totalRange));
+          const pct = Math.round(progress * 100);
+          console.log('[Community] Weight goal pct (Dashboard formula):', pct, '% — startKg:', startKg, 'activeKg:', activeWeightKg, 'goalKg:', goalWeightKg);
+          stats.push({ key: 'weight_goal_pct', label: 'Weight goal progress', emoji: '🎯', value: pct, selected: false });
+        } else {
+          console.log('[Community] Weight goal pct skipped — goalWeightKg:', goalWeightKg, 'startKg:', startKg, 'activeWeightKg:', activeWeightKg);
+        }
+      } catch (weightGoalErr) {
+        console.log('[Community] Weight goal pct error (non-fatal):', weightGoalErr);
       }
 
       // Today's steps — try health_metrics table; show even if 0
@@ -1905,50 +1928,67 @@ function ComposerSheet({
   };
 
   const loadCheckInPhotos = async () => {
-    console.log('[Community] Loading check-in photos for user:', currentUserId);
+    console.log('[Community] Loading check-in photos via edge function, user:', currentUserId);
     setPhotosLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('check_in_photos')
-        .select('id, user_id, photo_url, created_at, check_in:check_ins!check_in_id(date, weight, weight_unit)')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false })
-        .limit(30);
-      if (!error && data && data.length > 0) {
-        console.log('[Community] check_in_photos loaded via join:', data.length);
-        const mapped = (data ?? []).map((row: any) => ({
-          id: row.id,
-          user_id: row.user_id,
-          photo_url: row.photo_url,
-          created_at: row.created_at,
-          date: row.check_in?.date ?? null,
-          weight: row.check_in?.weight ?? null,
-          weight_unit: row.check_in?.weight_unit ?? null,
-        }));
-        setCheckInPhotos(mapped);
-      } else {
-        console.log('[Community] check_in_photos join returned 0 or error, falling back to check_ins. error:', error?.message ?? 'none');
-        const { data: ciData } = await supabase
-          .from('check_ins')
-          .select('id, user_id, photo_url, created_at, date, weight, weight_unit')
-          .eq('user_id', currentUserId)
-          .not('photo_url', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(30);
-        console.log('[Community] check_ins with photos loaded:', ciData?.length ?? 0);
-        const mapped2 = (ciData ?? []).map((row: any) => ({
-          id: row.id,
-          user_id: row.user_id,
-          photo_url: row.photo_url,
-          created_at: row.created_at,
-          date: row.date ?? null,
-          weight: row.weight ?? null,
-          weight_unit: row.weight_unit ?? null,
-        }));
-        setCheckInPhotos(mapped2);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log('[Community] No session for photo fetch');
+        setCheckInPhotos([]);
+        return;
       }
+
+      const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!response.ok) {
+        console.error('[Community] check-in-photos edge fn failed:', response.status);
+        setCheckInPhotos([]);
+        return;
+      }
+
+      const data = await response.json();
+      const photos: Array<{ id: string; user_id: string; check_in_id: string; photo_url: string; storage_path: string; created_at: string }> = data.photos ?? [];
+      console.log('[Community] Photos loaded from edge fn:', photos.length);
+
+      // Sort newest first for the picker
+      const sorted = [...photos].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      // Fetch weights and dates for each check-in
+      const checkInIds = photos.map(p => p.check_in_id).filter(Boolean);
+      let weightMap: Record<string, { weight: number | null; date: string | null }> = {};
+      if (checkInIds.length > 0) {
+        const { data: checkIns } = await supabase
+          .from('check_ins')
+          .select('id, weight, date')
+          .in('id', checkInIds);
+        if (checkIns) {
+          checkIns.forEach((ci: any) => {
+            weightMap[ci.id] = {
+              weight: ci.weight != null ? Math.round(Number(ci.weight) * 2.20462) : null,
+              date: ci.date ?? null,
+            };
+          });
+        }
+      }
+
+      const mapped: CheckInPhoto[] = sorted.map(p => ({
+        id: p.id,
+        user_id: p.user_id,
+        photo_url: p.photo_url,
+        created_at: p.created_at,
+        date: weightMap[p.check_in_id]?.date ?? null,
+        weight: weightMap[p.check_in_id]?.weight ?? null,
+        weight_unit: 'lbs',
+      }));
+
+      setCheckInPhotos(mapped);
     } catch (e) {
       console.warn('[Community] loadCheckInPhotos error:', e);
+      setCheckInPhotos([]);
     } finally {
       setPhotosLoading(false);
     }
@@ -2380,8 +2420,8 @@ function ComposerSheet({
                                 </View>
                               ) : null}
                             </View>
-                            {recipe.servings != null ? (
-                              <Text style={{ fontSize: 11, color: secondaryColor }}>{String(recipe.servings)}{' serving(s)'}</Text>
+                            {(recipe.calories_per_serving != null || recipe.protein_per_serving != null) ? (
+                              <Text style={{ fontSize: 11, color: secondaryColor }}>Per serving</Text>
                             ) : null}
                           </View>
                           {isSelected ? (
