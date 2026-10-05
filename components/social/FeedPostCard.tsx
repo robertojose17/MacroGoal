@@ -328,6 +328,41 @@ export default function FeedPostCard({
 }: FeedPostCardProps) {
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
+  const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const stats = post.progress_stats as Record<string, unknown> | null | undefined;
+    const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string }[] | null | undefined;
+    if (!photoProgress || photoProgress.length === 0) return;
+
+    const needsSigning = photoProgress.filter(p => p.storage_path);
+    if (needsSigning.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      console.log('[FeedPostCard] Generating signed URLs for', needsSigning.length, 'photo(s), post:', post.id);
+      const urlMap: Record<string, string> = {};
+      for (const p of needsSigning) {
+        if (!p.storage_path) continue;
+        try {
+          const { data } = await supabase.storage
+            .from('check-in-photos')
+            .createSignedUrl(p.storage_path, 3600);
+          if (data?.signedUrl && !cancelled) {
+            urlMap[p.storage_path] = data.signedUrl;
+          }
+        } catch (e) {
+          console.warn('[FeedPostCard] Failed to sign photo URL:', p.storage_path, e);
+        }
+      }
+      if (!cancelled) {
+        console.log('[FeedPostCard] Signed URLs resolved:', Object.keys(urlMap).length, 'for post:', post.id);
+        setResolvedPhotoUrls(urlMap);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [post.id]);
 
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textColor = isDark ? colors.textDark : colors.primaryText;
@@ -535,13 +570,13 @@ export default function FeedPostCard({
       ].filter(Boolean) as ProgressCardDef[];
 
       // Photo progress — render before stat cards
-      const photoProgress = stats?.photo_progress as { photo_url: string; date: string; weight: number | null; weight_unit: string | null }[] | null | undefined;
+      const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string; date: string; weight: number | null; weight_unit: string | null }[] | null | undefined;
       const photoProgressNode = photoProgress && photoProgress.length > 0 ? (
         <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
           {photoProgress.length === 1 ? (
             <View style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
               <Image
-                source={{ uri: photoProgress[0].photo_url }}
+                source={{ uri: resolvedPhotoUrls[photoProgress[0].storage_path ?? ''] ?? photoProgress[0].photo_url ?? '' }}
                 style={{ width: '100%', aspectRatio: 3 / 4 }}
                 resizeMode="contain"
               />
@@ -562,7 +597,7 @@ export default function FeedPostCard({
                 return (
                   <View key={idx} style={{ flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
                     <Image
-                      source={{ uri: photo.photo_url }}
+                      source={{ uri: resolvedPhotoUrls[photo.storage_path ?? ''] ?? photo.photo_url ?? '' }}
                       style={{ width: '100%', aspectRatio: 3 / 4 }}
                       resizeMode="cover"
                     />

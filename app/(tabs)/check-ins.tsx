@@ -216,7 +216,8 @@ interface SavedRecipeRow {
 type CheckInPhoto = {
   id: string;
   user_id: string;
-  photo_url: string;
+  photo_url: string;       // signed URL — for display in picker only
+  storage_path?: string;   // raw storage path — save this to DB
   created_at: string;
   weight?: number | null;
   weight_unit?: string | null;
@@ -1949,7 +1950,7 @@ function ComposerSheet({
       }
 
       const data = await response.json();
-      const photos: Array<{ id: string; user_id: string; check_in_id: string; photo_url: string; storage_path: string; created_at: string }> = data.photos ?? [];
+      const photos: { id: string; user_id: string; check_in_id: string; photo_url: string; storage_path: string; created_at: string }[] = data.photos ?? [];
       console.log('[Community] Photos loaded from edge fn:', photos.length);
 
       // Sort newest first for the picker
@@ -1978,7 +1979,8 @@ function ComposerSheet({
       const mapped: CheckInPhoto[] = sorted.map(p => ({
         id: p.id,
         user_id: p.user_id,
-        photo_url: p.photo_url,
+        photo_url: p.photo_url,           // keep for picker display
+        storage_path: p.storage_path,     // raw path — saved to DB
         created_at: p.created_at,
         date: weightMap[p.check_in_id]?.date ?? null,
         weight: weightMap[p.check_in_id]?.weight ?? null,
@@ -2063,8 +2065,10 @@ function ComposerSheet({
         });
         // Include photo progress if selected
         if (selectedPhotos.length > 0) {
+          console.log('[Community] Saving photo_progress with storage_path for', selectedPhotos.length, 'photo(s)');
           statsObj['photo_progress'] = selectedPhotos.map(p => ({
-            photo_url: p.photo_url,
+            storage_path: p.storage_path ?? null,   // raw path — used to generate fresh signed URLs at render time
+            photo_url: p.photo_url,                 // fallback for existing posts without storage_path
             date: p.date ?? p.created_at.split('T')[0],
             weight: p.weight ?? null,
             weight_unit: p.weight_unit ?? null,
