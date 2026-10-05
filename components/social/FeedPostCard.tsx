@@ -433,7 +433,6 @@ export default function FeedPostCard({
       const fatDisplay = post.meal_fat != null ? Math.round(Number(post.meal_fat)).toString() : null;
       const recipeData = post.meal_recipe_data;
       const recipeName = recipeData?.name ?? post.content;
-      const servingsDisplay = post.meal_servings != null ? String(post.meal_servings) : null;
       const captionDiffersFromName = !!(post.content && recipeData?.name && post.content !== recipeData.name);
       return (
         <View>
@@ -451,7 +450,7 @@ export default function FeedPostCard({
               {fatDisplay ? <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.fats + '18' }}><Text style={{ fontSize: 12, fontWeight: '700', color: colors.fats }}>{'🥑 '}{fatDisplay}{'g'}</Text></View> : null}
             </View>
           ) : null}
-          {servingsDisplay ? <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: 16, paddingBottom: 4 }}>{servingsDisplay}{' serving(s)'}</Text> : null}
+          {(calDisplay || protDisplay || carbDisplay || fatDisplay) ? <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: 16, paddingBottom: 4 }}>Per serving</Text> : null}
           {captionDiffersFromName && post.content ? <Text style={{ fontSize: 13, color: textColor, paddingHorizontal: 16, paddingBottom: 4, lineHeight: 18 }}>{post.content}</Text> : null}
           <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8, flexWrap: 'wrap' }}>
             {post.meal_recipe_id ? (
@@ -736,6 +735,8 @@ export default function FeedPostCard({
   const commentsCountDisplay = post.comments_count > 0 ? String(post.comments_count) : '';
   const likesCountDisplay = post.likes_count > 0 ? String(post.likes_count) : '';
 
+  const mediaNode = renderMedia();
+
   return (
     <View style={[cardStyles.postCard, { backgroundColor: cardBg }]}>
       {/* Header */}
@@ -787,10 +788,10 @@ export default function FeedPostCard({
       </View>
 
       {/* Media */}
-      {renderMedia()}
+      {mediaNode}
 
       {/* Action row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: mediaNode == null ? 4 : 12, paddingBottom: 12 }}>
         <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleLike}>
           <Heart size={22} color={post.liked_by_me ? '#EF4444' : textColor} fill={post.liked_by_me ? '#EF4444' : 'transparent'} />
           {likesCountDisplay ? <Text style={{ fontSize: 14, fontWeight: '600', color: post.liked_by_me ? '#EF4444' : textColor }}>{likesCountDisplay}</Text> : null}

@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { calcMacros } from '@/utils/macros';
 import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
 import { useXpStatus } from '@/hooks/useXpStatus';
 import { calcDailyScore } from '@/utils/consistencyMath';
+import FeedPostCard from '@/components/social/FeedPostCard';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -125,6 +126,8 @@ export default function ProfileScreen() {
 
   // Posts feed
   const [posts, setPosts] = useState<any[]>([]);
+  const [commentsPost, setCommentsPost] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Follow modal
   const [followModalType, setFollowModalType] = useState<FollowModalType>(null);
@@ -368,7 +371,7 @@ export default function ProfileScreen() {
       // Load posts feed
       const { data: postsData, error: postsError } = await supabase
         .from('social_posts')
-        .select('id, content, created_at, likes_count')
+        .select('id, user_id, content, image_url, created_at, likes_count, comments_count, is_public, post_type, post_type_v2, meal_photo_url, meal_calories, meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id, meal_recipe_data, question_title, progress_stats, is_pinned, is_founder_post, saves_count')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -389,6 +392,12 @@ export default function ProfileScreen() {
       loadData();
     }, [nutritionRange, customStartDate, customEndDate])
   );
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user?.id ?? null);
+    });
+  }, []);
 
   const onRefresh = () => {
     console.log('[Profile] pull-to-refresh triggered');
@@ -805,47 +814,28 @@ export default function ProfileScreen() {
               </Text>
             </View>
           ) : (
-            posts.map((post) => {
-              const postTime = relativeTime(post.created_at);
-              const postLikes = String(post.likes_count ?? 0);
-              return (
-                <View
-                  key={post.id}
-                  style={[styles.postCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}
-                >
-                  <View style={styles.postCardHeader}>
-                    <View style={styles.postCardBody}>
-                      <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
-                      <View style={styles.postMeta}>
-                        <Text style={[styles.postTime, { color: secondaryText }]}>{postTime}</Text>
-                        <View style={styles.postLikesRow}>
-                          <IconSymbol
-                            ios_icon_name="heart.fill"
-                            android_material_icon_name="favorite"
-                            size={13}
-                            color={colors.error}
-                          />
-                          <Text style={[styles.postLikes, { color: secondaryText }]}>{postLikes}</Text>
-                        </View>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => handleDeletePost(post.id)}
-                      activeOpacity={0.7}
-                      style={styles.postDeleteButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <IconSymbol
-                        ios_icon_name="trash"
-                        android_material_icon_name="delete"
-                        size={16}
-                        color={colors.error}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
+            posts.map((post) => (
+              <FeedPostCard
+                key={post.id}
+                post={{
+                  ...post,
+                  liked_by_me: false,
+                  saved_by_me: false,
+                  comments_count: post.comments_count ?? 0,
+                  likes_count: post.likes_count ?? 0,
+                  saves_count: post.saves_count ?? 0,
+                }}
+                currentUserId={currentUserId ?? undefined}
+                onLike={(postId, liked) => {
+                  console.log('[Profile] onLike — postId:', postId, 'liked:', liked);
+                  setPosts(prev => prev.map(p => p.id === postId ? { ...p, liked_by_me: liked, likes_count: liked ? (p.likes_count ?? 0) + 1 : Math.max(0, (p.likes_count ?? 0) - 1) } : p));
+                }}
+                onDelete={(postId) => {
+                  handleDeletePost(postId);
+                }}
+                onOpenComments={(p) => setCommentsPost(p)}
+              />
+            ))
           )}
         </View>
       </ScrollView>
@@ -1254,44 +1244,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.sm,
   },
-  postCard: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  postCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  postCardBody: {
-    flex: 1,
-  },
-  postDeleteButton: {
-    padding: 4,
-  },
-  postContent: {
-    ...typography.body,
-    marginBottom: spacing.sm,
-  },
-  postMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  postTime: {
-    ...typography.small,
-  },
-  postLikesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  postLikes: {
-    ...typography.small,
-  },
-
   // Follow modal
   modalOverlay: {
     flex: 1,

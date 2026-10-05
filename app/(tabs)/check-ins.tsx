@@ -847,7 +847,6 @@ function PostCard({
       const fatDisplay = post.meal_fat != null ? Math.round(Number(post.meal_fat)).toString() : null;
       const recipeData = post.meal_recipe_data;
       const recipeName = recipeData?.name ?? post.content;
-      const servingsDisplay = post.meal_servings != null ? String(post.meal_servings) : null;
       const captionDiffersFromName = !!(post.content && recipeData?.name && post.content !== recipeData.name);
       return (
         <View>
@@ -887,9 +886,9 @@ function PostCard({
               ) : null}
             </View>
           ) : null}
-          {servingsDisplay ? (
+          {(calDisplay || protDisplay || carbDisplay || fatDisplay) ? (
             <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: 16, paddingBottom: 4 }}>
-              {servingsDisplay}{' serving(s)'}
+              Per serving
             </Text>
           ) : null}
           {captionDiffersFromName && post.content ? (
