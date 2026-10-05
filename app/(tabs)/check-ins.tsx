@@ -973,11 +973,19 @@ function PostCard({
       const photoProgressNode = photoProgress && photoProgress.length > 0 ? (
         <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
           {photoProgress.length === 1 ? (
-            <View style={{ borderRadius: 12, overflow: 'hidden' }}>
+            <View style={{ borderRadius: 12, overflow: 'hidden', width: '100%', aspectRatio: 3/4 }}>
               <Image
                 source={{ uri: resolvedPhotoUrls[photoProgress[0].storage_path ?? ''] ?? photoProgress[0].photo_url ?? '' }}
-                style={{ width: '100%', aspectRatio: 3/4 }}
-                resizeMode="contain"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  transform: photoProgress[0].cropData ? [
+                    { scale: photoProgress[0].cropData.scale },
+                    { translateX: photoProgress[0].cropData.translateX },
+                    { translateY: photoProgress[0].cropData.translateY },
+                  ] : [],
+                }}
+                resizeMode="cover"
               />
               <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 10 }}>
                 <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
@@ -991,10 +999,18 @@ function PostCard({
           ) : (
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {photoProgress.map((photo, idx) => (
-                <View key={idx} style={{ flex: 1, borderRadius: 12, overflow: 'hidden' }}>
+                <View key={idx} style={{ flex: 1, borderRadius: 12, overflow: 'hidden', aspectRatio: 3/4 }}>
                   <Image
                     source={{ uri: resolvedPhotoUrls[photo.storage_path ?? ''] ?? photo.photo_url ?? '' }}
-                    style={{ width: '100%', aspectRatio: 3/4 }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      transform: photo.cropData ? [
+                        { scale: photo.cropData.scale },
+                        { translateX: photo.cropData.translateX },
+                        { translateY: photo.cropData.translateY },
+                      ] : [],
+                    }}
                     resizeMode="cover"
                   />
                   <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>

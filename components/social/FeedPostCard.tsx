@@ -570,16 +570,26 @@ export default function FeedPostCard({
       ].filter(Boolean) as ProgressCardDef[];
 
       // Photo progress — render before stat cards
-      const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string; date: string; weight: number | null; weight_unit: string | null }[] | null | undefined;
+      const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string; date: string; weight: number | null; weight_unit: string | null; cropData?: { scale: number; translateX: number; translateY: number } }[] | null | undefined;
       const photoProgressNode = photoProgress && photoProgress.length > 0 ? (
         <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
           {photoProgress.length === 1 ? (
             <View style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
-              <Image
-                source={{ uri: resolvedPhotoUrls[photoProgress[0].storage_path ?? ''] ?? photoProgress[0].photo_url ?? '' }}
-                style={{ width: '100%', aspectRatio: 3 / 4 }}
-                resizeMode="contain"
-              />
+              <View style={{ width: '100%', aspectRatio: 3/4, overflow: 'hidden' }}>
+                <Image
+                  source={{ uri: resolvedPhotoUrls[photoProgress[0].storage_path ?? ''] ?? photoProgress[0].photo_url ?? '' }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    transform: photoProgress[0].cropData ? [
+                      { scale: photoProgress[0].cropData.scale },
+                      { translateX: photoProgress[0].cropData.translateX },
+                      { translateY: photoProgress[0].cropData.translateY },
+                    ] : [],
+                  }}
+                  resizeMode="cover"
+                />
+              </View>
               <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 10 }}>
                 <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
                   {new Date(photoProgress[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -596,11 +606,21 @@ export default function FeedPostCard({
                 const photoDateStr = new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 return (
                   <View key={idx} style={{ flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
-                    <Image
-                      source={{ uri: resolvedPhotoUrls[photo.storage_path ?? ''] ?? photo.photo_url ?? '' }}
-                      style={{ width: '100%', aspectRatio: 3 / 4 }}
-                      resizeMode="cover"
-                    />
+                    <View style={{ width: '100%', aspectRatio: 3/4, overflow: 'hidden' }}>
+                      <Image
+                        source={{ uri: resolvedPhotoUrls[photo.storage_path ?? ''] ?? photo.photo_url ?? '' }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          transform: photo.cropData ? [
+                            { scale: photo.cropData.scale },
+                            { translateX: photo.cropData.translateX },
+                            { translateY: photo.cropData.translateY },
+                          ] : [],
+                        }}
+                        resizeMode="cover"
+                      />
+                    </View>
                     <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
                       <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{photoLabel}</Text>
                     </View>
