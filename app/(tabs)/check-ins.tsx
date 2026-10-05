@@ -1812,6 +1812,12 @@ function ComposerSheet({
   const [cropPhoto, setCropPhoto] = useState<CheckInPhoto | null>(null);
   const [cropData, setCropData] = useState<{ scale: number; translateX: number; translateY: number }>({ scale: 1, translateX: 0, translateY: 0 });
 
+  useEffect(() => {
+    if (cropPhoto) {
+      setCropData({ scale: 1, translateX: 0, translateY: 0 });
+    }
+  }, [cropPhoto]);
+
   const [posting, setPosting] = useState(false);
 
   const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
@@ -2432,11 +2438,25 @@ function ComposerSheet({
                       showsVerticalScrollIndicator={false}
                       centerContent
                       bouncesZoom
+                      scrollEventThrottle={16}
+                      onScroll={(e) => {
+                        const zoom = e.nativeEvent.zoomScale ?? 1;
+                        const offsetX = e.nativeEvent.contentOffset.x;
+                        const offsetY = e.nativeEvent.contentOffset.y;
+                        setCropData({ scale: zoom, translateX: -offsetX, translateY: -offsetY });
+                      }}
+                      onMomentumScrollEnd={(e) => {
+                        const zoom = e.nativeEvent.zoomScale ?? 1;
+                        const offsetX = e.nativeEvent.contentOffset.x;
+                        const offsetY = e.nativeEvent.contentOffset.y;
+                        console.log('[Community] Crop momentum end — zoom:', zoom, 'offsetX:', offsetX, 'offsetY:', offsetY);
+                        setCropData({ scale: zoom, translateX: -offsetX, translateY: -offsetY });
+                      }}
                       onScrollEndDrag={(e) => {
                         const zoom = e.nativeEvent.zoomScale ?? 1;
                         const offsetX = e.nativeEvent.contentOffset.x;
                         const offsetY = e.nativeEvent.contentOffset.y;
-                        console.log('[Community] Crop scroll end — zoom:', zoom, 'offsetX:', offsetX, 'offsetY:', offsetY);
+                        console.log('[Community] Crop scroll end drag — zoom:', zoom, 'offsetX:', offsetX, 'offsetY:', offsetY);
                         setCropData({ scale: zoom, translateX: -offsetX, translateY: -offsetY });
                       }}
                     >
