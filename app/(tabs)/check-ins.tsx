@@ -28,6 +28,8 @@ import {
   Image,
   Switch,
   ImageSourcePropType,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -1813,13 +1815,82 @@ function ComposerSheet({
   const [cropData, setCropData] = useState<{ scale: number; translateX: number; translateY: number }>({ scale: 1, translateX: 0, translateY: 0 });
   const cropDataRef = useRef<{ scale: number; translateX: number; translateY: number }>({ scale: 1, translateX: 0, translateY: 0 });
 
+  const cropScale = useRef(new Animated.Value(1)).current;
+  const cropTranslateX = useRef(new Animated.Value(0)).current;
+  const cropTranslateY = useRef(new Animated.Value(0)).current;
+  const cropScaleValue = useRef(1);
+  const cropTranslateXValue = useRef(0);
+  const cropTranslateYValue = useRef(0);
+  const lastDistance = useRef<number | null>(null);
+  const lastScale = useRef(1);
+
   useEffect(() => {
     if (cropPhoto) {
       const reset = { scale: 1, translateX: 0, translateY: 0 };
       cropDataRef.current = reset;
       setCropData(reset);
+      cropScale.setValue(1);
+      cropTranslateX.setValue(0);
+      cropTranslateY.setValue(0);
+      cropScaleValue.current = 1;
+      cropTranslateXValue.current = 0;
+      cropTranslateYValue.current = 0;
+      lastDistance.current = null;
+      lastScale.current = 1;
     }
   }, [cropPhoto]);
+
+  const cropPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        console.log('[CropEditor] Pan/pinch gesture started');
+        lastDistance.current = null;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (lastDistance.current !== null) {
+            const delta = distance / lastDistance.current;
+            const newScale = Math.min(4, Math.max(0.5, cropScaleValue.current * delta));
+            cropScaleValue.current = newScale;
+            cropScale.setValue(newScale);
+            lastScale.current = newScale;
+          }
+          lastDistance.current = distance;
+        } else if (touches.length === 1) {
+          lastDistance.current = null;
+          const newX = cropTranslateXValue.current + gestureState.dx;
+          const newY = cropTranslateYValue.current + gestureState.dy;
+          cropTranslateX.setValue(newX);
+          cropTranslateY.setValue(newY);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (evt.nativeEvent.touches.length < 2) {
+          cropTranslateXValue.current += gestureState.dx;
+          cropTranslateYValue.current += gestureState.dy;
+        }
+        lastDistance.current = null;
+        const finalCrop = {
+          scale: cropScaleValue.current,
+          translateX: cropTranslateXValue.current,
+          translateY: cropTranslateYValue.current,
+        };
+        console.log('[CropEditor] Gesture released — finalCrop:', finalCrop);
+        cropDataRef.current = finalCrop;
+        setCropData(finalCrop);
+      },
+      onPanResponderTerminate: () => {
+        console.log('[CropEditor] Gesture terminated');
+        lastDistance.current = null;
+      },
+    })
+  ).current;
 
   const [posting, setPosting] = useState(false);
 
@@ -2430,50 +2501,23 @@ function ComposerSheet({
                     </TouchableOpacity>
                   </View>
 
-                  {/* Zoomable image using ScrollView */}
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <ScrollView
-                      style={{ flex: 1, width: '100%' }}
-                      contentContainerStyle={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-                      maximumZoomScale={4}
-                      minimumZoomScale={0.5}
-                      showsHorizontalScrollIndicator={false}
-                      showsVerticalScrollIndicator={false}
-                      centerContent
-                      bouncesZoom
-                      scrollEventThrottle={16}
-                      onScroll={(e) => {
-                        const zoom = e.nativeEvent.zoomScale ?? 1;
-                        const offsetX = e.nativeEvent.contentOffset.x;
-                        const offsetY = e.nativeEvent.contentOffset.y;
-                        const newCrop = { scale: zoom, translateX: -offsetX, translateY: -offsetY };
-                        cropDataRef.current = newCrop;
-                        setCropData(newCrop);
-                      }}
-                      onMomentumScrollEnd={(e) => {
-                        const zoom = e.nativeEvent.zoomScale ?? 1;
-                        const offsetX = e.nativeEvent.contentOffset.x;
-                        const offsetY = e.nativeEvent.contentOffset.y;
-                        console.log('[Community] Crop momentum end — zoom:', zoom, 'offsetX:', offsetX, 'offsetY:', offsetY);
-                        const newCrop = { scale: zoom, translateX: -offsetX, translateY: -offsetY };
-                        cropDataRef.current = newCrop;
-                        setCropData(newCrop);
-                      }}
-                      onScrollEndDrag={(e) => {
-                        const zoom = e.nativeEvent.zoomScale ?? 1;
-                        const offsetX = e.nativeEvent.contentOffset.x;
-                        const offsetY = e.nativeEvent.contentOffset.y;
-                        console.log('[Community] Crop scroll end drag — zoom:', zoom, 'offsetX:', offsetX, 'offsetY:', offsetY);
-                        const newCrop = { scale: zoom, translateX: -offsetX, translateY: -offsetY };
-                        cropDataRef.current = newCrop;
-                        setCropData(newCrop);
+                  {/* Zoomable image using PanResponder */}
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    <Animated.View
+                      {...cropPanResponder.panHandlers}
+                      style={{
+                        transform: [
+                          { scale: cropScale },
+                          { translateX: cropTranslateX },
+                          { translateY: cropTranslateY },
+                        ],
                       }}
                     >
                       <Image
                         source={{ uri: cropPhoto.photo_url }}
                         style={{ width: 380, height: 507, resizeMode: 'contain' }}
                       />
-                    </ScrollView>
+                    </Animated.View>
                   </View>
 
                   {/* Instructions */}
