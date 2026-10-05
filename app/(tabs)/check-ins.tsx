@@ -62,6 +62,7 @@ import {
   Dumbbell,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { usePremium } from '@/hooks/usePremium';
@@ -2503,14 +2504,97 @@ function ComposerSheet({
                     </TouchableOpacity>
                     <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Adjust Photo</Text>
                     <TouchableOpacity
-                      onPress={() => {
-                        console.log('[Community] Crop editor confirmed for photo:', cropPhoto.id, 'cropData:', cropDataRef.current);
-                        const photoWithCrop: CheckInPhoto = {
-                          ...cropPhoto,
-                          cropData: cropDataRef.current,
-                        };
-                        setSelectedPhotos(prev => [...prev, photoWithCrop]);
-                        setCropPhoto(null);
+                      onPress={async () => {
+                        console.log('[CropEditor] Use Photo pressed for photo:', cropPhoto.id);
+                        const cd = cropDataRef.current;
+                        const sourceUri = cropPhoto.photo_url;
+
+                        // Display dimensions of the image container in the editor
+                        const DISPLAY_W = 380;
+                        const DISPLAY_H = 507;
+
+                        try {
+                          // Get actual pixel dimensions of the source image
+                          const { width: imgW, height: imgH } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+                            Image.getSize(sourceUri, (w, h) => resolve({ width: w, height: h }), reject);
+                          });
+
+                          console.log('[CropEditor] Source image dimensions:', { imgW, imgH });
+
+                          // The image is rendered with resizeMode "contain" inside 380x507
+                          // Calculate the actual rendered size and offset within the container
+                          const imgAspect = imgW / imgH;
+                          const containerAspect = DISPLAY_W / DISPLAY_H;
+                          let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
+                          if (imgAspect > containerAspect) {
+                            renderedW = DISPLAY_W;
+                            renderedH = DISPLAY_W / imgAspect;
+                            offsetX = 0;
+                            offsetY = (DISPLAY_H - renderedH) / 2;
+                          } else {
+                            renderedH = DISPLAY_H;
+                            renderedW = DISPLAY_H * imgAspect;
+                            offsetX = (DISPLAY_W - renderedW) / 2;
+                            offsetY = 0;
+                          }
+
+                          // Scale factor from display pixels to image pixels
+                          const scaleX = imgW / renderedW;
+                          const scaleY = imgH / renderedH;
+
+                          // The user panned by (translateX, translateY) in display coords and zoomed by cd.scale
+                          // translateX/translateY are negative offsets (pan left = negative translateX)
+                          // The visible region in display coords:
+                          const visibleW = renderedW / cd.scale;
+                          const visibleH = renderedH / cd.scale;
+                          // Pan offset: translateX is how much the image moved right (negative = moved left = we see more of the right side)
+                          const panX = -cd.translateX / cd.scale;
+                          const panY = -cd.translateY / cd.scale;
+                          // Clamp to image bounds
+                          const cropX = Math.max(0, panX + offsetX / cd.scale);
+                          const cropY = Math.max(0, panY + offsetY / cd.scale);
+                          const cropW = Math.min(visibleW, renderedW - panX);
+                          const cropH = Math.min(visibleH, renderedH - panY);
+
+                          // Convert to image pixel coordinates
+                          const pixelCropX = Math.round(cropX * scaleX);
+                          const pixelCropY = Math.round(cropY * scaleY);
+                          const pixelCropW = Math.round(Math.max(1, cropW * scaleX));
+                          const pixelCropH = Math.round(Math.max(1, cropH * scaleY));
+
+                          // Clamp to image bounds
+                          const safeCropX = Math.min(pixelCropX, imgW - 1);
+                          const safeCropY = Math.min(pixelCropY, imgH - 1);
+                          const safeCropW = Math.min(pixelCropW, imgW - safeCropX);
+                          const safeCropH = Math.min(pixelCropH, imgH - safeCropY);
+
+                          console.log('[CropEditor] Cropping image:', { imgW, imgH, renderedW, renderedH, cd, pixelCropX: safeCropX, pixelCropY: safeCropY, pixelCropW: safeCropW, pixelCropH: safeCropH });
+
+                          const result = await ImageManipulator.manipulateAsync(
+                            sourceUri,
+                            [{ crop: { originX: safeCropX, originY: safeCropY, width: safeCropW, height: safeCropH } }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                          );
+
+                          console.log('[CropEditor] Crop result URI:', result.uri);
+
+                          const photoWithCrop: CheckInPhoto = {
+                            ...cropPhoto,
+                            photo_url: result.uri,  // use the cropped image URI
+                            cropData: cd,           // keep for reference
+                          };
+                          setSelectedPhotos(prev => [...prev, photoWithCrop]);
+                          setCropPhoto(null);
+                        } catch (err) {
+                          console.warn('[CropEditor] Crop failed, using original:', err);
+                          // Fallback: use original photo without crop
+                          const photoWithCrop: CheckInPhoto = {
+                            ...cropPhoto,
+                            cropData: cd,
+                          };
+                          setSelectedPhotos(prev => [...prev, photoWithCrop]);
+                          setCropPhoto(null);
+                        }
                       }}
                     >
                       <Text style={{ color: '#2A9D8F', fontSize: 16, fontWeight: '700' }}>Use Photo</Text>
