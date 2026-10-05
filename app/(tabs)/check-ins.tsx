@@ -222,6 +222,7 @@ type CheckInPhoto = {
   weight?: number | null;
   weight_unit?: string | null;
   date?: string | null;
+  cropData?: { scale: number; translateX: number; translateY: number };
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -746,6 +747,35 @@ function PostCard({
 }: PostCardProps) {
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
+  const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const stats = post.progress_stats as Record<string, unknown> | null | undefined;
+    const photoProgress = stats?.photo_progress as Array<{ storage_path?: string; photo_url?: string }> | null | undefined;
+    if (!photoProgress || photoProgress.length === 0) return;
+    const needsSigning = photoProgress.filter(p => p.storage_path);
+    if (needsSigning.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const urlMap: Record<string, string> = {};
+      for (const p of needsSigning) {
+        if (!p.storage_path) continue;
+        try {
+          const { data } = await supabase.storage
+            .from('check-in-photos')
+            .createSignedUrl(p.storage_path, 3600);
+          if (data?.signedUrl && !cancelled) {
+            urlMap[p.storage_path] = data.signedUrl;
+          }
+        } catch (e) {
+          console.warn('[PostCard] Failed to sign photo URL:', p.storage_path, e);
+        }
+      }
+      if (!cancelled) setResolvedPhotoUrls(urlMap);
+    })();
+    return () => { cancelled = true; };
+  }, [post.id]);
+
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -928,6 +958,61 @@ function PostCard({
       const stats = post.progress_stats as Record<string, unknown> | null | undefined;
       if (!stats) return null;
 
+      // Photo progress
+      const photoProgress = stats?.photo_progress as Array<{
+        storage_path?: string;
+        photo_url?: string;
+        date: string;
+        weight: number | null;
+        weight_unit: string | null;
+        cropData?: { scale: number; translateX: number; translateY: number };
+      }> | null | undefined;
+
+      const photoProgressNode = photoProgress && photoProgress.length > 0 ? (
+        <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+          {photoProgress.length === 1 ? (
+            <View style={{ borderRadius: 12, overflow: 'hidden' }}>
+              <Image
+                source={{ uri: resolvedPhotoUrls[photoProgress[0].storage_path ?? ''] ?? photoProgress[0].photo_url ?? '' }}
+                style={{ width: '100%', aspectRatio: 3/4 }}
+                resizeMode="contain"
+              />
+              <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 10 }}>
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                  {photoProgress[0].date ? new Date(photoProgress[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                </Text>
+                {photoProgress[0].weight != null ? (
+                  <Text style={{ color: '#fff', fontSize: 12 }}>{photoProgress[0].weight} {photoProgress[0].weight_unit ?? 'lbs'}</Text>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {photoProgress.map((photo, idx) => (
+                <View key={idx} style={{ flex: 1, borderRadius: 12, overflow: 'hidden' }}>
+                  <Image
+                    source={{ uri: resolvedPhotoUrls[photo.storage_path ?? ''] ?? photo.photo_url ?? '' }}
+                    style={{ width: '100%', aspectRatio: 3/4 }}
+                    resizeMode="cover"
+                  />
+                  <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{idx === 0 ? 'Before' : 'After'}</Text>
+                  </View>
+                  <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 8 }}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>
+                      {photo.date ? new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                    </Text>
+                    {photo.weight != null ? (
+                      <Text style={{ color: '#fff', fontSize: 11 }}>{photo.weight} {photo.weight_unit ?? 'lbs'}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      ) : null;
+
       const TEAL = '#2A9D8F';
       const TEAL_BG = '#E8F5F5';
       const TRACK_BG = isDark ? 'rgba(255,255,255,0.10)' : '#E5E7EB';
@@ -989,7 +1074,8 @@ function PostCard({
         } : null,
       ].filter(Boolean) as PCardDef[];
 
-      if (progressCards.length === 0) return null;
+      if (progressCards.length === 0 && !photoProgressNode) return null;
+      if (progressCards.length === 0) return photoProgressNode;
 
       const renderPCard = (card: PCardDef, valueFontSize: number, labelFontSize: number) => {
         const barFill = card.barPct != null ? `${Math.round(card.barPct * 100)}%` as `${number}%` : '0%';
@@ -1025,21 +1111,26 @@ function PostCard({
       if (count === 1) {
         return (
           <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12 }}>
+            {photoProgressNode}
             {renderPCard(progressCards[0], 36, 14)}
           </View>
         );
       }
       if (count === 2) {
         return (
-          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}>{renderPCard(progressCards[0], 28, 12)}</View>
-            <View style={{ flex: 1 }}>{renderPCard(progressCards[1], 28, 12)}</View>
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            {photoProgressNode}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>{renderPCard(progressCards[0], 28, 12)}</View>
+              <View style={{ flex: 1 }}>{renderPCard(progressCards[1], 28, 12)}</View>
+            </View>
           </View>
         );
       }
       if (count === 3) {
         return (
           <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            {photoProgressNode}
             {renderPCard(progressCards[0], 28, 12)}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={{ flex: 1 }}>{renderPCard(progressCards[1], 24, 11)}</View>
@@ -1051,6 +1142,7 @@ function PostCard({
       if (count === 4) {
         return (
           <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            {photoProgressNode}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={{ width: '48%' }}>{renderPCard(progressCards[0], 24, 11)}</View>
               <View style={{ width: '48%' }}>{renderPCard(progressCards[1], 24, 11)}</View>
@@ -1065,6 +1157,7 @@ function PostCard({
       // 5 cards: first full, then 2x2
       return (
         <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+          {photoProgressNode}
           {renderPCard(progressCards[0], 28, 12)}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ width: '48%' }}>{renderPCard(progressCards[1], 22, 11)}</View>
@@ -1716,6 +1809,8 @@ function ComposerSheet({
   const [checkInPhotos, setCheckInPhotos] = useState<CheckInPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<CheckInPhoto[]>([]);
+  const [cropPhoto, setCropPhoto] = useState<CheckInPhoto | null>(null);
+  const [cropData, setCropData] = useState<{ scale: number; translateX: number; translateY: number }>({ scale: 1, translateX: 0, translateY: 0 });
 
   const [posting, setPosting] = useState(false);
 
@@ -2072,6 +2167,7 @@ function ComposerSheet({
             date: p.date ?? p.created_at.split('T')[0],
             weight: p.weight ?? null,
             weight_unit: p.weight_unit ?? null,
+            cropData: p.cropData ?? null,
           }));
         }
         const statLabels = selectedStats.map(s => `${s.emoji} ${s.value} ${s.label}`).join(', ');
@@ -2256,13 +2352,14 @@ function ComposerSheet({
                     <TouchableOpacity
                       style={{ flex: 1, opacity: canSelect ? 1 : 0.4 }}
                       onPress={() => {
-                        if (!canSelect) return;
+                        if (!canSelect && !isSelected) return;
                         if (isSelected) {
                           console.log('[Community] Photo deselected:', item.id);
                           setSelectedPhotos(prev => prev.filter(p => p.id !== item.id));
                         } else {
-                          console.log('[Community] Photo selected:', item.id);
-                          setSelectedPhotos(prev => [...prev, item]);
+                          console.log('[Community] Opening crop editor for photo:', item.id);
+                          setCropData({ scale: 1, translateX: 0, translateY: 0 });
+                          setCropPhoto(item);
                         }
                       }}
                       activeOpacity={0.8}
@@ -2290,6 +2387,73 @@ function ComposerSheet({
                 }}
               />
             )}
+
+            {/* Crop/Zoom Editor */}
+            <Modal
+              visible={!!cropPhoto}
+              animationType="slide"
+              presentationStyle="pageSheet"
+              onRequestClose={() => setCropPhoto(null)}
+            >
+              {cropPhoto ? (
+                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                  {/* Header */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 }}>
+                    <TouchableOpacity onPress={() => {
+                      console.log('[Community] Crop editor cancelled for photo:', cropPhoto.id);
+                      setCropPhoto(null);
+                    }}>
+                      <Text style={{ color: '#fff', fontSize: 16 }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Adjust Photo</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        console.log('[Community] Crop editor confirmed for photo:', cropPhoto.id, 'cropData:', cropData);
+                        const photoWithCrop: CheckInPhoto = {
+                          ...cropPhoto,
+                          cropData: cropData,
+                        };
+                        setSelectedPhotos(prev => [...prev, photoWithCrop]);
+                        setCropPhoto(null);
+                      }}
+                    >
+                      <Text style={{ color: '#2A9D8F', fontSize: 16, fontWeight: '700' }}>Use Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Zoomable image using ScrollView */}
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <ScrollView
+                      style={{ flex: 1, width: '100%' }}
+                      contentContainerStyle={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                      maximumZoomScale={4}
+                      minimumZoomScale={0.5}
+                      showsHorizontalScrollIndicator={false}
+                      showsVerticalScrollIndicator={false}
+                      centerContent
+                      bouncesZoom
+                      onScrollEndDrag={(e) => {
+                        const zoom = e.nativeEvent.zoomScale ?? 1;
+                        const offsetX = e.nativeEvent.contentOffset.x;
+                        const offsetY = e.nativeEvent.contentOffset.y;
+                        console.log('[Community] Crop scroll end — zoom:', zoom, 'offsetX:', offsetX, 'offsetY:', offsetY);
+                        setCropData({ scale: zoom, translateX: -offsetX, translateY: -offsetY });
+                      }}
+                    >
+                      <Image
+                        source={{ uri: cropPhoto.photo_url }}
+                        style={{ width: 380, height: 507, resizeMode: 'contain' }}
+                      />
+                    </ScrollView>
+                  </View>
+
+                  {/* Instructions */}
+                  <View style={{ paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' }}>
+                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>Pinch to zoom · Drag to reposition</Text>
+                  </View>
+                </View>
+              ) : null}
+            </Modal>
           </View>
         </Modal>
 
