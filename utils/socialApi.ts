@@ -433,6 +433,39 @@ export async function unsavePost(post_id: string): Promise<{ saved: boolean; sav
   return { saved: false, saves_count: (newCount as number) ?? 0 };
 }
 
+// ─── Comment Edit / Delete ────────────────────────────────────────────────────
+
+export async function updateComment(commentId: string, content: string): Promise<void> {
+  console.log('[SocialApi] updateComment — id:', commentId);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+  const { error } = await supabase
+    .from('community_comments')
+    .update({ content })
+    .eq('id', commentId)
+    .eq('user_id', session.user.id);
+  if (error) {
+    console.error('[SocialApi] updateComment error:', error.message);
+    throw error;
+  }
+}
+
+export async function deleteComment(commentId: string, postId: string): Promise<void> {
+  console.log('[SocialApi] deleteComment — id:', commentId, 'postId:', postId);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Not authenticated');
+  const { error } = await supabase
+    .from('community_comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', session.user.id);
+  if (error) {
+    console.error('[SocialApi] deleteComment error:', error.message);
+    throw error;
+  }
+  await supabase.rpc('decrement_comments', { post_id: postId });
+}
+
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 export async function searchUsers(q: string): Promise<SearchUser[]> {

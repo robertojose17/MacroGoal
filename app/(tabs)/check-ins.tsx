@@ -69,7 +69,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { createPost, savePost, unsavePost, addComment, fetchComments } from '@/utils/socialApi';
+import { createPost, savePost, unsavePost, addComment, fetchComments, updateComment, deleteComment } from '@/utils/socialApi';
 import type { SocialPost, Comment } from '@/utils/socialApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 
@@ -212,6 +212,16 @@ interface SavedRecipeRow {
   recipe_data: RecipeResult;
   created_at: string;
 }
+
+type CheckInPhoto = {
+  id: string;
+  user_id: string;
+  photo_url: string;
+  created_at: string;
+  weight?: number | null;
+  weight_unit?: string | null;
+  date?: string | null;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1383,6 +1393,8 @@ function CommentsModal({
   const flatListRef = useRef<FlatList<Comment>>(null);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [menuCommentId, setMenuCommentId] = useState<string | null>(null);
 
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -1444,9 +1456,59 @@ function CommentsModal({
     }
   };
 
+  const handleEditComment = (comment: Comment) => {
+    setMenuCommentId(null);
+    setEditingCommentId(comment.id);
+    setCommentText(comment.content);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingCommentId || !commentText.trim()) return;
+    if (submittingRef.current || sending) return;
+    submittingRef.current = true;
+    setSending(true);
+    const textToSave = commentText.trim();
+    try {
+      await updateComment(editingCommentId, textToSave);
+      setComments(prev => prev.map(c => c.id === editingCommentId ? { ...c, content: textToSave } : c));
+      setCommentText('');
+      setEditingCommentId(null);
+      inputRef.current?.blur();
+    } catch (e) {
+      console.warn('[Community] updateComment error:', e);
+      Alert.alert('Error', 'Could not update comment. Please try again.');
+    } finally {
+      setSending(false);
+      submittingRef.current = false;
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!post) return;
+    setMenuCommentId(null);
+    Alert.alert('Delete comment?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteComment(commentId, post.id);
+            setComments(prev => prev.filter(c => c.id !== commentId));
+            onCommentAdded(post.id);
+          } catch (e) {
+            console.warn('[Community] deleteComment error:', e);
+            Alert.alert('Error', 'Could not delete comment.');
+          }
+        },
+      },
+    ]);
+  };
+
   const renderComment = ({ item }: { item: Comment }) => {
     const commentUsername = item.author?.username || 'unknown';
     const commentTime = getRelativeTime(item.created_at);
+    const isOwn = item.user_id === currentUserId;
     return (
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 10, gap: 10 }}>
         <UserAvatar
@@ -1463,6 +1525,42 @@ function CommentsModal({
           </Text>
           <Text style={{ fontSize: 11, color: secondaryColor, marginTop: 3 }}>{commentTime}</Text>
         </View>
+        {isOwn ? (
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Community] Comment menu toggled for comment:', item.id);
+              setMenuCommentId(menuCommentId === item.id ? null : item.id);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MoreHorizontal size={16} color={secondaryColor} />
+          </TouchableOpacity>
+        ) : null}
+        {menuCommentId === item.id ? (
+          <View style={{
+            position: 'absolute', right: 16, top: 32,
+            backgroundColor: isDark ? '#2C2C2E' : '#fff',
+            borderRadius: 10, shadowColor: '#000', shadowOpacity: 0.15,
+            shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+            elevation: 8, zIndex: 100, minWidth: 130,
+          }}>
+            <TouchableOpacity
+              style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+              onPress={() => handleEditComment(item)}
+            >
+              <Pencil size={15} color={textColor} />
+              <Text style={{ fontSize: 14, color: textColor }}>Edit</Text>
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: isDark ? '#3A3A3C' : '#F3F4F6' }} />
+            <TouchableOpacity
+              style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+              onPress={() => handleDeleteComment(item.id)}
+            >
+              <Trash2 size={15} color="#EF4444" />
+              <Text style={{ fontSize: 14, color: '#EF4444' }}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -1493,24 +1591,41 @@ function CommentsModal({
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 40, flex: 1 }} />
         ) : (
-          <FlatList
-            ref={flatListRef}
-            style={{ flex: 1 }}
-            data={comments}
-            keyExtractor={(item) => item.id}
-            renderItem={renderComment}
-            ListEmptyComponent={
-              <View style={{ alignItems: 'center', paddingVertical: 48 }}>
-                <Text style={{ fontSize: 14, color: secondaryColor }}>No comments yet. Be the first!</Text>
-              </View>
-            }
-            contentContainerStyle={{ paddingBottom: 8 }}
-            keyboardShouldPersistTaps="handled"
-          />
+          <Pressable style={{ flex: 1 }} onPress={() => { if (menuCommentId) setMenuCommentId(null); }}>
+            <FlatList
+              ref={flatListRef}
+              style={{ flex: 1 }}
+              data={comments}
+              keyExtractor={(item) => item.id}
+              renderItem={renderComment}
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+                  <Text style={{ fontSize: 14, color: secondaryColor }}>No comments yet. Be the first!</Text>
+                </View>
+              }
+              contentContainerStyle={{ paddingBottom: 8 }}
+              keyboardShouldPersistTaps="handled"
+            />
+          </Pressable>
         )}
 
         {/* Input bar — sits above keyboard, respects home indicator */}
         <View style={{ paddingBottom: insets.bottom, borderTopWidth: 1, borderTopColor: borderColor, backgroundColor: cardBg }}>
+          {editingCommentId ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 6, gap: 6 }}>
+              <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', flex: 1 }}>Editing comment</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Community] Cancel edit pressed');
+                  setEditingCommentId(null);
+                  setCommentText('');
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={16} color={secondaryColor} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 10 }}>
             {currentUserAvatar ? (
               <Image source={{ uri: currentUserAvatar }} style={{ width: 32, height: 32, borderRadius: 16 }} resizeMode="cover" />
@@ -1522,18 +1637,23 @@ function CommentsModal({
             <TextInput
               ref={inputRef}
               style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
-              placeholder="Add a comment..."
+              placeholder={editingCommentId ? 'Edit comment...' : 'Add a comment...'}
               placeholderTextColor={secondaryColor}
               value={commentText}
               onChangeText={setCommentText}
               multiline
               returnKeyType="send"
-              onSubmitEditing={handleSend}
+              onSubmitEditing={editingCommentId ? handleSaveEdit : handleSend}
             />
             <TouchableOpacity
               onPress={() => {
-                console.log('[Community] Send comment button tapped');
-                handleSend();
+                if (editingCommentId) {
+                  console.log('[Community] Save edit button tapped');
+                  handleSaveEdit();
+                } else {
+                  console.log('[Community] Send comment button tapped');
+                  handleSend();
+                }
               }}
               disabled={!commentText.trim() || sending}
               style={{ opacity: commentText.trim() && !sending ? 1 : 0.4 }}
@@ -1590,6 +1710,11 @@ function ComposerSheet({
   const [progressStats, setProgressStats] = useState<ProgressStat[]>([]);
   const [progressText, setProgressText] = useState('');
   const [progressLoading, setProgressLoading] = useState(false);
+  // Photo progress fields
+  const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
+  const [checkInPhotos, setCheckInPhotos] = useState<CheckInPhoto[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState<CheckInPhoto[]>([]);
 
   const [posting, setPosting] = useState(false);
 
@@ -1779,6 +1904,56 @@ function ComposerSheet({
     }
   };
 
+  const loadCheckInPhotos = async () => {
+    console.log('[Community] Loading check-in photos for user:', currentUserId);
+    setPhotosLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('check_in_photos')
+        .select('id, user_id, photo_url, created_at, check_in:check_ins!check_in_id(date, weight, weight_unit)')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (!error && data && data.length > 0) {
+        console.log('[Community] check_in_photos loaded via join:', data.length);
+        const mapped = (data ?? []).map((row: any) => ({
+          id: row.id,
+          user_id: row.user_id,
+          photo_url: row.photo_url,
+          created_at: row.created_at,
+          date: row.check_in?.date ?? null,
+          weight: row.check_in?.weight ?? null,
+          weight_unit: row.check_in?.weight_unit ?? null,
+        }));
+        setCheckInPhotos(mapped);
+      } else {
+        console.log('[Community] check_in_photos join returned 0 or error, falling back to check_ins. error:', error?.message ?? 'none');
+        const { data: ciData } = await supabase
+          .from('check_ins')
+          .select('id, user_id, photo_url, created_at, date, weight, weight_unit')
+          .eq('user_id', currentUserId)
+          .not('photo_url', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(30);
+        console.log('[Community] check_ins with photos loaded:', ciData?.length ?? 0);
+        const mapped2 = (ciData ?? []).map((row: any) => ({
+          id: row.id,
+          user_id: row.user_id,
+          photo_url: row.photo_url,
+          created_at: row.created_at,
+          date: row.date ?? null,
+          weight: row.weight ?? null,
+          weight_unit: row.weight_unit ?? null,
+        }));
+        setCheckInPhotos(mapped2);
+      }
+    } catch (e) {
+      console.warn('[Community] loadCheckInPhotos error:', e);
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
   const handlePickImage = async () => {
     console.log('[Community] Image picker opened');
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -1799,7 +1974,7 @@ function ComposerSheet({
   const canPost = () => {
     if (composerType === 'post') return postText.trim().length > 0;
     if (composerType === 'meal') return selectedRecipe !== null;
-    if (composerType === 'progress') return progressStats.some(s => s.selected);
+    if (composerType === 'progress') return progressStats.some(s => s.selected) || selectedPhotos.length > 0;
     return false;
   };
 
@@ -1846,11 +2021,20 @@ function ComposerSheet({
             statsObj['steps_goal'] = s.meta.steps_goal;
           }
         });
+        // Include photo progress if selected
+        if (selectedPhotos.length > 0) {
+          statsObj['photo_progress'] = selectedPhotos.map(p => ({
+            photo_url: p.photo_url,
+            date: p.date ?? p.created_at.split('T')[0],
+            weight: p.weight ?? null,
+            weight_unit: p.weight_unit ?? null,
+          }));
+        }
         const statLabels = selectedStats.map(s => `${s.emoji} ${s.value} ${s.label}`).join(', ');
         postData = {
           post_type: 'stats',
           post_type_v2: 'progress',
-          content: progressText.trim() || statLabels,
+          content: progressText.trim() || statLabels || (selectedPhotos.length > 0 ? '📸 Photo progress' : ''),
           progress_stats: statsObj,
           is_public: true,
         };
@@ -1899,6 +2083,7 @@ function ComposerSheet({
       setMealCaption('');
       setProgressText('');
       setProgressStats(prev => prev.map(s => ({ ...s, selected: false })));
+      setSelectedPhotos([]);
 
       onPosted(optimisticPost);
       onClose();
@@ -1969,6 +2154,100 @@ function ComposerSheet({
             );
           })}
         </View>
+
+        {/* Photo Picker Modal */}
+        <Modal
+          visible={photoPickerVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setPhotoPickerVisible(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: bgColor }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
+              <TouchableOpacity onPress={() => {
+                console.log('[Community] Photo picker closed');
+                setPhotoPickerVisible(false);
+              }}>
+                <X size={22} color={secondaryColor} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Select Photos</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Community] Photo picker done pressed, selected:', selectedPhotos.length);
+                  setPhotoPickerVisible(false);
+                }}
+                style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.primary }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: secondaryColor, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
+              Select 1 or 2 photos. 2 photos will show as before &amp; after.
+            </Text>
+            {photosLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+            ) : checkInPhotos.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 60, gap: 12 }}>
+                <Text style={{ fontSize: 22 }}>📸</Text>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: textColor }}>No progress photos yet</Text>
+                <Text style={{ fontSize: 13, color: secondaryColor, textAlign: 'center', paddingHorizontal: 32 }}>
+                  Add photos to your check-ins to share your progress here.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={checkInPhotos}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                contentContainerStyle={{ padding: 12, gap: 8 }}
+                columnWrapperStyle={{ gap: 8 }}
+                renderItem={({ item }) => {
+                  const isSelected = selectedPhotos.some(p => p.id === item.id);
+                  const selIdx = selectedPhotos.findIndex(p => p.id === item.id);
+                  const canSelect = isSelected || selectedPhotos.length < 2;
+                  const itemDateDisplay = item.date
+                    ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  return (
+                    <TouchableOpacity
+                      style={{ flex: 1, opacity: canSelect ? 1 : 0.4 }}
+                      onPress={() => {
+                        if (!canSelect) return;
+                        if (isSelected) {
+                          console.log('[Community] Photo deselected:', item.id);
+                          setSelectedPhotos(prev => prev.filter(p => p.id !== item.id));
+                        } else {
+                          console.log('[Community] Photo selected:', item.id);
+                          setSelectedPhotos(prev => [...prev, item]);
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ position: 'relative' }}>
+                        <Image
+                          source={{ uri: item.photo_url }}
+                          style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 10, borderWidth: isSelected ? 3 : 0, borderColor: colors.primary }}
+                          resizeMode="cover"
+                        />
+                        {isSelected ? (
+                          <View style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{selIdx + 1}</Text>
+                          </View>
+                        ) : null}
+                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, padding: 6 }}>
+                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{itemDateDisplay}</Text>
+                          {item.weight != null ? (
+                            <Text style={{ color: '#fff', fontSize: 11 }}>{item.weight} {item.weight_unit ?? 'lbs'}</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </Modal>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
           {/* Author row */}
@@ -2180,6 +2459,74 @@ function ComposerSheet({
                   );
                 })
               )}
+              {/* Photo Progress option */}
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Community] Photo Progress picker opened');
+                  loadCheckInPhotos();
+                  setPhotoPickerVisible(true);
+                }}
+                style={[
+                  styles.progressStatRow,
+                  {
+                    borderColor: selectedPhotos.length > 0 ? colors.primary : borderColor,
+                    backgroundColor: selectedPhotos.length > 0 ? colors.primary + '12' : cardBg,
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 22 }}>📸</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>Photo Progress</Text>
+                  <Text style={{ fontSize: 13, color: selectedPhotos.length > 0 ? colors.primary : secondaryColor, fontWeight: selectedPhotos.length > 0 ? '700' : '400' }}>
+                    {selectedPhotos.length === 0
+                      ? 'Share before & after photos'
+                      : selectedPhotos.length === 1
+                      ? '1 photo selected'
+                      : `${selectedPhotos.length} photos selected (before & after)`}
+                  </Text>
+                </View>
+                {selectedPhotos.length > 0 ? (
+                  <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                    <Check size={13} color="#fff" />
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+
+              {/* Selected photos preview */}
+              {selectedPhotos.length > 0 ? (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  {selectedPhotos.map((photo) => {
+                    const photoDateDisplay = photo.date
+                      ? new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : new Date(photo.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    return (
+                      <View key={photo.id} style={{ flex: 1, position: 'relative' }}>
+                        <Image
+                          source={{ uri: photo.photo_url }}
+                          style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 10 }}
+                          resizeMode="cover"
+                        />
+                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, padding: 6 }}>
+                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{photoDateDisplay}</Text>
+                          {photo.weight != null ? (
+                            <Text style={{ color: '#fff', fontSize: 11 }}>{photo.weight} {photo.weight_unit ?? 'lbs'}</Text>
+                          ) : null}
+                        </View>
+                        <TouchableOpacity
+                          style={{ position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
+                          onPress={() => {
+                            console.log('[Community] Selected photo removed:', photo.id);
+                            setSelectedPhotos(prev => prev.filter(p => p.id !== photo.id));
+                          }}
+                        >
+                          <X size={14} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+
               {/* Live preview of selected stats */}
               {progressStats.some(s => s.selected) ? (() => {
                 const TEAL = '#2A9D8F';

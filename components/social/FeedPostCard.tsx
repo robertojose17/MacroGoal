@@ -534,7 +534,57 @@ export default function FeedPostCard({
         } : null,
       ].filter(Boolean) as ProgressCardDef[];
 
-      if (progressCards.length === 0) return null;
+      // Photo progress — render before stat cards
+      const photoProgress = stats?.photo_progress as { photo_url: string; date: string; weight: number | null; weight_unit: string | null }[] | null | undefined;
+      const photoProgressNode = photoProgress && photoProgress.length > 0 ? (
+        <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+          {photoProgress.length === 1 ? (
+            <View style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+              <Image
+                source={{ uri: photoProgress[0].photo_url }}
+                style={{ width: '100%', aspectRatio: 3 / 4 }}
+                resizeMode="contain"
+              />
+              <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 10 }}>
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                  {new Date(photoProgress[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+                {photoProgress[0].weight != null ? (
+                  <Text style={{ color: '#fff', fontSize: 12 }}>{photoProgress[0].weight} {photoProgress[0].weight_unit ?? 'lbs'}</Text>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {photoProgress.map((photo, idx) => {
+                const photoLabel = idx === 0 ? 'Before' : 'After';
+                const photoDateStr = new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                return (
+                  <View key={idx} style={{ flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+                    <Image
+                      source={{ uri: photo.photo_url }}
+                      style={{ width: '100%', aspectRatio: 3 / 4 }}
+                      resizeMode="cover"
+                    />
+                    <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{photoLabel}</Text>
+                    </View>
+                    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 8 }}>
+                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{photoDateStr}</Text>
+                      {photo.weight != null ? (
+                        <Text style={{ color: '#fff', fontSize: 11 }}>{photo.weight} {photo.weight_unit ?? 'lbs'}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      ) : null;
+
+      if (progressCards.length === 0 && !photoProgressNode) return null;
+      if (progressCards.length === 0) return photoProgressNode;
 
       const count = progressCards.length;
 
@@ -571,55 +621,70 @@ export default function FeedPostCard({
 
       if (count === 1) {
         return (
-          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12 }}>
-            {renderProgressCard(progressCards[0], 36, 14)}
+          <View>
+            {photoProgressNode}
+            <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12 }}>
+              {renderProgressCard(progressCards[0], 36, 14)}
+            </View>
           </View>
         );
       }
       if (count === 2) {
         return (
-          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}>{renderProgressCard(progressCards[0], 28, 12)}</View>
-            <View style={{ flex: 1 }}>{renderProgressCard(progressCards[1], 28, 12)}</View>
+          <View>
+            {photoProgressNode}
+            <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>{renderProgressCard(progressCards[0], 28, 12)}</View>
+              <View style={{ flex: 1 }}>{renderProgressCard(progressCards[1], 28, 12)}</View>
+            </View>
           </View>
         );
       }
       if (count === 3) {
         return (
-          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
-            {renderProgressCard(progressCards[0], 28, 12)}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ flex: 1 }}>{renderProgressCard(progressCards[1], 24, 11)}</View>
-              <View style={{ flex: 1 }}>{renderProgressCard(progressCards[2], 24, 11)}</View>
+          <View>
+            {photoProgressNode}
+            <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+              {renderProgressCard(progressCards[0], 28, 12)}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>{renderProgressCard(progressCards[1], 24, 11)}</View>
+                <View style={{ flex: 1 }}>{renderProgressCard(progressCards[2], 24, 11)}</View>
+              </View>
             </View>
           </View>
         );
       }
       if (count === 4) {
         return (
-          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[0], 24, 11)}</View>
-              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[1], 24, 11)}</View>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[2], 24, 11)}</View>
-              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[3], 24, 11)}</View>
+          <View>
+            {photoProgressNode}
+            <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ width: '48%' }}>{renderProgressCard(progressCards[0], 24, 11)}</View>
+                <View style={{ width: '48%' }}>{renderProgressCard(progressCards[1], 24, 11)}</View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ width: '48%' }}>{renderProgressCard(progressCards[2], 24, 11)}</View>
+                <View style={{ width: '48%' }}>{renderProgressCard(progressCards[3], 24, 11)}</View>
+              </View>
             </View>
           </View>
         );
       }
       // 5 cards: first full, then 2x2
       return (
-        <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
-          {renderProgressCard(progressCards[0], 28, 12)}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[1], 22, 11)}</View>
-            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[2], 22, 11)}</View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[3], 22, 11)}</View>
-            <View style={{ width: '48%' }}>{renderProgressCard(progressCards[4], 22, 11)}</View>
+        <View>
+          {photoProgressNode}
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: outerBg, borderRadius: 12, borderWidth: 1, borderColor: outerBorder, padding: 12, gap: 8 }}>
+            {renderProgressCard(progressCards[0], 28, 12)}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[1], 22, 11)}</View>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[2], 22, 11)}</View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[3], 22, 11)}</View>
+              <View style={{ width: '48%' }}>{renderProgressCard(progressCards[4], 22, 11)}</View>
+            </View>
           </View>
         </View>
       );
