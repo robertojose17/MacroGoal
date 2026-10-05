@@ -1281,6 +1281,9 @@ function PostCard({
       {/* ── Media zone ── */}
       {renderMedia()}
 
+      {/* ── Caption area ── */}
+      {renderCaption()}
+
       {/* ── Action row ── */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
         <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleLike}>
@@ -1299,9 +1302,6 @@ function PostCard({
           <Bookmark size={22} color={post.saved_by_me ? colors.primary : textColor} fill={post.saved_by_me ? colors.primary : 'transparent'} />
         </TouchableOpacity>
       </View>
-
-      {/* ── Caption area ── */}
-      {renderCaption()}
 
       {/* ── Comment preview ── */}
       {post.comments_count > 0 ? (
