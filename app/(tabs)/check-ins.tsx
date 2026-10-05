@@ -3847,8 +3847,13 @@ export default function CommunityScreen() {
   };
 
   // ── Like toggle ──
+  const likePendingRef = useRef<Set<string>>(new Set());
+
   const handleLike = useCallback(async (postId: string, liked: boolean) => {
-    console.log('[Community] handleLike pressed — postId:', postId, 'currentlyLiked:', liked);
+    // Prevent concurrent calls for the same post
+    if (likePendingRef.current.has(postId)) return;
+    likePendingRef.current.add(postId);
+
     // Optimistic update
     const updatePosts = (posts: CommunityPost[]) =>
       posts.map((p) =>
@@ -3860,10 +3865,8 @@ export default function CommunityScreen() {
     else setClubPosts((prev) => updatePosts(prev));
 
     try {
-      console.log('[Community] Network request: toggleLike — postId:', postId);
-      const result = await toggleLike(postId);
-      console.log('[Community] toggleLike response:', result);
-      // Update with the authoritative count from the server
+      const result = await toggleLike(postId, liked);
+      // Sync with authoritative server count
       const syncPosts = (posts: CommunityPost[]) =>
         posts.map((p) =>
           p.id === postId
@@ -3874,7 +3877,6 @@ export default function CommunityScreen() {
       else setClubPosts((prev) => syncPosts(prev));
     } catch (e) {
       console.warn('[Community] Like toggle failed, reverting:', e);
-      // Revert optimistic update
       const revert = (posts: CommunityPost[]) =>
         posts.map((p) =>
           p.id === postId
@@ -3883,6 +3885,8 @@ export default function CommunityScreen() {
         );
       if (activeTab === 'feed') setFeedPosts((prev) => revert(prev));
       else setClubPosts((prev) => revert(prev));
+    } finally {
+      likePendingRef.current.delete(postId);
     }
   }, [activeTab]);
 

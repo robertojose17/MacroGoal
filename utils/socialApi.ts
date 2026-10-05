@@ -317,30 +317,24 @@ export async function deletePost(postId: string): Promise<void> {
 // ─── Likes — direct Supabase + SECURITY DEFINER RPCs ─────────────────────────
 
 export async function toggleLike(
-  post_id: string
+  post_id: string,
+  currentlyLiked: boolean
 ): Promise<{ liked: boolean; likes_count: number }> {
-  console.log('[SocialApi] toggleLike — post_id:', post_id);
+  console.log('[SocialApi] toggleLike — post_id:', post_id, 'currentlyLiked:', currentlyLiked);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) throw new Error('Not authenticated');
   const userId = session.user.id;
 
-  const { data: existing } = await supabase
-    .from('community_likes')
-    .select('id')
-    .eq('post_id', post_id)
-    .eq('user_id', userId)
-    .maybeSingle();
-
   let liked: boolean;
   let likes_count: number;
 
-  if (existing) {
+  if (currentlyLiked) {
     await supabase.from('community_likes').delete().eq('post_id', post_id).eq('user_id', userId);
     const { data: newCount } = await supabase.rpc('decrement_likes', { post_id });
     liked = false;
     likes_count = (newCount as number) ?? 0;
   } else {
-    await supabase.from('community_likes').upsert({ post_id, user_id: userId });
+    await supabase.from('community_likes').upsert({ post_id, user_id: userId }, { onConflict: 'post_id,user_id' });
     const { data: newCount } = await supabase.rpc('increment_likes', { post_id });
     liked = true;
     likes_count = (newCount as number) ?? 1;
