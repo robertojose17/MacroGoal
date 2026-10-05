@@ -790,8 +790,11 @@ export default function FeedPostCard({
       {/* Media */}
       {mediaNode}
 
+      {/* Caption */}
+      {renderCaption()}
+
       {/* Action row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: mediaNode == null ? 4 : 12, paddingBottom: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
         <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleLike}>
           <Heart size={22} color={post.liked_by_me ? '#EF4444' : textColor} fill={post.liked_by_me ? '#EF4444' : 'transparent'} />
           {likesCountDisplay ? <Text style={{ fontSize: 14, fontWeight: '600', color: post.liked_by_me ? '#EF4444' : textColor }}>{likesCountDisplay}</Text> : null}
@@ -804,9 +807,6 @@ export default function FeedPostCard({
           <Bookmark size={22} color={post.saved_by_me ? colors.primary : textColor} fill={post.saved_by_me ? colors.primary : 'transparent'} />
         </TouchableOpacity>
       </View>
-
-      {/* Caption */}
-      {renderCaption()}
 
       {/* Comment preview */}
       {post.comments_count > 0 ? (

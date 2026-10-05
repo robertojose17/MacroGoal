@@ -376,7 +376,7 @@ export default function ProfileScreen() {
       // Load posts feed
       const { data: postsData, error: postsError } = await supabase
         .from('social_posts')
-        .select('id, user_id, content, image_url, created_at, likes_count, comments_count, is_public, post_type, post_type_v2, meal_photo_url, meal_calories, meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id, meal_recipe_data, question_title, progress_stats, is_pinned, is_founder_post, saves_count')
+        .select('id, user_id, content, image_url, created_at, likes_count, comments_count, is_public, post_type, post_type_v2, meal_photo_url, meal_calories, meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id, meal_recipe_data, question_title, progress_stats, is_pinned, is_founder_post, saves_count, auto_post_type, streak_days, weekly_recap_score, weekly_recap_days_tracked, weekly_recap_week_start, weekly_recap_day_flags, weight_goal_pct, edu_headline, edu_body, edu_example, edu_week, author:users!user_id(id, username, full_name, avatar_url)')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
         .limit(50);
