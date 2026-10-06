@@ -325,19 +325,16 @@ export async function toggleLike(
   if (!session?.user) throw new Error('Not authenticated');
   const userId = session.user.id;
 
-  let liked: boolean;
-  let likes_count = 0;
+  const { data, error } = await supabase.rpc('toggle_post_like', {
+    p_post_id: post_id,
+    p_user_id: userId,
+  });
 
-  if (currentlyLiked) {
-    await supabase.from('community_likes').delete().eq('post_id', post_id).eq('user_id', userId);
-    liked = false;
-  } else {
-    await supabase.from('community_likes').upsert({ post_id, user_id: userId }, { onConflict: 'post_id,user_id' });
-    liked = true;
-  }
-  // Read the real count from social_posts (kept in sync by DB trigger)
-  const { data: postData } = await supabase.from('social_posts').select('likes_count').eq('id', post_id).single();
-  likes_count = (postData?.likes_count as number) ?? 0;
+  if (error) throw error;
+
+  const result = Array.isArray(data) ? data[0] : data;
+  const liked = result?.liked ?? !currentlyLiked;
+  const likes_count = Number(result?.likes_count ?? 0);
 
   console.log('[SocialApi] toggleLike — liked:', liked, 'count:', likes_count);
   return { liked, likes_count };
