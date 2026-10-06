@@ -326,19 +326,18 @@ export async function toggleLike(
   const userId = session.user.id;
 
   let liked: boolean;
-  let likes_count: number;
+  let likes_count = 0;
 
   if (currentlyLiked) {
     await supabase.from('community_likes').delete().eq('post_id', post_id).eq('user_id', userId);
-    const { data: newCount } = await supabase.rpc('decrement_likes', { post_id });
     liked = false;
-    likes_count = (newCount as number) ?? 0;
   } else {
     await supabase.from('community_likes').upsert({ post_id, user_id: userId }, { onConflict: 'post_id,user_id' });
-    const { data: newCount } = await supabase.rpc('increment_likes', { post_id });
     liked = true;
-    likes_count = (newCount as number) ?? 1;
   }
+  // Read the real count from social_posts (kept in sync by DB trigger)
+  const { data: postData } = await supabase.from('social_posts').select('likes_count').eq('id', post_id).single();
+  likes_count = (postData?.likes_count as number) ?? 0;
 
   console.log('[SocialApi] toggleLike — liked:', liked, 'count:', likes_count);
   return { liked, likes_count };
