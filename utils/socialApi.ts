@@ -329,6 +329,7 @@ export async function toggleLike(
     p_post_id: post_id,
     p_user_id: userId,
   });
+  console.log('[SocialApi] toggleLike raw RPC response — data:', JSON.stringify(data), 'error:', error?.message);
 
   if (error) throw error;
 

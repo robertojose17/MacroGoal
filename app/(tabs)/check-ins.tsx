@@ -3457,6 +3457,10 @@ export default function CommunityScreen() {
   const fetchFeedPosts = useCallback(async (overrideUserId?: string) => {
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
+    if (anyLikePendingRef.current) {
+      console.log('[Community] Skipping fetchFeedPosts — like in progress');
+      return;
+    }
     console.log('[Community] Fetching feed posts from social_posts for user:', uid);
     try {
       const postsRes = await supabase
@@ -3513,6 +3517,10 @@ export default function CommunityScreen() {
   const fetchClubPosts = useCallback(async (overrideUserId?: string) => {
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
+    if (anyLikePendingRef.current) {
+      console.log('[Community] Skipping fetchClubPosts — like in progress');
+      return;
+    }
     console.log('[Community] Fetching club posts for user:', uid);
     try {
       const [postsRes, likesRes, commentsRes, savesRes] = await Promise.all([
@@ -3848,11 +3856,14 @@ export default function CommunityScreen() {
 
   // ── Like toggle ──
   const likePendingRef = useRef<Set<string>>(new Set());
+  const anyLikePendingRef = useRef(false);
 
   const handleLike = useCallback(async (postId: string, liked: boolean) => {
     // Prevent concurrent calls for the same post
     if (likePendingRef.current.has(postId)) return;
     likePendingRef.current.add(postId);
+    anyLikePendingRef.current = true;
+    console.log('[Community] Like button pressed — postId:', postId, 'currentlyLiked:', liked);
 
     // Optimistic update
     const updatePosts = (posts: CommunityPost[]) =>
@@ -3887,6 +3898,7 @@ export default function CommunityScreen() {
       else setClubPosts((prev) => revert(prev));
     } finally {
       likePendingRef.current.delete(postId);
+      if (likePendingRef.current.size === 0) anyLikePendingRef.current = false;
     }
   }, [activeTab]);
 
