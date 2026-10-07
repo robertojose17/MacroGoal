@@ -9,8 +9,7 @@ import {
   ImageSourcePropType,
   ActivityIndicator,
   Dimensions,
-  Animated,
-  PanResponder,
+  ScrollView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -76,85 +75,38 @@ interface InteractivePhotoProps {
 }
 
 function InteractivePhoto({ uri, initialScale = 1, initialTranslateX = 0, initialTranslateY = 0, onTransformChange, style }: InteractivePhotoProps) {
-  const scaleAnim = useRef(new Animated.Value(initialScale)).current;
-  const translateXAnim = useRef(new Animated.Value(initialTranslateX)).current;
-  const translateYAnim = useRef(new Animated.Value(initialTranslateY)).current;
-
-  const scaleVal = useRef(initialScale);
-  const translateXVal = useRef(initialTranslateX);
-  const translateYVal = useRef(initialTranslateY);
-  const lastDistance = useRef<number | null>(null);
-  const lastScale = useRef(initialScale);
-  const gestureStartX = useRef(initialTranslateX);
-  const gestureStartY = useRef(initialTranslateY);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (_evt, gestureState) => {
-        console.log('[InteractivePhoto] Pan gesture started');
-        lastDistance.current = null;
-        lastScale.current = scaleVal.current;
-        gestureStartX.current = translateXVal.current;
-        gestureStartY.current = translateYVal.current;
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          const dx = touches[0].pageX - touches[1].pageX;
-          const dy = touches[0].pageY - touches[1].pageY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (lastDistance.current !== null) {
-            const delta = dist / lastDistance.current;
-            const newScale = Math.min(4, Math.max(0.5, lastScale.current * delta));
-            scaleVal.current = newScale;
-            scaleAnim.setValue(newScale);
-          }
-          lastDistance.current = dist;
-          lastScale.current = scaleVal.current;
-        } else if (touches.length === 1) {
-          lastDistance.current = null;
-          const newX = gestureStartX.current + gestureState.dx / scaleVal.current;
-          const newY = gestureStartY.current + gestureState.dy / scaleVal.current;
-          translateXAnim.setValue(newX);
-          translateYAnim.setValue(newY);
-        }
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (evt.nativeEvent.touches.length === 0) {
-          translateXVal.current = gestureStartX.current + gestureState.dx / scaleVal.current;
-          translateYVal.current = gestureStartY.current + gestureState.dy / scaleVal.current;
-          console.log('[InteractivePhoto] Transform released:', scaleVal.current, translateXVal.current, translateYVal.current);
-          onTransformChange?.(scaleVal.current, translateXVal.current, translateYVal.current);
-        }
-        lastDistance.current = null;
-      },
-      onPanResponderTerminate: () => {
-        lastDistance.current = null;
-      },
-    })
-  ).current;
+  const scaleRef = useRef(initialScale);
+  const offsetXRef = useRef(0);
+  const offsetYRef = useRef(0);
 
   return (
-    <Animated.View
+    <ScrollView
       style={[{ flex: 1, overflow: 'hidden' }, style]}
-      {...panResponder.panHandlers}
+      contentContainerStyle={{ flex: 1 }}
+      maximumZoomScale={4}
+      minimumZoomScale={1}
+      bouncesZoom={true}
+      showsHorizontalScrollIndicator={false}
+      showsVerticalScrollIndicator={false}
+      centerContent={true}
+      onScrollEndDrag={(e) => {
+        scaleRef.current = e.nativeEvent.zoomScale ?? 1;
+        offsetXRef.current = e.nativeEvent.contentOffset.x;
+        offsetYRef.current = e.nativeEvent.contentOffset.y;
+        onTransformChange?.(scaleRef.current, -offsetXRef.current, -offsetYRef.current);
+      }}
+      onMomentumScrollEnd={(e) => {
+        scaleRef.current = e.nativeEvent.zoomScale ?? 1;
+        offsetXRef.current = e.nativeEvent.contentOffset.x;
+        offsetYRef.current = e.nativeEvent.contentOffset.y;
+        onTransformChange?.(scaleRef.current, -offsetXRef.current, -offsetYRef.current);
+      }}
     >
-      <Animated.Image
+      <Image
         source={{ uri }}
-        style={{
-          width: '100%',
-          height: '100%',
-          resizeMode: 'cover',
-          transform: [
-            { scale: scaleAnim },
-            { translateX: translateXAnim },
-            { translateY: translateYAnim },
-          ],
-        }}
+        style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
       />
-    </Animated.View>
+    </ScrollView>
   );
 }
 

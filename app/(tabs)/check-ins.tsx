@@ -28,8 +28,6 @@ import {
   Image,
   Switch,
   ImageSourcePropType,
-  Animated,
-  PanResponder,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -1829,89 +1827,19 @@ function ComposerSheet({
   const [photosLoading, setPhotosLoading] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<CheckInPhoto[]>([]);
   const [cropPhoto, setCropPhoto] = useState<CheckInPhoto | null>(null);
-  const [cropData, setCropData] = useState<{ scale: number; translateX: number; translateY: number }>({ scale: 1, translateX: 0, translateY: 0 });
-  const cropDataRef = useRef<{ scale: number; translateX: number; translateY: number }>({ scale: 1, translateX: 0, translateY: 0 });
 
-  const cropScale = useRef(new Animated.Value(1)).current;
-  const cropTranslateX = useRef(new Animated.Value(0)).current;
-  const cropTranslateY = useRef(new Animated.Value(0)).current;
-  const cropScaleValue = useRef(1);
-  const cropTranslateXValue = useRef(0);
-  const cropTranslateYValue = useRef(0);
-  const lastDistance = useRef<number | null>(null);
-  const lastScale = useRef(1);
-  const gestureStartX = useRef(0);
-  const gestureStartY = useRef(0);
+  const cropScrollViewRef = useRef<ScrollView>(null);
+  const cropCurrentScale = useRef(1);
+  const cropCurrentOffsetX = useRef(0);
+  const cropCurrentOffsetY = useRef(0);
 
   useEffect(() => {
     if (cropPhoto) {
-      const reset = { scale: 1, translateX: 0, translateY: 0 };
-      cropDataRef.current = reset;
-      setCropData(reset);
-      cropScale.setValue(1);
-      cropTranslateX.setValue(0);
-      cropTranslateY.setValue(0);
-      cropScaleValue.current = 1;
-      cropTranslateXValue.current = 0;
-      cropTranslateYValue.current = 0;
-      lastDistance.current = null;
-      lastScale.current = 1;
+      cropCurrentScale.current = 1;
+      cropCurrentOffsetX.current = 0;
+      cropCurrentOffsetY.current = 0;
     }
   }, [cropPhoto]);
-
-  const cropPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        console.log('[CropEditor] Pan/pinch gesture started');
-        lastDistance.current = null;
-        gestureStartX.current = cropTranslateXValue.current;
-        gestureStartY.current = cropTranslateYValue.current;
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          const dx = touches[0].pageX - touches[1].pageX;
-          const dy = touches[0].pageY - touches[1].pageY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          if (lastDistance.current !== null) {
-            const delta = distance / lastDistance.current;
-            const newScale = Math.min(4, Math.max(0.5, cropScaleValue.current * delta));
-            cropScaleValue.current = newScale;
-            cropScale.setValue(newScale);
-            lastScale.current = newScale;
-          }
-          lastDistance.current = distance;
-        } else if (touches.length === 1) {
-          lastDistance.current = null;
-          const newX = gestureStartX.current + gestureState.dx;
-          const newY = gestureStartY.current + gestureState.dy;
-          cropTranslateX.setValue(newX);
-          cropTranslateY.setValue(newY);
-        }
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (evt.nativeEvent.touches.length < 2) {
-          cropTranslateXValue.current = gestureStartX.current + gestureState.dx;
-          cropTranslateYValue.current = gestureStartY.current + gestureState.dy;
-        }
-        lastDistance.current = null;
-        const finalCrop = {
-          scale: cropScaleValue.current,
-          translateX: cropTranslateXValue.current,
-          translateY: cropTranslateYValue.current,
-        };
-        console.log('[CropEditor] Gesture released — finalCrop:', finalCrop);
-        cropDataRef.current = finalCrop;
-        setCropData(finalCrop);
-      },
-      onPanResponderTerminate: () => {
-        console.log('[CropEditor] Gesture terminated');
-        lastDistance.current = null;
-      },
-    })
-  ).current;
 
   const [posting, setPosting] = useState(false);
 
@@ -2510,119 +2438,96 @@ function ComposerSheet({
                     <TouchableOpacity
                       onPress={async () => {
                         console.log('[CropEditor] Use Photo pressed for photo:', cropPhoto.id);
-                        const cd = cropDataRef.current;
-                        const sourceUri = cropPhoto.photo_url;
+                        const scale = cropCurrentScale.current;
+                        const offsetX = cropCurrentOffsetX.current;
+                        const offsetY = cropCurrentOffsetY.current;
 
-                        // Display dimensions of the image container in the editor
                         const DISPLAY_W = 380;
                         const DISPLAY_H = 507;
 
                         try {
-                          // Get actual pixel dimensions of the source image
                           const { width: imgW, height: imgH } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-                            Image.getSize(sourceUri, (w, h) => resolve({ width: w, height: h }), reject);
+                            Image.getSize(cropPhoto.photo_url, (w, h) => resolve({ width: w, height: h }), reject);
                           });
 
-                          console.log('[CropEditor] Source image dimensions:', { imgW, imgH });
-
-                          // The image is rendered with resizeMode "contain" inside 380x507
-                          // Calculate the actual rendered size and offset within the container
+                          // Rendered size inside contain
                           const imgAspect = imgW / imgH;
                           const containerAspect = DISPLAY_W / DISPLAY_H;
-                          let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
+                          let renderedW: number, renderedH: number;
                           if (imgAspect > containerAspect) {
                             renderedW = DISPLAY_W;
                             renderedH = DISPLAY_W / imgAspect;
-                            offsetX = 0;
-                            offsetY = (DISPLAY_H - renderedH) / 2;
                           } else {
                             renderedH = DISPLAY_H;
                             renderedW = DISPLAY_H * imgAspect;
-                            offsetX = (DISPLAY_W - renderedW) / 2;
-                            offsetY = 0;
                           }
 
-                          // Scale factor from display pixels to image pixels
+                          // Visible region in display coords
+                          const visibleW = renderedW / scale;
+                          const visibleH = renderedH / scale;
+                          const cropX = offsetX;
+                          const cropY = offsetY;
+
+                          // Convert to image pixel coords
                           const scaleX = imgW / renderedW;
                           const scaleY = imgH / renderedH;
+                          const pixelX = Math.round(Math.max(0, cropX * scaleX));
+                          const pixelY = Math.round(Math.max(0, cropY * scaleY));
+                          const pixelW = Math.round(Math.min(imgW - pixelX, visibleW * scaleX));
+                          const pixelH = Math.round(Math.min(imgH - pixelY, visibleH * scaleY));
 
-                          // The user panned by (translateX, translateY) in display coords and zoomed by cd.scale
-                          // translateX/translateY are negative offsets (pan left = negative translateX)
-                          // The visible region in display coords:
-                          const visibleW = renderedW / cd.scale;
-                          const visibleH = renderedH / cd.scale;
-                          // Pan offset: translateX is how much the image moved right (negative = moved left = we see more of the right side)
-                          const panX = -cd.translateX / cd.scale;
-                          const panY = -cd.translateY / cd.scale;
-                          // Clamp to image bounds
-                          const cropX = Math.max(0, panX + offsetX / cd.scale);
-                          const cropY = Math.max(0, panY + offsetY / cd.scale);
-                          const cropW = Math.min(visibleW, renderedW - panX);
-                          const cropH = Math.min(visibleH, renderedH - panY);
+                          console.log('[CropEditor] Cropping:', { scale, offsetX, offsetY, pixelX, pixelY, pixelW, pixelH });
 
-                          // Convert to image pixel coordinates
-                          const pixelCropX = Math.round(cropX * scaleX);
-                          const pixelCropY = Math.round(cropY * scaleY);
-                          const pixelCropW = Math.round(Math.max(1, cropW * scaleX));
-                          const pixelCropH = Math.round(Math.max(1, cropH * scaleY));
-
-                          // Clamp to image bounds
-                          const safeCropX = Math.min(pixelCropX, imgW - 1);
-                          const safeCropY = Math.min(pixelCropY, imgH - 1);
-                          const safeCropW = Math.min(pixelCropW, imgW - safeCropX);
-                          const safeCropH = Math.min(pixelCropH, imgH - safeCropY);
-
-                          console.log('[CropEditor] Cropping image:', { imgW, imgH, renderedW, renderedH, cd, pixelCropX: safeCropX, pixelCropY: safeCropY, pixelCropW: safeCropW, pixelCropH: safeCropH });
-
-                          const result = await ImageManipulator.manipulateAsync(
-                            sourceUri,
-                            [{ crop: { originX: safeCropX, originY: safeCropY, width: safeCropW, height: safeCropH } }],
-                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                          );
-
-                          console.log('[CropEditor] Crop result URI:', result.uri);
-
-                          const photoWithCrop: CheckInPhoto = {
-                            ...cropPhoto,
-                            photo_url: result.uri,  // use the cropped image URI
-                            cropData: cd,           // keep for reference
-                          };
-                          setSelectedPhotos(prev => [...prev, photoWithCrop]);
-                          setCropPhoto(null);
+                          if (pixelW > 10 && pixelH > 10) {
+                            const result = await ImageManipulator.manipulateAsync(
+                              cropPhoto.photo_url,
+                              [{ crop: { originX: pixelX, originY: pixelY, width: pixelW, height: pixelH } }],
+                              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                            );
+                            setSelectedPhotos(prev => [...prev, { ...cropPhoto, photo_url: result.uri, cropData: { scale, translateX: -offsetX, translateY: -offsetY } }]);
+                          } else {
+                            // No meaningful crop — use original
+                            setSelectedPhotos(prev => [...prev, { ...cropPhoto, cropData: { scale: 1, translateX: 0, translateY: 0 } }]);
+                          }
                         } catch (err) {
                           console.warn('[CropEditor] Crop failed, using original:', err);
-                          // Fallback: use original photo without crop
-                          const photoWithCrop: CheckInPhoto = {
-                            ...cropPhoto,
-                            cropData: cd,
-                          };
-                          setSelectedPhotos(prev => [...prev, photoWithCrop]);
-                          setCropPhoto(null);
+                          setSelectedPhotos(prev => [...prev, { ...cropPhoto, cropData: { scale: 1, translateX: 0, translateY: 0 } }]);
                         }
+                        setCropPhoto(null);
                       }}
                     >
                       <Text style={{ color: '#2A9D8F', fontSize: 16, fontWeight: '700' }}>Use Photo</Text>
                     </TouchableOpacity>
                   </View>
 
-                  {/* Zoomable image using PanResponder */}
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    <Animated.View
-                      {...cropPanResponder.panHandlers}
-                      style={{
-                        transform: [
-                          { scale: cropScale },
-                          { translateX: cropTranslateX },
-                          { translateY: cropTranslateY },
-                        ],
-                      }}
-                    >
-                      <Image
-                        source={{ uri: cropPhoto.photo_url }}
-                        style={{ width: 380, height: 507, resizeMode: 'contain' }}
-                      />
-                    </Animated.View>
-                  </View>
+                  {/* Zoomable image using ScrollView native pinch/pan */}
+                  <ScrollView
+                    ref={cropScrollViewRef}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ flex: 1 }}
+                    maximumZoomScale={4}
+                    minimumZoomScale={1}
+                    bouncesZoom={true}
+                    showsHorizontalScrollIndicator={false}
+                    showsVerticalScrollIndicator={false}
+                    centerContent={true}
+                    onScrollEndDrag={(e) => {
+                      cropCurrentScale.current = e.nativeEvent.zoomScale ?? 1;
+                      cropCurrentOffsetX.current = e.nativeEvent.contentOffset.x;
+                      cropCurrentOffsetY.current = e.nativeEvent.contentOffset.y;
+                    }}
+                    onMomentumScrollEnd={(e) => {
+                      cropCurrentScale.current = e.nativeEvent.zoomScale ?? 1;
+                      cropCurrentOffsetX.current = e.nativeEvent.contentOffset.x;
+                      cropCurrentOffsetY.current = e.nativeEvent.contentOffset.y;
+                    }}
+                  >
+                    <Image
+                      source={{ uri: cropPhoto.photo_url }}
+                      style={{ width: 380, height: 507 }}
+                      resizeMode="contain"
+                    />
+                  </ScrollView>
 
                   {/* Instructions */}
                   <View style={{ paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' }}>
