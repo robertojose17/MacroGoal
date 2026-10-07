@@ -9,11 +9,12 @@ import {
   ImageSourcePropType,
   ActivityIndicator,
   Dimensions,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '@/styles/commonStyles';
-import { ZoomablePanPhoto } from '@/components/ZoomablePanPhoto';
 
 export const PROGRESS_CARD_WIDTH = Dimensions.get('window').width;
 export const PROGRESS_CARD_HEIGHT = 640;
@@ -65,6 +66,93 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+interface InteractivePhotoProps {
+  uri: string;
+  initialScale?: number;
+  initialTranslateX?: number;
+  initialTranslateY?: number;
+  onTransformChange?: (scale: number, translateX: number, translateY: number) => void;
+  style?: object;
+}
+
+function InteractivePhoto({ uri, initialScale = 1, initialTranslateX = 0, initialTranslateY = 0, onTransformChange, style }: InteractivePhotoProps) {
+  const scaleAnim = useRef(new Animated.Value(initialScale)).current;
+  const translateXAnim = useRef(new Animated.Value(initialTranslateX)).current;
+  const translateYAnim = useRef(new Animated.Value(initialTranslateY)).current;
+
+  const scaleVal = useRef(initialScale);
+  const translateXVal = useRef(initialTranslateX);
+  const translateYVal = useRef(initialTranslateY);
+  const lastDistance = useRef<number | null>(null);
+  const lastScale = useRef(initialScale);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        console.log('[InteractivePhoto] Pan gesture started');
+        lastDistance.current = null;
+        lastScale.current = scaleVal.current;
+      },
+      onPanResponderMove: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (lastDistance.current !== null) {
+            const delta = dist / lastDistance.current;
+            const newScale = Math.min(4, Math.max(0.5, lastScale.current * delta));
+            scaleVal.current = newScale;
+            scaleAnim.setValue(newScale);
+          }
+          lastDistance.current = dist;
+          lastScale.current = scaleVal.current;
+        } else if (touches.length === 1) {
+          const newX = translateXVal.current + evt.nativeEvent.dx / scaleVal.current;
+          const newY = translateYVal.current + evt.nativeEvent.dy / scaleVal.current;
+          translateXAnim.setValue(newX);
+          translateYAnim.setValue(newY);
+        }
+      },
+      onPanResponderRelease: (evt) => {
+        if (evt.nativeEvent.touches.length === 0) {
+          translateXVal.current = (translateXAnim as any).__getValue ? (translateXAnim as any).__getValue() : translateXVal.current;
+          translateYVal.current = (translateYAnim as any).__getValue ? (translateYAnim as any).__getValue() : translateYVal.current;
+          console.log('[InteractivePhoto] Transform released:', scaleVal.current, translateXVal.current, translateYVal.current);
+          onTransformChange?.(scaleVal.current, translateXVal.current, translateYVal.current);
+        }
+        lastDistance.current = null;
+      },
+      onPanResponderTerminate: () => {
+        lastDistance.current = null;
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      style={[{ flex: 1, overflow: 'hidden' }, style]}
+      {...panResponder.panHandlers}
+    >
+      <Animated.Image
+        source={{ uri }}
+        style={{
+          width: '100%',
+          height: '100%',
+          resizeMode: 'cover',
+          transform: [
+            { scale: scaleAnim },
+            { translateX: translateXAnim },
+            { translateY: translateYAnim },
+          ],
+        }}
+      />
+    </Animated.View>
+  );
+}
+
 const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableProgressCardProps>(
   function ShareableProgressCard(
     {
@@ -93,9 +181,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     // useState for visual placeholder re-renders
     const [beforeLoadedState, setBeforeLoadedState] = useState(false);
     const [afterLoadedState, setAfterLoadedState] = useState(false);
-
-    // Measured dimensions for ZoomablePanPhoto (flex:1 containers need onLayout)
-    const [photoDimensions, setPhotoDimensions] = useState<{ width: number; height: number } | null>(null);
 
     const beforeTransformStyle = beforeTransform
       ? { transform: [{ scale: beforeTransform.scale }, { translateX: beforeTransform.translateX }, { translateY: beforeTransform.translateY }] }
@@ -198,10 +283,6 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
       [afterPhotoId, onAfterTransformChange],
     );
 
-    // Determine whether to use ZoomablePanPhoto for each slot
-    const useZoomBefore = interactive && !!beforePhoto && !!beforePhotoId;
-    const useZoomAfter = interactive && !!afterPhoto && !!afterPhotoId;
-
     return (
       <CaptureWrapper
         ref={viewShotRef}
@@ -227,32 +308,16 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
           {/* ── PHOTOS ROW ── */}
           <View style={styles.photoRow}>
             {/* BEFORE */}
-            <View
-              style={styles.photoContainer}
-              onLayout={(e) => {
-                const { width, height } = e.nativeEvent.layout;
-                if (width > 0 && height > 0) {
-                  setPhotoDimensions({ width, height });
-                }
-              }}
-            >
-              {useZoomBefore ? (
-                photoDimensions ? (
-                  <ZoomablePanPhoto
-                    uri={beforePhoto as string}
-                    width={photoDimensions.width}
-                    height={photoDimensions.height}
-                    resizeMode="cover"
-                    initialScale={beforeTransform?.scale ?? 1}
-                    initialTranslateX={beforeTransform?.translateX ?? 0}
-                    initialTranslateY={beforeTransform?.translateY ?? 0}
-                    onTransformChange={handleBeforeTransformChange}
-                  />
-                ) : (
-                  <View style={styles.photoPlaceholder}>
-                    <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
-                  </View>
-                )
+            <View style={styles.photoContainer}>
+              {interactive && !!beforePhoto ? (
+                <InteractivePhoto
+                  uri={beforePhoto as string}
+                  initialScale={beforeTransform?.scale ?? 1}
+                  initialTranslateX={beforeTransform?.translateX ?? 0}
+                  initialTranslateY={beforeTransform?.translateY ?? 0}
+                  onTransformChange={handleBeforeTransformChange}
+                  style={{ flex: 1 }}
+                />
               ) : (
                 <>
                   {!beforeLoadedState && (
@@ -283,33 +348,16 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
             <View style={styles.photoDivider} />
 
             {/* AFTER */}
-            <View
-              style={styles.photoContainer}
-              onLayout={(e) => {
-                // After container shares the same dimensions — only update if not yet set
-                const { width, height } = e.nativeEvent.layout;
-                if (width > 0 && height > 0 && !photoDimensions) {
-                  setPhotoDimensions({ width, height });
-                }
-              }}
-            >
-              {useZoomAfter ? (
-                photoDimensions ? (
-                  <ZoomablePanPhoto
-                    uri={afterPhoto as string}
-                    width={photoDimensions.width}
-                    height={photoDimensions.height}
-                    resizeMode="cover"
-                    initialScale={afterTransform?.scale ?? 1}
-                    initialTranslateX={afterTransform?.translateX ?? 0}
-                    initialTranslateY={afterTransform?.translateY ?? 0}
-                    onTransformChange={handleAfterTransformChange}
-                  />
-                ) : (
-                  <View style={styles.photoPlaceholder}>
-                    <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
-                  </View>
-                )
+            <View style={styles.photoContainer}>
+              {interactive && !!afterPhoto ? (
+                <InteractivePhoto
+                  uri={afterPhoto as string}
+                  initialScale={afterTransform?.scale ?? 1}
+                  initialTranslateX={afterTransform?.translateX ?? 0}
+                  initialTranslateY={afterTransform?.translateY ?? 0}
+                  onTransformChange={handleAfterTransformChange}
+                  style={{ flex: 1 }}
+                />
               ) : (
                 <>
                   {!afterLoadedState && (
