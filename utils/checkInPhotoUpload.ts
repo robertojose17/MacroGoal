@@ -6,7 +6,7 @@
 import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
-import { tryAwardProgressPhoto } from '@/utils/xpAwarder';
+
 
 const PHOTOS_ENDPOINT = `${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`;
 
@@ -182,7 +182,7 @@ export async function handleQuickPhotoPick(
   try {
     await uploadCheckInPhoto(checkInId, uri);
     console.log('[checkInPhotoUpload] ✅ Photo uploaded successfully for check-in:', checkInId);
-    tryAwardProgressPhoto(checkInId);
+
   } catch (err) {
     console.error('[checkInPhotoUpload] Photo upload failed:', err);
     Alert.alert('Photo Upload Failed', 'Your check-in was saved, but the photo could not be uploaded.');

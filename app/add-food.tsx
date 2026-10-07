@@ -21,8 +21,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { usePremium } from '@/hooks/usePremium';
-import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
-import { emitMealLogged } from '@/utils/xpEvents';
+
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 import { formatServing } from '@/utils/servingFormat';
 import { hybridSearch } from '@/utils/foodSearchHybrid';
@@ -1109,14 +1108,7 @@ export default function AddFoodScreen() {
         }
       }
 
-      // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
-      const xpSourceId = `${mealId}_${foodId}_${date}`;
-      console.log('[AddFood] awarding meal XP for favorite, source_id:', xpSourceId);
-      tryAwardMealLogged(xpSourceId, mealType, date);
-      evaluateDailyGoals(date);
-
-      // Notify challenge hook that a meal was logged
-      emitMealLogged();
+      console.log('[AddFood] Meal logged from favorite — mealId:', mealId, 'date:', date);
       trackFirstMealIfNeeded();
       
       // Show success banner (will interrupt if one is already showing)
@@ -1387,9 +1379,6 @@ export default function AddFoodScreen() {
 
       const mealId = rpcData?.meal_id;
       const xpSourceId = `${mealId}_${item.food_item_id}_${date}`;
-      tryAwardMealLogged(xpSourceId, mealType, date);
-      evaluateDailyGoals(date);
-      emitMealLogged();
       trackFirstMealIfNeeded();
       showSuccessBanner();
     } catch (error) {
@@ -1718,8 +1707,6 @@ export default function AddFoodScreen() {
 
       console.log('[AddFood] ✅ Saved meal added successfully!');
 
-      // Notify challenge hook that a meal was logged
-      emitMealLogged();
       trackFirstMealIfNeeded();
       
       // Show success banner

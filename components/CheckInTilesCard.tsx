@@ -26,9 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { borderRadius, colors, spacing } from '@/styles/commonStyles';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { emitXpRefresh } from '@/utils/xpEvents';
 import { logEntry, listTrackers } from '@/utils/trackersApi';
-import { tryAwardWorkout, tryAwardWeightCheckin } from '@/utils/xpAwarder';
 import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
 import { supabase } from '@/lib/supabase/client';
 import { useSteps } from '@/hooks/useSteps';
@@ -343,9 +341,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
       }
 
       if (checkInId) {
-        console.log('[CheckInTilesCard] awarding weight check-in XP — check_in_id:', checkInId);
-        await tryAwardWeightCheckin(checkInId, weightInKg);
-        emitXpRefresh();
+        console.log('[CheckInTilesCard] weight check-in saved, id:', checkInId);
       }
     }
 
@@ -389,8 +385,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
       console.log('[CheckInTilesCard] synced went_to_gym=true to check_ins for date:', today);
     }
 
-    await tryAwardWorkout(entry.id);
-    emitXpRefresh();
+    console.log('[CheckInTilesCard] gym workout logged, entry id:', entry.id);
   }, [gymTracker, onXpRefresh]);
 
   // ── Steps refresh ──────────────────────────────────────────────────────────

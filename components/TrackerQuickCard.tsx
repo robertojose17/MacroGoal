@@ -26,8 +26,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { listTrackers, logEntry, listEntries, Tracker } from '@/utils/trackersApi';
-import { tryAwardWorkout, tryAwardWeightCheckin } from '@/utils/xpAwarder';
-import { emitXpRefresh } from '@/utils/xpEvents';
+
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
@@ -187,8 +186,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
           checkInId = newCheckIn?.id ?? null;
         }
         if (checkInId) {
-          await tryAwardWeightCheckin(checkInId, weightInKg);
-          emitXpRefresh();
+          console.log('[TrackerQuickCard] Weight check-in saved, id:', checkInId);
           onXpRefresh();
         }
       }
@@ -239,8 +237,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
         }
         console.log('[TrackerQuickCard] Synced went_to_gym=true to check_ins for date:', today);
       }
-      await tryAwardWorkout(entry.id);
-      emitXpRefresh();
+      console.log('[TrackerQuickCard] Gym check-in logged, entry id:', entry.id);
       onXpRefresh();
     } catch (err) {
       console.error('[TrackerQuickCard] Gym log failed:', err);

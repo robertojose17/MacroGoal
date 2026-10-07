@@ -1,28 +1,27 @@
 /**
  * useOneSignalTags
  *
- * Syncs XP/streak/premium status to OneSignal user tags for segmentation.
- * Call this from the dashboard after XP status is loaded.
+ * Syncs streak/premium status to OneSignal user tags for segmentation.
+ * Call this from the dashboard after streak status is loaded.
  *
  * Tags set:
  *   - current_streak: string (e.g. "7")
- *   - current_level: string (e.g. "3")
  *   - is_premium: "true" | "false"
  */
 
 import { useEffect } from "react";
 import { Platform } from "react-native";
-import type { XpStatus } from "@/types/xp";
+import type { StreakStatus } from "@/hooks/useStreakStatus";
 
 interface TagSyncParams {
-  status: XpStatus | null;
+  streak: StreakStatus | null;
   isPremium?: boolean;
 }
 
-export function useOneSignalTags({ status, isPremium = false }: TagSyncParams) {
+export function useOneSignalTags({ streak, isPremium = false }: TagSyncParams) {
   useEffect(() => {
     if (Platform.OS === "web") return;
-    if (!status) return;
+    if (!streak) return;
 
     let OneSignal: any = null;
     try {
@@ -33,8 +32,7 @@ export function useOneSignalTags({ status, isPremium = false }: TagSyncParams) {
     }
 
     const tags: Record<string, string> = {
-      current_streak: String(status.current_streak ?? 0),
-      current_level: String(status.current_level ?? 1),
+      current_streak: String(streak.current_streak ?? 0),
       is_premium: String(isPremium),
     };
 
@@ -44,5 +42,5 @@ export function useOneSignalTags({ status, isPremium = false }: TagSyncParams) {
     } catch (e) {
       console.warn("[OneSignalTags] Failed to sync tags (non-fatal):", e);
     }
-  }, [status, isPremium]);
+  }, [streak, isPremium]);
 }

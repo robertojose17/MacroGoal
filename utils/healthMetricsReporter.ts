@@ -22,7 +22,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAllDailyMetrics } from '@/utils/healthKit';
-import { awardXp } from '@/utils/xpApi';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -100,112 +99,36 @@ export async function reportDailyHealthMetrics(): Promise<MetricsReportResult> {
     const metrics = await getAllDailyMetrics(new Date());
     console.log('[healthMetricsReporter] metrics received:', metrics);
 
-    const dateStr = todayIsoDate();
     const eventsPosted: string[] = [];
 
     // ── Active Calories ──────────────────────────────────────────────────────
-    if (
-      metrics.activeCalories !== null &&
-      metrics.activeCalories >= THRESHOLDS.activeCalories
-    ) {
-      console.log('[healthMetricsReporter] active calories threshold met:', metrics.activeCalories, '>=', THRESHOLDS.activeCalories);
-      try {
-        await awardXp({
-          event_type: 'active_calories' as any,
-          source_id: `active_calories_${dateStr}`,
-          metadata: { calories: metrics.activeCalories },
-        });
-        eventsPosted.push('active_calories');
-        console.log('[healthMetricsReporter] active_calories XP posted');
-      } catch (e) {
-        console.warn('[healthMetricsReporter] active_calories post failed (non-fatal):', e instanceof Error ? e.message : e);
-      }
-    } else {
-      console.log('[healthMetricsReporter] active calories below threshold or null:', metrics.activeCalories);
+    if (metrics.activeCalories !== null && metrics.activeCalories >= THRESHOLDS.activeCalories) {
+      console.log('[healthMetricsReporter] active calories threshold met:', metrics.activeCalories);
+      eventsPosted.push('active_calories');
     }
 
     // ── Exercise Minutes ─────────────────────────────────────────────────────
-    if (
-      metrics.exerciseMinutes !== null &&
-      metrics.exerciseMinutes >= THRESHOLDS.exerciseMinutes
-    ) {
-      console.log('[healthMetricsReporter] exercise minutes threshold met:', metrics.exerciseMinutes, '>=', THRESHOLDS.exerciseMinutes);
-      try {
-        await awardXp({
-          event_type: 'exercise_minutes' as any,
-          source_id: `exercise_minutes_${dateStr}`,
-          metadata: { minutes: metrics.exerciseMinutes },
-        });
-        eventsPosted.push('exercise_minutes');
-        console.log('[healthMetricsReporter] exercise_minutes XP posted');
-      } catch (e) {
-        console.warn('[healthMetricsReporter] exercise_minutes post failed (non-fatal):', e instanceof Error ? e.message : e);
-      }
-    } else {
-      console.log('[healthMetricsReporter] exercise minutes below threshold or null:', metrics.exerciseMinutes);
+    if (metrics.exerciseMinutes !== null && metrics.exerciseMinutes >= THRESHOLDS.exerciseMinutes) {
+      console.log('[healthMetricsReporter] exercise minutes threshold met:', metrics.exerciseMinutes);
+      eventsPosted.push('exercise_minutes');
     }
 
     // ── Distance ─────────────────────────────────────────────────────────────
-    if (
-      metrics.distanceMiles !== null &&
-      metrics.distanceMiles >= THRESHOLDS.distanceMiles
-    ) {
-      console.log('[healthMetricsReporter] distance threshold met:', metrics.distanceMiles, '>=', THRESHOLDS.distanceMiles);
-      try {
-        await awardXp({
-          event_type: 'distance' as any,
-          source_id: `distance_${dateStr}`,
-          metadata: { miles: metrics.distanceMiles },
-        });
-        eventsPosted.push('distance');
-        console.log('[healthMetricsReporter] distance XP posted');
-      } catch (e) {
-        console.warn('[healthMetricsReporter] distance post failed (non-fatal):', e instanceof Error ? e.message : e);
-      }
-    } else {
-      console.log('[healthMetricsReporter] distance below threshold or null:', metrics.distanceMiles);
+    if (metrics.distanceMiles !== null && metrics.distanceMiles >= THRESHOLDS.distanceMiles) {
+      console.log('[healthMetricsReporter] distance threshold met:', metrics.distanceMiles);
+      eventsPosted.push('distance');
     }
 
     // ── Stand Hours ──────────────────────────────────────────────────────────
-    if (
-      metrics.standHours !== null &&
-      metrics.standHours >= THRESHOLDS.standHours
-    ) {
-      console.log('[healthMetricsReporter] stand hours threshold met:', metrics.standHours, '>=', THRESHOLDS.standHours);
-      try {
-        await awardXp({
-          event_type: 'stand_hours' as any,
-          source_id: `stand_hours_${dateStr}`,
-          metadata: { hours: metrics.standHours },
-        });
-        eventsPosted.push('stand_hours');
-        console.log('[healthMetricsReporter] stand_hours XP posted');
-      } catch (e) {
-        console.warn('[healthMetricsReporter] stand_hours post failed (non-fatal):', e instanceof Error ? e.message : e);
-      }
-    } else {
-      console.log('[healthMetricsReporter] stand hours below threshold or null:', metrics.standHours);
+    if (metrics.standHours !== null && metrics.standHours >= THRESHOLDS.standHours) {
+      console.log('[healthMetricsReporter] stand hours threshold met:', metrics.standHours);
+      eventsPosted.push('stand_hours');
     }
 
     // ── Flights Climbed ──────────────────────────────────────────────────────
-    if (
-      metrics.flightsClimbed !== null &&
-      metrics.flightsClimbed >= THRESHOLDS.flightsClimbed
-    ) {
-      console.log('[healthMetricsReporter] flights climbed threshold met:', metrics.flightsClimbed, '>=', THRESHOLDS.flightsClimbed);
-      try {
-        await awardXp({
-          event_type: 'flights_climbed' as any,
-          source_id: `flights_climbed_${dateStr}`,
-          metadata: { flights: metrics.flightsClimbed },
-        });
-        eventsPosted.push('flights_climbed');
-        console.log('[healthMetricsReporter] flights_climbed XP posted');
-      } catch (e) {
-        console.warn('[healthMetricsReporter] flights_climbed post failed (non-fatal):', e instanceof Error ? e.message : e);
-      }
-    } else {
-      console.log('[healthMetricsReporter] flights climbed below threshold or null:', metrics.flightsClimbed);
+    if (metrics.flightsClimbed !== null && metrics.flightsClimbed >= THRESHOLDS.flightsClimbed) {
+      console.log('[healthMetricsReporter] flights climbed threshold met:', metrics.flightsClimbed);
+      eventsPosted.push('flights_climbed');
     }
 
     if (eventsPosted.length > 0) {

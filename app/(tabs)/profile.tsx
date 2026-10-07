@@ -26,7 +26,7 @@ import ProgressCircle from '@/components/ProgressCircle';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { calcMacros } from '@/utils/macros';
 import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
-import { useXpStatus } from '@/hooks/useXpStatus';
+import { useStreakStatus } from '@/hooks/useStreakStatus';
 import { calcDailyScore } from '@/utils/consistencyMath';
 import FeedPostCard from '@/components/social/FeedPostCard';
 
@@ -106,11 +106,11 @@ export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isPremium } = usePremium();
-  const { status: xpStatus } = useXpStatus();
+  const { streak: streakData } = useStreakStatus();
 
-  // Streaks derived from useXpStatus (same source as dashboard)
-  const currentStreak = xpStatus?.current_streak ?? 0;
-  const bestStreak = xpStatus?.longest_streak ?? 0;
+  // Streaks derived from useStreakStatus
+  const currentStreak = streakData?.current_streak ?? 0;
+  const bestStreak = streakData?.longest_streak ?? 0;
 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);

@@ -22,8 +22,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
 import { usePremium } from '@/hooks/usePremium';
-import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
-import { emitMealLogged } from '@/utils/xpEvents';
+
 import { useTranslation } from 'react-i18next';
 import i18n from '@/lib/i18n';
 
@@ -737,15 +736,6 @@ export default function AIMealPlannerScreen() {
       // AI planner foods are user_created — do not affect catalog popularity
       console.log('[AIMealPlanner] Skipping logFoodUsage for AI planner food (user_created):', food.name);
 
-      // ── XP: award meal_logged (fire-and-forget) ──────────────────────────
-      const xpSourceId = rpcData?.meal_item_id ?? rpcData?.meal_id;
-      console.log('[AIMealPlanner] awarding meal XP, source_id:', xpSourceId);
-      tryAwardMealLogged(xpSourceId, mealType);
-      evaluateDailyGoals(todayStr);
-
-      // Notify challenge hook that a meal was logged
-      emitMealLogged();
-
       showToast(t('aiMealPlanner.addedToMealToast', { meal: mealLabel }));
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddFood error:', e?.message || e);
@@ -823,16 +813,7 @@ export default function AIMealPlannerScreen() {
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
       console.log('[AIMealPlanner] bulk add complete:', insertedItemIds.length, 'of', foods.length, 'items added to', mealType);
 
-      // ── XP: award meal_logged for each inserted item (fire-and-forget) ────
-      insertedItemIds.forEach((itemId, idx) => {
-        console.log('[AIMealPlanner] awarding meal XP for bulk item', idx, 'source_id:', itemId);
-        tryAwardMealLogged(itemId, mealType);
-      });
-      if (insertedItemIds.length > 0) {
-        evaluateDailyGoals(todayStr);
-        // Notify challenge hook that meals were logged
-        emitMealLogged();
-      }
+
 
       showToast(t('aiMealPlanner.allAddedToMealToast', { meal: mealLabel }));
     } catch (e: any) {

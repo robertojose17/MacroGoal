@@ -10,8 +10,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { addToDraft } from '@/utils/myMealsDraft';
-import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
-import { emitMealLogged } from '@/utils/xpEvents';
+
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 import { logFoodUsage } from '@/utils/logFoodUsage';
 
@@ -206,14 +205,7 @@ export default function MyFoodsCreateScreen() {
         console.log('[MyFoodsCreate] Logging food usage, food_id:', foodData.id);
         logFoodUsage(foodData.id, 'search');
 
-        // Award XP (fire-and-forget)
-        const xpSourceId = rpcData?.meal_item_id ?? `${mealId}_${foodData.id}_${date}`;
-        console.log('[MyFoodsCreate] Awarding meal XP, source_id:', xpSourceId);
-        tryAwardMealLogged(xpSourceId, mealType, date);
-        evaluateDailyGoals(date);
 
-        // Notify challenge hook
-        emitMealLogged();
         trackFirstMealIfNeeded();
 
         setSaving(false);

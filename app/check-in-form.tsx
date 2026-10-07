@@ -24,9 +24,7 @@ import CalendarDatePicker from '@/components/CalendarDatePicker';
 import { listTrackers, logEntry as logTrackerEntry } from '@/utils/trackersApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import * as ImagePicker from 'expo-image-picker';
-import { tryAwardWorkout, tryAwardWeightCheckin, tryAwardProgressPhoto } from '@/utils/xpAwarder';
 import { autoShareWeightMilestone } from '@/utils/autoShareAchievements';
-import { emitXpRefresh } from '@/utils/xpEvents';
 import { useTranslation } from 'react-i18next';
 import { invalidatePIECache } from '@/hooks/useProgressIntelligence';
 
@@ -332,23 +330,10 @@ export default function CheckInFormScreen() {
         await syncToTrackerEntries(authUser.id, checkInType, dateString, checkInData, notes);
       }
 
-      // ── XP: award check-in XP (await so refresh fires after DB write) ──
-      if (savedCheckInId) {
-        if (checkInType === 'gym' && checkInData.went_to_gym === true) {
-          console.log('[CheckInForm] awarding workout XP for check-in:', savedCheckInId);
-          await tryAwardWorkout(savedCheckInId);
-        }
-        if (checkInType === 'weight' && checkInData.weight != null) {
-          console.log('[CheckInForm] awarding weight_checkin XP for check-in:', savedCheckInId);
-          await tryAwardWeightCheckin(savedCheckInId, checkInData.weight as number);
-          console.log('[CheckInForm] triggering autoShareWeightMilestone (fire-and-forget)');
-          autoShareWeightMilestone();
-        }
+      if (savedCheckInId && checkInType === 'weight' && checkInData.weight != null) {
+        console.log('[CheckInForm] triggering autoShareWeightMilestone (fire-and-forget)');
+        autoShareWeightMilestone();
       }
-
-      console.log('[CheckInForm] emitting xp:refresh after check-in save');
-      await new Promise(resolve => setTimeout(resolve, 300));
-      emitXpRefresh();
 
       // For new weight check-ins: show the photo modal instead of immediately going back
       if (!isEditing && checkInType === 'weight' && savedCheckInId) {

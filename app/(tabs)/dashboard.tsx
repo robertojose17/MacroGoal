@@ -24,13 +24,9 @@ import CheckInTilesCard from '@/components/CheckInTilesCard';
 
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { useXpStatus } from '@/hooks/useXpStatus';
-import { useLeague } from '@/hooks/useLeague';
-import { emitXpRefresh } from '@/utils/xpEvents';
+import { useStreakStatus } from '@/hooks/useStreakStatus';
 import { useWidget } from '@/contexts/WidgetContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import LeagueLeaderboard from '@/components/xp/LeagueLeaderboard';
-import { TIER_METADATA } from '@/types/leagues';
 
 // ─── Local error boundary ─────────────────────────────────────────────────────
 interface CardErrorBoundaryState { hasError: boolean; }
@@ -84,83 +80,42 @@ function SkeletonBlock({ height, isDark }: { height: number; isDark: boolean }) 
   );
 }
 
-// ─── StreakLeaguePill ─────────────────────────────────────────────────────────
-function StreakLeaguePill({ isDark }: { isDark: boolean }) {
+// ─── StreakPill ───────────────────────────────────────────────────────────────
+function StreakPill({ isDark }: { isDark: boolean }) {
   const { t } = useTranslation();
-  const xp = useXpStatus();
-  const league = useLeague();
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const { streak } = useStreakStatus();
 
-  const streak = xp.status?.current_streak ?? 0;
-  const leagueStatus = league.status;
+  const streakValue = streak?.current_streak ?? 0;
 
-  if (!xp.status && !leagueStatus) return null;
+  if (streakValue === 0) return null;
 
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
   const cardBorder = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
-  const tierMeta = leagueStatus ? TIER_METADATA[leagueStatus.tier] : null;
-  const leagueLabel = tierMeta ? tierMeta.label : null;
-  const leaguePosition = leagueStatus ? leagueStatus.user_position : null;
-
-  const handlePress = () => {
-    console.log('[Dashboard] StreakLeaguePill tapped — opening LeagueLeaderboard');
-    setShowLeaderboard(true);
-  };
-
   return (
-    <>
-      <Pressable
-        onPress={handlePress}
-        style={({ pressed }) => [
-          styles.pillContainer,
-          {
-            backgroundColor: cardBg,
-            borderColor: cardBorder,
-            opacity: pressed ? 0.8 : 1,
-          },
-        ]}
-      >
-        <View style={styles.pillRow}>
-          {streak > 0 && (
-            <View style={styles.pillSegment}>
-              <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={16} color={colors.primary} />
-              <Text style={[styles.pillText, { color: textColor }]}>
-                {streak}
-              </Text>
-              <Text style={[styles.pillSubText, { color: subColor }]}>
-                {' '}{t('common.days')}
-              </Text>
-            </View>
-          )}
-          {streak > 0 && leagueLabel && (
-            <Text style={[styles.pillDot, { color: subColor }]}>·</Text>
-          )}
-          {leagueLabel && (
-            <View style={styles.pillSegment}>
-              <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={16} color={colors.primary} />
-              <Text style={[styles.pillText, { color: textColor }]}>{leagueLabel}</Text>
-              {leaguePosition != null && (
-                <Text style={[styles.pillSubText, { color: subColor }]}>
-                  {' #'}{leaguePosition}
-                </Text>
-              )}
-            </View>
-          )}
-          <Text style={[styles.pillChevron, { color: subColor }]}>›</Text>
+    <View
+      style={[
+        styles.pillContainer,
+        {
+          backgroundColor: cardBg,
+          borderColor: cardBorder,
+        },
+      ]}
+    >
+      <View style={styles.pillRow}>
+        <View style={styles.pillSegment}>
+          <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={16} color={colors.primary} />
+          <Text style={[styles.pillText, { color: textColor }]}>
+            {streakValue}
+          </Text>
+          <Text style={[styles.pillSubText, { color: subColor }]}>
+            {' '}{t('common.days')}
+          </Text>
         </View>
-      </Pressable>
-
-      <LeagueLeaderboard
-        visible={showLeaderboard}
-        onClose={() => {
-          console.log('[Dashboard] LeagueLeaderboard closed from pill');
-          setShowLeaderboard(false);
-        }}
-      />
-    </>
+      </View>
+    </View>
   );
 }
 
@@ -175,7 +130,6 @@ export default function DashboardScreen() {
   const [goal, setGoal] = useState<any>(null);
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
 
-  const xp = useXpStatus();
   const { syncWidget } = useWidget();
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
@@ -320,9 +274,9 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Streak + League Pill ── */}
-        <CardErrorBoundary label="StreakLeaguePill">
-          <StreakLeaguePill isDark={isDark} />
+        {/* ── Streak Pill ── */}
+        <CardErrorBoundary label="StreakPill">
+          <StreakPill isDark={isDark} />
         </CardErrorBoundary>
 
         {/* ── Consistency Score ── */}
@@ -357,9 +311,7 @@ export default function DashboardScreen() {
                 today_protein: todaySummary?.total_protein ?? 0,
               }}
               onXpRefresh={() => {
-                console.log('[Dashboard] CheckInTilesCard XP refresh requested');
-                xp.refresh();
-                emitXpRefresh();
+                console.log('[Dashboard] CheckInTilesCard refresh requested');
               }}
             />
           </CardErrorBoundary>

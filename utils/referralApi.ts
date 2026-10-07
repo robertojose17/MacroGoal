@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
-import { tryAwardReferral } from '@/utils/xpAwarder';
-import { emitXpRefresh } from '@/utils/xpEvents';
+
 
 // Generate a unique 6-char code from username + random suffix
 function generateCode(username: string): string {
@@ -172,15 +171,7 @@ export async function applyReferralCode(code: string): Promise<{ success: boolea
 
   console.log('[referralApi] referral inserted, id:', referral.id);
 
-  // Award XP to referred user (current auth user) via awardXp edge function
-  try {
-    console.log('[referralApi] awarding XP to referred user (current user)');
-    tryAwardReferral(referral.id);
-    emitXpRefresh();
-    console.log('[referralApi] XP award triggered for referred user');
-  } catch (e) {
-    console.warn('[referralApi] XP award for referred user failed (non-fatal):', e);
-  }
+
 
   // Award XP to referrer via direct DB write (different user — cannot use JWT-bound edge fn)
   try {

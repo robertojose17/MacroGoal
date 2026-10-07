@@ -69,7 +69,7 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
           .eq("user_id", userId)
           .eq("date", today),
         supabase
-          .from("user_xp_status")
+          .from("user_xp")
           .select("current_streak")
           .eq("user_id", userId)
           .maybeSingle(),

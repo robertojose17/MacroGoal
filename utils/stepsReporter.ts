@@ -16,8 +16,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTodaySteps } from '@/utils/healthKit';
-import { awardXp } from '@/utils/xpApi';
-import { emitXpRefresh } from '@/utils/xpEvents';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -124,20 +122,8 @@ export async function reportTodaySteps(): Promise<ReportResult> {
       return { reported: false, steps, reason: 'out_of_range' };
     }
 
-    // Award XP — source_id is today's date for idempotency
-    const sourceId = todayIsoDate();
-    console.log('[stepsReporter] awarding XP for steps:', steps, 'source_id:', sourceId);
-
-    const xpResult = await awardXp({
-      event_type: 'steps',
-      source_id: sourceId,
-      metadata: { step_count: steps },
-    });
-
-    console.log('[stepsReporter] XP awarded:', xpResult.awarded, 'total_xp:', xpResult.total_xp);
-
+    console.log('[stepsReporter] steps read successfully:', steps);
     await markReported();
-    emitXpRefresh();
     return { reported: true, steps };
   } catch (e) {
     // Never let a reporting error crash the app

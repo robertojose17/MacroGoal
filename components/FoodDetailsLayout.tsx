@@ -12,8 +12,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { isFavorite, toggleFavorite } from '@/utils/favoritesDatabase';
 import { useRouter } from 'expo-router';
 import { addToDraft } from '@/utils/myMealsDraft';
-import { tryAwardMealLogged, evaluateDailyGoals } from '@/utils/xpAwarder';
-import { emitMealLogged } from '@/utils/xpEvents';
+
 import { logFoodUsage, type FoodLogSource } from '@/utils/logFoodUsage';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
 
@@ -2009,14 +2008,7 @@ export default function FoodDetailsLayout({
             logFoodUsage(foodItemId, source);
           }
 
-          // ── XP: award meal_logged (fire-and-forget) ──────────────────────
-          // We don't have the new meal_item id here (no .select()), so use mealId+foodId as source
-          const xpSourceId = `${mealId}_${foodId}_${targetDate}`;
-          tryAwardMealLogged(xpSourceId, targetMealType, targetDate);
-          evaluateDailyGoals(targetDate);
-
-          // Notify challenge hook that a meal was logged
-          emitMealLogged();
+          console.log('[FoodDetailsLayout] Meal item logged — mealId:', mealId, 'date:', targetDate);
 
           setTimeout(() => {
             router.back();

@@ -15,7 +15,7 @@ import {
   getFlightsClimbedForDate,
   requestAllHealthPermissions,
 } from '@/utils/healthKit';
-import { emitXpRefresh, emitLeagueRefresh } from '@/utils/xpEvents';
+
 
 export interface FlashChallengeWithProgress extends FlashChallenge {
   progress: number;      // current value MINUS baseline_value (0 if not accepted)
@@ -176,8 +176,6 @@ export function useFlashChallenges() {
         try {
           const result = await apiCompleteChallenge(c.id, c.xp_reward);
           console.log('[useFlashChallenges] challenge completed, xp_awarded:', result.xp_awarded);
-          emitXpRefresh();
-          emitLeagueRefresh();
           // Reload to get updated challenge_status
           await load();
         } catch (e) {

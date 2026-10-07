@@ -25,7 +25,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { initializeFoodDatabase } from "@/utils/foodDatabase";
 import { supabase } from "@/lib/supabase/client";
 import { reportTodaySteps } from "@/utils/stepsReporter";
-import { setUserTimezone } from "@/utils/macroXpApi";
+
 import type { Session } from "@supabase/supabase-js";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import GoPremiumFloatingBadge from "@/components/GoPremiumFloatingBadge";
@@ -266,7 +266,10 @@ export default function RootLayout() {
         }
 
         console.log("[Layout] timezone sync — sending to backend:", tz);
-        await setUserTimezone(tz);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
+        }
         await AsyncStorage.setItem(TIMEZONE_STORAGE_KEY, tz);
         console.log("[Layout] timezone sync — success, cached:", tz);
       } catch (e) {
@@ -290,7 +293,10 @@ export default function RootLayout() {
         const cached = await AsyncStorage.getItem(TIMEZONE_STORAGE_KEY);
         if (cached === tz) return; // unchanged, skip
         console.log('[Layout] timezone resync on foreground — sending:', tz);
-        await setUserTimezone(tz);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
+        }
         await AsyncStorage.setItem(TIMEZONE_STORAGE_KEY, tz);
       } catch (e) {
         console.warn('[Layout] timezone resync (AppState) failed:', e);
