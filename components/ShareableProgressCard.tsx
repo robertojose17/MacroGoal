@@ -85,17 +85,21 @@ function InteractivePhoto({ uri, initialScale = 1, initialTranslateX = 0, initia
   const translateYVal = useRef(initialTranslateY);
   const lastDistance = useRef<number | null>(null);
   const lastScale = useRef(initialScale);
+  const gestureStartX = useRef(initialTranslateX);
+  const gestureStartY = useRef(initialTranslateY);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (_evt, gestureState) => {
         console.log('[InteractivePhoto] Pan gesture started');
         lastDistance.current = null;
         lastScale.current = scaleVal.current;
+        gestureStartX.current = translateXVal.current;
+        gestureStartY.current = translateYVal.current;
       },
-      onPanResponderMove: (evt) => {
+      onPanResponderMove: (evt, gestureState) => {
         const touches = evt.nativeEvent.touches;
         if (touches.length === 2) {
           const dx = touches[0].pageX - touches[1].pageX;
@@ -110,16 +114,17 @@ function InteractivePhoto({ uri, initialScale = 1, initialTranslateX = 0, initia
           lastDistance.current = dist;
           lastScale.current = scaleVal.current;
         } else if (touches.length === 1) {
-          const newX = translateXVal.current + evt.nativeEvent.dx / scaleVal.current;
-          const newY = translateYVal.current + evt.nativeEvent.dy / scaleVal.current;
+          lastDistance.current = null;
+          const newX = gestureStartX.current + gestureState.dx / scaleVal.current;
+          const newY = gestureStartY.current + gestureState.dy / scaleVal.current;
           translateXAnim.setValue(newX);
           translateYAnim.setValue(newY);
         }
       },
-      onPanResponderRelease: (evt) => {
+      onPanResponderRelease: (evt, gestureState) => {
         if (evt.nativeEvent.touches.length === 0) {
-          translateXVal.current = (translateXAnim as any).__getValue ? (translateXAnim as any).__getValue() : translateXVal.current;
-          translateYVal.current = (translateYAnim as any).__getValue ? (translateYAnim as any).__getValue() : translateYVal.current;
+          translateXVal.current = gestureStartX.current + gestureState.dx / scaleVal.current;
+          translateYVal.current = gestureStartY.current + gestureState.dy / scaleVal.current;
           console.log('[InteractivePhoto] Transform released:', scaleVal.current, translateXVal.current, translateYVal.current);
           onTransformChange?.(scaleVal.current, translateXVal.current, translateYVal.current);
         }

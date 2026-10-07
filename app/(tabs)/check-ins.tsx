@@ -1840,6 +1840,8 @@ function ComposerSheet({
   const cropTranslateYValue = useRef(0);
   const lastDistance = useRef<number | null>(null);
   const lastScale = useRef(1);
+  const gestureStartX = useRef(0);
+  const gestureStartY = useRef(0);
 
   useEffect(() => {
     if (cropPhoto) {
@@ -1864,6 +1866,8 @@ function ComposerSheet({
       onPanResponderGrant: () => {
         console.log('[CropEditor] Pan/pinch gesture started');
         lastDistance.current = null;
+        gestureStartX.current = cropTranslateXValue.current;
+        gestureStartY.current = cropTranslateYValue.current;
       },
       onPanResponderMove: (evt, gestureState) => {
         const touches = evt.nativeEvent.touches;
@@ -1881,16 +1885,16 @@ function ComposerSheet({
           lastDistance.current = distance;
         } else if (touches.length === 1) {
           lastDistance.current = null;
-          const newX = cropTranslateXValue.current + gestureState.dx;
-          const newY = cropTranslateYValue.current + gestureState.dy;
+          const newX = gestureStartX.current + gestureState.dx;
+          const newY = gestureStartY.current + gestureState.dy;
           cropTranslateX.setValue(newX);
           cropTranslateY.setValue(newY);
         }
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (evt.nativeEvent.touches.length < 2) {
-          cropTranslateXValue.current += gestureState.dx;
-          cropTranslateYValue.current += gestureState.dy;
+          cropTranslateXValue.current = gestureStartX.current + gestureState.dx;
+          cropTranslateYValue.current = gestureStartY.current + gestureState.dy;
         }
         lastDistance.current = null;
         const finalCrop = {
