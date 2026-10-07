@@ -60,7 +60,8 @@ import {
   Dumbbell,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+let ViewShot: any = null;
+try { ViewShot = require('react-native-view-shot').default; } catch {}
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { usePremium } from '@/hooks/usePremium';
@@ -1828,18 +1829,7 @@ function ComposerSheet({
   const [selectedPhotos, setSelectedPhotos] = useState<CheckInPhoto[]>([]);
   const [cropPhoto, setCropPhoto] = useState<CheckInPhoto | null>(null);
 
-  const cropScrollViewRef = useRef<ScrollView>(null);
-  const cropCurrentScale = useRef(1);
-  const cropCurrentOffsetX = useRef(0);
-  const cropCurrentOffsetY = useRef(0);
-
-  useEffect(() => {
-    if (cropPhoto) {
-      cropCurrentScale.current = 1;
-      cropCurrentOffsetX.current = 0;
-      cropCurrentOffsetY.current = 0;
-    }
-  }, [cropPhoto]);
+  const cropViewShotRef = useRef<any>(null);
 
   const [posting, setPosting] = useState(false);
 
@@ -2437,60 +2427,28 @@ function ComposerSheet({
                     <TouchableOpacity
                       onPress={async () => {
                         console.log('[CropEditor] Use Photo pressed for photo:', cropPhoto.id);
-                        const scale = cropCurrentScale.current;
-                        const offsetX = cropCurrentOffsetX.current;
-                        const offsetY = cropCurrentOffsetY.current;
-
-                        const DISPLAY_W = 380;
-                        const DISPLAY_H = 507;
-
                         try {
-                          const { width: imgW, height: imgH } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-                            Image.getSize(cropPhoto.photo_url, (w, h) => resolve({ width: w, height: h }), reject);
-                          });
+                          let finalUri: string = cropPhoto.photo_url;
 
-                          // Rendered size inside contain
-                          const imgAspect = imgW / imgH;
-                          const containerAspect = DISPLAY_W / DISPLAY_H;
-                          let renderedW: number, renderedH: number;
-                          if (imgAspect > containerAspect) {
-                            renderedW = DISPLAY_W;
-                            renderedH = DISPLAY_W / imgAspect;
+                          if (cropViewShotRef.current?.capture) {
+                            // Capture exactly what the user sees — zoom/pan included
+                            finalUri = await cropViewShotRef.current.capture();
+                            console.log('[CropEditor] ViewShot captured:', finalUri);
                           } else {
-                            renderedH = DISPLAY_H;
-                            renderedW = DISPLAY_H * imgAspect;
+                            console.warn('[CropEditor] ViewShot not available, using original');
                           }
 
-                          // Visible region in display coords
-                          const visibleW = renderedW / scale;
-                          const visibleH = renderedH / scale;
-                          const cropX = offsetX;
-                          const cropY = offsetY;
-
-                          // Convert to image pixel coords
-                          const scaleX = imgW / renderedW;
-                          const scaleY = imgH / renderedH;
-                          const pixelX = Math.round(Math.max(0, cropX * scaleX));
-                          const pixelY = Math.round(Math.max(0, cropY * scaleY));
-                          const pixelW = Math.round(Math.min(imgW - pixelX, visibleW * scaleX));
-                          const pixelH = Math.round(Math.min(imgH - pixelY, visibleH * scaleY));
-
-                          console.log('[CropEditor] Cropping:', { scale, offsetX, offsetY, pixelX, pixelY, pixelW, pixelH });
-
-                          if (pixelW > 10 && pixelH > 10) {
-                            const result = await ImageManipulator.manipulateAsync(
-                              cropPhoto.photo_url,
-                              [{ crop: { originX: pixelX, originY: pixelY, width: pixelW, height: pixelH } }],
-                              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                            );
-                            setSelectedPhotos(prev => [...prev, { ...cropPhoto, photo_url: result.uri, cropData: { scale, translateX: -offsetX, translateY: -offsetY } }]);
-                          } else {
-                            // No meaningful crop — use original
-                            setSelectedPhotos(prev => [...prev, { ...cropPhoto, cropData: { scale: 1, translateX: 0, translateY: 0 } }]);
-                          }
+                          setSelectedPhotos(prev => [...prev, {
+                            ...cropPhoto,
+                            photo_url: finalUri,
+                            cropData: { scale: 1, translateX: 0, translateY: 0 },
+                          }]);
                         } catch (err) {
-                          console.warn('[CropEditor] Crop failed, using original:', err);
-                          setSelectedPhotos(prev => [...prev, { ...cropPhoto, cropData: { scale: 1, translateX: 0, translateY: 0 } }]);
+                          console.warn('[CropEditor] Capture failed, using original:', err);
+                          setSelectedPhotos(prev => [...prev, {
+                            ...cropPhoto,
+                            cropData: { scale: 1, translateX: 0, translateY: 0 },
+                          }]);
                         }
                         setCropPhoto(null);
                       }}
@@ -2499,34 +2457,48 @@ function ComposerSheet({
                     </TouchableOpacity>
                   </View>
 
-                  {/* Zoomable image using ScrollView native pinch/pan */}
-                  <ScrollView
-                    ref={cropScrollViewRef}
-                    style={{ flex: 1 }}
-                    contentContainerStyle={{ flex: 1 }}
-                    maximumZoomScale={4}
-                    minimumZoomScale={1}
-                    bouncesZoom={true}
-                    showsHorizontalScrollIndicator={false}
-                    showsVerticalScrollIndicator={false}
-                    centerContent={true}
-                    onScrollEndDrag={(e) => {
-                      cropCurrentScale.current = e.nativeEvent.zoomScale ?? 1;
-                      cropCurrentOffsetX.current = e.nativeEvent.contentOffset.x;
-                      cropCurrentOffsetY.current = e.nativeEvent.contentOffset.y;
-                    }}
-                    onMomentumScrollEnd={(e) => {
-                      cropCurrentScale.current = e.nativeEvent.zoomScale ?? 1;
-                      cropCurrentOffsetX.current = e.nativeEvent.contentOffset.x;
-                      cropCurrentOffsetY.current = e.nativeEvent.contentOffset.y;
-                    }}
-                  >
-                    <Image
-                      source={{ uri: cropPhoto.photo_url }}
-                      style={{ width: 380, height: 507 }}
-                      resizeMode="contain"
-                    />
-                  </ScrollView>
+                  {/* ViewShot wrapper — captures exactly what user sees */}
+                  {ViewShot ? (
+                    <ViewShot
+                      ref={cropViewShotRef}
+                      style={{ flex: 1, overflow: 'hidden' }}
+                      options={{ format: 'jpg', quality: 0.9 }}
+                    >
+                      <ScrollView
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}
+                        maximumZoomScale={4}
+                        minimumZoomScale={1}
+                        bouncesZoom={true}
+                        showsHorizontalScrollIndicator={false}
+                        showsVerticalScrollIndicator={false}
+                        centerContent={true}
+                      >
+                        <Image
+                          source={{ uri: cropPhoto.photo_url }}
+                          style={{ width: 380, height: 507 }}
+                          resizeMode="contain"
+                        />
+                      </ScrollView>
+                    </ViewShot>
+                  ) : (
+                    <ScrollView
+                      style={{ flex: 1 }}
+                      contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}
+                      maximumZoomScale={4}
+                      minimumZoomScale={1}
+                      bouncesZoom={true}
+                      showsHorizontalScrollIndicator={false}
+                      showsVerticalScrollIndicator={false}
+                      centerContent={true}
+                    >
+                      <Image
+                        source={{ uri: cropPhoto.photo_url }}
+                        style={{ width: 380, height: 507 }}
+                        resizeMode="contain"
+                      />
+                    </ScrollView>
+                  )}
 
                   {/* Instructions */}
                   <View style={{ paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' }}>
