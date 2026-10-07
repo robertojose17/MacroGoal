@@ -2387,7 +2387,6 @@ function ComposerSheet({
                           setSelectedPhotos(prev => prev.filter(p => p.id !== item.id));
                         } else {
                           console.log('[Community] Opening crop editor for photo:', item.id);
-                          setCropData({ scale: 1, translateX: 0, translateY: 0 });
                           setCropPhoto(item);
                         }
                       }}
