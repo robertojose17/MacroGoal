@@ -1827,9 +1827,7 @@ function ComposerSheet({
   const [checkInPhotos, setCheckInPhotos] = useState<CheckInPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<CheckInPhoto[]>([]);
-  const [cropPhoto, setCropPhoto] = useState<CheckInPhoto | null>(null);
-
-  const cropViewShotRef = useRef<any>(null);
+  const photoViewShotRefs = useRef<Record<string, any>>({});
 
   const [posting, setPosting] = useState(false);
 
@@ -2177,12 +2175,27 @@ function ComposerSheet({
             statsObj['steps_goal'] = s.meta.steps_goal;
           }
         });
-        // Include photo progress if selected
+        // Include photo progress if selected — capture ViewShot to bake in zoom/pan
         if (selectedPhotos.length > 0) {
-          console.log('[Community] Saving photo_progress with storage_path for', selectedPhotos.length, 'photo(s)');
-          statsObj['photo_progress'] = selectedPhotos.map(p => ({
-            storage_path: p.storage_path ?? null,   // raw path — used to generate fresh signed URLs at render time
-            photo_url: p.photo_url,                 // fallback for existing posts without storage_path
+          console.log('[Community] Capturing ViewShot for', selectedPhotos.length, 'photo(s) before posting');
+          const capturedPhotos = await Promise.all(
+            selectedPhotos.map(async (p) => {
+              try {
+                const ref = photoViewShotRefs.current[p.id];
+                if (ref?.capture) {
+                  const uri = await ref.capture();
+                  console.log('[Community] ViewShot captured for photo:', p.id, uri);
+                  return { ...p, photo_url: uri };
+                }
+              } catch (e) {
+                console.warn('[Community] ViewShot capture failed for photo:', p.id, e);
+              }
+              return p;
+            })
+          );
+          statsObj['photo_progress'] = capturedPhotos.map(p => ({
+            storage_path: null,
+            photo_url: p.photo_url,
             date: p.date ?? p.created_at.split('T')[0],
             weight: p.weight ?? null,
             weight_unit: p.weight_unit ?? null,
@@ -2376,8 +2389,8 @@ function ComposerSheet({
                           console.log('[Community] Photo deselected:', item.id);
                           setSelectedPhotos(prev => prev.filter(p => p.id !== item.id));
                         } else {
-                          console.log('[Community] Opening crop editor for photo:', item.id);
-                          setCropPhoto(item);
+                          console.log('[Community] Photo selected:', item.id);
+                          setSelectedPhotos(prev => [...prev, item]);
                         }
                       }}
                       activeOpacity={0.8}
@@ -2406,107 +2419,7 @@ function ComposerSheet({
               />
             )}
 
-            {/* Crop/Zoom Editor */}
-            <Modal
-              visible={!!cropPhoto}
-              animationType="slide"
-              presentationStyle="pageSheet"
-              onRequestClose={() => setCropPhoto(null)}
-            >
-              {cropPhoto ? (
-                <View style={{ flex: 1, backgroundColor: '#000' }}>
-                  {/* Header */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 }}>
-                    <TouchableOpacity onPress={() => {
-                      console.log('[Community] Crop editor cancelled for photo:', cropPhoto.id);
-                      setCropPhoto(null);
-                    }}>
-                      <Text style={{ color: '#fff', fontSize: 16 }}>Cancel</Text>
-                    </TouchableOpacity>
-                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Adjust Photo</Text>
-                    <TouchableOpacity
-                      onPress={async () => {
-                        console.log('[CropEditor] Use Photo pressed for photo:', cropPhoto.id);
-                        try {
-                          let finalUri: string = cropPhoto.photo_url;
 
-                          if (cropViewShotRef.current?.capture) {
-                            // Capture exactly what the user sees — zoom/pan included
-                            finalUri = await cropViewShotRef.current.capture();
-                            console.log('[CropEditor] ViewShot captured:', finalUri);
-                          } else {
-                            console.warn('[CropEditor] ViewShot not available, using original');
-                          }
-
-                          setSelectedPhotos(prev => [...prev, {
-                            ...cropPhoto,
-                            photo_url: finalUri,
-                            cropData: { scale: 1, translateX: 0, translateY: 0 },
-                          }]);
-                        } catch (err) {
-                          console.warn('[CropEditor] Capture failed, using original:', err);
-                          setSelectedPhotos(prev => [...prev, {
-                            ...cropPhoto,
-                            cropData: { scale: 1, translateX: 0, translateY: 0 },
-                          }]);
-                        }
-                        setCropPhoto(null);
-                      }}
-                    >
-                      <Text style={{ color: '#2A9D8F', fontSize: 16, fontWeight: '700' }}>Use Photo</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* ViewShot wrapper — captures exactly what user sees */}
-                  {ViewShot ? (
-                    <ViewShot
-                      ref={cropViewShotRef}
-                      style={{ flex: 1, overflow: 'hidden' }}
-                      options={{ format: 'jpg', quality: 0.9 }}
-                    >
-                      <ScrollView
-                        style={{ flex: 1 }}
-                        contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}
-                        maximumZoomScale={4}
-                        minimumZoomScale={1}
-                        bouncesZoom={true}
-                        showsHorizontalScrollIndicator={false}
-                        showsVerticalScrollIndicator={false}
-                        centerContent={true}
-                      >
-                        <Image
-                          source={{ uri: cropPhoto.photo_url }}
-                          style={{ width: 380, height: 507 }}
-                          resizeMode="contain"
-                        />
-                      </ScrollView>
-                    </ViewShot>
-                  ) : (
-                    <ScrollView
-                      style={{ flex: 1 }}
-                      contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}
-                      maximumZoomScale={4}
-                      minimumZoomScale={1}
-                      bouncesZoom={true}
-                      showsHorizontalScrollIndicator={false}
-                      showsVerticalScrollIndicator={false}
-                      centerContent={true}
-                    >
-                      <Image
-                        source={{ uri: cropPhoto.photo_url }}
-                        style={{ width: 380, height: 507 }}
-                        resizeMode="contain"
-                      />
-                    </ScrollView>
-                  )}
-
-                  {/* Instructions */}
-                  <View style={{ paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>Pinch to zoom · Drag to reposition</Text>
-                  </View>
-                </View>
-              ) : null}
-            </Modal>
           </View>
         </Modal>
 
@@ -2753,26 +2666,54 @@ function ComposerSheet({
                 ) : null}
               </TouchableOpacity>
 
-              {/* Selected photos preview */}
+              {/* Selected photos preview — inline zoomable/pannable */}
               {selectedPhotos.length > 0 ? (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                   {selectedPhotos.map((photo) => {
                     const photoDateDisplay = photo.date
                       ? new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                       : new Date(photo.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    const weightText = photo.weight != null ? `${photo.weight} ${photo.weight_unit ?? 'lbs'}` : null;
                     return (
-                      <View key={photo.id} style={{ flex: 1, position: 'relative' }}>
-                        <Image
-                          source={{ uri: photo.photo_url }}
-                          style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 10 }}
-                          resizeMode="cover"
-                        />
+                      <View key={photo.id} style={{ flex: 1, position: 'relative', aspectRatio: 3 / 4, borderRadius: 10, overflow: 'hidden' }}>
+                        {ViewShot ? (
+                          <ViewShot
+                            ref={(r) => { photoViewShotRefs.current[photo.id] = r; }}
+                            style={{ flex: 1 }}
+                            options={{ format: 'jpg', quality: 0.9 }}
+                          >
+                            <ScrollView
+                              style={{ flex: 1 }}
+                              contentContainerStyle={{ flexGrow: 1 }}
+                              maximumZoomScale={4}
+                              minimumZoomScale={1}
+                              bouncesZoom={true}
+                              showsHorizontalScrollIndicator={false}
+                              showsVerticalScrollIndicator={false}
+                              centerContent={true}
+                            >
+                              <Image
+                                source={{ uri: photo.photo_url }}
+                                style={{ width: '100%', aspectRatio: 3 / 4 }}
+                                resizeMode="cover"
+                              />
+                            </ScrollView>
+                          </ViewShot>
+                        ) : (
+                          <Image
+                            source={{ uri: photo.photo_url }}
+                            style={{ flex: 1 }}
+                            resizeMode="cover"
+                          />
+                        )}
+                        {/* Date/weight overlay */}
                         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, padding: 6 }}>
                           <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{photoDateDisplay}</Text>
-                          {photo.weight != null ? (
-                            <Text style={{ color: '#fff', fontSize: 11 }}>{photo.weight} {photo.weight_unit ?? 'lbs'}</Text>
+                          {weightText != null ? (
+                            <Text style={{ color: '#fff', fontSize: 11 }}>{weightText}</Text>
                           ) : null}
                         </View>
+                        {/* Remove button */}
                         <TouchableOpacity
                           style={{ position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
                           onPress={() => {
