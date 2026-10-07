@@ -34,6 +34,10 @@ const OneSignal = {
     addTag: noOp,
     addTags: noOp,
     removeTag: noOp,
+    pushSubscription: {
+      optIn: noOpAsync,
+      optOut: noOpAsync,
+    },
   },
 };
 

@@ -139,6 +139,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           console.log("[OneSignal] Permission already granted");
         }
 
+        // Ensure push subscription is active (re-registers token if needed)
+        try {
+          await os.OneSignal.User.pushSubscription.optIn();
+          console.log("[OneSignal] pushSubscription.optIn() called on init");
+        } catch (optInErr) {
+          console.warn("[OneSignal] pushSubscription.optIn() not available (non-fatal):", optInErr);
+        }
+
         // Foreground notification handler — always display
         const foregroundHandler = (event: any) => {
           console.log("[OneSignal] Foreground notification received:", event.getNotification().title);
@@ -198,6 +206,32 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             if (session.user.email) {
               os.OneSignal.User.addEmail(session.user.email);
             }
+            // After login, check permission and request if needed
+            // This ensures the push token gets linked to the external_id
+            setTimeout(async () => {
+              try {
+                const hasPerm = await os.OneSignal.Notifications.getPermissionAsync();
+                console.log("[OneSignal] Permission after login:", hasPerm);
+                if (!hasPerm) {
+                  console.log("[OneSignal] Requesting permission after login...");
+                  const granted = await os.OneSignal.Notifications.requestPermission(true);
+                  console.log("[OneSignal] Permission granted after login:", granted);
+                  setHasPermission(granted);
+                  setPermissionDenied(!granted);
+                } else {
+                  // Permission already granted — re-trigger opt-in to ensure token is linked
+                  // This is a no-op if already subscribed, but forces re-registration if not
+                  try {
+                    await os.OneSignal.User.pushSubscription.optIn();
+                    console.log("[OneSignal] optIn() called to ensure push token is linked");
+                  } catch (optInErr) {
+                    console.warn("[OneSignal] optIn() not available or failed (non-fatal):", optInErr);
+                  }
+                }
+              } catch (permErr) {
+                console.warn("[OneSignal] Post-login permission check failed (non-fatal):", permErr);
+              }
+            }, 1500); // 1.5s delay to let OneSignal.login() complete its async registration
           } catch (e) {
             console.warn("[OneSignal] login failed (non-fatal):", e);
           }
