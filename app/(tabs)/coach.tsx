@@ -2005,6 +2005,21 @@ export default function CoachScreen() {
         <View style={styles.headerRight}>
           <TouchableOpacity
             onPress={() => {
+              console.log('[AICoach] Bug report icon pressed');
+              router.push('/bug-report?tab_source=coach');
+            }}
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <IconSymbol
+              ios_icon_name="ladybug"
+              android_material_icon_name="bug_report"
+              size={20}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
               console.log('[AICoach] Memory button pressed');
               router.push('/coach-memory');
             }}

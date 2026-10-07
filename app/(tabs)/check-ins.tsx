@@ -3925,6 +3925,20 @@ export default function CommunityScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <TouchableOpacity
             onPress={() => {
+              console.log('[Community] Bug report icon pressed');
+              router.push('/bug-report?tab_source=community');
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <IconSymbol
+              ios_icon_name="ladybug"
+              android_material_icon_name="bug_report"
+              size={22}
+              color={secondaryColor}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
               console.log('[Community] Auto-share settings button pressed');
               setShowAutoShareSettings(true);
             }}

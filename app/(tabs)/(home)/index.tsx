@@ -1750,6 +1750,25 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      {/* ── Fixed Food Header ── */}
+      <View style={[styles.foodHeader, { borderBottomColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        <Text style={[styles.foodHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>Food</Text>
+        <TouchableOpacity
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => {
+            console.log('[Home] Bug report icon pressed');
+            router.push('/bug-report?tab_source=food');
+          }}
+        >
+          <IconSymbol
+            ios_icon_name="ladybug"
+            android_material_icon_name="bug_report"
+            size={22}
+            color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
+
       {/* Top header: pill control in Tracking mode, underline tabs in Planning mode */}
       {activeTab === 'tracking' ? (
         <View style={[styles.segmentedControlWrapper, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
@@ -2233,6 +2252,18 @@ const styles = StyleSheet.create({
   dateCenter: { alignItems: 'center', flex: 1 },
   dateLabel: { ...typography.caption, marginBottom: 2 },
   dateText: { ...typography.h3 },
+  foodHeader: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  foodHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
   segmentedControlWrapper: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

@@ -221,13 +221,13 @@ export default function DashboardScreen() {
         style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
         edges={['top']}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <View>
-              <View style={[styles.skeletonText, { width: 180, height: 22, backgroundColor: isDark ? colors.cardDark : colors.card }]} />
-              <View style={[styles.skeletonText, { width: 140, height: 14, marginTop: 6, backgroundColor: isDark ? colors.cardDark : colors.card }]} />
-            </View>
+        <View style={[styles.header, { borderBottomColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+          <View style={styles.greetingColumn}>
+            <View style={[styles.skeletonText, { width: 180, height: 22, backgroundColor: isDark ? colors.cardDark : colors.card }]} />
+            <View style={[styles.skeletonText, { width: 140, height: 14, marginTop: 6, backgroundColor: isDark ? colors.cardDark : colors.card }]} />
           </View>
+        </View>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <SkeletonBlock height={44} isDark={isDark} />
           <SkeletonBlock height={280} isDark={isDark} />
           <SkeletonBlock height={180} isDark={isDark} />
@@ -242,22 +242,32 @@ export default function DashboardScreen() {
       style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
       edges={['top']}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        scrollEventThrottle={16}
-      >
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <View style={styles.greetingColumn}>
-            <Text style={[styles.greetingSmall, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {greeting}
-            </Text>
-            <Text style={[styles.greetingName, { color: isDark ? colors.textDark : colors.text }]}>
-              {firstName}
-            </Text>
-          </View>
+      {/* ── Fixed Header ── */}
+      <View style={[styles.header, { borderBottomColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        <View style={styles.greetingColumn}>
+          <Text style={[styles.greetingSmall, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            {greeting}
+          </Text>
+          <Text style={[styles.greetingName, { color: isDark ? colors.textDark : colors.text }]}>
+            {firstName}
+          </Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.headerIconBtn}
+            onPress={() => {
+              console.log('[Dashboard] Bug report icon pressed');
+              router.push('/bug-report?tab_source=dashboard');
+            }}
+          >
+            <IconSymbol
+              ios_icon_name="ladybug"
+              android_material_icon_name="bug_report"
+              size={22}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+            />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.shareButton}
             onPress={() => {
@@ -273,7 +283,14 @@ export default function DashboardScreen() {
             />
           </TouchableOpacity>
         </View>
+      </View>
 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        scrollEventThrottle={16}
+      >
         {/* ── Streak Pill ── */}
         <CardErrorBoundary label="StreakPill">
           <StreakPill isDark={isDark} />
@@ -359,8 +376,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
-    paddingBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerIconBtn: {
+    padding: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   greetingColumn: {
     flex: 1,

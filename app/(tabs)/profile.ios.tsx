@@ -567,19 +567,36 @@ export default function ProfileScreen() {
       {/* Top bar */}
       <View style={[styles.topBar, { borderBottomColor: borderColor }]}>
         <Text style={[styles.topBarTitle, { color: textColor }]}>Profile</Text>
-        <TouchableOpacity
-          onPress={handleSettingsPress}
-          activeOpacity={0.7}
-          style={styles.settingsButton}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <IconSymbol
-            ios_icon_name="gearshape"
-            android_material_icon_name="settings"
-            size={24}
-            color={textColor}
-          />
-        </TouchableOpacity>
+        <View style={styles.topBarRight}>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Profile iOS] Bug report icon pressed');
+              router.push('/bug-report?tab_source=profile');
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.topBarIconBtn}
+          >
+            <IconSymbol
+              ios_icon_name="ladybug"
+              android_material_icon_name="bug_report"
+              size={22}
+              color={secondaryText}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleSettingsPress}
+            activeOpacity={0.7}
+            style={styles.settingsButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <IconSymbol
+              ios_icon_name="gearshape"
+              android_material_icon_name="settings"
+              size={24}
+              color={textColor}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -1003,6 +1020,14 @@ const styles = StyleSheet.create({
   },
   topBarTitle: {
     ...typography.h3,
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  topBarIconBtn: {
+    padding: spacing.xs,
   },
   settingsButton: {
     padding: spacing.xs,
