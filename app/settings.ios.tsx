@@ -979,10 +979,6 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           )}
 
-          <Text style={[styles.subscriptionStatus, { color: isPremium ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-            {subscriptionStatusText}
-          </Text>
-
           <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {user.email || 'Guest User'}
           </Text>
@@ -1071,11 +1067,10 @@ export default function SettingsScreen() {
               <View style={[styles.accordionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
               <View style={styles.accordionContent}>
                 <EditableSettingItem
-                  label={t('profile.name')}
-                  value={user.name || t('profile.tapToSetName')}
-                  onPress={() => openEditModal('name')}
+                  label={t('profile.email') || 'Email'}
+                  value={user.email || ''}
+                  onPress={() => {}}
                   isDark={isDark}
-                  highlight={!user.name}
                 />
                 <EditableSettingItem
                   label={t('profile.username')}
@@ -1088,155 +1083,11 @@ export default function SettingsScreen() {
                   highlight={!user.username}
                 />
                 <EditableSettingItem
-                  label={t('profile.age')}
-                  value={age ? t('profile.years', { age }) : t('profile.tapToSet')}
-                  onPress={() => openEditModal('age')}
+                  label={t('profile.name')}
+                  value={user.name || t('profile.tapToSetName')}
+                  onPress={() => openEditModal('name')}
                   isDark={isDark}
-                  highlight={!age}
-                />
-                <EditableSettingItem
-                  label={t('profile.sex')}
-                  value={sexDisplayValue}
-                  onPress={() => {
-                    console.log('[Profile iOS] Sex field tapped');
-                    Alert.alert(
-                      t('profile.selectSex'),
-                      '',
-                      [
-                        {
-                          text: t('profile.male'),
-                          onPress: () => {
-                            console.log('[Profile iOS] Sex changed to male');
-                            saveFieldDirectly('sex', 'male');
-                          },
-                        },
-                        {
-                          text: t('profile.female'),
-                          onPress: () => {
-                            console.log('[Profile iOS] Sex changed to female');
-                            saveFieldDirectly('sex', 'female');
-                          },
-                        },
-                        { text: t('common.cancel'), style: 'cancel' },
-                      ]
-                    );
-                  }}
-                  isDark={isDark}
-                  highlight={!user.sex}
-                />
-                <EditableSettingItem
-                  label={t('profile.height')}
-                  value={user.height ? formatHeight(user.height, units) : t('profile.tapToSet')}
-                  onPress={() => openEditModal('height')}
-                  isDark={isDark}
-                  highlight={!user.height}
-                />
-                <EditableSettingItem
-                  label={t('profile.weight')}
-                  value={user.current_weight ? formatWeight(user.current_weight, units) : t('profile.tapToSet')}
-                  onPress={() => openEditModal('weight')}
-                  isDark={isDark}
-                  highlight={!user.current_weight}
-                />
-                <EditableSettingItem
-                  label={t('profile.goalWeight')}
-                  value={user.goal_weight ? formatWeight(user.goal_weight, units) : t('profile.tapToSetGoalWeight')}
-                  onPress={() => openEditModal('goalWeight')}
-                  isDark={isDark}
-                  highlight={!user.goal_weight}
-                />
-                <EditableSettingItem
-                  label={t('profile.units')}
-                  value={unitsDisplayValue}
-                  onPress={() => {
-                    console.log('[Profile iOS] Units field tapped');
-                    Alert.alert(
-                      t('profile.selectUnits'),
-                      '',
-                      [
-                        {
-                          text: t('profile.metricLabel'),
-                          onPress: async () => {
-                            console.log('[Profile iOS] Units changed to metric');
-                            try {
-                              const { error } = await supabase
-                                .from('users')
-                                .update({ preferred_units: 'metric', updated_at: new Date().toISOString() })
-                                .eq('id', user.id);
-                              if (error) throw error;
-                              await loadUserData();
-                            } catch (err: any) {
-                              console.error('[Profile iOS] Error saving units:', err);
-                              Alert.alert(t('common.error'), err.message || t('profile.failedToSaveUnits'));
-                            }
-                          },
-                        },
-                        {
-                          text: t('profile.imperialLabel'),
-                          onPress: async () => {
-                            console.log('[Profile iOS] Units changed to imperial');
-                            try {
-                              const { error } = await supabase
-                                .from('users')
-                                .update({ preferred_units: 'imperial', updated_at: new Date().toISOString() })
-                                .eq('id', user.id);
-                              if (error) throw error;
-                              await loadUserData();
-                            } catch (err: any) {
-                              console.error('[Profile iOS] Error saving units:', err);
-                              Alert.alert(t('common.error'), err.message || t('profile.failedToSaveUnits'));
-                            }
-                          },
-                        },
-                        { text: t('common.cancel'), style: 'cancel' },
-                      ]
-                    );
-                  }}
-                  isDark={isDark}
-                />
-                <EditableSettingItem
-                  label={t('profile.activityLevel')}
-                  value={activityDisplayValue}
-                  onPress={() => {
-                    console.log('[Profile iOS] Activity level field tapped');
-                    Alert.alert(
-                      t('profile.selectActivityLevel'),
-                      '',
-                      [
-                        {
-                          text: t('profile.sedentary'),
-                          onPress: () => {
-                            console.log('[Profile iOS] Activity level changed to sedentary');
-                            saveFieldDirectly('activity', 'sedentary');
-                          },
-                        },
-                        {
-                          text: t('profile.light'),
-                          onPress: () => {
-                            console.log('[Profile iOS] Activity level changed to light');
-                            saveFieldDirectly('activity', 'light');
-                          },
-                        },
-                        {
-                          text: t('profile.moderate'),
-                          onPress: () => {
-                            console.log('[Profile iOS] Activity level changed to moderate');
-                            saveFieldDirectly('activity', 'moderate');
-                          },
-                        },
-                        {
-                          text: t('profile.veryActive'),
-                          onPress: () => {
-                            console.log('[Profile iOS] Activity level changed to very_active');
-                            saveFieldDirectly('activity', 'very_active');
-                          },
-                        },
-                        { text: t('common.cancel'), style: 'cancel' },
-                      ]
-                    );
-                  }}
-                  isDark={isDark}
-                  highlight={!user.activity_level}
+                  highlight={!user.name}
                 />
               </View>
             </View>

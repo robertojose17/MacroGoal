@@ -16,6 +16,8 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -149,6 +151,9 @@ export default function ProfileScreen() {
 
   // Tooltip
   const [tooltipKey, setTooltipKey] = useState<string | null>(null);
+
+  // Avatar upload
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
 
 
@@ -513,6 +518,75 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleAvatarPress = () => {
+    console.log('[Profile iOS] Avatar tapped — showing photo picker alert');
+    Alert.alert(
+      'Profile Photo',
+      'Choose how to update your profile photo',
+      [
+        { text: 'Take Photo', onPress: () => pickAvatarImage('camera') },
+        { text: 'Choose from Library', onPress: () => pickAvatarImage('library') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const pickAvatarImage = async (source: 'camera' | 'library') => {
+    console.log('[Profile iOS] pickAvatarImage — source:', source);
+    try {
+      let result: ImagePicker.ImagePickerResult;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Photo library access is needed to choose a photo.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+      }
+      if (result.canceled) {
+        console.log('[Profile iOS] pickAvatarImage — user cancelled');
+        return;
+      }
+      console.log('[Profile iOS] pickAvatarImage — image selected, uploading');
+      await uploadAvatarFromProfile(result.assets[0].uri);
+    } catch (error: any) {
+      console.error('[Profile iOS] pickAvatarImage — error:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const uploadAvatarFromProfile = async (uri: string) => {
+    if (!user?.id) return;
+    console.log('[Profile iOS] uploadAvatarFromProfile — starting upload for user:', user.id);
+    setAvatarUploading(true);
+    try {
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+      const path = `${user.id}/avatar.jpg`;
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+      const { error: updateError } = await supabase.from('users').update({ avatar_url: urlData.publicUrl, updated_at: new Date().toISOString() }).eq('id', user.id);
+      if (updateError) throw updateError;
+      console.log('[Profile iOS] uploadAvatarFromProfile — upload successful, reloading user data');
+      await loadData();
+    } catch (error: any) {
+      console.error('[Profile iOS] uploadAvatarFromProfile — error:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -615,21 +689,35 @@ export default function ProfileScreen() {
           {/* Row: avatar + info */}
           <View style={styles.igHeaderRow}>
             {/* Avatar */}
-            <View style={[styles.igAvatarRing, { borderColor: colors.primary }]}>
-              {user.avatar_url ? (
-                <Image
-                  key={user.avatar_url}
-                  source={{ uri: user.avatar_url }}
-                  style={styles.igAvatarImage}
-                  resizeMode="cover"
-                  onError={(e) => console.warn('[Profile iOS] Avatar image load error:', e.nativeEvent.error, 'URL:', user.avatar_url)}
-                />
-              ) : (
-                <View style={[styles.igAvatarFallback, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.igAvatarInitials}>{initials}</Text>
-                </View>
-              )}
-            </View>
+            <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8} style={{ position: 'relative' }}>
+              <View style={[styles.igAvatarRing, { borderColor: colors.primary }]}>
+                {user.avatar_url ? (
+                  <Image
+                    key={user.avatar_url}
+                    source={{ uri: user.avatar_url }}
+                    style={styles.igAvatarImage}
+                    resizeMode="cover"
+                    onError={(e) => console.warn('[Profile iOS] Avatar image load error:', e.nativeEvent.error, 'URL:', user.avatar_url)}
+                  />
+                ) : (
+                  <View style={[styles.igAvatarFallback, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.igAvatarInitials}>{initials}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={{
+                position: 'absolute', bottom: 0, right: 0,
+                width: 24, height: 24, borderRadius: 12,
+                backgroundColor: colors.primary,
+                alignItems: 'center', justifyContent: 'center',
+                borderWidth: 2, borderColor: isDark ? colors.backgroundDark : '#fff',
+              }}>
+                {avatarUploading
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={12} color="#fff" />
+                }
+              </View>
+            </TouchableOpacity>
 
             {/* Info column */}
             <View style={styles.igInfoCol}>
