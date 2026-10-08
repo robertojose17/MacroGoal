@@ -4121,7 +4121,7 @@ export default function CommunityScreen() {
               router.push('/referrals');
             }}
           >
-            <Text style={styles.inviteBtnText}>🎉 Invite Friends — Help Us Grow</Text>
+            <Text style={styles.inviteBtnText}>Your Journey is Better With a Friend 🤝</Text>
           </TouchableOpacity>
 
           {/* Search bar */}
