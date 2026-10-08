@@ -1271,42 +1271,14 @@ export default function CoachScreen() {
           return;
         }
 
-        // Legacy: inject local welcome snapshot if history already exists and todayCal > 0
-        // (only when messages list is empty — i.e. history loaded but setMessages not yet called)
         if (messagesRef.current.length === 0) {
-          // Fetch today's totals for the snapshot
-          const todayStr = new Date().toISOString().split('T')[0];
-          const { data: todayMeals } = await supabase
-            .from('meals')
-            .select('meal_items(calories, protein, carbs, fats)')
-            .eq('user_id', user.id)
-            .eq('date', todayStr);
-
-          let todayCal = 0, todayProtein = 0, todayCarbs = 0, todayFats = 0;
-          for (const meal of (todayMeals || [])) {
-            for (const item of ((meal as any).meal_items || [])) {
-              todayCal += Number(item.calories) || 0;
-              todayProtein += Number(item.protein) || 0;
-              todayCarbs += Number(item.carbs) || 0;
-              todayFats += Number(item.fats) || 0;
-            }
-          }
-
-          if (todayCal > 0 && isMountedRef.current) {
-            const hour = new Date().getHours();
-            const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-            const todayCalRounded = Math.round(todayCal);
-            const todayProteinRounded = Math.round(todayProtein);
-            const todayCarbsRounded = Math.round(todayCarbs);
-            const todayFatsRounded = Math.round(todayFats);
-            const welcomeContent = `${greeting}! Here's your nutrition snapshot for today:\n\n**${todayCalRounded} cal** logged  •  **${todayProteinRounded}g** protein  •  **${todayCarbsRounded}g** carbs  •  **${todayFatsRounded}g** fats\n\nWhat can I help you with today?`;
-            console.log('[AICoach] Injecting welcome nutrition message');
-            setMessages([{
-              id: genId(),
-              role: 'assistant',
-              content: welcomeContent,
-              timestamp: Date.now(),
-            }]);
+          firstMessageSentRef.current = true;
+          const triggerMsg = [{ role: 'user' as const, content: '__RETURNING_USER_OPEN__', timestamp: Date.now() }];
+          try {
+            await sendMessage(triggerMsg, user.id, false, true);
+          } catch (e: any) {
+            console.warn('[AICoach] Returning user open error:', e?.message);
+            firstMessageSentRef.current = false;
           }
         }
       } catch (e: any) {

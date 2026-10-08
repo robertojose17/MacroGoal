@@ -280,7 +280,7 @@ export function useAICoach(options?: UseAICoachOptions) {
 
   // ── Non-streaming sendMessage ──────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (apiMessages: CoachMessage[], userId?: string, isFirstMessage?: boolean): Promise<void> => {
+    async (apiMessages: CoachMessage[], userId?: string, isFirstMessage?: boolean, isReturningUserOpen?: boolean): Promise<void> => {
       if (!apiMessages || apiMessages.length === 0) {
         console.log('[useAICoach] No messages to send');
         return;
@@ -387,6 +387,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               use_web: useWeb,
               language: i18n.language,
               ...(isFirstMessage ? { is_first_message: true } : {}),
+              ...(isReturningUserOpen ? { is_returning_user_open: true } : {}),
             }),
             signal: abortController.signal,
           }
