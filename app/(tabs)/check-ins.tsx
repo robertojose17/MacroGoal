@@ -3149,6 +3149,10 @@ export default function CommunityScreen() {
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState<CommunityTab>('feed');
 
+  // ── Community unlock counter ──
+  const [activeUserCount, setActiveUserCount] = useState<number>(0);
+  const [counterLoading, setCounterLoading] = useState(true);
+
   // ── Feed state ──
   const [feedPosts, setFeedPosts] = useState<CommunityPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -3258,6 +3262,30 @@ export default function CommunityScreen() {
     useCallback(() => {
       reloadAvatar();
     }, [reloadAvatar])
+  );
+
+  // Refresh community unlock counter on every tab focus
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      console.log('[Community] Fetching community_unlock_counter');
+      supabase
+        .from('community_unlock_counter')
+        .select('active_user_count')
+        .eq('id', 1)
+        .single()
+        .then(({ data }) => {
+          if (!cancelled) {
+            console.log('[Community] active_user_count:', data?.active_user_count);
+            setActiveUserCount(data?.active_user_count ?? 0);
+            setCounterLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setCounterLoading(false);
+        });
+      return () => { cancelled = true; };
+    }, [])
   );
 
   // ── Trigger initial data load once currentUserId is set ──
@@ -3979,39 +4007,108 @@ export default function CommunityScreen() {
 
       {/* ── FEED TAB ── */}
       {activeTab === 'feed' && (
-        <FlatList
-          data={feedPosts}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: spacing.md, paddingBottom: 100 }}
-          refreshControl={
-            <RefreshControl refreshing={feedRefreshing} onRefresh={handleFeedRefresh} tintColor={colors.primary} />
-          }
-          ListEmptyComponent={
-            feedLoading ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>
-                  No posts yet. Be the first to share!
-                </Text>
+        counterLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : activeUserCount < 1000 ? (
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, paddingVertical: 60, paddingBottom: 120 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Lock icon */}
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}>
+              <Lock size={40} color={colors.primary} />
+            </View>
+
+            {/* Title */}
+            <Text style={{ fontSize: 24, fontWeight: '800', color: isDark ? colors.textDark : colors.primaryText, textAlign: 'center', marginBottom: 14, letterSpacing: -0.3 }}>
+              Help Us Build Our Community
+            </Text>
+
+            {/* Description */}
+            <Text style={{ fontSize: 15, color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', lineHeight: 23, marginBottom: 36, maxWidth: 300 }}>
+              Thanks for joining Macro Goal! Once we reach 1,000 active members, the Community feed will unlock for everyone.
+            </Text>
+
+            {/* Progress bar */}
+            <View style={{ width: '100%', marginBottom: 10 }}>
+              <View style={{ height: 12, borderRadius: 6, backgroundColor: isDark ? colors.borderDark : '#E5E7EB', overflow: 'hidden' }}>
+                <View style={{
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: colors.primary,
+                  width: `${Math.min(Math.max((activeUserCount / 1000) * 100, 2), 100)}%`,
+                }} />
               </View>
-            )
-          }
-          renderItem={({ item }) => (
-            <PostCard
-              post={item}
-              isDark={isDark}
-              currentUserId={currentUserId}
-              onLike={handleLike}
-              onSave={handleSave}
-              onReport={handleReport}
-              onBlock={handleBlock}
-              onDelete={handleDelete}
-              onOpenComments={handleOpenComments}
-            />
-          )}
-          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-        />
+            </View>
+
+            {/* Counter */}
+            <Text style={{ fontSize: 17, fontWeight: '700', color: isDark ? colors.textDark : colors.primaryText, marginBottom: 40 }}>
+              {activeUserCount.toLocaleString()} / 1,000 active members
+            </Text>
+
+            {/* CTA button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: 50,
+                paddingVertical: 16,
+                paddingHorizontal: 32,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+              onPress={() => {
+                console.log('[Community] CTA pressed: navigating to /referrals');
+                router.push('/referrals');
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ fontSize: 16 }}>🎉</Text>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Invite a Friend — Help Us Grow</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        ) : (
+          <FlatList
+            data={feedPosts}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: spacing.md, paddingBottom: 100 }}
+            refreshControl={
+              <RefreshControl refreshing={feedRefreshing} onRefresh={handleFeedRefresh} tintColor={colors.primary} />
+            }
+            ListEmptyComponent={
+              feedLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={[styles.emptyStateText, { color: secondaryColor }]}>
+                    No posts yet. Be the first to share!
+                  </Text>
+                </View>
+              )
+            }
+            renderItem={({ item }) => (
+              <PostCard
+                post={item}
+                isDark={isDark}
+                currentUserId={currentUserId}
+                onLike={handleLike}
+                onSave={handleSave}
+                onReport={handleReport}
+                onBlock={handleBlock}
+                onDelete={handleDelete}
+                onOpenComments={handleOpenComments}
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          />
+        )
       )}
 
       {/* ── FRIENDS TAB ── */}
