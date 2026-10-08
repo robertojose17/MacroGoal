@@ -158,6 +158,7 @@ export interface CreatePostInput {
   auto_post_type?: string;
   auto_post_date?: string;
   saves_count?: number;
+  section?: 'feed' | 'club';
 }
 
 // ─── Auth helpers (used by feed/profile/follows/search edge functions) ────────
@@ -289,6 +290,7 @@ export async function createPost(post: CreatePostInput): Promise<SocialPost> {
       weight_unit: post.weight_unit ?? null,
       is_pinned: post.is_pinned ?? false,
       is_founder_post: post.is_founder_post ?? false,
+      section: post.section ?? 'feed',
     })
     .select('*')
     .single();

@@ -2212,8 +2212,8 @@ function ComposerSheet({
         };
       }
 
-      console.log('[Community] Network request: createPost, type:', postData.post_type_v2);
-      const result = await createPost(postData);
+      console.log('[Community] Network request: createPost, type:', postData.post_type_v2, 'section:', section);
+      const result = await createPost({ ...postData, section });
       console.log('[Community] Post created successfully, id:', result?.id);
 
       // Build optimistic post for immediate prepend
@@ -3132,7 +3132,6 @@ export default function CommunityScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isPremium, loading: premiumLoading } = usePremium();
-  const clubSyncedRef = useRef(false);
 
   const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
@@ -3673,13 +3672,8 @@ export default function CommunityScreen() {
       } else if (activeTab === 'club') {
         setClubLoading(true);
         fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
-        // Sync premium membership once per session when club tab is focused
-        // so cross-device purchases are reflected without a restart.
-        if (!clubSyncedRef.current) {
-          clubSyncedRef.current = true;
-          console.log('[Community] Club tab focused — triggering one-time premium sync');
-          syncPremiumMembership().catch(console.warn);
-        }
+        // Always re-sync premium on club tab focus so cancelled subscribers are gated correctly
+        syncPremiumMembership().catch(console.warn);
         // Fetch member count for founder
         fetchClubMemberCount();
       }
@@ -4119,6 +4113,18 @@ export default function CommunityScreen() {
             <RefreshControl refreshing={friendsRefreshing} onRefresh={handleFriendsRefresh} tintColor={colors.primary} />
           }
         >
+          {/* Invite Friends button */}
+          <TouchableOpacity
+            style={[styles.inviteBtn, { marginBottom: spacing.md }]}
+            onPress={() => {
+              console.log('[Community] Invite Friends button pressed');
+              router.push('/referrals');
+            }}
+          >
+            <Users size={18} color="#fff" style={{ marginRight: spacing.xs }} />
+            <Text style={styles.inviteBtnText}>🎉 Invite Friends — Help Us Grow</Text>
+          </TouchableOpacity>
+
           {/* Search bar */}
           <View style={[styles.searchBar, { backgroundColor: cardBg, borderColor }]}>
             <Search size={18} color={secondaryColor} />
