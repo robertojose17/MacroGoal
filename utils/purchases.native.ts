@@ -2,6 +2,7 @@
 // On native (iOS/Android), use the real react-native-purchases SDK.
 // Metro resolves '@/utils/purchases' → this file via the .native.ts extension.
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import { Platform } from 'react-native';
 
 export default Purchases;
 export { LOG_LEVEL };
@@ -45,6 +46,13 @@ export async function loginRevenueCat(userId: string, apiKey: string, opts?: { e
 
     if (opts?.email) {
       try { await Purchases.setEmail(opts.email); } catch (_) { /* non-fatal */ }
+    }
+
+    // iOS AdServices attribution — fire-and-forget, never blocks login or premium sync
+    if (Platform.OS === 'ios') {
+      Purchases.enableAdServicesAttributionTokenCollection()
+        .then(() => console.log('[RC] AdServices attribution token collection enabled'))
+        .catch((e: unknown) => console.warn('[RC] AdServices attribution failed (non-fatal):', e));
     }
   } catch (e) {
     console.warn('[RC] loginRevenueCat failed:', e);
