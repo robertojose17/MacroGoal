@@ -3326,6 +3326,7 @@ export default function CommunityScreen() {
           author:users!user_id(id, username, full_name, avatar_url, user_type)
         `)
         .eq('is_public', true)
+        .eq('section', 'feed')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(50);
