@@ -465,6 +465,9 @@ export function useAICoach(options?: UseAICoachOptions) {
                 if (parsed.done) {
                   actionProposal = parsed.action_proposal || null;
                   suggestions = parsed.suggestions || null;
+                  if (parsed.corrected_text) {
+                    fullText = parsed.corrected_text;
+                  }
                 }
               } catch { /* skip malformed */ }
             }
@@ -485,6 +488,9 @@ export function useAICoach(options?: UseAICoachOptions) {
               if (parsed.done) {
                 actionProposal = parsed.action_proposal || null;
                 suggestions = parsed.suggestions || null;
+                if (parsed.corrected_text) {
+                  fullText = parsed.corrected_text;
+                }
               }
             } catch { /* skip malformed */ }
           }
