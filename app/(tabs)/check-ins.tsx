@@ -4121,7 +4121,6 @@ export default function CommunityScreen() {
               router.push('/referrals');
             }}
           >
-            <Users size={18} color="#fff" style={{ marginRight: spacing.xs }} />
             <Text style={styles.inviteBtnText}>🎉 Invite Friends — Help Us Grow</Text>
           </TouchableOpacity>
 
@@ -4365,32 +4364,7 @@ export default function CommunityScreen() {
                 </TouchableOpacity>
               )}
 
-              <View style={[styles.composeRow, { backgroundColor: cardBg, borderColor, marginBottom: spacing.md }]}>
-                {currentUserAvatar ? (
-                  <Image key={currentUserAvatar} source={{ uri: currentUserAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} resizeMode="cover" />
-                ) : (
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#5B9AA8', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{currentUserFirstName ? currentUserFirstName.charAt(0).toUpperCase() : 'U'}</Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={[styles.composePlaceholder, { borderColor }]}
-                  onPress={() => {
-                    console.log('[Community] Club compose placeholder tapped');
-                    setShowCreatePost(true);
-                  }}
-                >
-                  <Text style={[styles.composePlaceholderText, { color: secondaryColor }]}>
-                    Share progress, a struggle, or encouragement...
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => {
-                  console.log('[Community] Club compose plus button tapped');
-                  setShowCreatePost(true);
-                }}>
-                  <Plus size={22} color={secondaryColor} />
-                </TouchableOpacity>
-              </View>
+
             </View>
           }
           ListEmptyComponent={
