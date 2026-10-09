@@ -3444,5 +3444,25 @@
     "friday": "Viernes",
     "saturday": "Sábado",
     "selectAdjustmentDay": "Seleccionar Día de Ajuste"
+  },
+  "coachInsight": {
+    "eveningWarning": "Es de noche y solo has registrado {{calories}} kcal. Necesitas {{remaining}} más — no te saltes la cena.",
+    "proteinHit": "Meta de proteína alcanzada ✓ Te quedan {{remaining}} kcal — úsalas libremente.",
+    "overCalories": "Te pasaste {{over}} kcal de tu meta hoy. Mantén la proteína alta el resto del día.",
+    "lunchWarning": "Es hora de almuerzo y no has registrado mucho. No olvides comer — saltarse comidas empeora los antojos.",
+    "proteinLow": "Tu proteína está baja para esta hora del día ({{current}}g de {{goal}}g). Prioriza proteína en tu próxima comida.",
+    "whatToEat": "¿Qué como?",
+    "howToGet": "¿Cómo quieres conseguir tu comida?",
+    "whatCraving": "¿Qué se te antoja?",
+    "cook": "Cocinar",
+    "store": "Tienda",
+    "fastFood": "Fast Food",
+    "restaurant": "Restaurante",
+    "sweet": "Dulce",
+    "savory": "Salado",
+    "protein": "Proteína",
+    "quick": "Rápido",
+    "surprise": "Sorpréndeme",
+    "coachMessage": "Quiero {{craving}} y planeo {{type}}. Me quedan {{calories}} calorías y {{protein}}g de proteína para hoy. Dame 3 opciones específicas que encajen."
   }
 }
