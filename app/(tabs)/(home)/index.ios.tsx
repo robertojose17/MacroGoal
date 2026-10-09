@@ -1245,138 +1245,6 @@ export default function HomeScreen() {
           <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={colors.primary} />
         </TouchableOpacity>
 
-        {/* ── ¿Qué como? Modal ── */}
-        <Modal
-          visible={queComoVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => {
-            console.log('[Home iOS] ¿Qué como? modal closed via back button');
-            setQueComoVisible(false);
-          }}
-        >
-          <Pressable style={styles.queComoOverlay} onPress={() => {
-            console.log('[Home iOS] ¿Qué como? modal dismissed by overlay tap');
-            setQueComoVisible(false);
-          }}>
-            <Pressable style={[styles.queComoSheet, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF' }]} onPress={() => {}}>
-              {/* Handle */}
-              <View style={[styles.queComoHandle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }]} />
-
-              {queComoStep === 1 ? (
-                <>
-                  <Text style={[styles.queComoSheetTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                    ¿Cómo quieres conseguir tu comida?
-                  </Text>
-                  <View style={styles.queComoGrid}>
-                    {([
-                      { key: 'cook', emoji: '🍳', label: 'Cocinar' },
-                      { key: 'store', emoji: '🏪', label: 'Tienda' },
-                      { key: 'fastfood', emoji: '🍔', label: 'Fast Food' },
-                      { key: 'restaurant', emoji: '🍽️', label: 'Restaurante' },
-                    ] as const).map((opt) => (
-                      <TouchableOpacity
-                        key={opt.key}
-                        style={[styles.queComoOption, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: colors.primary + '30' }]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          console.log('[Home iOS] ¿Qué como? type selected:', opt.key);
-                          setQueComoType(opt.key);
-                          setQueComoStep(2);
-                        }}
-                      >
-                        <Text style={styles.queComoOptionEmoji}>{opt.emoji}</Text>
-                        <Text style={[styles.queComoOptionLabel, { color: isDark ? colors.textDark : colors.text }]}>{opt.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              ) : (
-                <>
-                  <View style={styles.queComoBackRow}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log('[Home iOS] ¿Qué como? back to step 1');
-                        setQueComoStep(1);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={styles.queComoBackBtn}
-                    >
-                      <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="chevron-left" size={16} color={colors.primary} />
-                      <Text style={[styles.queComoBackLabel, { color: colors.primary }]}>
-                        {queComoType === 'cook' ? 'Cocinar' : queComoType === 'store' ? 'Tienda' : queComoType === 'fastfood' ? 'Fast Food' : 'Restaurante'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={[styles.queComoSheetTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                    ¿Qué se te antoja?
-                  </Text>
-                  <View style={styles.queComoGrid}>
-                    {([
-                      { key: 'sweet', emoji: '🍫', label: 'Dulce' },
-                      { key: 'savory', emoji: '🧂', label: 'Salado' },
-                      { key: 'protein', emoji: '💪', label: 'Proteína' },
-                      { key: 'quick', emoji: '⚡', label: 'Rápido' },
-                    ] as const).map((opt) => (
-                      <TouchableOpacity
-                        key={opt.key}
-                        style={[styles.queComoOption, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: colors.primary + '30' }]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          const typeLabels: Record<string, string> = {
-                            cook: 'cooking at home',
-                            store: 'buying from a store or supermarket',
-                            fastfood: 'getting fast food',
-                            restaurant: 'going to a restaurant',
-                          };
-                          const cravingLabels: Record<string, string> = {
-                            sweet: 'something sweet',
-                            savory: 'something savory',
-                            protein: 'something high in protein',
-                            quick: 'something quick and easy',
-                            surprise: 'whatever fits best',
-                          };
-                          const calRemaining = (goal?.daily_calories || 2000) - totalCalories;
-                          const proteinRemaining = (goal?.protein_g || 150) - totalMacros.protein;
-                          const message = `I want ${cravingLabels[opt.key]} and I'm planning on ${typeLabels[queComoType!]}. I have ${Math.round(calRemaining)} calories and ${Math.round(proteinRemaining)}g of protein left for today. Give me 3 specific options that fit.`;
-                          console.log('[Home iOS] ¿Qué como? craving selected:', opt.key, '| type:', queComoType, '| message:', message);
-                          setQueComoVisible(false);
-                          router.push({ pathname: '/(tabs)/coach', params: { prefill_message: message } });
-                        }}
-                      >
-                        <Text style={styles.queComoOptionEmoji}>{opt.emoji}</Text>
-                        <Text style={[styles.queComoOptionLabel, { color: isDark ? colors.textDark : colors.text }]}>{opt.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    {/* Surprise option — full width */}
-                    <TouchableOpacity
-                      style={[styles.queComoOptionWide, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: colors.primary + '30' }]}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        const typeLabels: Record<string, string> = {
-                          cook: 'cooking at home',
-                          store: 'buying from a store or supermarket',
-                          fastfood: 'getting fast food',
-                          restaurant: 'going to a restaurant',
-                        };
-                        const calRemaining = (goal?.daily_calories || 2000) - totalCalories;
-                        const proteinRemaining = (goal?.protein_g || 150) - totalMacros.protein;
-                        const message = `I want whatever fits best and I'm planning on ${typeLabels[queComoType!]}. I have ${Math.round(calRemaining)} calories and ${Math.round(proteinRemaining)}g of protein left for today. Give me 3 specific options that fit.`;
-                        console.log('[Home iOS] ¿Qué como? surprise selected | type:', queComoType, '| message:', message);
-                        setQueComoVisible(false);
-                        router.push({ pathname: '/(tabs)/coach', params: { prefill_message: message } });
-                      }}
-                    >
-                      <Text style={styles.queComoOptionEmoji}>🎲</Text>
-                      <Text style={[styles.queComoOptionLabel, { color: isDark ? colors.textDark : colors.text }]}>Sorpréndeme</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </Pressable>
-          </Pressable>
-        </Modal>
-
         {/* ── Adaptive TDEE Banner ── */}
         {showAdaptiveBanner && adaptiveCalories !== null && (
           <View style={[styles.adaptiveBanner, { backgroundColor: isDark ? '#0D2420' : '#F0FAF5', borderColor: colors.primary + '30' }]}>
@@ -2261,6 +2129,138 @@ export default function HomeScreen() {
         )}
       </View>
 
+      {/* ¿Qué como? Modal */}
+      <Modal
+        visible={queComoVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('[Home iOS] ¿Qué como? modal closed via back button');
+          setQueComoVisible(false);
+        }}
+      >
+        <Pressable style={styles.queComoOverlay} onPress={() => {
+          console.log('[Home iOS] ¿Qué como? modal dismissed by overlay tap');
+          setQueComoVisible(false);
+        }}>
+          <Pressable style={[styles.queComoSheet, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF' }]} onPress={() => {}}>
+            {/* Handle */}
+            <View style={[styles.queComoHandle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }]} />
+
+            {queComoStep === 1 ? (
+              <>
+                <Text style={[styles.queComoSheetTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  ¿Cómo quieres conseguir tu comida?
+                </Text>
+                <View style={styles.queComoGrid}>
+                  {([
+                    { key: 'cook', emoji: '🍳', label: 'Cocinar' },
+                    { key: 'store', emoji: '🏪', label: 'Tienda' },
+                    { key: 'fastfood', emoji: '🍔', label: 'Fast Food' },
+                    { key: 'restaurant', emoji: '🍽️', label: 'Restaurante' },
+                  ] as const).map((opt) => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[styles.queComoOption, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: colors.primary + '30' }]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        console.log('[Home iOS] ¿Qué como? type selected:', opt.key);
+                        setQueComoType(opt.key);
+                        setQueComoStep(2);
+                      }}
+                    >
+                      <Text style={styles.queComoOptionEmoji}>{opt.emoji}</Text>
+                      <Text style={[styles.queComoOptionLabel, { color: isDark ? colors.textDark : colors.text }]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.queComoBackRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('[Home iOS] ¿Qué como? back to step 1');
+                      setQueComoStep(1);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.queComoBackBtn}
+                  >
+                    <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="chevron-left" size={16} color={colors.primary} />
+                    <Text style={[styles.queComoBackLabel, { color: colors.primary }]}>
+                      {queComoType === 'cook' ? 'Cocinar' : queComoType === 'store' ? 'Tienda' : queComoType === 'fastfood' ? 'Fast Food' : 'Restaurante'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.queComoSheetTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  ¿Qué se te antoja?
+                </Text>
+                <View style={styles.queComoGrid}>
+                  {([
+                    { key: 'sweet', emoji: '🍫', label: 'Dulce' },
+                    { key: 'savory', emoji: '🧂', label: 'Salado' },
+                    { key: 'protein', emoji: '💪', label: 'Proteína' },
+                    { key: 'quick', emoji: '⚡', label: 'Rápido' },
+                  ] as const).map((opt) => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[styles.queComoOption, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: colors.primary + '30' }]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const typeLabels: Record<string, string> = {
+                          cook: 'cooking at home',
+                          store: 'buying from a store or supermarket',
+                          fastfood: 'getting fast food',
+                          restaurant: 'going to a restaurant',
+                        };
+                        const cravingLabels: Record<string, string> = {
+                          sweet: 'something sweet',
+                          savory: 'something savory',
+                          protein: 'something high in protein',
+                          quick: 'something quick and easy',
+                          surprise: 'whatever fits best',
+                        };
+                        const calRemaining = (goal?.daily_calories || 2000) - totalCalories;
+                        const proteinRemaining = (goal?.protein_g || 150) - totalMacros.protein;
+                        const message = `I want ${cravingLabels[opt.key]} and I'm planning on ${typeLabels[queComoType!]}. I have ${Math.round(calRemaining)} calories and ${Math.round(proteinRemaining)}g of protein left for today. Give me 3 specific options that fit.`;
+                        console.log('[Home iOS] ¿Qué como? craving selected:', opt.key, '| type:', queComoType, '| message:', message);
+                        setQueComoVisible(false);
+                        router.push({ pathname: '/(tabs)/coach', params: { prefill_message: message } });
+                      }}
+                    >
+                      <Text style={styles.queComoOptionEmoji}>{opt.emoji}</Text>
+                      <Text style={[styles.queComoOptionLabel, { color: isDark ? colors.textDark : colors.text }]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {/* Surprise option — full width */}
+                  <TouchableOpacity
+                    style={[styles.queComoOptionWide, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: colors.primary + '30' }]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      const typeLabels: Record<string, string> = {
+                        cook: 'cooking at home',
+                        store: 'buying from a store or supermarket',
+                        fastfood: 'getting fast food',
+                        restaurant: 'going to a restaurant',
+                      };
+                      const calRemaining = (goal?.daily_calories || 2000) - totalCalories;
+                      const proteinRemaining = (goal?.protein_g || 150) - totalMacros.protein;
+                      const message = `I want whatever fits best and I'm planning on ${typeLabels[queComoType!]}. I have ${Math.round(calRemaining)} calories and ${Math.round(proteinRemaining)}g of protein left for today. Give me 3 specific options that fit.`;
+                      console.log('[Home iOS] ¿Qué como? surprise selected | type:', queComoType, '| message:', message);
+                      setQueComoVisible(false);
+                      router.push({ pathname: '/(tabs)/coach', params: { prefill_message: message } });
+                    }}
+                  >
+                    <Text style={styles.queComoOptionEmoji}>🎲</Text>
+                    <Text style={[styles.queComoOptionLabel, { color: isDark ? colors.textDark : colors.text }]}>Sorpréndeme</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Streak Rescue Modal */}
       <StreakRescueModal
         visible={canRescue}
@@ -2544,6 +2544,7 @@ const recipeTabStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     marginBottom: spacing.sm,
+    marginHorizontal: spacing.md,
     gap: 8,
   },
   contextualInsightIcon: { fontSize: 16 },
@@ -2559,6 +2560,7 @@ const recipeTabStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
     marginBottom: spacing.sm,
+    marginHorizontal: spacing.md,
   },
   queComoButtonLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   queComoIconCircle: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
