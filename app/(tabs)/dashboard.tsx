@@ -80,6 +80,26 @@ function SkeletonBlock({ height, isDark }: { height: number; isDark: boolean }) 
   );
 }
 
+// ─── InlineStreakBadge ────────────────────────────────────────────────────────
+function InlineStreakBadge({ isDark }: { isDark: boolean }) {
+  const { t } = useTranslation();
+  const { streak } = useStreakStatus();
+  const streakValue = streak?.current_streak ?? 0;
+  if (streakValue === 0) return null;
+  const textColor = isDark ? colors.textDark : colors.text;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={14} color={colors.primary} />
+      <Text style={{ fontSize: 15, fontWeight: '600', color: textColor }}>
+        {streakValue}
+      </Text>
+      <Text style={{ fontSize: 15, fontWeight: '400', color: textColor }}>
+        {t('common.days')}
+      </Text>
+    </View>
+  );
+}
+
 // ─── StreakPill ───────────────────────────────────────────────────────────────
 function StreakPill({ isDark }: { isDark: boolean }) {
   const { t } = useTranslation();
@@ -248,9 +268,12 @@ export default function DashboardScreen() {
           <Text style={[styles.greetingSmall, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {greeting}
           </Text>
-          <Text style={[styles.greetingName, { color: isDark ? colors.textDark : colors.text }]}>
-            {firstName}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.greetingName, { color: isDark ? colors.textDark : colors.text }]}>
+              {firstName}
+            </Text>
+            <InlineStreakBadge isDark={isDark} />
+          </View>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity
@@ -291,11 +314,6 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         scrollEventThrottle={16}
       >
-        {/* ── Streak Pill ── */}
-        <CardErrorBoundary label="StreakPill">
-          <StreakPill isDark={isDark} />
-        </CardErrorBoundary>
-
         {/* ── Consistency Score ── */}
         {user && (
           <CardErrorBoundary label="ConsistencyScore">
