@@ -3446,6 +3446,9 @@
     "selectAdjustmentDay": "Seleccionar Día de Ajuste"
   },
   "coachInsight": {
+    "title": "Perspectiva del Coach",
+    "talkToCoach": "Hablar con el coach →",
+    "viewFullAnalysis": "⭐ Ver análisis completo",
     "eveningWarning": "Es de noche y solo has registrado {{calories}} kcal. Necesitas {{remaining}} más — no te saltes la cena.",
     "proteinHit": "Meta de proteína alcanzada ✓ Te quedan {{remaining}} kcal — úsalas libremente.",
     "overCalories": "Te pasaste {{over}} kcal de tu meta hoy. Mantén la proteína alta el resto del día.",

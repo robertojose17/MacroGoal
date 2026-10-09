@@ -92,6 +92,7 @@ interface CoachInsight {
 
 function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDark: boolean; isPremium: boolean }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const [insight, setInsight] = useState<CoachInsight | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -131,9 +132,16 @@ function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDar
   }, [insight]);
 
   const handleCta = useCallback(() => {
-    console.log('[CoachInsightCard] CTA pressed — navigating to coach tab, isPremium:', isPremium);
-    router.push('/(tabs)/coach');
-  }, [router, isPremium]);
+    if (!insight) return;
+    console.log('[CoachInsightCard] CTA pressed — navigating to coach tab with prefill, isPremium:', isPremium);
+    if (isPremium) {
+      const prefill = encodeURIComponent(`My coach detected this about me: "${insight.insight_text}" — let's talk about this.`);
+      router.push(`/(tabs)/coach?prefill_message=${prefill}`);
+    } else {
+      const prefill = encodeURIComponent(`I saw you detected something specific about my progress. What did you find?`);
+      router.push(`/(tabs)/coach?prefill_message=${prefill}`);
+    }
+  }, [router, isPremium, insight]);
 
   if (dismissed || !insight) return null;
   if (!insight.insight_text) return null;
@@ -152,7 +160,7 @@ function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDar
   const truncated = fullText.length > 80;
   const displayText = !isPremium && truncated ? fullText.slice(0, 80) + '...' : fullText;
 
-  const ctaLabel = isPremium ? 'Hablar con el coach →' : '⭐ Ver análisis completo';
+  const ctaLabel = isPremium ? t('coachInsight.talkToCoach') : t('coachInsight.viewFullAnalysis');
 
   return (
     <View style={[coachStyles.card, { backgroundColor: cardBg, borderColor }]}>
@@ -166,7 +174,7 @@ function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDar
             color={colors.primary}
           />
           <Text style={[coachStyles.title, { color: textColor }]}>
-            Coach Insight
+            {t('coachInsight.title')}
           </Text>
         </View>
         <TouchableOpacity

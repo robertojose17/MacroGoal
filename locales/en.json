@@ -3446,6 +3446,9 @@
     "selectAdjustmentDay": "Select Adjustment Day"
   },
   "coachInsight": {
+    "title": "Coach Insight",
+    "talkToCoach": "Talk to your coach →",
+    "viewFullAnalysis": "⭐ View full analysis",
     "eveningWarning": "It's evening and you've only logged {{calories}} kcal. You need {{remaining}} more — don't skip dinner.",
     "proteinHit": "Protein goal hit ✓ You have {{remaining}} kcal left — use them freely.",
     "overCalories": "You're {{over}} kcal over your goal today. Keep protein high for the rest of the day.",
