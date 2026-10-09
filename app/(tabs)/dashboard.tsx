@@ -26,6 +26,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { useStreakStatus } from '@/hooks/useStreakStatus';
 import { useWidget } from '@/contexts/WidgetContext';
+import { usePremium } from '@/hooks/usePremium';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Local error boundary ─────────────────────────────────────────────────────
@@ -79,6 +80,171 @@ function SkeletonBlock({ height, isDark }: { height: number; isDark: boolean }) 
     />
   );
 }
+
+// ─── CoachInsightCard ─────────────────────────────────────────────────────────
+interface CoachInsight {
+  id: string;
+  insight_text: string;
+  cta_message: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDark: boolean; isPremium: boolean }) {
+  const router = useRouter();
+  const [insight, setInsight] = useState<CoachInsight | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchInsight() {
+      console.log('[CoachInsightCard] Fetching latest insight for user', userId);
+      const { data, error } = await supabase
+        .from('coach_daily_insights')
+        .select('id, insight_text, cta_message, is_read, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[CoachInsightCard] Error fetching insight:', error);
+        return;
+      }
+      if (!cancelled) {
+        console.log('[CoachInsightCard] Insight fetched:', data ? data.id : 'none');
+        setInsight(data ?? null);
+      }
+    }
+    fetchInsight();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const handleDismiss = useCallback(async () => {
+    if (!insight) return;
+    console.log('[CoachInsightCard] Dismiss pressed — marking insight as read:', insight.id);
+    setDismissed(true);
+    await supabase
+      .from('coach_daily_insights')
+      .update({ is_read: true })
+      .eq('id', insight.id);
+  }, [insight]);
+
+  const handleCta = useCallback(() => {
+    console.log('[CoachInsightCard] CTA pressed — navigating to coach tab, isPremium:', isPremium);
+    router.push('/(tabs)/coach');
+  }, [router, isPremium]);
+
+  if (dismissed || !insight) return null;
+  if (!insight.insight_text) return null;
+
+  // Only show insights from the last 24 hours
+  const createdAt = new Date(insight.created_at).getTime();
+  const now = Date.now();
+  if (now - createdAt > 24 * 60 * 60 * 1000) return null;
+
+  const cardBg = isDark ? '#0D1F2D' : '#F0F7FF';
+  const borderColor = colors.primary + '25';
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+
+  const fullText = insight.insight_text;
+  const truncated = fullText.length > 80;
+  const displayText = !isPremium && truncated ? fullText.slice(0, 80) + '...' : fullText;
+
+  const ctaLabel = isPremium ? 'Hablar con el coach →' : '⭐ Ver análisis completo';
+
+  return (
+    <View style={[coachStyles.card, { backgroundColor: cardBg, borderColor }]}>
+      {/* Header row */}
+      <View style={coachStyles.headerRow}>
+        <View style={coachStyles.titleRow}>
+          <IconSymbol
+            ios_icon_name="sparkles"
+            android_material_icon_name="auto_awesome"
+            size={16}
+            color={colors.primary}
+          />
+          <Text style={[coachStyles.title, { color: textColor }]}>
+            Coach Insight
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={handleDismiss}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={coachStyles.dismissBtn}
+        >
+          <Text style={[coachStyles.dismissText, { color: subColor }]}>×</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Insight text */}
+      <Text style={[coachStyles.insightText, { color: textColor }]}>
+        {displayText}
+      </Text>
+
+      {/* CTA row */}
+      <TouchableOpacity onPress={handleCta} style={coachStyles.ctaRow}>
+        <Text style={[coachStyles.ctaText, { color: colors.primary }]}>
+          {ctaLabel}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const coachStyles = StyleSheet.create({
+  card: {
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8 },
+      android: { elevation: 2 },
+    }),
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  dismissBtn: {
+    padding: 2,
+  },
+  dismissText: {
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: '400',
+  },
+  insightText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
+    marginBottom: spacing.sm,
+  },
+  ctaRow: {
+    paddingTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.primary + '30',
+  },
+  ctaText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
 
 // ─── InlineStreakBadge ────────────────────────────────────────────────────────
 function InlineStreakBadge({ isDark }: { isDark: boolean }) {
@@ -151,6 +317,7 @@ export default function DashboardScreen() {
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
 
   const { syncWidget } = useWidget();
+  const { isPremium } = usePremium();
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
     try {
@@ -314,6 +481,13 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         scrollEventThrottle={16}
       >
+        {/* ── Coach Insight Card ── */}
+        {user && (
+          <CardErrorBoundary label="CoachInsightCard">
+            <CoachInsightCard userId={user.id} isDark={isDark} isPremium={isPremium} />
+          </CardErrorBoundary>
+        )}
+
         {/* ── Consistency Score ── */}
         {user && (
           <CardErrorBoundary label="ConsistencyScore">

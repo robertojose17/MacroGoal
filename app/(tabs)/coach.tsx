@@ -19,7 +19,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '@/lib/i18n';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -950,12 +950,14 @@ function StatusCard({
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function CoachScreen() {
   const router = useRouter();
+  const { prefill_message } = useLocalSearchParams<{ prefill_message?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
   const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefillSentRef = useRef(false);
 
   const [inputText, setInputText] = useState('');
   const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
@@ -1419,6 +1421,28 @@ export default function CoachScreen() {
   }, [initResult]);
 
 
+
+  // ── Prefill message from ¿Qué como? flow ─────────────────────────────────
+  useEffect(() => {
+    if (!prefill_message || prefillSentRef.current) return;
+    if (!initResult) return; // wait until coach is initialized
+
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !isMountedRef.current) return;
+        prefillSentRef.current = true;
+        console.log('[AICoach] Sending prefill message from ¿Qué como? flow:', prefill_message);
+        const msg = [{ role: 'user' as const, content: prefill_message, timestamp: Date.now() }];
+        await sendMessage(msg, user.id, false, false);
+        console.log('[AICoach] Prefill message sent successfully');
+      } catch (e: any) {
+        console.warn('[AICoach] Prefill message error:', e?.message);
+        prefillSentRef.current = false;
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill_message, initResult]);
 
   // ── Fix 3: Clear AsyncStorage gate when user upgrades to Premium ──────────
   useEffect(() => {
