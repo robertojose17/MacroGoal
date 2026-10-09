@@ -2535,7 +2535,7 @@ const styles = StyleSheet.create({
   adaptiveBanner: {
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    padding: spacing.md,
+    padding: spacing.lg,
     marginBottom: spacing.md,
   },
   adaptiveBannerTopRow: {
