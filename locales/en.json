@@ -3443,7 +3443,11 @@
     "thursday": "Thursday",
     "friday": "Friday",
     "saturday": "Saturday",
-    "selectAdjustmentDay": "Select Adjustment Day"
+    "selectAdjustmentDay": "Select Adjustment Day",
+    "bannerWhyLost": "You ate ~{{calories}} kcal/day and lost {{lbs}} lbs",
+    "bannerWhyGained": "You ate ~{{calories}} kcal/day and gained {{lbs}} lbs",
+    "bannerWhyMaintained": "You ate ~{{calories}} kcal/day and maintained",
+    "seeDetails": "See details →"
   },
   "coachInsight": {
     "title": "Coach Insight",
@@ -3466,6 +3470,11 @@
     "protein": "Protein",
     "quick": "Quick",
     "surprise": "Surprise me",
-    "coachMessage": "I want {{craving}} and I'm planning on {{type}}. I have {{calories}} calories and {{protein}}g of protein left for today. Give me 3 specific options that fit."
+    "coachMessage": "I want {{craving}} and I'm planning on {{type}}. I have {{calories}} calories and {{protein}}g of protein left for today. Give me 3 specific options that fit.",
+    "underProteinInsight": "You've been under your protein goal {{under}} of the last {{total}} days logged.",
+    "fixMyProtein": "Fix my protein",
+    "fixMyProteinMessage": "I've been under my protein goal {{days}} days this week. Help me fix it.",
+    "seeWeeklyReview": "See my weekly review",
+    "weeklyReviewMessage": "Give me my weekly progress review"
   }
 }

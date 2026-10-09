@@ -96,30 +96,32 @@ function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDar
   const [insight, setInsight] = useState<CoachInsight | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchInsight() {
-      console.log('[CoachInsightCard] Fetching latest insight for user', userId);
-      const { data, error } = await supabase
-        .from('coach_daily_insights')
-        .select('id, insight_text, cta_message, is_read, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      async function fetchInsight() {
+        console.log('[CoachInsightCard] Fetching latest insight for user', userId);
+        const { data, error } = await supabase
+          .from('coach_daily_insights')
+          .select('id, insight_text, cta_message, is_read, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (error) {
-        console.error('[CoachInsightCard] Error fetching insight:', error);
-        return;
+        if (error) {
+          console.error('[CoachInsightCard] Error fetching insight:', error);
+          return;
+        }
+        if (!cancelled) {
+          console.log('[CoachInsightCard] Insight fetched:', data ? data.id : 'none');
+          setInsight(data ?? null);
+        }
       }
-      if (!cancelled) {
-        console.log('[CoachInsightCard] Insight fetched:', data ? data.id : 'none');
-        setInsight(data ?? null);
-      }
-    }
-    fetchInsight();
-    return () => { cancelled = true; };
-  }, [userId]);
+      fetchInsight();
+      return () => { cancelled = true; };
+    }, [userId])
+  );
 
   const handleDismiss = useCallback(async () => {
     if (!insight) return;

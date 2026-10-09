@@ -3443,7 +3443,11 @@
     "thursday": "Jueves",
     "friday": "Viernes",
     "saturday": "Sábado",
-    "selectAdjustmentDay": "Seleccionar Día de Ajuste"
+    "selectAdjustmentDay": "Seleccionar Día de Ajuste",
+    "bannerWhyLost": "Comiste ~{{calories}} kcal/día y bajaste {{lbs}} lbs",
+    "bannerWhyGained": "Comiste ~{{calories}} kcal/día y subiste {{lbs}} lbs",
+    "bannerWhyMaintained": "Comiste ~{{calories}} kcal/día y te mantuviste",
+    "seeDetails": "Ver detalles →"
   },
   "coachInsight": {
     "title": "Perspectiva del Coach",
@@ -3466,6 +3470,11 @@
     "protein": "Proteína",
     "quick": "Rápido",
     "surprise": "Sorpréndeme",
-    "coachMessage": "Quiero {{craving}} y planeo {{type}}. Me quedan {{calories}} calorías y {{protein}}g de proteína para hoy. Dame 3 opciones específicas que encajen."
+    "coachMessage": "Quiero {{craving}} y planeo {{type}}. Me quedan {{calories}} calorías y {{protein}}g de proteína para hoy. Dame 3 opciones específicas que encajen.",
+    "underProteinInsight": "Has estado por debajo de tu meta de proteína {{under}} de los últimos {{total}} días registrados.",
+    "fixMyProtein": "Arreglar mi proteína",
+    "fixMyProteinMessage": "He estado por debajo de mi meta de proteína {{days}} días esta semana. Ayúdame a arreglarlo.",
+    "seeWeeklyReview": "Ver mi revisión semanal",
+    "weeklyReviewMessage": "Dame mi revisión de progreso semanal"
   }
 }

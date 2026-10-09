@@ -1264,62 +1264,8 @@ export default function CoachScreen() {
           }
         }
 
-        // Proactive insight: last 7 days
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const { data: weekMeals } = await supabase
-          .from('meals')
-          .select('date, meal_items(calories, protein)')
-          .eq('user_id', user.id)
-          .gte('date', sevenDaysAgo)
-          .lte('date', todayStr);
-
-        const { data: goalData } = await supabase
-          .from('goals')
-          .select('protein_g, daily_calories')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        // Aggregate by date
-        const dayMap: Record<string, { protein: number }> = {};
-        for (const meal of (weekMeals || [])) {
-          const d = (meal as any).date as string;
-          if (!dayMap[d]) dayMap[d] = { protein: 0 };
-          for (const item of ((meal as any).meal_items || [])) {
-            dayMap[d].protein += Number(item.protein) || 0;
-          }
-        }
-        const daysLogged = Object.keys(dayMap).length;
-        console.log('[AICoach] Proactive insight — days logged this week:', daysLogged);
-
-        if (daysLogged >= 3 && goalData) {
-          const proteinGoal = goalData.protein_g || 0;
-          const daysUnderProtein = Object.values(dayMap).filter((d) => proteinGoal > 0 && d.protein < proteinGoal * 0.8).length;
-
-          if (daysUnderProtein >= 3 && proteinGoal > 0) {
-            console.log('[AICoach] Proactive insight: under protein goal', daysUnderProtein, 'days');
-            if (isMountedRef.current) {
-              setProactiveInsight({
-                text: `You've been under your protein goal ${daysUnderProtein} of the last ${daysLogged} days logged.`,
-                cta: 'Fix my protein',
-                ctaMessage: `I've been under my protein goal ${daysUnderProtein} days this week. Help me fix it.`,
-              });
-            }
-          } else if (daysLogged >= 5) {
-            console.log('[AICoach] Proactive insight: great consistency,', daysLogged, 'days logged');
-            if (isMountedRef.current) {
-              setProactiveInsight({
-                text: i18n.t('coach.loggedDaysInsight', { days: daysLogged }),
-                cta: 'See my weekly review',
-                ctaMessage: 'Give me my weekly progress review',
-              });
-            }
-          }
-        }
-
-        // Daily insights from coach_daily_insights table
+        // Daily insights from coach_daily_insights table (fetch first — takes priority)
+        let hasCronInsight = false;
         try {
           console.log('[AICoach] Fetching daily insights from coach_daily_insights');
           const { data: dailyInsight } = await supabase
@@ -1332,15 +1278,12 @@ export default function CoachScreen() {
             .maybeSingle();
 
           if (dailyInsight && isMountedRef.current) {
-            // Only set if no proactive insight was already set from nutrition analysis
-            setProactiveInsight((prev) => {
-              if (prev) return prev;
-              console.log('[AICoach] Daily insight found, setting proactive insight');
-              return {
-                text: dailyInsight.insight_text,
-                cta: dailyInsight.cta_message || 'Tell me more',
-                ctaMessage: dailyInsight.cta_message || 'Give me my daily coaching insight',
-              };
+            hasCronInsight = true;
+            console.log('[AICoach] Nightly cron insight found — using it as proactive insight');
+            setProactiveInsight({
+              text: dailyInsight.insight_text,
+              cta: dailyInsight.cta_message || 'Tell me more',
+              ctaMessage: dailyInsight.cta_message || 'Give me my daily coaching insight',
             });
             // Mark as read
             await supabase
@@ -1354,6 +1297,63 @@ export default function CoachScreen() {
           }
         } catch (e: any) {
           console.warn('[AICoach] Daily insights fetch error:', e?.message);
+        }
+
+        // Proactive insight: last 7 days (local fallback — only runs if no nightly cron insight)
+        if (!hasCronInsight) {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          const { data: weekMeals } = await supabase
+            .from('meals')
+            .select('date, meal_items(calories, protein)')
+            .eq('user_id', user.id)
+            .gte('date', sevenDaysAgo)
+            .lte('date', todayStr);
+
+          const { data: goalData } = await supabase
+            .from('goals')
+            .select('protein_g, daily_calories')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          // Aggregate by date
+          const dayMap: Record<string, { protein: number }> = {};
+          for (const meal of (weekMeals || [])) {
+            const d = (meal as any).date as string;
+            if (!dayMap[d]) dayMap[d] = { protein: 0 };
+            for (const item of ((meal as any).meal_items || [])) {
+              dayMap[d].protein += Number(item.protein) || 0;
+            }
+          }
+          const daysLogged = Object.keys(dayMap).length;
+          console.log('[AICoach] Proactive insight (local fallback) — days logged this week:', daysLogged);
+
+          if (daysLogged >= 3 && goalData) {
+            const proteinGoal = goalData.protein_g || 0;
+            const daysUnderProtein = Object.values(dayMap).filter((d) => proteinGoal > 0 && d.protein < proteinGoal * 0.8).length;
+
+            if (daysUnderProtein >= 3 && proteinGoal > 0) {
+              console.log('[AICoach] Proactive insight: under protein goal', daysUnderProtein, 'days');
+              if (isMountedRef.current) {
+                setProactiveInsight({
+                  text: i18n.t('coach.underProteinInsight', { under: daysUnderProtein, total: daysLogged }),
+                  cta: i18n.t('coach.fixMyProtein'),
+                  ctaMessage: i18n.t('coach.fixMyProteinMessage', { days: daysUnderProtein }),
+                });
+              }
+            } else if (daysLogged >= 5) {
+              console.log('[AICoach] Proactive insight: great consistency,', daysLogged, 'days logged');
+              if (isMountedRef.current) {
+                setProactiveInsight({
+                  text: i18n.t('coach.loggedDaysInsight', { days: daysLogged }),
+                  cta: i18n.t('coach.seeWeeklyReview'),
+                  ctaMessage: i18n.t('coach.weeklyReviewMessage'),
+                });
+              }
+            }
+          }
         }
       } catch (e: any) {
         console.warn('[AICoach] Nutrition context fetch error:', e?.message);

@@ -1134,12 +1134,13 @@ export default function HomeScreen() {
       ? (adjustmentAmount ? `${adaptiveCalories} kcal/day  •  ${adjustmentSign}${adjustmentAmount} kcal` : `${adaptiveCalories} kcal/day`)
       : null;
 
+    const weightLostAbs = weightLost !== null ? Math.abs(weightLost) : 0;
     const bannerWhyLine = avgCalsEaten !== null
       ? (weightLost !== null && weightLost > 0
-        ? `You ate ~${avgCalsEaten} kcal/day and lost ${weightLost} lbs this week`
+        ? t('adaptiveTdee.bannerWhyLost', { calories: avgCalsEaten, lbs: weightLost })
         : weightLost !== null && weightLost < 0
-          ? `You ate ~${avgCalsEaten} kcal/day and gained ${Math.abs(weightLost)} lbs this week`
-          : `You ate ~${avgCalsEaten} kcal/day this week`)
+          ? t('adaptiveTdee.bannerWhyGained', { calories: avgCalsEaten, lbs: weightLostAbs })
+          : t('adaptiveTdee.bannerWhyMaintained', { calories: avgCalsEaten }))
       : null;
 
     return (
@@ -1214,7 +1215,7 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.adaptiveBannerSeeWhyText, { color: colors.primary }]}>
-                  {'See details →'}
+                  {t('adaptiveTdee.seeDetails')}
                 </Text>
               </TouchableOpacity>
             </View>
