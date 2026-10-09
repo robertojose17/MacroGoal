@@ -1170,108 +1170,91 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── Contextual Coach Insight ── */}
-        {!contextualInsightDismissed && (() => {
+        {/* ── Coach Card (insight + what to eat) ── */}
+        {(() => {
           const hour = new Date().getHours();
           const calGoal = goal?.daily_calories || 2000;
           const proteinGoal = goal?.protein_g || 150;
           const calRemaining = calGoal - totalCalories;
 
           let insightText: string | null = null;
-          let insightColor = '#F59E0B';
-          let insightBg = isDark ? 'rgba(245,158,11,0.12)' : '#FFF8EC';
           let insightEmoji = '⚡';
 
-          if (hour >= 19 && totalCalories < calGoal * 0.4) {
-            insightText = t('coachInsight.eveningWarning', { calories: totalCalories, remaining: Math.round(calRemaining) });
-            insightColor = '#F59E0B'; insightBg = isDark ? 'rgba(245,158,11,0.12)' : '#FFF8EC'; insightEmoji = '⚡';
-          } else if (totalMacros.protein >= proteinGoal * 0.95 && calRemaining > 200) {
-            insightText = t('coachInsight.proteinHit', { remaining: Math.round(calRemaining) });
-            insightColor = colors.primary; insightBg = isDark ? colors.primary + '18' : colors.primary + '12'; insightEmoji = '✅';
-          } else if (totalCalories > calGoal * 1.05) {
-            insightText = t('coachInsight.overCalories', { over: Math.round(totalCalories - calGoal) });
-            insightColor = '#F59E0B'; insightBg = isDark ? 'rgba(245,158,11,0.12)' : '#FFF8EC'; insightEmoji = '⚡';
-          } else if (hour >= 12 && hour <= 14 && totalCalories < calGoal * 0.2) {
-            insightText = t('coachInsight.lunchWarning');
-            insightColor = '#3B82F6'; insightBg = isDark ? 'rgba(59,130,246,0.12)' : '#EFF6FF'; insightEmoji = '💡';
-          } else if (hour >= 14 && totalMacros.protein < proteinGoal * 0.3) {
-            insightText = t('coachInsight.proteinLow', { current: Math.round(totalMacros.protein), goal: proteinGoal });
-            insightColor = '#3B82F6'; insightBg = isDark ? 'rgba(59,130,246,0.12)' : '#EFF6FF'; insightEmoji = '💡';
+          if (!contextualInsightDismissed) {
+            if (hour >= 19 && totalCalories < calGoal * 0.4) {
+              insightText = t('coachInsight.eveningWarning', { calories: totalCalories, remaining: Math.round(calRemaining) });
+              insightEmoji = '⚡';
+            } else if (totalMacros.protein >= proteinGoal * 0.95 && calRemaining > 200) {
+              insightText = t('coachInsight.proteinHit', { remaining: Math.round(calRemaining) });
+              insightEmoji = '✅';
+            } else if (totalCalories > calGoal * 1.05) {
+              insightText = t('coachInsight.overCalories', { over: Math.round(totalCalories - calGoal) });
+              insightEmoji = '⚡';
+            } else if (hour >= 12 && hour <= 14 && totalCalories < calGoal * 0.2) {
+              insightText = t('coachInsight.lunchWarning');
+              insightEmoji = '💡';
+            } else if (hour >= 14 && totalMacros.protein < proteinGoal * 0.3) {
+              insightText = t('coachInsight.proteinLow', { current: Math.round(totalMacros.protein), goal: proteinGoal });
+              insightEmoji = '💡';
+            }
           }
-
-          if (!insightText) return null;
 
           return (
             <View style={{
               marginHorizontal: spacing.md,
               marginBottom: spacing.sm,
-              borderRadius: borderRadius.md,
-              backgroundColor: insightBg,
+              borderRadius: borderRadius.lg,
+              backgroundColor: cardBg,
               borderWidth: 1,
-              borderColor: insightColor + '40',
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              flexDirection: 'row',
-              alignItems: 'flex-start',
+              borderColor: colors.primary + '25',
             }}>
-              <Text style={{ fontSize: 15, marginRight: 8, marginTop: 1 }}>{insightEmoji}</Text>
-              <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, color: isDark ? colors.textDark : colors.text }}>
-                {insightText}
-              </Text>
+              {insightText ? (
+                <>
+                  {/* Insight row */}
+                  <View style={{ paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, marginRight: 8 }}>{insightEmoji}</Text>
+                    <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, color: isDark ? colors.textDark : colors.text }}>
+                      {insightText}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        console.log('[Home iOS] Contextual insight dismissed');
+                        setContextualInsightDismissed(true);
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{ marginLeft: 8 }}
+                    >
+                      <Text style={{ fontSize: 16, color: isDark ? colors.textSecondaryDark : colors.textSecondary, lineHeight: 16 }}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {/* Divider */}
+                  <View style={{ height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)', marginHorizontal: 14 }} />
+                </>
+              ) : null}
+              {/* What should I eat? row */}
               <TouchableOpacity
+                style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                activeOpacity={0.75}
                 onPress={() => {
-                  console.log('[Home iOS] Contextual insight dismissed');
-                  setContextualInsightDismissed(true);
+                  console.log('[Home iOS] What should I eat? button pressed');
+                  setQueComoStep(1);
+                  setQueComoType(null);
+                  setQueComoVisible(true);
                 }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={{ marginLeft: 8, marginTop: 2 }}
               >
-                <Text style={{ fontSize: 16, color: isDark ? colors.textSecondaryDark : colors.textSecondary, lineHeight: 16 }}>×</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary + '18', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 15 }}>🤖</Text>
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: isDark ? colors.textDark : colors.text }}>
+                    {t('coachInsight.whatToEat')}
+                  </Text>
+                </View>
+                <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={colors.primary} />
               </TouchableOpacity>
             </View>
           );
         })()}
-
-        {/* ── ¿Qué como? Button ── */}
-        <TouchableOpacity
-          style={{
-            marginHorizontal: spacing.md,
-            marginBottom: spacing.sm,
-            borderRadius: borderRadius.lg,
-            backgroundColor: cardBg,
-            borderWidth: 1,
-            borderColor: colors.primary + '35',
-            paddingHorizontal: spacing.md,
-            paddingVertical: 11,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-          activeOpacity={0.75}
-          onPress={() => {
-            console.log('[Home iOS] ¿Qué como? button pressed');
-            setQueComoStep(1);
-            setQueComoType(null);
-            setQueComoVisible(true);
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: colors.primary + '18',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Text style={{ fontSize: 15 }}>🤖</Text>
-            </View>
-            <Text style={{ fontSize: 15, fontWeight: '600', color: isDark ? colors.textDark : colors.text }}>
-              {t('coachInsight.whatToEat')}
-            </Text>
-          </View>
-          <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={colors.primary} />
-        </TouchableOpacity>
 
         {/* ── Adaptive TDEE Banner ── */}
         {showAdaptiveBanner && adaptiveCalories !== null && (
@@ -2564,20 +2547,19 @@ const recipeTabStyles = StyleSheet.create({
   recipeCardMacroSep: { fontSize: 11 },
 
   // ── ¿Qué como? Modal ──
-  queComoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  queComoOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   queComoSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 40,
-    paddingTop: 12,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 34,
+    paddingTop: 8,
   },
-  queComoHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  queComoSheetTitle: { fontSize: 17, fontWeight: '700', marginBottom: 20, textAlign: 'center' },
-  queComoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  queComoHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  queComoSheetTitle: { fontSize: 17, fontWeight: '600', marginBottom: 20, textAlign: 'center', paddingHorizontal: 20 },
+  queComoGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10 },
   queComoOption: {
     width: '47%',
-    borderRadius: borderRadius.lg,
+    borderRadius: 14,
     borderWidth: 1,
     paddingVertical: 16,
     alignItems: 'center',
@@ -2585,17 +2567,17 @@ const recipeTabStyles = StyleSheet.create({
   },
   queComoOptionWide: {
     width: '100%',
-    borderRadius: borderRadius.lg,
+    borderRadius: 14,
     borderWidth: 1,
-    paddingVertical: 14,
+    paddingVertical: 16,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
   },
-  queComoOptionEmoji: { fontSize: 26 },
-  queComoOptionLabel: { fontSize: 14, fontWeight: '600' },
-  queComoBackRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  queComoOptionEmoji: { fontSize: 28, marginBottom: 6 },
+  queComoOptionLabel: { fontSize: 14, fontWeight: '500' },
+  queComoBackRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 4 },
   queComoBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
   queComoBackLabel: { fontSize: 14, fontWeight: '600' },
 });

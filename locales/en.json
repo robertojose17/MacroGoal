@@ -3451,7 +3451,7 @@
     "overCalories": "You're {{over}} kcal over your goal today. Keep protein high for the rest of the day.",
     "lunchWarning": "It's lunchtime and you haven't logged much yet. Don't forget to eat — skipping meals makes cravings worse later.",
     "proteinLow": "Your protein is low for this time of day ({{current}}g of {{goal}}g). Prioritize protein in your next meal.",
-    "whatToEat": "¿Qué como?",
+    "whatToEat": "What should I eat?",
     "howToGet": "How do you want to get your food?",
     "whatCraving": "What are you craving?",
     "cook": "Cook",
