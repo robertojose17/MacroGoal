@@ -1171,57 +1171,62 @@ export default function HomeScreen() {
         </View>
 
         {/* ── Contextual Coach Insight ── */}
-        {(() => {
-          if (contextualInsightDismissed) return null;
+        {!contextualInsightDismissed && (() => {
           const hour = new Date().getHours();
           const calGoal = goal?.daily_calories || 2000;
           const proteinGoal = goal?.protein_g || 150;
           const calRemaining = calGoal - totalCalories;
-          const proteinRemaining = proteinGoal - totalMacros.protein;
 
-          let insight: { text: string; type: 'warning' | 'success' | 'tip' | 'motivation' } | null = null;
+          let insightText: string | null = null;
+          let insightColor = '#F59E0B';
+          let insightBg = isDark ? 'rgba(245,158,11,0.12)' : '#FFF8EC';
+          let insightEmoji = '⚡';
 
           if (hour >= 19 && totalCalories < calGoal * 0.4) {
-            insight = { text: t('coachInsight.eveningWarning', { calories: totalCalories, remaining: Math.round(calRemaining) }), type: 'warning' };
+            insightText = t('coachInsight.eveningWarning', { calories: totalCalories, remaining: Math.round(calRemaining) });
+            insightColor = '#F59E0B'; insightBg = isDark ? 'rgba(245,158,11,0.12)' : '#FFF8EC'; insightEmoji = '⚡';
           } else if (totalMacros.protein >= proteinGoal * 0.95 && calRemaining > 200) {
-            insight = { text: t('coachInsight.proteinHit', { remaining: Math.round(calRemaining) }), type: 'success' };
+            insightText = t('coachInsight.proteinHit', { remaining: Math.round(calRemaining) });
+            insightColor = colors.primary; insightBg = isDark ? colors.primary + '18' : colors.primary + '12'; insightEmoji = '✅';
           } else if (totalCalories > calGoal * 1.05) {
-            insight = { text: t('coachInsight.overCalories', { over: Math.round(totalCalories - calGoal) }), type: 'warning' };
+            insightText = t('coachInsight.overCalories', { over: Math.round(totalCalories - calGoal) });
+            insightColor = '#F59E0B'; insightBg = isDark ? 'rgba(245,158,11,0.12)' : '#FFF8EC'; insightEmoji = '⚡';
           } else if (hour >= 12 && hour <= 14 && totalCalories < calGoal * 0.2) {
-            insight = { text: t('coachInsight.lunchWarning'), type: 'tip' };
+            insightText = t('coachInsight.lunchWarning');
+            insightColor = '#3B82F6'; insightBg = isDark ? 'rgba(59,130,246,0.12)' : '#EFF6FF'; insightEmoji = '💡';
           } else if (hour >= 14 && totalMacros.protein < proteinGoal * 0.3) {
-            insight = { text: t('coachInsight.proteinLow', { current: Math.round(totalMacros.protein), goal: proteinGoal }), type: 'tip' };
+            insightText = t('coachInsight.proteinLow', { current: Math.round(totalMacros.protein), goal: proteinGoal });
+            insightColor = '#3B82F6'; insightBg = isDark ? 'rgba(59,130,246,0.12)' : '#EFF6FF'; insightEmoji = '💡';
           }
 
-          if (!insight) return null;
-
-          const insightBg = insight.type === 'warning'
-            ? (isDark ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)')
-            : insight.type === 'success'
-              ? (isDark ? colors.primary + '18' : colors.primary + '12')
-              : (isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)');
-          const insightBorder = insight.type === 'warning'
-            ? '#F59E0B'
-            : insight.type === 'success'
-              ? colors.primary
-              : '#3B82F6';
-          const insightIcon = insight.type === 'warning' ? '⚡' : insight.type === 'success' ? '✅' : '💡';
+          if (!insightText) return null;
 
           return (
-            <View style={[styles.contextualInsightCard, { backgroundColor: insightBg, borderLeftColor: insightBorder }]}>
-              <Text style={styles.contextualInsightIcon}>{insightIcon}</Text>
-              <Text style={[styles.contextualInsightText, { color: isDark ? colors.textDark : colors.text }]} numberOfLines={3}>
-                {insight.text}
+            <View style={{
+              marginHorizontal: spacing.md,
+              marginBottom: spacing.sm,
+              borderRadius: borderRadius.md,
+              backgroundColor: insightBg,
+              borderWidth: 1,
+              borderColor: insightColor + '40',
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+            }}>
+              <Text style={{ fontSize: 15, marginRight: 8, marginTop: 1 }}>{insightEmoji}</Text>
+              <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, color: isDark ? colors.textDark : colors.text }}>
+                {insightText}
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  console.log('[Home iOS] Contextual insight dismissed, type:', insight!.type);
+                  console.log('[Home iOS] Contextual insight dismissed');
                   setContextualInsightDismissed(true);
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.contextualInsightClose}
+                style={{ marginLeft: 8, marginTop: 2 }}
               >
-                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={12} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
+                <Text style={{ fontSize: 16, color: isDark ? colors.textSecondaryDark : colors.textSecondary, lineHeight: 16 }}>×</Text>
               </TouchableOpacity>
             </View>
           );
@@ -1229,7 +1234,19 @@ export default function HomeScreen() {
 
         {/* ── ¿Qué como? Button ── */}
         <TouchableOpacity
-          style={[styles.queComoButton, { backgroundColor: cardBg, borderColor: colors.primary + '30' }]}
+          style={{
+            marginHorizontal: spacing.md,
+            marginBottom: spacing.sm,
+            borderRadius: borderRadius.lg,
+            backgroundColor: cardBg,
+            borderWidth: 1,
+            borderColor: colors.primary + '35',
+            paddingHorizontal: spacing.md,
+            paddingVertical: 11,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
           activeOpacity={0.75}
           onPress={() => {
             console.log('[Home iOS] ¿Qué como? button pressed');
@@ -1238,11 +1255,20 @@ export default function HomeScreen() {
             setQueComoVisible(true);
           }}
         >
-          <View style={styles.queComoButtonLeft}>
-            <View style={[styles.queComoIconCircle, { backgroundColor: colors.primary + '18' }]}>
-              <Text style={{ fontSize: 16 }}>🤖</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              backgroundColor: colors.primary + '18',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Text style={{ fontSize: 15 }}>🤖</Text>
             </View>
-            <Text style={[styles.queComoButtonText, { color: isDark ? colors.textDark : colors.text }]}>{t('coachInsight.whatToEat')}</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: isDark ? colors.textDark : colors.text }}>
+              {t('coachInsight.whatToEat')}
+            </Text>
           </View>
           <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={16} color={colors.primary} />
         </TouchableOpacity>
@@ -2536,38 +2562,6 @@ const recipeTabStyles = StyleSheet.create({
   recipeCardMacros: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   recipeCardMacroVal: { fontSize: 11, fontWeight: '600' },
   recipeCardMacroSep: { fontSize: 11 },
-
-  // ── Contextual Insight Card ──
-  contextualInsightCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderLeftWidth: 3,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    marginBottom: spacing.sm,
-    marginHorizontal: spacing.md,
-    gap: 8,
-  },
-  contextualInsightIcon: { fontSize: 16, marginTop: 1 },
-  contextualInsightText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  contextualInsightClose: { padding: 2, marginTop: 2 },
-
-  // ── ¿Qué como? Button ──
-  queComoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    marginBottom: spacing.sm,
-    marginHorizontal: spacing.md,
-  },
-  queComoButtonLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  queComoIconCircle: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  queComoButtonText: { fontSize: 15, fontWeight: '600' },
 
   // ── ¿Qué como? Modal ──
   queComoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
