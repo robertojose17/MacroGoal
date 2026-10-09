@@ -112,6 +112,7 @@ function countProductLines(lines: string[]): number {
 function formatActionType(actionType: string): { label: string; color: string } {
   const map: Record<string, { labelKey: string; color: string }> = {
     update_goal: { labelKey: 'coach.action_update_goal', color: '#3B82F6' },
+    adjust_calories: { labelKey: 'coach.action_update_goal', color: colors.primary },
     add_food_to_diary: { labelKey: 'coach.action_add_food_to_diary', color: '#10B981' },
     create_meal: { labelKey: 'coach.action_create_meal', color: '#8B5CF6' },
     create_meal_plan: { labelKey: 'coach.action_create_meal_plan', color: '#F59E0B' },
@@ -470,6 +471,135 @@ function InlineActionCard({
   const avgCalPerDay = mealPlanDays.length > 0 ? Math.round(totalCalories / mealPlanDays.length) : 0;
   const confirmBtnText = isAddFood ? t('coach.yesAddIt') : isMealPlan ? t('coach.accept') : t('coach.confirm');
   const declineBtnText = isAddFood ? t('coach.noThanks') : t('coach.decline');
+
+  // ── adjust_calories: before/after calorie card ──────────────────────────
+  const isAdjustCalories = (action.action_type === 'adjust_calories' || proposal.action_type === 'adjust_calories');
+  if (isAdjustCalories) {
+    const currentCal = proposal.current_calories !== undefined ? Number(proposal.current_calories) : null;
+    const proposedCal = proposal.proposed_calories !== undefined ? Number(proposal.proposed_calories) : null;
+    const adjustAmt = proposal.adjustment_amount !== undefined ? Number(proposal.adjustment_amount) : null;
+    const reasonText = proposal.reason ? String(proposal.reason) : null;
+    const effectText = proposal.expected_effect ? String(proposal.expected_effect) : null;
+
+    const adjustSign = adjustAmt !== null && adjustAmt > 0 ? '+' : '';
+    const adjustLabel = adjustAmt !== null ? `(${adjustSign}${adjustAmt})` : '';
+    const currentCalText = currentCal !== null ? `${currentCal.toLocaleString()} kcal/day` : '';
+    const proposedCalText = proposedCal !== null ? `${proposedCal.toLocaleString()} kcal/day` : '';
+
+    if (actionStatus === 'confirmed') {
+      return (
+        <View style={[styles.inlineActionStatusBadge]}>
+          <Text style={[styles.inlineActionStatusText, { color: '#10B981' }]}>
+            {'Calorie target updated'}
+          </Text>
+        </View>
+      );
+    }
+
+    if (actionStatus === 'declined') {
+      return (
+        <View style={[styles.inlineActionStatusBadge]}>
+          <Text style={[styles.inlineActionStatusText, { color: secondaryText }]}>
+            {'Keeping current target'}
+          </Text>
+        </View>
+      );
+    }
+
+    const isConfirmingCal = actionStatus === 'confirming';
+
+    return (
+      <View style={[styles.inlineActionCard, { backgroundColor: cardBg, borderColor }]}>
+        {/* Header */}
+        <View style={styles.inlineActionBadgeRow}>
+          <View style={[styles.inlineActionBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.inlineActionBadgeText}>
+              {'📊 Calorie Adjustment'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Before / After */}
+        {currentCal !== null && proposedCal !== null ? (
+          <View style={{ marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 0 }]}>
+                {'Current:'}
+              </Text>
+              <Text style={[styles.inlineActionValue, { color: textColor, fontSize: 15 }]}>
+                {currentCalText}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 0 }]}>
+                {'Proposed:'}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.inlineActionValue, { color: colors.primary, fontSize: 15 }]}>
+                  {proposedCalText}
+                </Text>
+                {adjustLabel.length > 0 ? (
+                  <Text style={{ fontSize: 12, color: secondaryText, marginLeft: 4 }}>
+                    {adjustLabel}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Why */}
+        {reasonText ? (
+          <View style={{ marginBottom: 4 }}>
+            <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 2 }]}>
+              {'Why: '}
+              <Text style={{ color: textColor }}>{reasonText}</Text>
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Effect */}
+        {effectText ? (
+          <View style={{ marginBottom: 8 }}>
+            <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 0 }]}>
+              {'Effect: '}
+              <Text style={{ color: textColor }}>{effectText}</Text>
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Buttons */}
+        <View style={styles.inlineActionButtons}>
+          <TouchableOpacity
+            style={[styles.inlineActionConfirmBtn, { backgroundColor: colors.primary, opacity: isConfirmingCal ? 0.7 : 1 }]}
+            onPress={() => {
+              if (isConfirmingCal) return;
+              console.log('[AICoach] adjust_calories confirm pressed, messageId:', messageId, 'proposed_calories:', proposal.proposed_calories);
+              onConfirm(messageId);
+            }}
+            activeOpacity={0.85}
+            disabled={isConfirmingCal}
+          >
+            <Text style={styles.inlineActionConfirmText}>
+              {isConfirmingCal ? 'Applying...' : '✓ Apply'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.inlineActionDeclineBtn, { backgroundColor: isDark ? '#252740' : '#F0F2F7', borderColor: 'transparent' }]}
+            onPress={() => {
+              console.log('[AICoach] adjust_calories skip pressed, messageId:', messageId, 'current_calories:', proposal.current_calories);
+              onDecline(messageId);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.inlineActionDeclineText, { color: textColor }]}>
+              {'✗ Skip'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   // ── add_food_to_diary: special compact card ──────────────────────────────
   if (isAddFood) {
@@ -1888,6 +2018,63 @@ export default function CoachScreen() {
         return;
       }
 
+      // ── adjust_calories ───────────────────────────────────────────────────
+      if (actionType === 'adjust_calories') {
+        console.log('[AICoach] adjust_calories confirmed, proposed_calories:', proposal.proposed_calories);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn('[AICoach] No user for adjust_calories');
+          setMessages((prev) =>
+            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
+          );
+          return;
+        }
+
+        const proposedCalories = Number(proposal.proposed_calories ?? 0);
+        const previousCalories = Number(proposal.current_calories ?? 0);
+
+        console.log('[AICoach] Updating goals table daily_calories to:', proposedCalories, 'for user:', user.id);
+        const { error: goalError } = await supabase
+          .from('goals')
+          .update({ daily_calories: proposedCalories })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        if (goalError) {
+          console.error('[AICoach] Error updating daily_calories:', goalError.message);
+          Alert.alert('Error', 'Could not update your calorie target.');
+          setMessages((prev) =>
+            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
+          );
+          return;
+        }
+
+        console.log('[AICoach] Inserting coach_actions record for adjust_calories');
+        await supabase.from('coach_actions').insert({
+          user_id: user.id,
+          action_type: 'adjust_calories',
+          new_value: {
+            daily_calories: proposedCalories,
+            previous_calories: previousCalories,
+            reason: proposal.reason ?? '',
+          },
+          status: 'applied',
+          created_at: new Date().toISOString(),
+        });
+
+        const successContent = `Done! Your daily calorie target is now **${proposedCalories.toLocaleString()} kcal**. I'll keep an eye on how this affects your progress.`;
+        console.log('[AICoach] adjust_calories applied successfully, new target:', proposedCalories);
+        setMessages((prev) => [
+          ...prev,
+          { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
+        ]);
+        setMessages((prev) =>
+          prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
+        );
+        return;
+      }
+
       // ── Default: unrecognized action_type — mark confirmed silently ──────────
       return;
     },
@@ -1900,11 +2087,53 @@ export default function CoachScreen() {
   }, [handleConfirmInline]);
 
   const handleDeclineInline = useCallback(
-    (messageId: string) => {
+    async (messageId: string) => {
       console.log('[AICoach] handleDeclineInline called, messageId:', messageId);
+
+      const targetMsg = messages.find((m) => m.id === messageId);
+      const actionProposal = targetMsg?.actionProposal;
+      const actionType = actionProposal?.action_type || actionProposal?.proposal?.action_type || '';
+
       setMessages((prev) =>
         prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'declined' as const } : m)
       );
+
+      // ── adjust_calories skip: log to coach_actions and send contextual message ──
+      if (actionType === 'adjust_calories') {
+        const proposal = actionProposal?.proposal;
+        const currentCalories = Number(proposal?.current_calories ?? 0);
+        console.log('[AICoach] adjust_calories skipped, current_calories:', currentCalories);
+
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from('coach_actions').insert({
+              user_id: user.id,
+              action_type: 'adjust_calories',
+              new_value: {
+                daily_calories: currentCalories,
+                previous_calories: currentCalories,
+                reason: proposal?.reason ?? '',
+              },
+              status: 'skipped',
+              created_at: new Date().toISOString(),
+            });
+            console.log('[AICoach] adjust_calories skip recorded in coach_actions');
+          }
+        } catch (e: any) {
+          console.warn('[AICoach] Error recording adjust_calories skip:', e?.message);
+        }
+
+        const skipMsg: MessageWithId = {
+          id: genId(),
+          role: 'assistant',
+          content: `Got it, keeping your current target of **${currentCalories.toLocaleString()} kcal**.`,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, skipMsg]);
+        return;
+      }
+
       const followUp: MessageWithId = {
         id: genId(),
         role: 'assistant',
@@ -1913,7 +2142,7 @@ export default function CoachScreen() {
       };
       setMessages((prev) => [...prev, followUp]);
     },
-    [setMessages]
+    [messages, setMessages]
   );
 
   const formatTime = useCallback((timestamp: number): string => {
