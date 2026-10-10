@@ -1,11 +1,11 @@
 import { supabase } from '@/lib/supabase/client';
 
 
-// Generate a unique 6-char code from username + random suffix
-function generateCode(username: string): string {
-  const base = (username || 'USER').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-  const suffix = Math.random().toString(36).toUpperCase().slice(2, 4);
-  return `${base}${suffix}`;
+// Generates a cryptographically random 8-char referral code.
+// 32-char unambiguous alphabet (no O, 0, I, 1) → 32^8 ≈ 1B combinations.
+function generateCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
 export async function getOrCreateReferralCode(): Promise<string | null> {
@@ -26,14 +26,7 @@ export async function getOrCreateReferralCode(): Promise<string | null> {
     return code;
   }
 
-  // Get username for code generation
-  const { data: profile } = await supabase
-    .from('users')
-    .select('username')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const code = generateCode(profile?.username || 'USER');
+  const code = generateCode();
   console.log('[referralApi] generating new code:', code);
 
   const { data: inserted, error: insertError } = await supabase
