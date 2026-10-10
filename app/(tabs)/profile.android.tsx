@@ -631,7 +631,7 @@ export default function ProfileScreen() {
                 </Text>
                 {isPremiumUser && (
                   <View style={[styles.igEliteBadge, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.igEliteBadgeText}>ELITE</Text>
+                    <Text style={styles.igEliteBadgeText}>PREMIUM</Text>
                   </View>
                 )}
               </View>

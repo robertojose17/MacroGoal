@@ -632,7 +632,7 @@ export default function SocialPostCard({
             ) : null}
             {isElite && !isFounder ? (
               <View style={styles.eliteBadge}>
-                <Text style={styles.eliteBadgeText}>ELITE</Text>
+                <Text style={styles.eliteBadgeText}>PREMIUM</Text>
               </View>
             ) : null}
             {post.post_type_v2 === 'question' ? (
