@@ -10,7 +10,7 @@ export default function GoPremiumFloatingBadge() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { isPremium } = usePremium();
+  const { isPremium, loading } = usePremium();
   const [visible, setVisible] = useState(true);
   const { t } = useTranslation();
 
@@ -24,17 +24,21 @@ export default function GoPremiumFloatingBadge() {
     router.push('/subscription');
   };
 
-  const ALLOWED_PATHS = [
-    '/(tabs)/(home)',
-    '/(tabs)/dashboard',
-    '/(tabs)/coach',
-    '/(tabs)/check-ins',
-    '/(tabs)/profile',
-  ];
+  const isModalOrStack = [
+    '/subscription', '/settings', '/onboarding', '/auth', '/add-food',
+    '/food-search', '/barcode', '/chatbot', '/coach-', '/check-in-',
+    '/edit-', '/my-', '/recipe', '/meal-plan', '/progress', '/social',
+    '/affiliate', '/referral', '/bug-report', '/delete-account',
+    '/privacy', '/terms', '/custom-macros', '/adaptive-tdee',
+    '/food-details', '/food-photo', '/share-', '/tracker',
+  ].some(p => pathname.startsWith(p));
 
-  const isAllowedScreen = ALLOWED_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
+  const isOnboardingFlow = pathname.startsWith('/onboarding') || pathname === '/';
+  const isAllowedScreen = !isModalOrStack && !isOnboardingFlow && (
+    pathname.includes('/(tabs)/') || pathname === '/(tabs)'
+  );
 
-  if (!visible || isPremium || !isAllowedScreen) return null;
+  if (!visible || loading || isPremium || !isAllowedScreen) return null;
 
   const bottomOffset = insets.bottom + 145;
 
