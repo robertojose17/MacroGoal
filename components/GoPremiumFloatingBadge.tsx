@@ -24,12 +24,12 @@ export default function GoPremiumFloatingBadge() {
     router.push('/subscription');
   };
 
-  const TAB_PATHS = ['/dashboard', '/(home)', '/coach', '/check-ins', '/profile'];
-  const isAllowedScreen = TAB_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
+  const TAB_PATHS = ['/', '/dashboard', '/(home)', '/coach', '/check-ins', '/profile'];
+  const isAllowedScreen = TAB_PATHS.some(p => pathname === p || (p !== '/' && pathname.startsWith(p + '/')));
 
   if (!visible || loading || isPremium || !isAllowedScreen) return null;
 
-  const bottomOffset = insets.bottom + 145;
+  const bottomOffset = insets.bottom + 67;
 
   return (
     <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="box-none">
