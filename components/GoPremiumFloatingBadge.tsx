@@ -29,7 +29,7 @@ export default function GoPremiumFloatingBadge() {
 
   if (!visible || loading || isPremium || !isAllowedScreen) return null;
 
-  const bottomOffset = insets.bottom + 67;
+  const bottomOffset = insets.bottom + 120;
 
   return (
     <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="box-none">
