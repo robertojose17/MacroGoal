@@ -1511,13 +1511,13 @@ function Step9({
 
               <View style={styles.s9Grid}>
                 <View style={styles.s9StatCard}>
-                  <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={24} color={colors.primary} />
+                  <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={24} color={PRIMARY} />
                   <Text style={styles.s9StatValue}>{calories.toLocaleString()}</Text>
                   <Text style={styles.s9StatUnit}>kcal</Text>
                   <Text style={styles.s9StatLabel}>{t('onboarding.dailyCalories')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
-                  <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={24} color={colors.primary} />
+                  <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={24} color={PRIMARY} />
                   <Text style={styles.s9StatValue}>{protein}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
                   <Text style={styles.s9StatLabel}>{t('common.protein')}</Text>
