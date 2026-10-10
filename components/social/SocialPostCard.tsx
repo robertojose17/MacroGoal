@@ -632,7 +632,7 @@ export default function SocialPostCard({
             ) : null}
             {isElite && !isFounder ? (
               <View style={styles.eliteBadge}>
-                <Text style={styles.eliteBadgeText}>PREMIUM</Text>
+                <IconSymbol ios_icon_name="crown.fill" android_material_icon_name="workspace_premium" size={12} color="#fff" />
               </View>
             ) : null}
             {post.post_type_v2 === 'question' ? (
@@ -852,13 +852,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F59E0B',
     borderRadius: 4,
     paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  eliteBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    paddingVertical: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   questionBadge: {
     flexDirection: 'row',

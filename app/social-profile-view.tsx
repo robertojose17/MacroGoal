@@ -310,7 +310,7 @@ export default function SocialProfileViewScreen() {
         postsRes,
         xpRes,
       ] = await Promise.all([
-        supabase.from('users').select('id, name, username, avatar_url, bio, created_at').eq('id', userId).maybeSingle(),
+        supabase.from('users').select('id, name, username, avatar_url, bio, created_at, user_type').eq('id', userId).maybeSingle(),
         supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', userId),
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('following_id', userId),
         supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
@@ -687,9 +687,16 @@ export default function SocialProfileViewScreen() {
 
             {/* Info column */}
             <View style={styles.igInfoCol}>
-              <Text style={[styles.igFullName, { color: textColor }]} numberOfLines={1}>
-                {displayName}
-              </Text>
+              <View style={styles.igFullNameRow}>
+                <Text style={[styles.igFullName, { color: textColor }]} numberOfLines={1}>
+                  {displayName}
+                </Text>
+                {profile.user_type === 'premium' ? (
+                  <View style={styles.premiumCrownBadge}>
+                    <IconSymbol ios_icon_name="crown.fill" android_material_icon_name="workspace_premium" size={12} color="#fff" />
+                  </View>
+                ) : null}
+              </View>
               {/* Stats row */}
               <View style={styles.igStatsRow}>
                 <View style={styles.igStatItem}>
@@ -1077,9 +1084,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flexShrink: 1,
   },
+  igFullNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   igFullName: {
     fontSize: 14,
     fontWeight: '400',
+  },
+  premiumCrownBadge: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   igStatsRow: {
     flexDirection: 'row',
