@@ -640,21 +640,21 @@ function Step0({ onNext }: { onNext: () => void }) {
 
 const renderOnboardingIcon = (iconValue: string, size = 24) => {
   const iconMap: Record<string, { ios: string; android: string; color: string }> = {
-    '📊': { ios: 'chart.bar.fill', android: 'bar_chart', color: colors.primary },
-    '🔄': { ios: 'arrow.clockwise', android: 'refresh', color: colors.primary },
+    '📊': { ios: 'chart.bar.fill', android: 'bar_chart', color: PRIMARY },
+    '🔄': { ios: 'arrow.clockwise', android: 'refresh', color: PRIMARY },
     '⚡': { ios: 'bolt.fill', android: 'bolt', color: '#F59E0B' },
     '❤️': { ios: 'heart.fill', android: 'favorite', color: '#EF4444' },
     '📉': { ios: 'arrow.down.circle.fill', android: 'trending_down', color: '#EF4444' },
-    '⚖️': { ios: 'scalemass.fill', android: 'balance', color: colors.primary },
+    '⚖️': { ios: 'scalemass.fill', android: 'balance', color: PRIMARY },
     '📈': { ios: 'arrow.up.circle.fill', android: 'trending_up', color: '#22C55E' },
-    '🚶': { ios: 'figure.walk', android: 'directions_walk', color: colors.primary },
-    '🏃': { ios: 'figure.run', android: 'directions_run', color: colors.primary },
-    '💪': { ios: 'bolt.fill', android: 'bolt', color: colors.primary },
-    '🪑': { ios: 'chair.fill', android: 'chair', color: colors.primary },
-    '😩': { ios: 'face.dashed', android: 'sentiment_dissatisfied', color: colors.primary },
-    '😍': { ios: 'face.smiling', android: 'sentiment_very_satisfied', color: colors.primary },
-    '👕': { ios: 'tshirt.fill', android: 'checkroom', color: colors.primary },
-    '🧒': { ios: 'figure.child', android: 'child_care', color: colors.primary },
+    '🚶': { ios: 'figure.walk', android: 'directions_walk', color: PRIMARY },
+    '🏃': { ios: 'figure.run', android: 'directions_run', color: PRIMARY },
+    '💪': { ios: 'bolt.fill', android: 'bolt', color: PRIMARY },
+    '🪑': { ios: 'chair.fill', android: 'chair', color: PRIMARY },
+    '😩': { ios: 'face.dashed', android: 'sentiment_dissatisfied', color: PRIMARY },
+    '😍': { ios: 'face.smiling', android: 'sentiment_very_satisfied', color: PRIMARY },
+    '👕': { ios: 'tshirt.fill', android: 'checkroom', color: PRIMARY },
+    '🧒': { ios: 'figure.child', android: 'child_care', color: PRIMARY },
   };
   const icon = iconMap[iconValue];
   if (!icon) return null;
