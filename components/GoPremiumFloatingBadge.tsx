@@ -24,19 +24,8 @@ export default function GoPremiumFloatingBadge() {
     router.push('/subscription');
   };
 
-  const isModalOrStack = [
-    '/subscription', '/settings', '/onboarding', '/auth', '/add-food',
-    '/food-search', '/barcode', '/chatbot', '/coach-', '/check-in-',
-    '/edit-', '/my-', '/recipe', '/meal-plan', '/progress', '/social',
-    '/affiliate', '/referral', '/bug-report', '/delete-account',
-    '/privacy', '/terms', '/custom-macros', '/adaptive-tdee',
-    '/food-details', '/food-photo', '/share-', '/tracker',
-  ].some(p => pathname.startsWith(p));
-
-  const isOnboardingFlow = pathname.startsWith('/onboarding') || pathname === '/';
-  const isAllowedScreen = !isModalOrStack && !isOnboardingFlow && (
-    pathname.includes('/(tabs)/') || pathname === '/(tabs)'
-  );
+  const TAB_PATHS = ['/dashboard', '/(home)', '/coach', '/check-ins', '/profile'];
+  const isAllowedScreen = TAB_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
 
   if (!visible || loading || isPremium || !isAllowedScreen) return null;
 
