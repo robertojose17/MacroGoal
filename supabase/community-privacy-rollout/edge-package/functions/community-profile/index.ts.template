@@ -1,0 +1,3 @@
+// LOCAL CANDIDATE ONLY. Publishing and activation need separate release approval.
+import { startCommunityProfileEndpoint } from '../_shared/pair-rollout/profile/server/communityProfileBootstrap.ts';
+await startCommunityProfileEndpoint(Deno, globalThis.fetch);

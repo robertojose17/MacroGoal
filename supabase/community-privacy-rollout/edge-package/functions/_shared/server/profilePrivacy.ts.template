@@ -1,0 +1,313 @@
+/**
+ * Pure DRAFT reference/test helpers, not the production authorization mechanism.
+ * Production HTTP must use one canonical authorized SQL snapshot, not recreate
+ * these facts with independent service-role reads. Types/avatar projection remain shared.
+ * Only the server may construct these inputs AFTER verifying the token and
+ * loading target-filtered facts. Never deserialize them from client JSON.
+ */
+import { MAX_NUTRITION_DAYS } from './profileContracts.ts';
+import type {
+  CurrentGoalsDto, DiscoveryIdentityDto, FollowRequestDescriptor, NutrientAmounts, NutritionDto, NutritionUnavailableReason,
+  ProfileAccess, ProfileResponseV2, PublicIdentityDto,
+} from './profileContracts.ts';
+
+/** Narrow SELECT lists only; these constants do not run or secure any query. */
+export const PROFILE_SELECT = Object.freeze({
+  user_discovery: 'id,username,name,full_name,avatar_url',
+  user_profile: 'id,username,name,full_name,avatar_url,bio',
+  social_bio: 'user_id,bio',
+  nutrient_goals: 'daily_calories,protein_g,carbs_g,fats_g,fiber_g',
+});
+
+export type TrustedRead<T> =
+  | { status: 'ok'; value: T }
+  | { status: 'unknown' | 'error' | 'stale' };
+
+export interface ProfileReadContext {
+  /** Server-generated unique nonce for this authorization/read attempt. */
+  request_id: string;
+  target_user_id: string;
+  auth:
+    | { status: 'verified'; user_id: string; is_anonymous: boolean }
+    | { status: 'unauthenticated' | 'expired' | 'error' };
+}
+
+export interface ReadScope {
+  request_id: string;
+  viewer_user_id: string;
+  target_user_id: string;
+}
+
+export interface TrustedProfileFacts {
+  scope: ReadScope;
+  target_exists: TrustedRead<boolean>;
+  viewer_blocks_target: TrustedRead<boolean>;
+  target_blocks_viewer: TrustedRead<boolean>;
+  /** Future authoritative target-owner acceptance of this viewer's request.
+   * Never derive accepted from legacy follows or a client-supplied flag. */
+  forward_follow_request: TrustedRead<FollowRequestDescriptor | null>;
+  viewer_follows_target: TrustedRead<boolean>;
+  target_follows_viewer: TrustedRead<boolean>;
+}
+
+/** Verified deployment configuration, never supplied by a requesting client. */
+export interface PublicAvatarLocation {
+  origin: string;
+  /** Exact public-avatar directory prefix, ending with '/'. */
+  path_prefix: string;
+}
+
+export interface TrustedProfilePayload {
+  scope: ReadScope;
+  user_row: unknown;
+  social_row: unknown;
+  /** Separately derived for display; user_type/subscription rows are not copied. */
+  public_badge: TrustedRead<boolean>;
+  nutrition: TrustedRead<unknown>;
+}
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const nutrientKeys = ['calories', 'protein', 'carbs', 'fats', 'fiber'] as const;
+const dayMs = 86_400_000;
+
+function canonicalUuid(value: unknown): string | null {
+  return typeof value === 'string' && uuid.test(value) ? value.toLowerCase() : null;
+}
+function sameUuid(left: unknown, right: unknown): boolean {
+  const id = canonicalUuid(left);
+  return id !== null && id === canonicalUuid(right);
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : null;
+}
+function bool(read: TrustedRead<boolean> | undefined): boolean | null {
+  return read?.status === 'ok' && typeof read.value === 'boolean' ? read.value : null;
+}
+function sameScope(context: ProfileReadContext, scope: ReadScope | undefined): boolean {
+  return !!scope && context.auth.status === 'verified'
+    && scope.request_id === context.request_id
+    && sameUuid(scope.viewer_user_id, context.auth.user_id)
+    && sameUuid(scope.target_user_id, context.target_user_id);
+}
+function denied(reason: NutritionUnavailableReason, own = false): ProfileAccess {
+  return {
+    can_discover_profile: false, can_view_profile: false, can_view_nutrition: false,
+    follow_request_state: null, follow_request: null, is_accepted_follower: null,
+    nutrition_unavailable_reason: reason, is_own_profile: own,
+    is_following: null, is_mutual: null,
+  };
+}
+
+/** Narrow participant descriptor; malformed values denied, unrelated fields omitted. */
+function requestDescriptor(value: unknown): FollowRequestDescriptor | null | undefined {
+  if (value === null) return null;
+  const row = record(value);
+  if (!row || !canonicalUuid(row.request_id) || typeof row.revision !== 'string'
+      || !/^[1-9]\d{0,18}$/.test(row.revision)
+      || (row.revision.length === 19 && row.revision > '9223372036854775807')
+      || !['pending', 'accepted', 'rejected', 'cancelled', 'revoked'].includes(row.state as string)) return undefined;
+  return { request_id: canonicalUuid(row.request_id)!, revision: row.revision, state: row.state as FollowRequestDescriptor['state'] };
+}
+
+/**
+ * Every other-user full profile/nutrition read requires the target owner's
+ * explicit forward acceptance AND a current viewer-to-target follow edge.
+ * Privacy flags, reverse follows and historical unapproved follows never grant.
+ * The future request/approval database model is not implemented by this helper.
+ */
+export function evaluateProfileAccess(
+  context: ProfileReadContext,
+  facts: TrustedProfileFacts,
+): ProfileAccess {
+  if (context.auth.status !== 'verified' || context.auth.is_anonymous !== false
+      || !canonicalUuid(context.auth.user_id)) return denied('authentication_required');
+  if (!canonicalUuid(context.target_user_id)) return denied('invalid_target');
+  const own = sameUuid(context.auth.user_id, context.target_user_id);
+  if (!context.request_id || !sameScope(context, facts?.scope)) {
+    return denied('authorization_unavailable', own);
+  }
+  const exists = bool(facts.target_exists);
+  if (exists !== true) return denied(exists === false ? 'profile_unavailable' : 'authorization_unavailable', own);
+  const outgoingBlock = bool(facts.viewer_blocks_target);
+  const incomingBlock = bool(facts.target_blocks_viewer);
+  if (outgoingBlock === true || incomingBlock === true) return denied('profile_unavailable', own);
+  if (outgoingBlock !== false || incomingBlock !== false) return denied('authorization_unavailable', own);
+
+  const following = bool(facts.viewer_follows_target);
+  const followedBy = bool(facts.target_follows_viewer);
+  const mutual = following === false || followedBy === false ? false
+    : following === true && followedBy === true ? true : null;
+  const result: ProfileAccess = {
+    can_discover_profile: true, can_view_profile: false, can_view_nutrition: false,
+    nutrition_unavailable_reason: null, is_own_profile: own,
+    is_following: following, is_mutual: mutual,
+    follow_request_state: null, follow_request: null, is_accepted_follower: null,
+  };
+  if (own) return { ...result, can_view_profile: true, can_view_nutrition: true, is_accepted_follower: false };
+  const request = facts.forward_follow_request;
+  const descriptor = request?.status === 'ok' ? requestDescriptor(request.value) : undefined;
+  const state = descriptor === undefined ? null : descriptor === null ? 'none'
+    : descriptor.state === 'pending' || descriptor.state === 'accepted' ? descriptor.state : 'none';
+  result.follow_request_state = state;
+  result.follow_request = descriptor ?? null;
+  result.is_accepted_follower = state === null || (state === 'accepted' && following === null)
+    ? null : state === 'accepted' && following === true;
+  if (state === null) return { ...result, nutrition_unavailable_reason: 'authorization_unavailable' };
+  if (state === 'none') return { ...result, nutrition_unavailable_reason: 'approval_required' };
+  if (state === 'pending') return { ...result, nutrition_unavailable_reason: 'approval_pending' };
+  if (following === null) return { ...result, nutrition_unavailable_reason: 'authorization_unavailable' };
+  if (!following) return { ...result, nutrition_unavailable_reason: 'follow_required' };
+  return { ...result, can_view_profile: true, can_view_nutrition: true };
+}
+
+function textOrNull(value: unknown, maxLength: number): string | null {
+  return typeof value === 'string' && value.length <= maxLength ? value : null;
+}
+export function projectPublicAvatarUrl(value: unknown, locations: readonly PublicAvatarLocation[]): string | null {
+  if (typeof value !== 'string' || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    const path = decodeURIComponent(url.pathname);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+        || /[%\\]/.test(path) || /(?:^|\/)(?:private|check[-_]?ins?|check[-_]?in[-_]?photos|gallery)(?:\/|$)/i.test(path)) return null;
+    return locations.some(location => location.origin === url.origin
+      && location.path_prefix.startsWith('/') && location.path_prefix.endsWith('/')
+      && location.path_prefix.length > 1 && path.startsWith(location.path_prefix)) ? url.href : null;
+  } catch { return null; }
+}
+
+/** Basic request-discovery identity only; no bio, badge, counts or health data. */
+function projectDiscovery(
+  targetId: string,
+  payload: TrustedProfilePayload,
+  avatars: readonly PublicAvatarLocation[],
+): DiscoveryIdentityDto | null {
+  const user = record(payload.user_row);
+  if (!user || !sameUuid(user.id, targetId)) return null;
+  const name = textOrNull(user.name, 200) ?? textOrNull(user.full_name, 200);
+  return {
+    id: canonicalUuid(targetId)!, username: textOrNull(user.username, 100),
+    name, full_name: name, avatar_url: projectPublicAvatarUrl(user.avatar_url, avatars),
+  };
+}
+
+/** Full identity is projected only after owner/accepted-follow authorization. */
+function projectIdentity(
+  targetId: string,
+  payload: TrustedProfilePayload,
+  discovery: DiscoveryIdentityDto,
+): PublicIdentityDto | null {
+  const user = record(payload.user_row);
+  const social = record(payload.social_row);
+  if (!user || (social !== null && !sameUuid(social.user_id, targetId))) return null;
+  const bio = Object.prototype.hasOwnProperty.call(user, 'bio') ? user.bio : social?.bio;
+  return { ...discovery, bio: textOrNull(bio, 4000), is_premium: bool(payload.public_badge) };
+}
+
+function validAmount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+function amounts(value: unknown): NutrientAmounts | null {
+  const row = record(value);
+  if (!row || !nutrientKeys.every(key => validAmount(row[key]))) return null;
+  return {
+    calories: row.calories as number, protein: row.protein as number,
+    carbs: row.carbs as number, fats: row.fats as number, fiber: row.fiber as number,
+  };
+}
+function goalAmounts(value: unknown): CurrentGoalsDto | null {
+  const row = record(value);
+  if (!row || !nutrientKeys.every(key => row[key] === null || validAmount(row[key]))) return null;
+  return {
+    calories: row.calories as number | null, protein: row.protein as number | null,
+    carbs: row.carbs as number | null, fats: row.fats as number | null, fiber: row.fiber as number | null,
+  };
+}
+function dateNumber(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const number = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(number) && new Date(number).toISOString().slice(0, 10) === value ? number : null;
+}
+function close(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 1e-8 * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+/**
+ * Projects already-computed, authorized aggregate data, not raw diary rows.
+ * Missing/failed queries must arrive as a non-ok TrustedRead, never fake zeros.
+ * Unknown keys (including arbitrary nested private data) are never copied.
+ */
+export function projectNutritionDto(value: unknown): NutritionDto | null {
+  const row = record(value);
+  if (!row) return null;
+  const start = dateNumber(row.from_date);
+  const end = dateNumber(row.to_date);
+  if (start === null || end === null || end < start) return null;
+  const count = (end - start) / dayMs + 1;
+  if (count > MAX_NUTRITION_DAYS || row.day_count !== count
+      || row.date_basis !== 'meal_date' || row.calendar_basis !== 'request_calendar_dates'
+      || row.goals_scope !== 'current' || !Array.isArray(row.days) || row.days.length !== count) return null;
+  const totals = amounts(row.totals);
+  const average = amounts(row.daily_average);
+  const goals = row.current_goals === null ? null : goalAmounts(row.current_goals);
+  if (!totals || !average || (row.current_goals !== null && !goals)) return null;
+  const days: NutritionDto['days'] = [];
+  const computed = { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+  let tracked = 0;
+  for (let index = 0; index < count; index++) {
+    const source = record(row.days[index]);
+    const nutrients = amounts(source);
+    const date = new Date(start + index * dayMs).toISOString().slice(0, 10);
+    if (!source || !nutrients || source.date !== date || typeof source.has_logged_items !== 'boolean') return null;
+    if (!source.has_logged_items && nutrientKeys.some(key => nutrients[key] !== 0)) return null;
+    if (source.has_logged_items) tracked++;
+    for (const key of nutrientKeys) computed[key] += nutrients[key];
+    days.push({ date, ...nutrients, has_logged_items: source.has_logged_items });
+  }
+  if (row.days_tracked !== tracked || !nutrientKeys.every(key => validAmount(computed[key])
+      && close(totals[key], computed[key]) && close(average[key], computed[key] / count))) return null;
+  const units = record(row.units);
+  if (!units || units.calories !== 'kcal' || !['protein', 'carbs', 'fats', 'fiber'].every(key => units[key] === 'g')) return null;
+  return {
+    from_date: row.from_date as string, to_date: row.to_date as string, day_count: count,
+    date_basis: 'meal_date', calendar_basis: 'request_calendar_dates', goals_scope: 'current',
+    current_goals: goals, totals, daily_average: average, days, days_tracked: tracked,
+    units: { calories: 'kcal', protein: 'g', carbs: 'g', fats: 'g', fiber: 'g' },
+  };
+}
+
+/** Re-evaluates access for this context; a cached access result is not accepted. */
+export function projectProfileResponse(
+  context: ProfileReadContext,
+  facts: TrustedProfileFacts,
+  payload: TrustedProfilePayload,
+  publicAvatarLocations: readonly PublicAvatarLocation[] = [],
+): ProfileResponseV2 {
+  let access = evaluateProfileAccess(context, facts);
+  let discovery: DiscoveryIdentityDto | null = null;
+  let user: PublicIdentityDto | null = null;
+  let nutrition: NutritionDto | null = null;
+  if (access.can_discover_profile) {
+    if (!sameScope(context, payload?.scope)) access = denied('authorization_unavailable', access.is_own_profile);
+    else {
+      discovery = projectDiscovery(context.target_user_id, payload, publicAvatarLocations);
+      if (!discovery) access = denied('profile_unavailable', access.is_own_profile);
+      else if (access.can_view_profile) {
+        user = projectIdentity(context.target_user_id, payload, discovery);
+        if (!user) {
+          access = denied('profile_unavailable', access.is_own_profile);
+          discovery = null;
+        } else if (access.can_view_nutrition) {
+          nutrition = payload.nutrition?.status === 'ok' ? projectNutritionDto(payload.nutrition.value) : null;
+          if (!nutrition) access = { ...access, can_view_nutrition: false, nutrition_unavailable_reason: 'nutrition_unavailable' };
+        }
+      }
+    }
+  }
+  return {
+    response_version: 2, target_user_id: canonicalUuid(context.target_user_id) ?? context.target_user_id,
+    ...access, discovery, user, nutrition, metrics: null,
+  };
+}

@@ -1,0 +1,94 @@
+{
+  "status": "LOCAL_ONLY_NOT_DEPLOYED",
+  "endpoint": "community-profile",
+  "legacyEndpointUnchanged": true,
+  "sdk": "@supabase/supabase-js@2.83.0",
+  "sourceCommitReference": "3d00beace3715477f1bf1e8d5cebe9a4d056f56d",
+  "copied": [
+    {
+      "source": "pair-rollout/profile/server/communityProfileBootstrap.ts",
+      "destination": "functions/_shared/pair-rollout/profile/server/communityProfileBootstrap.ts",
+      "sha256": "9c0434f4072163a05168b696069cb3c357ae003e5a1cc26cbb915414adb21bcb"
+    },
+    {
+      "source": "server/sdk-binding/supabaseProfileBinding.ts",
+      "destination": "functions/_shared/server/sdk-binding/supabaseProfileBinding.ts",
+      "sha256": "2b27b6a22fba6ea87fe92e5ea51c23267ddeb9923d27e36f8327c97400cc3378"
+    },
+    {
+      "source": "server/profileSnapshotHttp.ts",
+      "destination": "functions/_shared/server/profileSnapshotHttp.ts",
+      "sha256": "39a33ab9bf370d65e5a310d1b0f4f092987fe9d2ad8010a7250b21dddcd1d2c7"
+    },
+    {
+      "source": "server/profilePrivacy.ts",
+      "destination": "functions/_shared/server/profilePrivacy.ts",
+      "sha256": "1934645b6eb4397b38cd65e66de585f6aa44d2e12782086f29469d8e1fb5208b"
+    },
+    {
+      "source": "server/profileContracts.ts",
+      "destination": "functions/_shared/server/profileContracts.ts",
+      "sha256": "7be12048d15d99f2f8d93e54f0563dc8656f9bf17aae1f5480028ffba7722581"
+    },
+    {
+      "source": "client/responseValidation.ts",
+      "destination": "functions/_shared/client/responseValidation.ts",
+      "sha256": "bb62488b2e6dcc50bc1d2a2633d9a199c76d0f1141817789eb7f618c8fc550ee"
+    },
+    {
+      "source": "client/contracts.ts",
+      "destination": "functions/_shared/client/contracts.ts",
+      "sha256": "7e9da4d9e5dee61eefe721fb6595aa8d63afb6e8448c30a957dcf3f3cc8d680a"
+    }
+  ],
+  "files": [
+    {
+      "path": "deno.json",
+      "sha256": "45e505796e2f720e9724ea23172a2bb367b2d0874278d746ec325991c6cb8f53"
+    },
+    {
+      "path": "functions/_shared/client/contracts.ts",
+      "sha256": "7e9da4d9e5dee61eefe721fb6595aa8d63afb6e8448c30a957dcf3f3cc8d680a"
+    },
+    {
+      "path": "functions/_shared/client/responseValidation.ts",
+      "sha256": "bb62488b2e6dcc50bc1d2a2633d9a199c76d0f1141817789eb7f618c8fc550ee"
+    },
+    {
+      "path": "functions/_shared/pair-rollout/profile/server/communityProfileBootstrap.ts",
+      "sha256": "9c0434f4072163a05168b696069cb3c357ae003e5a1cc26cbb915414adb21bcb"
+    },
+    {
+      "path": "functions/_shared/server/profileContracts.ts",
+      "sha256": "7be12048d15d99f2f8d93e54f0563dc8656f9bf17aae1f5480028ffba7722581"
+    },
+    {
+      "path": "functions/_shared/server/profilePrivacy.ts",
+      "sha256": "1934645b6eb4397b38cd65e66de585f6aa44d2e12782086f29469d8e1fb5208b"
+    },
+    {
+      "path": "functions/_shared/server/profileSnapshotHttp.ts",
+      "sha256": "39a33ab9bf370d65e5a310d1b0f4f092987fe9d2ad8010a7250b21dddcd1d2c7"
+    },
+    {
+      "path": "functions/_shared/server/sdk-binding/supabaseProfileBinding.ts",
+      "sha256": "2b27b6a22fba6ea87fe92e5ea51c23267ddeb9923d27e36f8327c97400cc3378"
+    },
+    {
+      "path": "functions/community-profile/deno.json",
+      "sha256": "45e505796e2f720e9724ea23172a2bb367b2d0874278d746ec325991c6cb8f53"
+    },
+    {
+      "path": "functions/community-profile/index.ts",
+      "sha256": "cc2838316a21280da06f0f7a90b3538cb93e1e6538badc724eecfbfc0a565855"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "886697fd03b5d02cb1c5f537e7352d08c97483a05f6a89ab4dbdbc51051a9b59"
+    },
+    {
+      "path": "package.json",
+      "sha256": "796f7a4b1ce535ba6dbb8d23e5781b565e2a2c86e6cf3f243cb5fcb073b174d1"
+    }
+  ]
+}

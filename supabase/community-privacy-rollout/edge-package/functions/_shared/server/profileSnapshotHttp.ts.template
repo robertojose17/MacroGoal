@@ -1,0 +1,158 @@
+/**
+ * LOCAL HTTP transport draft. No Supabase SDK import, environment reads or network
+ * implementation. The production request-bound USER client and exact snapshot
+ * validator must be supplied; the atomic profile_snapshot RPC is still pending.
+ */
+import { MAX_NUTRITION_DAYS } from './profileContracts.ts';
+import type { ProfileResponseV2 } from './profileContracts.ts';
+import { projectPublicAvatarUrl } from './profilePrivacy.ts';
+import type { PublicAvatarLocation } from './profilePrivacy.ts';
+
+export interface ProfileSnapshotRequest {
+  targetId: string;
+  fromDate: string;
+  toDate: string;
+  /** Caller-calendar today, independent of a historical/custom nutrition range. */
+  today: string;
+}
+export interface SnapshotRpcArguments {
+  p_target: string;
+  p_from: string;
+  p_to: string;
+  p_today: string;
+}
+export interface RequestUserClient {
+  auth: {
+    /** Actual server auth.getUser(token), not unverified JWT decoding/getSession. */
+    getUser(token: string, signal: AbortSignal): Promise<{
+      data: { user: { id: string; is_anonymous: boolean } | null } | null;
+      error: unknown;
+    }>;
+  };
+  /** Exactly one authenticated PostgREST RPC under this request's bearer token. */
+  rpc(name: 'profile_snapshot', args: SnapshotRpcArguments, signal: AbortSignal):
+    Promise<{ data: unknown; error: unknown }>;
+}
+export interface ProfileHttpDependencies<T extends ProfileResponseV2> {
+  /** Build a FRESH client with a publishable/anon key + this same bearer token.
+   * Never use a service-role client, global mutable session, or cached auth client. */
+  createUserClient(token: string): RequestUserClient;
+  /** Mandatory reviewed EXACT recursive allowlist + authorization-invariant parser.
+   * Receives verified caller/request binding. Never an `as T` cast or identity fn.
+   * Core tests use the actual shared client parser; full metrics need its revision. */
+  validateSnapshot(data: unknown, request: ProfileSnapshotRequest, callerId: string): T | null;
+  /** Native callers need no Origin; browser origins must be explicitly listed. */
+  allowedOrigins?: readonly string[];
+  /** Required, verified public-avatar locations; [] is safe local-only null default. */
+  publicAvatarLocations: readonly PublicAvatarLocation[];
+  timeoutMs?: number;
+}
+
+export const MAX_PROFILE_HTTP_RESPONSE_BYTES = 1024 * 1024;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const QUERY_KEYS = ['response_version', 'user_id', 'from_date', 'to_date', 'today'];
+const DAY_MS = 86_400_000;
+function dateMs(value: string | null): number | null {
+  if (!value || !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const time = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? time : null;
+}
+export function parseProfileSnapshotRequest(url: URL): ProfileSnapshotRequest | null {
+  if (url.href.length > 4096) return null;
+  for (const key of url.searchParams.keys()) if (!QUERY_KEYS.includes(key)) return null;
+  if (!QUERY_KEYS.every(key => url.searchParams.getAll(key).length === 1)) return null;
+  const q = url.searchParams;
+  const target = q.get('user_id')!;
+  const from = dateMs(q.get('from_date')), to = dateMs(q.get('to_date'));
+  if (q.get('response_version') !== '2' || !UUID.test(target) || from === null || to === null
+      || to < from || (to - from) / DAY_MS + 1 > MAX_NUTRITION_DAYS || dateMs(q.get('today')) === null) return null;
+  // SCORE uses the preceding 29 dates too. Keep its full range representable.
+  if (dateMs(q.get('today'))! < Date.parse('0001-01-30T00:00:00.000Z')) return null;
+  return { targetId: target.toLowerCase(), fromDate: q.get('from_date')!, toDate: q.get('to_date')!, today: q.get('today')! };
+}
+function rpcErrorStatus(error: unknown): number {
+  const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : null;
+  return code === '28000' || code === 'PGRST301' ? 401 : code === '42501' ? 404 : 503;
+}
+
+/** One request-bound auth verification followed by ONE atomic snapshot RPC.
+ * No separate can_view_profile, profile_summary or profile_nutrition roundtrips. */
+export function createProfileHttpHandler<T extends ProfileResponseV2>(deps: ProfileHttpDependencies<T>) {
+  const timeoutMs = deps.timeoutMs ?? 10_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) throw new TypeError('Invalid HTTP timeout');
+  const allowedOrigins = new Set(deps.allowedOrigins ?? []);
+  for (const origin of allowedOrigins) {
+    const url = new URL(origin);
+    if (url.protocol !== 'https:' || url.origin !== origin) throw new TypeError('Invalid allowed origin');
+  }
+  return async function handleProfile(request: Request): Promise<Response> {
+    const origin = request.headers.get('origin');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store',
+      Pragma: 'no-cache', 'X-Content-Type-Options': 'nosniff', Vary: 'Authorization, Origin',
+    };
+    const reply = (status: number, body: unknown): Response => new Response(JSON.stringify(body), { status, headers });
+    const unavailable = (status = 503) => reply(status, { error: status === 401 ? 'authentication_required' : 'profile_unavailable' });
+    if (origin && !allowedOrigins.has(origin)) return unavailable(403);
+    if (origin) headers['Access-Control-Allow-Origin'] = origin;
+    if (request.method === 'OPTIONS') {
+      const method = request.headers.get('access-control-request-method');
+      const requestedHeaders = (request.headers.get('access-control-request-headers') ?? '').toLowerCase().split(',').map(h => h.trim()).filter(Boolean);
+      if (!origin || method !== 'GET' || requestedHeaders.some(h => !['authorization', 'apikey', 'x-client-info', 'accept', 'content-type'].includes(h))) return unavailable(403);
+      return new Response(null, { status: 204, headers: {
+        ...headers, 'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, apikey, x-client-info, accept, content-type',
+      } });
+    }
+    if (request.method !== 'GET') return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405, headers: { ...headers, Allow: 'GET, OPTIONS' } });
+    const authorization = request.headers.get('authorization');
+    // auth.getUser performs real validation. Do not decode or inspect JWT claims here.
+    if (!authorization || authorization.length > 8192 || !/^Bearer [A-Za-z0-9._~-]+$/i.test(authorization)) return unavailable(401);
+    const token = authorization.slice(7);
+    let input: ProfileSnapshotRequest | null;
+    try { input = parseProfileSnapshotRequest(new URL(request.url)); } catch { input = null; }
+    if (!input) return reply(400, { error: 'invalid_request' });
+    if (request.signal.aborted) return unavailable();
+    const controller = new AbortController();
+    const onRequestAbort = () => controller.abort();
+    request.signal.addEventListener('abort', onRequestAbort, { once: true });
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let onAbort: () => void = () => {};
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(new Error('unavailable'));
+      controller.signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      const client = deps.createUserClient(token);
+      const auth = await Promise.race([client.auth.getUser(token, controller.signal), aborted]);
+      if (controller.signal.aborted) return unavailable();
+      const user = auth.data?.user;
+      if (auth.error || !user || user.is_anonymous !== false || typeof user.id !== 'string' || !UUID.test(user.id)) return unavailable(401);
+      const callerId = user.id.toLowerCase();
+      const result = await Promise.race([client.rpc('profile_snapshot', {
+        p_target: input.targetId, p_from: input.fromDate, p_to: input.toDate, p_today: input.today,
+      }, controller.signal), aborted]);
+      if (controller.signal.aborted) return unavailable();
+      if (result.error) return unavailable(rpcErrorStatus(result.error));
+      // The canonical SQL result carries authorization from ONE statement snapshot;
+      // do not reconstruct it from client flags or follow up with separate reads.
+      const value = deps.validateSnapshot(result.data, input, callerId);
+      if (controller.signal.aborted || !value || value.target_user_id !== input.targetId
+          || value.is_own_profile !== (callerId === input.targetId)) return unavailable(502);
+      const body = JSON.stringify({
+        ...value,
+        discovery: value.discovery === null ? null : { ...value.discovery, avatar_url: projectPublicAvatarUrl(value.discovery.avatar_url, deps.publicAvatarLocations) },
+        user: value.user === null ? null : { ...value.user, avatar_url: projectPublicAvatarUrl(value.user.avatar_url, deps.publicAvatarLocations) },
+      });
+      if (new TextEncoder().encode(body).byteLength > MAX_PROFILE_HTTP_RESPONSE_BYTES) return unavailable(502);
+      return new Response(body, { status: 200, headers });
+    } catch {
+      // Never log/return request headers, token, response body, SQL or exception text.
+      return unavailable();
+    } finally {
+      clearTimeout(timer);
+      request.signal.removeEventListener('abort', onRequestAbort);
+      controller.signal.removeEventListener('abort', onAbort);
+    }
+  };
+}

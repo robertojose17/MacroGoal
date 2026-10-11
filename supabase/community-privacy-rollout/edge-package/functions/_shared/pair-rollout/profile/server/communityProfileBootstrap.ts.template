@@ -1,0 +1,24 @@
+/** LOCAL candidate: no environment read, SDK client or listener at import time.
+ * This is a separate normal v2 endpoint; it never modifies/forwards to social-profile.
+ * Pair admission and target containment are enforced by the profile_snapshot RPC.
+ */
+import { createSupabaseProfileHandler } from '../../../server/sdk-binding/supabaseProfileBinding.ts';
+
+export interface CommunityProfileRuntime {
+  env: { get(name: string): string | undefined };
+  serve(handler: (request: Request) => Promise<Response>): unknown;
+}
+
+/** Explicit entrypoint only. Standard runtime public configuration needs no new secret.
+ * The reviewed binding validates the URL/key shape and rejects secret/service-role keys.
+ * Native callers only; browser origins and avatars remain denied until separately reviewed.
+ */
+export async function startCommunityProfileEndpoint(runtime: CommunityProfileRuntime,
+  fetch: typeof globalThis.fetch): Promise<unknown> {
+  const projectUrl = runtime.env.get('SUPABASE_URL') ?? '';
+  const publicKey = runtime.env.get('SUPABASE_ANON_KEY') ?? '';
+  const handler = await createSupabaseProfileHandler({
+    projectUrl, publicKey, fetch, allowedOrigins: [], publicAvatarLocations: [], timeoutMs: 10000,
+  });
+  return runtime.serve(handler);
+}

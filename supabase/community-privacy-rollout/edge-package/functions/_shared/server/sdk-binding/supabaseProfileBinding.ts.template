@@ -1,0 +1,197 @@
+/**
+ * Dormant, genuine Supabase SDK binding for the draft profile HTTP handler.
+ * Importing this module reads no environment/key, constructs no client and
+ * performs no fetch. SDK loading happens only when the exported factory runs.
+ */
+import type { RequestUserClient } from '../profileSnapshotHttp.ts';
+import { createProfileHttpHandler } from '../profileSnapshotHttp.ts';
+import type { PublicAvatarLocation } from '../profilePrivacy.ts';
+import { parseProfileResponse } from '../../client/responseValidation.ts';
+
+export interface SupabaseProfileBindingConfig {
+  /** Trusted HTTPS project origin. Never taken from a request parameter/header. */
+  projectUrl: string;
+  /** Public publishable key or legacy role=anon JWT only. No secret/service key. */
+  publicKey: string;
+  /** Explicit transport injection. Tests never supply the real global fetch. */
+  fetch: typeof globalThis.fetch;
+}
+export interface SupabaseProfileHandlerConfig extends SupabaseProfileBindingConfig {
+  publicAvatarLocations: readonly PublicAvatarLocation[];
+  allowedOrigins?: readonly string[];
+  timeoutMs?: number;
+}
+interface SnapshotDatabase {
+  public: {
+    Tables: Record<string, never>;
+    Views: Record<string, never>;
+    Functions: { profile_snapshot: {
+      Args: { p_target: string; p_from: string; p_to: string; p_today: string };
+      Returns: unknown;
+    } };
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_UPSTREAM_BYTES = 1024 * 1024;
+type Operation = { kind: 'auth' | 'rpc'; signal: AbortSignal };
+
+/** Configuration mistake guard only. It does NOT authenticate a token/key. */
+function isPublicKey(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 8192 || /[\s\x00-\x1f\x7f]/.test(value)) return false;
+  if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(value)) return true;
+  const parts = value.split('.');
+  if (parts.length !== 3 || !parts.every(part => /^[A-Za-z0-9_-]+$/.test(part))) return false;
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload !== null && typeof payload === 'object' && payload.role === 'anon';
+  } catch { return false; }
+}
+function genericError(code = 'P0001') { return { code }; }
+function unavailableResponse(status = 503): Response {
+  return new Response(JSON.stringify({ code: status === 401 ? 'PGRST301' : status === 403 ? '42501' : 'P0001', message: 'Request unavailable' }), {
+    status, headers: { 'Content-Type': 'application/json' },
+  });
+}
+async function boundedJson(response: Response, signal: AbortSignal): Promise<Uint8Array | null> {
+  const announced = response.headers.get('content-length');
+  if ((announced && (!/^\d+$/.test(announced) || Number(announced) > MAX_UPSTREAM_BYTES))
+      || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '') || !response.body) {
+    void response.body?.cancel().catch(() => {});
+    return null;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const onAbort = () => { void reader.cancel().catch(() => {}); };
+  signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    while (!signal.aborted) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > MAX_UPSTREAM_BYTES) { await reader.cancel(); return null; }
+      chunks.push(part.value);
+    }
+    if (signal.aborted) return null;
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    // Prevent raw JSON parse errors/diagnostics from reaching third-party SDK code.
+    JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    return bytes;
+  } catch { return null; }
+  finally { signal.removeEventListener('abort', onAbort); reader.releaseLock(); }
+}
+
+/**
+ * Returns the exact synchronous per-request client factory expected by the HTTP
+ * handler. Actual SDK version is pinned by this directory's package+lockfile.
+ */
+export async function createSupabaseProfileUserClientFactory(config: SupabaseProfileBindingConfig): Promise<(token: string) => RequestUserClient> {
+  let origin: string;
+  try {
+    const url = new URL(config.projectUrl);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+        || (url.pathname !== '/' && url.pathname !== '') || !isPublicKey(config.publicKey)
+        || typeof config.fetch !== 'function') throw new Error();
+    origin = url.origin;
+  } catch { throw new TypeError('Invalid public project configuration'); }
+  // Snapshot configuration; later caller mutation cannot redirect an in-flight token.
+  const publicKey = config.publicKey;
+  const transport = config.fetch;
+  const { createClient } = await import('@supabase/supabase-js');
+  return (token: string): RequestUserClient => {
+    if (typeof token !== 'string' || token.length < 1 || token.length > 8192 || !/^[A-Za-z0-9._~-]+$/.test(token)) throw new TypeError('Invalid request authentication');
+    let operation: Operation | null = null;
+    let authUsed = false;
+    let verified = false;
+    let rpcUsed = false;
+
+    const guardedFetch: typeof globalThis.fetch = async (input, init) => {
+      const active = operation;
+      if (!active || active.signal.aborted) return unavailableResponse();
+      try {
+        const inputRequest = input instanceof Request ? input : null;
+        const url = new URL(inputRequest?.url ?? String(input));
+        const method = (init?.method ?? inputRequest?.method ?? 'GET').toUpperCase();
+        const headers = new Headers(init?.headers ?? inputRequest?.headers);
+        const path = active.kind === 'auth' ? '/auth/v1/user' : '/rest/v1/rpc/profile_snapshot';
+        if (url.origin !== origin || url.pathname !== path || url.search || url.hash
+            || method !== (active.kind === 'auth' ? 'GET' : 'POST')
+            || headers.get('authorization') !== `Bearer ${token}` || headers.get('apikey') !== publicKey) return unavailableResponse();
+        const response = await transport(input, { ...init, headers, signal: active.signal, redirect: 'error', credentials: 'omit', cache: 'no-store' });
+        if (active.signal.aborted || response.redirected || (response.url && new URL(response.url).origin !== origin)) {
+          void response.body?.cancel().catch(() => {});
+          return unavailableResponse();
+        }
+        if (!response.ok || response.status !== 200) {
+          // Do not read or retain an upstream error body, headers or diagnostics.
+          void response.body?.cancel().catch(() => {});
+          return unavailableResponse(response.status === 401 ? 401 : response.status === 403 ? 403 : 503);
+        }
+        const bytes = await boundedJson(response, active.signal);
+        return bytes === null ? unavailableResponse() : new Response(bytes as BodyInit, { status: 200, headers: { 'Content-Type': 'application/json' } });
+      } catch {
+        // Convert raw transport exceptions before SDK error handlers can log them.
+        return unavailableResponse();
+      }
+    };
+    const sdk = createClient<SnapshotDatabase>(origin, publicKey, {
+      db: { schema: 'public' },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, debug: false },
+      global: { headers: { Authorization: `Bearer ${token}` }, fetch: guardedFetch },
+    });
+    return {
+      auth: {
+        async getUser(requestToken, signal) {
+          if (authUsed || operation || signal.aborted || requestToken !== token) return { data: { user: null }, error: genericError('28000') };
+          authUsed = true;
+          operation = { kind: 'auth', signal };
+          try {
+            // Real SDK auth.getUser(token). No getSession, JWT decoding or setSession.
+            const result = await sdk.auth.getUser(token);
+            const user = result.data.user;
+            if (signal.aborted || result.error || !user || user.is_anonymous !== false || !UUID.test(user.id)) {
+              return { data: { user: null }, error: genericError('28000') };
+            }
+            verified = true;
+            return { data: { user: { id: user.id.toLowerCase(), is_anonymous: false } }, error: null };
+          } catch { return { data: { user: null }, error: genericError('28000') }; }
+          finally { operation = null; }
+        },
+      },
+      async rpc(name, args, signal) {
+        if (!verified || rpcUsed || operation || signal.aborted || name !== 'profile_snapshot') return { data: null, error: genericError() };
+        rpcUsed = true;
+        operation = { kind: 'rpc', signal };
+        try {
+          // Real PostgREST builder with this SAME client's bearer Authorization.
+          const result = await sdk.rpc('profile_snapshot', args).abortSignal(signal);
+          if (signal.aborted) return { data: null, error: genericError() };
+          if (result.error) {
+            const code = result.error.code;
+            return { data: null, error: genericError(['28000', '42501', 'PGRST301'].includes(code) ? code : 'P0001') };
+          }
+          return { data: result.data, error: null };
+        } catch { return { data: null, error: genericError() }; }
+        finally { operation = null; }
+      },
+    };
+  };
+}
+
+/** Explicit composition only; no Deno.serve, listener, deployment or env access. */
+export async function createSupabaseProfileHandler(config: SupabaseProfileHandlerConfig): Promise<(request: Request) => Promise<Response>> {
+  const createUserClient = await createSupabaseProfileUserClientFactory(config);
+  return createProfileHttpHandler({
+    createUserClient,
+    validateSnapshot: (body, request, callerId) => parseProfileResponse(body, {
+      userId: request.targetId, fromDate: request.fromDate, toDate: request.toDate, today: request.today,
+    }, callerId),
+    publicAvatarLocations: config.publicAvatarLocations,
+    allowedOrigins: config.allowedOrigins,
+    timeoutMs: config.timeoutMs,
+  });
+}

@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "2.83.0"
+  },
+  "name": "macrogoal-profile-sdk-binding-local-draft",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module"
+}
