@@ -68,6 +68,8 @@ import { usePremium } from '@/hooks/usePremium';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { useTranslation } from 'react-i18next';
 import { IconSymbol } from '@/components/IconSymbol';
+import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { CommunityFollowRequestEntry } from '@/features/communityPrivacyV2Integration/CommunityFollowRequestEntry';
 
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
@@ -3960,6 +3962,13 @@ export default function CommunityScreen() {
               color={secondaryColor}
             />
           </TouchableOpacity>
+          {COMMUNITY_PRIVACY_V2_ENABLED && (
+            <CommunityFollowRequestEntry theme={{
+              background: bgColor, card: cardBg, text: textColor, secondary: secondaryColor,
+              border: borderColor, primary: colors.primary, onPrimary: '#FFFFFF',
+              danger: isDark ? '#FDA4AF' : '#B91C1C',
+            }} />
+          )}
           <TouchableOpacity
             onPress={() => {
               console.log('[Community] Auto-share settings button pressed');
