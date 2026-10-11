@@ -1,0 +1,15 @@
+import type { ProfileResponseV2, PublicIdentityDto, DiscoveryIdentityDto } from './profileContracts';
+
+export type { ProfileResponseV2, PublicIdentityDto, DiscoveryIdentityDto };
+export interface ProfileInput { userId: string; fromDate: string; toDate: string; today: string }
+export type IdentityInput = { mode: 'ids'; userIds: string[] } | { mode: 'search'; query: string; limit?: number };
+export type IdentityRequest = { mode: 'ids'; user_ids: string[] } | { mode: 'search'; q: string; limit: number };
+export interface CommunityIdentitiesResponseV2 {
+  response_version: 2;
+  request: IdentityRequest;
+  users: DiscoveryIdentityDto[];
+  unavailable_user_ids: string[];
+}
+
+export const MAX_IDENTITY_IDS = 50;
+export const MAX_IDENTITY_SEARCH_RESULTS = 20;
