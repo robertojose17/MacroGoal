@@ -1,3 +1,5 @@
+import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { Redirect } from 'expo-router';
 /**
  * Social Profile Screen — Instagram-style
  * Route: /social-profile?user_id=X
@@ -171,6 +173,16 @@ function StatPill({
 }
 
 export default function SocialProfileScreen() {
+  return COMMUNITY_PRIVACY_V2_ENABLED ? <ProtectedLegacyProfileRedirect /> : <LegacySocialProfileScreen />;
+}
+
+function ProtectedLegacyProfileRedirect() {
+  const { user_id } = useLocalSearchParams<{ user_id?: string | string[] }>();
+  const target = typeof user_id === 'string' ? user_id : '';
+  return <Redirect href={{ pathname: '/social-profile-view', params: { userId: target } }} />;
+}
+
+function LegacySocialProfileScreen() {
   const { user_id } = useLocalSearchParams<{ user_id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';

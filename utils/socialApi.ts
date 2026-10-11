@@ -1,3 +1,5 @@
+import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
 import { supabase } from '@/lib/supabase/client';
 
 const BASE = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1';
@@ -119,9 +121,11 @@ export interface SearchUser {
   id: string;
   username: string;
   name: string | null;
-  is_following: boolean;
-  followers_count: number;
-  posts_count: number;
+  is_following?: boolean;
+  followers_count?: number;
+  posts_count?: number;
+  full_name?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface CreatePostInput {
@@ -194,6 +198,7 @@ export async function fetchFeed(
   limit = 20,
   offset = 0
 ): Promise<SocialPost[]> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) return remainingCommunityReads.feed(mode, limit, offset);
   console.log('[SocialApi] fetchFeed — mode:', mode, 'limit:', limit, 'offset:', offset);
   const data = await apiFetch<SocialPost[]>(
     `/social-feed?mode=${mode}&limit=${limit}&offset=${offset}`
@@ -209,6 +214,7 @@ export async function fetchProfile(
   fromDate?: string,
   toDate?: string
 ): Promise<SocialProfile> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) throw new Error('Use the protected profile route.');
   console.log('[SocialApi] fetchProfile — user_id:', userId, 'from:', fromDate, 'to:', toDate);
   let path = `/social-profile?user_id=${encodeURIComponent(userId)}`;
   if (fromDate) path += `&from_date=${fromDate}`;
@@ -221,6 +227,7 @@ export async function fetchProfile(
 // ─── Follows ──────────────────────────────────────────────────────────────────
 
 export async function followUser(targetUserId: string): Promise<void> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) throw new Error('Open the profile to request access.');
   console.log('[SocialApi] followUser — target_user_id:', targetUserId);
   await apiFetch('/social-follows', {
     method: 'POST',
@@ -230,6 +237,7 @@ export async function followUser(targetUserId: string): Promise<void> {
 }
 
 export async function unfollowUser(targetUserId: string): Promise<void> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) throw new Error('Open the profile to change accepted access.');
   console.log('[SocialApi] unfollowUser — target_user_id:', targetUserId);
   await apiFetch(`/social-follows?target_user_id=${encodeURIComponent(targetUserId)}`, {
     method: 'DELETE',
@@ -238,6 +246,7 @@ export async function unfollowUser(targetUserId: string): Promise<void> {
 }
 
 export async function fetchFollowing(userId?: string): Promise<SearchUser[]> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) return (await remainingCommunityReads.connections(userId, 'following')).map(identity => ({ ...identity, username: identity.username ?? '' }));
   console.log('[SocialApi] fetchFollowing — user_id:', userId ?? 'self');
   let path = '/social-follows?type=following';
   if (userId) path += `&user_id=${encodeURIComponent(userId)}`;
@@ -247,6 +256,7 @@ export async function fetchFollowing(userId?: string): Promise<SearchUser[]> {
 }
 
 export async function fetchFollowers(userId?: string): Promise<SearchUser[]> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) return (await remainingCommunityReads.connections(userId, 'followers')).map(identity => ({ ...identity, username: identity.username ?? '' }));
   console.log('[SocialApi] fetchFollowers — user_id:', userId ?? 'self');
   let path = '/social-follows?type=followers';
   if (userId) path += `&user_id=${encodeURIComponent(userId)}`;
@@ -346,6 +356,7 @@ export async function toggleLike(
 // ─── Comments — direct Supabase ───────────────────────────────────────────────
 
 export async function addComment(post_id: string, content: string): Promise<Comment> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) return remainingCommunityReads.addComment(post_id, content);
   console.log('[SocialApi] addComment — post_id:', post_id, 'content length:', content.length);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) throw new Error('Not authenticated');
@@ -390,6 +401,7 @@ export async function addComment(post_id: string, content: string): Promise<Comm
 }
 
 export async function fetchComments(post_id: string): Promise<Comment[]> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) return remainingCommunityReads.comments(post_id);
   console.log('[SocialApi] fetchComments — post_id:', post_id);
   const { data, error } = await supabase
     .from('community_comments')
@@ -462,6 +474,7 @@ export async function deleteComment(commentId: string, postId: string): Promise<
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 export async function searchUsers(q: string): Promise<SearchUser[]> {
+  if (COMMUNITY_PRIVACY_V2_ENABLED) return (await remainingCommunityReads.search(q)).map(identity => ({ ...identity, username: identity.username ?? '' }));
   console.log('[SocialApi] searchUsers — query:', q);
   const data = await apiFetch<SearchUser[]>(
     `/social-search-users?q=${encodeURIComponent(q)}`

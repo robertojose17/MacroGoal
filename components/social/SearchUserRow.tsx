@@ -1,3 +1,4 @@
+import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -40,6 +41,7 @@ export default function SearchUserRow({
   }, []);
 
   const handleFollowToggle = useCallback(async () => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) { router.push(`/social-profile-view?userId=${encodeURIComponent(user.id)}`); return; }
     const newFollowing = !isFollowing;
     console.log('[SearchUserRow] Follow toggle pressed — user_id:', user.id, 'username:', user.username, 'newFollowing:', newFollowing);
     setIsFollowing(newFollowing);
@@ -78,7 +80,7 @@ export default function SearchUserRow({
   const followBtnBg = isFollowing ? 'transparent' : colors.primary;
   const followBtnBorder = isFollowing ? (isDark ? colors.cardBorderDark : colors.cardBorder) : colors.primary;
   const followBtnText = isFollowing ? (isDark ? colors.textDark : colors.text) : '#FFFFFF';
-  const followLabel = isFollowing ? 'Following' : 'Follow';
+  const followLabel = COMMUNITY_PRIVACY_V2_ENABLED ? 'View profile' : (isFollowing ? 'Following' : 'Follow');
 
   return (
     <Animated.View
@@ -99,10 +101,10 @@ export default function SearchUserRow({
               {user.name}
             </Text>
           ) : null}
-          <View style={styles.metaRow}>
+          {!COMMUNITY_PRIVACY_V2_ENABLED && <View style={styles.metaRow}>
             <Users size={11} color={subColor} />
             <Text style={[styles.metaText, { color: subColor }]}>{followersText}</Text>
-          </View>
+          </View>}
         </View>
         <Pressable
           onPress={handleFollowToggle}

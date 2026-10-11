@@ -1,3 +1,6 @@
+import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
+import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibility/ProtectedReaderBoundary';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
@@ -102,6 +105,12 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
 }
 
 export default function ProfileScreen() {
+  return COMMUNITY_PRIVACY_V2_ENABLED
+    ? <ProtectedReaderBoundary><OwnerProfileBody /></ProtectedReaderBoundary>
+    : <OwnerProfileBody />;
+}
+
+function OwnerProfileBody() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -118,8 +127,8 @@ export default function ProfileScreen() {
 
   // Stats
   const [postsCount, setPostsCount] = useState(0);
-  const [followersCount, setFollowersCount] = useState(0);
-  const [followingCount, setFollowingCount] = useState(0);
+  const [followersCount, setFollowersCount] = useState<number | null>(0);
+  const [followingCount, setFollowingCount] = useState<number | null>(0);
 
   // Consistency score (30-day)
   const [consistencyScore, setConsistencyScore] = useState(0);
@@ -337,8 +346,8 @@ export default function ProfileScreen() {
       ] = await Promise.all([
         supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
         supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', authUser.id),
-        supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('following_id', authUser.id),
-        supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', authUser.id),
+        COMMUNITY_PRIVACY_V2_ENABLED ? acceptedConnectionCount(authUser.id, 'followers') : supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('following_id', authUser.id),
+        COMMUNITY_PRIVACY_V2_ENABLED ? acceptedConnectionCount(authUser.id, 'following') : supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', authUser.id),
         supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
       ]);
 
@@ -360,8 +369,8 @@ export default function ProfileScreen() {
       }
 
       setPostsCount(postsResult.count ?? 0);
-      setFollowersCount(followersResult.error ? 0 : (followersResult.count ?? 0));
-      setFollowingCount(followingResult.error ? 0 : (followingResult.count ?? 0));
+      setFollowersCount(COMMUNITY_PRIVACY_V2_ENABLED ? followersResult.count : (followersResult.error ? 0 : (followersResult.count ?? 0)));
+      setFollowingCount(COMMUNITY_PRIVACY_V2_ENABLED ? followingResult.count : (followingResult.error ? 0 : (followingResult.count ?? 0)));
 
       if (goalsResult.data) {
         setGoal(goalsResult.data);
@@ -432,6 +441,14 @@ export default function ProfileScreen() {
     await loadNutritionData(authUser.id, 'custom', startDate, endDate);
   };
 
+  const [followReadError, setFollowReadError] = useState(false);
+  const followReadSequence = useRef(0);
+  const followReadAbort = useRef<AbortController | null>(null);
+  React.useEffect(() => {
+    if (!COMMUNITY_PRIVACY_V2_ENABLED) return;
+    return () => { ++followReadSequence.current; followReadAbort.current?.abort(); };
+  }, []);
+
   const openFollowModal = async (type: FollowModalType) => {
     if (!user || !type) return;
     console.log('[Profile] openFollowModal — type:', type, 'user_id:', user.id);
@@ -439,6 +456,22 @@ export default function ProfileScreen() {
     setFollowModalLoading(true);
     setFollowModalUsers([]);
     try {
+      if (COMMUNITY_PRIVACY_V2_ENABLED) {
+        setFollowReadError(false);
+        followReadAbort.current?.abort();
+        const request = new AbortController();
+        followReadAbort.current = request;
+        const sequence = ++followReadSequence.current;
+        try {
+          const identities = await remainingCommunityReads.connections(user.id, type, request.signal);
+          if (!request.signal.aborted && sequence === followReadSequence.current) setFollowModalUsers(identities);
+        } catch {
+          if (!request.signal.aborted && sequence === followReadSequence.current) { setFollowModalUsers([]); setFollowReadError(true); }
+        } finally {
+          if (sequence === followReadSequence.current) setFollowModalLoading(false);
+        }
+        return;
+      }
       let ids: string[] = [];
       if (type === 'followers') {
         const { data, error } = await supabase
@@ -470,11 +503,12 @@ export default function ProfileScreen() {
     } catch (err) {
       console.error('[Profile] openFollowModal — error:', err);
     } finally {
-      setFollowModalLoading(false);
+      if (!COMMUNITY_PRIVACY_V2_ENABLED) setFollowModalLoading(false);
     }
   };
 
   const closeFollowModal = () => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) { ++followReadSequence.current; followReadAbort.current?.abort(); setFollowModalLoading(false); }
     console.log('[Profile] closeFollowModal');
     setFollowModalType(null);
     setFollowModalUsers([]);
@@ -547,8 +581,8 @@ export default function ProfileScreen() {
   const bestStreakDisplay = String(bestStreak);
   const consistencyScoreDisplay = String(consistencyScore);
   const postsCountDisplay = String(postsCount);
-  const followersCountDisplay = String(followersCount);
-  const followingCountDisplay = String(followingCount);
+  const followersCountDisplay = COMMUNITY_PRIVACY_V2_ENABLED && followersCount === null ? 'Unavailable' : String(followersCount);
+  const followingCountDisplay = COMMUNITY_PRIVACY_V2_ENABLED && followingCount === null ? 'Unavailable' : String(followingCount);
 
   const totalCaloriesRounded = Math.round(totalCalories);
 
@@ -902,7 +936,7 @@ export default function ProfileScreen() {
             ) : followModalUsers.length === 0 ? (
               <View style={styles.modalEmpty}>
                 <Text style={[styles.modalEmptyText, { color: secondaryText }]}>
-                  {followModalType === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+                  {COMMUNITY_PRIVACY_V2_ENABLED && followReadError ? 'Accepted connections are unavailable.' : (followModalType === 'followers' ? 'No followers yet' : 'Not following anyone yet')}
                 </Text>
               </View>
             ) : (

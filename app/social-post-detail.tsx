@@ -1,3 +1,6 @@
+import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
+import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibility/ProtectedReaderBoundary';
 /**
  * Social Post Detail Screen
  * Route: /social-post-detail?post_id=X
@@ -82,6 +85,16 @@ function CommentItem({
 }
 
 export default function SocialPostDetailScreen() {
+  return COMMUNITY_PRIVACY_V2_ENABLED ? <ProtectedPostDetailRoute /> : <LegacySocialPostDetailScreen />;
+}
+
+function ProtectedPostDetailRoute() {
+  const { post_id } = useLocalSearchParams<{ post_id?: string | string[] }>();
+  const target = typeof post_id === 'string' ? post_id : '';
+  return <ProtectedReaderBoundary scopeKey={target}><ProtectedPostDetailBody key={target} /></ProtectedReaderBoundary>;
+}
+
+function LegacySocialPostDetailScreen() {
   const { post_id } = useLocalSearchParams<{ post_id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -262,6 +275,184 @@ export default function SocialPostDetailScreen() {
               handleSubmitComment();
             }}
             disabled={!commentText.trim() || submitting}
+            style={[styles.sendBtn, { opacity: !commentText.trim() || submitting ? 0.4 : 1 }]}
+            accessibilityLabel="Send comment"
+            accessibilityRole="button"
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Send size={18} color="#fff" />
+            )}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </>
+  );
+}
+
+function ProtectedPostDetailBody() {
+  const { post_id } = useLocalSearchParams<{ post_id: string }>();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const router = useRouter();
+
+  const [post, setPost] = useState<SocialPost | null>(null);
+  const [postLoading, setPostLoading] = useState(true);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentText, setCommentText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const bg = isDark ? colors.backgroundDark : colors.background;
+  const textColor = isDark ? colors.textDark : colors.text;
+  const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
+  const cardBg = isDark ? colors.cardDark : '#FFFFFF';
+  const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
+
+  const activeRequest = useRef<AbortController | null>(null);
+  const mutationPending = useRef(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const request = new AbortController();
+    activeRequest.current = request;
+    setPost(null); setComments([]); setCommentText(''); setLoadError(false);
+    setPostLoading(true); setCommentsLoading(true);
+    if (typeof post_id !== 'string' || !post_id) {
+      setLoadError(true); setPostLoading(false); setCommentsLoading(false);
+      return () => request.abort();
+    }
+    void Promise.all([
+      remainingCommunityReads.post(post_id, request.signal),
+      remainingCommunityReads.comments(post_id, request.signal),
+    ]).then(([nextPost, nextComments]) => {
+      if (request.signal.aborted) return;
+      setPost(nextPost); setComments(nextPost ? nextComments : []);
+    }).catch(() => {
+      if (request.signal.aborted) return;
+      setPost(null); setComments([]); setLoadError(true);
+    }).finally(() => {
+      if (request.signal.aborted) return;
+      setPostLoading(false); setCommentsLoading(false);
+    });
+    return () => { request.abort(); activeRequest.current = null; };
+  }, [post_id]);
+
+  const handleLike = useCallback(async (postId: string) => {
+    if (!post || post.id !== postId || mutationPending.current || !activeRequest.current) return;
+    const request = activeRequest.current;
+    mutationPending.current = true;
+    try {
+      const result = await remainingCommunityReads.toggleLike(postId, request.signal);
+      if (!request.signal.aborted) setPost(previous => previous?.id === postId ?
+        { ...previous, liked_by_me: result.liked, likes_count: result.likes_count } : previous);
+    } catch { /* An uncertain toggle is never retried or invented optimistically. */ }
+    finally { mutationPending.current = false; }
+  }, [post]);
+
+  const handleSubmitComment = useCallback(async () => {
+    if (!post || post.id !== post_id || !commentText.trim() || mutationPending.current || !activeRequest.current) return;
+    const request = activeRequest.current;
+    mutationPending.current = true; setSubmitting(true);
+    try {
+      const newComment = await remainingCommunityReads.addComment(post_id, commentText.trim(), request.signal);
+      if (request.signal.aborted) return;
+      setComments(previous => [...previous, newComment]); setCommentText('');
+      setPost(previous => previous?.id === post_id ? { ...previous, comments_count: previous.comments_count + 1 } : previous);
+    } catch {
+      if (!request.signal.aborted) setLoadError(true);
+    } finally {
+      mutationPending.current = false;
+      if (!request.signal.aborted) setSubmitting(false);
+    }
+  }, [post_id, post, commentText]);
+
+  const commentsCountText = loadError ? 'Comments unavailable.' : commentsLoading
+    ? 'Loading comments...'
+    : `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}`;
+
+  const renderHeader = () => {
+    if (postLoading) {
+      return (
+        <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor }]}>
+          <ActivityIndicator color={colors.primary} style={{ margin: spacing.lg }} />
+        </View>
+      );
+    }
+    if (!post) {
+      return (
+        <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor }]}>
+          <Text style={[styles.errorText, { color: subColor }]}>Post not found.</Text>
+        </View>
+      );
+    }
+    return (
+      <SocialPostCard
+        post={post}
+        isDark={isDark}
+        onLike={handleLike}
+        onPressUser={(userId) => {
+          console.log('[PostDetail] Author pressed — navigating to profile user_id:', userId);
+          router.push(`/social-profile-view?userId=${encodeURIComponent(userId)}`);
+        }}
+        hideCommentButton
+      />
+    );
+  };
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          title: 'Post',
+          headerBackButtonDisplayMode: 'minimal',
+          headerShown: true,
+        }}
+      />
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: bg }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={90}
+      >
+        <FlatList
+          data={comments}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index }) => (
+            <CommentItem comment={item} isDark={isDark} index={index} />
+          )}
+          ListHeaderComponent={
+            <>
+              {renderHeader()}
+              <Text style={[styles.commentsLabel, { color: subColor }]}>
+                {commentsCountText}
+              </Text>
+            </>
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+
+        {/* Comment input */}
+        <View style={[styles.commentInputRow, { backgroundColor: cardBg, borderTopColor: borderColor }]}>
+          <TextInput
+            style={[styles.commentInput, { backgroundColor: isDark ? '#1E2035' : colors.card, borderColor, color: textColor }]}
+            placeholder="Add a comment..."
+            placeholderTextColor={subColor}
+            value={commentText}
+            onChangeText={setCommentText}
+            editable={!!post && !loadError}
+            multiline
+            maxLength={300}
+            returnKeyType="send"
+            onSubmitEditing={handleSubmitComment}
+          />
+          <Pressable
+            onPress={() => {
+              console.log('[PostDetail] Send comment button pressed');
+              handleSubmitComment();
+            }}
+            disabled={!post || loadError || !commentText.trim() || submitting}
             style={[styles.sendBtn, { opacity: !commentText.trim() || submitting ? 0.4 : 1 }]}
             accessibilityLabel="Send comment"
             accessibilityRole="button"
