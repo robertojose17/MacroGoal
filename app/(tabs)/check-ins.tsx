@@ -8,6 +8,7 @@ import React, {
   useCallback,
   useEffect,
   useRef,
+  useLayoutEffect,
 } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -70,6 +71,9 @@ import { useTranslation } from 'react-i18next';
 import { IconSymbol } from '@/components/IconSymbol';
 import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
 import { CommunityFollowRequestEntry } from '@/features/communityPrivacyV2Integration/CommunityFollowRequestEntry';
+import { CommunityReadProvider, useCommunityReadEnvironment } from '@/features/communityPrivacyV2Community/CommunityReadEnvironment';
+import { communityReadStrings } from '@/features/communityPrivacyV2Community/communityReadStrings';
+import type { OutboundRow } from '@/features/communityPrivacyV2Community/communityReaderContracts';
 
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
@@ -1487,6 +1491,8 @@ interface CommentsModalProps {
   isDark: boolean;
   onClose: () => void;
   onCommentAdded: (postId: string) => void;
+  communityClubAllowed?: boolean;
+  communityUnavailableLabel?: string;
 }
 
 function CommentsModal({
@@ -1498,7 +1504,12 @@ function CommentsModal({
   isDark,
   onClose,
   onCommentAdded,
+  communityClubAllowed = false,
+  communityUnavailableLabel = 'Unavailable. Try again.',
 }: CommentsModalProps) {
+  const { runtime: commentPrivacy, state: commentPrivacyState } = useCommunityReadEnvironment();
+  const [commentPrivacyView, setCommentPrivacyView] = useState('');
+  const [commentPrivacyError, setCommentPrivacyError] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -1517,6 +1528,7 @@ function CommentsModal({
   const borderColor = isDark ? colors.borderDark : colors.border;
 
   useEffect(() => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) return;
     if (visible && post) {
       console.log('[Community] CommentsModal opened for post:', post.id);
       loadComments();
@@ -1526,7 +1538,26 @@ function CommentsModal({
     }
   }, [visible, post?.id]);
 
+  useEffect(() => {
+    if (!COMMUNITY_PRIVACY_V2_ENABLED) return;
+    setComments([]); setCommentText(''); setEditingCommentId(null); setMenuCommentId(null);
+    setCommentPrivacyView(commentPrivacyState.viewKey); setCommentPrivacyError(false);
+    if (visible && post && commentPrivacyState.scopeKey) void loadComments();
+    return () => commentPrivacy?.cancel('comments');
+  }, [visible, post?.id, commentPrivacy, commentPrivacyState.viewKey]);
+
   const loadComments = async () => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      const ticket = commentPrivacy?.begin('comments');
+      setComments([]); setLoading(true);
+      if (!ticket || !commentPrivacy || !visible || !post) { ticket?.finish(); setLoading(false); return; }
+      try {
+        const result = await commentPrivacy.readers.comments(ticket.session, ticket.signal, post.id, post.section, communityClubAllowed);
+        if (!ticket.current()) return;
+        setComments(result.ok ? result.value : []); setCommentPrivacyError(!result.ok);
+      } finally { if (ticket.alive()) { setLoading(false); if (ticket.signal.aborted) setCommentPrivacyError(true); } ticket.finish(); }
+      return;
+    }
     if (!post) return;
     console.log('[Community] Network request: fetchComments for post:', post.id);
     setLoading(true);
@@ -1552,7 +1583,8 @@ function CommentsModal({
     try {
       const newComment = await addComment(post.id, textToSend);
       console.log('[Community] Comment added, id:', newComment.id);
-      setComments(prev => [...prev, newComment]);
+      if (COMMUNITY_PRIVACY_V2_ENABLED) await loadComments();
+      else setComments(prev => [...prev, newComment]);
       setCommentText('');
       onCommentAdded(post.id);
       inputRef.current?.blur();
@@ -1709,12 +1741,12 @@ function CommentsModal({
             <FlatList
               ref={flatListRef}
               style={{ flex: 1 }}
-              data={comments}
+              data={COMMUNITY_PRIVACY_V2_ENABLED && (!visible || commentPrivacyView !== commentPrivacyState.viewKey) ? [] : comments}
               keyExtractor={(item) => item.id}
               renderItem={renderComment}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: 48 }}>
-                  <Text style={{ fontSize: 14, color: secondaryColor }}>No comments yet. Be the first!</Text>
+                  <Text style={{ fontSize: 14, color: secondaryColor }}>{COMMUNITY_PRIVACY_V2_ENABLED && commentPrivacyError ? communityUnavailableLabel : 'No comments yet. Be the first!'}</Text>
                 </View>
               }
               contentContainerStyle={{ paddingBottom: 8 }}
@@ -3129,11 +3161,26 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function CommunityScreen() {
+  return COMMUNITY_PRIVACY_V2_ENABLED
+    ? <CommunityReadProvider><CommunityScreenContent /></CommunityReadProvider>
+    : <CommunityScreenContent />;
+}
+
+function CommunityScreenContent() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isPremium, loading: premiumLoading } = usePremium();
+  const { runtime: communityPrivacy, state: communityPrivacyState } = useCommunityReadEnvironment();
+  const privacyCopy = communityReadStrings(i18n.resolvedLanguage ?? i18n.language ?? 'en');
+  const privacyPremiumRef = useRef(isPremium);
+  privacyPremiumRef.current = isPremium;
+  const [privacyViewKey, setPrivacyViewKey] = useState('');
+  const privacyScopeRef = useRef<string | null>(null);
+  const [privacyErrors, setPrivacyErrors] = useState<Record<string, boolean>>({});
+  const [outboundRows, setOutboundRows] = useState<Record<string, OutboundRow>>({});
+  const [outboundBusy, setOutboundBusy] = useState<Record<string, boolean>>({});
 
   const bgColor = isDark ? colors.backgroundDark : colors.primaryBackground;
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
@@ -3168,13 +3215,13 @@ export default function CommunityScreen() {
   const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [following, setFollowing] = useState<FollowingUser[]>([]);
-  const [followingCount, setFollowingCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState<number | null>(0);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [friendsLoading, setFriendsLoading] = useState(false);
   const [friendsRefreshing, setFriendsRefreshing] = useState(false);
   const [commitment, setCommitment] = useState<Commitment | null>(null);
-  const [myMealDays, setMyMealDays] = useState(0);
-  const [partnerMealDays, setPartnerMealDays] = useState(0);
+  const [myMealDays, setMyMealDays] = useState<number | null>(0);
+  const [partnerMealDays, setPartnerMealDays] = useState<number | null>(0);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Leaderboard state ──
@@ -3201,8 +3248,43 @@ export default function CommunityScreen() {
   const [showMemberList, setShowMemberList] = useState(false);
   const [memberListLoading, setMemberListLoading] = useState(false);
 
+  useLayoutEffect(() => {
+    if (!COMMUNITY_PRIVACY_V2_ENABLED) return;
+    setPrivacyViewKey(communityPrivacyState.viewKey);
+    if (privacyScopeRef.current === communityPrivacyState.scopeKey) return;
+    privacyScopeRef.current = communityPrivacyState.scopeKey;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = null;
+    setFeedPosts([]); setClubPosts([]); setCommentsPost(null);
+    setSearchQuery(''); setSearchResults([]); setSearchLoading(false);
+    setFollowing([]); setFollowingIds(new Set()); setFollowingCount(null);
+    setCommitment(null); setMyMealDays(null); setPartnerMealDays(null); setLeaderboard([]);
+    setOutboundRows({}); setOutboundBusy({}); setPrivacyErrors({});
+    setCurrentUserId(communityPrivacyState.userId ?? '');
+    setCurrentUserName(''); setCurrentUserFirstName(''); setCurrentUserAvatar(null);
+    setIsFounder(false); setClubMemberCount(null); setClubMembers([]);
+    setPrivacyViewKey(communityPrivacyState.viewKey);
+    if (!communityPrivacyState.userId || !communityPrivacy) return;
+    const ticket = communityPrivacy.begin('owner');
+    if (!ticket) return;
+    void Promise.all([
+      communityPrivacy.readers.ownIdentity(ticket.session, ticket.signal),
+      communityPrivacy.readers.founder(ticket.session, ticket.signal),
+    ]).then(([owner, founder]) => {
+      if (!ticket.current()) return;
+      if (owner.ok) {
+        setCurrentUserName(owner.value.username);
+        setCurrentUserFirstName(owner.value.full_name?.split(' ')[0] || owner.value.username);
+        const avatar = owner.value.avatar_url;
+        if (avatar) setCurrentUserAvatar(avatar.startsWith('http') ? avatar : supabase.storage.from('avatars').getPublicUrl(avatar).data.publicUrl);
+      }
+      setIsFounder(founder.ok && founder.value === true);
+    }).finally(ticket.finish);
+  }, [communityPrivacy, communityPrivacyState.viewKey]);
+
   // ── Load current user (run once on mount) ──
   useEffect(() => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) return;
     const loadUser = async () => {
       console.log('[Community] Loading current user session');
       const { data: { session } } = await supabase.auth.getSession();
@@ -3245,6 +3327,15 @@ export default function CommunityScreen() {
 
   // ── Reload avatar on every tab focus ──
   const reloadAvatar = useCallback(async () => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      const ticket = communityPrivacy?.begin('avatar');
+      if (!ticket || !communityPrivacy) return;
+      try {
+        const owner = await communityPrivacy.readers.ownIdentity(ticket.session, ticket.signal);
+        if (ticket.current()) setCurrentUserAvatar(owner.ok ? owner.value.avatar_url : null);
+      } finally { ticket.finish(); }
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     const uid = session.user.id;
@@ -3305,6 +3396,18 @@ export default function CommunityScreen() {
   // ── Fetch feed posts (reads from social_posts — same table the composer writes to) ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFeedPosts = useCallback(async (overrideUserId?: string) => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      const ticket = communityPrivacy?.begin('feed');
+      setFeedPosts([]);
+      if (!ticket || !communityPrivacy) return;
+      try {
+        const result = await communityPrivacy.readers.posts(ticket.session, ticket.signal, 'feed', false);
+        if (!ticket.current()) return;
+        setFeedPosts(result.ok ? result.value as unknown as CommunityPost[] : []);
+        setPrivacyErrors(prev => ({ ...prev, feed: !result.ok }));
+      } finally { ticket.finish(); }
+      return;
+    }
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
     if (anyLikePendingRef.current) {
@@ -3366,6 +3469,18 @@ export default function CommunityScreen() {
   // ── Fetch club posts ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchClubPosts = useCallback(async (overrideUserId?: string) => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      const ticket = communityPrivacy?.begin('club');
+      setClubPosts([]);
+      if (!ticket || !communityPrivacy || !privacyPremiumRef.current) { ticket?.finish(); return; }
+      try {
+        const result = await communityPrivacy.readers.posts(ticket.session, ticket.signal, 'club', privacyPremiumRef.current);
+        if (!ticket.current() || !privacyPremiumRef.current) return;
+        setClubPosts(result.ok ? result.value as unknown as CommunityPost[] : []);
+        setPrivacyErrors(prev => ({ ...prev, club: !result.ok }));
+      } finally { ticket.finish(); }
+      return;
+    }
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
     if (anyLikePendingRef.current) {
@@ -3415,6 +3530,18 @@ export default function CommunityScreen() {
 
   // ── Fetch club member count (founder only) ──
   const fetchClubMemberCount = useCallback(async () => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      if (!isFounder) return;
+      const ticket = communityPrivacy?.begin('members');
+      setClubMemberCount(null); setClubMembers([]);
+      if (!ticket || !communityPrivacy) return;
+      try {
+        const result = await communityPrivacy.readers.premiumMembers(ticket.session, ticket.signal);
+        if (!ticket.current()) return;
+        if (result.ok) { setClubMemberCount(result.value.count); setClubMembers(result.value.members); }
+      } finally { ticket.finish(); }
+      return;
+    }
     if (!isFounder) return;
     try {
       const { data: countData, error: countError } = await supabase.rpc('get_premium_member_count');
@@ -3441,6 +3568,38 @@ export default function CommunityScreen() {
   // ── Fetch friends data ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFriendsData = useCallback(async (overrideUserId?: string) => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      const ticket = communityPrivacy?.begin('friends');
+      setFollowing([]); setFollowingIds(new Set()); setFollowingCount(null);
+      setCommitment(null); setMyMealDays(null); setPartnerMealDays(null);
+      if (!ticket || !communityPrivacy) return;
+      try {
+        const result = await communityPrivacy.readers.connections(ticket.session, ticket.signal);
+        if (!ticket.current()) return;
+        setPrivacyErrors(prev => ({ ...prev, friends: !result.ok }));
+        if (result.ok) {
+          const accepted = result.value.items.map(row => ({ id: row.id, username: row.username ?? '', name: row.name, avatar_url: row.avatar_url }));
+          setFollowing(accepted); setFollowingIds(new Set(accepted.map(row => row.id))); setFollowingCount(accepted.length);
+          void fetchWeeklyConsistency(ticket.session.userId, accepted);
+        } else { setLeaderboard([]); setPrivacyErrors(prev => ({ ...prev, weekly: true })); }
+        const weekStart = getMondayOfWeek(new Date());
+        const commitmentResult = await communityPrivacy.readers.commitment(ticket.session, ticket.signal, weekStart);
+        if (!ticket.current()) return;
+        if (!commitmentResult.ok || !commitmentResult.value) return;
+        const value = commitmentResult.value;
+        setCommitment(value);
+        const partnerId = value.user_id === ticket.session.userId ? value.partner_id : value.user_id;
+        const toDate = toLocalDateString(new Date());
+        const [own, partner] = await Promise.all([
+          communityPrivacy.readers.weekly(ticket.session, ticket.signal, ticket.session.userId, weekStart, toDate),
+          communityPrivacy.readers.weekly(ticket.session, ticket.signal, partnerId, weekStart, toDate),
+        ]);
+        if (!ticket.current()) return;
+        setMyMealDays(own.ok && own.value.tracking.status === 'available' ? own.value.tracking.mealDays : null);
+        setPartnerMealDays(partner.ok && partner.value.tracking.status === 'available' ? partner.value.tracking.mealDays : null);
+      } finally { ticket.finish(); }
+      return;
+    }
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
     console.log('[Community] Fetching friends data for user:', uid);
@@ -3527,6 +3686,39 @@ export default function CommunityScreen() {
 
   // ── Fetch weekly consistency leaderboard ──
   const fetchWeeklyConsistency = useCallback(async (uid: string, followedUsers: FollowingUser[]) => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      const ticket = communityPrivacy?.begin('weekly');
+      setLeaderboard([]); setLeaderboardLoading(true);
+      if (!ticket || !communityPrivacy) { setLeaderboardLoading(false); return; }
+      try {
+        const today = new Date(), mondayStr = getMondayOfWeek(today), todayStr = toLocalDateString(today);
+        const targets = [{ id: ticket.session.userId, name: currentUserFirstName || 'You', username: '', avatarUrl: currentUserAvatar, isMe: true },
+          ...followedUsers.map(row => ({ id: row.id, name: row.name || row.username, username: row.username, avatarUrl: row.avatar_url, isMe: false }))];
+        const results = await Promise.all(targets.map(async target => ({ target,
+          result: await communityPrivacy.readers.weekly(ticket.session, ticket.signal, target.id, mondayStr, todayStr) })));
+        if (!ticket.current()) return;
+        const available = results.flatMap(({ target, result }) => result.ok && result.value.consistency.status === 'available'
+          ? [{ userId: target.id, name: target.name, username: target.username, avatarUrl: target.avatarUrl,
+              score: result.value.consistency.score, noActivity: result.value.consistency.noActivity, isMe: target.isMe }] : []);
+        available.sort((a, b) => b.score - a.score);
+        let rank = 1;
+        const ranked = available.map((row, index) => { if (index && row.score < available[index - 1].score) rank = index + 1; return { ...row, rank }; });
+        setLeaderboard(ranked);
+        setPrivacyErrors(prev => ({ ...prev, weekly: results.some(value => !value.result.ok) }));
+        // Preserve the existing owner's Sunday snapshot/auto-share behavior only
+        // from a current, available own aggregate. Hidden/denied data is never zero.
+        const own = results.find(value => value.target.isMe)?.result;
+        const myScore = ranked.find(value => value.isMe);
+        if (today.getDay() === 0 && myScore && own?.ok && own.value.tracking.status === 'available' && ticket.current()) {
+          await communityPrivacy.readers.saveOwnWeekly(ticket.session, ticket.signal, mondayStr, myScore.score);
+          if (myScore.score >= 70 && ticket.current()) {
+            const { autoShareWeeklyRecap } = await import('@/utils/autoShareAchievements');
+            if (ticket.current()) autoShareWeeklyRecap(myScore.score, own.value.tracking.mealDays, mondayStr, own.value.tracking.dayFlags).catch(() => {});
+          }
+        }
+      } finally { if (ticket.alive()) { setLeaderboardLoading(false); if (ticket.signal.aborted) setPrivacyErrors(prev => ({ ...prev, weekly: true })); } ticket.finish(); }
+      return;
+    }
     setLeaderboardLoading(true);
     console.log('[Community] fetchWeeklyConsistency: starting for uid:', uid, 'followed:', followedUsers.length);
     try {
@@ -3788,6 +3980,30 @@ export default function CommunityScreen() {
 
   // ── Block ──
   const handleBlock = async (userId: string) => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      Alert.alert(privacyCopy.blockTitle, privacyCopy.blockBody, [
+        { text: privacyCopy.cancel, style: 'cancel' },
+        { text: privacyCopy.block, style: 'destructive', onPress: async () => {
+          const ticket = communityPrivacy?.begin('block');
+          if (!ticket || !communityPrivacy) return;
+          setFeedPosts([]); setClubPosts([]); setCommentsPost(null); setSearchQuery(''); setSearchResults([]);
+          setFollowing([]); setFollowingIds(new Set()); setFollowingCount(null); setLeaderboard([]);
+          setCommitment(null); setMyMealDays(null); setPartnerMealDays(null); setOutboundRows({});
+          if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+          searchDebounceRef.current = null;
+          communityPrivacy.clear('block');
+          try {
+            const confirmed = await communityPrivacy.block(ticket.session, ticket.signal, userId);
+            if (!ticket.current()) return;
+            communityPrivacy.releaseExclusive('block');
+            Alert.alert(confirmed ? privacyCopy.blocked : privacyCopy.actionFailed);
+            if (confirmed) await Promise.all([fetchFeedPosts(ticket.session.userId), fetchFriendsData(ticket.session.userId),
+              privacyPremiumRef.current ? fetchClubPosts(ticket.session.userId) : Promise.resolve()]);
+          } finally { ticket.finish(); }
+        } },
+      ]);
+      return;
+    }
     console.log('[Community] Network request: block user:', userId);
     const { error } = await supabase.from('community_blocks').upsert({ blocker_id: currentUserId, blocked_id: userId });
     console.log('[Community] Block result, error:', error?.message ?? 'none');
@@ -3833,6 +4049,32 @@ export default function CommunityScreen() {
 
   // ── Search users ──
   const handleSearchChange = (q: string) => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      setSearchQuery(q); setSearchResults([]); setOutboundRows({}); setSearchLoading(false); setPrivacyErrors(prev => ({ ...prev, search: false }));
+      communityPrivacy?.cancel('search'); communityPrivacy?.outbound.invalidate();
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+      if (q.trim().length < 2 || q.length > 64 || !communityPrivacy) return;
+      searchDebounceRef.current = setTimeout(async () => {
+        const ticket = communityPrivacy.begin('search');
+        if (!ticket) return;
+        setSearchLoading(true);
+        try {
+          const result = await communityPrivacy.readers.search(ticket.session, ticket.signal, q);
+          if (!ticket.current()) return;
+          setPrivacyErrors(prev => ({ ...prev, search: !result.ok }));
+          if (!result.ok) return;
+          const users = result.value.items.filter(row => row.id !== ticket.session.userId);
+          setSearchResults(users.map(row => ({ id: row.id, username: row.username ?? '', full_name: row.full_name, avatar_url: row.avatar_url })));
+          const states = await communityPrivacy.outbound.read(ticket.session, ticket.signal, users.map(row => row.id));
+          if (!ticket.current()) return;
+          setOutboundRows(states.ok ? Object.fromEntries(states.value.map(row => [row.targetId, row])) : {});
+          setSearchResults(prev => states.ok ? prev.filter(user => states.value.some(row => row.targetId === user.id)) : []);
+          setPrivacyErrors(prev => ({ ...prev, search: !states.ok }));
+        } finally { if (ticket.alive()) { setSearchLoading(false); if (ticket.signal.aborted) setPrivacyErrors(prev => ({ ...prev, search: true })); } ticket.finish(); }
+      }, 400);
+      return;
+    }
     setSearchQuery(q);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     if (!q.trim()) {
@@ -3855,6 +4097,29 @@ export default function CommunityScreen() {
 
   // ── Follow / Unfollow ──
   const handleFollow = async (userId: string) => {
+    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      const row = outboundRows[userId];
+      if (!row || outboundBusy[userId] || !communityPrivacy) return;
+      const ticket = communityPrivacy.begin('outbound');
+      if (!ticket) return;
+      setOutboundBusy(prev => ({ ...prev, [userId]: true }));
+      const change = communityPrivacy.outbound.change(ticket.session, ticket.signal, row);
+      setFeedPosts([]); setClubPosts([]); setCommentsPost(null); setSearchQuery(''); setSearchResults([]);
+      setFollowing([]); setFollowingIds(new Set()); setFollowingCount(null); setLeaderboard([]);
+      setCommitment(null); setMyMealDays(null); setPartnerMealDays(null); setOutboundRows({});
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+      communityPrivacy.clear('outbound');
+      try {
+        const result = await change;
+        if (!ticket.current()) return;
+        setOutboundRows(result.row ? { [userId]: result.row } : {});
+        communityPrivacy.releaseExclusive('outbound');
+        if (!result.confirmed) Alert.alert(privacyCopy.actionFailed);
+        else await fetchFriendsData(ticket.session.userId);
+      } finally { if (ticket.current()) setOutboundBusy({}); ticket.finish(); }
+      return;
+    }
     const isFollowing = followingIds.has(userId);
     console.log('[Community] Network request:', isFollowing ? 'unfollow' : 'follow', 'user:', userId);
     if (isFollowing) {
@@ -3942,6 +4207,15 @@ export default function CommunityScreen() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
 
+  if (COMMUNITY_PRIVACY_V2_ENABLED && (!communityPrivacyState.scopeKey || privacyViewKey !== communityPrivacyState.viewKey)) {
+    return <View style={[styles.root, { backgroundColor: bgColor }]}>
+      {communityPrivacyState.status === 'loading' || privacyViewKey !== communityPrivacyState.viewKey
+        ? <ActivityIndicator color={colors.primary} />
+        : <View style={{ padding: spacing.lg }}><Text style={{ color: textColor }}>{privacyCopy.unavailable}</Text>
+            <TouchableOpacity onPress={() => { communityPrivacy?.deactivate(); communityPrivacy?.activate(); }}><Text style={{ color: colors.primary }}>{privacyCopy.retry}</Text></TouchableOpacity></View>}
+    </View>;
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: bgColor }]}>
       {/* Header */}
@@ -3990,6 +4264,8 @@ export default function CommunityScreen() {
         </View>
       </View>
 
+      {COMMUNITY_PRIVACY_V2_ENABLED && ((activeTab === 'feed' && privacyErrors.feed) || (activeTab === 'club' && privacyErrors.club)) &&
+        <Text style={{ color: secondaryColor, padding: spacing.md }}>{privacyCopy.unavailable}</Text>}
       {/* Pill selector */}
       <View style={[styles.pillContainer, { borderColor }]}>
         {tabLabels.map(({ key, label }) => {
@@ -4149,11 +4425,15 @@ export default function CommunityScreen() {
             {searchLoading && <ActivityIndicator size="small" color={colors.primary} />}
           </View>
 
+          {COMMUNITY_PRIVACY_V2_ENABLED && privacyErrors.search && <Text style={{ color: secondaryColor }}>{privacyCopy.unavailable}</Text>}
           {/* Search results */}
           {searchResults.length > 0 && (
             <View style={[styles.searchResultsCard, { backgroundColor: cardBg, borderColor }]}>
               {searchResults.map((user) => {
                 const isFollowing = followingIds.has(user.id);
+                const requestState = outboundRows[user.id];
+                const requestLabel = !requestState ? privacyCopy.checking : requestState.state === 'pending' ? privacyCopy.pending
+                  : requestState.state === 'accepted' ? privacyCopy.following : privacyCopy.request;
                 return (
                   <View key={user.id} style={[styles.searchResultRow, { borderBottomColor: borderColor }]}>
                     <UserAvatar url={user.avatar_url} name={user.full_name} username={user.username} size={40} />
@@ -4164,9 +4444,10 @@ export default function CommunityScreen() {
                     <TouchableOpacity
                       style={[styles.followBtn, isFollowing && { backgroundColor: 'transparent', borderColor: colors.primary }]}
                       onPress={() => handleFollow(user.id)}
+                      disabled={COMMUNITY_PRIVACY_V2_ENABLED ? !requestState || !!outboundBusy[user.id] : undefined}
                     >
                       <Text style={[styles.followBtnText, isFollowing && { color: colors.primary }]}>
-                        {isFollowing ? 'Following' : 'Follow'}
+                        {COMMUNITY_PRIVACY_V2_ENABLED ? requestLabel : isFollowing ? 'Following' : 'Follow'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -4186,7 +4467,7 @@ export default function CommunityScreen() {
               <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
             ) : leaderboard.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>Follow people to see the leaderboard.</Text>
+                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>{COMMUNITY_PRIVACY_V2_ENABLED && privacyErrors.weekly ? privacyCopy.unavailable : 'Follow people to see the leaderboard.'}</Text>
               </View>
             ) : (
               <View style={{ backgroundColor: cardBg, borderRadius: 16, borderWidth: 1, borderColor, overflow: 'hidden' }}>
@@ -4258,13 +4539,13 @@ export default function CommunityScreen() {
           {/* Following list */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: spacing.lg }}>
             <Text style={[styles.sectionTitle, { color: textColor }]}>Following</Text>
-            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{followingCount} people</Text>
+            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{COMMUNITY_PRIVACY_V2_ENABLED && followingCount === null ? privacyCopy.unavailable : <>{followingCount} people</>}</Text>
           </View>
 
           {following.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyStateText, { color: secondaryColor }]}>
-                You're not following anyone yet. Search above to find friends.
+                {COMMUNITY_PRIVACY_V2_ENABLED && privacyErrors.friends ? privacyCopy.unavailable : "You're not following anyone yet. Search above to find friends."}
               </Text>
             </View>
           ) : (
@@ -4448,6 +4729,8 @@ export default function CommunityScreen() {
           setCommentsPost(null);
         }}
         onCommentAdded={handleCommentAdded}
+        communityClubAllowed={isPremium}
+        communityUnavailableLabel={privacyCopy.unavailable}
       />
 
       {/* Premium member list modal (founder only) */}
