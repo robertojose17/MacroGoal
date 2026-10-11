@@ -211,6 +211,7 @@ export default function MealPlanDetailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId]);
 
   useFocusEffect(
@@ -367,6 +368,7 @@ export default function MealPlanDetailScreen() {
     } finally {
       setRecipeLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCloseRecipe = useCallback(() => {

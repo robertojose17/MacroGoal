@@ -119,6 +119,7 @@ function MacroPill({
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ message, visible }: { message: string; visible: boolean }) {
   const opacity = useRef(new Animated.Value(0)).current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (visible) {
       Animated.sequence([
@@ -127,6 +128,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
         Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
   return (
     <Animated.View style={[styles.toast, { opacity }]} pointerEvents="none">

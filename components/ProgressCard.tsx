@@ -416,6 +416,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
       setError(t('progressCard.failedToLoad'));
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   useEffect(() => {

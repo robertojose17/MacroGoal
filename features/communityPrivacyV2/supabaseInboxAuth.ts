@@ -59,6 +59,7 @@ export function createSupabaseInboxAuthBinding(auth: SupabaseAuthSource, options
   }
   function usable(raw: SupabaseAuthSession | null): raw is SupabaseAuthSession & { expires_at: number } {
     return !!raw && !!raw.user && typeof raw.user.id === 'string' && UUID.test(raw.user.id) && raw.user.is_anonymous !== true &&
+      // eslint-disable-next-line no-control-regex
       typeof raw.access_token === 'string' && !!raw.access_token && !/[\s\u0000-\u001f\u007f]/.test(raw.access_token) &&
       typeof raw.expires_at === 'number' && Number.isFinite(raw.expires_at) && raw.expires_at * 1000 > now();
   }

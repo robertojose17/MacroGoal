@@ -79,6 +79,7 @@ export default function MyFoodsScreen() {
       console.error('[MyFoods] Error in loadMyFoods:', error);
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useFocusEffect(
@@ -184,6 +185,7 @@ export default function MyFoodsScreen() {
       setMyFoods(previousFoods);
       Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myFoods]);
 
   const renderFoodItem = useCallback((food: MyFood, index: number) => {

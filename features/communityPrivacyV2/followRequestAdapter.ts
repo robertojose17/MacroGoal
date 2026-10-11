@@ -31,11 +31,13 @@ function id(value: unknown): value is string { return typeof value === 'string' 
 function revision(value: unknown): value is string {
   return typeof value === 'string' && /^[1-9]\d{0,15}$/.test(value) && BigInt(value) <= MAX_REVISION;
 }
+// eslint-disable-next-line no-control-regex
 function text(value: unknown, limit: number): value is string | null { return value === null || (typeof value === 'string' && value.length <= limit && !/[\u0000-\u001f\u007f]/.test(value)); }
 function sessionScope(s: InboxSession): string { return JSON.stringify([s.userId.toLowerCase(), s.sessionKey]); }
 function validSession(s: ClientSession | null, expected: InboxSession, now: number): s is ClientSession {
   return !!s && typeof s.userId === 'string' && id(s.userId.toLowerCase()) && s.userId.toLowerCase() === expected.userId.toLowerCase() &&
     s.isAnonymous === false && typeof s.sessionKey === 'string' && s.sessionKey.length > 0 && s.sessionKey === expected.sessionKey &&
+    // eslint-disable-next-line no-control-regex
     typeof s.accessToken === 'string' && s.accessToken.length > 0 && !/[\s\u0000-\u001f\u007f]/.test(s.accessToken) &&
     Number.isFinite(s.expiresAtSeconds) && s.expiresAtSeconds * 1000 > now;
 }

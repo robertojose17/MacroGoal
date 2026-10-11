@@ -32,6 +32,7 @@ export function createSupabaseFollowRequestTransport({ client, getSession, timeo
     if (call.signal.aborted || call.method !== 'POST' ||
       !['list_follow_request_inbox', 'respond_follow_request'].includes(name) || !validArgs ||
       !UUID.test(started.userId) || !started.sessionKey || started.isAnonymous !== false ||
+      // eslint-disable-next-line no-control-regex
       !started.accessToken || /[\s\u0000-\u001f\u007f]/.test(started.accessToken) ||
       !Number.isFinite(started.expiresAtSeconds) || started.expiresAtSeconds * 1000 <= now()) return failure();
 

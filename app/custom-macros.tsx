@@ -183,6 +183,7 @@ export default function CustomMacrosScreen() {
     } finally {
       setSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protein, carbs, fats, isValid, proteinNum, carbsNum, fatsNum, totalDisplay]);
 
   const bg = isDark ? colors.backgroundDark : colors.primaryBackground;

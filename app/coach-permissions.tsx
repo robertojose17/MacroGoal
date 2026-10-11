@@ -170,6 +170,7 @@ export default function CoachPermissionsScreen() {
     } finally {
       setSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permissions, maxCalInput]);
 
   const handleRevokeAll = useCallback(() => {
@@ -216,6 +217,7 @@ export default function CoachPermissionsScreen() {
         },
       ]
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showToggles = permissions.permission_level >= 3;

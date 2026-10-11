@@ -158,6 +158,7 @@ export default function FoodPhotoCaptureScreen() {
       setErrorMessage(t('foodPhotoCapture.connectionError'));
       setStep('error');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [barcode, type, food_item_id, mealType, date, mode, context, returnTo, mealId, router]);
 
   const capturePhoto = useCallback(async () => {
@@ -203,6 +204,7 @@ export default function FoodPhotoCaptureScreen() {
     } finally {
       isCapturingRef.current = false;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, type, labelPhotoUrl, callEdgeFunction]);
 
   const handleRetry = () => {

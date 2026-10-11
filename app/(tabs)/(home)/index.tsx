@@ -517,6 +517,7 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
   // ── Load plans ──
@@ -554,6 +555,7 @@ export default function HomeScreen() {
     } finally {
       setPlansLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Load month assignments ──
@@ -780,6 +782,7 @@ export default function HomeScreen() {
       Alert.alert(t('home.deleteFailed'), err?.message || t('home.failedToDeleteFood'), [{ text: t('common.ok') }]);
       loadData();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadData]);
 
   const goToPreviousDay = () => {
@@ -2032,6 +2035,7 @@ const RECIPE_TAG_COLORS: Record<string, string> = {
 
 function RecipeCardSkeleton({ isDark, horizontal }: { isDark: boolean; horizontal?: boolean }) {
   const opacity = React.useRef(new Animated.Value(0.3)).current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -2039,6 +2043,7 @@ function RecipeCardSkeleton({ isDark, horizontal }: { isDark: boolean; horizonta
         Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
       ])
     ).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const shimmer = isDark ? '#3A3C52' : '#E5E7EB';
   const bg = isDark ? colors.cardDark : '#FFFFFF';

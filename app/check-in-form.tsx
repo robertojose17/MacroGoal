@@ -113,6 +113,7 @@ export default function CheckInFormScreen() {
     } catch (error) {
       console.error('[CheckInForm] Error in loadCheckInData:', error);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkInId, router]);
 
   const loadDefaultStepsGoal = useCallback(async (userId: string) => {

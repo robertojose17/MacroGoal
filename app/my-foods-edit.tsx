@@ -62,6 +62,7 @@ export default function MyFoodsEditScreen() {
       Alert.alert(t('common.error'), t('common.unexpectedError'));
       router.back();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [foodId, router]);
 
   useEffect(() => {

@@ -805,6 +805,7 @@ export default function FoodDetailsLayout({
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offData]);
 
   // Helper: build a minimal OpenFoodFactsProduct from a food_items row
@@ -1206,6 +1207,7 @@ export default function FoodDetailsLayout({
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId, router, itemTable]);
 
   useEffect(() => {

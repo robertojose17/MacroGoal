@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OutboundDependencies } from './outboundFollowAdapter';
-type OutboundRpcCall = Parameters<OutboundDependencies['rpc']>[0];
 import type { ClientSession } from './communityProfileApi';
+type OutboundRpcCall = Parameters<OutboundDependencies['rpc']>[0];
 
 const failure = () => ({ data: null, error: { code: 'OUTBOUND_UNAVAILABLE' } });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -32,6 +32,7 @@ export function createSupabaseOutboundFollowTransport({ client, getSession, time
       (requestId === null ? revision === '0' && args.p_action === 'request' : revision !== '0');
     if (call.signal.aborted || call.method !== 'POST' || name !== 'change_outbound_follow' || !validArgs ||
       !UUID.test(started.userId) || !started.sessionKey || started.isAnonymous !== false ||
+      // eslint-disable-next-line no-control-regex
       !started.accessToken || /[\s\u0000-\u001f\u007f]/.test(started.accessToken) ||
       !Number.isFinite(started.expiresAtSeconds) || started.expiresAtSeconds * 1000 <= now()) return failure();
 

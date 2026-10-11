@@ -44,6 +44,7 @@ export function exact(value: unknown, names: readonly string[]): value is Record
     names.every(k => Object.hasOwn(value, k));
 }
 export function normalizedQuery(value: unknown): string | null {
+  // eslint-disable-next-line no-control-regex
   if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f-\u009f]/.test(value)) return null;
   // SQL btrim(text) removes ASCII spaces; do not silently change Unicode query semantics.
   const query = value.replace(/^ +| +$/g, '');
@@ -53,6 +54,7 @@ export function validSession(value: ClientSession | null, now: number): value is
   return !!value && canonicalId(value.userId) !== null && value.isAnonymous === false &&
     typeof value.sessionKey === 'string' && value.sessionKey.length > 0 && value.sessionKey.length <= 256 &&
     typeof value.accessToken === 'string' && value.accessToken.length > 0 && value.accessToken.length <= 8192 &&
+    // eslint-disable-next-line no-control-regex
     !/[\s\u0000-\u001f\u007f]/.test(value.accessToken) && Number.isFinite(value.expiresAtSeconds) && value.expiresAtSeconds * 1000 > now;
 }
 export function validExpected(value: CompatibilitySession): boolean {
@@ -70,6 +72,7 @@ export function safeFailureKind(error: unknown): CompatibilityFailureKind {
 export function parseIdentity(raw: unknown): DiscoveryIdentityDto | null {
   if (!exact(raw, ['id', 'username', 'name', 'full_name', 'avatar_url']) ||
     typeof raw.id !== 'string' || !UUID.test(raw.id)) return null;
+  // eslint-disable-next-line no-control-regex
   const text = (v: unknown, limit: number) => v === null || (typeof v === 'string' && v.length <= limit && !/[\u0000-\u001f\u007f-\u009f]/.test(v));
   if (!text(raw.username, 100) || !text(raw.name, 200) || !text(raw.full_name, 200) || raw.name !== raw.full_name) return null;
   const avatar = `https://esgptfiofoaeguslgvcq.supabase.co/storage/v1/object/public/avatars/${raw.id}/avatar.jpg`;

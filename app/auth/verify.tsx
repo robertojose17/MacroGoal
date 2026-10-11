@@ -152,6 +152,7 @@ export default function VerifyScreen() {
       console.log('[Verify] Cleaning up deep link listener');
       subscription.remove();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   return (

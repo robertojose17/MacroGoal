@@ -41,11 +41,13 @@ function SearchUserRowBody({
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(10)).current;
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     Animated.parallel([
       Animated.timing(cardOpacity, { toValue: 1, duration: 300, delay: index * 50, useNativeDriver: true }),
       Animated.timing(cardTranslateY, { toValue: 0, duration: 300, delay: index * 50, useNativeDriver: true }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFollowToggle = useCallback(async () => {

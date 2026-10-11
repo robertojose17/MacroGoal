@@ -24,6 +24,7 @@ export function createCommunityScopedQuery(getSession: () => Promise<ClientSessi
         return !settled && !request.signal.aborted && session?.isAnonymous === false &&
           session.userId === expected.userId && session.sessionKey === expected.sessionKey &&
           session.expiresAtSeconds * 1000 > Date.now() && session.accessToken &&
+          // eslint-disable-next-line no-control-regex
           !/[\s\u0000-\u001f\u007f]/.test(session.accessToken) ? Object.freeze({ ...session }) : null;
       };
       if (signal.aborted) cancel();

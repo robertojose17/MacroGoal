@@ -537,6 +537,7 @@ export default function AddFoodScreen() {
       console.error('[AddFood] Error adding search result to plan:', err);
       Alert.alert(t('common.error'), t('addFood.failedToAddToPlan'));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, planId, date, mealType, showSuccessBanner]);
 
   /**
@@ -1801,6 +1802,7 @@ export default function AddFoodScreen() {
         </SwipeToDeleteRow>
       </React.Fragment>
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDark, context, handleSelectMeal, handleDeleteMeal, handleQuickAddSavedMeal]);
 
   const renderListContent = useCallback(() => {

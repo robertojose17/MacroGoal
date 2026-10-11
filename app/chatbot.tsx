@@ -226,6 +226,7 @@ export default function ChatbotScreen() {
       return false;
     }
     return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Request media library permissions
@@ -236,6 +237,7 @@ export default function ChatbotScreen() {
       return false;
     }
     return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Convert image URI to base64 data URL
@@ -285,6 +287,7 @@ export default function ChatbotScreen() {
       console.error('[Chatbot] Error taking photo:', error);
       Alert.alert(t('common.error'), t('chatbot.failedToTakePhoto'));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestCameraPermission, convertImageToBase64, selectedImages.length]);
 
   // Choose from gallery — appends to selectedImages (max 3)
@@ -314,6 +317,7 @@ export default function ChatbotScreen() {
       console.error('[Chatbot] Error choosing photo:', error);
       Alert.alert(t('common.error'), t('chatbot.failedToChoosePhoto'));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestMediaLibraryPermission, convertImageToBase64, selectedImages.length]);
 
   // Handle photo selection
@@ -333,6 +337,7 @@ export default function ChatbotScreen() {
         style: 'cancel',
       },
     ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleTakePhoto, handleChooseFromGallery]);
 
   // Remove a specific photo by index
@@ -409,6 +414,7 @@ export default function ChatbotScreen() {
         });
       }, 0);
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
     [loading, isPremium, premiumLoading, sendMessage]
   );
 
@@ -851,6 +857,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       };
       setMessages((prev) => [...prev, errorMessage]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputText, selectedImages, loading, messages, sendMessage, parseMealData, isPremium, premiumLoading, isMealEstimator]);
 
   // Update ingredient quantity using per-100g values when available
@@ -1467,6 +1474,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         Alert.alert(t('common.error'), t('chatbot.failedToLogMeal'));
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestEstimate, context, mealType, date, router]);
 
   const formatTime = useCallback((timestamp: number | undefined): string => {

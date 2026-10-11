@@ -1,11 +1,11 @@
 /** Local migration draft. Deliberately not imported by any application route. */
 import type { ProfileResponseV2, PublicIdentityDto } from './profileContracts';
+import type { ProfileInput, IdentityInput, CommunityIdentitiesResponseV2 } from './clientContracts';
 import { parseProfileResponse, parseIdentityResponse, validateProfileInput, validateIdentityInput } from './responseValidation';
 
 export type { ProfileResponseV2, PublicIdentityDto } from './profileContracts';
 export type { ProfileInput, IdentityInput, IdentityRequest, DiscoveryIdentityDto, CommunityIdentitiesResponseV2 } from './clientContracts';
 export { MAX_IDENTITY_IDS, MAX_IDENTITY_SEARCH_RESULTS } from './clientContracts';
-import type { ProfileInput, IdentityInput, CommunityIdentitiesResponseV2 } from './clientContracts';
 
 /** sessionKey is a non-secret auth generation, changed on sign-out/sign-in/account switch.
  * It must NOT be a token, and must not be reused if the same account signs back in.
@@ -45,6 +45,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function validSession(session: ClientSession | null, now: number): session is ClientSession {
   return !!session && uuid.test(session.userId) && session.isAnonymous === false &&
     typeof session.accessToken === 'string' && session.accessToken.length > 0 &&
+    // eslint-disable-next-line no-control-regex
     !/[\s\u0000-\u001f\u007f]/.test(session.accessToken) &&
     typeof session.sessionKey === 'string' && session.sessionKey.length > 0 &&
     Number.isFinite(session.expiresAtSeconds) && session.expiresAtSeconds * 1000 > now;

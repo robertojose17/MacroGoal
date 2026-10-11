@@ -27,12 +27,14 @@ let ReanimatedView: any = null;
 
 if (Platform.OS !== 'web') {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const gh = require('react-native-gesture-handler');
     GestureDetector = gh.GestureDetector;
     Gesture = gh.Gesture;
   } catch (_) {}
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ra = require('react-native-reanimated');
     useSharedValue = ra.useSharedValue;
     useAnimatedStyle = ra.useAnimatedStyle;

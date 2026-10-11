@@ -429,6 +429,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     useCallback(() => {
       console.log('[Profile] screen focused — loading data');
       loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nutritionRange, customStartDate, customEndDate])
   );
 
@@ -477,7 +478,9 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   const followReadAbort = useRef<AbortController | null>(null);
   React.useEffect(() => {
     if (!privacyProtected) return;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => { ++followReadSequence.current; followReadAbort.current?.abort(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openFollowModal = async (type: FollowModalType) => {

@@ -31,7 +31,7 @@ async function hydrate<T extends { user_id: string }>(context: RemainingReadCont
   return rows.flatMap(row => { const identity = identities.get(row.user_id.toLowerCase());
     return identity ? [{ ...row, author: author(identity) }] : []; });
 }
-function projectPosts(raw: unknown): Array<Record<string, unknown> & { id: string; user_id: string }> {
+function projectPosts(raw: unknown): (Record<string, unknown> & { id: string; user_id: string })[] {
   if (!Array.isArray(raw) || raw.length > 100) throw unavailable();
   return raw.map(row => {
     if (!row || typeof row !== 'object' || !UUID.test(row.id) || !UUID.test(row.user_id) ||

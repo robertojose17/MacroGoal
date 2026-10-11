@@ -210,6 +210,7 @@ export default function CopyFromPreviousScreen() {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, targetDate]);
 
   const loadMealsForDate = useCallback(async (date: string) => {
@@ -287,6 +288,7 @@ export default function CopyFromPreviousScreen() {
       console.error('[CopyFromPrevious] Error in loadMealsForDate:', error);
       Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

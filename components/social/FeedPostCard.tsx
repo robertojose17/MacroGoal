@@ -330,6 +330,7 @@ export default function FeedPostCard({
   const [menuVisible, setMenuVisible] = useState(false);
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const stats = post.progress_stats as Record<string, unknown> | null | undefined;
     const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string }[] | null | undefined;
@@ -362,6 +363,7 @@ export default function FeedPostCard({
     })();
 
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
 
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';

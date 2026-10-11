@@ -12,6 +12,7 @@ function exact(value: unknown, names: string[]): value is Record<string, unknown
 function validSession(value: ClientSession | null, expected: OutboundSession, now: number): value is ClientSession {
   return !!value && UUID.test(value.userId) && value.userId.toLowerCase() === expected.userId.toLowerCase() &&
     value.sessionKey === expected.sessionKey && value.isAnonymous === false && typeof value.accessToken === 'string' &&
+    // eslint-disable-next-line no-control-regex
     !!value.accessToken && !/[\s\u0000-\u001f\u007f]/.test(value.accessToken) &&
     Number.isFinite(value.expiresAtSeconds) && value.expiresAtSeconds * 1000 > now;
 }

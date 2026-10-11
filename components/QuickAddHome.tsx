@@ -85,6 +85,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
       console.error('[QuickAddHome] Error in loadMyFoods:', error);
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useFocusEffect(
@@ -315,6 +316,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
       console.error('[QuickAddHome] Error quick adding saved food:', error);
       Alert.alert(t('common.error'), t('quickAdd.unexpectedErrorAddingFood'));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context, date, mealType, mode, planId, onQuickAdd]);
 
   const handleDeleteFood = useCallback(async (foodId: string) => {
@@ -342,6 +344,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
       setMyFoods(previousFoods);
       Alert.alert(t('common.error'), t('common.unexpectedError'));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myFoods]);
 
   const filteredFoods = myFoods.filter(food =>

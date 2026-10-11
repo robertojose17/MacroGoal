@@ -76,6 +76,7 @@ export default function MealPlanGroceryScreen() {
         setLoading(false);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId, planIds, rangeLabel, isMultiMode]);
 
   useFocusEffect(

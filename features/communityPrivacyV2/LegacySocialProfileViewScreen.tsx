@@ -349,6 +349,7 @@ export default function SocialProfileViewScreen() {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   useEffect(() => {

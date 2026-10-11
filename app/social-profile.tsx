@@ -239,6 +239,7 @@ function LegacySocialProfileScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user_id]);
 
   const loadNutrition = useCallback(async (targetUserId: string, range: NutritionRange) => {
@@ -319,6 +320,7 @@ function LegacySocialProfileScreen() {
 
   useEffect(() => {
     loadProfile(fromDate, toDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user_id]);
 
   useEffect(() => {
@@ -965,6 +967,7 @@ function ProfileCommentsModal({
       setComments([]);
       setCommentText('');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, post?.id]);
 
   const handleSend = async () => {

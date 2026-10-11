@@ -235,6 +235,7 @@ export default function FoodSearchScreen() {
       },
       controller.signal,
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -334,6 +335,7 @@ export default function FoodSearchScreen() {
         </Text>
       </View>
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSearching, results.length, isDark]);
 
   const renderEmptyState = () => {

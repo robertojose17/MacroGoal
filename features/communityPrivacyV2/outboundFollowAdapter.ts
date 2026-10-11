@@ -80,6 +80,7 @@ export function createOutboundFollowAdapter(deps: OutboundDependencies) {
       const s = await deps.getSession();
       if (signal.aborted || !s || typeof s.userId !== 'string' || s.userId.toLowerCase() !== expected.userId.toLowerCase() ||
         s.sessionKey !== expected.sessionKey || s.isAnonymous !== false || typeof s.accessToken !== 'string' ||
+        // eslint-disable-next-line no-control-regex
         !s.accessToken || /[\s\u0000-\u001f\u007f]/.test(s.accessToken) || !Number.isFinite(s.expiresAtSeconds) || s.expiresAtSeconds * 1000 <= now()) return null;
       return { userId: s.userId.toLowerCase(), sessionKey: s.sessionKey, accessToken: s.accessToken,
         isAnonymous: false, expiresAtSeconds: s.expiresAtSeconds };

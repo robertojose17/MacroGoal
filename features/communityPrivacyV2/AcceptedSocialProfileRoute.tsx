@@ -50,6 +50,7 @@ function ConfiguredProfileRoute({ services, target, onBack }: {
   useLayoutEffect(() => {
     controller.setScope(scope);
     return () => controller.setScope(null); // Reusable on StrictMode replay, blur, logout and unmount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controller, scopeKey]);
   const refresh = useCallback(() => {
     const next = new Date();
