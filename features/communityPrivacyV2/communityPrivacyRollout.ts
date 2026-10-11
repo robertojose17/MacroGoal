@@ -16,6 +16,7 @@ const eligibilityClient = supabase as unknown as {
 const controller = createCommunityPrivacyRolloutController({
   requested: isCommunityPrivacyRolloutRequested(COMMUNITY_PRIVACY_V2_ENABLED, COMMUNITY_PRIVACY_PAIR_PILOT_OPT_IN,
     typeof __DEV__ !== 'undefined' && __DEV__),
+  requireGeneral: COMMUNITY_PRIVACY_V2_ENABLED,
   createAuthBinding: () => createSupabaseInboxAuthBinding(supabase.auth),
   async eligibility(session, signal) {
     const result = await eligibilityClient.rpc('community_privacy_eligibility', {}, { get: false, head: false })

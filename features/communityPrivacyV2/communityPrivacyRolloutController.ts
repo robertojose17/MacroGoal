@@ -21,6 +21,8 @@ export interface CommunityPrivacyScope {
 }
 export interface CommunityPrivacyRolloutDependencies {
   requested: boolean;
+  /** Global builds stay unavailable unless the server confirms general availability. */
+  requireGeneral?: boolean;
   createAuthBinding(): SupabaseInboxAuthBinding;
   eligibility(session: VerifiedInboxClientSession, signal: AbortSignal): Promise<unknown>;
   now?: () => number;
@@ -99,6 +101,7 @@ export function createCommunityPrivacyRolloutController(dependencies: CommunityP
       const row = result as Record<string, unknown> | null;
       if (!row || typeof row !== 'object' || Array.isArray(row) || row.version !== 1 || typeof row.enabled !== 'boolean' ||
           !(row.enabled ? row.rollout === 'pair' || row.rollout === 'general' : row.rollout === 'closed')) throw unavailable();
+      if (dependencies.requireGeneral && (!row.enabled || row.rollout !== 'general')) throw unavailable();
       clearTimeout(timer); timer = undefined; eligibilityAbort = null;
       session = { ...current };
       scheduleExpiry();

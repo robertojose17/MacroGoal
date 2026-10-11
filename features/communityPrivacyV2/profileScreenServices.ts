@@ -57,7 +57,8 @@ export function createProfileScreenServices(deps: {
 })) {
   const binding = createSupabaseInboxAuthBinding(deps.auth);
   const rollout = deps.rollout;
-  if ((deps.profileRoute === 'community-profile') !== !!rollout) {
+  if ((rollout && deps.profileRoute !== 'social-profile') ||
+      (!rollout && deps.profileRoute === 'community-profile')) {
     throw new TypeError('The v2 profile route requires a protected rollout context.');
   }
   function assertActivation() {

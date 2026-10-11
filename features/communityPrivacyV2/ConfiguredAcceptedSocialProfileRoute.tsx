@@ -16,7 +16,7 @@ export default function ConfiguredAcceptedSocialProfileRoute() {
       if (activation.status !== 'ready' || activation.mode !== 'protected') return null;
       return createProfileScreenServices({
         auth: supabase.auth,
-        profileRoute: 'community-profile',
+        profileRoute: 'social-profile',
         rollout: { activation, getActivation: getCommunityPrivacyActivation, getScope: getCommunityPrivacyScope },
         functionsBaseUrl: `${SUPABASE_PROJECT_URL.replace(/\/$/, '')}/functions/v1`,
         fetch: (input, init) => globalThis.fetch(input, init),
