@@ -540,89 +540,15 @@ BEGIN
  IF current_user<>'postgres' THEN RAISE EXCEPTION 'interaction patch requires approved administrative owner'; END IF;
  IF (SELECT count(*) FROM pg_temp.global_interaction_function_owners)<>5 THEN RAISE EXCEPTION 'interaction function overload drift'; END IF;
 
- IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.decrement_comments(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND pg_catalog.pg_get_functiondef(p.oid)='CREATE OR REPLACE FUNCTION public.decrement_comments(post_id uuid)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
-BEGIN
-  UPDATE public.social_posts 
-  SET comments_count = GREATEST(0, COALESCE(comments_count, 0) - 1) 
-  WHERE id = post_id;
-END;
-$function$
-' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: decrement_comments(uuid)'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.decrement_comments(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND encode(sha256(convert_to(pg_catalog.pg_get_functiondef(p.oid),'UTF8')),'hex')='7e2e5589444678c90db4b974e08e6d85b1d8593f09355b966235ffa05a8818d4' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: decrement_comments(uuid)'; END IF;
 
- IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.decrement_saves(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND pg_catalog.pg_get_functiondef(p.oid)='CREATE OR REPLACE FUNCTION public.decrement_saves(post_id uuid)
- RETURNS integer
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
-DECLARE
-  new_count INTEGER;
-BEGIN
-  UPDATE social_posts SET saves_count = GREATEST(0, saves_count - 1) WHERE id = post_id
-  RETURNING saves_count INTO new_count;
-  RETURN COALESCE(new_count, 0);
-END;
-$function$
-' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: decrement_saves(uuid)'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.decrement_saves(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND encode(sha256(convert_to(pg_catalog.pg_get_functiondef(p.oid),'UTF8')),'hex')='a1bb3c0464cc5b6abc64b70146d0395782e571a90e44b4a29c789f20fcea705e' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: decrement_saves(uuid)'; END IF;
 
- IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.increment_comments(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND pg_catalog.pg_get_functiondef(p.oid)='CREATE OR REPLACE FUNCTION public.increment_comments(post_id uuid)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
-BEGIN
-  UPDATE public.social_posts
-  SET comments_count = COALESCE(comments_count, 0) + 1
-  WHERE id = post_id;
-END;
-$function$
-' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: increment_comments(uuid)'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.increment_comments(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND encode(sha256(convert_to(pg_catalog.pg_get_functiondef(p.oid),'UTF8')),'hex')='47ba9790a6da4dd8899fc9c9ce1e58dabc63080648d573c3cc0ed823efe751ab' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: increment_comments(uuid)'; END IF;
 
- IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.increment_saves(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND pg_catalog.pg_get_functiondef(p.oid)='CREATE OR REPLACE FUNCTION public.increment_saves(post_id uuid)
- RETURNS integer
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
-DECLARE
-  new_count INTEGER;
-BEGIN
-  UPDATE social_posts SET saves_count = saves_count + 1 WHERE id = post_id
-  RETURNING saves_count INTO new_count;
-  RETURN COALESCE(new_count, 0);
-END;
-$function$
-' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: increment_saves(uuid)'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.increment_saves(uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM NULL::text[] AND encode(sha256(convert_to(pg_catalog.pg_get_functiondef(p.oid),'UTF8')),'hex')='479fec4923b8c60ab2e524e36009295e75fc6e5f9503fe858c0f2169e5af992f' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: increment_saves(uuid)'; END IF;
 
- IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.toggle_post_like(uuid,uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=public']::text[] AND pg_catalog.pg_get_functiondef(p.oid)='CREATE OR REPLACE FUNCTION public.toggle_post_like(p_post_id uuid, p_user_id uuid)
- RETURNS TABLE(liked boolean, likes_count bigint)
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO ''public''
-AS $function$
-DECLARE
-  v_liked boolean;
-  v_count bigint;
-BEGIN
-  IF EXISTS (SELECT 1 FROM community_likes WHERE post_id = p_post_id AND user_id = p_user_id) THEN
-    DELETE FROM community_likes WHERE post_id = p_post_id AND user_id = p_user_id;
-    v_liked := false;
-  ELSE
-    INSERT INTO community_likes (post_id, user_id) VALUES (p_post_id, p_user_id)
-    ON CONFLICT (post_id, user_id) DO NOTHING;
-    v_liked := true;
-  END IF;
-
-  SELECT COUNT(*) INTO v_count FROM community_likes WHERE post_id = p_post_id;
-
-  UPDATE social_posts SET likes_count = v_count WHERE id = p_post_id;
-
-  RETURN QUERY SELECT v_liked, v_count;
-END;
-$function$
-' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: toggle_post_like(uuid,uuid)'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.oid=pg_catalog.to_regprocedure('public.toggle_post_like(uuid,uuid)') AND p.prokind='f' AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=public']::text[] AND encode(sha256(convert_to(pg_catalog.pg_get_functiondef(p.oid),'UTF8')),'hex')='32b427c34290fcdca5473e12f83bb093e8da053a654e4b6ef344cc1d356eac6a' AND pg_catalog.has_function_privilege('anon',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('authenticated',p.oid,'EXECUTE') AND pg_catalog.has_function_privilege('service_role',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'interaction function exact baseline drift: toggle_post_like(uuid,uuid)'; END IF;
 
  -- New bodies rely on existing canonical private predicates. Fail closed if the
  -- retained old owner cannot execute them; do not silently change owner or grants.
