@@ -1,5 +1,7 @@
-import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
-import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
+import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
+import { withCommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
+import type { CommunityPrivacyActivation, CommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
+import { remainingCommunityReads } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
 import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibility/ProtectedReaderBoundary';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -104,13 +106,25 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
   );
 }
 
-export default function ProfileScreen() {
-  return COMMUNITY_PRIVACY_V2_ENABLED
-    ? <ProtectedReaderBoundary><OwnerProfileBody /></ProtectedReaderBoundary>
-    : <OwnerProfileBody />;
+async function scopedAcceptedConnectionCount(scope: CommunityPrivacyScope, actorId: string, direction: 'followers' | 'following') {
+  try {
+    const rows = await remainingCommunityReads.connections(actorId, direction, scope.signal);
+    scope.assertCurrent();
+    return { count: rows.length, error: null };
+  } catch {
+    scope.assertCurrent();
+    return { count: null, error: new Error('Accepted connections are unavailable.') };
+  }
 }
 
-function OwnerProfileBody() {
+export default function ProfileScreen() {
+  return <CommunityPrivacyRolloutBoundary>{activation => activation.mode === 'protected'
+    ? <ProtectedReaderBoundary scopeKey={activation.scopeKey}><OwnerProfileBody activation={activation} /></ProtectedReaderBoundary>
+    : <OwnerProfileBody activation={activation} />}</CommunityPrivacyRolloutBoundary>;
+}
+
+function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivation }) {
+  const privacyProtected = activation.mode === 'protected';
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -175,6 +189,8 @@ function OwnerProfileBody() {
     customStart?: Date,
     customEnd?: Date,
   ) => {
+    return withCommunityPrivacyScope(async scope => {
+    scope.assertActor(userId);
     const today = new Date();
     let startDateStr: string;
     let endDateStr: string;
@@ -224,7 +240,8 @@ function OwnerProfileBody() {
       .gte('date', startDateStr)
       .lte('date', endDateStr);
 
-    const { data: mealsData, error: mealsError } = await query;
+    const { data: mealsData, error: mealsError } = await scope.request(query);
+    scope.assertCurrent();
     console.log('[Profile] loadNutritionData — meals query:', mealsError ? mealsError.message : `${mealsData?.length ?? 0} meals`);
 
     let totalCals = 0, totalP = 0, totalC = 0, totalF = 0, totalFib = 0;
@@ -260,9 +277,13 @@ function OwnerProfileBody() {
     setTotalCalories(avgCals);
     setTotalMacros({ protein: avgP, carbs: avgC, fats: avgF, fiber: avgFib });
     setRangeDayCount(dayCount);
+  
+    }, activation.scopeKey);
   };
 
   const loadConsistencyScore = async (userId: string) => {
+    return withCommunityPrivacyScope(async scope => {
+    scope.assertActor(userId);
     console.log('[Profile] loadConsistencyScore — starting 30-day calculation for user:', userId);
     try {
       const today = new Date();
@@ -272,19 +293,20 @@ function OwnerProfileBody() {
       const endStr = toLocalDateString(today);
 
       const [mealsRes, goalsRes] = await Promise.all([
-        supabase
+        scope.request(supabase
           .from('meals')
           .select('date, meal_items(calories, protein, is_scheduled)')
           .eq('user_id', userId)
           .gte('date', startStr)
-          .lte('date', endStr),
-        supabase
+          .lte('date', endStr)),
+        scope.request(supabase
           .from('goals')
           .select('daily_calories, protein_g')
           .eq('user_id', userId)
           .eq('is_active', true)
-          .maybeSingle(),
+          .maybeSingle()),
       ]);
+    scope.assertCurrent();
 
       console.log('[Profile] loadConsistencyScore — meals:', mealsRes.error ? mealsRes.error.message : `${mealsRes.data?.length ?? 0} meals`, 'goals:', goalsRes.error ? goalsRes.error.message : 'ok');
 
@@ -321,15 +343,21 @@ function OwnerProfileBody() {
       console.log('[Profile] loadConsistencyScore — 30-day avg score:', avg);
       setConsistencyScore(avg);
     } catch (err) {
+      scope.assertCurrent();
       console.error('[Profile] loadConsistencyScore — error:', err);
     }
+  
+    }, activation.scopeKey);
   };
 
   const loadData = async () => {
+    return withCommunityPrivacyScope(async scope => {
     console.log('[Profile] loadData — starting');
     try {
       setLoading(true);
       const { data: { user: authUser } } = await supabase.auth.getUser();
+      scope.assertCurrent();
+      scope.assertActor(authUser?.id);
       if (!authUser) {
         console.log('[Profile] loadData — no authenticated user');
         setLoading(false);
@@ -344,12 +372,13 @@ function OwnerProfileBody() {
         followingResult,
         goalsResult,
       ] = await Promise.all([
-        supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
-        supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', authUser.id),
-        COMMUNITY_PRIVACY_V2_ENABLED ? acceptedConnectionCount(authUser.id, 'followers') : supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('following_id', authUser.id),
-        COMMUNITY_PRIVACY_V2_ENABLED ? acceptedConnectionCount(authUser.id, 'following') : supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', authUser.id),
-        supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
+        scope.request(supabase.from('users').select('*').eq('id', authUser.id).maybeSingle()),
+        scope.request(supabase.from('social_posts').select('id', { count: 'exact', head: true }).eq('user_id', authUser.id)),
+        privacyProtected ? scopedAcceptedConnectionCount(scope, authUser.id, 'followers') : scope.request(supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('following_id', authUser.id)),
+        privacyProtected ? scopedAcceptedConnectionCount(scope, authUser.id, 'following') : scope.request(supabase.from('social_follows').select('id', { count: 'exact', head: true }).eq('follower_id', authUser.id)),
+        scope.request(supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle()),
       ]);
+      scope.assertCurrent();
 
       console.log('[Profile] loadData — user result:', userResult.error ? userResult.error.message : 'ok');
       console.log('[Profile] loadData — posts count:', postsResult.count, postsResult.error?.message);
@@ -369,8 +398,8 @@ function OwnerProfileBody() {
       }
 
       setPostsCount(postsResult.count ?? 0);
-      setFollowersCount(COMMUNITY_PRIVACY_V2_ENABLED ? followersResult.count : (followersResult.error ? 0 : (followersResult.count ?? 0)));
-      setFollowingCount(COMMUNITY_PRIVACY_V2_ENABLED ? followingResult.count : (followingResult.error ? 0 : (followingResult.count ?? 0)));
+      setFollowersCount(privacyProtected ? followersResult.count : (followersResult.error ? 0 : (followersResult.count ?? 0)));
+      setFollowingCount(privacyProtected ? followingResult.count : (followingResult.error ? 0 : (followingResult.count ?? 0)));
 
       if (goalsResult.data) {
         setGoal(goalsResult.data);
@@ -381,14 +410,16 @@ function OwnerProfileBody() {
         loadNutritionData(authUser.id, nutritionRange, customStartDate, customEndDate),
         loadConsistencyScore(authUser.id),
       ]);
+      scope.assertCurrent();
 
       // Load posts feed
-      const { data: postsData, error: postsError } = await supabase
+      const { data: postsData, error: postsError } = await scope.request(supabase
         .from('social_posts')
         .select('id, user_id, content, image_url, created_at, likes_count, comments_count, is_public, post_type, post_type_v2, meal_photo_url, meal_calories, meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id, meal_recipe_data, question_title, progress_stats, is_pinned, is_founder_post, saves_count, auto_post_type, streak_days, weekly_recap_score, weekly_recap_days_tracked, weekly_recap_week_start, weekly_recap_day_flags, weight_goal_pct, edu_headline, edu_body, edu_example, edu_week, author:users!user_id(id, username, full_name, avatar_url)')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(50));
+      scope.assertCurrent();
 
       console.log('[Profile] loadData — posts feed:', postsError ? postsError.message : `${postsData?.length ?? 0} posts`);
       setPosts(postsData ?? []);
@@ -398,6 +429,8 @@ function OwnerProfileBody() {
       setLoading(false);
       setRefreshing(false);
     }
+  
+    }, activation.scopeKey).catch(() => {});
   };
 
   useFocusEffect(
@@ -420,6 +453,7 @@ function OwnerProfileBody() {
   };
 
   const handleRangeChange = async (range: NutritionRange) => {
+    return withCommunityPrivacyScope(async scope => {
     console.log('[Profile] handleRangeChange — range pill pressed:', range);
     if (range === 'custom') {
       setShowRangePicker(true);
@@ -427,43 +461,57 @@ function OwnerProfileBody() {
     }
     setNutritionRange(range);
     const { data: { user: authUser } } = await supabase.auth.getUser();
+    scope.assertActor(authUser?.id);
+    scope.assertCurrent();
     if (!authUser) return;
     await loadNutritionData(authUser.id, range);
+    scope.assertCurrent();
+  
+    }, activation.scopeKey);
   };
 
   const handleCustomRangeSelect = async (startDate: Date, endDate: Date) => {
+    return withCommunityPrivacyScope(async scope => {
     console.log('[Profile] handleCustomRangeSelect — start:', toLocalDateString(startDate), 'end:', toLocalDateString(endDate));
     setCustomStartDate(startDate);
     setCustomEndDate(endDate);
     setNutritionRange('custom');
     const { data: { user: authUser } } = await supabase.auth.getUser();
+    scope.assertActor(authUser?.id);
+    scope.assertCurrent();
     if (!authUser) return;
     await loadNutritionData(authUser.id, 'custom', startDate, endDate);
+    scope.assertCurrent();
+  
+    }, activation.scopeKey);
   };
 
   const [followReadError, setFollowReadError] = useState(false);
   const followReadSequence = useRef(0);
   const followReadAbort = useRef<AbortController | null>(null);
   React.useEffect(() => {
-    if (!COMMUNITY_PRIVACY_V2_ENABLED) return;
+    if (!privacyProtected) return;
     return () => { ++followReadSequence.current; followReadAbort.current?.abort(); };
   }, []);
 
   const openFollowModal = async (type: FollowModalType) => {
+    return withCommunityPrivacyScope(async scope => {
     if (!user || !type) return;
     console.log('[Profile] openFollowModal — type:', type, 'user_id:', user.id);
     setFollowModalType(type);
     setFollowModalLoading(true);
     setFollowModalUsers([]);
     try {
-      if (COMMUNITY_PRIVACY_V2_ENABLED) {
+      if (privacyProtected) {
         setFollowReadError(false);
         followReadAbort.current?.abort();
         const request = new AbortController();
+        scope.signal.addEventListener('abort', () => request.abort(), { once: true });
         followReadAbort.current = request;
         const sequence = ++followReadSequence.current;
         try {
           const identities = await remainingCommunityReads.connections(user.id, type, request.signal);
+      scope.assertCurrent();
           if (!request.signal.aborted && sequence === followReadSequence.current) setFollowModalUsers(identities);
         } catch {
           if (!request.signal.aborted && sequence === followReadSequence.current) { setFollowModalUsers([]); setFollowReadError(true); }
@@ -474,17 +522,19 @@ function OwnerProfileBody() {
       }
       let ids: string[] = [];
       if (type === 'followers') {
-        const { data, error } = await supabase
+        const { data, error } = await scope.request(supabase
           .from('social_follows')
           .select('follower_id')
-          .eq('following_id', user.id);
+          .eq('following_id', user.id));
+      scope.assertCurrent();
         console.log('[Profile] openFollowModal — followers query:', error ? error.message : `${data?.length ?? 0} rows`);
         ids = (data ?? []).map((r: any) => r.follower_id);
       } else {
-        const { data, error } = await supabase
+        const { data, error } = await scope.request(supabase
           .from('social_follows')
           .select('following_id')
-          .eq('follower_id', user.id);
+          .eq('follower_id', user.id));
+      scope.assertCurrent();
         console.log('[Profile] openFollowModal — following query:', error ? error.message : `${data?.length ?? 0} rows`);
         ids = (data ?? []).map((r: any) => r.following_id);
       }
@@ -494,21 +544,24 @@ function OwnerProfileBody() {
         return;
       }
 
-      const { data: usersData, error: usersError } = await supabase
+      const { data: usersData, error: usersError } = await scope.request(supabase
         .from('users')
         .select('id, username, full_name, avatar_url')
-        .in('id', ids);
+        .in('id', ids));
+      scope.assertCurrent();
       console.log('[Profile] openFollowModal — users query:', usersError ? usersError.message : `${usersData?.length ?? 0} users`);
       setFollowModalUsers(usersData ?? []);
     } catch (err) {
       console.error('[Profile] openFollowModal — error:', err);
     } finally {
-      if (!COMMUNITY_PRIVACY_V2_ENABLED) setFollowModalLoading(false);
+      if (!privacyProtected) setFollowModalLoading(false);
     }
+  
+    }, activation.scopeKey).catch(() => {});
   };
 
   const closeFollowModal = () => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) { ++followReadSequence.current; followReadAbort.current?.abort(); setFollowModalLoading(false); }
+    if (privacyProtected) { ++followReadSequence.current; followReadAbort.current?.abort(); setFollowModalLoading(false); }
     console.log('[Profile] closeFollowModal');
     setFollowModalType(null);
     setFollowModalUsers([]);
@@ -581,8 +634,8 @@ function OwnerProfileBody() {
   const bestStreakDisplay = String(bestStreak);
   const consistencyScoreDisplay = String(consistencyScore);
   const postsCountDisplay = String(postsCount);
-  const followersCountDisplay = COMMUNITY_PRIVACY_V2_ENABLED && followersCount === null ? 'Unavailable' : String(followersCount);
-  const followingCountDisplay = COMMUNITY_PRIVACY_V2_ENABLED && followingCount === null ? 'Unavailable' : String(followingCount);
+  const followersCountDisplay = privacyProtected && followersCount === null ? 'Unavailable' : String(followersCount);
+  const followingCountDisplay = privacyProtected && followingCount === null ? 'Unavailable' : String(followingCount);
 
   const totalCaloriesRounded = Math.round(totalCalories);
 
@@ -936,7 +989,7 @@ function OwnerProfileBody() {
             ) : followModalUsers.length === 0 ? (
               <View style={styles.modalEmpty}>
                 <Text style={[styles.modalEmptyText, { color: secondaryText }]}>
-                  {COMMUNITY_PRIVACY_V2_ENABLED && followReadError ? 'Accepted connections are unavailable.' : (followModalType === 'followers' ? 'No followers yet' : 'Not following anyone yet')}
+                  {privacyProtected && followReadError ? 'Accepted connections are unavailable.' : (followModalType === 'followers' ? 'No followers yet' : 'Not following anyone yet')}
                 </Text>
               </View>
             ) : (

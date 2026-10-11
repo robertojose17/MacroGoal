@@ -1,3 +1,4 @@
+import { useCommunityPrivacyRolloutLifecycle } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 
 import '@/lib/i18n';
 import i18n from '@/lib/i18n';
@@ -68,6 +69,7 @@ try {
 }
 
 export default function RootLayout() {
+  useCommunityPrivacyRolloutLifecycle();
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
   const hasNavigatedRef = React.useRef(false);

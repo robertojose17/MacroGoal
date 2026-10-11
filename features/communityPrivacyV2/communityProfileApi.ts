@@ -26,6 +26,8 @@ export type ApiResult<T> = { ok: true; value: T } | {
 export interface ClientDependencies {
   /** Explicit trusted configuration, e.g. the existing exported SUPABASE_PROJECT_URL + /functions/v1. */
   functionsBaseUrl: string;
+  /** Explicit protected-branch selection. Omission preserves the existing route. */
+  profileRoute?: 'social-profile' | 'community-profile';
   getSession: () => Promise<ClientSession | null>;
   fetch: typeof globalThis.fetch;
   now?: () => number;
@@ -58,6 +60,10 @@ export function createCommunityProfileClient(deps: ClientDependencies) {
     throw new TypeError('A trusted HTTPS functions base URL without credentials, query, or fragment is required.');
   }
   const baseUrl = base.toString().replace(/\/$/, '');
+  const profileRoute = deps.profileRoute ?? 'social-profile';
+  if (profileRoute !== 'social-profile' && profileRoute !== 'community-profile') {
+    throw new TypeError('Invalid profile route');
+  }
   const now = deps.now ?? Date.now;
 
   async function request<T>(path: string, params: URLSearchParams,
@@ -124,7 +130,7 @@ export function createCommunityProfileClient(deps: ClientDependencies) {
   async function fetchProfile(input: ProfileInput, options: RequestOptions = {}): Promise<ApiResult<ProfileResponseV2>> {
     const clean = validateProfileInput(input);
     if (!clean) return failure('invalid_input');
-    return request('/social-profile', new URLSearchParams({ response_version: '2', user_id: clean.userId,
+    return request(`/${profileRoute}`, new URLSearchParams({ response_version: '2', user_id: clean.userId,
       from_date: clean.fromDate, to_date: clean.toDate, today: clean.today }),
       (body, callerId) => parseProfileResponse(body, clean, callerId), options);
   }

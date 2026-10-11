@@ -69,7 +69,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { useTranslation } from 'react-i18next';
 import { IconSymbol } from '@/components/IconSymbol';
-import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { CommunityFollowRequestEntry } from '@/features/communityPrivacyV2Integration/CommunityFollowRequestEntry';
 import { CommunityReadProvider, useCommunityReadEnvironment } from '@/features/communityPrivacyV2Community/CommunityReadEnvironment';
 import { communityReadStrings } from '@/features/communityPrivacyV2Community/communityReadStrings';
@@ -1508,6 +1508,7 @@ function CommentsModal({
   communityUnavailableLabel = 'Unavailable. Try again.',
 }: CommentsModalProps) {
   const { runtime: commentPrivacy, state: commentPrivacyState } = useCommunityReadEnvironment();
+  const communityPrivacyEnabled = commentPrivacy !== null;
   const [commentPrivacyView, setCommentPrivacyView] = useState('');
   const [commentPrivacyError, setCommentPrivacyError] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -1528,7 +1529,7 @@ function CommentsModal({
   const borderColor = isDark ? colors.borderDark : colors.border;
 
   useEffect(() => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) return;
+    if (communityPrivacyEnabled) return;
     if (visible && post) {
       console.log('[Community] CommentsModal opened for post:', post.id);
       loadComments();
@@ -1539,7 +1540,7 @@ function CommentsModal({
   }, [visible, post?.id]);
 
   useEffect(() => {
-    if (!COMMUNITY_PRIVACY_V2_ENABLED) return;
+    if (!communityPrivacyEnabled) return;
     setComments([]); setCommentText(''); setEditingCommentId(null); setMenuCommentId(null);
     setCommentPrivacyView(commentPrivacyState.viewKey); setCommentPrivacyError(false);
     if (visible && post && commentPrivacyState.scopeKey) void loadComments();
@@ -1547,7 +1548,7 @@ function CommentsModal({
   }, [visible, post?.id, commentPrivacy, commentPrivacyState.viewKey]);
 
   const loadComments = async () => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       const ticket = commentPrivacy?.begin('comments');
       setComments([]); setLoading(true);
       if (!ticket || !commentPrivacy || !visible || !post) { ticket?.finish(); setLoading(false); return; }
@@ -1583,7 +1584,7 @@ function CommentsModal({
     try {
       const newComment = await addComment(post.id, textToSend);
       console.log('[Community] Comment added, id:', newComment.id);
-      if (COMMUNITY_PRIVACY_V2_ENABLED) await loadComments();
+      if (communityPrivacyEnabled) await loadComments();
       else setComments(prev => [...prev, newComment]);
       setCommentText('');
       onCommentAdded(post.id);
@@ -1741,12 +1742,12 @@ function CommentsModal({
             <FlatList
               ref={flatListRef}
               style={{ flex: 1 }}
-              data={COMMUNITY_PRIVACY_V2_ENABLED && (!visible || commentPrivacyView !== commentPrivacyState.viewKey) ? [] : comments}
+              data={communityPrivacyEnabled && (!visible || commentPrivacyView !== commentPrivacyState.viewKey) ? [] : comments}
               keyExtractor={(item) => item.id}
               renderItem={renderComment}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: 48 }}>
-                  <Text style={{ fontSize: 14, color: secondaryColor }}>{COMMUNITY_PRIVACY_V2_ENABLED && commentPrivacyError ? communityUnavailableLabel : 'No comments yet. Be the first!'}</Text>
+                  <Text style={{ fontSize: 14, color: secondaryColor }}>{communityPrivacyEnabled && commentPrivacyError ? communityUnavailableLabel : 'No comments yet. Be the first!'}</Text>
                 </View>
               }
               contentContainerStyle={{ paddingBottom: 8 }}
@@ -3161,18 +3162,21 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function CommunityScreen() {
-  return COMMUNITY_PRIVACY_V2_ENABLED
-    ? <CommunityReadProvider><CommunityScreenContent /></CommunityReadProvider>
-    : <CommunityScreenContent />;
+  // The boundary resolves server eligibility before either data-effect tree mounts.
+  // With both compile-time switches off it is inert and renders the legacy tree.
+  return <CommunityPrivacyRolloutBoundary>{activation => activation.mode === 'protected'
+    ? <CommunityReadProvider activation={activation}><CommunityScreenContent suppressAutomaticSharing={activation.rollout === 'pair'} /></CommunityReadProvider>
+    : <CommunityScreenContent />}</CommunityPrivacyRolloutBoundary>;
 }
 
-function CommunityScreenContent() {
+function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppressAutomaticSharing?: boolean }) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const { isPremium, loading: premiumLoading } = usePremium();
   const { runtime: communityPrivacy, state: communityPrivacyState } = useCommunityReadEnvironment();
+  const communityPrivacyEnabled = communityPrivacy !== null;
   const privacyCopy = communityReadStrings(i18n.resolvedLanguage ?? i18n.language ?? 'en');
   const privacyPremiumRef = useRef(isPremium);
   privacyPremiumRef.current = isPremium;
@@ -3249,7 +3253,7 @@ function CommunityScreenContent() {
   const [memberListLoading, setMemberListLoading] = useState(false);
 
   useLayoutEffect(() => {
-    if (!COMMUNITY_PRIVACY_V2_ENABLED) return;
+    if (!communityPrivacyEnabled) return;
     setPrivacyViewKey(communityPrivacyState.viewKey);
     if (privacyScopeRef.current === communityPrivacyState.scopeKey) return;
     privacyScopeRef.current = communityPrivacyState.scopeKey;
@@ -3284,7 +3288,7 @@ function CommunityScreenContent() {
 
   // ── Load current user (run once on mount) ──
   useEffect(() => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) return;
+    if (communityPrivacyEnabled) return;
     const loadUser = async () => {
       console.log('[Community] Loading current user session');
       const { data: { session } } = await supabase.auth.getSession();
@@ -3327,7 +3331,7 @@ function CommunityScreenContent() {
 
   // ── Reload avatar on every tab focus ──
   const reloadAvatar = useCallback(async () => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       const ticket = communityPrivacy?.begin('avatar');
       if (!ticket || !communityPrivacy) return;
       try {
@@ -3396,7 +3400,7 @@ function CommunityScreenContent() {
   // ── Fetch feed posts (reads from social_posts — same table the composer writes to) ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFeedPosts = useCallback(async (overrideUserId?: string) => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       const ticket = communityPrivacy?.begin('feed');
       setFeedPosts([]);
       if (!ticket || !communityPrivacy) return;
@@ -3469,7 +3473,7 @@ function CommunityScreenContent() {
   // ── Fetch club posts ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchClubPosts = useCallback(async (overrideUserId?: string) => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       const ticket = communityPrivacy?.begin('club');
       setClubPosts([]);
       if (!ticket || !communityPrivacy || !privacyPremiumRef.current) { ticket?.finish(); return; }
@@ -3530,7 +3534,7 @@ function CommunityScreenContent() {
 
   // ── Fetch club member count (founder only) ──
   const fetchClubMemberCount = useCallback(async () => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       if (!isFounder) return;
       const ticket = communityPrivacy?.begin('members');
       setClubMemberCount(null); setClubMembers([]);
@@ -3568,7 +3572,7 @@ function CommunityScreenContent() {
   // ── Fetch friends data ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFriendsData = useCallback(async (overrideUserId?: string) => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       const ticket = communityPrivacy?.begin('friends');
       setFollowing([]); setFollowingIds(new Set()); setFollowingCount(null);
       setCommitment(null); setMyMealDays(null); setPartnerMealDays(null);
@@ -3686,7 +3690,7 @@ function CommunityScreenContent() {
 
   // ── Fetch weekly consistency leaderboard ──
   const fetchWeeklyConsistency = useCallback(async (uid: string, followedUsers: FollowingUser[]) => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       const ticket = communityPrivacy?.begin('weekly');
       setLeaderboard([]); setLeaderboardLoading(true);
       if (!ticket || !communityPrivacy) { setLeaderboardLoading(false); return; }
@@ -3705,11 +3709,11 @@ function CommunityScreenContent() {
         const ranked = available.map((row, index) => { if (index && row.score < available[index - 1].score) rank = index + 1; return { ...row, rank }; });
         setLeaderboard(ranked);
         setPrivacyErrors(prev => ({ ...prev, weekly: results.some(value => !value.result.ok) }));
-        // Preserve the existing owner's Sunday snapshot/auto-share behavior only
-        // from a current, available own aggregate. Hidden/denied data is never zero.
+        // Pair rollout is observation-only for automatic snapshots and recap posts.
+        // General rollout keeps the existing current-owner aggregate behavior.
         const own = results.find(value => value.target.isMe)?.result;
         const myScore = ranked.find(value => value.isMe);
-        if (today.getDay() === 0 && myScore && own?.ok && own.value.tracking.status === 'available' && ticket.current()) {
+        if (!suppressAutomaticSharing && today.getDay() === 0 && myScore && own?.ok && own.value.tracking.status === 'available' && ticket.current()) {
           await communityPrivacy.readers.saveOwnWeekly(ticket.session, ticket.signal, mondayStr, myScore.score);
           if (myScore.score >= 70 && ticket.current()) {
             const { autoShareWeeklyRecap } = await import('@/utils/autoShareAchievements');
@@ -3980,7 +3984,7 @@ function CommunityScreenContent() {
 
   // ── Block ──
   const handleBlock = async (userId: string) => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       Alert.alert(privacyCopy.blockTitle, privacyCopy.blockBody, [
         { text: privacyCopy.cancel, style: 'cancel' },
         { text: privacyCopy.block, style: 'destructive', onPress: async () => {
@@ -4049,7 +4053,7 @@ function CommunityScreenContent() {
 
   // ── Search users ──
   const handleSearchChange = (q: string) => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       setSearchQuery(q); setSearchResults([]); setOutboundRows({}); setSearchLoading(false); setPrivacyErrors(prev => ({ ...prev, search: false }));
       communityPrivacy?.cancel('search'); communityPrivacy?.outbound.invalidate();
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -4097,7 +4101,7 @@ function CommunityScreenContent() {
 
   // ── Follow / Unfollow ──
   const handleFollow = async (userId: string) => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) {
+    if (communityPrivacyEnabled) {
       const row = outboundRows[userId];
       if (!row || outboundBusy[userId] || !communityPrivacy) return;
       const ticket = communityPrivacy.begin('outbound');
@@ -4207,7 +4211,7 @@ function CommunityScreenContent() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
 
-  if (COMMUNITY_PRIVACY_V2_ENABLED && (!communityPrivacyState.scopeKey || privacyViewKey !== communityPrivacyState.viewKey)) {
+  if (communityPrivacyEnabled && (!communityPrivacyState.scopeKey || privacyViewKey !== communityPrivacyState.viewKey)) {
     return <View style={[styles.root, { backgroundColor: bgColor }]}>
       {communityPrivacyState.status === 'loading' || privacyViewKey !== communityPrivacyState.viewKey
         ? <ActivityIndicator color={colors.primary} />
@@ -4236,7 +4240,7 @@ function CommunityScreenContent() {
               color={secondaryColor}
             />
           </TouchableOpacity>
-          {COMMUNITY_PRIVACY_V2_ENABLED && (
+          {communityPrivacyEnabled && (
             <CommunityFollowRequestEntry theme={{
               background: bgColor, card: cardBg, text: textColor, secondary: secondaryColor,
               border: borderColor, primary: colors.primary, onPrimary: '#FFFFFF',
@@ -4264,7 +4268,7 @@ function CommunityScreenContent() {
         </View>
       </View>
 
-      {COMMUNITY_PRIVACY_V2_ENABLED && ((activeTab === 'feed' && privacyErrors.feed) || (activeTab === 'club' && privacyErrors.club)) &&
+      {communityPrivacyEnabled && ((activeTab === 'feed' && privacyErrors.feed) || (activeTab === 'club' && privacyErrors.club)) &&
         <Text style={{ color: secondaryColor, padding: spacing.md }}>{privacyCopy.unavailable}</Text>}
       {/* Pill selector */}
       <View style={[styles.pillContainer, { borderColor }]}>
@@ -4425,7 +4429,7 @@ function CommunityScreenContent() {
             {searchLoading && <ActivityIndicator size="small" color={colors.primary} />}
           </View>
 
-          {COMMUNITY_PRIVACY_V2_ENABLED && privacyErrors.search && <Text style={{ color: secondaryColor }}>{privacyCopy.unavailable}</Text>}
+          {communityPrivacyEnabled && privacyErrors.search && <Text style={{ color: secondaryColor }}>{privacyCopy.unavailable}</Text>}
           {/* Search results */}
           {searchResults.length > 0 && (
             <View style={[styles.searchResultsCard, { backgroundColor: cardBg, borderColor }]}>
@@ -4444,10 +4448,10 @@ function CommunityScreenContent() {
                     <TouchableOpacity
                       style={[styles.followBtn, isFollowing && { backgroundColor: 'transparent', borderColor: colors.primary }]}
                       onPress={() => handleFollow(user.id)}
-                      disabled={COMMUNITY_PRIVACY_V2_ENABLED ? !requestState || !!outboundBusy[user.id] : undefined}
+                      disabled={communityPrivacyEnabled ? !requestState || !!outboundBusy[user.id] : undefined}
                     >
                       <Text style={[styles.followBtnText, isFollowing && { color: colors.primary }]}>
-                        {COMMUNITY_PRIVACY_V2_ENABLED ? requestLabel : isFollowing ? 'Following' : 'Follow'}
+                        {communityPrivacyEnabled ? requestLabel : isFollowing ? 'Following' : 'Follow'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -4467,7 +4471,7 @@ function CommunityScreenContent() {
               <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
             ) : leaderboard.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>{COMMUNITY_PRIVACY_V2_ENABLED && privacyErrors.weekly ? privacyCopy.unavailable : 'Follow people to see the leaderboard.'}</Text>
+                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>{communityPrivacyEnabled && privacyErrors.weekly ? privacyCopy.unavailable : 'Follow people to see the leaderboard.'}</Text>
               </View>
             ) : (
               <View style={{ backgroundColor: cardBg, borderRadius: 16, borderWidth: 1, borderColor, overflow: 'hidden' }}>
@@ -4539,13 +4543,13 @@ function CommunityScreenContent() {
           {/* Following list */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: spacing.lg }}>
             <Text style={[styles.sectionTitle, { color: textColor }]}>Following</Text>
-            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{COMMUNITY_PRIVACY_V2_ENABLED && followingCount === null ? privacyCopy.unavailable : <>{followingCount} people</>}</Text>
+            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{communityPrivacyEnabled && followingCount === null ? privacyCopy.unavailable : <>{followingCount} people</>}</Text>
           </View>
 
           {following.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyStateText, { color: secondaryColor }]}>
-                {COMMUNITY_PRIVACY_V2_ENABLED && privacyErrors.friends ? privacyCopy.unavailable : "You're not following anyone yet. Search above to find friends."}
+                {communityPrivacyEnabled && privacyErrors.friends ? privacyCopy.unavailable : "You're not following anyone yet. Search above to find friends."}
               </Text>
             </View>
           ) : (

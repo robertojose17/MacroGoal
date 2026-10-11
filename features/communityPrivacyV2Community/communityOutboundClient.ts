@@ -7,11 +7,11 @@ import type { OutboundRow, ReadResult, ReadScope } from './communityReaderContra
 import type { CommunityReaderClient } from './communityReaderClient';
 const fail = <T>(): ReadResult<T> => ({ ok: false });
 const key = (scope: ReadScope, target: string) => JSON.stringify([scope.userId, scope.sessionKey, target]);
-const revision = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 1;
+const revision = (value: unknown): value is string => typeof value === 'string' && /^[1-9]\d{0,15}$/.test(value) && BigInt(value) <= 9007199254740991n;
 /** Participant-only descriptors are mutation freshness metadata, NEVER profile
  * authorization. Accepted directory membership comes from the canonical RPC. */
 export function createCommunityOutboundClient({ client, getSession, readers }: {
-  client: Pick<SupabaseClient, 'from' | 'rpc'>;
+  client: Pick<SupabaseClient, 'rpc'>;
   getSession(): Promise<ClientSession | null>;
   readers: CommunityReaderClient;
 }) {
@@ -30,20 +30,22 @@ export function createCommunityOutboundClient({ client, getSession, readers }: {
     const allowed = ids.filter(id => discovered.value.has(id));
     const relationships = new Map<string, OutboundRow>();
     const requestIds = new Set<string>();
-    for (let offset = 0; offset < allowed.length; offset += 50) {
-      const batch = allowed.slice(offset, offset + 50);
-      const result = await run(scope, signal, (session, abort) => client.from('follow_requests')
-        .select('id,requester_id,owner_id,state,revision').eq('requester_id', session.userId).in('owner_id', batch)
-        .limit(51).setHeader('Authorization', `Bearer ${session.accessToken}`).abortSignal(abort));
-      if (!result.ok || !Array.isArray(result.value) || result.value.length > batch.length || signal.aborted || mine !== generation) return fail();
-      for (const row of result.value as unknown[]) {
-        if (!object(row) || Object.keys(row).sort().join(',') !== 'id,owner_id,requester_id,revision,state' ||
-          typeof row.id !== 'string' || !UUID.test(row.id) || row.requester_id !== scope.userId ||
-          typeof row.owner_id !== 'string' || !batch.includes(row.owner_id) || relationships.has(row.owner_id) || requestIds.has(row.id) ||
-          !revision(row.revision) || !['pending', 'accepted', 'rejected', 'cancelled', 'revoked'].includes(String(row.state))) return fail();
-        requestIds.add(row.id);
-        relationships.set(row.owner_id, { targetId: row.owner_id, requestId: row.id, revision: String(row.revision), state: row.state as OutboundRow['state'] });
-      }
+    for (const targetId of allowed) {
+      // The request ledger has no API SELECT grant. Status is a bounded,
+      // server-authorized projection; never fall back to reading its table.
+      const result = await run(scope, signal, (session, abort) => client.rpc('get_outbound_follow_status', { p_target_id: targetId })
+        .setHeader('Authorization', `Bearer ${session.accessToken}`).abortSignal(abort));
+      if (!result.ok || signal.aborted || mine !== generation || !object(result.value)) return fail();
+      const raw = result.value;
+      if (Object.keys(raw).sort().join(',') !== 'follow_request,requesterUserId,targetUserId' ||
+        raw.requesterUserId !== scope.userId || raw.targetUserId !== targetId) return fail();
+      if (raw.follow_request === null) continue;
+      const row = raw.follow_request;
+      if (!object(row) || Object.keys(row).sort().join(',') !== 'request_id,revision,state' ||
+        typeof row.request_id !== 'string' || !UUID.test(row.request_id) || requestIds.has(row.request_id) ||
+        !revision(row.revision) || !['pending', 'accepted', 'rejected', 'cancelled', 'revoked'].includes(String(row.state))) return fail();
+      requestIds.add(row.request_id);
+      relationships.set(targetId, { targetId, requestId: row.request_id, revision: row.revision, state: row.state as OutboundRow['state'] });
     }
     if (signal.aborted || mine !== generation) return fail();
     const values = allowed.map(targetId => relationships.get(targetId) ?? { targetId, requestId: null, revision: '0', state: 'none' as const });

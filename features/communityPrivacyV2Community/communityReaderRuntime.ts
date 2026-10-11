@@ -7,11 +7,24 @@ import { UUID } from './communityReaderContracts';
 import type { ReadScope } from './communityReaderContracts';
 export interface CommunityReadSnapshot { scopeKey: string | null; userId: string | null; viewKey: string; status: 'loading' | 'ready' | 'signed_out' | 'error'; }
 export const EMPTY_COMMUNITY_READ_STATE: CommunityReadSnapshot = { scopeKey: null, userId: null, viewKey: 'unavailable', status: 'signed_out' };
-export function createCommunityReaderRuntime(client: Pick<SupabaseClient, 'auth' | 'from' | 'rpc'>) {
+export interface CommunityReaderActivation {
+  actorId: string | null;
+  isCurrent(): boolean;
+  allowAutomaticWrites: boolean;
+}
+export function createCommunityReaderRuntime(client: Pick<SupabaseClient, 'auth' | 'from' | 'rpc'>,
+  activation?: CommunityReaderActivation) {
   const binding = createSupabaseInboxAuthBinding(client.auth);
-  const readers = createCommunityReaderClient({ client, getSession: binding.getSession });
-  const outbound = createCommunityOutboundClient({ client, getSession: binding.getSession, readers });
-  const run = createCommunityScopedQuery(binding.getSession);
+  const allowed = () => !activation || activation.isCurrent();
+  const matchesActor = (userId: string) => !activation || activation.actorId === userId;
+  const getSession = async () => {
+    if (!allowed()) return null;
+    const session = await binding.getSession();
+    return allowed() && session && matchesActor(session.userId) ? session : null;
+  };
+  const readers = createCommunityReaderClient({ client, getSession, allowAutomaticWrites: activation?.allowAutomaticWrites ?? true });
+  const outbound = createCommunityOutboundClient({ client, getSession, readers });
+  const run = createCommunityScopedQuery(getSession);
   let active = false, version = 0, snapshot = EMPTY_COMMUNITY_READ_STATE;
   let exclusive: 'block' | 'outbound' | null = null;
   let unsubscribe: (() => void) | null = null;
@@ -33,13 +46,15 @@ export function createCommunityReaderRuntime(client: Pick<SupabaseClient, 'auth'
     outbound.invalidate(); emit(except);
   }
   function reconcile() {
-    const auth = binding.getSnapshot(), session = active ? auth.session : null, key = scopeKey(session);
-    const status = active ? auth.status : 'signed_out';
+    const auth = binding.getSnapshot();
+    const session = active && allowed() && auth.session && matchesActor(auth.session.userId) ? auth.session : null;
+    const key = scopeKey(session);
+    const status = active ? (auth.status === 'ready' && !session ? 'error' : auth.status) : 'signed_out';
     if (key === snapshot.scopeKey && status === snapshot.status) return;
     snapshot = { scopeKey: key, userId: session?.userId ?? null, viewKey: '', status }; clear();
   }
   function activate() {
-    if (active) return; active = true;
+    if (active || !allowed()) return; active = true;
     unsubscribe = binding.subscribe(reconcile); binding.start(); reconcile();
   }
   function deactivate() {
@@ -50,7 +65,7 @@ export function createCommunityReaderRuntime(client: Pick<SupabaseClient, 'auth'
     if (exclusive && !['owner', 'avatar'].includes(surface)) return null;
     cancel(surface);
     const session = active ? binding.getSnapshot().session : null;
-    if (!session || scopeKey(session) !== snapshot.scopeKey) return null;
+    if (!allowed() || !session || !matchesActor(session.userId) || scopeKey(session) !== snapshot.scopeKey) return null;
     const captured = { ...session }, expected = snapshot.scopeKey, abort = new AbortController();
     const serial = (serials.get(surface) ?? 0) + 1; serials.set(surface, serial);
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -62,8 +77,8 @@ export function createCommunityReaderRuntime(client: Pick<SupabaseClient, 'auth'
     if (surface === 'block' || surface === 'outbound') exclusive = surface;
     timer = setTimeout(() => { abort.abort(); operation.finish(); }, 12000);
     return { session: captured, signal: abort.signal,
-      current: () => active && !abort.signal.aborted && expected === snapshot.scopeKey && operation.viewKey === snapshot.viewKey && operations.get(surface) === operation,
-      alive: () => active && expected === snapshot.scopeKey && operation.viewKey === snapshot.viewKey && serials.get(surface) === serial,
+      current: () => active && allowed() && !abort.signal.aborted && expected === snapshot.scopeKey && operation.viewKey === snapshot.viewKey && operations.get(surface) === operation,
+      alive: () => active && allowed() && expected === snapshot.scopeKey && operation.viewKey === snapshot.viewKey && serials.get(surface) === serial,
       finish: operation.finish };
   }
   async function block(scope: ReadScope, signal: AbortSignal, targetId: string) {

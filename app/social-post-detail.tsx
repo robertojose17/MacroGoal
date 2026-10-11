@@ -1,4 +1,4 @@
-import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
 import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibility/ProtectedReaderBoundary';
 /**
@@ -85,7 +85,7 @@ function CommentItem({
 }
 
 export default function SocialPostDetailScreen() {
-  return COMMUNITY_PRIVACY_V2_ENABLED ? <ProtectedPostDetailRoute /> : <LegacySocialPostDetailScreen />;
+  return <CommunityPrivacyRolloutBoundary>{activation => activation.mode === 'protected' ? <ProtectedPostDetailRoute /> : <LegacySocialPostDetailScreen />}</CommunityPrivacyRolloutBoundary>;
 }
 
 function ProtectedPostDetailRoute() {

@@ -1,4 +1,6 @@
-import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
+import { getCommunityPrivacyActivation } from '@/features/communityPrivacyV2/communityPrivacyRollout';
+import type { CommunityPrivacyActivation, CommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -21,12 +23,18 @@ interface SearchUserRowProps {
   onFollowChange?: (userId: string, isFollowing: boolean) => void;
 }
 
-export default function SearchUserRow({
+export default function SearchUserRow(props: SearchUserRowProps) {
+  return <CommunityPrivacyRolloutBoundary>{activation => <SearchUserRowBody {...props} activation={activation} />}</CommunityPrivacyRolloutBoundary>;
+}
+
+function SearchUserRowBody({
+  activation,
   user,
   isDark,
   index = 0,
   onFollowChange,
-}: SearchUserRowProps) {
+}: SearchUserRowProps & { activation: CommunityPrivacyActivation }) {
+  const privacyProtected = activation.mode === 'protected';
   const router = useRouter();
   const [isFollowing, setIsFollowing] = useState(user.is_following);
   const [loading, setLoading] = useState(false);
@@ -41,7 +49,8 @@ export default function SearchUserRow({
   }, []);
 
   const handleFollowToggle = useCallback(async () => {
-    if (COMMUNITY_PRIVACY_V2_ENABLED) { router.push(`/social-profile-view?userId=${encodeURIComponent(user.id)}`); return; }
+    if (activation.status !== 'disabled' && getCommunityPrivacyActivation().scopeKey !== activation.scopeKey) return;
+    if (privacyProtected) { router.push(`/social-profile-view?userId=${encodeURIComponent(user.id)}`); return; }
     const newFollowing = !isFollowing;
     console.log('[SearchUserRow] Follow toggle pressed — user_id:', user.id, 'username:', user.username, 'newFollowing:', newFollowing);
     setIsFollowing(newFollowing);
@@ -61,12 +70,13 @@ export default function SearchUserRow({
     } finally {
       setLoading(false);
     }
-  }, [user.id, user.username, isFollowing, onFollowChange]);
+  }, [user.id, user.username, isFollowing, onFollowChange, activation, privacyProtected, router]);
 
   const handleRowPress = useCallback(() => {
+    if (activation.status !== 'disabled' && getCommunityPrivacyActivation().scopeKey !== activation.scopeKey) return;
     console.log('[SearchUserRow] Row pressed — navigating to profile user_id:', user.id);
     router.push(`/social-profile?user_id=${user.id}`);
-  }, [user.id, router]);
+  }, [user.id, router, activation]);
 
   const bg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
@@ -80,7 +90,7 @@ export default function SearchUserRow({
   const followBtnBg = isFollowing ? 'transparent' : colors.primary;
   const followBtnBorder = isFollowing ? (isDark ? colors.cardBorderDark : colors.cardBorder) : colors.primary;
   const followBtnText = isFollowing ? (isDark ? colors.textDark : colors.text) : '#FFFFFF';
-  const followLabel = COMMUNITY_PRIVACY_V2_ENABLED ? 'View profile' : (isFollowing ? 'Following' : 'Follow');
+  const followLabel = privacyProtected ? 'View profile' : (isFollowing ? 'Following' : 'Follow');
 
   return (
     <Animated.View
@@ -101,7 +111,7 @@ export default function SearchUserRow({
               {user.name}
             </Text>
           ) : null}
-          {!COMMUNITY_PRIVACY_V2_ENABLED && <View style={styles.metaRow}>
+          {!privacyProtected && <View style={styles.metaRow}>
             <Users size={11} color={subColor} />
             <Text style={[styles.metaText, { color: subColor }]}>{followersText}</Text>
           </View>}

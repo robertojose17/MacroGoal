@@ -2,13 +2,25 @@ import React, { createContext, useCallback, useContext, useMemo, useSyncExternal
 import { AppState } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase/client';
+import { getCommunityPrivacyActivation } from '../communityPrivacyV2/communityPrivacyRollout';
 import { createCommunityReaderRuntime, EMPTY_COMMUNITY_READ_STATE } from './communityReaderRuntime';
 import type { CommunityReaderRuntime } from './communityReaderRuntime';
 const Environment = createContext<CommunityReaderRuntime | null>(null);
 const subscribeDisabled = () => () => {};
 const disabledSnapshot = () => EMPTY_COMMUNITY_READ_STATE;
-export function CommunityReadProvider({ children }: { children: React.ReactNode }) {
-  const runtime = useMemo(() => createCommunityReaderRuntime(supabase), []);
+export function CommunityReadProvider({ children, activation }: {
+  children: React.ReactNode;
+  activation: ReturnType<typeof getCommunityPrivacyActivation>;
+}) {
+  const runtime = useMemo(() => createCommunityReaderRuntime(supabase, {
+    actorId: activation.actorId,
+    isCurrent: () => {
+      const live = getCommunityPrivacyActivation();
+      return live.status === 'ready' && live.mode === 'protected' &&
+        live.actorId === activation.actorId && live.scopeKey === activation.scopeKey;
+    },
+    allowAutomaticWrites: activation.rollout !== 'pair',
+  }), [activation.actorId, activation.scopeKey, activation.rollout]);
   useFocusEffect(useCallback(() => {
     const update = (state: string | null) => { if (state === 'active') runtime.activate(); else runtime.deactivate(); };
     const change = AppState.addEventListener('change', update);

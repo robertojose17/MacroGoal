@@ -1,4 +1,4 @@
-import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { Redirect } from 'expo-router';
 /**
  * Social Profile Screen — Instagram-style
@@ -173,7 +173,7 @@ function StatPill({
 }
 
 export default function SocialProfileScreen() {
-  return COMMUNITY_PRIVACY_V2_ENABLED ? <ProtectedLegacyProfileRedirect /> : <LegacySocialProfileScreen />;
+  return <CommunityPrivacyRolloutBoundary>{activation => activation.mode === 'protected' ? <ProtectedLegacyProfileRedirect /> : <LegacySocialProfileScreen />}</CommunityPrivacyRolloutBoundary>;
 }
 
 function ProtectedLegacyProfileRedirect() {

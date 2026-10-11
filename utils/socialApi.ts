@@ -1,4 +1,5 @@
-import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { withCommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
+import type { CommunityPrivacyActivation, CommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
 import { supabase } from '@/lib/supabase/client';
 
@@ -167,19 +168,20 @@ export interface CreatePostInput {
 
 // ─── Auth helpers (used by feed/profile/follows/search edge functions) ────────
 
-async function authHeaders(): Promise<Record<string, string>> {
+async function authHeaders(scope: CommunityPrivacyScope): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   return {
     Authorization: `Bearer ${session?.access_token ?? ''}`,
     'Content-Type': 'application/json',
   };
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = await authHeaders();
+async function apiFetch<T>(scope: CommunityPrivacyScope, path: string, options: RequestInit = {}): Promise<T> {
+  const headers = await authHeaders(scope);
   const url = `${BASE}${path}`;
   console.log(`[SocialApi] ${options.method ?? 'GET'} ${url}`);
-  const res = await fetch(url, {
+  const res = await scope.fetch(url, {
     ...options,
     headers: { ...headers, ...(options.headers ?? {}) },
   });
@@ -198,13 +200,16 @@ export async function fetchFeed(
   limit = 20,
   offset = 0
 ): Promise<SocialPost[]> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) return remainingCommunityReads.feed(mode, limit, offset);
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') return remainingCommunityReads.feed(mode, limit, offset, scope.signal);
   console.log('[SocialApi] fetchFeed — mode:', mode, 'limit:', limit, 'offset:', offset);
-  const data = await apiFetch<SocialPost[]>(
+  const data = await apiFetch<SocialPost[]>(scope, 
     `/social-feed?mode=${mode}&limit=${limit}&offset=${offset}`
   );
   console.log('[SocialApi] fetchFeed — received', data?.length ?? 0, 'posts');
   return data ?? [];
+
+  });
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -214,65 +219,82 @@ export async function fetchProfile(
   fromDate?: string,
   toDate?: string
 ): Promise<SocialProfile> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) throw new Error('Use the protected profile route.');
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') throw new Error('Use the protected profile route.');
   console.log('[SocialApi] fetchProfile — user_id:', userId, 'from:', fromDate, 'to:', toDate);
   let path = `/social-profile?user_id=${encodeURIComponent(userId)}`;
   if (fromDate) path += `&from_date=${fromDate}`;
   if (toDate) path += `&to_date=${toDate}`;
-  const data = await apiFetch<SocialProfile>(path);
+  const data = await apiFetch<SocialProfile>(scope, path);
   console.log('[SocialApi] fetchProfile — is_own:', data?.is_own_profile, 'is_mutual:', data?.is_mutual);
   return data;
+
+  });
 }
 
 // ─── Follows ──────────────────────────────────────────────────────────────────
 
 export async function followUser(targetUserId: string): Promise<void> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) throw new Error('Open the profile to request access.');
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') throw new Error('Open the profile to request access.');
   console.log('[SocialApi] followUser — target_user_id:', targetUserId);
-  await apiFetch('/social-follows', {
+  await apiFetch(scope, '/social-follows', {
     method: 'POST',
     body: JSON.stringify({ target_user_id: targetUserId }),
   });
   console.log('[SocialApi] followUser — success');
+
+  });
 }
 
 export async function unfollowUser(targetUserId: string): Promise<void> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) throw new Error('Open the profile to change accepted access.');
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') throw new Error('Open the profile to change accepted access.');
   console.log('[SocialApi] unfollowUser — target_user_id:', targetUserId);
-  await apiFetch(`/social-follows?target_user_id=${encodeURIComponent(targetUserId)}`, {
+  await apiFetch(scope, `/social-follows?target_user_id=${encodeURIComponent(targetUserId)}`, {
     method: 'DELETE',
   });
   console.log('[SocialApi] unfollowUser — success');
+
+  });
 }
 
 export async function fetchFollowing(userId?: string): Promise<SearchUser[]> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) return (await remainingCommunityReads.connections(userId, 'following')).map(identity => ({ ...identity, username: identity.username ?? '' }));
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') return (await remainingCommunityReads.connections(userId, 'following', scope.signal)).map(identity => ({ ...identity, username: identity.username ?? '' }));
   console.log('[SocialApi] fetchFollowing — user_id:', userId ?? 'self');
   let path = '/social-follows?type=following';
   if (userId) path += `&user_id=${encodeURIComponent(userId)}`;
-  const data = await apiFetch<SearchUser[]>(path);
+  const data = await apiFetch<SearchUser[]>(scope, path);
   console.log('[SocialApi] fetchFollowing — received', data?.length ?? 0, 'users');
   return data ?? [];
+
+  });
 }
 
 export async function fetchFollowers(userId?: string): Promise<SearchUser[]> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) return (await remainingCommunityReads.connections(userId, 'followers')).map(identity => ({ ...identity, username: identity.username ?? '' }));
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') return (await remainingCommunityReads.connections(userId, 'followers', scope.signal)).map(identity => ({ ...identity, username: identity.username ?? '' }));
   console.log('[SocialApi] fetchFollowers — user_id:', userId ?? 'self');
   let path = '/social-follows?type=followers';
   if (userId) path += `&user_id=${encodeURIComponent(userId)}`;
-  const data = await apiFetch<SearchUser[]>(path);
+  const data = await apiFetch<SearchUser[]>(scope, path);
   console.log('[SocialApi] fetchFollowers — received', data?.length ?? 0, 'users');
   return data ?? [];
+
+  });
 }
 
 // ─── Post CRUD — direct Supabase (no edge function needed) ───────────────────
 
 export async function createPost(post: CreatePostInput): Promise<SocialPost> {
+  return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] createPost — type:', post.post_type, 'type_v2:', post.post_type_v2, 'public:', post.is_public);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase
+  const { data, error } = await scope.request(supabase
     .from('social_posts')
     .insert({
       user_id: session.user.id,
@@ -303,7 +325,7 @@ export async function createPost(post: CreatePostInput): Promise<SocialPost> {
       section: post.section ?? 'feed',
     })
     .select('*')
-    .single();
+    .single());
 
   if (error) {
     console.error('[SocialApi] createPost error:', error.message, error.code);
@@ -311,19 +333,25 @@ export async function createPost(post: CreatePostInput): Promise<SocialPost> {
   }
   console.log('[SocialApi] createPost — success, id:', data?.id);
   return data as unknown as SocialPost;
+
+  });
 }
 
 export async function deletePost(postId: string): Promise<void> {
+  return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] deletePost — post_id:', postId);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
 
-  await supabase
+  await scope.request(supabase
     .from('social_posts')
     .delete()
     .eq('id', postId)
-    .eq('user_id', session.user.id);
+    .eq('user_id', session.user.id));
   console.log('[SocialApi] deletePost — success');
+
+  });
 }
 
 // ─── Likes — direct Supabase + SECURITY DEFINER RPCs ─────────────────────────
@@ -332,15 +360,17 @@ export async function toggleLike(
   post_id: string,
   currentlyLiked: boolean
 ): Promise<{ liked: boolean; likes_count: number }> {
+  return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] toggleLike — post_id:', post_id, 'currentlyLiked:', currentlyLiked);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
   const userId = session.user.id;
 
-  const { data, error } = await supabase.rpc('toggle_post_like', {
+  const { data, error } = await scope.request(supabase.rpc('toggle_post_like', {
     p_post_id: post_id,
     p_user_id: userId,
-  });
+  }));
   console.log('[SocialApi] toggleLike raw RPC response — data:', JSON.stringify(data), 'error:', error?.message);
 
   if (error) throw error;
@@ -351,22 +381,26 @@ export async function toggleLike(
 
   console.log('[SocialApi] toggleLike — liked:', liked, 'count:', likes_count);
   return { liked, likes_count };
+
+  });
 }
 
 // ─── Comments — direct Supabase ───────────────────────────────────────────────
 
 export async function addComment(post_id: string, content: string): Promise<Comment> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) return remainingCommunityReads.addComment(post_id, content);
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') return remainingCommunityReads.addComment(post_id, content, scope.signal);
   console.log('[SocialApi] addComment — post_id:', post_id, 'content length:', content.length);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
   const userId = session.user.id;
 
-  const { data, error } = await supabase
+  const { data, error } = await scope.request(supabase
     .from('community_comments')
     .insert({ post_id, user_id: userId, content })
     .select('*, author:users!user_id(id, username, full_name, avatar_url)')
-    .single();
+    .single());
 
   if (error) {
     console.error('[SocialApi] addComment insert error:', error.message, error.code);
@@ -378,11 +412,11 @@ export async function addComment(post_id: string, content: string): Promise<Comm
   if (!commentData.author) {
     console.log('[SocialApi] addComment — author join returned null, fetching separately');
     try {
-      const { data: userRow } = await supabase
+      const { data: userRow } = await scope.request(supabase
         .from('users')
         .select('id, username, full_name, avatar_url')
         .eq('id', userId)
-        .maybeSingle();
+        .maybeSingle());
       if (userRow) {
         commentData.author = userRow;
       } else {
@@ -395,90 +429,114 @@ export async function addComment(post_id: string, content: string): Promise<Comm
     }
   }
 
-  await supabase.rpc('increment_comments', { post_id });
+  await scope.request(supabase.rpc('increment_comments', { post_id }));
   console.log('[SocialApi] addComment — comment id:', commentData?.id);
   return commentData as unknown as Comment;
+
+  });
 }
 
 export async function fetchComments(post_id: string): Promise<Comment[]> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) return remainingCommunityReads.comments(post_id);
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') return remainingCommunityReads.comments(post_id, scope.signal);
   console.log('[SocialApi] fetchComments — post_id:', post_id);
-  const { data, error } = await supabase
+  const { data, error } = await scope.request(supabase
     .from('community_comments')
     .select('*, author:users!user_id(id, username, full_name, avatar_url)')
     .eq('post_id', post_id)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true }));
 
   if (error) throw error;
   console.log('[SocialApi] fetchComments — received', data?.length ?? 0, 'comments');
   return (data ?? []) as unknown as Comment[];
+
+  });
 }
 
 // ─── Saves — direct Supabase + SECURITY DEFINER RPCs ─────────────────────────
 
 export async function savePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
+  return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] savePost — post_id:', post_id);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
 
-  await supabase.from('social_post_saves').upsert({ post_id, user_id: session.user.id });
-  const { data: newCount } = await supabase.rpc('increment_saves', { post_id });
+  await scope.request(supabase.from('social_post_saves').upsert({ post_id, user_id: session.user.id }));
+  const { data: newCount } = await scope.request(supabase.rpc('increment_saves', { post_id }));
   console.log('[SocialApi] savePost — saves_count:', newCount);
   return { saved: true, saves_count: (newCount as number) ?? 1 };
+
+  });
 }
 
 export async function unsavePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
+  return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] unsavePost — post_id:', post_id);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
 
-  await supabase.from('social_post_saves').delete().eq('post_id', post_id).eq('user_id', session.user.id);
-  const { data: newCount } = await supabase.rpc('decrement_saves', { post_id });
+  await scope.request(supabase.from('social_post_saves').delete().eq('post_id', post_id).eq('user_id', session.user.id));
+  const { data: newCount } = await scope.request(supabase.rpc('decrement_saves', { post_id }));
   console.log('[SocialApi] unsavePost — saves_count:', newCount);
   return { saved: false, saves_count: (newCount as number) ?? 0 };
+
+  });
 }
 
 // ─── Comment Edit / Delete ────────────────────────────────────────────────────
 
 export async function updateComment(commentId: string, content: string): Promise<void> {
+  return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] updateComment — id:', commentId);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
-  const { error } = await supabase
+  const { error } = await scope.request(supabase
     .from('community_comments')
     .update({ content })
     .eq('id', commentId)
-    .eq('user_id', session.user.id);
+    .eq('user_id', session.user.id));
   if (error) {
     console.error('[SocialApi] updateComment error:', error.message);
     throw error;
   }
+
+  });
 }
 
 export async function deleteComment(commentId: string, postId: string): Promise<void> {
+  return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] deleteComment — id:', commentId, 'postId:', postId);
   const { data: { session } } = await supabase.auth.getSession();
+  scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
-  const { error } = await supabase
+  const { error } = await scope.request(supabase
     .from('community_comments')
     .delete()
     .eq('id', commentId)
-    .eq('user_id', session.user.id);
+    .eq('user_id', session.user.id));
   if (error) {
     console.error('[SocialApi] deleteComment error:', error.message);
     throw error;
   }
-  await supabase.rpc('decrement_comments', { post_id: postId });
+  await scope.request(supabase.rpc('decrement_comments', { post_id: postId }));
+
+  });
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 export async function searchUsers(q: string): Promise<SearchUser[]> {
-  if (COMMUNITY_PRIVACY_V2_ENABLED) return (await remainingCommunityReads.search(q)).map(identity => ({ ...identity, username: identity.username ?? '' }));
+  return withCommunityPrivacyScope(async scope => {
+  if (scope.activation.mode === 'protected') return (await remainingCommunityReads.search(q, scope.signal)).map(identity => ({ ...identity, username: identity.username ?? '' }));
   console.log('[SocialApi] searchUsers — query:', q);
-  const data = await apiFetch<SearchUser[]>(
+  const data = await apiFetch<SearchUser[]>(scope, 
     `/social-search-users?q=${encodeURIComponent(q)}`
   );
   console.log('[SocialApi] searchUsers — found', data?.length ?? 0, 'users');
   return data ?? [];
+
+  });
 }

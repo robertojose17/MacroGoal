@@ -1,4 +1,5 @@
-import type { ClientSession } from './communityProfileApi';
+import type { CommunityPrivacyActivation, CommunityPrivacyScope } from './communityPrivacyRolloutController';
+import type { ClientSession, ClientDependencies } from './communityProfileApi';
 import { createCommunityProfileClient, failure } from './communityProfileApi';
 import { createOutboundFollowAdapter } from './outboundFollowAdapter';
 import type { OutboundDependencies } from './outboundFollowAdapter';
@@ -41,6 +42,13 @@ export function createBoundedProfileReader(reader: ProfileReader, timeoutMs = 10
 export function createProfileScreenServices(deps: {
   auth: SupabaseAuthSource;
   functionsBaseUrl: string;
+  profileRoute?: ClientDependencies['profileRoute'];
+  /** Present only inside the normal verified protected route. No credential is stored here. */
+  rollout?: {
+    activation: CommunityPrivacyActivation;
+    getActivation(): CommunityPrivacyActivation;
+    getScope(): CommunityPrivacyScope;
+  };
   fetch: typeof globalThis.fetch;
   profileTimeoutMs?: number;
   createSupplements?: (getSession: () => Promise<ClientSession | null>) => ProfileSupplementAdapter;
@@ -48,12 +56,58 @@ export function createProfileScreenServices(deps: {
   createRpc: (getSession: () => Promise<ClientSession | null>) => OutboundDependencies['rpc']; rpc?: never;
 })) {
   const binding = createSupabaseInboxAuthBinding(deps.auth);
+  const rollout = deps.rollout;
+  if ((deps.profileRoute === 'community-profile') !== !!rollout) {
+    throw new TypeError('The v2 profile route requires a protected rollout context.');
+  }
+  function assertActivation() {
+    if (!rollout) return;
+    const activation = rollout.getActivation();
+    if (activation !== rollout.activation || activation.status !== 'ready' || activation.mode !== 'protected'
+        || !activation.actorId || !['pair', 'general'].includes(activation.rollout)) {
+      throw new Error('Community data is unavailable.');
+    }
+  }
+  // A separate verified auth binding must never cross the outer rollout generation,
+  // including same-account sign-out/sign-in. All existing adapters get this guard.
+  async function getSession(): Promise<ClientSession | null> {
+    assertActivation();
+    const session = await binding.getSession();
+    assertActivation();
+    if (session && rollout && session.userId !== rollout.activation.actorId) return null;
+    return session;
+  }
   const client = createCommunityProfileClient({ functionsBaseUrl: deps.functionsBaseUrl,
-    fetch: deps.fetch, getSession: binding.getSession });
-  const fetchProfile = createBoundedProfileReader(client.fetchProfile, deps.profileTimeoutMs);
-  const rpc = deps.createRpc ? deps.createRpc(binding.getSession) : deps.rpc;
-  return { binding, createSupplements: deps.createSupplements ? () => deps.createSupplements!(binding.getSession) : undefined, createAdapter: (onInvalidate: () => void) => createOutboundFollowAdapter({
-    getSession: binding.getSession, fetchProfile, rpc, onInvalidate,
+    fetch: deps.fetch, getSession, profileRoute: deps.profileRoute });
+  const boundedProfile = createBoundedProfileReader(client.fetchProfile, deps.profileTimeoutMs);
+  const fetchProfile: ProfileReader = async (input, options = {}) => {
+    if (!rollout) return boundedProfile(input, options);
+    let scope: CommunityPrivacyScope | null = null;
+    const request = new AbortController();
+    const abort = () => request.abort();
+    try {
+      assertActivation();
+      scope = rollout.getScope();
+      scope.assertCurrent();
+      if (scope.activation !== rollout.activation) return failure('stale_response');
+      scope.assertActor(rollout.activation.actorId);
+      scope.signal.addEventListener('abort', abort, { once: true });
+      options.signal?.addEventListener('abort', abort, { once: true });
+      if (scope.signal.aborted || options.signal?.aborted) abort();
+      // Keep the rollout scope alive through response text parsing, not just headers.
+      const result = await boundedProfile(input, { signal: request.signal });
+      assertActivation(); scope.assertCurrent();
+      return result;
+    } catch { return failure(options.signal?.aborted ? 'aborted' : 'stale_response'); }
+    finally {
+      scope?.signal.removeEventListener('abort', abort);
+      options.signal?.removeEventListener('abort', abort);
+      scope?.release();
+    }
+  };
+  const rpc = deps.createRpc ? deps.createRpc(getSession) : deps.rpc;
+  return { binding, createSupplements: deps.createSupplements ? () => deps.createSupplements!(getSession) : undefined, createAdapter: (onInvalidate: () => void) => createOutboundFollowAdapter({
+    getSession, fetchProfile, rpc, onInvalidate,
   }) };
 }
 export type ProfileScreenServices = ReturnType<typeof createProfileScreenServices>;

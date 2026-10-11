@@ -17,9 +17,10 @@ const rows = (value: unknown, maximum: number): value is Record<string, unknown>
 
 /** Fixed existing Community reads only. Owner tracking and explicit post writes
  * remain in the screen. No cross-user users/meals/goals read or identity join. */
-export function createCommunityReaderClient({ client, getSession }: {
+export function createCommunityReaderClient({ client, getSession, allowAutomaticWrites = true }: {
   client: Pick<SupabaseClient, 'from' | 'rpc'>;
   getSession(): Promise<ClientSession | null>;
+  allowAutomaticWrites?: boolean;
 }) {
   const run = createCommunityScopedQuery(getSession);
   const rpc = createSupabaseCompatibilityTransport({ client, getSession });
@@ -130,7 +131,7 @@ export function createCommunityReaderClient({ client, getSession }: {
     return result.ok && typeof result.value === 'boolean' ? result : fail<boolean>();
   }
   async function saveOwnWeekly(scope: ReadScope, signal: AbortSignal, weekStart: string, score: number) {
-    if (!Number.isSafeInteger(score) || score < 0 || score > 100 || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return false;
+    if (!allowAutomaticWrites || !Number.isSafeInteger(score) || score < 0 || score > 100 || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return false;
     const result = await run<unknown>(scope, signal, async (session, abort) => {
       const response = await client.from('weekly_consistency_scores').upsert({ user_id: session.userId, week_start: weekStart, score },
         { onConflict: 'user_id,week_start' }).setHeader('Authorization', `Bearer ${session.accessToken}`).abortSignal(abort);

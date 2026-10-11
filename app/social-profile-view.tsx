@@ -1,11 +1,9 @@
 import React from 'react';
-import { COMMUNITY_PRIVACY_V2_ENABLED } from '@/features/communityPrivacyV2/featureFlag';
+import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import LegacySocialProfileViewScreen from '@/features/communityPrivacyV2/LegacySocialProfileViewScreen';
 import ConfiguredAcceptedSocialProfileRoute from '@/features/communityPrivacyV2/ConfiguredAcceptedSocialProfileRoute';
 
-/** False retains the exact original component. Only the selected branch mounts hooks/effects. */
+/** Eligibility resolves before either branch mounts its hooks/effects. */
 export default function SocialProfileViewScreen() {
-  return COMMUNITY_PRIVACY_V2_ENABLED
-    ? <ConfiguredAcceptedSocialProfileRoute />
-    : <LegacySocialProfileViewScreen />;
+  return <CommunityPrivacyRolloutBoundary>{activation => activation.mode === 'protected' ? <ConfiguredAcceptedSocialProfileRoute /> : <LegacySocialProfileViewScreen />}</CommunityPrivacyRolloutBoundary>;
 }
