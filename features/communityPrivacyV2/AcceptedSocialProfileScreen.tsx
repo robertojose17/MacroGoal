@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image,
-  Modal, TextInput, useColorScheme } from 'react-native';
+  Modal, TextInput, FlatList, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ProfileScreenState } from './profileScreenController';
 import { profileAction } from './profileScreenController';
 import type { OutboundAction } from './outboundFollowAdapter';
-import { amountText, goalProgress, metricText, safeProfileAvatar, visibleProfile } from './profileScreenPresentation';
+import { amountText, goalProgress, metricText, relativePostTime, safeProfileAvatar, visibleProfile } from './profileScreenPresentation';
+import type { ConnectionDirection } from './profileSupplementTypes';
 import type { NutritionRange } from './profileScreenPresentation';
 
 interface Props {
@@ -18,6 +19,9 @@ interface Props {
   onRange?(range: NutritionRange): void;
   onCustom?(fromDate: string, toDate: string): boolean;
   onAction?(action: OutboundAction): void;
+  onConnections?(direction: ConnectionDirection): void;
+  onCloseConnections?(): void;
+  onBlockConfirm?(confirmedScopeKey: string): void;
 }
 const rangeLabels: Record<NutritionRange, string> = { today: 'Today', '7d': '7 Days', '30d': '30 Days', custom: 'Custom' };
 const macroLabels = { protein: 'Protein', carbs: 'Carbs', fats: 'Fats', fiber: 'Fiber' } as const;
@@ -25,7 +29,7 @@ const macroColors = { protein: '#29a583', carbs: '#d89d32', fats: '#9d74c5', fib
 
 /** Snapshot-only renderer. No database, auth, HTTP, storage, raw health or post-media access. */
 export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range = 'today', custom,
-  onRefresh, onRange, onCustom, onAction }: Props) {
+  onRefresh, onRange, onCustom, onAction, onConnections, onCloseConnections, onBlockConfirm }: Props) {
   const dark = useColorScheme() === 'dark';
   const palette = { bg: dark ? '#111827' : '#f7f8fa', card: dark ? '#1f2937' : '#fff',
     text: dark ? '#f9fafb' : '#111827', muted: dark ? '#b3bbc9' : '#5d6675', border: dark ? '#374151' : '#e5e7eb' };
@@ -33,7 +37,8 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
   const [fromDate, setFromDate] = useState(custom?.fromDate ?? '');
   const [toDate, setToDate] = useState(custom?.toDate ?? '');
   const [dateError, setDateError] = useState(false);
-  useEffect(() => { setRangeEditor(false); setDateError(false); }, [state.scopeKey, unavailable]);
+  const [blockScopeKey, setBlockScopeKey] = useState<string | null>(null);
+  useEffect(() => { setRangeEditor(false); setDateError(false); setBlockScopeKey(null); }, [state.scopeKey, unavailable]);
   // A message-only/hidden route cannot expose even discovery from a stale renderer prop.
   const profile = unavailable ? null : state.profile;
   const { identity, user, metrics, nutrition } = visibleProfile(profile);
@@ -61,29 +66,36 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
     <ScrollView contentContainerStyle={styles.content}>
       {unavailable ? <Text style={[styles.message, muted]}>{unavailable}</Text> :
         state.status === 'loading' || state.busy ? <View accessibilityLiveRegion="polite" style={styles.message}>
-          <ActivityIndicator color="#19a377" /><Text style={muted}>{state.busy ? 'Updating request…' : 'Loading profile…'}</Text>
+          <ActivityIndicator color="#19a377" /><Text style={muted}>{state.blockBusy ? 'Blocking user…' : state.busy ? 'Updating request…' : 'Loading profile…'}</Text>
         </View> : state.status === 'error' ? <View style={styles.message}>
-          <Text accessibilityLiveRegion="polite" style={muted}>Profile could not be loaded.</Text>
+          <Text accessibilityLiveRegion="polite" style={muted}>{state.outcome === 'block_unconfirmed' ? 'Block could not be confirmed. Refresh to check this profile before trying again.' : 'Profile could not be loaded.'}</Text>
           <TouchableOpacity accessibilityRole="button" style={styles.button} onPress={onRefresh}><Text style={styles.buttonText}>Try again</Text></TouchableOpacity>
-        </View> : !identity ? <Text style={[styles.message, muted]}>This account is not available.</Text> : <>
+        </View> : !identity ? <Text style={[styles.message, muted]}>{state.outcome === 'blocked' ? 'This user is blocked.' : 'This account is not available.'}</Text> : <>
           <View style={styles.header}>
             {avatar ? <Image accessibilityLabel={`${displayName} avatar`} source={{ uri: avatar }} style={styles.avatar} /> :
               <View style={[styles.avatar, styles.avatarFallback]}><Text style={styles.avatarLetter}>{displayName.charAt(0).toUpperCase()}</Text></View>}
             <View style={styles.headerInfo}>
               <Text style={[styles.name, text]}>{displayName}</Text>
               {!!identity.username && <Text style={muted}>@{identity.username}</Text>}
-              {user?.is_premium === true && <Text style={muted}>Premium</Text>}
+              {user?.is_premium === true && <Text accessibilityLabel="Premium member" style={muted}>👑</Text>}
             </View>
           </View>
           {!!user?.bio && <Text style={[styles.bio, text]}>{user.bio}</Text>}
           {profile?.can_view_profile && user ? <View style={styles.counts}>
-            {(['posts', 'followers', 'following'] as const).map(key => <View key={key} style={styles.count}>
+            {(['posts', 'followers', 'following'] as const).map(key => key === 'posts' ? <View key={key} style={styles.count}>
               <Text style={[styles.countValue, text]}>{values[key]}</Text><Text style={muted}>{key}</Text>
-            </View>)}
+            </View> : <TouchableOpacity key={key} accessibilityRole="button" accessibilityLabel={`View ${key}`}
+              style={styles.count} disabled={state.busy || !onConnections} onPress={() => onConnections?.(key)}>
+              <Text style={[styles.countValue, text]}>{values[key]}</Text><Text style={muted}>{key}</Text>
+            </TouchableOpacity>)}
           </View> : null}
           {!!action && <TouchableOpacity accessibilityRole="button" accessibilityLabel={actionLabel}
             style={styles.button} disabled={state.busy || !onAction} onPress={() => onAction?.(action)}>
             <Text style={styles.buttonText}>{actionLabel}</Text>
+          </TouchableOpacity>}
+          {profile && !profile.is_own_profile && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Block user"
+            disabled={state.busy || !onBlockConfirm} style={styles.touch} onPress={() => setBlockScopeKey(state.scopeKey)}>
+            <Text style={{ color: '#B91C1C' }}>Block user</Text>
           </TouchableOpacity>}
           {profile?.follow_request_state === 'pending' && <Text style={[styles.notice, muted]}>Request pending. Statistics appear after this person accepts.</Text>}
           {state.outcome === 'unconfirmed' && <Text accessibilityLiveRegion="polite" style={[styles.notice, muted]}>
@@ -127,11 +139,46 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
             </View>
             <View style={[styles.card, card]}>
               <Text style={[styles.sectionTitle, text]}>Posts</Text>
-              <Text style={muted}>Posts are unavailable in this preview.</Text>
+              {state.posts?.status === 'loading' ? <ActivityIndicator accessibilityLabel="Loading posts" color="#19a377" /> :
+                state.posts?.status === 'ready' ? state.posts.items.length === 0 ? <Text style={muted}>No posts yet</Text> : <>
+                  {state.posts.items.map(post => <View key={post.id} style={[styles.post, { borderColor: palette.border }]}>
+                    {post.content !== null && <Text style={[styles.bio, text]}>{post.content}</Text>}
+                    <View style={styles.postMeta}><Text style={muted}>{relativePostTime(post.created_at)}</Text>
+                      <Text accessibilityLabel={`${post.likes_count} likes`} style={muted}>♥ {post.likes_count}</Text>
+                    </View>
+                  </View>)}
+                  {state.posts.nextCursor !== null && <Text style={muted}>Showing the latest 20 posts</Text>}
+                </> : <Text style={muted}>Posts could not be loaded.</Text>}
             </View>
           </>}
         </>}
     </ScrollView>
+    <Modal visible={!!user && !unavailable && !!state.connections?.direction} transparent animationType="slide" onRequestClose={onCloseConnections}>
+      <View style={styles.modalBackdrop}><View style={[styles.modal, card, { maxHeight: '80%' }]}>
+        <Text style={[styles.sectionTitle, text]}>{state.connections?.direction === 'followers' ? 'Followers' : 'Following'}</Text>
+        {state.connections?.status === 'loading' ? <ActivityIndicator accessibilityLabel="Loading connections" color="#19a377" /> :
+          state.connections?.items.length === 0 ? <Text style={muted}>{state.connections.direction === 'followers' ? 'No followers yet' : 'Not following anyone yet'}</Text> :
+            <FlatList data={state.connections?.items ?? []} keyExtractor={item => item.id} renderItem={({ item }) => {
+              const name = item.name || item.full_name || item.username || 'User';
+              const uri = safeProfileAvatar(item.id, item.avatar_url);
+              return <View style={styles.connectionRow}>
+                {uri ? <Image accessibilityLabel={`${name} avatar`} source={{ uri }} style={styles.smallAvatar} /> :
+                  <View style={[styles.smallAvatar, styles.avatarFallback]}><Text style={styles.buttonText}>{name.charAt(0).toUpperCase()}</Text></View>}
+                <View style={{ flex: 1 }}><Text style={text}>{name}</Text>{!!item.username && <Text style={muted}>@{item.username}</Text>}</View>
+              </View>;
+            }} />}
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close connections" style={styles.touch} onPress={onCloseConnections}><Text style={text}>Close</Text></TouchableOpacity>
+      </View></View>
+    </Modal>
+    <Modal visible={!!blockScopeKey && blockScopeKey === state.scopeKey && !!identity && !unavailable} transparent animationType="fade" onRequestClose={() => setBlockScopeKey(null)}>
+      <View style={styles.modalBackdrop}><View style={[styles.modal, card]}>
+        <Text style={[styles.sectionTitle, text]}>Block {displayName}?</Text>
+        <Text style={muted}>You and this person will no longer be able to see each other’s profile or posts.</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Confirm block user" style={[styles.button, { backgroundColor: '#B91C1C' }]}
+          onPress={() => { const key = blockScopeKey; setBlockScopeKey(null); if (key) onBlockConfirm?.(key); }}><Text style={styles.buttonText}>Block</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancel block" style={styles.touch} onPress={() => setBlockScopeKey(null)}><Text style={text}>Cancel</Text></TouchableOpacity>
+      </View></View>
+    </Modal>
     <Modal visible={rangeEditor && !unavailable && !!user} transparent animationType="fade" onRequestClose={() => setRangeEditor(false)}>
       <View style={styles.modalBackdrop}><View style={[styles.modal, card]}>
         <Text style={[styles.sectionTitle, text]}>Custom date range</Text>
@@ -165,5 +212,7 @@ const styles = StyleSheet.create({
   nutritionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 18 }, calorieCircle: { width: 145, minHeight: 145, borderRadius: 80, borderWidth: 8, borderColor: '#19a377', alignItems: 'center', justifyContent: 'center', padding: 8 },
   calories: { fontSize: 30, fontWeight: '700' }, macros: { flex: 1, minWidth: 135, gap: 12 }, macro: { gap: 4 }, track: { height: 6, borderRadius: 3, overflow: 'hidden' }, fill: { height: 6, borderRadius: 3 },
   modalBackdrop: { flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 24 }, modal: { padding: 20, borderRadius: 16, gap: 14 },
+  connectionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }, smallAvatar: { width: 44, height: 44, borderRadius: 22 },
+  post: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 10 }, postMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   input: { borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 44 },
 });

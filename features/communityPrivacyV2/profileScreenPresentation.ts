@@ -53,3 +53,15 @@ export function safeProfileAvatar(userId: string, value: string | null | undefin
   const expected = `https://esgptfiofoaeguslgvcq.supabase.co/storage/v1/object/public/avatars/${userId}/avatar.jpg`;
   return value === expected ? expected : null;
 }
+
+/** Same relative timestamp presentation as the original profile post cards. */
+export function relativePostTime(dateStr: string): string {
+  const diffMins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}

@@ -30,7 +30,7 @@ function ConfiguredProfileRoute({ services, target, onBack }: {
   const [calendarNow, setCalendarNow] = useState(() => new Date());
   const [custom, setCustom] = useState(() => ({ fromDate: localCalendarDate(new Date()), toDate: localCalendarDate(new Date()) }));
   const auth = useSyncExternalStore(services.binding.subscribe, services.binding.getSnapshot, services.binding.getSnapshot);
-  const controller = useMemo(() => createProfileScreenController(services.createAdapter), [services]);
+  const controller = useMemo(() => createProfileScreenController(services.createAdapter, services.createSupplements), [services]);
   const observed = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const input = profileRangeInput(target, range, calendarNow, custom);
   const active = focused && windowFocused && appState === 'active';
@@ -65,5 +65,7 @@ function ConfiguredProfileRoute({ services, target, onBack }: {
     onCustom={(fromDate, toDate) => {
       if (!profileRangeInput(target, 'custom', new Date(), { fromDate, toDate })) return false;
       setCustom({ fromDate, toDate }); setCalendarNow(new Date()); setRange('custom'); return true;
-    }} onAction={action => { void controller.change(action); }} />;
+    }} onAction={action => { void controller.change(action); }}
+    onConnections={direction => { void controller.openConnections(direction); }} onCloseConnections={controller.closeConnections}
+    onBlockConfirm={key => { void controller.block(key).then(confirmed => { if (confirmed) onBack(); }); }} />;
 }

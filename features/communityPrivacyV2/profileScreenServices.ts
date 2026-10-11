@@ -3,6 +3,7 @@ import { createCommunityProfileClient, failure } from './communityProfileApi';
 import { createOutboundFollowAdapter } from './outboundFollowAdapter';
 import type { OutboundDependencies } from './outboundFollowAdapter';
 import { createSupabaseInboxAuthBinding } from './supabaseInboxAuth';
+import type { ProfileSupplementAdapter } from './profileSupplementTypes';
 import type { SupabaseAuthSource } from './supabaseInboxAuth';
 
 type ProfileReader = ReturnType<typeof createCommunityProfileClient>['fetchProfile'];
@@ -42,6 +43,7 @@ export function createProfileScreenServices(deps: {
   functionsBaseUrl: string;
   fetch: typeof globalThis.fetch;
   profileTimeoutMs?: number;
+  createSupplements?: (getSession: () => Promise<ClientSession | null>) => ProfileSupplementAdapter;
 } & ({ rpc: OutboundDependencies['rpc']; createRpc?: never } | {
   createRpc: (getSession: () => Promise<ClientSession | null>) => OutboundDependencies['rpc']; rpc?: never;
 })) {
@@ -50,7 +52,7 @@ export function createProfileScreenServices(deps: {
     fetch: deps.fetch, getSession: binding.getSession });
   const fetchProfile = createBoundedProfileReader(client.fetchProfile, deps.profileTimeoutMs);
   const rpc = deps.createRpc ? deps.createRpc(binding.getSession) : deps.rpc;
-  return { binding, createAdapter: (onInvalidate: () => void) => createOutboundFollowAdapter({
+  return { binding, createSupplements: deps.createSupplements ? () => deps.createSupplements!(binding.getSession) : undefined, createAdapter: (onInvalidate: () => void) => createOutboundFollowAdapter({
     getSession: binding.getSession, fetchProfile, rpc, onInvalidate,
   }) };
 }
