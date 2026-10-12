@@ -3856,7 +3856,13 @@
       "uploadFailed": "Failed to upload photo. Please try again.",
       "close": "Close",
       "reportBug": "Report a bug",
-      "settings": "Settings"
+      "settings": "Settings",
+      "postsLabel_one": " post",
+      "postsLabel_other": " posts",
+      "followersLabel_one": " follower",
+      "followersLabel_other": " followers",
+      "followingLabel_one": " following",
+      "followingLabel_other": " following"
     },
     "screens": {
       "bug0": "Permission required",

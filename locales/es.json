@@ -3856,7 +3856,13 @@
       "uploadFailed": "No se pudo subir la foto. Inténtalo de nuevo.",
       "close": "Cerrar",
       "reportBug": "Informar de un error",
-      "settings": "Ajustes"
+      "settings": "Ajustes",
+      "postsLabel_one": " publicación",
+      "postsLabel_other": " publicaciones",
+      "followersLabel_one": " seguidor",
+      "followersLabel_other": " seguidores",
+      "followingLabel_one": " seguido",
+      "followingLabel_other": " seguidos"
     },
     "screens": {
       "bug0": "Permiso necesario",

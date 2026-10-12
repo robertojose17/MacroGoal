@@ -819,7 +819,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               <View style={styles.igStatsRow}>
                 <TouchableOpacity onPress={() => {}} activeOpacity={0.7} style={styles.igStatItem}>
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{postsCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.postsLabel')}</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.postsLabel', { count: postsCount })}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -830,7 +830,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                   style={styles.igStatItem}
                 >
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{followersCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.followersLabel')}</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.followersLabel', { count: followersCount ?? 0 })}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -841,7 +841,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                   style={styles.igStatItem}
                 >
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{followingCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.followingLabel')}</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.followingLabel', { count: followingCount ?? 0 })}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1281,6 +1281,7 @@ const styles = StyleSheet.create({
   },
   igInfoCol: {
     flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
     gap: 4,
   },
@@ -1312,19 +1313,23 @@ const styles = StyleSheet.create({
   },
   igStatsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 16,
+    columnGap: 12,
+    rowGap: 6,
     marginTop: 4,
   },
   igStatItem: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    maxWidth: '100%',
   },
   igStatNumber: {
     fontSize: 14,
     fontWeight: '700',
   },
   igStatLabel: {
+    flexShrink: 1,
     fontSize: 13,
     fontWeight: '400',
   },

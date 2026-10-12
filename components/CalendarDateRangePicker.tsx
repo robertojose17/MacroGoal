@@ -230,7 +230,7 @@ export default function CalendarDateRangePicker({
                 {getInstructionText()}
               </Text>
               {startDate && endDate && (
-                <TouchableOpacity onPress={handleReset}>
+                <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
                   <Text style={[styles.resetText, { color: colors.primary }]}>
                     {t('localization.shared.reset')}
                   </Text>
@@ -370,14 +370,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   instructionContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'stretch',
+    gap: 6,
     marginBottom: spacing.sm,
   },
   instructionText: {
     ...typography.caption,
     fontSize: 13,
+  },
+  resetButton: {
+    alignSelf: 'flex-end',
+    maxWidth: '100%',
+    paddingVertical: 4,
   },
   resetText: {
     ...typography.caption,
