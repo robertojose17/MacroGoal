@@ -507,7 +507,7 @@ export default function CopyFromPreviousScreen() {
                     {formatDisplayDate(dateData.date)}
                   </Text>
                   <Text style={[styles.dateCardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {dateData.itemCount} {dateData.itemCount === 1 ? 'item' : 'items'} • {Math.round(dateData.totalCalories)} kcal
+                    {t('localization.completion.itemCount', { count: dateData.itemCount })} • {Math.round(dateData.totalCalories)} kcal
                   </Text>
                 </View>
                 <IconSymbol
@@ -615,10 +615,7 @@ export default function CopyFromPreviousScreen() {
                             {formatHourLabel(group.hour)}
                           </Text>
                           <Text style={[styles.mealSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                            {group.entries.length}
-                            <Text>
-                              {group.entries.length === 1 ? ' item' : ' items'}
-                            </Text>
+                            {t('localization.completion.itemCount', { count: group.entries.length })}
                           </Text>
                         </View>
                       </View>

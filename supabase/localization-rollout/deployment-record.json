@@ -1,0 +1,39 @@
+{
+  "project": "esgptfiofoaeguslgvcq",
+  "verified_at": "2026-10-12T20:02:15Z",
+  "schema": "applied_and_verified_nullable_text_en_es_check",
+  "functions": {
+    "ai-coach": {
+      "status": "deployed_and_source_bytes_verified",
+      "live_version": 153,
+      "verify_jwt": true,
+      "live_bundle_sha256": "e597d477ac3c4c9de7b05248347e943283d94349a5da3bdd995ebdf40c81ae65",
+      "updated_at": 1791834539995,
+      "package_file_sha256": {
+        "index.ts": "79ddb03f37b88273094a999d37588edd4a74b9f48f336cbf7c3b03aed8831927"
+      }
+    },
+    "daily-morning-notifications": {
+      "status": "deployed_and_source_bytes_verified",
+      "live_version": 14,
+      "verify_jwt": false,
+      "live_bundle_sha256": "b818d2d9dae9809a2101841c1c13f4a518125e256752464c8217119bde5771e3",
+      "updated_at": 1791834572443,
+      "package_file_sha256": {
+        "index.ts": "3e4467adc3dbbd096dd2748f486560641f84db7ce22c47c67b0b301e8971cdb5",
+        "_shared/onesignal.ts": "67587f7525d99bb327027218c328e3da499b97f785d71c8ea1182cc883222deb"
+      }
+    },
+    "streak-risk-notifications": {
+      "status": "deployed_and_source_bytes_verified",
+      "live_version": 15,
+      "verify_jwt": false,
+      "live_bundle_sha256": "c07a7735de36889cf75446542224a2f99d7c2ae20cc1de6527276222892e0d89",
+      "updated_at": 1791835321381,
+      "package_file_sha256": {
+        "index.ts": "516a4ca5280ef87c60fcca3ae22987f56d0967e87a7a945043a66e9e7b9898f2",
+        "_shared/onesignal.ts": "67587f7525d99bb327027218c328e3da499b97f785d71c8ea1182cc883222deb"
+      }
+    }
+  }
+}

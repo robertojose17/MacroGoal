@@ -3785,7 +3785,12 @@
       "acceptCreatorTerms": "He leído y acepto los Términos del Programa de Creadores de Macro Goal",
       "continue": "Continuar",
       "emailPlaceholder": "tu@email.com",
-      "paypalPlaceholder": "tu@paypal.com"
+      "paypalPlaceholder": "tu@paypal.com",
+      "itemCount_one": "{{count}} alimento",
+      "itemCount_other": "{{count}} alimentos",
+      "planNotFound": "No se encontró el plan.",
+      "transactionPrefix": "Transacción: ",
+      "user": "Usuario"
     },
     "profileUi": {
       "justNow": "ahora mismo",

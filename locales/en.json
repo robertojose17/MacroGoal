@@ -3785,7 +3785,12 @@
       "acceptCreatorTerms": "I have read and agree to the Macro Goal Creator Program Terms",
       "continue": "Continue",
       "emailPlaceholder": "your@email.com",
-      "paypalPlaceholder": "your@paypal.com"
+      "paypalPlaceholder": "your@paypal.com",
+      "itemCount_one": "{{count}} item",
+      "itemCount_other": "{{count}} items",
+      "planNotFound": "Plan not found.",
+      "transactionPrefix": "Txn: ",
+      "user": "User"
     },
     "profileUi": {
       "justNow": "just now",

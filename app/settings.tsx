@@ -1008,7 +1008,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           <Text style={[styles.userName, { color: isDark ? colors.textDark : colors.text }]}>
-            {user.name || 'User'}
+            {user.name || t('localization.completion.user')}
           </Text>
 
           {user.username ? (

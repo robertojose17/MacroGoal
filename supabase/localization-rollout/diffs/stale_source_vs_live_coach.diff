@@ -1,0 +1,477 @@
+--- downloaded_source
++++ live_v152
+@@ -5,7 +5,7 @@
+ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+ const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
+ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+-const DEFAULT_MODEL = "google/gemini-2.5-flash";
++const DEFAULT_MODEL = "google/gemini-2.5-pro";
+ 
+ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
+   auth: { persistSession: false },
+@@ -125,6 +125,34 @@
+   }
+ }
+ 
++// Strip MEMORY_UPDATE blocks from text and upsert them into coach_memory
++async function processMemoryUpdates(text: string, userId: string): Promise<string> {
++  const memoryRegex = /MEMORY_UPDATE:\s*(\{[\s\S]*?\})(?=\s*(?:MEMORY_UPDATE:|ACTION_PROPOSAL:|$))/g;
++  const matches = [...text.matchAll(memoryRegex)];
++  if (matches.length === 0) return text;
++
++  for (const match of matches) {
++    try {
++      const parsed = JSON.parse(match[1]);
++      const key = parsed.key as string;
++      const value = parsed.value as string;
++      const category = (parsed.category as string) || "general";
++      if (key && value) {
++        await supabase.from("coach_memory").upsert(
++          { user_id: userId, key, value, category, updated_at: new Date().toISOString() },
++          { onConflict: "user_id,key" }
++        );
++        console.log("[AICoach] Memory upserted:", key, "=", value, "category:", category);
++      }
++    } catch (e) {
++      console.warn("[AICoach] Failed to parse MEMORY_UPDATE:", match[1], e);
++    }
++  }
++
++  // Strip all MEMORY_UPDATE blocks from the visible text
++  return text.replace(/MEMORY_UPDATE:\s*\{[\s\S]*?\}(?=\s*(?:MEMORY_UPDATE:|ACTION_PROPOSAL:|$))/g, "").trim();
++}
++
+ Deno.serve(async (req) => {
+   if (req.method === "OPTIONS") {
+     return new Response("ok", { headers: corsHeaders });
+@@ -175,6 +203,7 @@
+       weight_unit?: string;
+       conversation_id?: string;
+       is_first_message?: boolean;
++      is_returning_user_open?: boolean;
+       language?: string;
+     };
+     try {
+@@ -190,7 +219,8 @@
+     const weightUnit = body.weight_unit || "lb";
+     const conversationId = body.conversation_id || null;
+     const language = body.language || "en";
+-    console.log("[AICoach] language:", language);
++    const isReturningUserOpen = body.is_returning_user_open === true;
++    console.log("[AICoach] language:", language, "returning_user_open:", isReturningUserOpen);
+ 
+     if (!messages.length) {
+       return new Response(JSON.stringify({ error: "No messages provided" }), {
+@@ -199,15 +229,18 @@
+       });
+     }
+ 
+-    // __FIRST_INTERACTION__ is a system-triggered welcome sentinel — bypass subscription gate entirely
++    // Sentinel detection
+     const lastMessageContent = messages[messages.length - 1]?.content;
+     const isFirstInteraction = body.is_first_message === true || lastMessageContent === "__FIRST_INTERACTION__";
++    const isReturningOpen = isReturningUserOpen || lastMessageContent === "__RETURNING_USER_OPEN__";
+ 
+     // Subscription gating is handled by the frontend (coach.tsx) — backend only verifies auth.
+ 
+     const userId = authUser.id;
+     const today = new Date().toISOString().split("T")[0];
+     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
++    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
++    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+ 
+     const [
+       profileResult,
+@@ -215,12 +248,21 @@
+       mealsResult,
+       checkInsResult,
+       memoryResult,
++      tdeeResult,
++      trackerEntriesResult,
++      coachActionsResult,
++      lastInsightResult,
+     ] = await Promise.all([
+       supabase.from("users").select("name, username, sex, date_of_birth, height, current_weight, goal_weight, activity_level, weight_unit").eq("id", userId).maybeSingle(),
+       supabase.from("goals").select("daily_calories, protein_g, carbs_g, fats_g, fiber_g, goal_type, macro_preset").eq("user_id", userId).eq("is_active", true).order("created_at", { ascending: false }).limit(1),
+       supabase.from("meals").select("date, meal_items(calories, protein, carbs, fats, fiber)").eq("user_id", userId).gte("date", fourteenDaysAgo).lte("date", today).order("date", { ascending: false }),
+-      supabase.from("check_ins").select("date, weight").eq("user_id", userId).gte("date", fourteenDaysAgo).order("date", { ascending: false }).limit(14),
+-      supabase.from("coach_memory").select("key, value").eq("user_id", userId).order("updated_at", { ascending: false }).limit(20),
++      supabase.from("check_ins").select("date, weight").eq("user_id", userId).gte("date", thirtyDaysAgo).order("date", { ascending: false }).limit(30),
++      supabase.from("coach_memory").select("key, value, category").eq("user_id", userId).order("updated_at", { ascending: false }).limit(50),
++      supabase.from("tdee_estimates").select("week_start, estimated_tdee, prescribed_calories, adjustment_amount, avg_calories_eaten, avg_weight_lbs, prev_avg_weight_lbs, data_days_count, adjustment_applied").eq("user_id", userId).order("week_start", { ascending: false }).limit(4),
++      supabase.from("tracker_entries").select("date, value, tracker_id, trackers(name, emoji, unit, goal_value)").eq("user_id", userId).gte("date", sevenDaysAgo).lte("date", today).order("date", { ascending: false }),
++      supabase.from("coach_actions").select("action_type, new_value, created_at, status").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
++      // Fetch latest unread insight for returning user open
++      supabase.from("coach_daily_insights").select("insight_text, condition_type, created_at").eq("user_id", userId).eq("is_read", false).order("created_at", { ascending: false }).limit(1),
+     ]);
+ 
+     const profile = profileResult.data;
+@@ -228,6 +270,10 @@
+     const mealsRaw = mealsResult.data || [];
+     const checkIns = checkInsResult.data || [];
+     const memoryItems = memoryResult.data || [];
++    const tdeeRows = tdeeResult.data || [];
++    const trackerEntries = trackerEntriesResult.data || [];
++    const coachActions = coachActionsResult.data || [];
++    const latestInsight = lastInsightResult.data?.[0] || null;
+ 
+     // Aggregate nutrition by date
+     const nutritionByDate: Record<string, { calories: number; protein: number; carbs: number; fats: number; fiber: number }> = {};
+@@ -248,7 +294,37 @@
+       .slice(0, 14)
+       .map(([date, n]) => ({ date, ...n }));
+ 
+-    console.log("[AICoach] Context — profile:", !!profile, "goals:", !!goals, "nutrition days:", nutritionLogs.length, "weight:", checkIns.length);
++    // Today's nutrition
++    const todayNutrition = nutritionByDate[today] || null;
++
++    // Food patterns: last 7 days avg
++    const last7Days = nutritionLogs.filter((l) => l.date >= sevenDaysAgo);
++    const foodPatternBlock = last7Days.length > 0
++      ? (() => {
++          const avg = last7Days.reduce((acc, l) => {
++            acc.calories += l.calories;
++            acc.protein += l.protein;
++            acc.carbs += l.carbs;
++            acc.fats += l.fats;
++            return acc;
++          }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
++          const n = last7Days.length;
++          return `FOOD PATTERNS (last 7 days avg, ${n} days logged):\n- Avg calories: ${Math.round(avg.calories / n)} kcal\n- Avg protein: ${Math.round(avg.protein / n)}g\n- Avg carbs: ${Math.round(avg.carbs / n)}g\n- Avg fats: ${Math.round(avg.fats / n)}g`;
++        })()
++      : "FOOD PATTERNS (last 7 days): No data logged";
++
++    // Streak / consistency
++    const loggedDates = new Set(nutritionLogs.map((l) => l.date));
++    let streak = 0;
++    for (let i = 0; i < 30; i++) {
++      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
++      if (loggedDates.has(d)) streak++;
++      else break;
++    }
++    const consistencyDays = loggedDates.size;
++    const streakBlock = `STREAK & CONSISTENCY:\n- Current logging streak: ${streak} day${streak !== 1 ? "s" : ""}\n- Total days logged (last 14): ${consistencyDays}`;
++
++    console.log("[AICoach] Context — profile:", !!profile, "goals:", !!goals, "nutrition days:", nutritionLogs.length, "weight:", checkIns.length, "tdee rows:", tdeeRows.length, "tracker entries:", trackerEntries.length, "coach actions:", coachActions.length);
+ 
+     const dbWeightUnit = (profile as any)?.weight_unit || weightUnit || "lb";
+     const wUnit = dbWeightUnit === "kg" ? "kg" : "lb";
+@@ -262,14 +338,7 @@
+     }
+ 
+     const profileBlock = profile
+-      ? `USER PROFILE:
+-- Name: ${(profile as any).name || (profile as any).username || "User"}
+-- Age: ${age}
+-- Height: ${(profile as any).height ? `${(profile as any).height} cm` : "unknown"}
+-- Sex: ${(profile as any).sex || "unknown"}
+-- Current weight: ${(profile as any).current_weight ? `${toDisplayWeight((profile as any).current_weight)} ${wUnit}` : "unknown"}
+-- Goal weight: ${(profile as any).goal_weight ? `${toDisplayWeight((profile as any).goal_weight)} ${wUnit}` : "unknown"}
+-- Activity level: ${(profile as any).activity_level || "unknown"}`
++      ? `USER PROFILE:\n- Name: ${(profile as any).name || (profile as any).username || "User"}\n- Age: ${age}\n- Height: ${(profile as any).height ? `${(profile as any).height} cm` : "unknown"}\n- Sex: ${(profile as any).sex || "unknown"}\n- Current weight: ${(profile as any).current_weight ? `${toDisplayWeight((profile as any).current_weight)} ${wUnit}` : "unknown"}\n- Goal weight: ${(profile as any).goal_weight ? `${toDisplayWeight((profile as any).goal_weight)} ${wUnit}` : "unknown"}\n- Activity level: ${(profile as any).activity_level || "unknown"}`
+       : "USER PROFILE: Not available";
+ 
+     let nutritionBlock = "RECENT NUTRITION (last 14 days):\n";
+@@ -281,16 +350,27 @@
+       nutritionBlock += "- No nutrition data logged yet\n";
+     }
+ 
++    // Today's nutrition block
++    const todayBlock = todayNutrition
++      ? `TODAY (${today}):\n- Calories logged: ${Math.round(todayNutrition.calories)} kcal${goals ? ` / ${(goals as any).daily_calories ?? "?"} target` : ""}\n- Protein: ${Math.round(todayNutrition.protein)}g${goals ? ` / ${(goals as any).protein_g ?? "?"}g target` : ""}\n- Carbs: ${Math.round(todayNutrition.carbs)}g | Fats: ${Math.round(todayNutrition.fats)}g`
++      : `TODAY (${today}): Nothing logged yet`;
++
+     const goalsBlock = goals
+-      ? `CURRENT DAILY TARGETS:
+-- Daily calories: ${(goals as any).daily_calories ?? "not set"} kcal
+-- Protein: ${(goals as any).protein_g ?? "not set"}g
+-- Carbs: ${(goals as any).carbs_g ?? "not set"}g
+-- Fats: ${(goals as any).fats_g ?? "not set"}g
+-- Goal type: ${(goals as any).goal_type || "not set"}`
++      ? `CURRENT DAILY TARGETS:\n- Daily calories: ${(goals as any).daily_calories ?? "not set"} kcal\n- Protein: ${(goals as any).protein_g ?? "not set"}g\n- Carbs: ${(goals as any).carbs_g ?? "not set"}g\n- Fats: ${(goals as any).fats_g ?? "not set"}g\n- Goal type: ${(goals as any).goal_type || "not set"}`
+       : "CURRENT DAILY TARGETS: Not set";
+ 
+-    let weightBlock = "WEIGHT TREND:\n";
++    // Adaptive TDEE block
++    let tdeeBlock = "ADAPTIVE TDEE HISTORY (last 4 weeks):\n";
++    if (tdeeRows.length > 0) {
++      for (const row of tdeeRows) {
++        const r = row as any;
++        tdeeBlock += `- Week of ${r.week_start}: estimated TDEE ${r.estimated_tdee ?? "?"} kcal | prescribed ${r.prescribed_calories ?? "?"} kcal | avg eaten ${r.avg_calories_eaten != null ? Math.round(r.avg_calories_eaten) : "?"} kcal | avg weight ${r.avg_weight_lbs != null ? r.avg_weight_lbs.toFixed(1) : "?"} ${wUnit} | adjustment ${r.adjustment_amount != null ? (r.adjustment_amount >= 0 ? "+" : "") + r.adjustment_amount : "?"} kcal | applied: ${r.adjustment_applied ? "yes" : "no"}\n`;
++      }
++    } else {
++      tdeeBlock += "- No TDEE adjustment history yet\n";
++    }
++
++    let weightBlock = "WEIGHT TREND (last 30 days):\n";
+     if (checkIns.length > 0) {
+       for (const w of checkIns) {
+         weightBlock += `- ${(w as any).date}: ${toDisplayWeight((w as any).weight)} ${wUnit}\n`;
+@@ -299,13 +379,115 @@
+       weightBlock += "- No weight data\n";
+     }
+ 
++    // Trackers block
++    let trackersBlock = "HABIT TRACKERS (last 7 days):\n";
++    if (trackerEntries.length > 0) {
++      // Group entries by tracker
++      const trackerMap: Record<string, { name: string; emoji: string; unit: string; goal_value: number | null; entries: number[] }> = {};
++      for (const entry of trackerEntries) {
++        const e = entry as any;
++        const tid = e.tracker_id as string;
++        const tracker = e.trackers as any;
++        if (!trackerMap[tid]) {
++          trackerMap[tid] = {
++            name: tracker?.name || tid,
++            emoji: tracker?.emoji || "",
++            unit: tracker?.unit || "",
++            goal_value: tracker?.goal_value ?? null,
++            entries: [],
++          };
++        }
++        trackerMap[tid].entries.push(Number(e.value) || 0);
++      }
++      for (const [, t] of Object.entries(trackerMap)) {
++        const avg = t.entries.reduce((a, b) => a + b, 0) / t.entries.length;
++        const daysHitGoal = t.goal_value != null ? t.entries.filter((v) => v >= t.goal_value!).length : null;
++        const goalStr = t.goal_value != null ? ` (goal: ${t.goal_value}${t.unit ? " " + t.unit : ""})` : "";
++        const hitStr = daysHitGoal != null ? ` — ${daysHitGoal} day${daysHitGoal !== 1 ? "s" : ""} hit goal` : "";
++        trackersBlock += `- ${t.emoji ? t.emoji + " " : ""}${t.name}: ${t.entries.length} entries — avg ${avg.toFixed(1)}${t.unit ? " " + t.unit : ""}/day${goalStr}${hitStr}\n`;
++      }
++    } else {
++      trackersBlock += "- No habit trackers set up yet\n";
++    }
++
++    // Build memory block grouped by category
+     let memoryBlock = "COACH MEMORY:\n";
+     if (memoryItems.length > 0) {
++      // Group by category
++      const categoryMap: Record<string, { key: string; value: string }[]> = {};
+       for (const m of memoryItems) {
+-        memoryBlock += `- ${(m as any).key}: ${(m as any).value}\n`;
++        const cat = (m as any).category || "general";
++        if (!categoryMap[cat]) categoryMap[cat] = [];
++        categoryMap[cat].push({ key: (m as any).key, value: (m as any).value });
++      }
++      const categoryOrder = ["food_preferences", "restrictions", "schedule", "results", "onboarding", "general"];
++      const allCats = [...new Set([...categoryOrder, ...Object.keys(categoryMap)])];
++      for (const cat of allCats) {
++        if (!categoryMap[cat] || categoryMap[cat].length === 0) continue;
++        memoryBlock += `[${cat}]\n`;
++        for (const item of categoryMap[cat]) {
++          memoryBlock += `- ${item.key}: ${item.value}\n`;
++        }
++        memoryBlock += "\n";
+       }
+     } else {
+       memoryBlock += "- No memory yet\n";
++    }
++
++    // Coach actions block
++    let coachActionsBlock = "COACH ACTION HISTORY (what I've done for this user):\n";
++    if (coachActions.length > 0) {
++      for (const action of coachActions) {
++        const a = action as any;
++        const dateStr = a.created_at ? new Date(a.created_at).toISOString().split("T")[0] : "unknown date";
++        const newValStr = a.new_value ? ` — ${JSON.stringify(a.new_value)}` : "";
++        coachActionsBlock += `- ${dateStr}: ${a.action_type}${newValStr} (status: ${a.status || "unknown"})\n`;
++      }
++    } else {
++      coachActionsBlock += "- No previous coach actions\n";
++    }
++
++    // Build returning user context block for __RETURNING_USER_OPEN__
++    let returningUserContextBlock = "";
++    if (isReturningOpen) {
++      const recentLogDays = nutritionLogs.length;
++      const last7LogDays = last7Days.length;
++      const avgProteinLast7 = last7Days.length > 0
++        ? Math.round(last7Days.reduce((s, l) => s + l.protein, 0) / last7Days.length)
++        : null;
++      const avgCaloriesLast7 = last7Days.length > 0
++        ? Math.round(last7Days.reduce((s, l) => s + l.calories, 0) / last7Days.length)
++        : null;
++      const proteinGoal = goals ? (goals as any).protein_g : null;
++      const calorieGoal = goals ? (goals as any).daily_calories : null;
++
++      // Weight trend
++      let weightTrendNote = "";
++      if (checkIns.length >= 2) {
++        const newest = checkIns[0] as any;
++        const oldest = checkIns[checkIns.length - 1] as any;
++        const diffLbs = (Number(newest.weight) - Number(oldest.weight)) * 2.20462;
++        if (Math.abs(diffLbs) >= 0.5) {
++          weightTrendNote = diffLbs < 0
++            ? `down ${Math.abs(diffLbs).toFixed(1)} ${wUnit} over the last ${checkIns.length} weigh-ins`
++            : `up ${diffLbs.toFixed(1)} ${wUnit} over the last ${checkIns.length} weigh-ins`;
++        }
++      }
++
++      // Unread insight from nightly analysis
++      const insightNote = latestInsight
++        ? `UNREAD COACH INSIGHT (from nightly analysis, condition: ${(latestInsight as any).condition_type}): "${(latestInsight as any).insight_text}"`
++        : "";
++
++      returningUserContextBlock = `
++RETURNING USER OPEN CONTEXT:
++- Streak: ${streak} day${streak !== 1 ? "s" : ""} logged in a row
++- Days logged last 7: ${last7LogDays}
++- Avg calories last 7 days: ${avgCaloriesLast7 ?? "no data"}${calorieGoal ? ` / ${calorieGoal} goal` : ""}
++- Avg protein last 7 days: ${avgProteinLast7 ?? "no data"}${proteinGoal ? `g / ${proteinGoal}g goal` : ""}
++${weightTrendNote ? `- Weight trend: ${weightTrendNote}` : ""}
++${insightNote}
++`;
+     }
+ 
+     // Derive onboarding state from coach_memory for use in the system prompt
+@@ -334,10 +516,20 @@
+ 
+ ${goalsBlock}
+ 
++${tdeeBlock}
+ ${nutritionBlock}
++${todayBlock}
++
++${foodPatternBlock}
++
++${streakBlock}
++
+ ${weightBlock}
++${trackersBlock}
+ ${memoryBlock}
+ 
++${coachActionsBlock}
++${returningUserContextBlock}
+ Today: ${today}
+ 
+ CONVERSATION PROGRESSION RULES:
+@@ -351,10 +543,18 @@
+ - The COACH MEMORY section above shows what you already know. Check it before asking anything.
+ - If "onboarding_experience" is not in memory, you need to learn the user's experience level. If "onboarding_challenge" is not in memory, you need to learn their biggest challenge.
+ - Never ask two onboarding questions at once. Never say "Step 1 of 3" or anything form-like. Just conversation.
+-- When the user's answer reveals their experience level, use the save_memory tool to store: key="onboarding_experience", value one of: "beginner" / "intermediate" / "advanced"
+-- When the user's answer reveals their biggest challenge, use save_memory: key="onboarding_challenge", value one of: "cravings" / "not_seeing_results" / "inconsistency" / "dont_know_what_to_eat"
+-- When the user's answer reveals whether they want a meal plan, use save_memory: key="onboarding_meal_plan", value one of: "yes" / "no"
++- When the user's answer reveals their experience level, use the save_memory tool to store: key="onboarding_experience", value one of: "beginner" / "intermediate" / "advanced", category="onboarding"
++- When the user's answer reveals their biggest challenge, use save_memory: key="onboarding_challenge", value one of: "cravings" / "not_seeing_results" / "inconsistency" / "dont_know_what_to_eat", category="onboarding"
++- When the user's answer reveals whether they want a meal plan, use save_memory: key="onboarding_meal_plan", value one of: "yes" / "no", category="onboarding"
+ - After saving, adapt your tone and advice from that point forward based on what you learned.
++
++MEMORY CATEGORIZATION RULES — when using save_memory, always pick the right category:
++- User mentions food they like or dislike (e.g. "I love chicken", "I hate broccoli") → category: food_preferences
++- User mentions dietary restrictions (no pork, lactose intolerant, vegan, gluten-free, allergies) → category: restrictions
++- User mentions their schedule (works nights, trains mornings, busy on weekends, meal preps Sundays) → category: schedule
++- User mentions past results (lost X lbs, gained muscle, hit a plateau in month X, best weight was Y) → category: results
++- Onboarding keys (onboarding_experience, onboarding_challenge, onboarding_meal_plan) → category: onboarding
++- Everything else → category: general
+ 
+ TONE BY EXPERIENCE LEVEL (apply once onboarding_experience is known):
+ - beginner: explain terms, be encouraging, never assume knowledge, celebrate small wins
+@@ -372,7 +572,35 @@
+ - Sound like a real coach introducing themselves, not a software product
+ - Example tone: "Hi, I'm your nutrition and body transformation coach. I can see you're working toward [their goal] and I'm here to help you get there with a plan built around your actual life. Before I put anything together — have you tracked macros before, or is this new territory for you?"
+ 
++When you receive [RETURNING_USER_OPEN], write a proactive opening message that:
++- MUST reference something SPECIFIC from the RETURNING USER OPEN CONTEXT above — use the actual numbers (streak days, avg protein, avg calories, weight trend, or the unread insight if present)
++- If there is an UNREAD COACH INSIGHT, lead with that insight naturally — mention what you noticed and why it matters, then ask one actionable question
++- If no unread insight, pick the single most interesting data point from the context (e.g. streak, protein gap, weight trend) and reference it with the exact number
++- Do NOT give a generic "welcome back" or "great to see you" opener
++- Do NOT ask how they're doing or how things are going
++- Do NOT give a full analysis or list multiple observations
++- 2-3 sentences max, no markdown, no lists
++- Example (streak): "You've logged 6 days in a row — that's real momentum. Your protein has been averaging about 20g under your goal though. Want to fix that today?"
++- Example (insight): "I noticed your weight has barely moved even though your calories look right — your protein has been consistently low at around 85g vs your 140g goal. That's likely what's stalling things. Want to talk about it?"
++- Example (weight trend): "You're down 2.3 lbs over the last two weeks — that's right on track. What are we working on today?"
++
+ In subsequent messages, if onboarding_experience or onboarding_challenge are not yet in memory, weave in ONE question naturally when the moment is right. Never interrupt a direct question the user asked just to collect onboarding data — answer them first, then ask.
++
++ADAPTIVE TDEE AWARENESS:
++- The app automatically adjusts the user's calorie target weekly based on actual intake vs weight change.
++- If the TDEE history shows consistent adjustments downward, the user may be in a prolonged deficit — consider recommending a diet break or maintenance week.
++- If prescribed calories keep dropping but weight isn't moving, the user may be underreporting food.
++- Reference specific weeks and numbers when discussing calorie adjustments.
++
++TRACKER AWARENESS:
++- Low sleep (under 7 hrs) correlates with increased hunger and cravings — mention this if the user complains about hunger or cravings.
++- Low water intake can cause false hunger signals — mention this if the user is struggling with overeating.
++- Low steps combined with a calorie deficit may slow metabolism — consider recommending NEAT (non-exercise activity thermogenesis).
++
++COACH ACTIONS AWARENESS:
++- The COACH ACTION HISTORY shows changes you previously made for this user. Reference them naturally.
++- If you adjusted calories recently, acknowledge it: "I lowered your calories last week to X — how has that been feeling?"
++- Never propose the same action twice in a row without checking if the previous one was effective.
+ 
+ INSTRUCTIONS:
+ - Answer directly and concisely. Use the user's actual data.
+@@ -382,16 +610,19 @@
+ - CRITICAL: When adding food to diary, write only 1 sentence then append ACTION_PROPOSAL JSON.
+ - When proposing a goal change: ACTION_PROPOSAL: {"action_type":"update_goal","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"reason":"...","current_value":...,"proposed_value":...,"expected_effect":"..."}}
+ - When creating a meal plan: ACTION_PROPOSAL: {"action_type":"create_meal_plan","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"plan_name":"...","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD","reason":"...","days":[{"date":"YYYY-MM-DD","meals":[{"meal_type":"breakfast","food_name":"...","calories":0,"protein":0,"carbs":0,"fats":0,"fiber":0,"grams":0,"quantity":1,"serving_unit":"serving","dish_description":"..."}]}]}}
+-- When adding food to diary: ACTION_PROPOSAL: {"action_type":"add_food_to_diary","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"food_name":"...","calories":0,"protein":0,"carbs":0,"fats":0,"date":"YYYY-MM-DD","meal_type":"lunch","quantity":1,"serving_unit":"serving"}}`;
++- When adding food to diary: ACTION_PROPOSAL: {"action_type":"add_food_to_diary","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"food_name":"...","calories":0,"protein":0,"carbs":0,"fats":0,"date":"YYYY-MM-DD","meal_type":"lunch","quantity":1,"serving_unit":"serving"}}
++- When recommending a calorie adjustment based on data: write 1-2 sentences with the evidence, then append ACTION_PROPOSAL: {"action_type":"adjust_calories","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"reason":"...","current_calories":<number>,"proposed_calories":<number>,"adjustment_amount":<number>,"expected_effect":"...","evidence":"..."}}`;
+ 
+     // Gemini doesn't support system role
+     const apiMessages: { role: string; content: string }[] = [
+       { role: "user", content: `[SYSTEM INSTRUCTIONS]\n${systemPrompt}` },
+-      { role: "assistant", content: "Understood. I have your full profile, goals, and nutrition history. How can I help?" },
++      { role: "assistant", content: "Understood. I have your full profile, goals, nutrition history, TDEE trends, habit trackers, and coach action history. How can I help?" },
+       ...messages.map((m) => ({
+         role: m.role,
+-        // Map the frontend sentinel to the trigger token the prompt expects
+-        content: m.content === "__FIRST_INTERACTION__" ? "[FIRST_INTERACTION_TRIGGER]" : m.content,
++        content:
++          m.content === "__FIRST_INTERACTION__" ? "[FIRST_INTERACTION_TRIGGER]" :
++          m.content === "__RETURNING_USER_OPEN__" ? "[RETURNING_USER_OPEN]" :
++          m.content,
+       })),
+     ];
+ 
+@@ -465,8 +696,11 @@
+           fullText = fallback;
+         }
+ 
++        // Process and strip MEMORY_UPDATE blocks, upsert to coach_memory
++        const correctedText = await processMemoryUpdates(fullText, userId);
++
+         // Parse ACTION_PROPOSAL from full text
+-        const actionProposalRaw = extractActionProposal(fullText);
++        const actionProposalRaw = extractActionProposal(correctedText);
+         let actionProposal: Record<string, unknown> | null = null;
+         if (actionProposalRaw) {
+           const proposal = actionProposalRaw as Record<string, unknown>;
+@@ -480,13 +714,24 @@
+         }
+ 
+         // Generate suggestions based on assistant message content
+-        const suggestions = generateSuggestions(fullText);
++        const suggestions = generateSuggestions(correctedText);
+         console.log("[AICoach] Suggestions generated:", suggestions ? suggestions.length : 0);
+ 
+-        // Send done event with action_proposal and suggestions
+-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, action_proposal: actionProposal, suggestions })}\n\n`));
+-
+-        // Message persistence is handled by the frontend after stream completes.
++        // Mark the unread insight as read if this was a returning user open
++        if (isReturningOpen && latestInsight) {
++          try {
++            await supabase
++              .from("coach_daily_insights")
++              .update({ is_read: true })
++              .eq("user_id", userId)
++              .eq("is_read", false);
++          } catch (e) {
++            console.warn("[AICoach] Failed to mark insights as read:", e);
++          }
++        }
++
++        // Send done event with corrected_text, action_proposal, and suggestions
++        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, corrected_text: correctedText, action_proposal: actionProposal, suggestions })}\n\n`));
+ 
+         controller.close();
+       },
+@@ -511,3 +756,4 @@
+     });
+   }
+ });
++

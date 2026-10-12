@@ -206,7 +206,7 @@ export default function MealPlanDetailScreen() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[MealPlanDetail] Error loading plan:', msg);
-      setError(t('mealPlanDetail.failedToLoad'));
+      setError('mealPlanDetail.failedToLoad');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -410,7 +410,7 @@ export default function MealPlanDetailScreen() {
           <View style={styles.headerRight} />
         </View>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: textColor }]}>{error ?? 'Plan not found.'}</Text>
+          <Text style={[styles.errorText, { color: textColor }]}>{error ? t(error) : t('localization.completion.planNotFound')}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadPlan}>
             <Text style={styles.retryButtonText}>{t('mealPlanDetail.retry')}</Text>
           </TouchableOpacity>

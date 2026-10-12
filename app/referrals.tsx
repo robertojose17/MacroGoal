@@ -410,7 +410,7 @@ export default function ReferralsScreen() {
                     <Text style={[styles.txAmount, { color: textColor }]}>{amt}</Text>
                     {payout.paypal_transaction_id ? (
                       <Text style={[styles.txCommission, { color: mutedColor }]}>
-                        {'Txn: '}
+                        {t('localization.completion.transactionPrefix')}
                         {payout.paypal_transaction_id}
                       </Text>
                     ) : null}

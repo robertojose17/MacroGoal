@@ -2,6 +2,7 @@ import { useCommunityPrivacyRolloutLifecycle } from '@/features/communityPrivacy
 
 import '@/lib/i18n';
 import { languageReady } from '@/lib/i18n';
+import { startLanguagePreferenceSync } from '@/lib/languagePreferenceSync';
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from "react";
 import { Stack, router } from "expo-router";
@@ -70,13 +71,29 @@ try {
 }
 
 export default function RootLayout() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [languageHydrated, setLanguageHydrated] = useState(false);
   useEffect(() => {
     let mounted = true;
-    languageReady.then(() => { if (mounted) setLanguageHydrated(true); });
-    return () => { mounted = false; };
-  }, []);
+    let stopLanguageSync: (() => void) | undefined;
+    languageReady.then(() => {
+      if (!mounted) return;
+      setLanguageHydrated(true);
+      // Notification preference sync must never block app startup or change UI language.
+      try {
+        stopLanguageSync = startLanguagePreferenceSync({
+          getLanguage: () => i18n.resolvedLanguage || i18n.language,
+          subscribeLanguage: (listener) => {
+            i18n.on('languageChanged', listener);
+            return () => { i18n.off('languageChanged', listener); };
+          },
+        });
+      } catch {
+        console.warn('[Language] Notification preference sync could not start.');
+      }
+    });
+    return () => { mounted = false; stopLanguageSync?.(); };
+  }, [i18n]);
   useCommunityPrivacyRolloutLifecycle();
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);

@@ -1,0 +1,22 @@
+--- live/ai-coach/index.ts
++++ draft/ai-coach/index.ts
+@@ -218,7 +218,7 @@
+     const messages = body.messages || [];
+     const weightUnit = body.weight_unit || "lb";
+     const conversationId = body.conversation_id || null;
+-    const language = body.language || "en";
++    const language = body.language === "es" ? "es" : "en";
+     const isReturningUserOpen = body.is_returning_user_open === true;
+     console.log("[AICoach] language:", language, "returning_user_open:", isReturningUserOpen);
+ 
+@@ -691,7 +691,9 @@
+         // Guard: if OpenRouter returned no tokens, send a fallback so the client never gets an empty bubble
+         if (fullText.trim().length === 0) {
+           console.warn("[AICoach] OpenRouter returned empty response — sending fallback token");
+-          const fallback = "I'm having trouble responding right now. Please try again.";
++          const fallback = language === "es"
++            ? "Estoy teniendo problemas para responder en este momento. Inténtalo de nuevo."
++            : "I'm having trouble responding right now. Please try again.";
+           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback })}\n\n`));
+           fullText = fallback;
+         }
