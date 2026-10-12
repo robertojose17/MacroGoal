@@ -1,3 +1,5 @@
+import { privatePhotoReference } from '@/utils/privatePhotoClient';
+import { PrivatePhotoImage } from '@/components/PrivatePhotoImage';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -70,7 +72,15 @@ export default function CheckInDetailsScreen() {
         setUser({ ...authUser, ...userData });
       }
 
-      setCheckIn(checkInResult.data);
+      // Resolve by owned stable photo ID. Legacy check_ins.photo_url is not download authority.
+      let photoReference: string | null = null;
+      if (authUser && checkInResult.data.user_id === authUser.id) {
+        const {data: photo} = await supabase.from('check_in_photos').select('id')
+          .eq('user_id', authUser.id).eq('check_in_id', checkInId)
+          .order('created_at', {ascending: true}).limit(1).maybeSingle();
+        if (photo) photoReference = privatePhotoReference({kind:'original',id:photo.id});
+      }
+      setCheckIn({...checkInResult.data, photo_url: photoReference});
     } catch (error) {
       console.error('[CheckInDetails] Error in loadData:', error);
     } finally {
@@ -273,8 +283,8 @@ export default function CheckInDetailsScreen() {
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
               {t('checkInDetails.photo')}
             </Text>
-            <Image
-              source={{ uri: checkIn.photo_url }}
+            <PrivatePhotoImage
+              reference={checkIn.photo_url}
               style={styles.photo}
               resizeMode="cover"
             />

@@ -1,3 +1,4 @@
+import { createOwnerMediaHandler } from './ownerMediaAdapter.ts';
 // LOCAL REVIEW CANDIDATE — not deployed. Authenticated media client cutover required.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
 import { ownedReference, checkInId, uploadType } from './photoReferenceGuard.ts';
@@ -13,7 +14,10 @@ async function boundedBody(req:Request,max:number):Promise<string>{
   finally{reader.releaseLock();}
   const bytes=new Uint8Array(size);let at=0;for(const chunk of chunks){bytes.set(chunk,at);at+=chunk.byteLength;}return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
 }
+const ownerMediaHandler=createOwnerMediaHandler();
 Deno.serve(async(req:Request)=>{
+  const incomingPath=new URL(req.url).pathname;
+  if(incomingPath.startsWith('/functions/v1/check-in-photos/media/') || incomingPath.startsWith('/check-in-photos/media/'))return ownerMediaHandler(req);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   try{
     const header=req.headers.get('Authorization');

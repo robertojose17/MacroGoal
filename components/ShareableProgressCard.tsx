@@ -1,6 +1,6 @@
 import { getAppLocale } from '@/lib/localization';
 
-import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle, useEffect } from 'react';
 import {
   View,
   Text,
@@ -148,6 +148,8 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
       : {};
 
     // useRef for stale-closure-free capture polling
+    const disposedRef = useRef(false);
+    useEffect(() => { disposedRef.current=false; return () => { disposedRef.current=true; }; }, []);
     const beforeLoadedRef = useRef(false);
     const afterLoadedRef = useRef(false);
 
@@ -177,27 +179,28 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
           const SETTLE_DELAY_MS = 150;
 
           const poll = () => {
+            if(disposedRef.current){reject(new Error('Capture canceled'));return;}
             const elapsed = Date.now() - startTime;
             const beforeReady = !beforePhoto || beforeLoadedRef.current;
             const afterReady = !afterPhoto || afterLoadedRef.current;
             const photosReady = beforeReady && afterReady;
             const timedOut = elapsed >= TIMEOUT_MS;
 
-            if (photosReady || timedOut) {
-              if (timedOut && !photosReady) {
-                console.warn('[ShareableProgressCard] Timed out waiting for photos — capturing anyway');
-              } else {
-                console.log('[ShareableProgressCard] Photos ready, waiting settle delay...');
-              }
-
+            if(timedOut&&!photosReady){reject(new Error('Private photos not loaded'));return;}
+            if (photosReady) {
               setTimeout(() => {
-                if (!viewShotRef.current) {
+                if (disposedRef.current || !viewShotRef.current) {
                   reject(new Error('ViewShot ref not available'));
                   return;
                 }
                 console.log('[ShareableProgressCard] Capturing...');
                 viewShotRef.current.capture({ format: 'png', quality: 1, result: 'tmpfile', pixelRatio: 3 }).then((uri: string) => {
-                  console.log('[ShareableProgressCard] Capture complete:', uri);
+                  if (disposedRef.current) {
+                    try { require('react-native-view-shot').releaseCapture(uri); } catch {}
+                    reject(new Error('Capture canceled'));
+                    return;
+                  }
+                  // No private temporary URI logging.
                   resolve(uri);
                 }).catch(reject);
               }, SETTLE_DELAY_MS);
@@ -293,9 +296,8 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                       setBeforeLoadedState(true);
                     }}
                     onError={() => {
-                      console.warn('[ShareableProgressCard] Before photo failed to load');
-                      beforeLoadedRef.current = true;
-                      setBeforeLoadedState(true);
+                      beforeLoadedRef.current = false;
+                      setBeforeLoadedState(false);
                     }}
                   />
                 </>
@@ -333,9 +335,8 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
                       setAfterLoadedState(true);
                     }}
                     onError={() => {
-                      console.warn('[ShareableProgressCard] After photo failed to load');
-                      afterLoadedRef.current = true;
-                      setAfterLoadedState(true);
+                      afterLoadedRef.current = false;
+                      setAfterLoadedState(false);
                     }}
                   />
                 </>

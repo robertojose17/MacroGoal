@@ -1,3 +1,6 @@
+import {privatePhotoGeneration} from '@/hooks/usePrivatePhoto';
+import { privatePhotoReference } from '@/utils/privatePhotoClient';
+import { PrivateShareableProgressCard as ShareableProgressCard } from '@/components/PrivatePhotoViews';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -17,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import ShareableProgressCard, { ShareableProgressCardHandle, PROGRESS_CARD_WIDTH, PROGRESS_CARD_HEIGHT, PhotoTransform } from '@/components/ShareableProgressCard';
+import { ShareableProgressCardHandle, PROGRESS_CARD_WIDTH, PROGRESS_CARD_HEIGHT, PhotoTransform } from '@/components/ShareableProgressCard';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { TouchableOpacity } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -478,8 +481,8 @@ export default function ShareProgressScreen() {
         ? photosData.find((p) => p.id === savedAfterId)!
         : photosData.length > 1 ? photosData[photosData.length - 1] : null;
 
-      const beforePhotoUrl: string | null = beforeEntry?.photo_url ?? null;
-      const afterPhotoUrl: string | null = afterEntry?.photo_url ?? null;
+      const beforePhotoUrl: string | null = beforeEntry ? privatePhotoReference({kind:'original',id:beforeEntry.id}) : null;
+      const afterPhotoUrl: string | null = afterEntry ? privatePhotoReference({kind:'original',id:afterEntry.id}) : null;
 
       // Load saved pinch/pan transforms for each photo
       const [beforeTransform, afterTransform] = await Promise.all([
@@ -595,12 +598,14 @@ export default function ShareProgressScreen() {
       return;
     }
 
+    const shareGeneration = privatePhotoGeneration();
+    let captureUri: string | null = null;
     try {
       setSharing(true);
       console.log('[ShareProgress] Capturing progress card...');
 
       const uri = await viewShotRef.current.captureWhenReady();
-      console.log('[ShareProgress] Card captured:', uri);
+      captureUri = uri;
 
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
@@ -611,6 +616,7 @@ export default function ShareProgressScreen() {
 
       console.log('[ShareProgress] Sharing is available, proceeding...');
 
+      if (shareGeneration !== privatePhotoGeneration()) throw new Error('Private photo session changed');
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
         dialogTitle: t('shareProgress.shareYourProgress'),
@@ -619,9 +625,13 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] Card shared successfully');
       setSharing(false);
     } catch (error) {
-      console.error('[ShareProgress] Error sharing card:', error);
+      // Do not log temporary image URIs or private SDK error payloads.
       Alert.alert(t('common.error'), t('shareProgress.failedToShare'));
       setSharing(false);
+    } finally {
+      if (captureUri) {
+        try { require('react-native-view-shot').releaseCapture(captureUri); } catch { /* Native cleanup unavailable; do not delete other files. */ }
+      }
     }
   };
 

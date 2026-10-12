@@ -1,3 +1,4 @@
+import { privatePhotoReference } from '@/utils/privatePhotoClient';
 import { getAppLocale } from '@/lib/localization';
 import { useTranslation } from 'react-i18next';
 
@@ -19,8 +20,8 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import { ZoomablePhoto } from '@/components/ZoomablePhoto';
-import { ZoomablePanPhoto } from '@/components/ZoomablePanPhoto';
+import { PrivateZoomablePhoto as ZoomablePhoto, PrivateZoomablePanPhoto as ZoomablePanPhoto } from '@/components/PrivatePhotoViews';
+
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 
 
@@ -327,7 +328,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       }
 
       const data = await response.json();
-      const fetched: CheckInPhoto[] = data.photos ?? [];
+      const fetched: CheckInPhoto[] = (data.photos ?? []).map((photo: CheckInPhoto) => ({ ...photo, photo_url: privatePhotoReference({ kind: 'original', id: photo.id }) }));
       console.log('[PhotoProgressCard] Photos loaded:', fetched.length);
 
       // Sort oldest → newest
