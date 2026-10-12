@@ -81,8 +81,10 @@ export function createCommunityProfileClient(deps: ClientDependencies) {
     let response: Response;
     try {
       response = await deps.fetch(`${baseUrl}${path}?${params.toString()}`, {
-        method: 'GET', headers: { Authorization: `Bearer ${started.accessToken}`, Accept: 'application/json' },
-        credentials: 'omit', cache: 'no-store', redirect: 'error', signal,
+        method: 'GET', headers: { Authorization: `Bearer ${started.accessToken}`, Accept: 'application/json', 'Cache-Control': 'no-store' },
+        // Native whatwg-fetch appends an unsupported '_' query for cache:'no-store'.
+        // Explicit header + server no-store response preserve cache policy without URL mutation.
+        credentials: 'omit', redirect: 'error', signal,
       });
     } catch {
       // Never retain/stringify the exception: platform errors can include URL, headers or response data.
@@ -178,3 +180,4 @@ export function createCommunityProfileClient(deps: ClientDependencies) {
   }
   return { fetchProfile, fetchIdentities, createProfileScope };
 }
+
