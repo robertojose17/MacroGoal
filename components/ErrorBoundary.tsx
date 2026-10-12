@@ -1,3 +1,4 @@
+import i18n from '@/lib/i18n';
 /**
  * Error Boundary Component
  *
@@ -98,6 +99,16 @@ export class ErrorBoundary extends Component<Props, State> {
     };
   }
 
+  private handleLanguageChanged = () => this.forceUpdate();
+
+  componentDidMount() {
+    i18n.on('languageChanged', this.handleLanguageChanged);
+  }
+
+  componentWillUnmount() {
+    i18n.off('languageChanged', this.handleLanguageChanged);
+  }
+
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error, errorInfo: null };
   }
@@ -150,7 +161,7 @@ export class ErrorBoundary extends Component<Props, State> {
       const componentPath = extractComponentPath(componentStack);
       const errorName = this.state.error?.name || "Error";
       const isRenderError = !!componentStack;
-      const title = isRenderError ? "Render Error" : "Uncaught Error";
+      const title = isRenderError ? i18n.t('localization.shared.renderError') : i18n.t('localization.shared.uncaughtError');
 
       const firstSource = componentPath.length > 0 ? componentPath[0].source : null;
       const bundleInfo = extractBundleInfo(errorStack || componentStack);
@@ -167,24 +178,24 @@ export class ErrorBoundary extends Component<Props, State> {
             <View style={styles.messageSection}>
               <Text style={styles.errorName}>{errorName}</Text>
               <Text selectable style={styles.errorMessage}>
-                {this.state.error?.message || "Unknown error"}
+                {this.state.error?.message || i18n.t('localization.shared.unknownError')}
               </Text>
             </View>
 
             {/* Source info */}
             {(firstSource || bundleInfo) && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Source</Text>
+                <Text style={styles.sectionTitle}>{i18n.t('localization.shared.source')}</Text>
                 <View style={styles.sourceCard}>
                   <View style={styles.sourceRow}>
-                    <Text style={styles.sourceLabel}>File</Text>
+                    <Text style={styles.sourceLabel}>{i18n.t('localization.shared.file')}</Text>
                     <Text selectable style={styles.sourceValue}>
                       {firstSource || bundleInfo?.file || "unknown"}
                     </Text>
                   </View>
                   {bundleInfo && (
                     <View style={[styles.sourceRow, styles.sourceRowBorder]}>
-                      <Text style={styles.sourceLabel}>Platform</Text>
+                      <Text style={styles.sourceLabel}>{i18n.t('localization.shared.platform')}</Text>
                       <Text style={styles.sourceValue}>{bundleInfo.platform}</Text>
                     </View>
                   )}
@@ -195,7 +206,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {/* Component stack */}
             {componentPath.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Component Stack</Text>
+                <Text style={styles.sectionTitle}>{i18n.t('localization.shared.componentStack')}</Text>
                 <View style={styles.componentList}>
                   {componentPath.map((frame, i) => (
                     <View key={i} style={styles.componentRow}>
@@ -217,7 +228,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {errorStack ? (
               <View style={styles.section}>
                 <Pressable onPress={this.toggleTrace} style={styles.traceToggle}>
-                  <Text style={styles.sectionTitle}>Call Stack</Text>
+                  <Text style={styles.sectionTitle}>{i18n.t('localization.shared.callStack')}</Text>
                   <Text style={styles.chevron}>
                     {this.state.showTrace ? "−" : "+"}
                   </Text>
@@ -239,7 +250,7 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               {({ pressed }) => (
                 <Text style={[styles.footerButtonText, pressed && styles.footerButtonTextPressed]}>
-                  Retry
+                  {i18n.t('localization.shared.retry')}
                 </Text>
               )}
             </Pressable>

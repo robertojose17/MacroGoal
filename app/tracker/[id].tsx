@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
@@ -77,7 +78,7 @@ function AnimatedPressable({
 }
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, t: (key: string) => string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   const date = new Date(y, m - 1, d);
   const today = new Date();
@@ -86,13 +87,13 @@ function formatDate(dateStr: string): string {
   yesterday.setDate(yesterday.getDate() - 1);
   const target = new Date(date);
   target.setHours(0, 0, 0, 0);
-  if (target.getTime() === today.getTime()) return 'Today';
-  if (target.getTime() === yesterday.getTime()) return 'Yesterday';
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (target.getTime() === today.getTime()) return t('common.today');
+  if (target.getTime() === yesterday.getTime()) return t('localization.screens.yesterday');
+  return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
-function formatValue(value: number, trackerType: string, unit: string | null): string {
-  if (trackerType === 'binary') return value === 1 ? 'Done ✓' : 'Skipped';
+function formatValue(value: number, trackerType: string, unit: string | null, t: (key: string) => string): string {
+  if (trackerType === 'binary') return value === 1 ? t('localization.screens.done') : t('localization.screens.skipped');
   const num = Number(value);
   const unitStr = unit ? ` ${unit}` : '';
   if (trackerType === 'duration') {
@@ -135,7 +136,7 @@ function DailyGoalSection({
   const inputBg = isDark ? '#2A2C40' : '#F1F3F8';
 
   const goalDisplay = currentGoal
-    ? currentGoal.toLocaleString('en-US') + ' ' + t('tracker.stepsUnit')
+    ? currentGoal.toLocaleString(getAppLocale()) + ' ' + t('tracker.stepsUnit')
     : t('tracker.notSet');
 
   const saveGoal = async (value: number) => {
@@ -225,7 +226,7 @@ function DailyGoalSection({
               const isSelected = selectedPreset === preset || currentGoal === preset;
               const chipBg = isSelected ? colors.primary : (isDark ? '#2A2C40' : '#F1F3F8');
               const chipText = isSelected ? '#fff' : textColor;
-              const presetLabel = preset.toLocaleString('en-US');
+              const presetLabel = preset.toLocaleString(getAppLocale());
               return (
                 <AnimatedPressable
                   key={preset}
@@ -259,7 +260,7 @@ function DailyGoalSection({
                 value={customInput}
                 onChangeText={setCustomInput}
                 keyboardType="number-pad"
-                placeholder="e.g. 8000"
+                placeholder={t('localization.screens.exampleSteps')}
                 placeholderTextColor={subColor}
                 returnKeyType="done"
                 onSubmitEditing={handleCustomSave}
@@ -400,7 +401,7 @@ function GymEntryActions({
   // ── Camera button handler ─────────────────────────────────────────────────
   const handleCamera = () => {
     console.log('[TrackerDetail][Gym] Camera button tapped — entry date:', entry.date);
-    const dateLabel = formatDate(entry.date);
+    const dateLabel = formatDate(entry.date, t);
     Alert.alert(t('tracker.addPhotoFor', { date: dateLabel }), undefined, [
       { text: t('tracker.takePhoto'), onPress: () => pickAndUpload('camera') },
       { text: t('tracker.chooseFromLibrary'), onPress: () => pickAndUpload('library') },
@@ -728,7 +729,7 @@ function WeightEntryActions({
   // ── Camera button handler ─────────────────────────────────────────────────
   const handleCamera = () => {
     console.log('[TrackerDetail] Camera button tapped — entry date:', entry.date);
-    const dateLabel = formatDate(entry.date);
+    const dateLabel = formatDate(entry.date, t);
     Alert.alert(t('tracker.addPhotoFor', { date: dateLabel }), undefined, [
       {
         text: t('tracker.takePhoto'),
@@ -1420,9 +1421,9 @@ export default function TrackerDetailScreen() {
               <View style={[styles.entriesList, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 {entries.map((entry, index) => {
                   const valueDisplay = tracker
-                    ? formatValue(Number(entry.value), tracker.tracker_type, tracker.unit)
+                    ? formatValue(Number(entry.value), tracker.tracker_type, tracker.unit, t)
                     : String(entry.value);
-                  const dateDisplay = formatDate(entry.date);
+                  const dateDisplay = formatDate(entry.date, t);
                   const isLast = index === entries.length - 1;
                   return (
                     <SwipeToDeleteRow key={entry.id} onDelete={() => handleDeleteEntry(entry)}>

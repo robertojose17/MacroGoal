@@ -22,10 +22,14 @@ export const getDeviceLanguage = (): string => {
   }
 };
 
-export const setStoredLanguage = async (lang: string): Promise<void> => {
+export const setStoredLanguage = async (lang: string): Promise<boolean> => {
+  if (lang !== 'en' && lang !== 'es') return false;
   try {
     await AsyncStorage.setItem(LANGUAGE_KEY, lang);
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 // Initialize synchronously with device language as default
@@ -42,11 +46,14 @@ i18n
     compatibilityJSON: 'v4',
   });
 
-// Then async-override with stored preference if any
-AsyncStorage.getItem(LANGUAGE_KEY).then((stored) => {
-  if (stored && stored !== i18n.language) {
-    i18n.changeLanguage(stored);
-  }
-});
+// Resolve the saved preference before mounting app-owned visible content.
+// A failed storage read falls back to the device language without blocking startup.
+export const languageReady: Promise<void> = AsyncStorage.getItem(LANGUAGE_KEY)
+  .then(async (stored) => {
+    if ((stored === 'en' || stored === 'es') && stored !== i18n.language) {
+      await i18n.changeLanguage(stored);
+    }
+  })
+  .catch(() => undefined);
 
 export default i18n;

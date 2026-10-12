@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 import { ConfiguredFollowerActions } from '@/features/communityPrivacyV2/ConfiguredFollowerActions';
 import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { withCommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
@@ -6,6 +7,7 @@ import { remainingCommunityReads } from '@/features/communityPrivacyV2Compatibil
 import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibility/ProtectedReaderBoundary';
 
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
@@ -43,18 +45,18 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-function relativeTime(dateStr: string): string {
+function relativeTime(dateStr: string, t: TFunction): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;
   const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffMins < 1) return t('localization.profileUi.justNow');
+  if (diffMins < 60) return t('localization.profileUi.minutesAgo', { count: diffMins });
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 24) return t('localization.profileUi.hoursAgo', { count: diffHours });
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (diffDays < 7) return t('localization.profileUi.daysAgo', { count: diffDays });
+  return new Date(dateStr).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
 type FollowUser = {
@@ -67,26 +69,9 @@ type FollowUser = {
 type FollowModalType = 'followers' | 'following' | null;
 type NutritionRange = 'today' | '7d' | '30d' | 'custom';
 
-const TOOLTIP_CONTENT: Record<string, { title: string; description: string }> = {
-  streak: {
-    title: 'Current Streak',
-    description: "The number of consecutive days you've logged your food. Keep it going!",
-  },
-  best: {
-    title: 'Best Streak',
-    description: 'Your longest streak ever. This is your personal record for consecutive days logged.',
-  },
-  score: {
-    title: 'Consistency Score (30 days)',
-    description: 'A score from 0–100 measuring how consistently you\'ve tracked your calories and protein over the last 30 days. 80+ is Locked In, 60+ is On Track.',
-  },
-  member: {
-    title: 'Member Since',
-    description: 'The date you joined Macro Goal. Welcome to the journey!',
-  },
-};
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
+  const { t } = useTranslation();
   const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
     <View style={styles.macroSummaryRowCompact}>
@@ -101,7 +86,7 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
           {eaten}
           {' / '}
           {goal}
-          {'g'}
+          {t('localization.profileUi.grams')}
         </Text>
       </View>
     </View>
@@ -128,8 +113,13 @@ export default function ProfileScreen() {
 function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivation }) {
   const privacyProtected = activation.mode === 'protected';
   const router = useRouter();
-  const { i18n } = useTranslation();
-  const spanish = (i18n.resolvedLanguage || i18n.language || 'en').startsWith('es');
+  const { t } = useTranslation();
+  const TOOLTIP_CONTENT: Record<string, { title: string; description: string }> = {
+    streak: { title: t('localization.profileUi.streakTitle'), description: t('localization.profileUi.streakDescription') },
+    best: { title: t('localization.profileUi.bestTitle'), description: t('localization.profileUi.bestDescription') },
+    score: { title: t('localization.profileUi.scoreTitle'), description: t('localization.profileUi.scoreDescription') },
+    member: { title: t('localization.profileUi.memberTitle'), description: t('localization.profileUi.memberDescription') },
+  };
   const connectionNavigation = useRef(false);
   const profileFocused = useRef(true);
   const colorScheme = useColorScheme();
@@ -620,7 +610,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     connectionNavigation.current = true;
     followerActionNavigation.current = false;
     closeFollowModal();
-    setFollowerActionTarget({ id: person.id, name: person.full_name || person.username || 'User' });
+    setFollowerActionTarget({ id: person.id, name: person.full_name || person.username || '' });
   };
 
   const refreshFollowerCount = () => {
@@ -676,12 +666,12 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   const handleDeletePost = async (postId: string) => {
     console.log('[Profile] handleDeletePost — trash button pressed, postId:', postId);
     Alert.alert(
-      'Delete Post',
-      'Are you sure you want to delete this post?',
+      t('localization.profileUi.deletePost'),
+      t('localization.profileUi.deleteConfirm'),
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[Profile] handleDeletePost — cancelled') },
+        { text: t('localization.profileUi.cancel'), style: 'cancel', onPress: () => console.log('[Profile] handleDeletePost — cancelled') },
         {
-          text: 'Delete',
+          text: t('localization.profileUi.delete'),
           style: 'destructive',
           onPress: async () => {
             console.log('[Profile] handleDeletePost — confirmed, deleting postId:', postId);
@@ -694,7 +684,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               .eq('user_id', authUser.id);
             if (error) {
               console.error('[Profile] handleDeletePost — error:', error.message);
-              Alert.alert('Error', 'Could not delete post');
+              Alert.alert(t('localization.profileUi.error'), t('localization.profileUi.deleteFailed'));
             } else {
               console.log('[Profile] handleDeletePost — deleted successfully, postId:', postId);
               setPosts(prev => prev.filter(p => p.id !== postId));
@@ -720,13 +710,13 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <Text style={[typography.body, { color: secondaryText }]}>Not signed in</Text>
+          <Text style={[typography.body, { color: secondaryText }]}>{t('localization.profileUi.notSignedIn')}</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const displayName = user.full_name || user.name || 'User';
+  const displayName = user.full_name || user.name || t('localization.profileUi.user');
   const initials = displayName.charAt(0).toUpperCase();
   const isPremiumUser = user.user_type === 'premium' || isPremium;
   const bioText = user.bio || '';
@@ -735,22 +725,18 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   const bestStreakDisplay = String(bestStreak);
   const consistencyScoreDisplay = String(consistencyScore);
   const postsCountDisplay = String(postsCount);
-  const followersCountDisplay = privacyProtected && followersCount === null ? 'Unavailable' : String(followersCount);
-  const followingCountDisplay = privacyProtected && followingCount === null ? 'Unavailable' : String(followingCount);
+  const followersCountDisplay = privacyProtected && followersCount === null ? t('localization.profileUi.unavailable') : String(followersCount);
+  const followingCountDisplay = privacyProtected && followingCount === null ? t('localization.profileUi.unavailable') : String(followingCount);
 
   const totalCaloriesRounded = Math.round(totalCalories);
 
   const isMultiDay = nutritionRange !== 'today';
-  const averageLabelText = nutritionRange === '7d'
-    ? 'Daily average over 7 days'
-    : nutritionRange === '30d'
-      ? 'Daily average over 30 days'
-      : nutritionRange === 'custom'
-        ? `Daily average over ${rangeDayCount} day${rangeDayCount !== 1 ? 's' : ''}`
-        : '';
+  const averageLabelText = isMultiDay
+    ? t('localization.profileUi.dailyAverage', { count: nutritionRange === '7d' ? 7 : nutritionRange === '30d' ? 30 : rangeDayCount })
+    : '';
 
   const memberSinceDisplay = user.created_at
-    ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).replace(' ', " '")
+    ? new Date(user.created_at).toLocaleDateString(getAppLocale(), { month: 'short', year: '2-digit' })
     : '—';
 
   const activeTooltip = tooltipKey ? TOOLTIP_CONTENT[tooltipKey] : null;
@@ -759,7 +745,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
       {/* Top bar */}
       <View style={[styles.topBar, { borderBottomColor: borderColor }]}>
-        <Text style={[styles.topBarTitle, { color: textColor }]}>Profile</Text>
+        <Text style={[styles.topBarTitle, { color: textColor }]}>{t('localization.profileUi.profile')}</Text>
         <View style={styles.topBarRight}>
           <TouchableOpacity
             onPress={() => {
@@ -767,6 +753,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               router.push('/bug-report?tab_source=profile');
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={t('localization.profileUi.reportBug')}
             style={styles.topBarIconBtn}
           >
             <IconSymbol
@@ -777,6 +764,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
             />
           </TouchableOpacity>
           <TouchableOpacity
+            accessibilityLabel={t('localization.profileUi.settings')}
             onPress={handleSettingsPress}
             activeOpacity={0.7}
             style={styles.settingsButton}
@@ -833,7 +821,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                 </Text>
                 {isPremiumUser && (
                   <View style={[styles.igEliteBadge, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.igEliteBadgeText}>PREMIUM</Text>
+                    <Text style={styles.igEliteBadgeText}>{t('localization.profileUi.premium')}</Text>
                   </View>
                 )}
               </View>
@@ -845,7 +833,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               <View style={styles.igStatsRow}>
                 <TouchableOpacity onPress={() => {}} activeOpacity={0.7} style={styles.igStatItem}>
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{postsCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> posts</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.postsLabel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -856,7 +844,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                   style={styles.igStatItem}
                 >
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{followersCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> followers</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.followersLabel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -867,7 +855,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                   style={styles.igStatItem}
                 >
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{followingCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> following</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}>{t('localization.profileUi.followingLabel')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -892,7 +880,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           >
             <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={16} color={colors.primary} />
             <Text style={[styles.statColValue, { color: textColor }]}>{currentStreakDisplay}</Text>
-            <Text style={[styles.statColLabel, { color: secondaryText }]}>STREAK</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.profileUi.streak')}</Text>
           </TouchableOpacity>
 
           <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
@@ -908,7 +896,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           >
             <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={16} color="#F59E0B" />
             <Text style={[styles.statColValue, { color: textColor }]}>{bestStreakDisplay}</Text>
-            <Text style={[styles.statColLabel, { color: secondaryText }]}>BEST</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.profileUi.best')}</Text>
           </TouchableOpacity>
 
           <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
@@ -924,7 +912,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           >
             <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar_chart" size={16} color={colors.primary} />
             <Text style={[styles.statColValue, { color: colors.primary }]}>{consistencyScoreDisplay}</Text>
-            <Text style={[styles.statColLabel, { color: secondaryText }]}>SCORE</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.profileUi.score')}</Text>
           </TouchableOpacity>
 
           <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
@@ -940,7 +928,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           >
             <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={16} color="#8B5CF6" />
             <Text style={[styles.statColValue, { color: textColor }]}>{memberSinceDisplay}</Text>
-            <Text style={[styles.statColLabel, { color: secondaryText }]}>SINCE</Text>
+            <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.profileUi.since')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -957,7 +945,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               activeOpacity={0.7}
             >
               <Text style={[styles.rangeDropdownLabel, { color: secondaryText }]}>
-                {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7 Days' : nutritionRange === '30d' ? '30 Days' : 'Custom'}
+                {nutritionRange === 'today' ? t('localization.profileUi.today') : nutritionRange === '7d' ? t('localization.profileUi.sevenDays') : nutritionRange === '30d' ? t('localization.profileUi.thirtyDays') : t('localization.profileUi.custom')}
               </Text>
               <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="expand_more" size={12} color={secondaryText} />
             </TouchableOpacity>
@@ -970,7 +958,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           {rangeDropdownOpen && (
             <View style={[styles.rangeDropdownMenu, { backgroundColor: cardBg, borderColor: borderColor }]}>
               {(['today', '7d', '30d', 'custom'] as NutritionRange[]).map((key) => {
-                const label = key === 'today' ? 'Today' : key === '7d' ? '7 Days' : key === '30d' ? '30 Days' : 'Custom';
+                const label = key === 'today' ? t('localization.profileUi.today') : key === '7d' ? t('localization.profileUi.sevenDays') : key === '30d' ? t('localization.profileUi.thirtyDays') : t('localization.profileUi.custom');
                 const isActive = nutritionRange === key;
                 return (
                   <TouchableOpacity
@@ -1001,26 +989,26 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               size={140}
               strokeWidth={12}
               color={colors.calories}
-              label="kcal"
+              label={t('localization.profileUi.kcal')}
             />
             <View style={styles.macroSummaryCompact}>
-              <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-              <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-              <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-              <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
             </View>
           </View>
         </View>
 
         {/* ── Posts Feed ──────────────────────────────────────────────────── */}
         <View style={styles.feedSection}>
-          <Text style={[styles.feedSectionTitle, { color: textColor }]}>Posts</Text>
+          <Text style={[styles.feedSectionTitle, { color: textColor }]}>{t('localization.profileUi.posts')}</Text>
 
           {posts.length === 0 ? (
             <View style={[styles.emptyState, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
               <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={40} color={colors.textSecondary} />
               <Text style={[styles.emptyStateText, { color: secondaryText }]}>
-                Your achievements will appear here
+                {t('localization.profileUi.emptyAchievements')}
               </Text>
             </View>
           ) : (
@@ -1068,9 +1056,10 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           >
             <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
               <Text style={[styles.modalTitle, { color: textColor }]}>
-                {followModalType === 'followers' ? 'Followers' : 'Following'}
+                {followModalType === 'followers' ? t('localization.profileUi.followers') : t('localization.profileUi.following')}
               </Text>
               <TouchableOpacity
+                accessibilityLabel={t('localization.profileUi.close')}
                 onPress={closeFollowModal}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
@@ -1090,7 +1079,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
             ) : followModalUsers.length === 0 ? (
               <View style={styles.modalEmpty}>
                 <Text style={[styles.modalEmptyText, { color: secondaryText }]}>
-                  {privacyProtected && followReadError ? 'Accepted connections are unavailable.' : (followModalType === 'followers' ? 'No followers yet' : 'Not following anyone yet')}
+                  {privacyProtected && followReadError ? t('localization.profileUi.connectionsUnavailable') : (followModalType === 'followers' ? t('localization.profileUi.noFollowers') : t('localization.profileUi.noFollowing'))}
                 </Text>
               </View>
             ) : (
@@ -1099,14 +1088,14 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.modalList}
                 renderItem={({ item }) => {
-                  const itemName = item.full_name || item.username || 'User';
+                  const itemName = item.full_name || item.username || t('localization.profileUi.user');
                   const itemInitial = itemName.charAt(0).toUpperCase();
                   const itemUsername = item.username ? `@${item.username}` : '';
                   return (
                     <View style={[styles.followUserRow, { borderBottomColor: borderColor }]}>
                     <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 }}
                       accessibilityRole="button"
-                      accessibilityLabel={spanish ? `Ver perfil de ${itemName}` : `View ${itemName}'s profile`}
+                      accessibilityLabel={t('localization.profileUi.viewProfile', { name: itemName })}
                       disabled={followModalLoading || followReadError}
                       onPress={() => openConnectionProfile(item.id)}>
                       {item.avatar_url ? (
@@ -1130,7 +1119,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                     </TouchableOpacity>
                     {privacyProtected && activation.rollout === 'general' && followModalType === 'followers' &&
                       <TouchableOpacity accessibilityRole="button"
-                        accessibilityLabel={spanish ? `Opciones de ${itemName}` : `Options for ${itemName}`}
+                        accessibilityLabel={t('localization.profileUi.userOptions', { name: itemName })}
                         disabled={followModalLoading || followReadError}
                         style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
                         onPress={() => openFollowerActions(item)}>
@@ -1147,7 +1136,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
 
       {privacyProtected && user?.id && followerActionTarget &&
         <ConfiguredFollowerActions key={`${activation.scopeKey}:${user.id}:${followerActionTarget.id}`}
-          activation={activation} ownerId={user.id} requester={followerActionTarget}
+          activation={activation} ownerId={user.id} requester={{ ...followerActionTarget, name: followerActionTarget.name || t('localization.profileUi.user') }}
           onClose={closeFollowerActions} onViewProfile={viewFollowerActionProfile}
           onRelationshipChanged={refreshFollowerCount} onRelationshipInvalidated={invalidateFollowerSummary} />}
 
@@ -1174,6 +1163,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
             activeOpacity={1}
           >
             <TouchableOpacity
+              accessibilityLabel={t('localization.profileUi.close')}
               style={styles.tooltipCloseBtn}
               onPress={() => {
                 console.log('[Profile] tooltip close button pressed, key:', tooltipKey);
@@ -1209,7 +1199,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
         initialStartDate={customStartDate}
         initialEndDate={customEndDate}
         maxDate={new Date()}
-        title="Select Date Range"
+        title={t('localization.profileUi.selectDateRange')}
       />
     </SafeAreaView>
   );

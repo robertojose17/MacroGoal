@@ -70,7 +70,7 @@ export default function DeleteAccountScreen() {
               );
             } catch (error: any) {
               console.error('[DeleteAccount] Error deleting account:', error);
-              Alert.alert(t('common.error'), error.message || t('deleteAccount.failedToDelete'));
+              Alert.alert(t('common.error'), t('deleteAccount.failedToDelete'));
             } finally {
               setDeleting(false);
             }

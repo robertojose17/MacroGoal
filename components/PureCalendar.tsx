@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { View, Text } from 'react-native';
 
@@ -9,9 +10,10 @@ interface Props {
 }
 
 export default function PureCalendar(_props: Props) {
+  const { t } = useTranslation();
   return (
     <View>
-      <Text>Calendar not available on this platform.</Text>
+      <Text>{t('localization.shared.calendarUnavailable')}</Text>
     </View>
   );
 }

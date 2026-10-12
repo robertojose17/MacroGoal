@@ -111,7 +111,7 @@ export default function RecipeEditScreen() {
 
       if (recipeResult.error || !recipeResult.data) {
         console.error('[RecipeEdit] Error loading recipe:', recipeResult.error);
-        setLoadError(t('recipeEdit.failedToLoad'));
+        setLoadError('recipeEdit.failedToLoad');
         return;
       }
 
@@ -120,7 +120,7 @@ export default function RecipeEditScreen() {
 
       if (!user || recipe.created_by !== user.id) {
         console.warn('[RecipeEdit] User is not the owner of this recipe');
-        setLoadError(t('recipeEdit.notOwner'));
+        setLoadError('recipeEdit.notOwner');
         setIsOwner(false);
         return;
       }
@@ -149,7 +149,7 @@ export default function RecipeEditScreen() {
       console.log('[RecipeEdit] Recipe loaded:', recipe.name);
     } catch (err: any) {
       console.error('[RecipeEdit] Unexpected error:', err);
-      setLoadError(err?.message || t('recipeEdit.unexpectedError'));
+      setLoadError('recipeEdit.unexpectedError');
     } finally {
       setLoadingRecipe(false);
     }
@@ -334,7 +334,7 @@ export default function RecipeEditScreen() {
       router.back();
     } catch (err: any) {
       console.error('[RecipeEdit] Unexpected error:', err);
-      Alert.alert(t('recipeEdit.errorTitle'), err?.message || t('recipeEdit.failedToSave'));
+      Alert.alert(t('recipeEdit.errorTitle'), t('recipeEdit.failedToSave'));
     } finally {
       setSaving(false);
     }
@@ -371,7 +371,7 @@ export default function RecipeEditScreen() {
               router.dismiss();
             } catch (err: any) {
               console.error('[RecipeEdit] Unexpected error deleting:', err);
-              Alert.alert(t('recipeEdit.errorTitle'), err?.message || t('recipeEdit.failedToDelete'));
+              Alert.alert(t('recipeEdit.errorTitle'), t('recipeEdit.failedToDelete'));
             } finally {
               setDeleting(false);
             }
@@ -395,7 +395,7 @@ export default function RecipeEditScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: bgColor }]}>
         <Stack.Screen options={{ title: t('recipeEdit.title'), headerBackTitle: t('recipeEdit.back') }} />
-        <Text style={[styles.errorText, { color: colors.error }]}>{loadError}</Text>
+        <Text style={[styles.errorText, { color: colors.error }]}>{t(loadError)}</Text>
         <TouchableOpacity
           style={[styles.retryBtn, { backgroundColor: colors.primary }]}
           onPress={() => router.back()}

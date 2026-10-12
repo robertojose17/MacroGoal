@@ -43,11 +43,11 @@ type CustomerInfo = any;
 
 // Premium features list (used in web + isPremium views)
 const PREMIUM_FEATURES = [
-  'Snap a photo to estimate calories & macros instantly',
-  'Personalized meal plans for fat loss, muscle gain, or maintenance',
-  'Generate grocery lists automatically from your plan',
-  'Track progress photos & body measurements',
-  'No ads. No invasive tracking.',
+  'localization.shared.premium0',
+  'localization.shared.premium1',
+  'localization.shared.premium2',
+  'localization.shared.premium3',
+  'localization.shared.premium4',
 ];
 
 const DARK_BG = '#0d0d0d';
@@ -434,7 +434,7 @@ export default function SubscriptionScreen() {
       } else {
         Alert.alert(
           t('subscription.purchaseFailed'),
-          error.message || t('subscription.purchaseFailedMsg')
+          t('subscription.purchaseFailedMsg')
         );
       }
     } finally {
@@ -491,7 +491,7 @@ export default function SubscriptionScreen() {
       console.error('[Subscription] ❌ Restore error:', error);
       Alert.alert(
         t('subscription.restoreFailed'),
-        error.message || t('subscription.restoreFailedMsg')
+        t('subscription.restoreFailedMsg')
       );
     } finally {
       setLoading(false);
@@ -546,7 +546,7 @@ export default function SubscriptionScreen() {
                   color={colors.primary}
                 />
                 <Text style={[styles.featureText, { color: isDark ? colors.textDark : colors.text }]}>
-                  {feature}
+                  {t(feature)}
                 </Text>
               </View>
             ))}
@@ -608,7 +608,7 @@ export default function SubscriptionScreen() {
             {t('subscription.errorTitle')}
           </Text>
           <Text style={[styles.errorMessage, { color: 'rgba(255,255,255,0.6)' }]}>
-            {errorMessage}
+            {t('localization.shared.subscriptionUnavailable')}
           </Text>
           <TouchableOpacity
             style={[styles.button, { backgroundColor: colors.primary }]}
@@ -634,11 +634,11 @@ export default function SubscriptionScreen() {
   }
 
   const PREMIUM_HERO_FEATURES = [
-    { ios: 'camera.fill', android: 'camera-alt', label: 'AI Snap & Track', desc: 'Snap a photo to estimate calories & macros instantly.' },
-    { ios: 'list.clipboard.fill', android: 'assignment', label: 'Custom Meal Plans', desc: 'Personalized plans for fat loss, muscle gain, or maintenance.' },
-    { ios: 'cart.fill', android: 'shopping-cart', label: 'Auto Grocery Lists', desc: 'Generate grocery lists automatically from your plan.' },
-    { ios: 'chart.line.uptrend.xyaxis', android: 'trending-up', label: 'Progress Tracking', desc: 'Track progress photos & body measurements over time.' },
-    { ios: 'checkmark.shield.fill', android: 'verified-user', label: 'No Ads, No Tracking', desc: 'A clean, private experience — just for you.' },
+    { ios: 'camera.fill', android: 'camera-alt', label: t('localization.shared.hero0'), desc: t('localization.shared.hero1') },
+    { ios: 'list.clipboard.fill', android: 'assignment', label: t('localization.shared.hero2'), desc: t('localization.shared.hero3') },
+    { ios: 'cart.fill', android: 'shopping-cart', label: t('localization.shared.hero4'), desc: t('localization.shared.hero5') },
+    { ios: 'chart.line.uptrend.xyaxis', android: 'trending-up', label: t('localization.shared.hero6'), desc: t('localization.shared.hero7') },
+    { ios: 'checkmark.shield.fill', android: 'verified-user', label: t('localization.shared.hero8'), desc: t('localization.shared.hero9') },
   ];
 
   if (isPremium) {
@@ -773,7 +773,7 @@ export default function SubscriptionScreen() {
 
   const yearlyRawPrice = resolvedYearlyPkg?.product?.price;
   const yearlyMonthlyEquiv = yearlyRawPrice
-    ? `$${(Number(yearlyRawPrice) / 12).toFixed(2)}/mo`
+    ? `$${(Number(yearlyRawPrice) / 12).toFixed(2)}${t('localization.shared.perMonth')}`
     : null;
 
   const selectedPkg = activePlan === 'yearly' ? resolvedYearlyPkg : resolvedMonthlyPkg;
@@ -832,16 +832,16 @@ export default function SubscriptionScreen() {
   const ctaLabel = t('subscription.getStarted');
 
   const ALL_FEATURES = [
-    'AI photo calorie estimator',
-    'Personalized meal plans (fat loss, muscle gain, maintenance)',
-    'Auto-generated grocery lists',
-    'Progress photos & body measurements',
-    'Barcode scanner for instant food logging',
-    'Custom macros & calorie goals',
-    'Unlimited food search & logging',
-    'AI chatbot nutrition coach',
-    'Streak tracking & consistency score',
-    'No ads, no invasive tracking',
+    'localization.shared.allFeature0',
+    'localization.shared.allFeature1',
+    'localization.shared.allFeature2',
+    'localization.shared.allFeature3',
+    'localization.shared.allFeature4',
+    'localization.shared.allFeature5',
+    'localization.shared.allFeature6',
+    'localization.shared.allFeature7',
+    'localization.shared.allFeature8',
+    'localization.shared.allFeature9',
   ];
 
   const NEW_FEATURES = [
@@ -936,7 +936,7 @@ export default function SubscriptionScreen() {
               {ALL_FEATURES.map((feature, index) => (
                 <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: index < ALL_FEATURES.length - 1 ? 12 : 0 }}>
                   <Text style={{ color: '#5B9AA8', fontSize: 15, fontWeight: '700', marginTop: 1 }}>✓</Text>
-                  <Text style={{ color: '#ccc', fontSize: 14, flex: 1, lineHeight: 20 }}>{feature}</Text>
+                  <Text style={{ color: '#ccc', fontSize: 14, flex: 1, lineHeight: 20 }}>{t(feature)}</Text>
                 </View>
               ))}
             </View>
@@ -958,7 +958,7 @@ export default function SubscriptionScreen() {
                 activeOpacity={0.85}
               >
                 <View style={[styles.saveBadge, { backgroundColor: '#5B9AA8' }]}>
-                  <Text style={styles.saveBadgeText}>✓ SAVE 58%</Text>
+                  <Text style={styles.saveBadgeText}>{t('localization.shared.save58')}</Text>
                 </View>
 
                 <View style={styles.planCardInner}>

@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
@@ -56,7 +57,6 @@ interface HourGroup {
 
 interface DateWithData {
   date: string;
-  displayDate: string;
   totalCalories: number;
   itemCount: number;
 }
@@ -66,9 +66,9 @@ function getEntryTimestamp(entry: FoodEntry): string | null {
 }
 
 function formatHourLabel(hour: number): string {
-  const period = hour < 12 ? 'AM' : 'PM';
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${displayHour}:00 ${period}`;
+  const date = new Date();
+  date.setHours(hour, 0, 0, 0);
+  return date.toLocaleTimeString(getAppLocale(), { hour: 'numeric', minute: '2-digit' });
 }
 
 function groupEntriesByHour(entries: FoodEntry[]): HourGroup[] {
@@ -108,6 +108,15 @@ export default function CopyFromPreviousScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
+  const formatDisplayDate = (date: string) => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (date === toLocalDateString(today)) return t('common.today');
+    if (date === toLocalDateString(yesterday)) return t('localization.screens.yesterday');
+    return new Date(date + 'T00:00:00').toLocaleDateString(getAppLocale(), { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
 
   const targetDate = (params.date as string) || toLocalDateString();
   const targetMealType = params.meal as MealType;
@@ -174,27 +183,8 @@ export default function CopyFromPreviousScreen() {
       // Convert to array and format
       const dates: DateWithData[] = Array.from(dateMap.entries())
         .map(([date, data]) => {
-          const dateObj = new Date(date + 'T00:00:00');
-          const today = new Date();
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-
-          let displayDate = '';
-          if (date === toLocalDateString(yesterday)) {
-            displayDate = 'Yesterday';
-          } else if (dateObj.toDateString() === today.toDateString()) {
-            displayDate = 'Today';
-          } else {
-            displayDate = dateObj.toLocaleDateString('en-US', { 
-              weekday: 'short', 
-              month: 'short', 
-              day: 'numeric' 
-            });
-          }
-
           return {
             date,
-            displayDate,
             totalCalories: data.totalCalories,
             itemCount: data.itemCount,
           };
@@ -514,7 +504,7 @@ export default function CopyFromPreviousScreen() {
               >
                 <View style={styles.dateCardLeft}>
                   <Text style={[styles.dateCardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                    {dateData.displayDate}
+                    {formatDisplayDate(dateData.date)}
                   </Text>
                   <Text style={[styles.dateCardSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                     {dateData.itemCount} {dateData.itemCount === 1 ? 'item' : 'items'} • {Math.round(dateData.totalCalories)} kcal
@@ -554,7 +544,7 @@ export default function CopyFromPreviousScreen() {
                   {t('copyFromPrevious.copyingFrom')}
                 </Text>
                 <Text style={[styles.selectedDateTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                  {datesWithData.find(d => d.date === selectedDate)?.displayDate}
+                  {selectedDate ? formatDisplayDate(selectedDate) : ''}
                 </Text>
               </View>
               <View style={styles.selectedDateRight}>
@@ -622,7 +612,7 @@ export default function CopyFromPreviousScreen() {
                         </View>
                         <View>
                           <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                            {group.label}
+                            {formatHourLabel(group.hour)}
                           </Text>
                           <Text style={[styles.mealSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                             {group.entries.length}

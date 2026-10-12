@@ -1,3 +1,6 @@
+import { getAppLocale } from '@/lib/localization';
+import { configureCalendarLocale } from '@/components/calendarLocale';
+import { useTranslation } from 'react-i18next';
 
 import React, { useState } from 'react';
 import {
@@ -32,8 +35,10 @@ export default function CalendarDateRangePicker({
   initialEndDate = new Date(),
   maxDate = new Date(),
   minDate,
-  title = 'Select Date Range',
+  title,
 }: CalendarDateRangePickerProps) {
+  const { t, i18n } = useTranslation();
+  configureCalendarLocale();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -151,11 +156,11 @@ export default function CalendarDateRangePicker({
 
   const getInstructionText = () => {
     if (tapCount === 0) {
-      return 'Tap to select start date';
+      return t('localization.shared.selectStart');
     } else if (tapCount === 1) {
-      return 'Tap to select end date';
+      return t('localization.shared.selectEnd');
     } else {
-      return 'Tap any date to start a new selection';
+      return t('localization.shared.selectAgain');
     }
   };
 
@@ -212,7 +217,7 @@ export default function CalendarDateRangePicker({
                 { color: isDark ? colors.textDark : colors.text },
               ]}
             >
-              {title}
+              {title ?? t('localization.shared.selectDateRange')}
             </Text>
 
             <View style={styles.instructionContainer}>
@@ -227,7 +232,7 @@ export default function CalendarDateRangePicker({
               {startDate && endDate && (
                 <TouchableOpacity onPress={handleReset}>
                   <Text style={[styles.resetText, { color: colors.primary }]}>
-                    Reset
+                    {t('localization.shared.reset')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -242,7 +247,7 @@ export default function CalendarDateRangePicker({
                       { color: isDark ? colors.textSecondaryDark : colors.textSecondary },
                     ]}
                   >
-                    Start:
+                    {t('localization.shared.start')}
                   </Text>
                   <Text
                     style={[
@@ -250,7 +255,7 @@ export default function CalendarDateRangePicker({
                       { color: isDark ? colors.textDark : colors.text },
                     ]}
                   >
-                    {new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', {
+                    {new Date(startDate + 'T00:00:00').toLocaleDateString(getAppLocale(), {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric',
@@ -265,7 +270,7 @@ export default function CalendarDateRangePicker({
                         { color: isDark ? colors.textSecondaryDark : colors.textSecondary },
                       ]}
                     >
-                      End:
+                      {t('localization.shared.end')}
                     </Text>
                     <Text
                       style={[
@@ -273,7 +278,7 @@ export default function CalendarDateRangePicker({
                         { color: isDark ? colors.textDark : colors.text },
                       ]}
                     >
-                      {new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', {
+                      {new Date(endDate + 'T00:00:00').toLocaleDateString(getAppLocale(), {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
@@ -285,6 +290,7 @@ export default function CalendarDateRangePicker({
             )}
 
             <Calendar
+              key={i18n.resolvedLanguage || i18n.language}
               current={startDate || undefined}
               onDayPress={handleDayPress}
               markedDates={getMarkedDates()}
@@ -315,7 +321,7 @@ export default function CalendarDateRangePicker({
                     { color: isDark ? colors.textDark : colors.text },
                   ]}
                 >
-                  Cancel
+                  {t('localization.shared.cancel')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -331,7 +337,7 @@ export default function CalendarDateRangePicker({
                 disabled={!startDate || !endDate}
               >
                 <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>
-                  Confirm
+                  {t('localization.shared.confirm')}
                 </Text>
               </TouchableOpacity>
             </View>

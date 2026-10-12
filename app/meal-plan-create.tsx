@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
@@ -15,7 +16,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 
 const formatDateDisplay = (date: Date): string => {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
 export default function MealPlanCreateScreen() {

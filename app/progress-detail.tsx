@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator, Text } from 'react-native';
@@ -12,38 +13,32 @@ import { useProgressIntelligence, ProgressState } from '@/hooks/useProgressIntel
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
 function formatDateES(isoDate: string): string {
-  const d = new Date(isoDate);
-  const day = d.getUTCDate();
-  const month = MONTHS_ES[d.getUTCMonth()];
-  const year = d.getUTCFullYear();
-  return `${day} ${month} ${year}`;
+  return new Date(isoDate).toLocaleDateString(getAppLocale(), { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 function formatWeight(lbs: number | null, isMetric: boolean): string {
   if (lbs == null) return '—';
   const val = isMetric ? lbs / 2.20462 : lbs;
   const unit = isMetric ? 'kg' : 'lbs';
-  return `${Number(val).toFixed(1)} ${unit}`;
+  return `${Number(val).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${unit}`;
 }
 
-function formatTDEE(kcal: number): string {
-  return Number(kcal).toLocaleString('es-MX') + ' kcal/día';
+function formatTDEE(kcal: number, t: (key: string) => string): string {
+  return Number(kcal).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kcalDay');
 }
 
-function formatPace(lbsPerWeek: number, isMetric: boolean): string {
+function formatPace(lbsPerWeek: number, isMetric: boolean, t: (key: string) => string): string {
   const val = isMetric ? lbsPerWeek / 2.20462 : lbsPerWeek;
-  const unit = isMetric ? 'kg/sem' : 'lbs/sem';
+  const unit = isMetric ? t('localization.screens.kgWeek') : t('localization.screens.lbsWeek');
   const sign = val > 0 ? '+' : '';
-  return `${sign}${Number(val).toFixed(2)} ${unit}`;
+  return `${sign}${Number(val).toLocaleString(getAppLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${unit}`;
 }
 
 const CONFIDENCE_LABEL: Record<string, string> = {
-  high: 'Alta',
-  medium: 'Media',
-  low: 'Baja',
+  high: 'localization.screens.progresshigh',
+  medium: 'localization.screens.progressmedium',
+  low: 'localization.screens.progresslow',
 };
 
 const CONFIDENCE_BG: Record<string, string> = {
@@ -71,13 +66,13 @@ const CONFIDENCE_TEXT_DARK: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  ON_TRACK: 'En camino',
-  BELOW_TARGET_PACE: 'Por debajo del ritmo',
-  ABOVE_TARGET_PACE: 'Por encima del ritmo',
-  WEIGHT_STABLE: 'Peso estable',
-  TRENDING_UP: 'Tendencia al alza',
-  MAINTAINING: 'Manteniendo',
-  GOAL_REACHED: '¡Meta alcanzada!',
+  ON_TRACK: 'localization.screens.progressON_TRACK',
+  BELOW_TARGET_PACE: 'localization.screens.progressBELOW_TARGET_PACE',
+  ABOVE_TARGET_PACE: 'localization.screens.progressABOVE_TARGET_PACE',
+  WEIGHT_STABLE: 'localization.screens.progressWEIGHT_STABLE',
+  TRENDING_UP: 'localization.screens.progressTRENDING_UP',
+  MAINTAINING: 'localization.screens.progressMAINTAINING',
+  GOAL_REACHED: 'localization.screens.progressGOAL_REACHED',
 };
 
 const STATUS_BG: Record<string, string> = {
@@ -129,12 +124,13 @@ interface SectionProps {
 }
 
 function JourneyProgressSection({ isDark, progressState, isMetric }: SectionProps) {
+  const { t } = useTranslation();
   const jp = progressState.journeyProgress;
   if (jp.progressFraction == null) return null;
 
   const fraction = Math.min(1, Math.max(0, jp.progressFraction));
   const pct = Math.round(fraction * 100);
-  const pctText = `${pct}% completado`;
+  const pctText = t('localization.screens.progressPercent', { percent: pct.toLocaleString(getAppLocale()) });
   const barFill = `${pct}%`;
 
   const labelColor = isDark ? colors.textDark : colors.text;
@@ -148,18 +144,18 @@ function JourneyProgressSection({ isDark, progressState, isMetric }: SectionProp
 
   return (
     <View style={styles.subsection}>
-      <Text style={[styles.subsectionTitle, { color: mutedColor }]}>Tu camino</Text>
+      <Text style={[styles.subsectionTitle, { color: mutedColor }]}>{t('localization.screens.progressText0')}</Text>
       <View style={styles.journeyRow}>
         <View style={styles.journeyWeightItem}>
-          <Text style={[styles.journeyWeightLabel, { color: mutedColor }]}>Inicio</Text>
+          <Text style={[styles.journeyWeightLabel, { color: mutedColor }]}>{t('localization.screens.progressText1')}</Text>
           <Text style={[styles.journeyWeightValue, { color: labelColor }]}>{startText}</Text>
         </View>
         <View style={styles.journeyWeightItem}>
-          <Text style={[styles.journeyWeightLabel, { color: mutedColor }]}>Actual</Text>
+          <Text style={[styles.journeyWeightLabel, { color: mutedColor }]}>{t('localization.screens.progressText2')}</Text>
           <Text style={[styles.journeyWeightValue, { color: colors.primary }]}>{currentText}</Text>
         </View>
         <View style={styles.journeyWeightItem}>
-          <Text style={[styles.journeyWeightLabel, { color: mutedColor }]}>Meta</Text>
+          <Text style={[styles.journeyWeightLabel, { color: mutedColor }]}>{t('localization.screens.progressText3')}</Text>
           <Text style={[styles.journeyWeightValue, { color: labelColor }]}>{goalText}</Text>
         </View>
       </View>
@@ -172,12 +168,13 @@ function JourneyProgressSection({ isDark, progressState, isMetric }: SectionProp
 }
 
 function ProjectionSection({ isDark, progressState }: SectionProps) {
+  const { t } = useTranslation();
   const proj = progressState.projection;
   if (proj.projectedGoalDate == null) return null;
 
   const primaryDate = formatDateES(proj.projectedGoalDate);
   const conf = proj.projectionConfidence ?? 'low';
-  const confLabel = CONFIDENCE_LABEL[conf] ?? conf;
+  const confLabel = (CONFIDENCE_LABEL[conf] ? t(CONFIDENCE_LABEL[conf]) : conf);
   const confBg = isDark ? (CONFIDENCE_BG_DARK[conf] ?? '#374151') : (CONFIDENCE_BG[conf] ?? '#F3F4F6');
   const confText = isDark ? (CONFIDENCE_TEXT_DARK[conf] ?? '#D1D5DB') : (CONFIDENCE_TEXT[conf] ?? '#374151');
 
@@ -186,13 +183,13 @@ function ProjectionSection({ isDark, progressState }: SectionProps) {
 
   const hasRange = proj.projectedGoalDateRange != null;
   const rangeText = hasRange
-    ? `Entre ${formatDateES(proj.projectedGoalDateRange!.earliest)} y ${formatDateES(proj.projectedGoalDateRange!.latest)}`
+    ? t('localization.screens.progressBetween', { start: formatDateES(proj.projectedGoalDateRange!.earliest), end: formatDateES(proj.projectedGoalDateRange!.latest) })
     : null;
 
   return (
     <View style={styles.subsection}>
       <View style={styles.subsectionHeader}>
-        <Text style={[styles.subsectionTitle, { color: mutedColor }]}>Proyección de meta</Text>
+        <Text style={[styles.subsectionTitle, { color: mutedColor }]}>{t('localization.screens.progressText4')}</Text>
         <View style={[styles.badge, { backgroundColor: confBg }]}>
           <Text style={[styles.badgeText, { color: confText }]}>{confLabel}</Text>
         </View>
@@ -206,24 +203,25 @@ function ProjectionSection({ isDark, progressState }: SectionProps) {
 }
 
 function TDEESection({ isDark, progressState }: SectionProps) {
+  const { t } = useTranslation();
   const tdee = progressState.tdee;
   if (tdee.value == null) return null;
 
   const isObserved = tdee.source === 'observed';
   const showGreenDot = isObserved && (tdee.confidence === 'medium' || tdee.confidence === 'high');
   const dotColor = showGreenDot ? '#10B981' : '#9CA3AF';
-  const sourceLabel = isObserved ? 'Observado' : 'Estimado por fórmula';
+  const sourceLabel = isObserved ? t('localization.screens.progressText5') : t('localization.screens.progressText6');
   const sourceLabelColor = isObserved
     ? (isDark ? colors.textDark : colors.text)
     : (isDark ? colors.textSecondaryDark : colors.textSecondary);
 
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const labelColor = isDark ? colors.textDark : colors.text;
-  const tdeeText = formatTDEE(tdee.value);
+  const tdeeText = formatTDEE(tdee.value, t);
 
   return (
     <View style={styles.subsection}>
-      <Text style={[styles.subsectionTitle, { color: mutedColor }]}>Gasto calórico estimado</Text>
+      <Text style={[styles.subsectionTitle, { color: mutedColor }]}>{t('localization.screens.progressText7')}</Text>
       <Text style={[styles.primaryValue, { color: labelColor }]}>{tdeeText}</Text>
       <View style={styles.sourceRow}>
         <View style={[styles.dot, { backgroundColor: dotColor }]} />
@@ -234,24 +232,25 @@ function TDEESection({ isDark, progressState }: SectionProps) {
 }
 
 function PaceSection({ isDark, progressState, isMetric }: SectionProps) {
+  const { t } = useTranslation();
   const pace = progressState.weightPace;
   const status = progressState.progressStatus;
 
   if (pace.lbsPerWeek == null) return null;
   if (status === 'INSUFFICIENT_DATA') return null;
 
-  const statusLabel = STATUS_LABEL[status] ?? status;
+  const statusLabel = (STATUS_LABEL[status] ? t(STATUS_LABEL[status]) : status);
   const statusBg = isDark ? (STATUS_BG_DARK[status] ?? '#374151') : (STATUS_BG[status] ?? '#F3F4F6');
   const statusText = isDark ? (STATUS_TEXT_DARK[status] ?? '#D1D5DB') : (STATUS_TEXT[status] ?? '#374151');
 
   const mutedColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const labelColor = isDark ? colors.textDark : colors.text;
-  const paceText = formatPace(pace.lbsPerWeek, isMetric);
+  const paceText = formatPace(pace.lbsPerWeek, isMetric, t);
 
   return (
     <View style={styles.subsection}>
       <View style={styles.subsectionHeader}>
-        <Text style={[styles.subsectionTitle, { color: mutedColor }]}>Ritmo actual</Text>
+        <Text style={[styles.subsectionTitle, { color: mutedColor }]}>{t('localization.screens.progressText8')}</Text>
         <View style={[styles.badge, { backgroundColor: statusBg }]}>
           <Text style={[styles.badgeText, { color: statusText }]}>{statusLabel}</Text>
         </View>
@@ -337,7 +336,7 @@ export default function ProgressDetailScreen() {
             {/* PIE placeholder — only on first load before any data arrives */}
             {showPIEPlaceholder && (
               <Text style={[styles.placeholder, { color: mutedColor }]}>
-                Calculando progreso...
+                {t('localization.completion.calculatingProgress')}
               </Text>
             )}
 
@@ -345,7 +344,7 @@ export default function ProgressDetailScreen() {
             {showPIESection && hasAnySubsection && (
               <View style={[styles.pieCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 <Text style={[styles.pieCardTitle, { color: labelColor }]}>
-                  Inteligencia de Progreso
+                  {t('localization.completion.progressIntelligence')}
                 </Text>
 
                 {hasJourney && (

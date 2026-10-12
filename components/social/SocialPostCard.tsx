@@ -1,3 +1,6 @@
+import { getAppLocale } from '@/lib/localization';
+import { useTranslation } from 'react-i18next';
+import { socialT as t, translateMilestone } from '@/features/communityPrivacyV2/socialTranslations';
 import React, { useRef, useCallback, useState } from 'react';
 import {
   View,
@@ -73,6 +76,7 @@ function MealV2Body({
   onSaveMeal,
   router,
 }: MealV2BodyProps) {
+  useTranslation();
   const [recipeSaved, setRecipeSaved] = useState(false);
   const [savingRecipe, setSavingRecipe] = useState(false);
 
@@ -105,7 +109,7 @@ function MealV2Body({
       });
       if (error) {
         console.error('[SocialPostCard] Save to Favorites error:', error.message);
-        Alert.alert('Error', 'Could not save recipe. Please try again.');
+        Alert.alert(t('localization.social.error'), t('localization.social.could_not_save_recipe_please_try_again'));
       } else {
         console.log('[SocialPostCard] Recipe saved to favorites — recipe_id:', recipeData.id);
         setRecipeSaved(true);
@@ -173,8 +177,7 @@ function MealV2Body({
       ) : null}
       {servingsDisplay ? (
         <Text style={[styles.mealServings, { color: subColor }]}>
-          {servingsDisplay}
-          {' serving(s)'}
+          {t('localization.social.servings_count', { count: Number(servingsDisplay) })}
         </Text>
       ) : null}
       {captionDiffersFromName && captionText ? (
@@ -188,7 +191,7 @@ function MealV2Body({
             accessibilityRole="button"
           >
             <ExternalLink size={13} color={colors.primary} />
-            <Text style={[styles.mealActionBtnText, { color: colors.primary }]}>View Recipe</Text>
+            <Text style={[styles.mealActionBtnText, { color: colors.primary }]}>{t('localization.social.view_recipe')}</Text>
           </Pressable>
         ) : null}
         {post.meal_recipe_data ? (
@@ -204,7 +207,7 @@ function MealV2Body({
               <Bookmark size={13} color={subColor} />
             )}
             <Text style={[styles.mealActionBtnText, { color: recipeSaved ? colors.success : subColor }]}>
-              {recipeSaved ? 'Saved ✓' : 'Save to Favorites'}
+              {recipeSaved ? t('localization.social.saved') : t('localization.social.save_to_favorites')}
             </Text>
           </Pressable>
         ) : onSaveMeal ? (
@@ -216,7 +219,7 @@ function MealV2Body({
             }}
             accessibilityRole="button"
           >
-            <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save to Food</Text>
+            <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>{t('localization.social.save_to_food')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -227,13 +230,13 @@ function MealV2Body({
 export function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t('localization.social.just_now');
+  if (mins < 60) return t('localization.social.minutes_ago', { count: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t('localization.social.hours_ago', { count: hrs });
   const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (days < 7) return t('localization.social.days_ago', { count: days });
+  return new Date(dateStr).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
 interface SocialPostCardProps {
@@ -261,6 +264,7 @@ export default function SocialPostCard({
   index = 0,
   hideCommentButton = false,
 }: SocialPostCardProps) {
+  useTranslation();
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
   const saveScale = useRef(new Animated.Value(1)).current;
@@ -337,7 +341,7 @@ export default function SocialPostCard({
   const savesCount = post.saves_count ?? 0;
   const likeActive = post.liked_by_me;
   const saveActive = post.saved_by_me ?? false;
-  const authorUsername = post.author?.username ?? 'Unknown';
+  const authorUsername = post.author?.username ?? t('localization.social.unknown');
   const authorName = post.author?.name ?? null;
   const captionText = post.content ?? null;
   const isElite = post.author?.user_type === 'premium' || post.author?.is_premium === true;
@@ -351,7 +355,7 @@ export default function SocialPostCard({
   const carbsDisplay = post.carbs != null ? Math.round(Number(post.carbs)).toString() : null;
   const fatDisplay = post.fat != null ? Math.round(Number(post.fat)).toString() : null;
   const streakDisplay = post.streak_days != null ? post.streak_days.toString() : null;
-  const weightDisplay = post.weight_value != null ? Number(post.weight_value).toFixed(1) : null;
+  const weightDisplay = post.weight_value != null ? Number(post.weight_value).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : null;
   const weightUnit = post.weight_unit ?? 'lbs';
 
   // Meal v2 display values
@@ -423,7 +427,7 @@ export default function SocialPostCard({
                   <Text style={[styles.progressTileValue, { color: '#EF4444' }]}>
                     {String(progressStats.streak_days)}
                   </Text>
-                  <Text style={[styles.progressTileLabel, { color: subColor }]}>day streak</Text>
+                  <Text style={[styles.progressTileLabel, { color: subColor }]}>{t('localization.social.day_streak')}</Text>
                 </View>
               ) : null}
               {progressStats.consistency_score != null ? (
@@ -432,14 +436,14 @@ export default function SocialPostCard({
                   <Text style={[styles.progressTileValue, { color: colors.success }]}>
                     {String(progressStats.consistency_score)}
                   </Text>
-                  <Text style={[styles.progressTileLabel, { color: subColor }]}>consistency</Text>
+                  <Text style={[styles.progressTileLabel, { color: subColor }]}>{t('localization.social.consistency')}</Text>
                 </View>
               ) : null}
               {progressStats.weight_value != null ? (
                 <View style={[styles.progressTile, { backgroundColor: isDark ? '#1A1A2A' : '#F5F3FF' }]}>
                   <Text style={styles.progressTileEmoji}>⚖️</Text>
                   <Text style={[styles.progressTileValue, { color: colors.primary }]}>
-                    {Number(progressStats.weight_value).toFixed(1)}
+                    {Number(progressStats.weight_value).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                   </Text>
                   <Text style={[styles.progressTileLabel, { color: subColor }]}>
                     {String(progressStats.weight_unit ?? 'lbs')}
@@ -487,7 +491,8 @@ export default function SocialPostCard({
               <Text style={[styles.streakNumber, { color: '#EF4444' }]}>{streakDisplay}</Text>
             ) : null}
             <Text style={[styles.streakLabel, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
-              day streak
+              
+              {t('localization.social.day_streak')}
             </Text>
           </View>
         );
@@ -498,7 +503,7 @@ export default function SocialPostCard({
             <Trophy size={32} color="#F59E0B" />
             {post.milestone_type ? (
               <Text style={[styles.milestoneType, { color: isDark ? '#FCD34D' : '#92400E' }]}>
-                {post.milestone_type}
+                {translateMilestone(post.milestone_type)}
               </Text>
             ) : null}
             {weightDisplay ? (
@@ -516,7 +521,7 @@ export default function SocialPostCard({
           <View style={[styles.statsCard, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor }]}>
             {caloriesDisplay ? (
               <View style={styles.statsRow}>
-                <Text style={[styles.statsLabel, { color: subColor }]}>Calories</Text>
+                <Text style={[styles.statsLabel, { color: subColor }]}>{t('localization.social.calories')}</Text>
                 <Text style={[styles.statsValue, { color: colors.calories }]}>{caloriesDisplay}</Text>
                 <Text style={[styles.statsUnit, { color: subColor }]}>kcal</Text>
               </View>
@@ -542,7 +547,7 @@ export default function SocialPostCard({
                 <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
                   <Text style={[styles.macroPillText, { color: colors.fats }]}>
                     {fatDisplay}
-                    {'g F'}
+                    {t('localization.social.fat_grams')}
                   </Text>
                 </View>
               ) : null}
@@ -582,7 +587,7 @@ export default function SocialPostCard({
                   <View style={[styles.macroPill, { backgroundColor: colors.fats + '18' }]}>
                     <Text style={[styles.macroPillText, { color: colors.fats }]}>
                       {fatDisplay}
-                      {'g F'}
+                      {t('localization.social.fat_grams')}
                     </Text>
                   </View>
                 ) : null}
@@ -612,14 +617,14 @@ export default function SocialPostCard({
       {isPinned ? (
         <View style={styles.pinnedRow}>
           <Pin size={12} color={colors.primary} />
-          <Text style={[styles.pinnedText, { color: colors.primary }]}>Pinned</Text>
+          <Text style={[styles.pinnedText, { color: colors.primary }]}>{t('localization.social.pinned')}</Text>
         </View>
       ) : null}
 
       {/* Auto label */}
       {isAutoPost ? (
         <View style={styles.autoLabel}>
-          <Text style={styles.autoLabelText}>Auto</Text>
+          <Text style={styles.autoLabelText}>{t('localization.social.auto')}</Text>
         </View>
       ) : null}
 
@@ -633,7 +638,7 @@ export default function SocialPostCard({
             </Text>
             {isFounder ? (
               <View style={styles.founderBadge}>
-                <Text style={styles.founderBadgeText}>Founder</Text>
+                <Text style={styles.founderBadgeText}>{t('localization.social.founder')}</Text>
               </View>
             ) : null}
             {isElite && !isFounder ? (
@@ -644,13 +649,13 @@ export default function SocialPostCard({
             {post.post_type_v2 === 'question' ? (
               <View style={styles.questionBadge}>
                 <HelpCircle size={10} color="#3B82F6" />
-                <Text style={styles.questionBadgeText}>Question</Text>
+                <Text style={styles.questionBadgeText}>{t('localization.social.question')}</Text>
               </View>
             ) : null}
             {post.post_type_v2 === 'progress' ? (
               <View style={styles.progressBadge}>
                 <TrendingUp size={10} color="#8B5CF6" />
-                <Text style={styles.progressBadgeText}>Progress</Text>
+                <Text style={styles.progressBadgeText}>{t('localization.social.progress')}</Text>
               </View>
             ) : null}
           </View>
@@ -669,7 +674,7 @@ export default function SocialPostCard({
             }
           }}
           style={styles.moreBtn}
-          accessibilityLabel="More options"
+          accessibilityLabel={t('localization.social.more_options')}
           accessibilityRole="button"
           hitSlop={8}
         >
@@ -703,7 +708,7 @@ export default function SocialPostCard({
         <Pressable
           onPress={handleLike}
           style={styles.actionBtn}
-          accessibilityLabel="Support post"
+          accessibilityLabel={t('localization.social.support_post')}
           accessibilityRole="button"
         >
           <Animated.View style={{ transform: [{ scale: likeScale }], opacity: likeActive ? 1 : 0.45 }}>
@@ -719,7 +724,7 @@ export default function SocialPostCard({
           <Pressable
             onPress={handleComment}
             style={styles.actionBtn}
-            accessibilityLabel="View comments"
+            accessibilityLabel={t('localization.social.view_comments')}
             accessibilityRole="button"
           >
             <MessageCircle size={18} color={subColor} />
@@ -732,7 +737,7 @@ export default function SocialPostCard({
           <Pressable
             onPress={handleSave}
             style={styles.actionBtn}
-            accessibilityLabel="Save post"
+            accessibilityLabel={t('localization.social.save_post')}
             accessibilityRole="button"
           >
             <Animated.View style={{ transform: [{ scale: saveScale }] }}>
@@ -754,9 +759,7 @@ export default function SocialPostCard({
       {/* Likes count */}
       {likesCount > 0 ? (
         <Text style={[styles.likesLine, { color: textColor }]}>
-          {likesCount}
-          {' '}
-          {likesCount === 1 ? 'like' : 'likes'}
+          {t('localization.social.likes_count', { count: likesCount })}
         </Text>
       ) : null}
 
@@ -768,10 +771,7 @@ export default function SocialPostCard({
           accessibilityRole="button"
         >
           <Text style={[styles.viewCommentsText, { color: subColor }]}>
-            {'View all '}
-            {commentsCount}
-            {' '}
-            {commentsCount === 1 ? 'comment' : 'comments'}
+            {t('localization.social.view_comments_count', { count: commentsCount })}
           </Text>
         </Pressable>
       ) : null}

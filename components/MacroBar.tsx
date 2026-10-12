@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { getAppLocale } from '@/lib/localization';
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
@@ -16,6 +18,7 @@ export default function MacroBar({ label, current, target, color, unit = 'g' }: 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
+  const { t } = useTranslation();
   const percentage = Math.min((current / target) * 100, 100);
   const remaining = Math.max(target - current, 0);
 
@@ -26,7 +29,7 @@ export default function MacroBar({ label, current, target, color, unit = 'g' }: 
           {label}
         </Text>
         <Text style={[styles.values, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-          {Math.round(current)} / {Math.round(target)}{unit}
+          {Math.round(current).toLocaleString(getAppLocale())} / {Math.round(target).toLocaleString(getAppLocale())}{unit}
         </Text>
       </View>
       <View style={[styles.barBackground, { backgroundColor: isDark ? colors.borderDark : colors.border }]}>
@@ -41,7 +44,7 @@ export default function MacroBar({ label, current, target, color, unit = 'g' }: 
         />
       </View>
       <Text style={[styles.remaining, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-        {Math.round(remaining)}{unit} remaining
+        {t('localization.shared.remainingAmount', { amount: Math.round(remaining).toLocaleString(getAppLocale()), unit })}
       </Text>
     </View>
   );

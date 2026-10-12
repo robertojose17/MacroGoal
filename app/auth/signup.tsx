@@ -85,7 +85,7 @@ export default function SignUpScreen() {
 
       if (authError) {
         console.error('[SignUp] Auth error:', authError);
-        Alert.alert(t('auth.signUpFailed'), authError.message);
+        Alert.alert(t('auth.signUpFailed'), t('auth.failedToCreateAccount'));
         setLoading(false);
         return;
       }
@@ -215,7 +215,7 @@ export default function SignUpScreen() {
       console.log('[SignUp] ✅ Signup complete — auth state change will handle navigation via _layout.tsx');
     } catch (error: any) {
       console.error('[SignUp] Unexpected error:', error);
-      Alert.alert(t('common.error'), error.message || t('auth.unexpectedSignUpError'));
+      Alert.alert(t('common.error'), t('auth.unexpectedSignUpError'));
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -892,7 +893,7 @@ function Step3({
         <Text style={styles.fieldLabel}>{t('onboarding.howOldAreYou')}</Text>
         <TextInput
           style={styles.bigInput}
-          placeholder="e.g. 28"
+          placeholder={t('localization.screens.exampleAge')}
           placeholderTextColor="rgba(255,255,255,0.3)"
           keyboardType="number-pad"
           value={age}
@@ -1014,7 +1015,7 @@ function Step4({
           <View style={styles.inputWithSuffix}>
             <TextInput
               style={[styles.bigInput, styles.flex1]}
-              placeholder="e.g. 175"
+              placeholder={t('localization.screens.exampleHeight')}
               placeholderTextColor="rgba(255,255,255,0.3)"
               keyboardType="number-pad"
               value={heightCm}
@@ -1119,16 +1120,16 @@ function Step5({
   ];
   const speedOptions = units === 'metric'
     ? [
-        { value: 0.5, label: '0.25 kg/week', sub: t('onboarding.speedSlow') },
-        { value: 1.0, label: '0.5 kg/week', sub: t('onboarding.speedModerate') },
-        { value: 1.5, label: '0.75 kg/week', sub: t('onboarding.speedFast') },
-        { value: 2.0, label: '1.0 kg/week', sub: t('onboarding.speedAggressive') },
+        { value: 0.5, label: Number(0.25).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedSlow') },
+        { value: 1.0, label: Number(0.5).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedModerate') },
+        { value: 1.5, label: Number(0.75).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedFast') },
+        { value: 2.0, label: Number(1.0).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedAggressive') },
       ]
     : [
-        { value: 0.5, label: '0.5 lb/week', sub: t('onboarding.speedSlow') },
-        { value: 1.0, label: '1.0 lb/week', sub: t('onboarding.speedModerate') },
-        { value: 1.5, label: '1.5 lb/week', sub: t('onboarding.speedFast') },
-        { value: 2.0, label: '2.0 lb/week', sub: t('onboarding.speedAggressive') },
+        { value: 0.5, label: Number(0.5).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.lbsWeek'), sub: t('onboarding.speedSlow') },
+        { value: 1.0, label: Number(1.0).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.lbsWeek'), sub: t('onboarding.speedModerate') },
+        { value: 1.5, label: Number(1.5).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.lbsWeek'), sub: t('onboarding.speedFast') },
+        { value: 2.0, label: Number(2.0).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.lbsWeek'), sub: t('onboarding.speedAggressive') },
       ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
@@ -1512,7 +1513,7 @@ function Step9({
               <View style={styles.s9Grid}>
                 <View style={styles.s9StatCard}>
                   <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={24} color={PRIMARY} />
-                  <Text style={styles.s9StatValue}>{calories.toLocaleString()}</Text>
+                  <Text style={styles.s9StatValue}>{calories.toLocaleString(getAppLocale())}</Text>
                   <Text style={styles.s9StatUnit}>kcal</Text>
                   <Text style={styles.s9StatLabel}>{t('onboarding.dailyCalories')}</Text>
                 </View>

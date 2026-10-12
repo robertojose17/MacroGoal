@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import React, { useCallback, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -11,18 +13,20 @@ import { AcceptedSocialProfileScreen } from './AcceptedSocialProfileScreen';
 
 /** No provider means no request, auth listener, cached profile, or mutation. */
 export default function AcceptedSocialProfileRoute() {
+  useTranslation();
   const services = useProfileScreenServices();
   const { userId } = useLocalSearchParams<{ userId?: string | string[] }>();
   const router = useRouter();
   const target = typeof userId === 'string' ? userId.toLowerCase() : '';
   if (!services) return <AcceptedSocialProfileScreen state={emptyProfileScreenState()}
-    onBack={() => router.back()} unavailable="Profile access is unavailable." />;
+    onBack={() => router.back()} unavailable={t('localization.social.profile_access_is_unavailable')} />;
   return <ConfiguredProfileRoute key={target} services={services} target={target} onBack={() => router.back()} />;
 }
 
 function ConfiguredProfileRoute({ services, target, onBack }: {
   services: ProfileScreenServices; target: string; onBack: () => void;
 }) {
+  useTranslation();
   const router = useRouter();
   const focused = useIsFocused();
   const [windowFocused, setWindowFocused] = useState(true);
@@ -58,9 +62,9 @@ function ConfiguredProfileRoute({ services, target, onBack }: {
     if (localCalendarDate(next) !== localCalendarDate(calendarNow)) setCalendarNow(next);
     else void controller.refresh();
   }, [controller, calendarNow]);
-  const unavailable = !active ? 'Profile hidden while this screen is inactive.' :
-    auth.status === 'loading' ? 'Checking your account…' : !auth.session ? 'Sign in to view this profile.' :
-    !input ? 'This profile or date range is unavailable.' : undefined;
+  const unavailable = !active ? t('localization.social.profile_hidden_while_this_screen_is_inactive') :
+    auth.status === 'loading' ? t('localization.social.checking_your_account') : !auth.session ? t('localization.social.sign_in_to_view_this_profile') :
+    !input ? t('localization.social.this_profile_or_date_range_is_unavailable') : undefined;
   return <AcceptedSocialProfileScreen state={state} onBack={onBack} unavailable={unavailable}
     range={range} custom={custom} onRefresh={refresh}
     onRange={next => { setCalendarNow(new Date()); setRange(next); }}

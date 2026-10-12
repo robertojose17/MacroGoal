@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -27,6 +29,11 @@ const MILESTONE_TYPES = [
   'Other',
 ];
 
+const milestoneLabelKeys: Record<string, string> = {
+  'Weight goal reached': 'milestone_weight', 'Streak milestone': 'milestone_streak',
+  'Macro goal hit': 'milestone_macro', 'Personal best': 'milestone_best', 'Other': 'milestone_other',
+};
+
 const MAX_CHARS = 500;
 
 interface CreatePostSheetProps {
@@ -46,6 +53,7 @@ export default function CreatePostSheet({
   onClose,
   onPosted,
 }: CreatePostSheetProps) {
+  useTranslation();
   const [content, setContent] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [showStreakBadge, setShowStreakBadge] = useState(false);
@@ -133,11 +141,11 @@ export default function CreatePostSheet({
   const handlePost = useCallback(async () => {
     console.log('[CreatePostSheet] Post button pressed — content length:', content.trim().length, 'public:', isPublic, 'hasImage:', !!selectedImageUri, 'streak:', showStreakBadge, 'stats:', showStatsBadge, 'milestone:', selectedMilestone);
     if (!content.trim()) {
-      setError('Please write something to share.');
+      setError('localization.social.please_write_something_to_share');
       return;
     }
     if (charCount > MAX_CHARS) {
-      setError(`Post must be ${MAX_CHARS} characters or less.`);
+      setError('localization.social.post_length');
       return;
     }
     setPosting(true);
@@ -176,9 +184,9 @@ export default function CreatePostSheet({
       onPosted();
       onClose();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to post. Please try again.';
+      const msg = e instanceof Error ? e.message : t('localization.social.failed_to_post_please_try_again');
       console.error('[CreatePostSheet] Post failed:', msg);
-      setError(msg);
+      setError('localization.social.failed_to_post_please_try_again');
     } finally {
       setPosting(false);
     }
@@ -234,7 +242,7 @@ export default function CreatePostSheet({
     setIsPublic(next);
   }, [isPublic]);
 
-  const streakBadgeText = `${currentStreak} day streak`;
+  const streakBadgeText = t('localization.social.streak_count', { count: currentStreak });
   const charCountDisplay = `${charCount}/${MAX_CHARS}`;
 
   return (
@@ -264,13 +272,13 @@ export default function CreatePostSheet({
               onPress={handlePost}
               disabled={!canPost}
               style={[styles.postPill, { backgroundColor: canPost ? colors.primary : colors.primary + '40' }]}
-              accessibilityLabel="Post"
+              accessibilityLabel={t('localization.social.post')}
               accessibilityRole="button"
             >
               {posting || uploadingImage ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.postPillText}>Post</Text>
+                <Text style={styles.postPillText}>{t('localization.social.post')}</Text>
               )}
             </Pressable>
 
@@ -278,7 +286,7 @@ export default function CreatePostSheet({
             <Pressable
               onPress={handleClose}
               style={styles.closeBtn}
-              accessibilityLabel="Close"
+              accessibilityLabel={t('localization.social.close')}
               accessibilityRole="button"
             >
               <X size={20} color={subColor} />
@@ -294,7 +302,7 @@ export default function CreatePostSheet({
             <TextInput
               ref={inputRef}
               style={[styles.mainInput, { color: textColor }]}
-              placeholder="What's on your mind?"
+              placeholder={t('localization.social.what_s_on_your_mind')}
               placeholderTextColor={subColor}
               value={content}
               onChangeText={setContent}
@@ -313,7 +321,7 @@ export default function CreatePostSheet({
 
             {showStatsBadge && (
               <View style={[styles.inlineBadge, { backgroundColor: colors.primary + '18' }]}>
-                <Text style={[styles.inlineBadgeText, { color: colors.primary }]}>Sharing my macros today</Text>
+                <Text style={[styles.inlineBadgeText, { color: colors.primary }]}>{t('localization.social.sharing_my_macros_today')}</Text>
               </View>
             )}
 
@@ -339,7 +347,7 @@ export default function CreatePostSheet({
                       accessibilityRole="button"
                     >
                       <Text style={[styles.milestoneOptionText, { color: isSelected ? colors.primary : textColor }]}>
-                        {mt}
+                        {t('localization.social.' + milestoneLabelKeys[mt])}
                       </Text>
                     </Pressable>
                   );
@@ -358,7 +366,7 @@ export default function CreatePostSheet({
                 <Pressable
                   style={styles.imageRemoveBtn}
                   onPress={handleRemoveImage}
-                  accessibilityLabel="Remove image"
+                  accessibilityLabel={t('localization.social.remove_image')}
                   accessibilityRole="button"
                 >
                   <X size={14} color="#fff" />
@@ -368,7 +376,7 @@ export default function CreatePostSheet({
 
             {/* Error */}
             {error ? (
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={styles.errorText}>{t(error, { count: MAX_CHARS })}</Text>
             ) : null}
           </ScrollView>
 
@@ -378,7 +386,7 @@ export default function CreatePostSheet({
             <Pressable
               onPress={handlePickImage}
               style={[styles.toolbarBtn, selectedImageUri ? { backgroundColor: colors.primary + '18' } : {}]}
-              accessibilityLabel="Add image"
+              accessibilityLabel={t('localization.social.add_image')}
               accessibilityRole="button"
               hitSlop={8}
             >
@@ -389,7 +397,7 @@ export default function CreatePostSheet({
             <Pressable
               onPress={handleToggleStreak}
               style={[styles.toolbarBtn, showStreakBadge ? { backgroundColor: '#FEE2E2' } : {}]}
-              accessibilityLabel="Add streak"
+              accessibilityLabel={t('localization.social.add_streak')}
               accessibilityRole="button"
               hitSlop={8}
             >
@@ -400,7 +408,7 @@ export default function CreatePostSheet({
             <Pressable
               onPress={handleToggleMilestone}
               style={[styles.toolbarBtn, showMilestonePicker ? { backgroundColor: '#FEF3C7' } : {}]}
-              accessibilityLabel="Add milestone"
+              accessibilityLabel={t('localization.social.add_milestone')}
               accessibilityRole="button"
               hitSlop={8}
             >
@@ -411,7 +419,7 @@ export default function CreatePostSheet({
             <Pressable
               onPress={handleToggleStats}
               style={[styles.toolbarBtn, showStatsBadge ? { backgroundColor: colors.primary + '18' } : {}]}
-              accessibilityLabel="Share stats"
+              accessibilityLabel={t('localization.social.share_stats')}
               accessibilityRole="button"
               hitSlop={8}
             >
@@ -422,7 +430,7 @@ export default function CreatePostSheet({
             <Pressable
               onPress={handleTogglePublic}
               style={styles.toolbarBtn}
-              accessibilityLabel={isPublic ? 'Public post' : 'Private post'}
+              accessibilityLabel={isPublic ? t('localization.social.public_post') : t('localization.social.private_post')}
               accessibilityRole="button"
               hitSlop={8}
             >

@@ -1,3 +1,6 @@
+import { getAppLocale } from '@/lib/localization';
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 /**
  * FeedPostCard — shared PostCard component used by both the Community feed
  * (check-ins.tsx) and the Social Profile screen (social-profile.tsx).
@@ -134,10 +137,10 @@ export function getRelativeTime(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
   const diff = Math.floor((now - then) / 1000);
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 60) return t('localization.social.just_now');
+  if (diff < 3600) return t('localization.social.minutes_ago', { count: Math.floor(diff / 60) });
+  if (diff < 86400) return t('localization.social.hours_ago', { count: Math.floor(diff / 3600) });
+  return t('localization.social.days_ago', { count: Math.floor(diff / 86400) });
 }
 
 export function getInitials(name: string | null | undefined, username: string): string {
@@ -169,6 +172,7 @@ interface AvatarProps {
 }
 
 export function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
+  useTranslation();
   const [hasError, setHasError] = useState(false);
   useEffect(() => {
     setHasError(false);
@@ -203,10 +207,11 @@ export function UserAvatar({ url, name, username, size = 40 }: AvatarProps) {
 // ─── StreakMilestoneCard ──────────────────────────────────────────────────────
 
 function StreakMilestoneCard({ streakDays, isDark }: { streakDays: number; isDark: boolean }) {
+  useTranslation();
   const bgColor = isDark ? '#1A2A1A' : '#F0FDF4';
   const borderColor = isDark ? '#2A4A2A' : '#BBF7D0';
-  const streakLabel = `${streakDays}-day streak`;
-  const streakSubtitle = `${streakDays} consecutive days of tracking`;
+  const streakLabel = t('localization.social.streak_count', { count: streakDays });
+  const streakSubtitle = t('localization.social.streak_consecutive', { count: streakDays });
   return (
     <View style={{ marginHorizontal: 0, backgroundColor: bgColor, borderTopWidth: 1, borderBottomWidth: 1, borderColor, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center', gap: 6 }}>
       <Text style={{ fontSize: 40 }}>🔥</Text>
@@ -221,29 +226,30 @@ function StreakMilestoneCard({ streakDays, isDark }: { streakDays: number; isDar
 function WeeklyRecapCard({ score, daysTracked, weekStart, dayFlags, isDark }: {
   score: number; daysTracked: number; weekStart: string; dayFlags: boolean[] | null; isDark: boolean;
 }) {
+  useTranslation();
   const bgColor = isDark ? '#0F1A2A' : '#F0F7FF';
   const borderColor = isDark ? '#1E3A5A' : '#BFDBFE';
   const scoreColor = score >= 80 ? '#5CB97B' : score >= 70 ? '#F59E0B' : '#EF4444';
   const monday = new Date(weekStart + 'T00:00:00');
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const fmtMonday = monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const fmtSunday = sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtMonday = monday.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
+  const fmtSunday = sunday.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
   const weekLabel = `${fmtMonday} – ${fmtSunday}`;
-  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const dayLabels = Array.from({ length: 7 }, (_, index) => { const date = new Date(monday); date.setDate(monday.getDate() + index); return date.toLocaleDateString(getAppLocale(), { weekday: 'narrow' }); });
   const flags = dayFlags && dayFlags.length === 7 ? dayFlags : Array(7).fill(false) as boolean[];
   const scoreDisplay = `${score}%`;
   const daysDisplay = `${daysTracked}/7`;
   return (
     <View style={{ marginHorizontal: 0, backgroundColor: bgColor, borderTopWidth: 1, borderBottomWidth: 1, borderColor, paddingVertical: 20, paddingHorizontal: 20, gap: 12 }}>
-      <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#E0F2FE' : '#1E3A5A' }}>My week</Text>
+      <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#E0F2FE' : '#1E3A5A' }}>{t('localization.social.my_week')}</Text>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View style={{ gap: 4 }}>
-          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>Consistency</Text>
+          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>{t('localization.social.consistency_alt')}</Text>
           <Text style={{ fontSize: 26, fontWeight: '800', color: scoreColor }}>{scoreDisplay}</Text>
         </View>
         <View style={{ gap: 4, alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>Days tracked</Text>
+          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>{t('localization.social.days_tracked')}</Text>
           <Text style={{ fontSize: 26, fontWeight: '800', color: isDark ? '#E0F2FE' : '#1E3A5A' }}>{daysDisplay}</Text>
         </View>
       </View>
@@ -269,14 +275,15 @@ function WeeklyRecapCard({ score, daysTracked, weekStart, dayFlags, isDark }: {
 // ─── WeightGoalCard ───────────────────────────────────────────────────────────
 
 function WeightGoalCard({ progressPct, isDark }: { progressPct: number; isDark: boolean }) {
+  useTranslation();
   const bgColor = isDark ? '#1A1A2A' : '#F5F3FF';
   const borderColor = isDark ? '#2A2A4A' : '#DDD6FE';
   const fillColor = '#5B9AA8';
   const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB';
-  const headlineLabel: Record<number, string> = { 25: '🎯 A quarter of the way there!', 50: '🎯 Halfway to my goal!', 75: '🎯 Almost there!', 100: '🎯 Goal reached!' };
-  const milestoneLabel: Record<number, string> = { 25: '25% completed', 50: '50% completed', 75: '75% completed', 100: '100% completed' };
-  const headline = headlineLabel[progressPct] ?? `🎯 ${progressPct}% to my goal!`;
-  const subtitle = milestoneLabel[progressPct] ?? `${progressPct}% completed`;
+  const headlineLabel: Record<number, string> = { 25: t('localization.social.a_quarter_of_the_way_there'), 50: t('localization.social.halfway_to_my_goal'), 75: t('localization.social.almost_there'), 100: t('localization.social.goal_reached') };
+  const milestoneLabel: Record<number, string> = { 25: t('localization.social.25_completed'), 50: t('localization.social.50_completed'), 75: t('localization.social.75_completed'), 100: t('localization.social.100_completed') };
+  const headline = headlineLabel[progressPct] ?? t('localization.social.goal_percent', { percent: progressPct });
+  const subtitle = milestoneLabel[progressPct] ?? t('localization.social.completed_percent', { percent: progressPct });
   const barWidth = `${progressPct}%` as `${number}%`;
   return (
     <View style={{ marginHorizontal: 0, backgroundColor: bgColor, borderTopWidth: 1, borderBottomWidth: 1, borderColor, paddingVertical: 24, paddingHorizontal: 20, gap: 10 }}>
@@ -292,6 +299,7 @@ function WeightGoalCard({ progressPct, isDark }: { progressPct: number; isDark: 
 // ─── EducationalCard ──────────────────────────────────────────────────────────
 
 function EducationalCard({ headline, body, example, isDark }: { headline: string; body: string; example?: string | null; isDark: boolean }) {
+  useTranslation();
   const bgColor = isDark ? '#0A1A1A' : '#F0FDFA';
   const borderColor = isDark ? '#134E4A' : '#99F6E4';
   const headlineColor = isDark ? '#5EEAD4' : '#0F766E';
@@ -326,6 +334,7 @@ export default function FeedPostCard({
   onSaveMeal,
   showSaveMeal = false,
 }: FeedPostCardProps) {
+  useTranslation();
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
@@ -370,13 +379,13 @@ export default function FeedPostCard({
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
-  const authorUsername = post.author?.username || 'unknown';
+  const authorUsername = post.author?.username || t('localization.social.unknown');
   const authorAvatarUri = post.author?.avatar_url ?? null;
   const relTime = getRelativeTime(post.created_at);
   const isOwn = post.user_id === currentUserId;
   const isAutoPost = post.post_type_v2 === 'auto';
   const isEduPost = post.auto_post_type === 'educational';
-  const displayName = isEduPost ? 'Coach' : (authorUsername ?? 'User');
+  const displayName = isEduPost ? t('localization.social.coach') : (authorUsername ?? t('localization.social.user'));
   const displayAvatar = isEduPost ? COACH_AVATAR : authorAvatarUri;
 
   const handleMenuPress = () => {
@@ -425,7 +434,7 @@ export default function FeedPostCard({
   const handleSaveMealPress = () => {
     console.log('[FeedPostCard] Save meal pressed for post:', post.id);
     if (onSaveMeal) onSaveMeal(post);
-    else Alert.alert('Meal saved!');
+    else Alert.alert(t('localization.social.meal_saved'));
   };
 
   // ── Media zone ──
@@ -439,7 +448,7 @@ export default function FeedPostCard({
     if (post.auto_post_type === 'educational') {
       return (
         <EducationalCard
-          headline={post.edu_headline ?? 'Did you know?'}
+          headline={post.edu_headline ?? t('localization.social.did_you_know')}
           body={post.edu_body ?? post.content ?? ''}
           example={post.edu_example}
           isDark={isDark}
@@ -487,7 +496,7 @@ export default function FeedPostCard({
               {fatDisplay ? <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: colors.fats + '18' }}><Text style={{ fontSize: 12, fontWeight: '700', color: colors.fats }}>{'🥑 '}{fatDisplay}{'g'}</Text></View> : null}
             </View>
           ) : null}
-          {(calDisplay || protDisplay || carbDisplay || fatDisplay) ? <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: 16, paddingBottom: 4 }}>Per serving</Text> : null}
+          {(calDisplay || protDisplay || carbDisplay || fatDisplay) ? <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: 16, paddingBottom: 4 }}>{t('localization.social.per_serving')}</Text> : null}
           {captionDiffersFromName && post.content ? <Text style={{ fontSize: 13, color: textColor, paddingHorizontal: 16, paddingBottom: 4, lineHeight: 18 }}>{post.content}</Text> : null}
           <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8, flexWrap: 'wrap' }}>
             {post.meal_recipe_id ? (
@@ -498,7 +507,7 @@ export default function FeedPostCard({
                   router.push(`/recipe-finder-detail?recipe_id=${post.meal_recipe_id}`);
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>View Recipe</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>{t('localization.social.view_recipe')}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -529,44 +538,44 @@ export default function FeedPostCard({
         stats.streak_days != null ? {
           key: 'streak',
           Icon: Flame,
-          value: `${stats.streak_days} days`,
-          label: 'Current Streak',
+          value: t('localization.social.days_count', { count: Number(stats.streak_days) }),
+          label: t('localization.social.current_streak'),
           barPct: Math.min(1, Number(stats.streak_days) / 100),
         } : null,
         stats.consistency_score != null ? {
           key: 'consistency',
           Icon: CalendarDays,
           value: `${stats.consistency_score}%`,
-          label: 'Weekly Consistency',
+          label: t('localization.social.weekly_consistency'),
           barPct: Math.min(1, Number(stats.consistency_score) / 100),
         } : null,
         stats.weight_goal_pct != null ? {
           key: 'weight_goal',
           Icon: Target,
           value: `${stats.weight_goal_pct}%`,
-          label: 'Weight Progress',
+          label: t('localization.social.weight_progress'),
           barPct: Math.min(1, Number(stats.weight_goal_pct) / 100),
         } : null,
         stats.steps_today != null ? {
           key: 'steps',
           Icon: Footprints,
-          value: Number(stats.steps_today).toLocaleString(),
-          label: `of ${Number(stats.steps_goal ?? 10000).toLocaleString()} steps`,
+          value: Number(stats.steps_today).toLocaleString(getAppLocale()),
+          label: t('localization.social.steps_goal', { count: Number(stats.steps_goal ?? 10000).toLocaleString(getAppLocale()) }),
           barPct: Math.min(1, Number(stats.steps_today) / Number(stats.steps_goal ?? 10000)),
         } : null,
         stats.gym_checked_in != null ? {
           key: 'gym',
           Icon: Dumbbell,
-          value: stats.gym_checked_in ? 'Workout complete' : 'Not yet',
-          label: "Today's Gym",
+          value: stats.gym_checked_in ? t('localization.social.workout_complete') : t('localization.social.not_yet'),
+          label: t('localization.social.today_s_gym'),
           barPct: null,
           gymDone: Boolean(stats.gym_checked_in),
         } : null,
         stats.weight_value != null && stats.weight_goal_pct == null ? {
           key: 'weight',
           Icon: Target,
-          value: `${Number(stats.weight_value).toFixed(1)} ${String(stats.weight_unit ?? 'lbs')}`,
-          label: 'Current Weight',
+          value: `${Number(stats.weight_value).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${String(stats.weight_unit ?? 'lbs')}`,
+          label: t('localization.social.current_weight'),
           barPct: null,
         } : null,
       ].filter(Boolean) as ProgressCardDef[];
@@ -594,7 +603,7 @@ export default function FeedPostCard({
               </View>
               <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 10 }}>
                 <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                  {new Date(photoProgress[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {new Date(photoProgress[0].date).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' })}
                 </Text>
                 {photoProgress[0].weight != null ? (
                   <Text style={{ color: '#fff', fontSize: 12 }}>{photoProgress[0].weight} {photoProgress[0].weight_unit ?? 'lbs'}</Text>
@@ -604,8 +613,8 @@ export default function FeedPostCard({
           ) : (
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {photoProgress.map((photo, idx) => {
-                const photoLabel = idx === 0 ? 'Before' : 'After';
-                const photoDateStr = new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const photoLabel = idx === 0 ? t('localization.social.before') : t('localization.social.after');
+                const photoDateStr = new Date(photo.date).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
                 return (
                   <View key={idx} style={{ flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
                     <View style={{ width: '100%', aspectRatio: 3/4, overflow: 'hidden' }}>
@@ -779,8 +788,8 @@ export default function FeedPostCard({
     }
     if (post.post_type_v2 === 'meal') return null;
     if (post.auto_post_type === 'streak_milestone') {
-      const streakMsgs: Record<number, string> = { 7: 'Keeping the momentum going!', 14: 'Two weeks of showing up.', 30: 'A full month of discipline.', 60: 'Habits are forming.', 100: 'Triple digits. Absolute legend.' };
-      const streakCaption = streakMsgs[post.streak_days ?? 0] ?? 'Staying consistent!';
+      const streakMsgs: Record<number, string> = { 7: t('localization.social.keeping_the_momentum_going'), 14: t('localization.social.two_weeks_of_showing_up'), 30: t('localization.social.a_full_month_of_discipline'), 60: t('localization.social.habits_are_forming'), 100: t('localization.social.triple_digits_absolute_legend') };
+      const streakCaption = streakMsgs[post.streak_days ?? 0] ?? t('localization.social.staying_consistent');
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
@@ -795,14 +804,14 @@ export default function FeedPostCard({
         <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
             <Text style={{ fontWeight: '700' }}>{authorUsername}</Text>
-            {'  '}{'Another week of showing up!'}
+            {'  '}{t('localization.social.another_week_of_showing_up')}
           </Text>
         </View>
       );
     }
     if (post.auto_post_type === 'weight_milestone' && post.weight_goal_pct != null) {
-      const captions: Record<number, string> = { 25: 'One milestone closer to my goal!', 50: 'One milestone closer to my goal!', 75: 'Almost there — keeping the momentum!', 100: 'Goal achieved. On to the next one!' };
-      const caption = captions[post.weight_goal_pct] ?? 'One milestone closer to my goal!';
+      const captions: Record<number, string> = { 25: t('localization.social.one_milestone_closer_to_my_goal'), 50: t('localization.social.one_milestone_closer_to_my_goal'), 75: t('localization.social.almost_there_keeping_the_momentum'), 100: t('localization.social.goal_achieved_on_to_the_next_one') };
+      const caption = captions[post.weight_goal_pct] ?? t('localization.social.one_milestone_closer_to_my_goal');
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
@@ -813,15 +822,15 @@ export default function FeedPostCard({
       );
     }
     if (post.auto_post_type === 'featured_recipe') {
-      const recipeName = post.meal_recipe_data?.name ?? post.content ?? 'Featured Recipe';
+      const recipeName = post.meal_recipe_data?.name ?? post.content ?? t('localization.social.featured_recipe');
       const cal = post.meal_calories != null ? Math.round(Number(post.meal_calories)) : null;
       const prot = post.meal_protein != null ? Math.round(Number(post.meal_protein)) : null;
-      const macroLine = cal != null && prot != null ? `${cal} kcal · ${prot}g protein per serving` : null;
+      const macroLine = cal != null && prot != null ? t('localization.social.protein_per_serving', { calories: cal, protein: prot }) : null;
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4, gap: 2 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
             <Text style={{ fontWeight: '700' }}>Macro Goal</Text>
-            {'  '}{`This week's featured recipe: ${recipeName}`}
+            {'  '}{t('localization.social.featured_recipe_name', { name: recipeName })}
           </Text>
           {macroLine ? <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', lineHeight: 18 }}>{macroLine}</Text> : null}
         </View>
@@ -896,11 +905,11 @@ export default function FeedPostCard({
             </TouchableOpacity>
             {post.is_founder_post ? (
               <View style={[cardStyles.founderBadge, { backgroundColor: '#0D9488' }]}>
-                <Text style={cardStyles.founderBadgeText}>Founder</Text>
+                <Text style={cardStyles.founderBadgeText}>{t('localization.social.founder')}</Text>
               </View>
             ) : null}
             {post.is_pinned ? (
-              <Text style={{ fontSize: 11, fontWeight: '500', color: colors.primary }}>Pinned</Text>
+              <Text style={{ fontSize: 11, fontWeight: '500', color: colors.primary }}>{t('localization.social.pinned')}</Text>
             ) : null}
           </View>
         </View>
@@ -934,9 +943,7 @@ export default function FeedPostCard({
       {post.comments_count > 0 ? (
         <TouchableOpacity onPress={handleViewAllComments} style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 13, color: secondaryColor }}>
-            {'View all '}
-            {commentsCountDisplay}
-            {' comments'}
+            {t('localization.social.view_comments_count', { count: post.comments_count })}
           </Text>
         </TouchableOpacity>
       ) : null}
@@ -949,7 +956,7 @@ export default function FeedPostCard({
       {/* Save meal button */}
       {showSaveMeal && post.category === 'meal_idea' && post.post_type_v2 !== 'meal' ? (
         <TouchableOpacity style={cardStyles.saveMealBtn} onPress={handleSaveMealPress}>
-          <Text style={[cardStyles.saveMealBtnText, { color: colors.primary }]}>Save meal</Text>
+          <Text style={[cardStyles.saveMealBtnText, { color: colors.primary }]}>{t('localization.social.save_meal')}</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -964,22 +971,22 @@ export default function FeedPostCard({
                   setMenuVisible(false);
                 }}>
                   <Pencil size={18} color={textColor} />
-                  <Text style={[cardStyles.menuItemText, { color: textColor }]}>Edit</Text>
+                  <Text style={[cardStyles.menuItemText, { color: textColor }]}>{t('localization.social.edit')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={cardStyles.menuItem} onPress={handleDelete}>
                   <Trash2 size={18} color={colors.error} />
-                  <Text style={[cardStyles.menuItemText, { color: colors.error }]}>Delete</Text>
+                  <Text style={[cardStyles.menuItemText, { color: colors.error }]}>{t('localization.social.delete')}</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <TouchableOpacity style={cardStyles.menuItem} onPress={handleReport}>
                   <Flag size={18} color={textColor} />
-                  <Text style={[cardStyles.menuItemText, { color: textColor }]}>Report</Text>
+                  <Text style={[cardStyles.menuItemText, { color: textColor }]}>{t('localization.social.report')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={cardStyles.menuItem} onPress={handleBlock}>
                   <UserX size={18} color={textColor} />
-                  <Text style={[cardStyles.menuItemText, { color: textColor }]}>Block user</Text>
+                  <Text style={[cardStyles.menuItemText, { color: textColor }]}>{t('localization.social.block_user')}</Text>
                 </TouchableOpacity>
               </>
             )}

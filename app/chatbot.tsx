@@ -25,6 +25,7 @@ import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { addToDraft } from '@/utils/myMealsDraft';
 import { useTranslation } from 'react-i18next';
+import { getAppLocale } from '@/lib/localization';
 
 
 
@@ -38,7 +39,7 @@ const generateMessageId = () => {
 };
 
 // Extended message type with guaranteed ID
-type MessageWithId = ChatMessage & { id: string; showUpgradeButton?: boolean };
+type MessageWithId = ChatMessage & { id: string; showUpgradeButton?: boolean; isAppWelcome?: boolean };
 
 type NutritionSource = {
   source_type: 'usda' | 'restaurant_official' | 'web_search' | 'gemini_estimate';
@@ -127,6 +128,17 @@ export default function ChatbotScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
+  const locale = getAppLocale();
+
+  const unitLabel = (unit: string) => {
+    const keys: Record<string, string> = { slice: 'localization.coach.unit_slice', piece: 'localization.coach.unit_piece', strip: 'localization.coach.unit_strip', cup: 'localization.coach.unit_cup', tablespoon: 'localization.coach.unit_tablespoon', teaspoon: 'localization.coach.unit_teaspoon', serving: 'localization.coach.unit_serving', portion: 'localization.coach.unit_portion', item: 'localization.coach.unit_item' };
+    return keys[unit] ? t(keys[unit]) : unit;
+  };
+
+  const confidenceLabel = (level: 'high' | 'medium' | 'low') => {
+    const keys = { high: 'localization.coach.confidenceHigh', medium: 'localization.coach.confidenceMedium', low: 'localization.coach.confidenceLow' };
+    return t(keys[level] || keys.medium);
+  };
 
   const QUICK_ACTION_CARDS = [
     t('chatbot.whatDidYouEat'),
@@ -161,11 +173,12 @@ export default function ChatbotScreen() {
   console.log('[Chatbot] Return To:', returnTo);
   console.log('[Chatbot] isMealEstimator:', isMealEstimator);
 
-  const [messages, setMessages] = useState<MessageWithId[]>([
+  const [messages, setMessages] = useState<MessageWithId[]>(() => [
     {
       id: generateMessageId(),
       role: 'assistant',
       content: t('chatbot.welcomeMessage'),
+      isAppWelcome: true,
       timestamp: Date.now(),
     },
   ]);
@@ -227,7 +240,7 @@ export default function ChatbotScreen() {
     }
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [t]);
 
   // Request media library permissions
   const requestMediaLibraryPermission = useCallback(async () => {
@@ -238,7 +251,7 @@ export default function ChatbotScreen() {
     }
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [t]);
 
   // Convert image URI to base64 data URL
   const convertImageToBase64 = useCallback(async (uri: string): Promise<string> => {
@@ -263,7 +276,7 @@ export default function ChatbotScreen() {
   // Take photo — appends to selectedImages (max 3)
   const handleTakePhoto = useCallback(async () => {
     if (selectedImages.length >= 3) {
-      Alert.alert(t('chatbot.addPhoto'), 'You can add up to 3 photos.');
+      Alert.alert(t('chatbot.addPhoto'), t('localization.coach.photoLimit'));
       return;
     }
     try {
@@ -288,12 +301,12 @@ export default function ChatbotScreen() {
       Alert.alert(t('common.error'), t('chatbot.failedToTakePhoto'));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestCameraPermission, convertImageToBase64, selectedImages.length]);
+  }, [requestCameraPermission, convertImageToBase64, selectedImages.length, t]);
 
   // Choose from gallery — appends to selectedImages (max 3)
   const handleChooseFromGallery = useCallback(async () => {
     if (selectedImages.length >= 3) {
-      Alert.alert(t('chatbot.addPhoto'), 'You can add up to 3 photos.');
+      Alert.alert(t('chatbot.addPhoto'), t('localization.coach.photoLimit'));
       return;
     }
     try {
@@ -318,7 +331,7 @@ export default function ChatbotScreen() {
       Alert.alert(t('common.error'), t('chatbot.failedToChoosePhoto'));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestMediaLibraryPermission, convertImageToBase64, selectedImages.length]);
+  }, [requestMediaLibraryPermission, convertImageToBase64, selectedImages.length, t]);
 
   // Handle photo selection
   const handleAddPhoto = useCallback(() => {
@@ -338,7 +351,7 @@ export default function ChatbotScreen() {
       },
     ]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleTakePhoto, handleChooseFromGallery]);
+  }, [handleTakePhoto, handleChooseFromGallery, t]);
 
   // Remove a specific photo by index
   const handleRemovePhoto = useCallback((index: number) => {
@@ -415,7 +428,7 @@ export default function ChatbotScreen() {
       }, 0);
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-    [loading, isPremium, premiumLoading, sendMessage]
+    [loading, isPremium, premiumLoading, sendMessage, t]
   );
 
   /**
@@ -478,7 +491,7 @@ export default function ChatbotScreen() {
 
         return {
           id: `ing-${Date.now()}-${index}`,
-          name: ing.name || 'Unknown ingredient',
+          name: ing.name || t('localization.coach.unknownIngredient'),
           quantity,
           unit,
           calories,
@@ -519,7 +532,7 @@ export default function ChatbotScreen() {
       const mealName =
         userMessage && userMessage.length > 50
           ? userMessage.substring(0, 47) + '...'
-          : userMessage || 'AI Estimated Meal';
+          : userMessage || t('localization.coach.estimatedMeal');
 
       console.log('[Chatbot] Successfully parsed ingredients:', ingredients.length);
 
@@ -540,7 +553,7 @@ export default function ChatbotScreen() {
       console.error('[Chatbot] Error parsing meal data:', error);
       return null;
     }
-  }, []);
+  }, [t]);
 
   const handleSend = useCallback(async () => {
     const trimmedInput = inputText.trim();
@@ -826,7 +839,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
 
         // Parse the meal data if available
         if (result.mealData) {
-          const estimate = parseMealData(result.mealData, trimmedInput || 'Photo of meal');
+          const estimate = parseMealData(result.mealData, trimmedInput || t('localization.coach.photoOfMeal'));
           if (estimate) {
             console.log('[Chatbot] Setting latest estimate with', estimate.ingredients.length, 'ingredients');
             setLatestEstimate(estimate);
@@ -858,13 +871,13 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       setMessages((prev) => [...prev, errorMessage]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputText, selectedImages, loading, messages, sendMessage, parseMealData, isPremium, premiumLoading, isMealEstimator]);
+  }, [inputText, selectedImages, loading, messages, sendMessage, parseMealData, isPremium, premiumLoading, isMealEstimator, t]);
 
   // Update ingredient quantity using per-100g values when available
   const handleQuantityChange = useCallback(
     (ingredientId: string, newQuantity: string) => {
       if (!latestEstimate) return;
-      const quantity = parseFloat(newQuantity);
+      const quantity = parseFloat(newQuantity.replace(',', '.'));
       if (isNaN(quantity) || quantity < 0) return;
 
       setLatestEstimate((prev) => {
@@ -1266,7 +1279,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           console.log('[Chatbot] ✅ All ingredients added to My Meal draft successfully!');
           Alert.alert(
             t('common.success'),
-            t('chatbot.addedIngredientsToMeal', { count: successCount }),
+            t('localization.coach.ingredientsAddedToMeal', { count: successCount }),
             [
               {
                 text: t('common.ok'),
@@ -1281,7 +1294,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           console.log(`[Chatbot] ⚠️ Partial success: ${successCount}/${includedIngredients.length} ingredients added`);
           Alert.alert(
             t('chatbot.partialSuccess'),
-            t('chatbot.partialSuccessAddMessage', { count: successCount, total: includedIngredients.length, failed: failedIngredients.join(', ') }),
+            t('localization.coach.ingredientsPartialSuccess', { count: successCount, total: includedIngredients.length, failed: failedIngredients.join(', ') }),
             [
               {
                 text: t('common.ok'),
@@ -1437,7 +1450,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           
           Alert.alert(
             t('common.success'),
-            t('chatbot.addedIngredientsToLog', { count: successCount, meal: mealLabels[mealType] || mealType }),
+            t('localization.coach.ingredientsAddedToLog', { count: successCount, meal: mealLabels[mealType] || mealType }),
             [
               {
                 text: t('common.ok'),
@@ -1452,7 +1465,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
           console.log(`[Chatbot] ⚠️ Partial success: ${successCount}/${includedIngredients.length} ingredients logged`);
           Alert.alert(
             t('chatbot.partialSuccess'),
-            t('chatbot.partialSuccessAddMessage', { count: successCount, total: includedIngredients.length, failed: failedIngredients.join(', ') }),
+            t('localization.coach.ingredientsPartialSuccess', { count: successCount, total: includedIngredients.length, failed: failedIngredients.join(', ') }),
             [
               {
                 text: t('common.ok'),
@@ -1475,7 +1488,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestEstimate, context, mealType, date, router]);
+  }, [latestEstimate, context, mealType, date, router, t]);
 
   const formatTime = useCallback((timestamp: number | undefined): string => {
     try {
@@ -1486,12 +1499,12 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       if (isNaN(date.getTime())) {
         return '';
       }
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     } catch (error) {
       console.warn('[ChatbotScreen] Error formatting time:', error);
       return '';
     }
-  }, []);
+  }, [locale]);
 
   const validMessages = messages.filter((message) => {
     return message && typeof message === 'object' && message.content && message.id;
@@ -1509,7 +1522,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
       edges={['top']}
     >
       <View style={[styles.header, { borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
-        <TouchableOpacity onPress={() => {
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('localization.coach.goBack')} onPress={() => {
           console.log('[Chatbot] Back button pressed');
           router.back();
         }} style={styles.backButton}>
@@ -1574,7 +1587,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                         },
                       ]}
                     >
-                      {message.content}
+                      {message.isAppWelcome ? t('chatbot.welcomeMessage') : message.content}
                     </Text>
                     {message.timestamp && (
                       <Text
@@ -1663,7 +1676,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                 <View style={styles.totalsGrid}>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: colors.primary }]}>
-                      {latestEstimate.totalCalories}
+                      {latestEstimate.totalCalories.toLocaleString(locale)}
                     </Text>
                     <Text
                       style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
@@ -1673,7 +1686,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      {latestEstimate.totalProtein}g
+                      {latestEstimate.totalProtein.toLocaleString(locale)}g
                     </Text>
                     <Text
                       style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
@@ -1683,7 +1696,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      {latestEstimate.totalCarbs}g
+                      {latestEstimate.totalCarbs.toLocaleString(locale)}g
                     </Text>
                     <Text
                       style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
@@ -1693,7 +1706,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   </View>
                   <View style={styles.totalItem}>
                     <Text style={[styles.totalValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      {latestEstimate.totalFats}g
+                      {latestEstimate.totalFats.toLocaleString(locale)}g
                     </Text>
                     <Text
                       style={[styles.totalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
@@ -1723,26 +1736,24 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                     : isDark
                     ? colors.textSecondaryDark
                     : colors.textSecondary;
-                  const scaleVerifiedText = ingredient.scale_verified ? '✓ Weight verified' : 'Verify weight';
-                  const confidenceToggleText = isExpanded ? '▲ Hide details' : '▼ Why this estimate?';
+                  const scaleVerifiedText = ingredient.scale_verified ? t('localization.coach.weightVerified') : t('localization.coach.verifyWeight');
+                  const confidenceToggleText = isExpanded ? t('localization.coach.hideDetails') : t('localization.coach.whyEstimate');
                   const gramsRangeText = ingredient.grams_min && ingredient.grams_max
-                    ? `Range: ${ingredient.grams_min}–${ingredient.grams_max}g`
+                    ? t('localization.coach.gramsRange', { min: ingredient.grams_min.toLocaleString(locale), max: ingredient.grams_max.toLocaleString(locale) })
                     : null;
                   const sourceUrl = ingredient.nutrition_source?.source_url ?? null;
                   const sourceName = ingredient.nutrition_source?.source_name ?? null;
-                  const confidenceDetailText = `ID: ${ingredient.id_confidence} · Portion: ${ingredient.model_portion_confidence} · Nutrition: ${ingredient.nutrition_confidence}`;
+                  const confidenceDetailText = t('localization.coach.confidenceDetail', { id: confidenceLabel(ingredient.id_confidence), portion: confidenceLabel(ingredient.model_portion_confidence), nutrition: confidenceLabel(ingredient.nutrition_confidence) });
 
                   // Build unit options for this ingredient
                   const unitOptions: { key: string; label: string; gramsPerUnit: number }[] = [];
                   if (ingredient.preferred_unit && ingredient.unit_grams > 0 && ingredient.preferred_unit !== 'g' && ingredient.preferred_unit !== 'oz') {
-                    unitOptions.push({ key: ingredient.preferred_unit, label: ingredient.preferred_unit, gramsPerUnit: ingredient.unit_grams });
+                    unitOptions.push({ key: ingredient.preferred_unit, label: unitLabel(ingredient.preferred_unit), gramsPerUnit: ingredient.unit_grams });
                   }
                   unitOptions.push({ key: 'g', label: 'g', gramsPerUnit: 1 });
                   unitOptions.push({ key: 'oz', label: 'oz', gramsPerUnit: 28.35 });
 
-                  const quantityDisplay = Number.isInteger(ingredient.quantity)
-                    ? ingredient.quantity.toString()
-                    : ingredient.quantity.toFixed(1);
+                  const quantityDisplay = ingredient.quantity.toLocaleString(locale, { useGrouping: false, maximumFractionDigits: 1 });
 
                   return (
                     <View
@@ -1760,6 +1771,9 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           console.log('[Chatbot] Toggle ingredient:', ingredient.name);
                           handleToggleIngredient(ingredient.id);
                         }}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={t('localization.coach.includeIngredient', { name: ingredient.name })}
+                        accessibilityState={{ checked: ingredient.included }}
                         style={styles.ingredientCheckbox}
                       >
                         <IconSymbol
@@ -1782,7 +1796,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text style={[styles.ingredientName, { color: isDark ? colors.textDark : colors.text, flex: 1 }]}>
                             {ingredient.name}
                           </Text>
-                          <Text style={{ fontSize: 16 }}>{confidenceEmojiVal}</Text>
+                          <Text accessibilityLabel={t('localization.coach.estimateConfidence', { confidence: confidenceLabel(ingredient.overall_confidence) })} style={{ fontSize: 16 }}>{confidenceEmojiVal}</Text>
                         </View>
 
                         {/* Quantity row: qty  unit▾ */}
@@ -1796,6 +1810,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                                 backgroundColor: isDark ? colors.cardDark : colors.card,
                               },
                             ]}
+                            accessibilityLabel={t('localization.coach.ingredientQuantity', { name: ingredient.name })}
                             value={quantityDisplay}
                             onChangeText={(val) => {
                               console.log('[Chatbot] Quantity text changed for', ingredient.name, ':', val);
@@ -1806,11 +1821,13 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           />
 
                           <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel={t('localization.coach.selectIngredientUnit', { name: ingredient.name, unit: unitLabel(ingredient.unit) })}
                             style={[styles.unitPill, { borderColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.cardDark : colors.card }]}
                             onPress={() => {
                               console.log('[Chatbot] Unit picker pressed for', ingredient.name, 'current unit:', ingredient.unit);
                               Alert.alert(
-                                'Select unit',
+                                t('localization.coach.selectUnit'),
                                 undefined,
                                 [
                                   ...unitOptions.map((opt) => ({
@@ -1820,13 +1837,13 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                                       handleUnitChange(ingredient.id, opt.key, opt.gramsPerUnit);
                                     },
                                   })),
-                                  { text: 'Cancel', style: 'cancel' as const },
+                                  { text: t('common.cancel'), style: 'cancel' as const },
                                 ]
                               );
                             }}
                           >
                             <Text style={[styles.unitPillText, { color: isDark ? colors.textDark : colors.text }]}>
-                              {ingredient.unit}
+                              {unitLabel(ingredient.unit)}
                             </Text>
                             <Text style={[styles.unitPillChevron, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>▾</Text>
                           </TouchableOpacity>
@@ -1836,7 +1853,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text
                             style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                           >
-                            {ingredient.calories} kcal
+                            {ingredient.calories.toLocaleString(locale)} kcal
                           </Text>
                           <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
                             •
@@ -1844,7 +1861,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text
                             style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                           >
-                            P: {ingredient.protein}g
+                            {t('localization.coach.proteinShort', { value: ingredient.protein.toLocaleString(locale) })}
                           </Text>
                           <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
                             •
@@ -1852,7 +1869,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text
                             style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                           >
-                            C: {ingredient.carbs}g
+                            {t('localization.coach.carbsShort', { value: ingredient.carbs.toLocaleString(locale) })}
                           </Text>
                           <Text style={[styles.macroDivider, { color: isDark ? colors.borderDark : colors.border }]}>
                             •
@@ -1860,7 +1877,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                           <Text
                             style={[styles.macroText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}
                           >
-                            F: {ingredient.fats}g
+                            {t('localization.coach.fatsShort', { value: ingredient.fats.toLocaleString(locale) })}
                           </Text>
                         </View>
 
@@ -1897,7 +1914,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                             )}
                             {sourceUrl !== null && (
                               <Text style={styles.confidenceDetailText} numberOfLines={1}>
-                                {'Source: '}
+                                {t('localization.coach.source')}
                                 {sourceUrl}
                               </Text>
                             )}
@@ -1929,11 +1946,11 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               {latestEstimate.packaging_ambiguous && latestEstimate.packaging_candidates && (
                 <View style={[styles.ambiguityCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
                   <Text style={[styles.ambiguityTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                    🔍 Multiple products found — which one?
+                    {t('localization.coach.selectProduct')}
                   </Text>
                   {latestEstimate.packaging_candidates.map((candidate, idx) => {
                     const candidateLabel = `${candidate.brand} ${candidate.name}`;
-                    const candidateMacroText = `${candidate.calories_per_100g} kcal/100g · P:${candidate.protein_per_100g}g · C:${candidate.carbs_per_100g}g · F:${candidate.fat_per_100g}g`;
+                    const candidateMacroText = t('localization.coach.candidateMacros', { calories: candidate.calories_per_100g.toLocaleString(locale), protein: candidate.protein_per_100g.toLocaleString(locale), carbs: candidate.carbs_per_100g.toLocaleString(locale), fat: candidate.fat_per_100g.toLocaleString(locale) });
                     return (
                       <TouchableOpacity
                         key={idx}
@@ -2006,7 +2023,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               {selectedImages.map((img, idx) => (
                 <View key={idx} style={styles.imageThumbnailWrapper}>
                   <Image source={{ uri: img }} style={styles.imageThumbnail} resizeMode="cover" />
-                  <TouchableOpacity style={styles.removeThumbnailButton} onPress={() => handleRemovePhoto(idx)}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('localization.coach.removePhoto', { count: idx + 1 })} style={styles.removeThumbnailButton} onPress={() => handleRemovePhoto(idx)}>
                     <IconSymbol
                       ios_icon_name="xmark.circle.fill"
                       android_material_icon_name="cancel"
@@ -2019,6 +2036,8 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               {selectedImages.length < 3 && (
                 <TouchableOpacity
                   style={[styles.addMorePhotoButton, { borderColor: colors.primary }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('chatbot.addPhoto')}
                   onPress={handleAddPhoto}
                 >
                   <IconSymbol
@@ -2027,7 +2046,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                     size={20}
                     color={colors.primary}
                   />
-                  <Text style={{ color: colors.primary, fontSize: 11, marginTop: 2 }}>Add</Text>
+                  <Text style={{ color: colors.primary, fontSize: 11, marginTop: 2 }}>{t('localization.coach.add')}</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
@@ -2052,6 +2071,8 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                 styles.photoButton,
                 { backgroundColor: isDark ? colors.backgroundDark : colors.background },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('chatbot.addPhoto')}
               onPress={handleAddPhoto}
               disabled={loading}
             >
@@ -2090,6 +2111,8 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                       : colors.border,
                 },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('localization.coach.sendMessage')}
               onPress={() => {
                 console.log('[Chatbot] Send button pressed, text length:', inputText.trim().length, 'images:', selectedImages.length);
                 handleSend();

@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -100,7 +101,7 @@ export default function CheckInDetailsScreen() {
     const [year, month, day] = dateString.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     
-    return date.toLocaleDateString('en-US', { 
+    return date.toLocaleDateString(getAppLocale(), { 
       weekday: 'long',
       month: 'long', 
       day: 'numeric', 
@@ -137,7 +138,7 @@ export default function CheckInDetailsScreen() {
     );
   }
 
-  const stepsGoalText = checkIn.steps_goal ? t('checkInDetails.stepsGoal', { goal: checkIn.steps_goal.toLocaleString() }) : null;
+  const stepsGoalText = checkIn.steps_goal ? t('checkInDetails.stepsGoal', { goal: checkIn.steps_goal.toLocaleString(getAppLocale()) }) : null;
 
   return (
     <SafeAreaView
@@ -230,7 +231,7 @@ export default function CheckInDetailsScreen() {
                   {t('checkInDetails.steps')}
                 </Text>
                 <Text style={[styles.statValue, { color: isDark ? colors.textDark : colors.text }]}>
-                  {checkIn.steps.toLocaleString()}
+                  {checkIn.steps.toLocaleString(getAppLocale())}
                 </Text>
                 {stepsGoalText ? (
                   <Text style={[styles.statSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>

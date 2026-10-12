@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
@@ -91,7 +92,7 @@ export default function TermsOfServiceScreen() {
           </Text>
 
           <Text style={[styles.lastUpdated, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {t('termsOfService.lastUpdated', { date: new Date().toLocaleDateString() })}
+            {t('termsOfService.lastUpdated', { date: new Date().toLocaleDateString(getAppLocale()) })}
           </Text>
         </View>
       </ScrollView>

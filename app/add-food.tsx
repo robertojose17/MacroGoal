@@ -428,7 +428,7 @@ export default function AddFoodScreen() {
           if (controller.signal.aborted) return;
           console.warn('[AddFood] Search error at stage:', _stage, _error.message);
           setSearchResults(prev => {
-            if (prev.length === 0) setSearchError('Connection issue. Please check your internet and try again.');
+            if (prev.length === 0) setSearchError(t('localization.screens.connectionError'));
             return prev;
           });
         },
@@ -440,7 +440,7 @@ export default function AddFoodScreen() {
       },
       controller.signal,
     );
-  }, []);
+  }, [t]);
 
   /**
    * Handle search input change with debouncing

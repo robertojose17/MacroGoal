@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Platform } from 'react-native';
@@ -92,14 +93,14 @@ export default function HomeScreen() {
 
       if (userError) {
         console.error('[Home Web] Error getting user:', userError);
-        setError('Failed to authenticate. Please try logging in again.');
+        setError('localization.screens.homeAuthFailed');
         setLoading(false);
         return;
       }
 
       if (!user) {
         console.log('[Home Web] No user found');
-        setError('No user session found. Please log in.');
+        setError('home.noUserSession');
         setLoading(false);
         return;
       }
@@ -166,7 +167,7 @@ export default function HomeScreen() {
 
       if (mealsError) {
         console.error('[Home Web] Error loading meals:', mealsError);
-        setError('Failed to load meals. Please try refreshing.');
+        setError('localization.screens.homeLoadFailed');
       } else {
         console.log('[Home Web] Meals loaded for', dateString, ':', mealsData?.length || 0, 'meals');
 
@@ -245,12 +246,12 @@ export default function HomeScreen() {
       }
     } catch (err: any) {
       console.error('[Home Web] Error in loadData:', err);
-      setError(err?.message || 'An unexpected error occurred. Please try again.');
+      setError('home.unexpectedError');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -322,10 +323,10 @@ export default function HomeScreen() {
       console.log('[Home Web] Successfully deleted from database');
     } catch (err: any) {
       console.error('[Home Web] Error in handleDeleteFood:', err);
-      Alert.alert('Delete Failed', err?.message || 'Failed to delete food entry. Please try again.', [{ text: 'OK' }]);
+      Alert.alert(t('localization.screens.deleteFailed'), t('localization.screens.deleteEntryFailed'), [{ text: 'OK' }]);
       loadData();
     }
-  }, [loadData]);
+  }, [loadData, t]);
 
   const goToPreviousDay = () => {
     console.log('[Home Web] Navigating to previous day');
@@ -358,8 +359,8 @@ export default function HomeScreen() {
   const leftArrowDisabled = false;
   const rightArrowDisabled = isTodayOrFutureBool;
 
-  const todayLabel = isTodayBool ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const dateLabel = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const todayLabel = isTodayBool ? t('common.today') : selectedDate.toLocaleDateString(getAppLocale(), { weekday: 'short' });
+  const dateLabel = selectedDate.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 
   if (loading) {
     return (
@@ -384,7 +385,7 @@ export default function HomeScreen() {
             color={colors.error}
           />
           <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>
-            {error}
+            {error ? t(error) : null}
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}

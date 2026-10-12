@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -278,7 +279,7 @@ export default function GoalWeightCard({
     if (daysToGoal != null) {
       const estDate = new Date();
       estDate.setDate(estDate.getDate() + daysToGoal);
-      estDateLabel = estDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      estDateLabel = estDate.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
     }
   }
   console.log('[GoalWeightCard] estArrival — lbsToGo:', lbsToGo, 'lossRateLbsPerWeek:', goalData?.lossRateLbsPerWeek, 'deficit:', goalData ? goalData.maintenanceCalories - goalData.dailyCalories : 'n/a', 'result:', estDateLabel);
@@ -335,11 +336,11 @@ export default function GoalWeightCard({
     const slopePerDay = num / den; // lbs/day (negative = losing)
     const lbsPerWeek = -slopePerDay * 7; // flip sign: positive = losing weight
     if (!isFinite(lbsPerWeek)) return '--';
-    return lbsPerWeek.toFixed(1);
+    return lbsPerWeek.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   })();
   console.log('[GoalWeightCard] lossSpeed — trackerEntries:', trackerEntries.length, 'checkIns:', checkIns.length, 'result:', lossSpeedDisplay);
 
-  const lossSpeedLabel = lossSpeedDisplay === '--' ? '--' : `${lossSpeedDisplay} lbs/week`;
+  const lossSpeedLabel = lossSpeedDisplay === '--' ? '--' : `${lossSpeedDisplay} ${t('localization.shared.lbsWeek')}`;
 
   return (
     <View style={[styles.card, { backgroundColor: bg, borderColor: cardBorderColor }]}>
@@ -395,7 +396,7 @@ export default function GoalWeightCard({
             </View>
             <View style={[styles.estDivider, { backgroundColor: textSecondary }]} />
             <View style={styles.estCell}>
-              <Text style={[styles.estLabel, { color: textSecondary }]}>LOSS SPEED</Text>
+              <Text style={[styles.estLabel, { color: textSecondary }]}>{t('localization.shared.lossSpeed')}</Text>
               <Text style={[styles.estDate, { color: textPrimary }]}>{lossSpeedLabel}</Text>
             </View>
           </View>

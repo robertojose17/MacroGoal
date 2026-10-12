@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -60,8 +61,8 @@ interface CardData {
   leaderboardPhrase: string;
   beforePhotoUrl?: string | null;
   afterPhotoUrl?: string | null;
-  beforeDateLabel?: string;
-  afterDateLabel?: string;
+  beforePhotoDate?: string;
+  afterPhotoDate?: string;
   calorieDeficit?: number;
   beforeWeight?: number | null;
   afterWeight?: number | null;
@@ -69,6 +70,12 @@ interface CardData {
   afterTransform?: PhotoTransform | null;
   beforePhotoId?: string | null;
   afterPhotoId?: string | null;
+}
+
+function formatPhotoDate(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value.length === 10 ? value + 'T00:00:00' : value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
 export default function ShareProgressScreen() {
@@ -482,16 +489,8 @@ export default function ShareProgressScreen() {
       console.log('[ShareProgress] Before transform:', beforeTransform);
       console.log('[ShareProgress] After transform:', afterTransform);
 
-      const formatDateLabel = (dateStr: string | null | undefined): string => {
-        if (!dateStr) return '';
-        // Handle both 'YYYY-MM-DD' and full ISO timestamps
-        const d = dateStr.length === 10 ? new Date(dateStr + 'T00:00:00') : new Date(dateStr);
-        if (isNaN(d.getTime())) return '';
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      };
-
-      const beforeDateLabel = formatDateLabel(beforeEntry?.created_at);
-      const afterDateLabel = afterEntry ? formatDateLabel(afterEntry.created_at) : '';
+      const beforePhotoDate = beforeEntry?.created_at ?? '';
+      const afterPhotoDate = afterEntry?.created_at ?? '';
 
       console.log('[ShareProgress] Before photo:', beforePhotoUrl ? 'found' : 'none');
       console.log('[ShareProgress] After photo:', afterPhotoUrl ? 'found' : 'none');
@@ -566,8 +565,8 @@ export default function ShareProgressScreen() {
         leaderboardPhrase,
         beforePhotoUrl,
         afterPhotoUrl,
-        beforeDateLabel,
-        afterDateLabel,
+        beforePhotoDate,
+        afterPhotoDate,
         calorieDeficit,
         beforeWeight: beforeWeightLbs,
         afterWeight: afterWeightLbs,
@@ -719,8 +718,8 @@ export default function ShareProgressScreen() {
               ref={viewShotRef}
               beforePhoto={cardData.beforePhotoUrl}
               afterPhoto={cardData.afterPhotoUrl}
-              beforeDate={cardData.beforeDateLabel}
-              afterDate={cardData.afterDateLabel}
+              beforeDate={formatPhotoDate(cardData.beforePhotoDate)}
+              afterDate={formatPhotoDate(cardData.afterPhotoDate)}
               beforeWeight={cardData.beforeWeight}
               afterWeight={cardData.afterWeight}
               consistencyScore={cardData.consistencyScore}
@@ -737,8 +736,8 @@ export default function ShareProgressScreen() {
               <ShareableProgressCard
                 beforePhoto={cardData.beforePhotoUrl}
                 afterPhoto={cardData.afterPhotoUrl}
-                beforeDate={cardData.beforeDateLabel}
-                afterDate={cardData.afterDateLabel}
+                beforeDate={formatPhotoDate(cardData.beforePhotoDate)}
+                afterDate={formatPhotoDate(cardData.afterPhotoDate)}
                 beforeWeight={cardData.beforeWeight}
                 afterWeight={cardData.afterWeight}
                 consistencyScore={cardData.consistencyScore}

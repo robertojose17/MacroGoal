@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
@@ -199,13 +200,13 @@ export default function HomeScreen() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
         console.error('[Home iOS] Error getting user:', userError);
-        setError('Failed to authenticate. Please try logging in again.');
+        setError('localization.screens.homeAuthFailed');
         setLoading(false);
         return;
       }
       if (!user) {
         console.log('[Home iOS] No user found');
-        setError('No user session found. Please log in.');
+        setError('home.noUserSession');
         setLoading(false);
         return;
       }
@@ -288,7 +289,7 @@ export default function HomeScreen() {
 
       if (mealsError) {
         console.error('[Home iOS] Error loading meals:', mealsError);
-        setError('Failed to load meals. Please try refreshing.');
+        setError('localization.screens.homeLoadFailed');
         setAllFoodItems([]);
       } else {
         console.log('[Home iOS] Meals loaded for', dateString, ':', mealsData?.length || 0, 'meals');
@@ -368,13 +369,13 @@ export default function HomeScreen() {
       }
     } catch (err: any) {
       console.error('[Home iOS] Error in loadData:', err);
-      setError(err?.message || 'An unexpected error occurred. Please try again.');
+      setError('home.unexpectedError');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate]);
+  }, [selectedDate, t]);
 
   // ── Load plans ──
   const loadPlans = useCallback(async () => {
@@ -407,11 +408,11 @@ export default function HomeScreen() {
       setTemplatePlans(Array.isArray(templatesData) ? templatesData : []);
     } catch (err: any) {
       console.error('[Home iOS] Error loading meal plans:', err);
-      setPlansError('Failed to load meal plans.');
+      setPlansError(t('localization.screens.homePlansFailed'));
     } finally {
       setPlansLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchPlanMacros = async (planId: string) => {
     if (planMacros[planId]) return;
@@ -533,10 +534,10 @@ export default function HomeScreen() {
       console.log('[Home iOS] Successfully deleted from database');
     } catch (err: any) {
       console.error('[Home iOS] Error in handleDeleteFood:', err);
-      Alert.alert('Delete Failed', err?.message || 'Failed to delete food entry. Please try again.', [{ text: 'OK' }]);
+      Alert.alert(t('localization.screens.deleteFailed'), t('localization.screens.deleteEntryFailed'), [{ text: 'OK' }]);
       loadData();
     }
-  }, [loadData]);
+  }, [loadData, t]);
 
   const goToPreviousDay = () => {
     console.log('[Home iOS] Navigating to previous day');
@@ -787,7 +788,7 @@ export default function HomeScreen() {
       await loadData();
     } catch (err: any) {
       console.error('[Home iOS] handleMarkEaten error:', err);
-      Alert.alert('Error', 'Failed to mark item as eaten. Please try again.');
+      Alert.alert(t('common.error'), t('localization.screens.markEatenFailed'));
     }
   };
 
@@ -926,7 +927,7 @@ export default function HomeScreen() {
       Alert.alert(t('home.scheduleDoneTitle'), t('home.scheduleDoneMessage'));
     } catch (err: any) {
       console.error('[Home iOS] handleSchedulePlan error:', err);
-      Alert.alert('Error', 'Failed to schedule plan. Please try again.');
+      Alert.alert(t('common.error'), t('localization.screens.scheduleFailed'));
     } finally {
       setIsScheduling(false);
     }
@@ -961,8 +962,8 @@ export default function HomeScreen() {
   // ── Derived values ──
   const leftArrowDisabled = false;
   const rightArrowDisabled = isTodayOrFuture();
-  const todayLabel = isToday() ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const dateDisplay = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const todayLabel = isToday() ? t('common.today') : selectedDate.toLocaleDateString(getAppLocale(), { weekday: 'short' });
+  const dateDisplay = selectedDate.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 
   // ── Render helpers ──
 
@@ -983,7 +984,7 @@ export default function HomeScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.errorContainer}>
           <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={48} color={colors.error} />
-          <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>{error}</Text>
+          <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>{error ? t(error) : null}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadData}>
             <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
@@ -1093,7 +1094,7 @@ export default function HomeScreen() {
   };
 
   const formatSessionTime = (date: Date): string => {
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return date.toLocaleTimeString(getAppLocale(), { hour: 'numeric', minute: '2-digit', hour12: getAppLocale() === 'en-US' });
   };
 
   const renderTrackingContent = () => {
@@ -1440,7 +1441,7 @@ export default function HomeScreen() {
         <View style={{ paddingVertical: 40, alignItems: 'center' }}>
           <Text style={{ color: isDark ? '#fff' : '#000', marginBottom: 12 }}>{plansError}</Text>
           <TouchableOpacity onPress={loadPlans} style={{ backgroundColor: '#14B8A6', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 }}>
-            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('localization.screens.home11')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -1463,8 +1464,8 @@ export default function HomeScreen() {
       ? t('home.nextWeek')
       : weekOffset === -1
       ? t('home.lastWeek')
-      : `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-    const weekDateRange = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      : `${startOfWeek.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' })}`;
+    const weekDateRange = `${startOfWeek.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' })}`;
 
     // Grocery list for this week
     const assignedPlanIds = [...new Set(DAYS.map(d => currentWeekPlan[d]).filter(Boolean))] as string[];
@@ -1783,7 +1784,7 @@ export default function HomeScreen() {
           <Search size={18} color={subColor} />
           <TextInput
             style={[recipeTabStyles.searchInput, { color: isDark ? colors.textDark : colors.text }]}
-            placeholder="Search recipes..."
+            placeholder={t('localization.screens.home0')}
             placeholderTextColor={subColor}
             value={recipeQuery}
             onChangeText={handleRecipeSearchChange}
@@ -1806,8 +1807,8 @@ export default function HomeScreen() {
             </ScrollView>
           ) : recipeFinderError ? (
             <View style={recipeTabStyles.emptyState}>
-              <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>Search failed</Text>
-              <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>{recipeFinderError}</Text>
+              <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('localization.screens.home1')}</Text>
+              <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>{t('localization.screens.recipeSearchFailed')}</Text>
             </View>
           ) : (
             <FlatList
@@ -1825,15 +1826,15 @@ export default function HomeScreen() {
               onEndReachedThreshold={0.3}
               ListEmptyComponent={
                 <View style={recipeTabStyles.emptyState}>
-                  <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>No recipes found</Text>
-                  <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>Try a different search term</Text>
+                  <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('localization.screens.home2')}</Text>
+                  <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>{t('localization.screens.home3')}</Text>
                 </View>
               }
               ListFooterComponent={
                 recipeFinderLoadingMore ? (
                   <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
                 ) : !recipeFinderHasMore && recipeFinderResults.length > 0 ? (
-                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>No more recipes</Text>
+                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>{t('localization.screens.home4')}</Text>
                 ) : null
               }
             />
@@ -1852,13 +1853,13 @@ export default function HomeScreen() {
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.sm }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <IconSymbol ios_icon_name="heart.fill" android_material_icon_name="favorite" size={18} color="#EF4444" />
-                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>Saved Recipes</Text>
+                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>{t('localization.screens.home5')}</Text>
                   </View>
                 </View>
                 {savedRecipes.length === 0 ? (
                   <View style={[recipeTabStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
                     <Bookmark size={24} color={subColor} />
-                    <Text style={[recipeTabStyles.emptyHorizontalText, { color: subColor }]}>Save recipes you love to find them here</Text>
+                    <Text style={[recipeTabStyles.emptyHorizontalText, { color: subColor }]}>{t('localization.screens.savedEmpty')}</Text>
                   </View>
                 ) : (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={recipeTabStyles.horizontalList}>
@@ -1870,9 +1871,9 @@ export default function HomeScreen() {
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.lg }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={18} color={colors.primary} />
-                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>Trending Now</Text>
+                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>{t('localization.screens.home6')}</Text>
                   </View>
-                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>Most clicked in the last 48h</Text>
+                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>{t('localization.screens.home7')}</Text>
                 </View>
                 {popularLoading ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={recipeTabStyles.horizontalList}>
@@ -1886,8 +1887,8 @@ export default function HomeScreen() {
                   </ScrollView>
                 ) : null}
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.md }]}>
-                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>✨ Discover</Text>
-                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>Endless fitness recipes, just for you</Text>
+                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>✨ {t('localization.screens.home8')}</Text>
+                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>{t('localization.screens.home9')}</Text>
                 </View>
                 {browseLoading && (
                   <View style={{ paddingHorizontal: spacing.md }}>
@@ -1905,7 +1906,7 @@ export default function HomeScreen() {
               browseLoadingMore ? (
                 <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
               ) : !browseHasMore && browseResults.length > 0 ? (
-                <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>No more recipes</Text>
+                <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>{t('localization.screens.home4')}</Text>
               ) : null
             }
           />
@@ -1918,7 +1919,7 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       {/* ── Fixed Food Header ── */}
       <View style={[styles.foodHeader, { borderBottomColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-        <Text style={[styles.foodHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>Food</Text>
+        <Text style={[styles.foodHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('localization.screens.home10')}</Text>
         <TouchableOpacity
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={() => {
@@ -1962,7 +1963,7 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.segmentButtonText, { color: activeTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-              Recipes
+              {t('localization.completion.recipes')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -2058,11 +2059,11 @@ export default function HomeScreen() {
           const result = await executePurchase();
           if (result.success) {
             console.log('[Home iOS] Streak rescue purchase succeeded, streak restored to:', lostStreakValue);
-            Alert.alert('¡Racha restaurada!', `¡Tu racha de ${lostStreakValue} días fue restaurada!`);
+            Alert.alert(t('localization.screens.streakRestored'), t('localization.screens.streakRestoredBody', { count: lostStreakValue }));
             await refreshRescue();
           } else if (result.error) {
             console.warn('[Home iOS] Streak rescue purchase failed:', result.error);
-            Alert.alert('Error', result.error);
+            Alert.alert(t('common.error'), result.error);
           }
         }}
         onDismiss={() => {

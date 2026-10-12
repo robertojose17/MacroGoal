@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -93,7 +94,7 @@ export default function CheckInFormScreen() {
       // Parse date correctly from database (stored as YYYY-MM-DD)
       const [year, month, day] = data.date.split('-').map(Number);
       const localDate = new Date(year, month - 1, day, 12, 0, 0);
-      console.log('[CheckInForm] 📅 Parsed date:', data.date, '→', localDate.toLocaleDateString());
+      console.log('[CheckInForm] 📅 Parsed date:', data.date, '→', localDate.toLocaleDateString(getAppLocale()));
       setDate(localDate);
       
       // Weight is ALWAYS stored in kg in the database
@@ -266,7 +267,7 @@ export default function CheckInFormScreen() {
 
       // Convert date to YYYY-MM-DD format in LOCAL timezone
       const dateString = toLocalDateString(date);
-      console.log('[CheckInForm] 📅 Saving date:', dateString, '(from', date.toLocaleDateString(), ')');
+      console.log('[CheckInForm] 📅 Saving date:', dateString, '(from', date.toLocaleDateString(getAppLocale()), ')');
 
       // Build check-in data based on type
       const checkInData: any = {
@@ -528,7 +529,7 @@ export default function CheckInFormScreen() {
   const getWeightUnit = () => 'lbs';
 
   const handleDateSelect = (selectedDate: Date) => {
-    console.log('[CheckInForm] 📅 Date selected from calendar:', selectedDate.toLocaleDateString());
+    console.log('[CheckInForm] 📅 Date selected from calendar:', selectedDate.toLocaleDateString(getAppLocale()));
     setDate(selectedDate);
   };
 
@@ -593,7 +594,7 @@ export default function CheckInFormScreen() {
               color={colors.primary}
             />
             <Text style={[styles.dateText, { color: isDark ? colors.textDark : colors.text }]}>
-              {date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              {date.toLocaleDateString(getAppLocale(), { month: 'long', day: 'numeric', year: 'numeric' })}
             </Text>
           </TouchableOpacity>
         </View>
@@ -651,7 +652,7 @@ export default function CheckInFormScreen() {
                 ) : liveSteps !== null ? (
                   <>
                     <Text style={[styles.stepsValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      {liveSteps.toLocaleString()}
+                      {liveSteps.toLocaleString(getAppLocale())}
                     </Text>
                     <Text style={[styles.stepsSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                       {Platform.OS === 'ios' ? t('checkInForm.fromAppleHealth') : t('checkInForm.fromHealthConnect')}

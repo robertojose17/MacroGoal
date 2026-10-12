@@ -1,3 +1,5 @@
+import { challengeUnitLabel } from '@/components/challengeUnitLabel';
+import { getAppLocale } from '@/lib/localization';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -52,11 +54,11 @@ function metricIcon(metric: MetricType): keyof typeof Ionicons.glyphMap {
 
 // Format a progress value nicely
 function formatValue(value: number, unit: string): string {
-  if (unit === 'steps' || unit === 'floors') return Math.round(value).toLocaleString();
-  if (unit === 'cal') return Math.round(value).toLocaleString();
+  if (unit === 'steps' || unit === 'floors') return Math.round(value).toLocaleString(getAppLocale());
+  if (unit === 'cal') return Math.round(value).toLocaleString(getAppLocale());
   if (unit === 'min') return Math.round(value).toString();
-  if (unit === 'mi') return value.toFixed(1);
-  return String(Math.round(value * 10) / 10);
+  if (unit === 'mi') return value.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (Math.round(value * 10) / 10).toLocaleString(getAppLocale());
 }
 
 // Read current HealthKit value for a metric (returns 0 on Android or error)
@@ -183,7 +185,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
         .maybeSingle();
       const code = rc?.custom_code || rc?.code || '';
       await Share.share({
-        message: `I've been tracking my macros with Macro Goal. Join with my code ${code} and we both earn 1,000 XP`,
+        message: t('localization.shared.referralShare', { code }),
       });
     } catch (e) {
       console.warn('[FlashChallengesCard] share failed:', e);
@@ -270,7 +272,7 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
   if (status === 'accepted') {
     const progressDisplay = formatValue(challenge.progress, challenge.target_unit);
     const targetDisplay = formatValue(challenge.target_value, challenge.target_unit);
-    const unitLabel = challenge.target_unit;
+    const unitLabel = challengeUnitLabel(challenge.target_unit);
 
     // Referral override
     const referralComplete = isReferral && weekReferrals >= 3;

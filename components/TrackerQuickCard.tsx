@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 /**
  * TrackerQuickCard
@@ -201,7 +202,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
       setWeightInput('');
     } catch (err) {
       console.error('[TrackerQuickCard] Weight log failed:', err);
-      Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
+      Alert.alert(t('checkIns.logFailed'), t('localization.shared.saveFailed'));
     } finally {
       setWeightLogging(false);
     }
@@ -242,7 +243,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
     } catch (err) {
       console.error('[TrackerQuickCard] Gym log failed:', err);
       setTodayEntries((prev) => ({ ...prev, [gymTracker.id]: null }));
-      Alert.alert(t('checkIns.logFailed'), err instanceof Error ? err.message : String(err));
+      Alert.alert(t('checkIns.logFailed'), t('localization.shared.saveFailed'));
     } finally {
       setGymLogging(false);
     }
@@ -273,9 +274,9 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
   const calsDisplay = `${Math.round(Number(goal?.today_calories ?? 0))} / ${Math.round(dailyCals)}`;
   const proteinDisplay = `${Math.round(Number(goal?.today_protein ?? 0))}g / ${Math.round(dailyProtein)}g`;
 
-  const stepsCountFormatted = stepsCount.toLocaleString('en-US');
-  const stepsGoalFormatted = stepsGoal > 0 ? stepsGoal.toLocaleString('en-US') : null;
-  const weightDisplayValue = weightEntry ? Number(weightEntry.value).toFixed(1) : '';
+  const stepsCountFormatted = stepsCount.toLocaleString(getAppLocale());
+  const stepsGoalFormatted = stepsGoal > 0 ? stepsGoal.toLocaleString(getAppLocale()) : null;
+  const weightDisplayValue = weightEntry ? Number(weightEntry.value).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '';
 
   if (loading) {
     return (

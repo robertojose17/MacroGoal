@@ -1,3 +1,5 @@
+import { getAppLocale } from '@/lib/localization';
+import { useTranslation } from 'react-i18next';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -42,17 +44,15 @@ type SlotKey = 'before' | 'after';
 
 const PHOTOS_ENDPOINT = `${SUPABASE_PROJECT_URL}/functions/v1/check-in-photos`;
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function formatDate(isoString: string): string {
   const d = new Date(isoString);
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  return d.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function formatDateShort(isoString: string): string {
   const d = new Date(isoString);
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return d.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
 // ─── Date Picker Modal ────────────────────────────────────────────────────────
@@ -68,6 +68,7 @@ interface DatePickerModalProps {
 }
 
 function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClose, weightByCheckInId }: DatePickerModalProps) {
+  const { t } = useTranslation();
   const overlayBg = isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.45)';
   const sheetBg = isDark ? '#1E2035' : '#FFFFFF';
   const titleColor = isDark ? colors.textDark : colors.text;
@@ -86,7 +87,7 @@ function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClos
       <Pressable style={[styles.modalOverlay, { backgroundColor: overlayBg }]} onPress={onClose}>
         <Pressable style={[styles.modalSheet, { backgroundColor: sheetBg }]} onPress={() => {}}>
           <View style={[styles.modalHandle, { backgroundColor: separatorColor }]} />
-          <Text style={[styles.modalTitle, { color: titleColor }]}>Select a Date</Text>
+          <Text style={[styles.modalTitle, { color: titleColor }]}>{t('localization.shared.selectADate')}</Text>
           <View style={[styles.modalDivider, { backgroundColor: separatorColor }]} />
           <FlatList
             data={photos}
@@ -99,7 +100,7 @@ function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClos
             renderItem={({ item }) => {
               const isSelected = item.id === selectedId;
               const weightLbs = weightByCheckInId[item.check_in_id];
-              const weightText = weightLbs != null ? ` · ${weightLbs.toFixed(1)} lbs` : '';
+              const weightText = weightLbs != null ? ` · ${weightLbs.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} lbs` : '';
               const displayText = formatDate(item.created_at) + weightText;
               return (
                 <TouchableOpacity
@@ -141,7 +142,7 @@ function DatePickerModal({ visible, photos, selectedId, isDark, onSelect, onClos
             }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.modalCancelText, { color: colors.primary }]}>Cancel</Text>
+            <Text style={[styles.modalCancelText, { color: colors.primary }]}>{t('localization.shared.cancel')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -159,8 +160,9 @@ interface DatePillProps {
 }
 
 function DatePill({ label, isDark, onPress, weightLbs }: DatePillProps) {
+  useTranslation();
   const pillBg = isDark ? '#1E2035' : '#F0F2F7';
-  const pillLabel = label + (weightLbs != null ? ` · ${weightLbs.toFixed(1)} lbs` : '');
+  const pillLabel = label + (weightLbs != null ? ` · ${weightLbs.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} lbs` : '');
   return (
     <TouchableOpacity
       style={[styles.datePill, { backgroundColor: pillBg }]}
@@ -261,6 +263,7 @@ const viewerStyles = StyleSheet.create({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
+  const { t } = useTranslation();
   const router = useRouter();
 
   const handleAddPhoto = useCallback(() => {
@@ -422,7 +425,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
         <View style={styles.cardHeader}>
           <Text style={[styles.cardTitle, { color: textColor }]}>
-            Photo Progress
+            {t('localization.shared.photoProgress')}
           </Text>
           <TouchableOpacity
             style={styles.addButton}
@@ -488,7 +491,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Header */}
       <View style={styles.cardHeader}>
         <Text style={[styles.cardTitle, { color: textColor }]}>
-          Photo Progress
+          {t('localization.shared.photoProgress')}
         </Text>
         <TouchableOpacity
           style={styles.addButton}
@@ -521,10 +524,10 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
             />
           </View>
           <Text style={[styles.emptyTitle, { color: textColor }]}>
-            Add your first progress photo
+            {t('localization.shared.firstPhoto')}
           </Text>
           <Text style={[styles.emptySubtext, { color: subtextColor }]}>
-            Track your transformation over time
+            {t('localization.shared.photoDescription')}
           </Text>
           <View style={[styles.emptyCtaButton, { backgroundColor: colors.primary }]}>
             <IconSymbol
@@ -533,7 +536,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
               size={14}
               color="#FFFFFF"
             />
-            <Text style={styles.emptyCtaText}>Add Check-In</Text>
+            <Text style={styles.emptyCtaText}>{t('localization.shared.addCheckIn')}</Text>
           </View>
         </TouchableOpacity>
       )}
@@ -578,7 +581,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
                 color={subtextColor}
               />
               <Text style={[styles.placeholderText, { color: subtextColor }]}>
-                Next check-in
+                {t('localization.shared.nextCheckIn')}
               </Text>
             </View>
           </View>
@@ -646,7 +649,7 @@ function PhotoProgressCardInner({ userId, isDark }: PhotoProgressCardProps) {
       {/* Fullscreen photo viewer */}
       <PhotoViewerModal
         uri={viewerUri}
-        label={viewerLabel}
+        label={photos.find(photo => photo.photo_url === viewerUri)?.created_at ? formatDateShort(photos.find(photo => photo.photo_url === viewerUri)!.created_at) : viewerLabel}
         onClose={handleCloseViewer}
       />
     </View>

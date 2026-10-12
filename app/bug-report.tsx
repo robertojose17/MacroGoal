@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 
 import React, { useState } from 'react';
 import {
@@ -26,6 +27,7 @@ const BUG_REPORT_ENDPOINT =
   'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/onesignal-inspector/send-bug-report';
 
 export default function BugReportScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { tab_source } = useLocalSearchParams<{ tab_source?: string }>();
   const colorScheme = useColorScheme();
@@ -45,7 +47,7 @@ export default function BugReportScreen() {
     console.log('[BugReport] Attach photo button pressed');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Please allow photo library access to attach a screenshot.');
+      Alert.alert(t('localization.screens.bug0'), t('localization.screens.bug1'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -68,7 +70,7 @@ export default function BugReportScreen() {
     console.log('[BugReport] Submit button pressed — tab_source:', tab_source);
 
     if (!description.trim()) {
-      Alert.alert('Description required', 'Please describe what happened before submitting.');
+      Alert.alert(t('localization.screens.bug2'), t('localization.screens.bug3'));
       return;
     }
 
@@ -76,7 +78,7 @@ export default function BugReportScreen() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        Alert.alert('Not signed in', 'You must be signed in to submit a bug report.');
+        Alert.alert(t('localization.screens.bug4'), t('localization.screens.bug5'));
         setSubmitting(false);
         return;
       }
@@ -134,12 +136,12 @@ export default function BugReportScreen() {
       }
 
       console.log('[BugReport] Bug report submitted successfully');
-      Alert.alert('Thank you!', 'Your report has been submitted.', [
+      Alert.alert(t('localization.screens.bug6'), t('localization.screens.bug7'), [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err: any) {
       console.error('[BugReport] Submit error:', err);
-      Alert.alert('Failed to submit', 'Please try again.');
+      Alert.alert(t('localization.screens.bug8'), t('localization.screens.bug9'));
     } finally {
       setSubmitting(false);
     }
@@ -164,7 +166,7 @@ export default function BugReportScreen() {
             color={colors.primary}
           />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: textColor }]}>Report a Bug</Text>
+        <Text style={[styles.headerTitle, { color: textColor }]}>{t('localization.screens.bug10')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -174,11 +176,11 @@ export default function BugReportScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Description */}
-        <Text style={[styles.fieldLabel, { color: secondaryColor }]}>Description</Text>
+        <Text style={[styles.fieldLabel, { color: secondaryColor }]}>{t('localization.screens.bug11')}</Text>
         <View style={[styles.textAreaCard, { backgroundColor: cardBg, borderColor }]}>
           <TextInput
             style={[styles.textArea, { color: textColor }]}
-            placeholder="Describe what happened..."
+            placeholder={t('localization.screens.bug12')}
             placeholderTextColor={secondaryColor}
             multiline
             numberOfLines={5}
@@ -190,7 +192,7 @@ export default function BugReportScreen() {
         </View>
 
         {/* Attach Photo */}
-        <Text style={[styles.fieldLabel, { color: secondaryColor }]}>Attach Photo (optional)</Text>
+        <Text style={[styles.fieldLabel, { color: secondaryColor }]}>{t('localization.screens.bug13')}</Text>
         {photo ? (
           <View style={styles.photoPreviewContainer}>
             <Image source={{ uri: photo.uri }} style={styles.photoPreview} resizeMode="cover" />
@@ -199,7 +201,7 @@ export default function BugReportScreen() {
               onPress={handleRemovePhoto}
               activeOpacity={0.8}
             >
-              <Text style={styles.removePhotoText}>Remove</Text>
+              <Text style={styles.removePhotoText}>{t('localization.screens.bug14')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -214,7 +216,7 @@ export default function BugReportScreen() {
               size={20}
               color={colors.primary}
             />
-            <Text style={[styles.attachButtonText, { color: colors.primary }]}>Choose Photo</Text>
+            <Text style={[styles.attachButtonText, { color: colors.primary }]}>{t('localization.screens.bug15')}</Text>
           </TouchableOpacity>
         )}
 
@@ -228,7 +230,7 @@ export default function BugReportScreen() {
           {submitting ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.submitButtonText}>Submit Report</Text>
+            <Text style={styles.submitButtonText}>{t('localization.screens.bug16')}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>

@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
@@ -337,9 +338,9 @@ export default function EditGoalsScreen() {
             <View style={[styles.coachBanner, { backgroundColor: isDark ? '#2D1B4E' : '#EDE7F6', borderColor: isDark ? '#7B1FA2' : '#CE93D8' }]}>
               <Text style={styles.coachBannerIcon}>{'⚠️'}</Text>
               <Text style={[styles.coachBannerText, { color: isDark ? '#CE93D8' : '#4A148C' }]}>
-                {'These goals were last adjusted by your AI Coach on '}
-                {new Date(lastCoachMacroAction.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                {'. Editing them will override the Coach\'s recommendation.'}
+                {t('localization.screens.coachAdjusted')}
+                {new Date(lastCoachMacroAction.created_at).toLocaleDateString(getAppLocale(), { month: 'long', day: 'numeric', year: 'numeric' })}
+                {t('localization.screens.coachOverride')}
               </Text>
             </View>
           )}

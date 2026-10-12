@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import {
@@ -153,7 +154,7 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
     const consistencyScoreValue = Math.max(0, Math.min(100, Math.round(consistencyScore ?? 0)));
     const weightLostValue = Math.max(0, weightLost ?? 0);
 
-    const weightLostDisplay = weightLostValue > 0 ? weightLostValue.toFixed(1) : '—';
+    const weightLostDisplay = weightLostValue > 0 ? weightLostValue.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—';
     const showWeightUnit = weightLostValue > 0;
 
     const beforeDateDisplay = beforeDate || '';
@@ -161,8 +162,8 @@ const ShareableProgressCard = forwardRef<ShareableProgressCardHandle, ShareableP
 
     const showBeforeWeight = typeof beforeWeight === 'number' && isFinite(beforeWeight) && beforeWeight > 0;
     const showAfterWeight = typeof afterWeight === 'number' && isFinite(afterWeight) && afterWeight > 0;
-    const beforeWeightDisplay = showBeforeWeight ? `${(beforeWeight as number).toFixed(1)} lbs` : '';
-    const afterWeightDisplay = showAfterWeight ? `${(afterWeight as number).toFixed(1)} lbs` : '';
+    const beforeWeightDisplay = showBeforeWeight ? `${(beforeWeight as number).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} lbs` : '';
+    const afterWeightDisplay = showAfterWeight ? `${(afterWeight as number).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} lbs` : '';
 
     const footerHandle = username ? `@${username}` : '@you';
 

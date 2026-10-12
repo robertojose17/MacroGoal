@@ -17,7 +17,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import i18n from '@/lib/i18n';
+import type { TFunction } from 'i18next';
+import { getAppLocale } from '@/lib/localization';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -38,27 +39,27 @@ const genId = () => {
 type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean };
 
 const QUICK_ACTION_CARDS = [
-  { iosIcon: 'fork.knife', androidIcon: 'restaurant', titleKey: 'coach.prompt_1_title', subtitleKey: 'coach.prompt_1_sub', message: "I'm starving, what can I eat right now?" },
-  { iosIcon: 'flame.fill', androidIcon: 'local-fire-department', titleKey: 'coach.prompt_2_title', subtitleKey: 'coach.prompt_2_sub', message: "I messed up today, what do I do now?" },
-  { iosIcon: 'cart.fill', androidIcon: 'shopping-cart', titleKey: 'coach.prompt_3_title', subtitleKey: 'coach.prompt_3_sub', message: "I'm eating out tonight, how do I stay on track?" },
-  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', titleKey: 'coach.prompt_4_title', subtitleKey: 'coach.prompt_4_sub', message: "I'm not seeing results, is this even working?" },
-  { iosIcon: 'moon.fill', androidIcon: 'nightlight', titleKey: 'coach.prompt_5_title', subtitleKey: 'coach.prompt_5_sub', message: "I can't stop eating, I keep snacking at night" },
-  { iosIcon: 'bolt.fill', androidIcon: 'bolt', titleKey: 'coach.prompt_6_title', subtitleKey: 'coach.prompt_6_sub', message: "Give me something quick to eat, I only have 10 minutes" },
+  { iosIcon: 'fork.knife', androidIcon: 'restaurant', titleKey: 'coach.prompt_1_title', subtitleKey: 'coach.prompt_1_sub', messageKey: 'localization.coach.quickMessage1' },
+  { iosIcon: 'flame.fill', androidIcon: 'local-fire-department', titleKey: 'coach.prompt_2_title', subtitleKey: 'coach.prompt_2_sub', messageKey: 'localization.coach.quickMessage2' },
+  { iosIcon: 'cart.fill', androidIcon: 'shopping-cart', titleKey: 'coach.prompt_3_title', subtitleKey: 'coach.prompt_3_sub', messageKey: 'localization.coach.quickMessage3' },
+  { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', titleKey: 'coach.prompt_4_title', subtitleKey: 'coach.prompt_4_sub', messageKey: 'localization.coach.quickMessage4' },
+  { iosIcon: 'moon.fill', androidIcon: 'nightlight', titleKey: 'coach.prompt_5_title', subtitleKey: 'coach.prompt_5_sub', messageKey: 'localization.coach.quickMessage5' },
+  { iosIcon: 'bolt.fill', androidIcon: 'bolt', titleKey: 'coach.prompt_6_title', subtitleKey: 'coach.prompt_6_sub', messageKey: 'localization.coach.quickMessage6' },
 ];
 
 const CRAVING_CHIPS = [
-  { label: "I'm starving", iosIcon: 'flame.fill', androidIcon: 'local-fire-department', message: "I'm starving, what can I eat right now?" },
-  { label: "I need something sweet", iosIcon: 'heart.fill', androidIcon: 'favorite', message: "I need something sweet, what are my options?" },
-  { label: "I want pizza", iosIcon: 'fork.knife', androidIcon: 'restaurant', message: "I want pizza, can I fit it in my macros?" },
-  { label: "I'm eating out", iosIcon: 'building.2.fill', androidIcon: 'store', message: "I'm eating out, what should I order?" },
-  { label: "I have nothing at home", iosIcon: 'house.fill', androidIcon: 'home', message: "I have nothing at home, what can I make?" },
-  { label: "I messed up today", iosIcon: 'arrow.uturn.backward', androidIcon: 'undo', message: "I messed up today, what do I do now?" },
-  { label: "I can't stop eating", iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', message: "I can't stop eating, I keep snacking" },
-  { label: "Give me something quick", iosIcon: 'bolt.fill', androidIcon: 'bolt', message: "Give me something quick to eat" },
-  { label: "I want chips or candy", iosIcon: 'star.fill', androidIcon: 'star', message: "I want chips or something crunchy, what can I have?" },
-  { label: "Help me with dinner", iosIcon: 'moon.fill', androidIcon: 'nightlight', message: "Help me figure out what to have for dinner" },
-  { label: "I went off plan", iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', message: "I went off plan today, how do I recover?" },
-  { label: "I'm hungry at night", iosIcon: 'moon.stars.fill', androidIcon: 'bedtime', message: "I'm hungry at night, what can I eat without ruining my macros?" },
+  { labelKey: 'localization.coach.cravingLabel1', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', messageKey: 'localization.coach.quickMessage1' },
+  { labelKey: 'localization.coach.cravingLabel2', iosIcon: 'heart.fill', androidIcon: 'favorite', messageKey: 'localization.coach.cravingMessage2' },
+  { labelKey: 'localization.coach.cravingLabel3', iosIcon: 'fork.knife', androidIcon: 'restaurant', messageKey: 'localization.coach.cravingMessage3' },
+  { labelKey: 'localization.coach.cravingLabel4', iosIcon: 'building.2.fill', androidIcon: 'store', messageKey: 'localization.coach.cravingMessage4' },
+  { labelKey: 'localization.coach.cravingLabel5', iosIcon: 'house.fill', androidIcon: 'home', messageKey: 'localization.coach.cravingMessage5' },
+  { labelKey: 'localization.coach.cravingLabel6', iosIcon: 'arrow.uturn.backward', androidIcon: 'undo', messageKey: 'localization.coach.quickMessage2' },
+  { labelKey: 'localization.coach.cravingLabel7', iosIcon: 'exclamationmark.circle.fill', androidIcon: 'error', messageKey: 'localization.coach.cravingMessage7' },
+  { labelKey: 'localization.coach.cravingLabel8', iosIcon: 'bolt.fill', androidIcon: 'bolt', messageKey: 'localization.coach.cravingMessage8' },
+  { labelKey: 'localization.coach.cravingLabel9', iosIcon: 'star.fill', androidIcon: 'star', messageKey: 'localization.coach.cravingMessage9' },
+  { labelKey: 'localization.coach.cravingLabel10', iosIcon: 'moon.fill', androidIcon: 'nightlight', messageKey: 'localization.coach.cravingMessage10' },
+  { labelKey: 'localization.coach.cravingLabel11', iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', messageKey: 'localization.coach.cravingMessage11' },
+  { labelKey: 'localization.coach.cravingLabel12', iosIcon: 'moon.stars.fill', androidIcon: 'bedtime', messageKey: 'localization.coach.cravingMessage12' },
 ];
 
 
@@ -109,7 +110,7 @@ function countProductLines(lines: string[]): number {
 }
 
 // ── Action type formatting ───────────────────────────────────────────────────
-function formatActionType(actionType: string): { label: string; color: string } {
+function formatActionType(actionType: string, t: TFunction): { label: string; color: string } {
   const map: Record<string, { labelKey: string; color: string }> = {
     update_goal: { labelKey: 'coach.action_update_goal', color: '#3B82F6' },
     adjust_calories: { labelKey: 'coach.action_update_goal', color: colors.primary },
@@ -122,8 +123,8 @@ function formatActionType(actionType: string): { label: string; color: string } 
   const key = (actionType || '').toLowerCase().replace(/\s+/g, '_');
   const entry = map[key];
   return entry
-    ? { label: i18n.t(entry.labelKey), color: entry.color }
-    : { label: actionType || i18n.t('coach.action_update_goal'), color: colors.primary };
+    ? { label: t(entry.labelKey), color: entry.color }
+    : { label: t('coach.action_update_goal'), color: colors.primary };
 }
 
 // ── Markdown-like inline parser ──────────────────────────────────────────────
@@ -450,15 +451,16 @@ function InlineActionCard({
   onDecline: (messageId: string) => void;
 }) {
   const { t } = useTranslation();
+  const locale = getAppLocale();
   const proposal = action.proposal;
-  const actionTypeInfo = formatActionType(action.action_type || proposal.action_type || proposal.goal_type || '');
+  const actionTypeInfo = formatActionType(action.action_type || proposal.action_type || proposal.goal_type || '', t);
   const borderColor = isDark ? colors.borderDark : colors.border;
   const textColor = isDark ? colors.textDark : colors.text;
   const secondaryText = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const cardBg = isDark ? '#1E2035' : '#F7F8FC';
 
-  const currentVal = proposal.current_value !== undefined ? String(proposal.current_value) : null;
-  const proposedVal = proposal.proposed_value !== undefined ? String(proposal.proposed_value) : null;
+  const currentVal = proposal.current_value !== undefined ? (typeof proposal.current_value === 'number' ? proposal.current_value.toLocaleString(locale) : String(proposal.current_value)) : null;
+  const proposedVal = proposal.proposed_value !== undefined ? (typeof proposal.proposed_value === 'number' ? proposal.proposed_value.toLocaleString(locale) : String(proposal.proposed_value)) : null;
   const goalType = proposal.goal_type || proposal.action_type || '';
   const unitLabel = goalType.toLowerCase().includes('calorie') ? ' cal' : '';
 
@@ -482,15 +484,15 @@ function InlineActionCard({
     const effectText = proposal.expected_effect ? String(proposal.expected_effect) : null;
 
     const adjustSign = adjustAmt !== null && adjustAmt > 0 ? '+' : '';
-    const adjustLabel = adjustAmt !== null ? `(${adjustSign}${adjustAmt})` : '';
-    const currentCalText = currentCal !== null ? `${currentCal.toLocaleString()} kcal/day` : '';
-    const proposedCalText = proposedCal !== null ? `${proposedCal.toLocaleString()} kcal/day` : '';
+    const adjustLabel = adjustAmt !== null ? `(${adjustSign}${adjustAmt.toLocaleString(locale)})` : '';
+    const currentCalText = currentCal !== null ? t('localization.coach.kcalPerDay', { value: currentCal.toLocaleString(locale) }) : '';
+    const proposedCalText = proposedCal !== null ? t('localization.coach.kcalPerDay', { value: proposedCal.toLocaleString(locale) }) : '';
 
     if (actionStatus === 'confirmed') {
       return (
         <View style={[styles.inlineActionStatusBadge]}>
           <Text style={[styles.inlineActionStatusText, { color: '#10B981' }]}>
-            {'Calorie target updated'}
+            {t('localization.coach.calorieTargetUpdated')}
           </Text>
         </View>
       );
@@ -500,7 +502,7 @@ function InlineActionCard({
       return (
         <View style={[styles.inlineActionStatusBadge]}>
           <Text style={[styles.inlineActionStatusText, { color: secondaryText }]}>
-            {'Keeping current target'}
+            {t('localization.coach.keepingTarget')}
           </Text>
         </View>
       );
@@ -514,7 +516,7 @@ function InlineActionCard({
         <View style={styles.inlineActionBadgeRow}>
           <View style={[styles.inlineActionBadge, { backgroundColor: colors.primary }]}>
             <Text style={styles.inlineActionBadgeText}>
-              {'📊 Calorie Adjustment'}
+              {t('localization.coach.calorieAdjustment')}
             </Text>
           </View>
         </View>
@@ -524,7 +526,7 @@ function InlineActionCard({
           <View style={{ marginBottom: 10 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 0 }]}>
-                {'Current:'}
+                {t('localization.coach.current')}
               </Text>
               <Text style={[styles.inlineActionValue, { color: textColor, fontSize: 15 }]}>
                 {currentCalText}
@@ -532,7 +534,7 @@ function InlineActionCard({
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 0 }]}>
-                {'Proposed:'}
+                {t('localization.coach.proposed')}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={[styles.inlineActionValue, { color: colors.primary, fontSize: 15 }]}>
@@ -552,7 +554,7 @@ function InlineActionCard({
         {reasonText ? (
           <View style={{ marginBottom: 4 }}>
             <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 2 }]}>
-              {'Why: '}
+              {t('localization.coach.why')}
               <Text style={{ color: textColor }}>{reasonText}</Text>
             </Text>
           </View>
@@ -562,7 +564,7 @@ function InlineActionCard({
         {effectText ? (
           <View style={{ marginBottom: 8 }}>
             <Text style={[styles.inlineActionReason, { color: secondaryText, marginBottom: 0 }]}>
-              {'Effect: '}
+              {t('localization.coach.effect')}
               <Text style={{ color: textColor }}>{effectText}</Text>
             </Text>
           </View>
@@ -581,7 +583,7 @@ function InlineActionCard({
             disabled={isConfirmingCal}
           >
             <Text style={styles.inlineActionConfirmText}>
-              {isConfirmingCal ? 'Applying...' : '✓ Apply'}
+              {isConfirmingCal ? t('localization.coach.applying') : t('localization.coach.apply')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -593,7 +595,7 @@ function InlineActionCard({
             activeOpacity={0.85}
           >
             <Text style={[styles.inlineActionDeclineText, { color: textColor }]}>
-              {'✗ Skip'}
+              {t('localization.coach.skip')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -607,9 +609,9 @@ function InlineActionCard({
     const foodProtein = proposal.protein !== undefined ? Number(proposal.protein) : null;
     const foodMealType = proposal.meal_type ? String(proposal.meal_type) : null;
 
-    const macroCalText = foodCalories !== null ? `${foodCalories} cal` : '';
-    const macroProteinText = foodProtein !== null ? `${foodProtein}g protein` : '';
-    const macroMealText = foodMealType ?? '';
+    const macroCalText = foodCalories !== null ? `${foodCalories.toLocaleString(locale)} cal` : '';
+    const macroProteinText = foodProtein !== null ? t('localization.coach.proteinGrams', { value: foodProtein.toLocaleString(locale) }) : '';
+    const macroMealText = foodMealType ? mealTypeLabel(foodMealType, t) : '';
 
     const macroParts = [macroCalText, macroProteinText, macroMealText].filter(Boolean);
     const macroLine = macroParts.join('  •  ');
@@ -701,10 +703,10 @@ function InlineActionCard({
     );
   }
 
-  const planName = proposal.plan_name || 'AI Meal Plan';
-  const daysCount = String(mealPlanDays.length);
-  const mealsPerDayStr = String(mealsPerDay);
-  const avgCalStr = '~' + String(avgCalPerDay);
+  const planName = proposal.plan_name || t('localization.coach.aiMealPlan');
+  const daysCount = mealPlanDays.length.toLocaleString(locale);
+  const mealsPerDayStr = mealsPerDay.toLocaleString(locale);
+  const avgCalStr = '~' + avgCalPerDay.toLocaleString(locale);
 
   return (
     <View style={[styles.inlineActionCard, { backgroundColor: isDark ? '#1E2035' : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}>
@@ -790,7 +792,7 @@ function InlineActionCard({
             {proposal.calories !== undefined ? (
               <Text style={[{ fontSize: 13 }, { color: secondaryText }]}>
                 {'  '}
-                {Number(proposal.calories)}
+                {Number(proposal.calories).toLocaleString(locale)}
                 {' cal'}
               </Text>
             ) : null}
@@ -820,7 +822,7 @@ function InlineActionCard({
           disabled={isConfirming}
         >
           <Text style={styles.inlineActionConfirmText}>
-            {isConfirming ? 'Creating...' : confirmBtnText}
+            {isConfirming ? t('localization.coach.creating') : confirmBtnText}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -848,23 +850,23 @@ type CoachRecommendation = {
   recommendation_text: string;
 };
 
-function getStatusInfo(userStatus: string): { iconName: { ios: string; android: string }; iconColor: string; label: string } {
+function getStatusInfo(userStatus: string, t: TFunction): { iconName: { ios: string; android: string }; iconColor: string; label: string } {
   const map: Record<string, { iconName: { ios: string; android: string }; iconColor: string; label: string }> = {
-    on_track: { iconName: { ios: 'checkmark.circle.fill', android: 'check_circle' }, iconColor: '#22C55E', label: i18n.t('coach.statusOnTrack') },
-    faster_than_expected: { iconName: { ios: 'arrow.up.circle.fill', android: 'trending_up' }, iconColor: '#22C55E', label: i18n.t('coach.statusFaster') },
-    slower_than_expected: { iconName: { ios: 'arrow.down.circle.fill', android: 'trending_down' }, iconColor: '#EF4444', label: i18n.t('coach.statusSlower') },
-    possible_plateau: { iconName: { ios: 'exclamationmark.triangle.fill', android: 'warning' }, iconColor: '#F59E0B', label: i18n.t('coach.statusPlateau') },
-    low_adherence: { iconName: { ios: 'pencil.circle.fill', android: 'edit' }, iconColor: '#F59E0B', label: i18n.t('coach.statusLowAdherence') },
-    incomplete_logging: { iconName: { ios: 'pencil.circle.fill', android: 'edit' }, iconColor: '#F59E0B', label: i18n.t('coach.statusIncompleteLogging') },
-    approaching_goal: { iconName: { ios: 'target', android: 'gps_fixed' }, iconColor: '#3B82F6', label: i18n.t('coach.statusApproachingGoal') },
-    goal_achieved: { iconName: { ios: 'trophy.fill', android: 'emoji_events' }, iconColor: '#F59E0B', label: i18n.t('coach.statusGoalAchieved') },
-    insufficient_data: { iconName: { ios: 'chart.bar.fill', android: 'bar_chart' }, iconColor: colors.textSecondary, label: i18n.t('coach.statusGatheringData') },
-    at_risk_of_quitting: { iconName: { ios: 'exclamationmark.triangle.fill', android: 'warning' }, iconColor: '#EF4444', label: i18n.t('coach.statusGetBackOnTrack') },
+    on_track: { iconName: { ios: 'checkmark.circle.fill', android: 'check_circle' }, iconColor: '#22C55E', label: t('coach.statusOnTrack') },
+    faster_than_expected: { iconName: { ios: 'arrow.up.circle.fill', android: 'trending_up' }, iconColor: '#22C55E', label: t('coach.statusFaster') },
+    slower_than_expected: { iconName: { ios: 'arrow.down.circle.fill', android: 'trending_down' }, iconColor: '#EF4444', label: t('coach.statusSlower') },
+    possible_plateau: { iconName: { ios: 'exclamationmark.triangle.fill', android: 'warning' }, iconColor: '#F59E0B', label: t('coach.statusPlateau') },
+    low_adherence: { iconName: { ios: 'pencil.circle.fill', android: 'edit' }, iconColor: '#F59E0B', label: t('coach.statusLowAdherence') },
+    incomplete_logging: { iconName: { ios: 'pencil.circle.fill', android: 'edit' }, iconColor: '#F59E0B', label: t('coach.statusIncompleteLogging') },
+    approaching_goal: { iconName: { ios: 'target', android: 'gps_fixed' }, iconColor: '#3B82F6', label: t('coach.statusApproachingGoal') },
+    goal_achieved: { iconName: { ios: 'trophy.fill', android: 'emoji_events' }, iconColor: '#F59E0B', label: t('coach.statusGoalAchieved') },
+    insufficient_data: { iconName: { ios: 'chart.bar.fill', android: 'bar_chart' }, iconColor: colors.textSecondary, label: t('coach.statusGatheringData') },
+    at_risk_of_quitting: { iconName: { ios: 'exclamationmark.triangle.fill', android: 'warning' }, iconColor: '#EF4444', label: t('coach.statusGetBackOnTrack') },
   };
-  return map[userStatus] ?? { iconName: { ios: 'chart.bar.fill', android: 'bar_chart' }, iconColor: colors.textSecondary, label: 'Status Unknown' };
+  return map[userStatus] ?? { iconName: { ios: 'chart.bar.fill', android: 'bar_chart' }, iconColor: colors.textSecondary, label: t('localization.coach.statusUnknown') };
 }
 
-function getEvidenceBadge(strength: string): { label: string; color: string; bg: string } {
+function getEvidenceBadge(strength: string, t: TFunction): { label: string; color: string; bg: string } {
   const map: Record<string, { labelKey: string; color: string; bg: string }> = {
     strong: { labelKey: 'coach.dataStrength_strong', color: '#059669', bg: '#D1FAE5' },
     moderate: { labelKey: 'coach.dataStrength_moderate', color: '#D97706', bg: '#FEF3C7' },
@@ -873,35 +875,36 @@ function getEvidenceBadge(strength: string): { label: string; color: string; bg:
   };
   const entry = map[(strength ?? '').toLowerCase()];
   return entry
-    ? { label: i18n.t(entry.labelKey), color: entry.color, bg: entry.bg }
-    : { label: i18n.t('coach.dataStrength_moderate'), color: '#D97706', bg: '#FEF3C7' };
+    ? { label: t(entry.labelKey), color: entry.color, bg: entry.bg }
+    : { label: t('coach.dataStrength_moderate'), color: '#D97706', bg: '#FEF3C7' };
 }
 
-function getRelativeTime(isoDate: string): string {
-  try {
-    const diff = Date.now() - new Date(isoDate).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 60) return `Updated ${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `Updated ${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days === 1) return 'Updated 1 day ago';
-    return `Updated ${days} days ago`;
-  } catch {
-    return '';
-  }
+function getRelativeTime(isoDate: string, t: TFunction, locale: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  if (!Number.isFinite(diff)) return '';
+  const minutes = Math.max(0, Math.floor(diff / 60000));
+  if (minutes < 60) return t('localization.coach.updatedMinutes', { count: minutes, value: minutes.toLocaleString(locale) });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t('localization.coach.updatedHours', { count: hours, value: hours.toLocaleString(locale) });
+  const days = Math.floor(hours / 24);
+  return t('localization.coach.updatedDays', { count: days, value: days.toLocaleString(locale) });
 }
 
 // ── Conversation date formatter ──────────────────────────────────────────────
-function formatConvDate(isoDate: string): string {
+function formatConvDate(isoDate: string, t: TFunction, locale: string): string {
   const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return '';
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return t('localization.coach.today');
+  if (d.toDateString() === yesterday.toDateString()) return t('localization.coach.yesterday');
+  return d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
+}
 
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+function mealTypeLabel(mealType: string, t: TFunction): string {
+  const keys: Record<string, string> = { breakfast: 'common.breakfast', lunch: 'common.lunch', dinner: 'common.dinner', snack: 'common.snack' };
+  return keys[mealType] ? t(keys[mealType]) : mealType;
 }
 
 // ── Status Card Component ────────────────────────────────────────────────────
@@ -914,13 +917,15 @@ function StatusCard({
   isDark: boolean;
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
+  const locale = getAppLocale();
   const textColor = isDark ? colors.textDark : colors.text;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const cardBg = isDark ? colors.cardDark : '#FFFFFF';
 
-  const statusInfo = getStatusInfo(recommendation.user_status);
-  const evidenceBadge = getEvidenceBadge(recommendation.evidence_strength);
-  const relativeTime = getRelativeTime(recommendation.created_at);
+  const statusInfo = getStatusInfo(recommendation.user_status, t);
+  const evidenceBadge = getEvidenceBadge(recommendation.evidence_strength, t);
+  const relativeTime = getRelativeTime(recommendation.created_at, t, locale);
 
   return (
     <TouchableOpacity
@@ -954,6 +959,7 @@ export default function CoachScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
+  const locale = getAppLocale();
   const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -963,7 +969,7 @@ export default function CoachScreen() {
   const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [userWeightUnit, setUserWeightUnit] = useState<string>('lb');
-  const [proactiveInsight, setProactiveInsight] = useState<{ text: string; cta: string; ctaMessage: string } | null>(null);
+  const [proactiveInsight, setProactiveInsight] = useState<{ text?: string; cta?: string; ctaMessage?: string; textKey?: string; ctaKey?: string; ctaMessageKey?: string; values?: Record<string, number> } | null>(null);
 
   // ── MGCS: Follow-up card ──────────────────────────────────────────────────
   type FollowUp = { id: string; title: string; reason: string | null; due_date: string | null };
@@ -1007,6 +1013,7 @@ export default function CoachScreen() {
     created_at: string;
     last_message_at: string;
     preview?: string;
+    previewIsUser?: boolean;
   }[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -1037,11 +1044,10 @@ export default function CoachScreen() {
             .limit(1);
           const lastMsg = msgs?.[0];
           const rawContent = lastMsg ? lastMsg.content : '';
-          const prefix = lastMsg?.role === 'user' ? 'You: ' : '';
           const preview = lastMsg
-            ? `${prefix}${rawContent.slice(0, 50)}${rawContent.length > 50 ? '...' : ''}`
-            : 'No messages';
-          return { ...conv, preview };
+            ? `${rawContent.slice(0, 50)}${rawContent.length > 50 ? '...' : ''}`
+            : '';
+          return { ...conv, preview, previewIsUser: lastMsg?.role === 'user' };
         })
       );
       setHistoryConversations(withPreviews);
@@ -1282,8 +1288,8 @@ export default function CoachScreen() {
             console.log('[AICoach] Nightly cron insight found — using it as proactive insight');
             setProactiveInsight({
               text: dailyInsight.insight_text,
-              cta: dailyInsight.cta_message || 'Tell me more',
-              ctaMessage: dailyInsight.cta_message || 'Give me my daily coaching insight',
+              cta: dailyInsight.cta_message || '',
+              ctaMessage: dailyInsight.cta_message || '',
             });
             // Mark as read
             await supabase
@@ -1338,18 +1344,20 @@ export default function CoachScreen() {
               console.log('[AICoach] Proactive insight: under protein goal', daysUnderProtein, 'days');
               if (isMountedRef.current) {
                 setProactiveInsight({
-                  text: i18n.t('coach.underProteinInsight', { under: daysUnderProtein, total: daysLogged }),
-                  cta: i18n.t('coach.fixMyProtein'),
-                  ctaMessage: i18n.t('coach.fixMyProteinMessage', { days: daysUnderProtein }),
+                  textKey: 'localization.coach.underProteinInsight',
+                  ctaKey: 'localization.coach.fixMyProtein',
+                  ctaMessageKey: 'localization.coach.fixMyProteinMessage',
+                  values: { under: daysUnderProtein, total: daysLogged, days: daysUnderProtein },
                 });
               }
             } else if (daysLogged >= 5) {
               console.log('[AICoach] Proactive insight: great consistency,', daysLogged, 'days logged');
               if (isMountedRef.current) {
                 setProactiveInsight({
-                  text: i18n.t('coach.loggedDaysInsight', { days: daysLogged }),
-                  cta: i18n.t('coach.seeWeeklyReview'),
-                  ctaMessage: i18n.t('coach.weeklyReviewMessage'),
+                  textKey: 'localization.coach.loggedDaysInsight',
+                  ctaKey: 'localization.coach.seeWeeklyReview',
+                  ctaMessageKey: 'localization.coach.weeklyReviewMessage',
+                  values: { days: daysLogged },
                 });
               }
             }
@@ -1550,7 +1558,7 @@ export default function CoachScreen() {
         if (freeMessageCountRef.current >= 1) {
           // Already used the 1 free message — show gate immediately
           console.log('[AICoach] Free message limit reached (count:', freeMessageCountRef.current, ') — showing premium gate');
-          const teaserLine = "You've used your free message. Upgrade to Premium to keep chatting with your AI coach.";
+          const teaserLine = t('localization.coach.freeMessageUsed');
           const gateCard: MessageWithId = {
             id: genId(),
             role: 'assistant',
@@ -1625,18 +1633,18 @@ export default function CoachScreen() {
         console.error('[AICoach] Error from sendMessage:', e?.message);
 
         if (!e?.isSubscriptionError) {
-          Alert.alert('Error', 'Something went wrong. Please try again.');
+          Alert.alert(t('common.error'), t('localization.coach.requestFailed'));
           const errMsg: MessageWithId = {
             id: genId(),
             role: 'assistant',
-            content: 'Something went wrong. Please try again.',
+            content: t('localization.coach.requestFailed'),
             timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, errMsg]);
         }
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, t]
   );
 
   // Keep ref in sync so the premium-upgrade effect can call handleSend without
@@ -1647,18 +1655,18 @@ export default function CoachScreen() {
 
   const handleQuickAction = useCallback(
     (card: typeof QUICK_ACTION_CARDS[number]) => {
-      console.log('[AICoach] Quick action card tapped:', card.titleKey, '→', card.message);
-      handleSend(card.message);
+      console.log('[AICoach] Quick action card tapped:', card.titleKey, '→', t(card.messageKey));
+      handleSend(t(card.messageKey));
     },
-    [handleSend]
+    [handleSend, t]
   );
 
   const handleCravingChip = useCallback(
-    (chip: { label: string; iosIcon: string; androidIcon: string; message: string }) => {
-      console.log('[AICoach] Craving chip tapped:', chip.label);
-      handleSend(chip.message);
+    (chip: typeof CRAVING_CHIPS[number]) => {
+      console.log('[AICoach] Craving chip tapped:', t(chip.labelKey));
+      handleSend(t(chip.messageKey));
     },
-    [handleSend]
+    [handleSend, t]
   );
 
   const handleSendPress = useCallback(() => {
@@ -1675,7 +1683,7 @@ export default function CoachScreen() {
       console.log('[AICoach] pendingAction arrived for free user (freeCount:', freeMessageCountRef.current, ') — showing premium gate instead of action proposal, action_id:', pendingAction.action_id);
       setMessages((prev) => {
         const reversedIdx = [...prev].reverse().findIndex((m) => m.role === 'assistant' && !m.isPremiumGate);
-        const teaserLine = "I've put together a plan built around your exact goals. Unlock it with Premium.";
+        const teaserLine = t('localization.coach.unlockPlan');
         if (reversedIdx === -1) {
           return [
             ...prev,
@@ -1753,7 +1761,7 @@ export default function CoachScreen() {
           savedActionProposalRef.current = targetMsgForGate.actionProposal;
           console.log('[AICoach] Saved action proposal for post-upgrade restore (inline gate), action_id:', targetMsgForGate.actionProposal.action_id);
         }
-        const teaserLine = "Your plan is ready to execute. Upgrade to Premium to apply it.";
+        const teaserLine = t('localization.coach.applyPremiumPlan');
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId
@@ -1804,7 +1812,7 @@ export default function CoachScreen() {
           (proposal.days && proposal.days.length > 0)
         )
       ) {
-        const planName = proposal.plan_name || 'AI Meal Plan';
+        const planName = proposal.plan_name || t('localization.coach.aiMealPlan');
         const startDate = proposal.start_date || '';
         const endDate = proposal.end_date || '';
 
@@ -1872,7 +1880,7 @@ export default function CoachScreen() {
           const successMsg: MessageWithId = {
             id: genId(),
             role: 'assistant',
-            content: `Your meal plan "${plan.name}" has been created! It covers ${uniqueDays} day${uniqueDays !== 1 ? 's' : ''} with ${totalMeals} meal${totalMeals !== 1 ? 's' : ''}. Opening it now...`,
+            content: t('localization.coach.planCreated', { name: plan.name, days: uniqueDays.toLocaleString(locale), meals: totalMeals.toLocaleString(locale) }),
             timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, successMsg]);
@@ -1884,7 +1892,7 @@ export default function CoachScreen() {
           );
         } catch (e: any) {
           console.error('[AICoach] Error creating meal plan:', e?.message);
-          Alert.alert('Error', 'Could not create meal plan. Please try again.');
+          Alert.alert(t('common.error'), t('localization.coach.planFailed'));
           setMessages((prev) =>
             prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
           );
@@ -1934,7 +1942,7 @@ export default function CoachScreen() {
 
         if (!mealId) {
           console.error('[AICoach] Could not get meal_id for add_food_to_diary');
-          Alert.alert('Error', 'Could not add food to diary.');
+          Alert.alert(t('common.error'), t('localization.coach.diaryFailed'));
           return;
         }
 
@@ -1954,13 +1962,13 @@ export default function CoachScreen() {
 
         if (insertError) {
           console.error('[AICoach] Error inserting meal_item:', insertError.message);
-          Alert.alert('Error', 'Could not add food to diary.');
+          Alert.alert(t('common.error'), t('localization.coach.diaryFailed'));
           return;
         }
 
-        const foodName = String(proposal.food_name ?? 'food');
+        const foodName = String(proposal.food_name ?? t('localization.coach.foodFallback'));
         const calories = Number(proposal.calories ?? 0);
-        const successContent = `Added **${foodName}** (${calories} cal) to your ${mealType} on ${date}.`;
+        const successContent = t('localization.coach.foodAdded', { name: foodName, calories: calories.toLocaleString(locale), meal: mealTypeLabel(mealType, t), date: new Date(`${date}T12:00:00`).toLocaleDateString(locale) });
         console.log('[AICoach] Food added to diary successfully:', foodName);
         setMessages((prev) => [
           ...prev,
@@ -2023,14 +2031,14 @@ export default function CoachScreen() {
 
         if (goalError) {
           console.error('[AICoach] Error inserting new goal:', goalError.message);
-          Alert.alert('Error', 'Could not update your goals.');
+          Alert.alert(t('common.error'), t('localization.coach.goalsFailed'));
           setMessages((prev) =>
             prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
           );
           return;
         }
 
-        const successContent = `Your daily calorie goal has been updated to **${newCalories} kcal**.`;
+        const successContent = t('localization.coach.goalUpdated', { calories: newCalories.toLocaleString(locale) });
         console.log('[AICoach] Goal updated successfully, new daily_calories:', newCalories);
         setMessages((prev) => [
           ...prev,
@@ -2067,7 +2075,7 @@ export default function CoachScreen() {
 
         if (goalError) {
           console.error('[AICoach] Error updating daily_calories:', goalError.message);
-          Alert.alert('Error', 'Could not update your calorie target.');
+          Alert.alert(t('common.error'), t('localization.coach.caloriesFailed'));
           setMessages((prev) =>
             prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
           );
@@ -2087,7 +2095,7 @@ export default function CoachScreen() {
           created_at: new Date().toISOString(),
         });
 
-        const successContent = `Done! Your daily calorie target is now **${proposedCalories.toLocaleString()} kcal**. I'll keep an eye on how this affects your progress.`;
+        const successContent = t('localization.coach.targetApplied', { calories: proposedCalories.toLocaleString(locale) });
         console.log('[AICoach] adjust_calories applied successfully, new target:', proposedCalories);
         setMessages((prev) => [
           ...prev,
@@ -2102,7 +2110,7 @@ export default function CoachScreen() {
       // ── Default: unrecognized action_type — mark confirmed silently ──────────
       return;
     },
-    [messages, router, setMessages, isPremium, premiumLoading]
+    [messages, router, setMessages, isPremium, premiumLoading, t, locale]
   );
 
   // Keep ref in sync so handleSend can call handleConfirmInline without a circular dep
@@ -2151,7 +2159,7 @@ export default function CoachScreen() {
         const skipMsg: MessageWithId = {
           id: genId(),
           role: 'assistant',
-          content: `Got it, keeping your current target of **${currentCalories.toLocaleString()} kcal**.`,
+          content: t('localization.coach.targetKept', { calories: currentCalories.toLocaleString(locale) }),
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, skipMsg]);
@@ -2161,23 +2169,23 @@ export default function CoachScreen() {
       const followUp: MessageWithId = {
         id: genId(),
         role: 'assistant',
-        content: "No problem! Let me know if you'd like to make any other changes.",
+        content: t('localization.coach.declineAcknowledgement'),
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, followUp]);
     },
-    [messages, setMessages]
+    [messages, setMessages, t, locale]
   );
 
   const formatTime = useCallback((timestamp: number): string => {
     try {
       const d = new Date(timestamp);
       if (isNaN(d.getTime())) return '';
-      return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     } catch {
       return '';
     }
-  }, []);
+  }, [locale]);
 
   // Determine if we're in the "welcome" state (only the welcome message, no user messages)
   const hasUserMessages = messages.some((m) => m.role === 'user');
@@ -2229,6 +2237,8 @@ export default function CoachScreen() {
 
         <View style={styles.headerRight}>
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('localization.coach.reportBug')}
             onPress={() => {
               console.log('[AICoach] Bug report icon pressed');
               router.push('/bug-report?tab_source=coach');
@@ -2244,6 +2254,8 @@ export default function CoachScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('localization.coach.coachMemory')}
             onPress={() => {
               console.log('[AICoach] Memory button pressed');
               router.push('/coach-memory');
@@ -2259,6 +2271,8 @@ export default function CoachScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('localization.coach.conversationHistory')}
             onPress={() => {
               console.log('[AICoach] Conversation history button pressed');
               loadHistory();
@@ -2275,6 +2289,8 @@ export default function CoachScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('localization.coach.coachPermissions')}
             onPress={() => {
               console.log('[AICoach] Permissions settings button pressed');
               router.push('/coach-permissions');
@@ -2314,19 +2330,19 @@ export default function CoachScreen() {
               <View style={styles.insightCardRow}>
                 <IconSymbol ios_icon_name="lightbulb.fill" android_material_icon_name="lightbulb" size={16} color="#F59E0B" />
                 <Text style={[styles.insightCardText, { color: isDark ? colors.textDark : colors.text }]}>
-                  {proactiveInsight.text}
+                  {proactiveInsight.textKey ? t(proactiveInsight.textKey, proactiveInsight.values) : proactiveInsight.text}
                 </Text>
               </View>
               <TouchableOpacity
                 style={[styles.insightCardCta, { backgroundColor: colors.primary }]}
                 onPress={() => {
                   console.log('[AICoach] Proactive insight CTA pressed:', proactiveInsight.cta);
-                  handleSend(proactiveInsight.ctaMessage);
+                  handleSend(proactiveInsight.ctaMessageKey ? t(proactiveInsight.ctaMessageKey, proactiveInsight.values) : proactiveInsight.ctaMessage || t('localization.coach.dailyInsightMessage'));
                 }}
                 activeOpacity={0.85}
               >
                 <Text style={styles.insightCardCtaText}>
-                  {proactiveInsight.cta}
+                  {proactiveInsight.ctaKey ? t(proactiveInsight.ctaKey) : proactiveInsight.cta || t('localization.coach.tellMeMore')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2338,10 +2354,12 @@ export default function CoachScreen() {
               <View style={styles.followUpCardHeader}>
                 <View style={styles.followUpBadge}>
                   <Text style={styles.followUpBadgeText}>
-                    {'Follow-up'}
+                    {t('localization.coach.followUp')}
                   </Text>
                 </View>
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={t('localization.coach.dismissFollowUp')}
                   onPress={async () => {
                     console.log('[AICoach] Follow-up card dismissed, id:', pendingFollowUp.id);
                     setPendingFollowUp(null);
@@ -2378,7 +2396,7 @@ export default function CoachScreen() {
                 activeOpacity={0.85}
               >
                 <Text style={styles.followUpCheckInText}>
-                  {'Check in'}
+                  {t('localization.coach.checkIn')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2399,7 +2417,7 @@ export default function CoachScreen() {
                 isDark={isDark}
                 onPress={() => {
                   console.log('[AICoach] Status card tapped, sending status assessment request');
-                  handleSend('Give me my current status assessment');
+                  handleSend(t('localization.coach.assessmentMessage'));
                 }}
               />
             </View>
@@ -2515,14 +2533,14 @@ export default function CoachScreen() {
               <View style={styles.cravingHubRow}>
                 {CRAVING_CHIPS.map((chip) => (
                   <TouchableOpacity
-                    key={chip.label}
+                    key={chip.labelKey}
                     style={[styles.cravingHubChip, { backgroundColor: isDark ? colors.cardDark : '#FFFFFF', borderColor: isDark ? colors.borderDark : colors.border }]}
                     onPress={() => handleCravingChip(chip)}
                     disabled={premiumLoading}
                     activeOpacity={0.75}
                   >
                     <IconSymbol ios_icon_name={chip.iosIcon} android_material_icon_name={chip.androidIcon} size={15} color={colors.primary} />
-                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{chip.label}</Text>
+                    <Text style={[styles.cravingHubChipText, { color: isDark ? colors.textDark : colors.text }]}>{t(chip.labelKey)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -2573,6 +2591,8 @@ export default function CoachScreen() {
           />
           <TouchableOpacity
             style={[styles.sendButton, { backgroundColor: canSend ? colors.primary : colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('localization.coach.sendMessage')}
             onPress={handleSendPress}
             disabled={!canSend || effectivelyGated}
             activeOpacity={0.8}
@@ -2604,6 +2624,8 @@ export default function CoachScreen() {
               {t('coach.conversationHistory')}
             </Text>
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
               onPress={() => {
                 console.log('[AICoach] History modal close button pressed');
                 setShowHistory(false);
@@ -2631,8 +2653,10 @@ export default function CoachScreen() {
               </Text>
             ) : (
               historyConversations.map((conv) => {
-                const convDateLabel = formatConvDate(conv.last_message_at || conv.created_at);
-                const convPreview = conv.preview || 'No messages';
+                const convDateLabel = formatConvDate(conv.last_message_at || conv.created_at, t, locale);
+                const convPreview = conv.preview
+                  ? (conv.previewIsUser ? t('localization.coach.youPrefix', { message: conv.preview }) : conv.preview)
+                  : t('localization.coach.noMessages');
                 return (
                   <TouchableOpacity
                     key={conv.id}

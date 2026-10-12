@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -387,13 +388,13 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
     const isDefault =
       rangeStartDate === journeyStartDate &&
       rangeEndDate === toLocalDateString();
-    const start = new Date(rangeStartDate + 'T00:00:00').toLocaleDateString('en-US', {
+    const start = new Date(rangeStartDate + 'T00:00:00').toLocaleDateString(getAppLocale(), {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
     if (isDefault) return `${start} - ${t('consistency.today')}`;
-    const end = new Date(rangeEndDate + 'T00:00:00').toLocaleDateString('en-US', {
+    const end = new Date(rangeEndDate + 'T00:00:00').toLocaleDateString(getAppLocale(), {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -501,7 +502,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               {scoreData.score}
             </Text>
             <Text style={[styles.scoreLabelText, { color: labelColor }]}>
-              {scoreData.label}
+              {t(scoreData.label === 'Locked In' ? 'localization.shared.lockedIn' : scoreData.label === 'On Track' ? 'localization.shared.onTrack' : 'localization.shared.slipping')}
             </Text>
           </View>
           <View style={styles.titleContainer}>
@@ -517,7 +518,7 @@ export default function ConsistencyScore({ userId, isDark, initialExpanded = fal
               </TouchableOpacity>
             </View>
             <Text style={[styles.subtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {scoreData.insight}
+              {buildInsight(scoreData.label, scoreData.trackedDays, scoreData.totalDays, scoreData.avgCalorieAccuracy, scoreData.avgProteinAccuracy)}
             </Text>
           </View>
           {!initialExpanded && (

@@ -420,7 +420,7 @@ export default function TemplatePlanDetailScreen() {
                   ) : (
                     <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={18} color={colors.primary} />
                   )}
-                  <Text style={[styles.mealTitle, { color: textColor }]}>{mealDef.label}</Text>
+                  <Text style={[styles.mealTitle, { color: textColor }]}>{t('localization.screens.meal' + mealDef.key)}</Text>
                 </View>
                 {items.length > 0 && (
                   <Text style={[styles.mealCaloriesLabel, { color: secondaryColor }]}>

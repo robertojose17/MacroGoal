@@ -1,3 +1,6 @@
+import { getAppLocale } from '@/lib/localization';
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -36,13 +39,13 @@ function relativeTime(dateStr: string): string {
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;
   const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffMins < 1) return t('localization.social.just_now');
+  if (diffMins < 60) return t('localization.social.minutes_ago', { count: diffMins });
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 24) return t('localization.social.hours_ago', { count: diffHours });
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (diffDays < 7) return t('localization.social.days_ago', { count: diffDays });
+  return new Date(dateStr).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
 type FollowUser = {
@@ -56,6 +59,7 @@ type FollowModalType = 'followers' | 'following' | null;
 type NutritionRange = 'today' | '7d' | '30d' | 'custom';
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
+  useTranslation();
   const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
     <View style={{ gap: 4 }}>
@@ -71,6 +75,7 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
 }
 
 export default function SocialProfileViewScreen() {
+  useTranslation();
   const router = useRouter();
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const colorScheme = useColorScheme();
@@ -366,7 +371,7 @@ export default function SocialProfileViewScreen() {
         .insert({ follower_id: currentUserId, following_id: userId });
       if (error) {
         console.error('[SocialProfileView] handleFollow — error:', error.message);
-        Alert.alert('Error', 'Could not follow user');
+        Alert.alert(t('localization.social.error'), t('localization.social.could_not_follow_user'));
       } else {
         console.log('[SocialProfileView] handleFollow — success, now following userId:', userId);
         setIsFollowing(true);
@@ -392,7 +397,7 @@ export default function SocialProfileViewScreen() {
         .eq('following_id', userId);
       if (error) {
         console.error('[SocialProfileView] handleUnfollow — error:', error.message);
-        Alert.alert('Error', 'Could not unfollow user');
+        Alert.alert(t('localization.social.error'), t('localization.social.could_not_unfollow_user'));
       } else {
         console.log('[SocialProfileView] handleUnfollow — success, unfollowed userId:', userId);
         setIsFollowing(false);
@@ -410,16 +415,16 @@ export default function SocialProfileViewScreen() {
     console.log('[SocialProfileView] handleBlock — Block pressed, currentUserId:', currentUserId, 'targetUserId:', userId);
     setShowFollowingDropdown(false);
     Alert.alert(
-      'Block User',
-      'Are you sure you want to block this user? They will no longer be able to see your profile.',
+      t('localization.social.block_user_alt'),
+      t('localization.social.are_you_sure_you_want_to_block_this_user_they_will_no_longer_be_able_to_see_your_profile'),
       [
         {
-          text: 'Cancel',
+          text: t('localization.social.cancel'),
           style: 'cancel',
           onPress: () => console.log('[SocialProfileView] handleBlock — cancelled'),
         },
         {
-          text: 'Block',
+          text: t('localization.social.block'),
           style: 'destructive',
           onPress: async () => {
             console.log('[SocialProfileView] handleBlock — confirmed, blocking userId:', userId);
@@ -428,7 +433,7 @@ export default function SocialProfileViewScreen() {
               .insert({ blocker_id: currentUserId, blocked_id: userId });
             if (error) {
               console.error('[SocialProfileView] handleBlock — error:', error.message);
-              Alert.alert('Error', 'Could not block user');
+              Alert.alert(t('localization.social.error'), t('localization.social.could_not_block_user'));
             } else {
               console.log('[SocialProfileView] handleBlock — success, blocked userId:', userId);
               router.back();
@@ -530,9 +535,10 @@ export default function SocialProfileViewScreen() {
         </View>
         <View style={styles.blockedContainer}>
           <IconSymbol ios_icon_name="lock.fill" android_material_icon_name="lock" size={48} color={secondaryText} />
-          <Text style={[styles.blockedTitle, { color: textColor }]}>This account is not available</Text>
+          <Text style={[styles.blockedTitle, { color: textColor }]}>{t('localization.social.this_account_is_not_available_alt')}</Text>
           <Text style={[styles.blockedSubtitle, { color: secondaryText }]}>
-            This account is unavailable because you have blocked this user or they have blocked you.
+            
+            {t('localization.social.this_account_is_unavailable_because_you_have_blocked_this_user_or_they_have_blocked_you')}
           </Text>
         </View>
       </SafeAreaView>
@@ -557,14 +563,14 @@ export default function SocialProfileViewScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
-          <Text style={[typography.body, { color: secondaryText }]}>User not found</Text>
+          <Text style={[typography.body, { color: secondaryText }]}>{t('localization.social.user_not_found')}</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   // ── Derived display values ─────────────────────────────────────────────────
-  const displayName = profile.name || 'User';
+  const displayName = profile.name || t('localization.social.user');
   const usernameDisplay = profile.username ? `@${profile.username}` : displayName;
   const initials = displayName.charAt(0).toUpperCase();
   const bioText = profile.bio || '';
@@ -577,7 +583,7 @@ export default function SocialProfileViewScreen() {
   const consistencyScoreDisplay = String(consistencyScore);
 
   const memberSinceDisplay = profile.created_at
-    ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).replace(' ', " '")
+    ? new Date(profile.created_at).toLocaleDateString(getAppLocale(), { month: 'short', year: '2-digit' })
     : '—';
 
   // ── Stats section (blurred when not following) ─────────────────────────────
@@ -586,25 +592,25 @@ export default function SocialProfileViewScreen() {
       <View style={styles.statCol}>
         <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={16} color={colors.primary} />
         <Text style={[styles.statColValue, { color: textColor }]}>{currentStreakDisplay}</Text>
-        <Text style={[styles.statColLabel, { color: secondaryText }]}>STREAK</Text>
+        <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.social.streak')}</Text>
       </View>
       <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
       <View style={styles.statCol}>
         <IconSymbol ios_icon_name="trophy.fill" android_material_icon_name="emoji_events" size={16} color="#F59E0B" />
         <Text style={[styles.statColValue, { color: textColor }]}>{bestStreakDisplay}</Text>
-        <Text style={[styles.statColLabel, { color: secondaryText }]}>BEST</Text>
+        <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.social.best')}</Text>
       </View>
       <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
       <View style={styles.statCol}>
         <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar_chart" size={16} color={colors.primary} />
         <Text style={[styles.statColValue, { color: colors.primary }]}>{consistencyScoreDisplay}</Text>
-        <Text style={[styles.statColLabel, { color: secondaryText }]}>SCORE</Text>
+        <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.social.score')}</Text>
       </View>
       <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
       <View style={styles.statCol}>
         <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={16} color="#8B5CF6" />
         <Text style={[styles.statColValue, { color: textColor }]}>{memberSinceDisplay}</Text>
-        <Text style={[styles.statColLabel, { color: secondaryText }]}>SINCE</Text>
+        <Text style={[styles.statColLabel, { color: secondaryText }]}>{t('localization.social.since')}</Text>
       </View>
     </View>
   );
@@ -612,11 +618,11 @@ export default function SocialProfileViewScreen() {
   // ── Posts section (blurred when not following) ─────────────────────────────
   const PostsContent = (
     <View style={styles.feedSection}>
-      <Text style={[styles.feedSectionTitle, { color: textColor }]}>Posts</Text>
+      <Text style={[styles.feedSectionTitle, { color: textColor }]}>{t('localization.social.posts')}</Text>
       {posts.length === 0 ? (
         <View style={[styles.emptyState, { backgroundColor: cardBg, borderColor: cardBorderColor }]}>
           <IconSymbol ios_icon_name="star.fill" android_material_icon_name="star" size={40} color={colors.textSecondary} />
-          <Text style={[styles.emptyStateText, { color: secondaryText }]}>No posts yet</Text>
+          <Text style={[styles.emptyStateText, { color: secondaryText }]}>{t('localization.social.no_posts_yet')}</Text>
         </View>
       ) : (
         posts.map((post) => {
@@ -702,7 +708,7 @@ export default function SocialProfileViewScreen() {
               <View style={styles.igStatsRow}>
                 <View style={styles.igStatItem}>
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{postsCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> posts</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> {' '+t('localization.social.posts')}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => {
@@ -713,7 +719,7 @@ export default function SocialProfileViewScreen() {
                   style={styles.igStatItem}
                 >
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{followersCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> followers</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> {' '+t('localization.social.followers')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -724,7 +730,7 @@ export default function SocialProfileViewScreen() {
                   style={styles.igStatItem}
                 >
                   <Text style={[styles.igStatNumber, { color: textColor }]}>{followingCountDisplay}</Text>
-                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> following</Text>
+                  <Text style={[styles.igStatLabel, { color: secondaryText }]}> {' '+t('localization.social.following')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -747,7 +753,7 @@ export default function SocialProfileViewScreen() {
                   activeOpacity={0.7}
                   style={[styles.followingButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: borderColor }]}
                 >
-                  <Text style={[styles.followingButtonText, { color: textColor }]}>Following</Text>
+                  <Text style={[styles.followingButtonText, { color: textColor }]}>{t('localization.social.following')}</Text>
                   <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="expand_more" size={14} color={textColor} />
                 </TouchableOpacity>
 
@@ -759,7 +765,7 @@ export default function SocialProfileViewScreen() {
                       activeOpacity={0.7}
                       style={styles.followDropdownItem}
                     >
-                      <Text style={[styles.followDropdownItemText, { color: textColor }]}>Unfollow</Text>
+                      <Text style={[styles.followDropdownItemText, { color: textColor }]}>{t('localization.social.unfollow')}</Text>
                     </TouchableOpacity>
                     <View style={[styles.followDropdownDivider, { backgroundColor: borderColor }]} />
                     <TouchableOpacity
@@ -767,7 +773,7 @@ export default function SocialProfileViewScreen() {
                       activeOpacity={0.7}
                       style={styles.followDropdownItem}
                     >
-                      <Text style={[styles.followDropdownItemText, { color: colors.error }]}>Block</Text>
+                      <Text style={[styles.followDropdownItemText, { color: colors.error }]}>{t('localization.social.block')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -782,7 +788,7 @@ export default function SocialProfileViewScreen() {
                 {followLoading ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.followButtonText}>Follow</Text>
+                  <Text style={styles.followButtonText}>{t('localization.social.follow')}</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -798,7 +804,8 @@ export default function SocialProfileViewScreen() {
             <View style={styles.lockOverlay}>
               <IconSymbol ios_icon_name="lock.fill" android_material_icon_name="lock" size={28} color={colors.primary} />
               <Text style={[styles.lockOverlayText, { color: textColor }]}>
-                Sigue a este usuario para ver sus estadísticas
+                
+                {t('localization.social.sigue_a_este_usuario_para_ver_sus_estadisticas')}
               </Text>
             </View>
           </View>
@@ -820,13 +827,13 @@ export default function SocialProfileViewScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.rangeDropdownLabel, { color: secondaryText }]}>
-                  {nutritionRange === 'today' ? 'Today' : nutritionRange === '7d' ? '7 Days' : nutritionRange === '30d' ? '30 Days' : 'Custom'}
+                  {nutritionRange === 'today' ? t('localization.social.today') : nutritionRange === '7d' ? t('localization.social.7_days') : nutritionRange === '30d' ? t('localization.social.30_days') : t('localization.social.custom')}
                 </Text>
                 <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="expand_more" size={12} color={secondaryText} />
               </TouchableOpacity>
               {nutritionRange !== 'today' && (
                 <Text style={[styles.avgLabel, { color: secondaryText }]}>
-                  {nutritionRange === '7d' ? 'Daily average over 7 days' : nutritionRange === '30d' ? 'Daily average over 30 days' : `Daily average over ${rangeDayCount} day${rangeDayCount !== 1 ? 's' : ''}`}
+                  {nutritionRange === '7d' ? t('localization.social.daily_average_over_7_days') : nutritionRange === '30d' ? t('localization.social.daily_average_over_30_days') : t('localization.social.daily_average', { count: rangeDayCount })}
                 </Text>
               )}
             </View>
@@ -834,7 +841,7 @@ export default function SocialProfileViewScreen() {
             {rangeDropdownOpen && (
               <View style={[styles.rangeDropdownMenu, { backgroundColor: cardBg, borderColor }]}>
                 {(['today', '7d', '30d', 'custom'] as NutritionRange[]).map((key) => {
-                  const label = key === 'today' ? 'Today' : key === '7d' ? '7 Days' : key === '30d' ? '30 Days' : 'Custom';
+                  const label = key === 'today' ? t('localization.social.today') : key === '7d' ? t('localization.social.7_days') : key === '30d' ? t('localization.social.30_days') : t('localization.social.custom');
                   const isActive = nutritionRange === key;
                   return (
                     <TouchableOpacity
@@ -865,10 +872,10 @@ export default function SocialProfileViewScreen() {
                 label="kcal"
               />
               <View style={styles.macroSummaryCompact}>
-                <MacroSummaryRowCompact label="Protein" eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-                <MacroSummaryRowCompact label="Fats" eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
               </View>
             </View>
           </View>
@@ -883,7 +890,8 @@ export default function SocialProfileViewScreen() {
             <View style={styles.lockOverlay}>
               <IconSymbol ios_icon_name="lock.fill" android_material_icon_name="lock" size={28} color={colors.primary} />
               <Text style={[styles.lockOverlayText, { color: textColor }]}>
-                Sigue a este usuario para ver sus publicaciones
+                
+                {t('localization.social.sigue_a_este_usuario_para_ver_sus_publicaciones')}
               </Text>
             </View>
           </View>
@@ -930,7 +938,7 @@ export default function SocialProfileViewScreen() {
           >
             <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
               <Text style={[styles.modalTitle, { color: textColor }]}>
-                {followModalType === 'followers' ? 'Followers' : 'Following'}
+                {followModalType === 'followers' ? t('localization.social.followers') : t('localization.social.following')}
               </Text>
               <TouchableOpacity
                 onPress={closeFollowModal}
@@ -947,7 +955,7 @@ export default function SocialProfileViewScreen() {
             ) : followModalUsers.length === 0 ? (
               <View style={styles.modalEmpty}>
                 <Text style={[styles.modalEmptyText, { color: secondaryText }]}>
-                  {followModalType === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+                  {followModalType === 'followers' ? t('localization.social.no_followers_yet') : t('localization.social.not_following_anyone_yet')}
                 </Text>
               </View>
             ) : (
@@ -956,7 +964,7 @@ export default function SocialProfileViewScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.modalList}
                 renderItem={({ item }) => {
-                  const itemName = item.name || item.username || 'User';
+                  const itemName = item.name || item.username || t('localization.social.user');
                   const itemInitial = itemName.charAt(0).toUpperCase();
                   const itemUsername = item.username ? `@${item.username}` : '';
                   return (

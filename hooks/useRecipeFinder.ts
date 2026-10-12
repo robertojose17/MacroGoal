@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 /**
  * useRecipeFinder — manages recipe search, daily suggestions, and saved recipes
  */
@@ -116,6 +117,7 @@ export function parseRecipesFromResponse(text: string): RecipeResult[] {
 }
 
 export function useRecipeFinder() {
+  const { t } = useTranslation();
   const [searchResults, setSearchResults] = useState<RecipeResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -444,7 +446,7 @@ export function useRecipeFinder() {
     searchRecipes,
     searchResults,
     searchLoading,
-    searchError,
+    searchError: searchError ? t('localization.shared.recipeSearchFailed') : null,
     hasMore,
     isLoadingMore,
     loadMore,

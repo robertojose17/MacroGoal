@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback } from 'react';
 import {
@@ -65,7 +66,7 @@ function RecipeCard({ recipe, isDark, onPress }: RecipeCardProps) {
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
   const placeholderColor = getPlaceholderColor(recipe.id);
-  const ratingDisplay = recipe.average_rating != null ? Number(recipe.average_rating).toFixed(1) : '—';
+  const ratingDisplay = recipe.average_rating != null ? Number(recipe.average_rating).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—';
   const reviewCountDisplay = recipe.review_count != null ? String(recipe.review_count) : '0';
   const caloriesDisplay = recipe.calories != null ? String(Math.round(Number(recipe.calories))) : '—';
   const proteinDisplay = recipe.protein != null ? String(Math.round(Number(recipe.protein))) : '—';

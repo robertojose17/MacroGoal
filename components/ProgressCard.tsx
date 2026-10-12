@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -865,9 +866,7 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const formatDate = (d: Date) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${months[d.getMonth()]} ${d.getDate()}`;
+    return d.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
   };
 
   // ── Loading / error states ───────────────────────────────────────────────
@@ -926,17 +925,17 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
   const card1WeightUnit = stats?.weightUnit ?? 'lbs';
   const card1Value = stats && stats.displayWeightLost !== null
     ? (stats.displayWeightLost >= 0
-        ? `↓ ${stats.displayWeightLost.toFixed(1)} ${card1WeightUnit}`
-        : `↑ ${Math.abs(stats.displayWeightLost).toFixed(1)} ${card1WeightUnit}`)
+        ? `↓ ${stats.displayWeightLost.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${card1WeightUnit}`
+        : `↑ ${Math.abs(stats.displayWeightLost).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${card1WeightUnit}`)
     : '--';
   const card1Subtitle = stats ? t('progressCard.sinceStart', { days: stats.daysSinceStart }) : '--';
   const card1Accent = stats && stats.weightLost !== null
     ? (stats.weightLost >= 0 ? '#22C55E' : '#EF4444')
     : undefined;
 
-  const card2PaceUnit = stats?.paceUnit ?? 'lb/wk';
+  const card2PaceUnit = stats?.paceUnit === 'kg/wk' ? t('localization.shared.kgWeek') : t('localization.shared.lbWeek');
   const card2Value = stats && stats.displayPace !== null
-    ? `${stats.currentPaceLbsPerWeek! >= 0 ? '-' : '+'}${Math.abs(stats.displayPace).toFixed(1)} ${card2PaceUnit}`
+    ? `${stats.currentPaceLbsPerWeek! >= 0 ? '-' : '+'}${Math.abs(stats.displayPace).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${card2PaceUnit}`
     : t('common.noData');
   const card2Subtitle = stats && stats.adherencePct !== null ? t('progressCard.onPlan', { pct: stats.adherencePct }) : '--';
 
@@ -960,9 +959,9 @@ export default function ProgressCard({ userId, isDark, layout = 'carousel' }: Pr
     : undefined;
 
   const card4WeightUnit = stats?.weightUnit ?? 'lbs';
-  const card4StartStr = stats ? stats.displayStartWeight.toFixed(1) : (profileData ? profileData.startWeightLbs.toFixed(1) : '--');
+  const card4StartStr = stats ? stats.displayStartWeight.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : (profileData ? profileData.startWeightLbs.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--');
   const card4DisplayCurrentLbs = isMetric ? currentWeightLbs / 2.20462 : currentWeightLbs;
-  const card4CurrentStr = card4DisplayCurrentLbs.toFixed(1);
+  const card4CurrentStr = card4DisplayCurrentLbs.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const card4Value = `${card4StartStr} → ${card4CurrentStr} ${card4WeightUnit}`;
   const card4GoalDateStr = stats
     ? (stats.projectedGoalDate

@@ -1,3 +1,5 @@
+import i18n from '@/lib/i18n';
+import { getAppLocale } from '@/lib/localization';
 
 import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractUnitFromString } from '@/utils/openFoodFacts';
 import { parseServingString } from '@/utils/servingParser';
@@ -34,7 +36,7 @@ function scaleNutriment(per100g: number | undefined, servingGrams: number): numb
 function fmtNutrient(value: number | null, unit: string): string | null {
   if (value == null) return null;
   const rounded = Math.round(value * 10) / 10;
-  return `${rounded}${unit}`;
+  return `${rounded.toLocaleString(getAppLocale(), { maximumFractionDigits: 1 })}${unit}`;
 }
 
 type NutrientRow = { label: string; value: string };
@@ -47,15 +49,15 @@ function buildExtendedMacroRows(n: Record<string, number | undefined>, servingGr
     const formatted = fmtNutrient(scaled, unit);
     if (formatted != null) rows.push({ label, value: formatted });
   };
-  add('Saturated Fat', 'saturated-fat_100g', 'g');
-  add('Polyunsaturated Fat', 'polyunsaturated-fat_100g', 'g');
-  add('Monounsaturated Fat', 'monounsaturated-fat_100g', 'g');
-  add('Trans Fat', 'trans-fat_100g', 'g');
+  add(i18n.t('localization.shared.nutrient0'), 'saturated-fat_100g', 'g');
+  add(i18n.t('localization.shared.nutrient1'), 'polyunsaturated-fat_100g', 'g');
+  add(i18n.t('localization.shared.nutrient2'), 'monounsaturated-fat_100g', 'g');
+  add(i18n.t('localization.shared.nutrient3'), 'trans-fat_100g', 'g');
   // cholesterol stored as kg in OFF (mg/1000), display in mg
-  add('Cholesterol', 'cholesterol_100g', 'mg', 1000);
-  add('Sugar', 'sugars_100g', 'g');
+  add(i18n.t('localization.shared.nutrient4'), 'cholesterol_100g', 'mg', 1000);
+  add(i18n.t('localization.shared.nutrient5'), 'sugars_100g', 'g');
   // sodium stored as kg in OFF (mg/1000), display in mg
-  add('Sodium', 'sodium_100g', 'mg', 1000);
+  add(i18n.t('localization.shared.nutrient6'), 'sodium_100g', 'mg', 1000);
   return rows;
 }
 
@@ -75,17 +77,17 @@ function buildVitaminRows(n: Record<string, number | undefined>, servingGrams: n
     const formatted = fmtNutrient(scaled, 'mg');
     if (formatted != null) rows.push({ label, value: formatted });
   };
-  addMcg('Vitamin A', 'vitamin-a_100g');
-  addMg('Vitamin C', 'vitamin-c_100g');
-  addMcg('Vitamin D', 'vitamin-d_100g');
-  addMg('Vitamin E', 'vitamin-e_100g');
-  addMcg('Vitamin K', 'vitamin-k_100g');
-  addMg('Vitamin B1 (Thiamine)', 'vitamin-b1_100g');
-  addMg('Vitamin B2 (Riboflavin)', 'vitamin-b2_100g');
-  addMg('Vitamin B3 (Niacin)', 'vitamin-b3_100g');
-  addMg('Vitamin B6', 'vitamin-b6_100g');
-  addMcg('Vitamin B12', 'vitamin-b12_100g');
-  addMcg('Folate', 'folate_100g');
+  addMcg(i18n.t('localization.shared.nutrient7'), 'vitamin-a_100g');
+  addMg(i18n.t('localization.shared.nutrient8'), 'vitamin-c_100g');
+  addMcg(i18n.t('localization.shared.nutrient9'), 'vitamin-d_100g');
+  addMg(i18n.t('localization.shared.nutrient10'), 'vitamin-e_100g');
+  addMcg(i18n.t('localization.shared.nutrient11'), 'vitamin-k_100g');
+  addMg(i18n.t('localization.shared.nutrient12'), 'vitamin-b1_100g');
+  addMg(i18n.t('localization.shared.nutrient13'), 'vitamin-b2_100g');
+  addMg(i18n.t('localization.shared.nutrient14'), 'vitamin-b3_100g');
+  addMg(i18n.t('localization.shared.nutrient15'), 'vitamin-b6_100g');
+  addMcg(i18n.t('localization.shared.nutrient16'), 'vitamin-b12_100g');
+  addMcg(i18n.t('localization.shared.nutrient17'), 'folate_100g');
   return rows;
 }
 
@@ -103,14 +105,14 @@ function buildMineralRows(n: Record<string, number | undefined>, servingGrams: n
     const formatted = fmtNutrient(scaled, 'mcg');
     if (formatted != null) rows.push({ label, value: formatted });
   };
-  addMg('Calcium', 'calcium_100g');
-  addMg('Iron', 'iron_100g');
-  addMg('Magnesium', 'magnesium_100g');
-  addMg('Phosphorus', 'phosphorus_100g');
-  addMg('Potassium', 'potassium_100g');
-  addMg('Zinc', 'zinc_100g');
-  addMg('Manganese', 'manganese_100g');
-  addMcg('Selenium', 'selenium_100g');
+  addMg(i18n.t('localization.shared.nutrient18'), 'calcium_100g');
+  addMg(i18n.t('localization.shared.nutrient19'), 'iron_100g');
+  addMg(i18n.t('localization.shared.nutrient20'), 'magnesium_100g');
+  addMg(i18n.t('localization.shared.nutrient21'), 'phosphorus_100g');
+  addMg(i18n.t('localization.shared.nutrient22'), 'potassium_100g');
+  addMg(i18n.t('localization.shared.nutrient23'), 'zinc_100g');
+  addMg(i18n.t('localization.shared.nutrient24'), 'manganese_100g');
+  addMcg(i18n.t('localization.shared.nutrient25'), 'selenium_100g');
   return rows;
 }
 
@@ -705,7 +707,7 @@ export default function FoodDetailsLayout({
         // Case C: no unitName — plain grams product
         const defLabel = (servingSizeStr && !/^\d+(\.\d+)?\s*(g|ml)$/i.test(servingSizeStr) && !/^\d+\s+\d/.test(servingSizeStr) && /[a-zA-Z]/.test(servingSizeStr))
           ? servingSizeStr
-          : `1 serving (${defGrams}g)`;
+          : t('localization.shared.servingGrams', { grams: defGrams.toLocaleString(getAppLocale()) });
 
         options.push({
           key: 'default',
@@ -714,7 +716,7 @@ export default function FoodDetailsLayout({
         });
       }
     } else {
-      options.push({ key: 'default', label: '1 serving (100g)', gramsPerUnit: 100 });
+      options.push({ key: 'default', label: t('localization.shared.serving100'), gramsPerUnit: 100 });
     }
 
     // ── Standard measurement units (always present) ──────────────────────
@@ -723,14 +725,14 @@ export default function FoodDetailsLayout({
       { key: 'oz',    label: '1 oz',    gramsPerUnit: 28.35 },
       { key: 'lb',    label: '1 lb',    gramsPerUnit: 453.592 },
       { key: 'ml',    label: '1 ml',    gramsPerUnit: 1 },
-      { key: 'tsp',   label: '1 tsp',   gramsPerUnit: 5 },
-      { key: 'tbsp',  label: '1 tbsp',  gramsPerUnit: 15 },
-      { key: 'cup',   label: '1 cup',   gramsPerUnit: 240 },
+      { key: 'tsp',   label: t('localization.shared.teaspoon'),   gramsPerUnit: 5 },
+      { key: 'tbsp',  label: t('localization.shared.tablespoon'),  gramsPerUnit: 15 },
+      { key: 'cup',   label: t('localization.shared.cup'),   gramsPerUnit: 240 },
       { key: 'fl oz', label: '1 fl oz', gramsPerUnit: 29.57 },
     );
 
     return options;
-  }, [product, editDefaultGramsPerUnit, mode]);
+  }, [product, editDefaultGramsPerUnit, mode, t]);
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
@@ -1654,7 +1656,7 @@ export default function FoodDetailsLayout({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
+        Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
 
@@ -1860,7 +1862,7 @@ export default function FoodDetailsLayout({
 
             if (insertErrorForDraft || !newFoodForDraft) {
               console.error('[FoodDetails] handleSave (my_meals_builder): food insert error:', insertErrorForDraft);
-              Alert.alert('Error', `Failed to save food: ${insertErrorForDraft?.message ?? 'unknown error'}`);
+              Alert.alert(t('common.error'), t('localization.shared.foodSaveFailed'));
               return;
             }
 
@@ -1929,7 +1931,7 @@ export default function FoodDetailsLayout({
 
             if (insertError || !newFood) {
               console.error('[FoodDetails] handleSave: food insert error:', insertError);
-              Alert.alert('Error', `Failed to save food: ${insertError?.message ?? 'unknown error'}`);
+              Alert.alert(t('common.error'), t('localization.shared.foodSaveFailed'));
               return;
             }
 
@@ -1969,7 +1971,7 @@ export default function FoodDetailsLayout({
 
             if (mealInsertError || !newMeal) {
               console.error('[FoodDetails] handleSave: meal insert error:', mealInsertError);
-              Alert.alert('Error', `Failed to create meal: ${mealInsertError?.message ?? 'unknown error'}`);
+              Alert.alert(t('common.error'), t('localization.shared.mealCreateFailed'));
               return;
             }
 
@@ -1999,7 +2001,7 @@ export default function FoodDetailsLayout({
 
           if (mealItemError) {
             console.error('[FoodDetails] handleSave: meal_item insert error:', mealItemError);
-            Alert.alert('Error', `Failed to add food to meal: ${mealItemError.message}`);
+            Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
             return;
           }
 
@@ -2163,8 +2165,8 @@ export default function FoodDetailsLayout({
           const sourceLabel =
             dataSource === 'usda' ? 'USDA' :
             dataSource === 'openfoodfacts' ? 'Open Food Facts' :
-            dataSource === 'ai' ? 'AI Estimated' :
-            dataSource === 'manual' ? 'Manual Entry' :
+            dataSource === 'ai' ? t('localization.shared.aiEstimated') :
+            dataSource === 'manual' ? t('localization.shared.manualEntry') :
             null;
 
           const qualityBadgeColor =
@@ -2172,8 +2174,8 @@ export default function FoodDetailsLayout({
             qualityScore != null && qualityScore >= 50 ? '#f59e0b' :
             null;
           const qualityBadgeLabel =
-            qualityScore != null && qualityScore >= 80 ? 'Verified' :
-            qualityScore != null && qualityScore >= 50 ? 'Partial data' :
+            qualityScore != null && qualityScore >= 80 ? t('localization.shared.verified') :
+            qualityScore != null && qualityScore >= 50 ? t('localization.shared.partialData') :
             null;
 
           return (

@@ -1,3 +1,4 @@
+import { getAppLocale, translatePreference } from '@/lib/localization';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation, Switch, Image, ImageSourcePropType } from 'react-native';
@@ -95,24 +96,24 @@ export default function SettingsScreen() {
   const handleAvatarPress = () => {
     console.log('[Profile Android] Avatar tapped — showing photo picker options');
     Alert.alert(
-      'Profile Photo',
-      'Choose how to update your profile photo',
+      t('localization.settings.profilePhoto'),
+      t('localization.settings.choosePhoto'),
       [
         {
-          text: 'Take Photo',
+          text: t('localization.settings.takePhoto'),
           onPress: () => {
             console.log('[Profile Android] Take Photo selected');
             pickImage('camera');
           },
         },
         {
-          text: 'Choose from Library',
+          text: t('localization.settings.chooseLibrary'),
           onPress: () => {
             console.log('[Profile Android] Choose from Library selected');
             pickImage('library');
           },
         },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
       ]
     );
   };
@@ -126,7 +127,7 @@ export default function SettingsScreen() {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           console.log('[Profile Android] Camera permission denied');
-          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          Alert.alert(t('localization.settings.permissionRequired'), t('localization.settings.cameraPermission'));
           return;
         }
         console.log('[Profile Android] Launching camera');
@@ -141,7 +142,7 @@ export default function SettingsScreen() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
           console.log('[Profile Android] Media library permission denied');
-          Alert.alert('Permission Required', 'Photo library access is needed to choose a photo.');
+          Alert.alert(t('localization.settings.permissionRequired'), t('localization.settings.photoPermission'));
           return;
         }
         console.log('[Profile Android] Launching image library');
@@ -163,7 +164,7 @@ export default function SettingsScreen() {
       await uploadAvatar(asset.uri);
     } catch (error: any) {
       console.error('[Profile Android] Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert(t('common.error'), t('localization.settings.pickImageError'));
     }
   };
 
@@ -210,7 +211,7 @@ export default function SettingsScreen() {
       console.log('[Avatar Android] Done — avatar updated successfully');
     } catch (error: any) {
       console.error('[Avatar Android] Upload failed:', error);
-      Alert.alert('Upload Failed', error.message || 'Failed to upload photo. Please try again.');
+      Alert.alert(t('localization.settings.uploadFailed'), t('localization.settings.uploadError'));
     } finally {
       setAvatarUploading(false);
     }
@@ -318,7 +319,7 @@ export default function SettingsScreen() {
       await loadUserData();
     } catch (error: any) {
       console.error('[Profile Android] Error saving food preferences:', error);
-      Alert.alert(t('common.error'), error.message || t('profile.failedToSavePreferences'));
+      Alert.alert(t('common.error'), t('profile.failedToSavePreferences'));
     } finally {
       setSavingFoodPrefs(false);
     }
@@ -577,7 +578,7 @@ export default function SettingsScreen() {
       }
     } catch (error: any) {
       console.error('[Profile Android] Error in saveFieldDirectly:', error);
-      Alert.alert(t('common.error'), error.message || t('profile.failedToSaveChanges'));
+      Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
     }
@@ -697,7 +698,7 @@ export default function SettingsScreen() {
       closeEditModal();
     } catch (error: any) {
       console.error('[Profile Android] Error saving field:', error);
-      Alert.alert(t('common.error'), error.message || t('profile.failedToSaveChanges'));
+      Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
     }
@@ -744,7 +745,7 @@ export default function SettingsScreen() {
       Alert.alert(t('common.success'), t('profile.journeyStartUpdated'));
     } catch (error: any) {
       console.error('[Profile Android] Error saving start date:', error);
-      Alert.alert(t('common.error'), error.message || t('profile.failedToSaveStartDate'));
+      Alert.alert(t('common.error'), t('profile.failedToSaveStartDate'));
     } finally {
       setSaving(false);
     }
@@ -790,7 +791,7 @@ export default function SettingsScreen() {
     try {
       const ymd = effective.slice(0, 10);
       const date = new Date(ymd + 'T00:00:00');
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
     } catch (error) {
       console.error('[Profile Android] Error formatting date:', error);
       return 'Set Date';
@@ -984,7 +985,7 @@ export default function SettingsScreen() {
           </Text>
 
           <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {user.email || 'Guest User'}
+            {user.email || t('localization.settings.guestUser')}
           </Text>
 
           {user.challenger_badge && (
@@ -1167,7 +1168,7 @@ export default function SettingsScreen() {
                               await loadUserData();
                             } catch (err: any) {
                               console.error('[Profile Android] Error saving units:', err);
-                              Alert.alert(t('common.error'), err.message || t('profile.failedToSaveUnits'));
+                              Alert.alert(t('common.error'), t('profile.failedToSaveUnits'));
                             }
                           },
                         },
@@ -1184,7 +1185,7 @@ export default function SettingsScreen() {
                               await loadUserData();
                             } catch (err: any) {
                               console.error('[Profile Android] Error saving units:', err);
-                              Alert.alert(t('common.error'), err.message || t('profile.failedToSaveUnits'));
+                              Alert.alert(t('common.error'), t('profile.failedToSaveUnits'));
                             }
                           },
                         },
@@ -1448,7 +1449,7 @@ export default function SettingsScreen() {
                           await recalculateGoals(user, goal);
                           Alert.alert(t('profile.goalsUpdated'), t('profile.goalsRecalculated'));
                         } catch (e: any) {
-                          Alert.alert(t('common.error'), e.message || t('errors.failedToSave'));
+                          Alert.alert(t('common.error'), t('errors.failedToSave'));
                         } finally {
                           setSaving(false);
                         }
@@ -1496,7 +1497,7 @@ export default function SettingsScreen() {
                             setUser((prev: any) => ({ ...prev, adaptive_tdee_enabled: val }));
                           } catch (err: any) {
                             console.error('[Profile Android] Error saving adaptive_tdee_enabled:', err);
-                            Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                            Alert.alert(t('common.error'), t('errors.failedToSave'));
                           }
                         }}
                         trackColor={{ false: isDark ? colors.borderDark : colors.border, true: colors.primary + '80' }}
@@ -1686,7 +1687,8 @@ export default function SettingsScreen() {
                 onPress: async () => {
                   console.log('[Profile Android] Language changed to:', lang.code);
                   await i18nInstance.changeLanguage(lang.code);
-                  await setStoredLanguage(lang.code);
+                  const stored = await setStoredLanguage(lang.code);
+                  if (!stored) Alert.alert(i18n.t('common.error'), i18n.t('localization.settings.languageSaveError'));
                 },
               }));
               Alert.alert(t('profile.selectLanguage'), '', [...options, { text: t('common.cancel'), style: 'cancel' as const }]);
@@ -1992,7 +1994,7 @@ export default function SettingsScreen() {
                       onPress={() => toggleDietaryRestriction(item)}
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {item}
+                        {translatePreference(item)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2018,7 +2020,7 @@ export default function SettingsScreen() {
                       onPress={() => toggleProteinPreference(item)}
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {item}
+                        {translatePreference(item)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2067,7 +2069,7 @@ export default function SettingsScreen() {
                       onPress={() => toggleRecipeStyle(opt.value)}
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {opt.label}
+                        {translatePreference(opt.label)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2150,7 +2152,7 @@ export default function SettingsScreen() {
                       setShowAdjustmentDayModal(false);
                     } catch (err: any) {
                       console.error('[Profile Android] Error saving adjustment_day:', err);
-                      Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                      Alert.alert(t('common.error'), t('errors.failedToSave'));
                     }
                   }}
                   activeOpacity={0.7}
@@ -2210,6 +2212,7 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
+                  locale={Platform.OS === 'ios' ? getAppLocale() : undefined}
                   value={selectedDate}
                   mode="date"
                   display="spinner"
@@ -2221,6 +2224,7 @@ export default function SettingsScreen() {
           </Modal>
         ) : (
           <DateTimePicker
+                  locale={Platform.OS === 'ios' ? getAppLocale() : undefined}
             value={selectedDate}
             mode="date"
             display="default"

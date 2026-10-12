@@ -1,3 +1,4 @@
+import { getAppLocale, translatePreference } from '@/lib/localization';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation, Switch, Image, ImageSourcePropType } from 'react-native';
@@ -103,24 +104,24 @@ export default function SettingsScreen() {
   const handleAvatarPress = () => {
     console.log('[Profile] Avatar tapped — showing photo picker options');
     Alert.alert(
-      'Profile Photo',
-      'Choose how to update your profile photo',
+      t('localization.settings.profilePhoto'),
+      t('localization.settings.choosePhoto'),
       [
         {
-          text: 'Take Photo',
+          text: t('localization.settings.takePhoto'),
           onPress: () => {
             console.log('[Profile] Take Photo selected');
             pickImage('camera');
           },
         },
         {
-          text: 'Choose from Library',
+          text: t('localization.settings.chooseLibrary'),
           onPress: () => {
             console.log('[Profile] Choose from Library selected');
             pickImage('library');
           },
         },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
       ]
     );
   };
@@ -134,7 +135,7 @@ export default function SettingsScreen() {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           console.log('[Profile] Camera permission denied');
-          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          Alert.alert(t('localization.settings.permissionRequired'), t('localization.settings.cameraPermission'));
           return;
         }
         console.log('[Profile] Launching camera');
@@ -149,7 +150,7 @@ export default function SettingsScreen() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
           console.log('[Profile] Media library permission denied');
-          Alert.alert('Permission Required', 'Photo library access is needed to choose a photo.');
+          Alert.alert(t('localization.settings.permissionRequired'), t('localization.settings.photoPermission'));
           return;
         }
         console.log('[Profile] Launching image library');
@@ -171,7 +172,7 @@ export default function SettingsScreen() {
       await uploadAvatar(asset.uri);
     } catch (error: any) {
       console.error('[Profile] Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert(t('common.error'), t('localization.settings.pickImageError'));
     }
   };
 
@@ -218,7 +219,7 @@ export default function SettingsScreen() {
       console.log('[Avatar] Done — avatar updated successfully');
     } catch (error: any) {
       console.error('[Avatar] Upload failed:', error);
-      Alert.alert('Upload Failed', error.message || 'Failed to upload photo. Please try again.');
+      Alert.alert(t('localization.settings.uploadFailed'), t('localization.settings.uploadError'));
     } finally {
       setAvatarUploading(false);
     }
@@ -343,7 +344,7 @@ export default function SettingsScreen() {
       await loadUserData();
     } catch (error: any) {
       console.error('[Profile] Error saving food preferences:', error);
-      Alert.alert('Error', error.message || 'Failed to save food preferences');
+      Alert.alert(t('common.error'), t('profile.failedToSavePreferences'));
     } finally {
       setSavingFoodPrefs(false);
     }
@@ -602,7 +603,7 @@ export default function SettingsScreen() {
       }
     } catch (error: any) {
       console.error('[Profile] Error in saveFieldDirectly:', error);
-      Alert.alert('Error', error.message || 'Failed to save changes');
+      Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
     }
@@ -722,7 +723,7 @@ export default function SettingsScreen() {
       closeEditModal();
     } catch (error: any) {
       console.error('[Profile] Error saving field:', error);
-      Alert.alert('Error', error.message || 'Failed to save changes');
+      Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
     }
@@ -769,7 +770,7 @@ export default function SettingsScreen() {
       Alert.alert(t('common.success'), t('profile.journeyStartUpdated'));
     } catch (error: any) {
       console.error('[Profile] Error saving start date:', error);
-      Alert.alert('Error', error.message || 'Failed to save start date');
+      Alert.alert(t('common.error'), t('profile.failedToSaveStartDate'));
     } finally {
       setSaving(false);
     }
@@ -815,7 +816,7 @@ export default function SettingsScreen() {
     try {
       const ymd = effective.slice(0, 10);
       const date = new Date(ymd + 'T00:00:00');
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
     } catch (error) {
       console.error('[Profile] Error formatting date:', error);
       return t('profile.setDate');
@@ -919,9 +920,9 @@ export default function SettingsScreen() {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (diffDays === 0) return t('localization.settings.today');
+    if (diffDays === 1) return t('localization.settings.yesterday');
+    return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
   };
 
   const getCoachActionIcon = (actionType: string): { ios: string; android: string } => {
@@ -934,7 +935,7 @@ export default function SettingsScreen() {
   const handleCoachBadgePress = (fieldLabel: string) => {
     if (!lastAdjustMacrosAction) return;
     console.log('[Profile] Coach badge tapped for field:', fieldLabel);
-    const dateStr = new Date(lastAdjustMacrosAction.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const dateStr = new Date(lastAdjustMacrosAction.created_at).toLocaleDateString(getAppLocale(), { month: 'long', day: 'numeric', year: 'numeric' });
     Alert.alert(
       t('profile.setByCoach'),
       t('profile.setByCoachMessage', { date: dateStr })
@@ -1041,7 +1042,7 @@ export default function SettingsScreen() {
           </Text>
 
           <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {user.email || 'Guest User'}
+            {user.email || t('localization.settings.guestUser')}
           </Text>
 
           {user.challenger_badge && (
@@ -1224,7 +1225,7 @@ export default function SettingsScreen() {
                               await loadUserData();
                             } catch (err: any) {
                               console.error('[Profile] Error saving units:', err);
-                              Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                              Alert.alert(t('common.error'), t('errors.failedToSave'));
                             }
                           },
                         },
@@ -1241,7 +1242,7 @@ export default function SettingsScreen() {
                               await loadUserData();
                             } catch (err: any) {
                               console.error('[Profile] Error saving units:', err);
-                              Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                              Alert.alert(t('common.error'), t('errors.failedToSave'));
                             }
                           },
                         },
@@ -1367,7 +1368,7 @@ export default function SettingsScreen() {
                                 }
                               },
                             },
-                            { text: 'Cancel', style: 'cancel' },
+                            { text: t('common.cancel'), style: 'cancel' },
                           ]
                         );
                       }}
@@ -1541,7 +1542,7 @@ export default function SettingsScreen() {
                           await recalculateGoals(user, goal);
                           Alert.alert(t('profile.goalsUpdated'), t('profile.goalsRecalculated'));
                         } catch (e: any) {
-                          Alert.alert(t('common.error'), e.message || t('errors.failedToSave'));
+                          Alert.alert(t('common.error'), t('errors.failedToSave'));
                         } finally {
                           setSaving(false);
                         }
@@ -1589,7 +1590,7 @@ export default function SettingsScreen() {
                             setUser((prev: any) => ({ ...prev, adaptive_tdee_enabled: val }));
                           } catch (err: any) {
                             console.error('[Profile] Error saving adaptive_tdee_enabled:', err);
-                            Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                            Alert.alert(t('common.error'), t('errors.failedToSave'));
                           }
                         }}
                         trackColor={{ false: isDark ? colors.borderDark : colors.border, true: colors.primary + '80' }}
@@ -1827,10 +1828,10 @@ export default function SettingsScreen() {
               />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.actionRowLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                  Community Sharing
+                  {t('localization.settings.communitySharing')}
                 </Text>
                 <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary, marginTop: 1 }}>
-                  Auto-share achievements to the community feed
+                  {t('localization.settings.communitySharingDescription')}
                 </Text>
               </View>
             </View>
@@ -1867,7 +1868,8 @@ export default function SettingsScreen() {
                 onPress: async () => {
                   console.log('[Profile] Language changed to:', lang.code);
                   await i18n.changeLanguage(lang.code);
-                  await setStoredLanguage(lang.code);
+                  const stored = await setStoredLanguage(lang.code);
+                  if (!stored) Alert.alert(i18n.t('common.error'), i18n.t('localization.settings.languageSaveError'));
                 },
               }));
               Alert.alert(t('profile.selectLanguage'), '', [...options, { text: t('common.cancel'), style: 'cancel' as const }]);
@@ -2015,11 +2017,11 @@ export default function SettingsScreen() {
                 onChangeText={setEditValue}
                 keyboardType={editingField === 'name' ? 'default' : 'decimal-pad'}
                 placeholder={
-                  editingField === 'name' ? 'Your first name' :
-                  editingField === 'height' ? (units === 'imperial' ? 'inches' : 'cm') :
+                  editingField === 'name' ? t('profile.yourFirstName') :
+                  editingField === 'height' ? (units === 'imperial' ? t('profile.inches') : 'cm') :
                   editingField === 'weight' || editingField === 'goalWeight' ? (units === 'imperial' ? 'lbs' : 'kg') :
-                  editingField === 'age' ? 'years' :
-                  editingField === 'lossRate' ? (units === 'metric' ? 'kg per week' : 'lbs per week') : ''
+                  editingField === 'age' ? t('profile.years', { age: '' }).trim() :
+                  editingField === 'lossRate' ? (units === 'metric' ? t('profile.kgPerWeek') : t('profile.lbsPerWeek')) : ''
                 }
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 autoFocus
@@ -2173,7 +2175,7 @@ export default function SettingsScreen() {
                       onPress={() => toggleDietaryRestriction(item)}
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {item}
+                        {translatePreference(item)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2199,7 +2201,7 @@ export default function SettingsScreen() {
                       onPress={() => toggleProteinPreference(item)}
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {item}
+                        {translatePreference(item)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2248,7 +2250,7 @@ export default function SettingsScreen() {
                       onPress={() => toggleRecipeStyle(opt.value)}
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFFFFF' : (isDark ? colors.textDark : colors.text) }]}>
-                        {opt.label}
+                        {translatePreference(opt.label)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2310,6 +2312,7 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
+                  locale={Platform.OS === 'ios' ? getAppLocale() : undefined}
                   value={selectedDate}
                   mode="date"
                   display="spinner"
@@ -2321,6 +2324,7 @@ export default function SettingsScreen() {
           </Modal>
         ) : (
           <DateTimePicker
+                  locale={Platform.OS === 'ios' ? getAppLocale() : undefined}
             value={selectedDate}
             mode="date"
             display="default"
@@ -2378,7 +2382,7 @@ export default function SettingsScreen() {
                       setUser((prev: any) => ({ ...prev, adjustment_day: index }));
                     } catch (err: any) {
                       console.error('[Profile] Error saving adjustment_day:', err);
-                      Alert.alert(t('common.error'), err.message || t('errors.failedToSave'));
+                      Alert.alert(t('common.error'), t('errors.failedToSave'));
                     }
                   }}
                   activeOpacity={0.7}

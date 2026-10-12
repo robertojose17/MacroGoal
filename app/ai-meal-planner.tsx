@@ -438,21 +438,23 @@ function ActivePreferencesSummary({ userPreferences, secondaryColor, cardBg, isD
     );
   }
 
+  const optionKeys: Record<string, string> = {"vegetarian": "localization.screens.option0", "vegan": "localization.screens.option1", "gluten-free": "localization.screens.option2", "dairy-free": "localization.screens.option3", "chicken": "localization.screens.option4", "turkey": "localization.screens.option5", "beef": "localization.screens.option6", "pork": "localization.screens.option7", "salmon": "localization.screens.option8", "tuna": "localization.screens.option9", "shrimp": "localization.screens.option10", "cod": "localization.screens.option11", "tilapia": "localization.screens.option12", "eggs": "localization.screens.option13", "greek yogurt": "localization.screens.option14", "cottage cheese": "localization.screens.option15", "whey protein": "localization.screens.option16", "tofu": "localization.screens.option17", "tempeh": "localization.screens.option18", "edamame": "localization.screens.option19", "lentils": "localization.screens.option20", "chickpeas": "localization.screens.option21", "black beans": "localization.screens.option22", "air-fryer": "localization.screens.styleair-fryer", "meal-prep": "localization.screens.stylemeal-prep", "under-30-minutes": "localization.screens.styleunder-30-minutes", "one-pan-meals": "localization.screens.styleone-pan-meals", "slow-cooker": "localization.screens.styleslow-cooker", "instant-pot": "localization.screens.styleinstant-pot", "easy-recipes": "localization.screens.styleeasy-recipes", "freezer-friendly": "localization.screens.stylefreezer-friendly"};
+  const optionLabel = (value: string) => optionKeys[value.toLowerCase()] ? t(optionKeys[value.toLowerCase()]) : value;
   const chips: string[] = [];
   if (hasRestrictions) {
     userPreferences!.dietary_restrictions!.forEach(r => {
-      const label = r.charAt(0).toUpperCase() + r.slice(1);
+      const label = optionLabel(r);
       chips.push(label);
     });
   }
   if (hasProteins) {
     userPreferences!.protein_preferences!.forEach(p => {
-      chips.push(p);
+      chips.push(optionLabel(p));
     });
   }
   if (hasRecipeStyles) {
     userPreferences!.recipe_styles!.forEach(s => {
-      const label = RECIPE_STYLE_OPTIONS.find(o => o.value === s)?.label || s;
+      const label = optionLabel(s);
       chips.push(label);
     });
   }
@@ -1584,6 +1586,7 @@ function MealSectionCard({
   section, foods, dishDescription, mealName, sectionCalories, isDark, textColor, secondaryColor, cardBg, borderColor, inputBg,
   onReplaceMeal, onServingChange, onOpenRecipe,
 }: MealSectionCardProps) {
+  const { t } = useTranslation();
   const calRounded = Math.round(sectionCalories);
 
   return (

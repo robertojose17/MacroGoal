@@ -222,7 +222,7 @@ export default function AffiliateApplyScreen() {
               style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
               value={email}
               onChangeText={setEmail}
-              placeholder="your@email.com"
+              placeholder={t('localization.completion.emailPlaceholder')}
               placeholderTextColor={mutedColor}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -258,7 +258,7 @@ export default function AffiliateApplyScreen() {
                 ]}
                 value={desiredCode}
                 onChangeText={handleCodeChange}
-                placeholder="e.g. MARIAFIT"
+                placeholder={t('localization.screens.exampleAffiliate')}
                 placeholderTextColor={mutedColor}
                 autoCapitalize="characters"
                 autoCorrect={false}
@@ -288,7 +288,7 @@ export default function AffiliateApplyScreen() {
               style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
               value={paypalEmail}
               onChangeText={setPaypalEmail}
-              placeholder="your@paypal.com"
+              placeholder={t('localization.completion.paypalPlaceholder')}
               placeholderTextColor={mutedColor}
               keyboardType="email-address"
               autoCapitalize="none"

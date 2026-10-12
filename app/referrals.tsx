@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -36,7 +37,7 @@ function isValidEmail(email: string): boolean {
 function formatDate(dateStr: string | undefined | null): string {
   if (!dateStr) return '—';
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(dateStr).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -292,7 +293,7 @@ export default function ReferralsScreen() {
             <>
               <TextInput
                 style={[styles.paypalInput, { backgroundColor: inputBg, borderColor: cardBorder, color: textColor }]}
-                placeholder="your@paypal.com"
+                placeholder={t('localization.completion.paypalPlaceholder')}
                 placeholderTextColor={mutedColor}
                 value={paypalInput}
                 onChangeText={setPaypalInput}

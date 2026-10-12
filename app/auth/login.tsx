@@ -65,7 +65,7 @@ export default function LoginScreen() {
         console.error('[Login] Error code:', error.status);
         console.error('[Login] Error message:', error.message);
 
-        let errorMessage = error.message;
+        let errorMessage = t('common.unexpectedError');
         if (error.message.includes('Invalid login credentials')) {
           errorMessage = t('auth.invalidCredentials');
         } else if (error.message.includes('Email not confirmed')) {
@@ -89,7 +89,7 @@ export default function LoginScreen() {
       console.log('[Login] Auth state change will handle navigation via _layout.tsx');
     } catch (error: any) {
       console.error('[Login] Unexpected error:', error);
-      Alert.alert(t('common.error'), error.message || t('common.unexpectedError'));
+      Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       setLoading(false);
     }
@@ -98,16 +98,16 @@ export default function LoginScreen() {
   const handleForgotPassword = () => {
     console.log('[Login] Forgot password tapped');
     if (!email) {
-      Alert.alert(t('auth.forgotPassword'), 'Enter your email address above, then tap Forgot Password.');
+      Alert.alert(t('auth.forgotPassword'), t('localization.screens.resetInstruction'));
       return;
     }
     supabase.auth
       .resetPasswordForEmail(email.trim().toLowerCase())
       .then(({ error }) => {
         if (error) {
-          Alert.alert(t('common.error'), error.message);
+          Alert.alert(t('common.error'), t('common.unexpectedError'));
         } else {
-          Alert.alert(t('auth.checkYourEmail'), 'A password reset link has been sent to your email.');
+          Alert.alert(t('auth.checkYourEmail'), t('localization.screens.resetSent'));
         }
       });
   };

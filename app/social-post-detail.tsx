@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
 import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibility/ProtectedReaderBoundary';
@@ -42,6 +44,7 @@ function CommentItem({
   isDark: boolean;
   index: number;
 }) {
+  useTranslation();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
 
@@ -58,7 +61,7 @@ function CommentItem({
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const bg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
-  const authorUsername = comment.author?.username ?? 'Unknown';
+  const authorUsername = comment.author?.username ?? t('localization.social.unknown');
   const timeText = timeAgo(comment.created_at);
 
   return (
@@ -87,16 +90,19 @@ function CommentItem({
 }
 
 export default function SocialPostDetailScreen() {
+  useTranslation();
   return <CommunityPrivacyRolloutBoundary>{activation => activation.mode === 'protected' ? <ProtectedPostDetailRoute /> : <LegacySocialPostDetailScreen />}</CommunityPrivacyRolloutBoundary>;
 }
 
 function ProtectedPostDetailRoute() {
+  useTranslation();
   const { post_id } = useLocalSearchParams<{ post_id?: string | string[] }>();
   const target = typeof post_id === 'string' ? post_id : '';
   return <ProtectedReaderBoundary scopeKey={target}><ProtectedPostDetailBody key={target} /></ProtectedReaderBoundary>;
 }
 
 function LegacySocialPostDetailScreen() {
+  useTranslation();
   const { post_id } = useLocalSearchParams<{ post_id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -194,8 +200,8 @@ function LegacySocialPostDetailScreen() {
   }, [post_id, commentText]);
 
   const commentsCountText = commentsLoading
-    ? 'Loading comments...'
-    : `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}`;
+    ? t('localization.social.loading_comments')
+    : t('localization.social.comments_count', { count: comments.length });
 
   const renderHeader = () => {
     if (postLoading) {
@@ -208,7 +214,7 @@ function LegacySocialPostDetailScreen() {
     if (!post) {
       return (
         <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor }]}>
-          <Text style={[styles.errorText, { color: subColor }]}>Post not found.</Text>
+          <Text style={[styles.errorText, { color: subColor }]}>{t('localization.social.post_not_found')}</Text>
         </View>
       );
     }
@@ -230,7 +236,7 @@ function LegacySocialPostDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Post',
+          title: t('localization.social.post_title'),
           headerBackButtonDisplayMode: 'minimal',
           headerShown: true,
         }}
@@ -262,7 +268,7 @@ function LegacySocialPostDetailScreen() {
         <View style={[styles.commentInputRow, { backgroundColor: cardBg, borderTopColor: borderColor }]}>
           <TextInput
             style={[styles.commentInput, { backgroundColor: isDark ? '#1E2035' : colors.card, borderColor, color: textColor }]}
-            placeholder="Add a comment..."
+            placeholder={t('localization.social.add_a_comment')}
             placeholderTextColor={subColor}
             value={commentText}
             onChangeText={setCommentText}
@@ -278,7 +284,7 @@ function LegacySocialPostDetailScreen() {
             }}
             disabled={!commentText.trim() || submitting}
             style={[styles.sendBtn, { opacity: !commentText.trim() || submitting ? 0.4 : 1 }]}
-            accessibilityLabel="Send comment"
+            accessibilityLabel={t('localization.social.send_comment')}
             accessibilityRole="button"
           >
             {submitting ? (
@@ -294,6 +300,7 @@ function LegacySocialPostDetailScreen() {
 }
 
 function ProtectedPostDetailBody() {
+  useTranslation();
   const { post_id } = useLocalSearchParams<{ post_id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -370,9 +377,9 @@ function ProtectedPostDetailBody() {
     }
   }, [post_id, post, commentText]);
 
-  const commentsCountText = loadError ? 'Comments unavailable.' : commentsLoading
-    ? 'Loading comments...'
-    : `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}`;
+  const commentsCountText = loadError ? t('localization.social.comments_unavailable') : commentsLoading
+    ? t('localization.social.loading_comments')
+    : t('localization.social.comments_count', { count: comments.length });
 
   const renderHeader = () => {
     if (postLoading) {
@@ -385,7 +392,7 @@ function ProtectedPostDetailBody() {
     if (!post) {
       return (
         <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor }]}>
-          <Text style={[styles.errorText, { color: subColor }]}>Post not found.</Text>
+          <Text style={[styles.errorText, { color: subColor }]}>{t('localization.social.post_not_found')}</Text>
         </View>
       );
     }
@@ -407,7 +414,7 @@ function ProtectedPostDetailBody() {
     <>
       <Stack.Screen
         options={{
-          title: 'Post',
+          title: t('localization.social.post_title'),
           headerBackButtonDisplayMode: 'minimal',
           headerShown: true,
         }}
@@ -439,7 +446,7 @@ function ProtectedPostDetailBody() {
         <View style={[styles.commentInputRow, { backgroundColor: cardBg, borderTopColor: borderColor }]}>
           <TextInput
             style={[styles.commentInput, { backgroundColor: isDark ? '#1E2035' : colors.card, borderColor, color: textColor }]}
-            placeholder="Add a comment..."
+            placeholder={t('localization.social.add_a_comment')}
             placeholderTextColor={subColor}
             value={commentText}
             onChangeText={setCommentText}
@@ -456,7 +463,7 @@ function ProtectedPostDetailBody() {
             }}
             disabled={!post || loadError || !commentText.trim() || submitting}
             style={[styles.sendBtn, { opacity: !commentText.trim() || submitting ? 0.4 : 1 }]}
-            accessibilityLabel="Send comment"
+            accessibilityLabel={t('localization.social.send_comment')}
             accessibilityRole="button"
           >
             {submitting ? (

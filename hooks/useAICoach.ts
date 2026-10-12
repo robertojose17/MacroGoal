@@ -1,3 +1,4 @@
+import { isCoachPlaceholder } from '@/hooks/coachMessageLocalization';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
@@ -224,7 +225,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               }));
               // Check for real history before setMessages so the flag is accurate
               finalHasHistory = mapped.some(
-                (m) => m.content && m.content !== '__FIRST_INTERACTION__' && m.content !== 'Something went wrong. Please try again.'
+                (m) => !isCoachPlaceholder(m.content)
               );
               setMessages(mapped);
             }
@@ -294,9 +295,8 @@ export function useAICoach(options?: UseAICoachOptions) {
 
       // Build full history: filter out streaming/placeholder/sentinel messages,
       // then append the new user message (deduplicating if already present).
-      const EXCLUDED_CONTENTS = new Set(['', '__FIRST_INTERACTION__', 'Something went wrong. Please try again.']);
       const historyMessages: CoachMessage[] = messagesRef.current
-        .filter((m) => !m.isStreaming && !EXCLUDED_CONTENTS.has(m.content))
+        .filter((m) => !m.isStreaming && !isCoachPlaceholder(m.content))
         .map((m) => ({ role: m.role, content: m.content, timestamp: m.timestamp }));
 
       // Avoid duplicating the new user message if it's already the last item in history
@@ -340,7 +340,7 @@ export function useAICoach(options?: UseAICoachOptions) {
           const sessionErrMsg: Message = {
             id: genMsgId(),
             role: 'assistant',
-            content: 'Session expired — please restart the app.',
+            content: i18n.t('localization.shared.sessionExpired'),
             timestamp: Date.now(),
             isStreaming: false,
           };
@@ -406,8 +406,8 @@ export function useAICoach(options?: UseAICoachOptions) {
             } else {
               // Auth error or unexpected server error — show visible message in chat
               const errorContent = response.status === 401
-                ? 'Authentication error — please restart the app and try again.'
-                : 'Something went wrong. Please try again.';
+                ? i18n.t('localization.shared.authError')
+                : i18n.t('localization.shared.tryAgain');
               console.error('[useAICoach] Non-subscription error (status', response.status, ') — showing error in chat');
               setMessages((prev) =>
                 prev.map((m) =>
@@ -506,7 +506,7 @@ export function useAICoach(options?: UseAICoachOptions) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === placeholderMsg.id
-                  ? { ...m, content: "I didn't catch that. Please try sending your message again.", isStreaming: false }
+                  ? { ...m, content: i18n.t('localization.shared.emptyResponse'), isStreaming: false }
                   : m
               )
             );
@@ -579,7 +579,7 @@ export function useAICoach(options?: UseAICoachOptions) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === placeholderMsg.id
-                  ? { ...m, content: "I'm taking a bit longer than usual. Please try sending your message again.", isStreaming: false }
+                  ? { ...m, content: i18n.t('localization.shared.coachTimeout'), isStreaming: false }
                   : m
               )
             );

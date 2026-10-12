@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { getCommunityPrivacyActivation } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 import type { CommunityPrivacyActivation, CommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
@@ -24,6 +26,7 @@ interface SearchUserRowProps {
 }
 
 export default function SearchUserRow(props: SearchUserRowProps) {
+  useTranslation();
   return <CommunityPrivacyRolloutBoundary>{activation => <SearchUserRowBody {...props} activation={activation} />}</CommunityPrivacyRolloutBoundary>;
 }
 
@@ -34,6 +37,7 @@ function SearchUserRowBody({
   index = 0,
   onFollowChange,
 }: SearchUserRowProps & { activation: CommunityPrivacyActivation }) {
+  useTranslation();
   const privacyProtected = activation.mode === 'protected';
   const router = useRouter();
   const [isFollowing, setIsFollowing] = useState(user.is_following);
@@ -85,14 +89,12 @@ function SearchUserRowBody({
   const textColor = isDark ? colors.textDark : colors.text;
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
-  const followersText = user.followers_count === 1
-    ? '1 follower'
-    : `${user.followers_count} followers`;
+  const followersText = t('localization.social.followers_count', { count: user.followers_count });
 
   const followBtnBg = isFollowing ? 'transparent' : colors.primary;
   const followBtnBorder = isFollowing ? (isDark ? colors.cardBorderDark : colors.cardBorder) : colors.primary;
   const followBtnText = isFollowing ? (isDark ? colors.textDark : colors.text) : '#FFFFFF';
-  const followLabel = privacyProtected ? 'View profile' : (isFollowing ? 'Following' : 'Follow');
+  const followLabel = privacyProtected ? t('localization.social.view_profile') : (isFollowing ? t('localization.social.following') : t('localization.social.follow'));
 
   return (
     <Animated.View

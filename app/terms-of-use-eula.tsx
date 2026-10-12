@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Linking } from 'react-native';
@@ -138,7 +139,7 @@ export default function TermsOfUseEULAScreen() {
           </Text>
 
           <Text style={[styles.lastUpdated, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {t('termsEula.lastUpdated', { date: new Date().toLocaleDateString() })}
+            {t('termsEula.lastUpdated', { date: new Date().toLocaleDateString(getAppLocale()) })}
           </Text>
         </View>
       </ScrollView>

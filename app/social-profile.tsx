@@ -1,3 +1,6 @@
+import { getAppLocale } from '@/lib/localization';
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { Redirect } from 'expo-router';
 /**
@@ -110,6 +113,7 @@ function formatDateISO(d: Date): string {
 }
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
+  useTranslation();
   const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
     <View style={macroRowStyles.row}>
@@ -156,6 +160,7 @@ function StatPill({
   color: string;
   isDark: boolean;
 }) {
+  useTranslation();
   const bg = isDark ? colors.cardDark : '#FFFFFF';
   const borderColor = isDark ? colors.cardBorderDark : colors.cardBorder;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -173,16 +178,19 @@ function StatPill({
 }
 
 export default function SocialProfileScreen() {
+  useTranslation();
   return <CommunityPrivacyRolloutBoundary>{activation => activation.mode === 'protected' ? <ProtectedLegacyProfileRedirect /> : <LegacySocialProfileScreen />}</CommunityPrivacyRolloutBoundary>;
 }
 
 function ProtectedLegacyProfileRedirect() {
+  useTranslation();
   const { user_id } = useLocalSearchParams<{ user_id?: string | string[] }>();
   const target = typeof user_id === 'string' ? user_id : '';
   return <Redirect href={{ pathname: '/social-profile-view', params: { userId: target } }} />;
 }
 
 function LegacySocialProfileScreen() {
+  useTranslation();
   const { user_id } = useLocalSearchParams<{ user_id: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -232,9 +240,9 @@ function LegacySocialProfileScreen() {
       // Load nutrition for this user
       loadNutrition(user_id, nutritionRange);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load profile';
+      const msg = e instanceof Error ? e.message : t('localization.social.failed_to_load_profile');
       console.error('[SocialProfile] loadProfile error:', msg);
-      setError(msg);
+      setError('localization.social.failed_to_load_profile');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -474,10 +482,10 @@ function LegacySocialProfileScreen() {
   // ─── Delete ──────────────────────────────────────────────────────────────────
   const handleDelete = useCallback((postId: string) => {
     console.log('[SocialProfile] Delete post pressed:', postId);
-    Alert.alert('Delete post?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('localization.social.delete_post'), t('localization.social.this_cannot_be_undone'), [
+      { text: t('localization.social.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('localization.social.delete'),
         style: 'destructive',
         onPress: async () => {
           console.log('[SocialProfile] Network request: deletePost:', postId);
@@ -487,7 +495,7 @@ function LegacySocialProfileScreen() {
             console.log('[SocialProfile] Post deleted:', postId);
           } catch (e) {
             console.error('[SocialProfile] deletePost failed:', e);
-            Alert.alert('Error', 'Could not delete post.');
+            Alert.alert(t('localization.social.error'), t('localization.social.could_not_delete_post'));
           }
         },
       },
@@ -504,7 +512,7 @@ function LegacySocialProfileScreen() {
   if (loading) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Profile', headerBackButtonDisplayMode: 'minimal' }} />
+        <Stack.Screen options={{ title: t('localization.social.profile'), headerBackButtonDisplayMode: 'minimal' }} />
         <View style={[styles.loadingContainer, { backgroundColor: bg }]}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
@@ -515,10 +523,10 @@ function LegacySocialProfileScreen() {
   if (error || !profile) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Profile', headerBackButtonDisplayMode: 'minimal' }} />
+        <Stack.Screen options={{ title: t('localization.social.profile'), headerBackButtonDisplayMode: 'minimal' }} />
         <View style={[styles.loadingContainer, { backgroundColor: bg }]}>
-          <Text style={[styles.errorTitle, { color: textColor }]}>Couldn't load profile</Text>
-          <Text style={[styles.errorSub, { color: subColor }]}>{error ?? 'Unknown error'}</Text>
+          <Text style={[styles.errorTitle, { color: textColor }]}>{t('localization.social.couldn_t_load_profile')}</Text>
+          <Text style={[styles.errorSub, { color: subColor }]}>{t(error ?? 'localization.social.unknown_error')}</Text>
           <Pressable
             onPress={() => {
               console.log('[SocialProfile] Retry pressed');
@@ -527,7 +535,7 @@ function LegacySocialProfileScreen() {
             style={styles.retryBtn}
             accessibilityRole="button"
           >
-            <Text style={styles.retryBtnText}>Try again</Text>
+            <Text style={styles.retryBtnText}>{t('localization.social.try_again')}</Text>
           </Pressable>
         </View>
       </>
@@ -538,22 +546,22 @@ function LegacySocialProfileScreen() {
   const canViewStats = is_mutual || is_own_profile;
 
   // Follow button state
-  let followBtnLabel = 'Follow';
+  let followBtnLabel = t('localization.social.follow');
   let followBtnBg = colors.primary;
   let followBtnTextColor = '#FFFFFF';
   let followBtnBorderColor = colors.primary;
   if (is_own_profile) {
-    followBtnLabel = 'Edit Profile';
+    followBtnLabel = t('localization.social.edit_profile');
     followBtnBg = 'transparent';
     followBtnTextColor = textColor;
     followBtnBorderColor = borderColor;
   } else if (is_mutual) {
-    followBtnLabel = 'Friends ✓';
+    followBtnLabel = t('localization.social.friends');
     followBtnBg = 'transparent';
     followBtnTextColor = colors.success;
     followBtnBorderColor = colors.success;
   } else if (is_following) {
-    followBtnLabel = 'Following';
+    followBtnLabel = t('localization.social.following');
     followBtnBg = 'transparent';
     followBtnTextColor = textColor;
     followBtnBorderColor = borderColor;
@@ -566,9 +574,10 @@ function LegacySocialProfileScreen() {
       return (
         <View style={styles.lockedStats}>
           <Lock size={32} color={subColor} />
-          <Text style={[styles.lockedTitle, { color: textColor }]}>Stats are private</Text>
+          <Text style={[styles.lockedTitle, { color: textColor }]}>{t('localization.social.stats_are_private')}</Text>
           <Text style={[styles.lockedSub, { color: subColor }]}>
-            Follow each other to see stats
+            
+            {t('localization.social.follow_each_other_to_see_stats')}
           </Text>
         </View>
       );
@@ -576,13 +585,13 @@ function LegacySocialProfileScreen() {
     if (!stats) {
       return (
         <View style={styles.lockedStats}>
-          <Text style={[styles.lockedSub, { color: subColor }]}>No stats available</Text>
+          <Text style={[styles.lockedSub, { color: subColor }]}>{t('localization.social.no_stats_available')}</Text>
         </View>
       );
     }
 
     const weightChangeDisplay = stats.weight_change != null
-      ? (stats.weight_change > 0 ? '+' : '') + Number(stats.weight_change).toFixed(1)
+      ? (stats.weight_change > 0 ? '+' : '') + Number(stats.weight_change).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : null;
     const weightChangeColor = stats.weight_change != null
       ? (stats.weight_change < 0 ? colors.success : colors.warning)
@@ -611,7 +620,7 @@ function LegacySocialProfileScreen() {
                 accessibilityRole="button"
               >
                 <Text style={[styles.dateRangeBtnText, { color: isActive ? '#fff' : subColor }]}>
-                  {r.label}
+                  {t('localization.social.range_' + r.key)}
                 </Text>
               </Pressable>
             );
@@ -620,18 +629,18 @@ function LegacySocialProfileScreen() {
 
         {/* Calories */}
         <View style={[styles.caloriesCard, { backgroundColor: cardBg, borderColor }]}>
-          <Text style={[styles.caloriesLabel, { color: subColor }]}>Avg Calories</Text>
+          <Text style={[styles.caloriesLabel, { color: subColor }]}>{t('localization.social.avg_calories')}</Text>
           <Text style={[styles.caloriesValue, { color: colors.calories }]}>
             {stats.avg_calories != null ? Math.round(Number(stats.avg_calories)).toString() : '—'}
           </Text>
-          <Text style={[styles.caloriesUnit, { color: subColor }]}>kcal / day</Text>
+          <Text style={[styles.caloriesUnit, { color: subColor }]}>{t('localization.social.kcal_day')}</Text>
         </View>
 
         {/* Macros row */}
         <View style={styles.macroRow}>
-          <StatPill label="Protein" value={stats.avg_protein} unit="g" color={colors.protein} isDark={isDark} />
-          <StatPill label="Carbs" value={stats.avg_carbs} unit="g" color={colors.carbs} isDark={isDark} />
-          <StatPill label="Fat" value={stats.avg_fat} unit="g" color={colors.fats} isDark={isDark} />
+          <StatPill label={t('localization.social.protein')} value={stats.avg_protein} unit="g" color={colors.protein} isDark={isDark} />
+          <StatPill label={t('localization.social.carbs')} value={stats.avg_carbs} unit="g" color={colors.carbs} isDark={isDark} />
+          <StatPill label={t('localization.social.fat')} value={stats.avg_fat} unit="g" color={colors.fats} isDark={isDark} />
         </View>
 
         {/* Weight change */}
@@ -639,7 +648,7 @@ function LegacySocialProfileScreen() {
           <View style={[styles.weightChangeCard, { backgroundColor: cardBg, borderColor }]}>
             <TrendingUp size={20} color={weightChangeColor} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.weightChangeLabel, { color: subColor }]}>Weight change</Text>
+              <Text style={[styles.weightChangeLabel, { color: subColor }]}>{t('localization.social.weight_change')}</Text>
               <Text style={[styles.weightChangeValue, { color: weightChangeColor }]}>
                 {weightChangeDisplay}
                 {' '}
@@ -654,12 +663,12 @@ function LegacySocialProfileScreen() {
           <View style={[styles.streakCard, { backgroundColor: cardBg, borderColor }]}>
             <Flame size={22} color="#EF4444" />
             <Text style={[styles.streakValue, { color: textColor }]}>{stats.streak}</Text>
-            <Text style={[styles.streakLabel, { color: subColor }]}>day streak</Text>
+            <Text style={[styles.streakLabel, { color: subColor }]}>{t('localization.social.day_streak')}</Text>
           </View>
           <View style={[styles.streakCard, { backgroundColor: cardBg, borderColor }]}>
             <Trophy size={22} color="#F59E0B" />
             <Text style={[styles.streakValue, { color: textColor }]}>{consistencyDisplay}</Text>
-            <Text style={[styles.streakLabel, { color: subColor }]}>consistency</Text>
+            <Text style={[styles.streakLabel, { color: subColor }]}>{t('localization.social.consistency')}</Text>
           </View>
         </View>
 
@@ -668,19 +677,20 @@ function LegacySocialProfileScreen() {
           <Text style={[styles.daysTracked, { color: subColor }]}>
             {stats.days_tracked}
             {' '}
-            days tracked in this period
+            
+            {t('localization.social.days_tracked_in_this_period')}
           </Text>
         ) : null}
 
         {/* Photo progress */}
         {stats.check_in_photos && stats.check_in_photos.length > 0 ? (
           <View style={styles.photoProgressSection}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Photo Progress</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('localization.social.photo_progress')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoProgressScroll}>
               {stats.check_in_photos.map((photo) => {
                 const d = new Date(photo.date ?? photo.created_at ?? '');
                 const dateLabel = d instanceof Date && !isNaN(d.getTime())
-                  ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  ? d.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' })
                   : '';
                 return (
                   <View key={photo.id} style={styles.photoProgressItem}>
@@ -690,7 +700,7 @@ function LegacySocialProfileScreen() {
                     ) : null}
                     {photo.weight != null ? (
                       <Text style={[styles.photoProgressWeight, { color: subColor }]}>
-                        {Number(photo.weight).toFixed(1)}
+                        {Number(photo.weight).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                         {' '}
                         {stats.preferred_units ?? 'lbs'}
                       </Text>
@@ -705,11 +715,11 @@ function LegacySocialProfileScreen() {
         {/* Nutrition Progress Card */}
         <View style={[styles.nutritionCard, { backgroundColor: cardBg, borderColor }]}>
           <View style={styles.nutritionCardHeader}>
-            <Text style={[styles.nutritionCardTitle, { color: textColor }]}>Nutrition Progress</Text>
+            <Text style={[styles.nutritionCardTitle, { color: textColor }]}>{t('localization.social.nutrition_progress')}</Text>
             <View style={styles.nutritionRangePills}>
               {(['today', '7d', '30d'] as NutritionRange[]).map((r) => {
                 const isActive = nutritionRange === r;
-                const label = r === 'today' ? 'Today' : r === '7d' ? '7 Days' : '30 Days';
+                const label = r === 'today' ? t('localization.social.today') : r === '7d' ? t('localization.social.7_days') : t('localization.social.30_days');
                 return (
                   <TouchableOpacity
                     key={r}
@@ -745,10 +755,10 @@ function LegacySocialProfileScreen() {
                 label="kcal"
               />
               <View style={styles.macroSummaryCompact}>
-                <MacroSummaryRowCompact label="Protein" eaten={Math.round(nutritionData?.protein ?? 0)} goal={goalData?.protein ?? 150} color={colors.protein} isDark={isDark} />
-                <MacroSummaryRowCompact label="Carbs" eaten={Math.round(nutritionData?.carbs ?? 0)} goal={goalData?.carbs ?? 200} color={colors.carbs} isDark={isDark} />
-                <MacroSummaryRowCompact label="Fats" eaten={Math.round(nutritionData?.fats ?? 0)} goal={goalData?.fats ?? 65} color={colors.fats} isDark={isDark} />
-                <MacroSummaryRowCompact label="Fiber" eaten={Math.round(nutritionData?.fiber ?? 0)} goal={goalData?.fiber ?? 30} color={colors.fiber} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.protein')} eaten={Math.round(nutritionData?.protein ?? 0)} goal={goalData?.protein ?? 150} color={colors.protein} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.carbs')} eaten={Math.round(nutritionData?.carbs ?? 0)} goal={goalData?.carbs ?? 200} color={colors.carbs} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.fats')} eaten={Math.round(nutritionData?.fats ?? 0)} goal={goalData?.fats ?? 65} color={colors.fats} isDark={isDark} />
+                <MacroSummaryRowCompact label={t('localization.social.fiber')} eaten={Math.round(nutritionData?.fiber ?? 0)} goal={goalData?.fiber ?? 30} color={colors.fiber} isDark={isDark} />
               </View>
             </View>
           )}
@@ -761,7 +771,7 @@ function LegacySocialProfileScreen() {
     if (posts.length === 0) {
       return (
         <View style={styles.emptyPosts}>
-          <Text style={[styles.emptyPostsText, { color: subColor }]}>No posts yet</Text>
+          <Text style={[styles.emptyPostsText, { color: subColor }]}>{t('localization.social.no_posts_yet')}</Text>
         </View>
       );
     }
@@ -818,15 +828,15 @@ function LegacySocialProfileScreen() {
             <View style={styles.profileStats}>
               <View style={styles.profileStatItem}>
                 <Text style={[styles.profileStatValue, { color: textColor }]}>{user.posts_count}</Text>
-                <Text style={[styles.profileStatLabel, { color: subColor }]}>Posts</Text>
+                <Text style={[styles.profileStatLabel, { color: subColor }]}>{t('localization.social.posts')}</Text>
               </View>
               <View style={styles.profileStatItem}>
                 <Text style={[styles.profileStatValue, { color: textColor }]}>{user.followers_count}</Text>
-                <Text style={[styles.profileStatLabel, { color: subColor }]}>Followers</Text>
+                <Text style={[styles.profileStatLabel, { color: subColor }]}>{t('localization.social.followers')}</Text>
               </View>
               <View style={styles.profileStatItem}>
                 <Text style={[styles.profileStatValue, { color: textColor }]}>{user.following_count}</Text>
-                <Text style={[styles.profileStatLabel, { color: subColor }]}>Following</Text>
+                <Text style={[styles.profileStatLabel, { color: subColor }]}>{t('localization.social.following')}</Text>
               </View>
             </View>
           </View>
@@ -872,7 +882,7 @@ function LegacySocialProfileScreen() {
         <View style={[styles.tabSwitcher, { borderColor }]}>
           {(['posts', 'stats'] as ProfileTab[]).map((tab) => {
             const isActive = activeTab === tab;
-            const label = tab === 'posts' ? 'Posts' : 'Stats';
+            const label = tab === 'posts' ? t('localization.social.posts') : t('localization.social.stats');
             return (
               <Pressable
                 key={tab}
@@ -938,6 +948,7 @@ function ProfileCommentsModal({
   onClose,
   onCommentAdded,
 }: ProfileCommentsModalProps) {
+  useTranslation();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -985,7 +996,7 @@ function ProfileCommentsModal({
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e) {
       console.warn('[SocialProfile] addComment error:', e);
-      Alert.alert('Error', 'Could not post comment. Please try again.');
+      Alert.alert(t('localization.social.error'), t('localization.social.could_not_post_comment_please_try_again'));
     } finally {
       setSending(false);
       submittingRef.current = false;
@@ -1017,7 +1028,7 @@ function ProfileCommentsModal({
         keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Comments</Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{t('localization.social.comments')}</Text>
           <TouchableOpacity
             onPress={() => {
               console.log('[SocialProfile] CommentsModal close pressed');
@@ -1041,7 +1052,7 @@ function ProfileCommentsModal({
             renderItem={renderComment}
             ListEmptyComponent={
               <View style={{ alignItems: 'center', paddingVertical: 48 }}>
-                <Text style={{ fontSize: 14, color: secondaryColor }}>No comments yet. Be the first!</Text>
+                <Text style={{ fontSize: 14, color: secondaryColor }}>{t('localization.social.no_comments_yet_be_the_first')}</Text>
               </View>
             }
             contentContainerStyle={{ paddingBottom: 16 }}
@@ -1060,7 +1071,7 @@ function ProfileCommentsModal({
             )}
             <TextInput
               style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
-              placeholder="Add a comment..."
+              placeholder={t('localization.social.add_a_comment')}
               placeholderTextColor={secondaryColor}
               value={commentText}
               onChangeText={setCommentText}

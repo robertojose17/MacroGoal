@@ -1,3 +1,4 @@
+import i18n from '@/lib/i18n';
 import { useState, useCallback } from 'react';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 
@@ -19,7 +20,7 @@ export function useVoiceRecorder({ onTranscription, onError }: UseVoiceRecorderO
       const status = await AudioModule.requestRecordingPermissionsAsync();
       console.log('[useVoiceRecorder] microphone permission status:', status.granted);
       if (!status.granted) {
-        onError('Microphone permission is required to record audio.');
+        onError(i18n.t('localization.shared.voiceError0'));
         return;
       }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -29,7 +30,7 @@ export function useVoiceRecorder({ onTranscription, onError }: UseVoiceRecorderO
       console.log('[useVoiceRecorder] recording started');
     } catch (err) {
       console.log('[useVoiceRecorder] startRecording error:', err);
-      onError('Could not start recording. Please try again.');
+      onError(i18n.t('localization.shared.voiceError1'));
     }
   }, [recorder, onError]);
 
@@ -42,7 +43,7 @@ export function useVoiceRecorder({ onTranscription, onError }: UseVoiceRecorderO
       const uri = recorder.uri;
       console.log('[useVoiceRecorder] recording stopped, uri:', uri);
       if (!uri) {
-        onError('Recording failed — no audio file was created.');
+        onError(i18n.t('localization.shared.voiceError2'));
         return;
       }
       setIsTranscribing(true);
@@ -73,7 +74,7 @@ export function useVoiceRecorder({ onTranscription, onError }: UseVoiceRecorderO
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[useVoiceRecorder] OpenRouter error:', errorText);
-        onError('Transcription failed. Please try again or type your description.');
+        onError(i18n.t('localization.shared.voiceError3'));
         return;
       }
 
@@ -82,14 +83,14 @@ export function useVoiceRecorder({ onTranscription, onError }: UseVoiceRecorderO
 
       const text: string = (data.text || '').trim();
       if (!text) {
-        onError('No speech detected. Please try again and speak clearly.');
+        onError(i18n.t('localization.shared.voiceError4'));
         return;
       }
 
       onTranscription(text);
     } catch (err) {
       console.log('[useVoiceRecorder] stopRecordingAndTranscribe error:', err);
-      onError('Transcription failed. Please try again.');
+      onError(i18n.t('localization.shared.voiceError5'));
     } finally {
       setIsTranscribing(false);
     }

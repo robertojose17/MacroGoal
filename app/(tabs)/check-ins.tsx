@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 /**
  * Community Tab — Feed / Friends / Premium Club
  * 3 sub-tabs rendered as pill selector (state-based, not router tabs)
@@ -243,14 +244,19 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+function formatPercent(value: number): string {
+  return (value / 100).toLocaleString(getAppLocale(), { style: 'percent', maximumFractionDigits: 1 });
+}
+
 function getRelativeTime(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
   const diff = Math.floor((now - then) / 1000);
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  const formatter = new Intl.RelativeTimeFormat(getAppLocale(), { numeric: 'auto', style: 'short' });
+  if (diff < 60) return formatter.format(0, 'second');
+  if (diff < 3600) return formatter.format(-Math.floor(diff / 60), 'minute');
+  if (diff < 86400) return formatter.format(-Math.floor(diff / 3600), 'hour');
+  return formatter.format(-Math.floor(diff / 86400), 'day');
 }
 
 function getInitials(name: string | null, username: string): string {
@@ -289,11 +295,11 @@ const CATEGORY_COLORS: Record<PostCategory, string> = {
 };
 
 const CATEGORY_LABELS: Record<PostCategory, string> = {
-  small_win: 'Small win',
-  meal_idea: 'Meal idea',
-  question: 'Question',
-  progress: 'Progress',
-  general: 'General',
+  small_win: 'localization.checkins.smallWin',
+  meal_idea: 'localization.checkins.mealIdea',
+  question: 'localization.checkins.question',
+  progress: 'localization.checkins.progress',
+  general: 'localization.checkins.general',
 };
 
 // ─── Avatar Component ─────────────────────────────────────────────────────────
@@ -370,6 +376,7 @@ function MealPostCardBody({
   servingsDisplay,
   router,
 }: MealPostCardBodyProps) {
+  const { t } = useTranslation();
   const [recipeSaved, setRecipeSaved] = useState(false);
   const [savingRecipe, setSavingRecipe] = useState(false);
 
@@ -399,7 +406,7 @@ function MealPostCardBody({
       });
       if (error) {
         console.error('[Community] Save to Favorites error:', error.message);
-        Alert.alert('Error', 'Could not save recipe.');
+        Alert.alert(t('localization.checkins.error'), t('localization.checkins.saveRecipeError'));
       } else {
         console.log('[Community] Recipe saved to favorites — recipe_id:', recipeData.id);
         setRecipeSaved(true);
@@ -453,7 +460,7 @@ function MealPostCardBody({
       ) : null}
       {servingsDisplay ? (
         <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: spacing.md, paddingBottom: 4 }}>
-          {servingsDisplay}{' serving(s)'}
+          {servingsDisplay}{t('localization.checkins.servingSuffix')}
         </Text>
       ) : null}
       {captionDiffersFromName && post.content ? (
@@ -467,7 +474,7 @@ function MealPostCardBody({
             style={[styles.mealActionBtn, { borderColor: colors.primary }]}
             onPress={handleViewRecipe}
           >
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>View Recipe</Text>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>{t('localization.checkins.viewRecipe')}</Text>
           </TouchableOpacity>
         ) : null}
         {post.meal_recipe_data ? (
@@ -477,7 +484,7 @@ function MealPostCardBody({
             disabled={savingRecipe || recipeSaved}
           >
             <Text style={{ fontSize: 12, fontWeight: '600', color: recipeSaved ? colors.success : secondaryColor }}>
-              {recipeSaved ? 'Saved ✓' : 'Save to Favorites'}
+              {recipeSaved ? t('localization.checkins.saved') : t('localization.checkins.saveFavorites')}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -494,10 +501,11 @@ interface StreakMilestoneCardProps {
 }
 
 function StreakMilestoneCard({ streakDays, isDark }: StreakMilestoneCardProps) {
+  const { t } = useTranslation();
   const bgColor = isDark ? '#1A2A1A' : '#F0FDF4';
   const borderColor = isDark ? '#2A4A2A' : '#BBF7D0';
-  const streakLabel = `${streakDays}-day streak`;
-  const streakSubtitle = `${streakDays} consecutive days of tracking`;
+  const streakLabel = t('localization.checkins.streakDays', { days: streakDays.toLocaleString(getAppLocale()) });
+  const streakSubtitle = t('localization.checkins.consecutiveDays', { days: streakDays.toLocaleString(getAppLocale()) });
   return (
     <View style={{
       marginHorizontal: 0,
@@ -532,6 +540,7 @@ interface WeeklyRecapCardProps {
 }
 
 function WeeklyRecapCard({ score, daysTracked, weekStart, dayFlags, isDark }: WeeklyRecapCardProps) {
+  const { t } = useTranslation();
   const bgColor = isDark ? '#0F1A2A' : '#F0F7FF';
   const borderColor = isDark ? '#1E3A5A' : '#BFDBFE';
   const scoreColor = score >= 80 ? '#5CB97B' : score >= 70 ? '#F59E0B' : '#EF4444';
@@ -539,15 +548,18 @@ function WeeklyRecapCard({ score, daysTracked, weekStart, dayFlags, isDark }: We
   const monday = new Date(weekStart + 'T00:00:00');
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const fmtMonday = monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const fmtSunday = sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtMonday = monday.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
+  const fmtSunday = sunday.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
   const weekLabel = `${fmtMonday} – ${fmtSunday}`;
 
-  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const dayLabels = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(monday); day.setDate(monday.getDate() + i);
+    return day.toLocaleDateString(getAppLocale(), { weekday: 'narrow' });
+  });
   const flags = dayFlags && dayFlags.length === 7 ? dayFlags : Array(7).fill(false) as boolean[];
 
-  const scoreDisplay = `${score}%`;
-  const daysDisplay = `${daysTracked}/7`;
+  const scoreDisplay = formatPercent(Number(score));
+  const daysDisplay = `${daysTracked.toLocaleString(getAppLocale())}/7`;
 
   return (
     <View style={{
@@ -561,15 +573,14 @@ function WeeklyRecapCard({ score, daysTracked, weekStart, dayFlags, isDark }: We
       gap: 12,
     }}>
       <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#E0F2FE' : '#1E3A5A' }}>
-        My week
-      </Text>
+        {t('localization.checkins.myWeek')}</Text>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View style={{ gap: 4 }}>
-          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>Consistency</Text>
+          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>{t('localization.checkins.consistency')}</Text>
           <Text style={{ fontSize: 26, fontWeight: '800', color: scoreColor }}>{scoreDisplay}</Text>
         </View>
         <View style={{ gap: 4, alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>Days tracked</Text>
+          <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' }}>{t('localization.checkins.daysTracked')}</Text>
           <Text style={{ fontSize: 26, fontWeight: '800', color: isDark ? '#E0F2FE' : '#1E3A5A' }}>{daysDisplay}</Text>
         </View>
       </View>
@@ -611,26 +622,27 @@ interface WeightGoalCardProps {
 }
 
 function WeightGoalCard({ progressPct, isDark }: WeightGoalCardProps) {
+  const { t } = useTranslation();
   const bgColor = isDark ? '#1A1A2A' : '#F5F3FF';
   const borderColor = isDark ? '#2A2A4A' : '#DDD6FE';
   const fillColor = '#5B9AA8';
   const trackBg = isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB';
 
   const milestoneLabel: Record<number, string> = {
-    25: '25% completed',
-    50: '50% completed',
-    75: '75% completed',
-    100: '100% completed',
+    25: t('localization.checkins.quarterComplete'),
+    50: t('localization.checkins.halfComplete'),
+    75: t('localization.checkins.threeQuartersComplete'),
+    100: t('localization.checkins.fullyComplete'),
   };
   const headlineLabel: Record<number, string> = {
-    25: '🎯 A quarter of the way there!',
-    50: '🎯 Halfway to my goal!',
-    75: '🎯 Almost there!',
-    100: '🎯 Goal reached!',
+    25: t('localization.checkins.quarterGoal'),
+    50: t('localization.checkins.halfGoal'),
+    75: t('localization.checkins.almostGoal'),
+    100: t('localization.checkins.reachedGoal'),
   };
 
-  const headline = headlineLabel[progressPct] ?? `🎯 ${progressPct}% to my goal!`;
-  const subtitle = milestoneLabel[progressPct] ?? `${progressPct}% completed`;
+  const headline = headlineLabel[progressPct] ?? t('localization.checkins.percentGoal', { percent: formatPercent(progressPct) });
+  const subtitle = milestoneLabel[progressPct] ?? t('localization.checkins.percentComplete', { percent: formatPercent(progressPct) });
   const barWidth = `${progressPct}%` as `${number}%`;
 
   return (
@@ -755,6 +767,7 @@ function PostCard({
   onSaveMeal,
   showSaveMeal = false,
 }: PostCardProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
@@ -791,7 +804,7 @@ function PostCard({
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
-  const authorUsername = post.author?.username || 'unknown';
+  const authorUsername = post.author?.username || t('localization.checkins.unknown');
   const authorAvatarUri = post.author?.avatar_url ?? null;
   const relTime = getRelativeTime(post.created_at);
   const isOwn = post.user_id === currentUserId;
@@ -799,7 +812,7 @@ function PostCard({
 
   // Educational posts always display as "Coach" with the Coach avatar
   const isEduPost = post.auto_post_type === 'educational';
-  const displayName = isEduPost ? 'Coach' : (authorUsername ?? 'User');
+  const displayName = isEduPost ? t('localization.checkins.coach') : (authorUsername ?? t('localization.checkins.user'));
   const displayAvatar = isEduPost ? COACH_AVATAR : authorAvatarUri;
 
   const handleMenuPress = () => {
@@ -848,7 +861,7 @@ function PostCard({
   const handleSaveMealPress = () => {
     console.log('[Community] Save meal pressed for post:', post.id, 'food:', post.food_name);
     if (onSaveMeal) onSaveMeal(post);
-    else Alert.alert('Meal saved!');
+    else Alert.alert(t('localization.checkins.mealSaved'));
   };
 
   // ── Media zone ──
@@ -867,7 +880,7 @@ function PostCard({
     if (post.auto_post_type === 'educational') {
       return (
         <EducationalCard
-          headline={post.edu_headline ?? 'Did you know?'}
+          headline={post.edu_headline ?? t('localization.checkins.didYouKnow')}
           body={post.edu_body ?? post.content ?? ''}
           example={post.edu_example}
           isDark={isDark}
@@ -894,10 +907,10 @@ function PostCard({
 
     if (post.post_type_v2 === 'meal') {
       const mealPhotoUrl = post.meal_photo_url ?? post.image_url;
-      const calDisplay = post.meal_calories != null ? Math.round(Number(post.meal_calories)).toString() : null;
-      const protDisplay = post.meal_protein != null ? Math.round(Number(post.meal_protein)).toString() : null;
-      const carbDisplay = post.meal_carbs != null ? Math.round(Number(post.meal_carbs)).toString() : null;
-      const fatDisplay = post.meal_fat != null ? Math.round(Number(post.meal_fat)).toString() : null;
+      const calDisplay = post.meal_calories != null ? Math.round(Number(post.meal_calories)).toLocaleString(getAppLocale()) : null;
+      const protDisplay = post.meal_protein != null ? Math.round(Number(post.meal_protein)).toLocaleString(getAppLocale()) : null;
+      const carbDisplay = post.meal_carbs != null ? Math.round(Number(post.meal_carbs)).toLocaleString(getAppLocale()) : null;
+      const fatDisplay = post.meal_fat != null ? Math.round(Number(post.meal_fat)).toLocaleString(getAppLocale()) : null;
       const recipeData = post.meal_recipe_data;
       const recipeName = recipeData?.name ?? post.content;
       const captionDiffersFromName = !!(post.content && recipeData?.name && post.content !== recipeData.name);
@@ -941,8 +954,7 @@ function PostCard({
           ) : null}
           {(calDisplay || protDisplay || carbDisplay || fatDisplay) ? (
             <Text style={{ fontSize: 12, color: secondaryColor, paddingHorizontal: 16, paddingBottom: 4 }}>
-              Per serving
-            </Text>
+              {t('localization.checkins.perServing')}</Text>
           ) : null}
           {captionDiffersFromName && post.content ? (
             <Text style={{ fontSize: 13, color: textColor, paddingHorizontal: 16, paddingBottom: 4, lineHeight: 18 }}>
@@ -958,7 +970,7 @@ function PostCard({
                   router.push(`/recipe-finder-detail?recipe_id=${post.meal_recipe_id}`);
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>View Recipe</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>{t('localization.checkins.viewRecipe')}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -999,10 +1011,10 @@ function PostCard({
               />
               <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 10 }}>
                 <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                  {photoProgress[0].date ? new Date(photoProgress[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                  {photoProgress[0].date ? new Date(photoProgress[0].date).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
                 </Text>
                 {photoProgress[0].weight != null ? (
-                  <Text style={{ color: '#fff', fontSize: 12 }}>{photoProgress[0].weight} {photoProgress[0].weight_unit ?? 'lbs'}</Text>
+                  <Text style={{ color: '#fff', fontSize: 12 }}>{Number(photoProgress[0].weight).toLocaleString(getAppLocale())} {photoProgress[0].weight_unit ?? 'lbs'}</Text>
                 ) : null}
               </View>
             </View>
@@ -1024,14 +1036,14 @@ function PostCard({
                     resizeMode="cover"
                   />
                   <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{idx === 0 ? 'Before' : 'After'}</Text>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{idx === 0 ? t('localization.checkins.before') : t('localization.checkins.after')}</Text>
                   </View>
                   <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', padding: 8 }}>
                     <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>
-                      {photo.date ? new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                      {photo.date ? new Date(photo.date).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
                     </Text>
                     {photo.weight != null ? (
-                      <Text style={{ color: '#fff', fontSize: 11 }}>{photo.weight} {photo.weight_unit ?? 'lbs'}</Text>
+                      <Text style={{ color: '#fff', fontSize: 11 }}>{Number(photo.weight).toLocaleString(getAppLocale())} {photo.weight_unit ?? 'lbs'}</Text>
                     ) : null}
                   </View>
                 </View>
@@ -1060,44 +1072,44 @@ function PostCard({
         stats.streak_days != null ? {
           key: 'streak',
           Icon: Flame,
-          value: `${stats.streak_days} days`,
-          label: 'Current Streak',
+          value: t('localization.checkins.numberDays', { days: Number(stats.streak_days).toLocaleString(getAppLocale()) }),
+          label: t('localization.checkins.currentStreak'),
           barPct: Math.min(1, Number(stats.streak_days) / 100),
         } : null,
         stats.consistency_score != null ? {
           key: 'consistency',
           Icon: CalendarDays,
-          value: `${stats.consistency_score}%`,
-          label: 'Weekly Consistency',
+          value: formatPercent(Number(stats.consistency_score)),
+          label: t('localization.checkins.weeklyConsistency'),
           barPct: Math.min(1, Number(stats.consistency_score) / 100),
         } : null,
         stats.weight_goal_pct != null ? {
           key: 'weight_goal',
           Icon: Target,
-          value: `${stats.weight_goal_pct}%`,
-          label: 'Weight Progress',
+          value: formatPercent(Number(stats.weight_goal_pct)),
+          label: t('localization.checkins.weightProgress'),
           barPct: Math.min(1, Number(stats.weight_goal_pct) / 100),
         } : null,
         stats.steps_today != null ? {
           key: 'steps',
           Icon: Footprints,
-          value: Number(stats.steps_today).toLocaleString(),
-          label: `of ${Number(stats.steps_goal ?? 10000).toLocaleString()} steps`,
+          value: Number(stats.steps_today).toLocaleString(getAppLocale()),
+          label: t('localization.checkins.ofSteps', { steps: Number(stats.steps_goal ?? 10000).toLocaleString(getAppLocale()) }),
           barPct: Math.min(1, Number(stats.steps_today) / Number(stats.steps_goal ?? 10000)),
         } : null,
         stats.gym_checked_in != null ? {
           key: 'gym',
           Icon: Dumbbell,
-          value: stats.gym_checked_in ? 'Workout complete' : 'Not yet',
-          label: "Today's Gym",
+          value: stats.gym_checked_in ? t('localization.checkins.workoutComplete') : t('localization.checkins.notYet'),
+          label: t('localization.checkins.todayGym'),
           barPct: null,
           gymDone: Boolean(stats.gym_checked_in),
         } : null,
         stats.weight_value != null && stats.weight_goal_pct == null ? {
           key: 'weight',
           Icon: Target,
-          value: `${Number(stats.weight_value).toFixed(1)} ${String(stats.weight_unit ?? 'lbs')}`,
-          label: 'Current Weight',
+          value: `${Number(stats.weight_value).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${String(stats.weight_unit ?? 'lbs')}`,
+          label: t('localization.checkins.currentWeight'),
           barPct: null,
         } : null,
       ].filter(Boolean) as PCardDef[];
@@ -1243,13 +1255,13 @@ function PostCard({
 
     if (post.auto_post_type === 'streak_milestone') {
       const streakMsgs: Record<number, string> = {
-        7: 'Keeping the momentum going!',
-        14: 'Two weeks of showing up.',
-        30: 'A full month of discipline.',
-        60: 'Habits are forming.',
-        100: 'Triple digits. Absolute legend.',
+        7: t('localization.checkins.streak7'),
+        14: t('localization.checkins.streak14'),
+        30: t('localization.checkins.streak30'),
+        60: t('localization.checkins.streak60'),
+        100: t('localization.checkins.streak100'),
       };
-      const streakCaption = streakMsgs[post.streak_days ?? 0] ?? 'Staying consistent!';
+      const streakCaption = streakMsgs[post.streak_days ?? 0] ?? t('localization.checkins.stayingConsistent');
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
@@ -1261,7 +1273,7 @@ function PostCard({
     }
 
     if (post.auto_post_type === 'weekly_recap') {
-      const weeklyCaption = 'Another week of showing up!';
+      const weeklyCaption = t('localization.checkins.anotherWeek');
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
@@ -1274,12 +1286,12 @@ function PostCard({
 
     if (post.auto_post_type === 'weight_milestone' && post.weight_goal_pct != null) {
       const captions: Record<number, string> = {
-        25: 'One milestone closer to my goal!',
-        50: 'One milestone closer to my goal!',
-        75: 'Almost there — keeping the momentum!',
-        100: 'Goal achieved. On to the next one!',
+        25: t('localization.checkins.milestoneCloser'),
+        50: t('localization.checkins.milestoneCloser'),
+        75: t('localization.checkins.almostMomentum'),
+        100: t('localization.checkins.goalAchieved'),
       };
-      const caption = captions[post.weight_goal_pct] ?? 'One milestone closer to my goal!';
+      const caption = captions[post.weight_goal_pct] ?? t('localization.checkins.milestoneCloser');
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
@@ -1291,16 +1303,16 @@ function PostCard({
     }
 
     if (post.auto_post_type === 'featured_recipe') {
-      const recipeName = post.meal_recipe_data?.name ?? post.content ?? 'Featured Recipe';
+      const recipeName = post.meal_recipe_data?.name ?? post.content ?? t('localization.checkins.featuredRecipe');
       const cal = post.meal_calories != null ? Math.round(Number(post.meal_calories)) : null;
       const prot = post.meal_protein != null ? Math.round(Number(post.meal_protein)) : null;
-      const macroLine = cal != null && prot != null ? `${cal} kcal · ${prot}g protein per serving` : null;
+      const macroLine = cal != null && prot != null ? t('localization.checkins.recipeMacros', { cal: Number(cal).toLocaleString(getAppLocale()), protein: Number(prot).toLocaleString(getAppLocale()) }) : null;
       return (
         <View style={{ paddingHorizontal: 16, paddingTop: 4, gap: 2 }}>
           <Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
             <Text style={{ fontWeight: '700' }}>Macro Goal</Text>
             {'  '}
-            {`This week's featured recipe: ${recipeName}`}
+            {t('localization.checkins.weeklyRecipe', { recipe: recipeName })}
           </Text>
           {macroLine ? (
             <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', lineHeight: 18 }}>
@@ -1335,7 +1347,7 @@ function PostCard({
             <Check size={12} color="#fff" />
             <Text style={styles.foodChipText}>
               {post.food_name}
-              {post.food_calories ? ` · ${post.food_calories} kcal` : ''}
+              {post.food_calories ? ` · ${Number(post.food_calories).toLocaleString(getAppLocale())} kcal` : ''}
             </Text>
           </View>
         </View>
@@ -1345,9 +1357,9 @@ function PostCard({
     return null;
   };
 
-  const commentsCountDisplay = post.comments_count > 0 ? String(post.comments_count) : '';
-  const likesCountDisplay = post.likes_count > 0 ? String(post.likes_count) : '';
-  const savesCountDisplay = (post.saves_count ?? 0) > 0 ? String(post.saves_count) : '';
+  const commentsCountDisplay = post.comments_count > 0 ? Number(post.comments_count).toLocaleString(getAppLocale()) : '';
+  const likesCountDisplay = post.likes_count > 0 ? Number(post.likes_count).toLocaleString(getAppLocale()) : '';
+  const savesCountDisplay = (post.saves_count ?? 0) > 0 ? Number(post.saves_count).toLocaleString(getAppLocale()) : '';
 
   return (
     <View style={[styles.postCard, { backgroundColor: cardBg }]}>
@@ -1386,15 +1398,15 @@ function PostCard({
             </TouchableOpacity>
             {post.is_founder_post ? (
               <View style={[styles.founderBadge, { backgroundColor: '#0D9488' }]}>
-                <Text style={styles.founderBadgeText}>Founder</Text>
+                <Text style={styles.founderBadgeText}>{t('localization.checkins.founder')}</Text>
               </View>
             ) : null}
             {post.is_pinned ? (
-              <Text style={{ fontSize: 11, fontWeight: '500', color: colors.primary }}>Pinned</Text>
+              <Text style={{ fontSize: 11, fontWeight: '500', color: colors.primary }}>{t('localization.checkins.pinned')}</Text>
             ) : null}
           </View>
         </View>
-        <TouchableOpacity onPress={handleMenuPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity accessibilityLabel={t('localization.checkins.moreOptions')} onPress={handleMenuPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <MoreHorizontal size={20} color={secondaryColor} />
         </TouchableOpacity>
       </View>
@@ -1407,19 +1419,19 @@ function PostCard({
 
       {/* ── Action row ── */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleLike}>
+        <TouchableOpacity accessibilityLabel={t('localization.checkins.like')} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleLike}>
           <Heart size={22} color={post.liked_by_me ? '#EF4444' : textColor} fill={post.liked_by_me ? '#EF4444' : 'transparent'} />
           {likesCountDisplay ? (
             <Text style={{ fontSize: 14, fontWeight: '600', color: post.liked_by_me ? '#EF4444' : textColor }}>{likesCountDisplay}</Text>
           ) : null}
         </TouchableOpacity>
-        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleCommentPress}>
+        <TouchableOpacity accessibilityLabel={t('localization.checkins.comments')} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 16 }} onPress={handleCommentPress}>
           <MessageCircle size={22} color={textColor} />
           {commentsCountDisplay ? (
             <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{commentsCountDisplay}</Text>
           ) : null}
         </TouchableOpacity>
-        <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={handleSave}>
+        <TouchableOpacity accessibilityLabel={t('localization.checkins.savePost')} style={{ marginLeft: 'auto' }} onPress={handleSave}>
           <Bookmark size={22} color={post.saved_by_me ? colors.primary : textColor} fill={post.saved_by_me ? colors.primary : 'transparent'} />
         </TouchableOpacity>
       </View>
@@ -1428,9 +1440,9 @@ function PostCard({
       {post.comments_count > 0 ? (
         <TouchableOpacity onPress={handleViewAllComments} style={{ paddingHorizontal: 16, paddingTop: 4 }}>
           <Text style={{ fontSize: 13, color: secondaryColor }}>
-            {'View all '}
+            {t('localization.checkins.viewAll')}
             {commentsCountDisplay}
-            {' comments'}
+            {t('localization.checkins.commentsSuffix')}
           </Text>
         </TouchableOpacity>
       ) : null}
@@ -1443,7 +1455,7 @@ function PostCard({
       {/* ── Save meal button (club only) ── */}
       {showSaveMeal && post.category === 'meal_idea' && post.post_type_v2 !== 'meal' ? (
         <TouchableOpacity style={styles.saveMealBtn} onPress={handleSaveMealPress}>
-          <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>Save meal</Text>
+          <Text style={[styles.saveMealBtnText, { color: colors.primary }]}>{t('localization.checkins.saveMeal')}</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -1458,22 +1470,22 @@ function PostCard({
                   setMenuVisible(false);
                 }}>
                   <Pencil size={18} color={textColor} />
-                  <Text style={[styles.menuItemText, { color: textColor }]}>Edit</Text>
+                  <Text style={[styles.menuItemText, { color: textColor }]}>{t('localization.checkins.edit')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
                   <Trash2 size={18} color={colors.error} />
-                  <Text style={[styles.menuItemText, { color: colors.error }]}>Delete</Text>
+                  <Text style={[styles.menuItemText, { color: colors.error }]}>{t('localization.checkins.delete')}</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
                   <Flag size={18} color={textColor} />
-                  <Text style={[styles.menuItemText, { color: textColor }]}>Report</Text>
+                  <Text style={[styles.menuItemText, { color: textColor }]}>{t('localization.checkins.report')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem} onPress={handleBlock}>
                   <UserX size={18} color={textColor} />
-                  <Text style={[styles.menuItemText, { color: textColor }]}>Block user</Text>
+                  <Text style={[styles.menuItemText, { color: textColor }]}>{t('localization.checkins.blockUser')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1509,8 +1521,9 @@ function CommentsModal({
   onClose,
   onCommentAdded,
   communityClubAllowed = false,
-  communityUnavailableLabel = 'Unavailable. Try again.',
+  communityUnavailableLabel,
 }: CommentsModalProps) {
+  const { t } = useTranslation();
   const { runtime: commentPrivacy, state: commentPrivacyState } = useCommunityReadEnvironment();
   const communityPrivacyEnabled = commentPrivacy !== null;
   const [commentPrivacyView, setCommentPrivacyView] = useState('');
@@ -1604,7 +1617,7 @@ function CommentsModal({
     } catch (e) {
       console.warn('[Community] addComment error:', e);
       // Preserve text on failure
-      Alert.alert('Error', 'Could not post comment. Please try again.');
+      Alert.alert(t('localization.checkins.error'), t('localization.checkins.commentPostError'));
     } finally {
       setSending(false);
       submittingRef.current = false;
@@ -1632,7 +1645,7 @@ function CommentsModal({
       inputRef.current?.blur();
     } catch (e) {
       console.warn('[Community] updateComment error:', e);
-      Alert.alert('Error', 'Could not update comment. Please try again.');
+      Alert.alert(t('localization.checkins.error'), t('localization.checkins.commentUpdateError'));
     } finally {
       setSending(false);
       submittingRef.current = false;
@@ -1642,10 +1655,10 @@ function CommentsModal({
   const handleDeleteComment = async (commentId: string) => {
     if (!post) return;
     setMenuCommentId(null);
-    Alert.alert('Delete comment?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('localization.checkins.deleteComment'), t('localization.checkins.cannotUndo'), [
+      { text: t('localization.checkins.cancel'), style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive',
+        text: t('localization.checkins.delete'), style: 'destructive',
         onPress: async () => {
           try {
             await deleteComment(commentId, post.id);
@@ -1653,7 +1666,7 @@ function CommentsModal({
             onCommentAdded(post.id);
           } catch (e) {
             console.warn('[Community] deleteComment error:', e);
-            Alert.alert('Error', 'Could not delete comment.');
+            Alert.alert(t('localization.checkins.error'), t('localization.checkins.commentDeleteError'));
           }
         },
       },
@@ -1661,7 +1674,7 @@ function CommentsModal({
   };
 
   const renderComment = ({ item }: { item: Comment }) => {
-    const commentUsername = item.author?.username || 'unknown';
+    const commentUsername = item.author?.username || t('localization.checkins.unknown');
     const commentTime = getRelativeTime(item.created_at);
     const isOwn = item.user_id === currentUserId;
     return (
@@ -1681,7 +1694,7 @@ function CommentsModal({
           <Text style={{ fontSize: 11, color: secondaryColor, marginTop: 3 }}>{commentTime}</Text>
         </View>
         {isOwn ? (
-          <TouchableOpacity
+          <TouchableOpacity accessibilityLabel={t('localization.checkins.moreOptions')}
             onPress={() => {
               console.log('[Community] Comment menu toggled for comment:', item.id);
               setMenuCommentId(menuCommentId === item.id ? null : item.id);
@@ -1704,7 +1717,7 @@ function CommentsModal({
               onPress={() => handleEditComment(item)}
             >
               <Pencil size={15} color={textColor} />
-              <Text style={{ fontSize: 14, color: textColor }}>Edit</Text>
+              <Text style={{ fontSize: 14, color: textColor }}>{t('localization.checkins.edit')}</Text>
             </TouchableOpacity>
             <View style={{ height: 1, backgroundColor: isDark ? '#3A3A3C' : '#F3F4F6' }} />
             <TouchableOpacity
@@ -1712,7 +1725,7 @@ function CommentsModal({
               onPress={() => handleDeleteComment(item.id)}
             >
               <Trash2 size={15} color="#EF4444" />
-              <Text style={{ fontSize: 14, color: '#EF4444' }}>Delete</Text>
+              <Text style={{ fontSize: 14, color: '#EF4444' }}>{t('localization.checkins.delete')}</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -1729,8 +1742,8 @@ function CommentsModal({
       >
         {/* Header — fixed */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Comments</Text>
-          <TouchableOpacity
+          <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{t('localization.checkins.comments')}</Text>
+          <TouchableOpacity accessibilityLabel={t('localization.checkins.close')}
             onPress={() => {
               console.log('[Community] CommentsModal close button pressed');
               onClose();
@@ -1755,7 +1768,7 @@ function CommentsModal({
               renderItem={renderComment}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: 48 }}>
-                  <Text style={{ fontSize: 14, color: secondaryColor }}>{communityPrivacyEnabled && commentPrivacyError ? communityUnavailableLabel : 'No comments yet. Be the first!'}</Text>
+                  <Text style={{ fontSize: 14, color: secondaryColor }}>{communityPrivacyEnabled && commentPrivacyError ? communityUnavailableLabel : t('localization.checkins.noComments')}</Text>
                 </View>
               }
               contentContainerStyle={{ paddingBottom: 8 }}
@@ -1768,8 +1781,8 @@ function CommentsModal({
         <View style={{ paddingBottom: insets.bottom, borderTopWidth: 1, borderTopColor: borderColor, backgroundColor: cardBg }}>
           {editingCommentId ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 6, gap: 6 }}>
-              <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', flex: 1 }}>Editing comment</Text>
-              <TouchableOpacity
+              <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', flex: 1 }}>{t('localization.checkins.editingComment')}</Text>
+              <TouchableOpacity accessibilityLabel={t('localization.checkins.close')}
                 onPress={() => {
                   console.log('[Community] Cancel edit pressed');
                   setEditingCommentId(null);
@@ -1792,7 +1805,7 @@ function CommentsModal({
             <TextInput
               ref={inputRef}
               style={{ flex: 1, fontSize: 14, color: textColor, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: isDark ? '#2C2C2E' : '#F3F4F6', maxHeight: 80 }}
-              placeholder={editingCommentId ? 'Edit comment...' : 'Add a comment...'}
+              placeholder={editingCommentId ? t('localization.checkins.editComment') : t('localization.checkins.addComment')}
               placeholderTextColor={secondaryColor}
               value={commentText}
               onChangeText={setCommentText}
@@ -1800,7 +1813,7 @@ function CommentsModal({
               returnKeyType="send"
               onSubmitEditing={editingCommentId ? handleSaveEdit : handleSend}
             />
-            <TouchableOpacity
+            <TouchableOpacity accessibilityLabel={t(editingCommentId ? 'localization.checkins.save' : 'localization.checkins.sendComment')}
               onPress={() => {
                 if (editingCommentId) {
                   console.log('[Community] Save edit button tapped');
@@ -1851,6 +1864,7 @@ function ComposerSheet({
   currentUserFirstName,
   currentUserAvatar,
 }: ComposerSheetProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [composerType, setComposerType] = useState<ComposerType>('post');
   // Post fields (merged update + question)
@@ -1972,9 +1986,9 @@ function ComposerSheet({
 
       const stats: ProgressStat[] = [];
       if (finalStreak > 0) {
-        stats.push({ key: 'streak_days', label: 'Current streak', emoji: '🔥', value: finalStreak, selected: false });
+        stats.push({ key: 'streak_days', label: 'localization.checkins.currentStreak', emoji: '🔥', value: finalStreak, selected: false });
       }
-      stats.push({ key: 'consistency_score', label: 'Weekly consistency', emoji: '📊', value: consistencyScore, selected: false });
+      stats.push({ key: 'consistency_score', label: 'localization.checkins.weeklyConsistency', emoji: '📊', value: consistencyScore, selected: false });
 
       // Weight goal progress — mirror GoalWeightCard exactly
       // Uses users.goal_weight as target, earliest check-in as start, latest tracker/check-in as current
@@ -2016,7 +2030,7 @@ function ComposerSheet({
           const progress = Math.min(1, Math.max(0, Math.abs(startKg - activeWeightKg) / totalRange));
           const pct = Math.round(progress * 100);
           console.log('[Community] Weight goal pct (Dashboard formula):', pct, '% — startKg:', startKg, 'activeKg:', activeWeightKg, 'goalKg:', goalWeightKg);
-          stats.push({ key: 'weight_goal_pct', label: 'Weight goal progress', emoji: '🎯', value: pct, selected: false });
+          stats.push({ key: 'weight_goal_pct', label: 'localization.checkins.weightProgress', emoji: '🎯', value: pct, selected: false });
         } else {
           console.log('[Community] Weight goal pct skipped — goalWeightKg:', goalWeightKg, 'startKg:', startKg, 'activeWeightKg:', activeWeightKg);
         }
@@ -2036,7 +2050,7 @@ function ComposerSheet({
         const stepsGoal = stepsRes.data?.steps_goal ?? 10000;
         if (steps != null) {
           console.log('[Community] Steps today:', steps, 'goal:', stepsGoal);
-          stats.push({ key: 'steps_today', label: "Today's steps", emoji: '👟', value: steps, selected: false, meta: { steps_goal: stepsGoal } });
+          stats.push({ key: 'steps_today', label: 'localization.checkins.todaySteps', emoji: '👟', value: steps, selected: false, meta: { steps_goal: stepsGoal } });
         }
       } catch (stepsErr) {
         console.log('[Community] Steps data not available (non-fatal):', stepsErr);
@@ -2071,7 +2085,7 @@ function ComposerSheet({
           gymCheckedIn = checkInTodayRes.data != null;
         }
         console.log('[Community] Gym checked in today:', gymCheckedIn);
-        stats.push({ key: 'gym_checked_in', label: "Today's gym", emoji: gymCheckedIn ? '💪' : '⏳', value: gymCheckedIn ? 'Trained' : 'Not yet', selected: false });
+        stats.push({ key: 'gym_checked_in', label: 'localization.checkins.todayGym', emoji: gymCheckedIn ? '💪' : '⏳', value: gymCheckedIn ? 'Trained' : 'Not yet', selected: false });
       } catch (gymErr) {
         console.log('[Community] Gym data not available (non-fatal):', gymErr);
       }
@@ -2247,11 +2261,11 @@ function ComposerSheet({
             cropData: p.cropData ?? null,
           }));
         }
-        const statLabels = selectedStats.map(s => `${s.emoji} ${s.value} ${s.label}`).join(', ');
+        const statLabels = selectedStats.map(s => `${s.emoji} ${s.key === 'gym_checked_in' ? t(s.value === 'Trained' ? 'localization.checkins.workoutComplete' : 'localization.checkins.notYet') : Number(s.value).toLocaleString(getAppLocale())} ${t(s.label)}`).join(', ');
         postData = {
           post_type: 'stats',
           post_type_v2: 'progress',
-          content: progressText.trim() || statLabels || (selectedPhotos.length > 0 ? '📸 Photo progress' : ''),
+          content: progressText.trim() || statLabels || (selectedPhotos.length > 0 ? t('localization.checkins.photoProgressCaption') : ''),
           progress_stats: statsObj,
           is_public: true,
         };
@@ -2306,16 +2320,16 @@ function ComposerSheet({
       onClose();
     } catch (e) {
       console.error('[Community] Post failed:', e);
-      Alert.alert('Error', 'Could not post. Please try again.');
+      Alert.alert(t('localization.checkins.error'), t('localization.checkins.postError'));
     } finally {
       setPosting(false);
     }
   };
 
   const composerTypes: { key: ComposerType; icon: React.ReactNode; label: string }[] = [
-    { key: 'post', icon: <MessageSquare size={20} color={composerType === 'post' ? '#fff' : colors.primary} />, label: 'Post' },
-    { key: 'meal', icon: <UtensilsCrossed size={20} color={composerType === 'meal' ? '#fff' : '#FF8A5B'} />, label: 'Recipe' },
-    { key: 'progress', icon: <TrendingUp size={20} color={composerType === 'progress' ? '#fff' : '#8B5CF6'} />, label: 'Progress' },
+    { key: 'post', icon: <MessageSquare size={20} color={composerType === 'post' ? '#fff' : colors.primary} />, label: t('localization.checkins.post') },
+    { key: 'meal', icon: <UtensilsCrossed size={20} color={composerType === 'meal' ? '#fff' : '#FF8A5B'} />, label: t('localization.checkins.recipe') },
+    { key: 'progress', icon: <TrendingUp size={20} color={composerType === 'progress' ? '#fff' : '#8B5CF6'} />, label: t('localization.checkins.progress') },
   ];
 
   const typeColors: Record<ComposerType, string> = {
@@ -2331,13 +2345,13 @@ function ComposerSheet({
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: bgColor }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Sheet header */}
         <View style={[styles.sheetHeader, { borderBottomColor: borderColor }]}>
-          <TouchableOpacity onPress={() => {
+          <TouchableOpacity accessibilityLabel={t('localization.checkins.close')} onPress={() => {
             console.log('[Community] Composer close button pressed');
             onClose();
           }}>
             <X size={22} color={secondaryColor} />
           </TouchableOpacity>
-          <Text style={[styles.sheetTitle, { color: textColor }]}>New Post</Text>
+          <Text style={[styles.sheetTitle, { color: textColor }]}>{t('localization.checkins.newPost')}</Text>
           <TouchableOpacity
             style={[styles.postBtn, { backgroundColor: activeColor, opacity: canPost() ? 1 : 0.5 }]}
             onPress={handlePost}
@@ -2346,7 +2360,7 @@ function ComposerSheet({
             {posting ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.postBtnText}>Post</Text>
+              <Text style={styles.postBtnText}>{t('localization.checkins.post')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -2381,13 +2395,13 @@ function ComposerSheet({
         >
           <View style={{ flex: 1, backgroundColor: bgColor }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: borderColor }}>
-              <TouchableOpacity onPress={() => {
+              <TouchableOpacity accessibilityLabel={t('localization.checkins.close')} onPress={() => {
                 console.log('[Community] Photo picker closed');
                 setPhotoPickerVisible(false);
               }}>
                 <X size={22} color={secondaryColor} />
               </TouchableOpacity>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Select Photos</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{t('localization.checkins.selectPhotos')}</Text>
               <TouchableOpacity
                 onPress={() => {
                   console.log('[Community] Photo picker done pressed, selected:', selectedPhotos.length);
@@ -2395,21 +2409,19 @@ function ComposerSheet({
                 }}
                 style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.primary }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Done</Text>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('localization.checkins.done')}</Text>
               </TouchableOpacity>
             </View>
             <Text style={{ fontSize: 13, color: secondaryColor, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
-              Select 1 or 2 photos. 2 photos will show as before &amp; after.
-            </Text>
+              {t('localization.checkins.selectPhotosHelp')}</Text>
             {photosLoading ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
             ) : checkInPhotos.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 60, gap: 12 }}>
                 <Text style={{ fontSize: 22 }}>📸</Text>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: textColor }}>No progress photos yet</Text>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: textColor }}>{t('localization.checkins.noProgressPhotos')}</Text>
                 <Text style={{ fontSize: 13, color: secondaryColor, textAlign: 'center', paddingHorizontal: 32 }}>
-                  Add photos to your check-ins to share your progress here.
-                </Text>
+                  {t('localization.checkins.addCheckinPhotos')}</Text>
               </View>
             ) : (
               <FlatList
@@ -2423,8 +2435,8 @@ function ComposerSheet({
                   const selIdx = selectedPhotos.findIndex(p => p.id === item.id);
                   const canSelect = isSelected || selectedPhotos.length < 2;
                   const itemDateDisplay = item.date
-                    ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                    : new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    ? new Date(item.date).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' })
+                    : new Date(item.created_at).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
                   return (
                     <TouchableOpacity
                       style={{ flex: 1, opacity: canSelect ? 1 : 0.4 }}
@@ -2454,7 +2466,7 @@ function ComposerSheet({
                         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, padding: 6 }}>
                           <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{itemDateDisplay}</Text>
                           {item.weight != null ? (
-                            <Text style={{ color: '#fff', fontSize: 11 }}>{item.weight} {item.weight_unit ?? 'lbs'}</Text>
+                            <Text style={{ color: '#fff', fontSize: 11 }}>{Number(item.weight).toLocaleString(getAppLocale())} {item.weight_unit ?? 'lbs'}</Text>
                           ) : null}
                         </View>
                       </View>
@@ -2479,8 +2491,8 @@ function ComposerSheet({
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: textColor }}>{currentUserName || 'You'}</Text>
-              <Text style={{ fontSize: 12, color: secondaryColor }}>Public</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: textColor }}>{currentUserName || t('localization.checkins.you')}</Text>
+              <Text style={{ fontSize: 12, color: secondaryColor }}>{t('localization.checkins.public')}</Text>
             </View>
           </View>
 
@@ -2489,7 +2501,7 @@ function ComposerSheet({
             <View>
               <TextInput
                 style={[styles.composeInput, { color: textColor, borderColor }]}
-                placeholder="What's on your mind?"
+                placeholder={t('localization.checkins.mindPlaceholder')}
                 placeholderTextColor={secondaryColor}
                 multiline
                 value={postText}
@@ -2499,7 +2511,7 @@ function ComposerSheet({
               {postImageUri ? (
                 <View style={{ marginTop: spacing.sm, position: 'relative' }}>
                   <Image source={resolveImageSource(postImageUri)} style={{ width: '100%', height: 180, borderRadius: borderRadius.md }} resizeMode="cover" />
-                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => {
+                  <TouchableOpacity accessibilityLabel={t('localization.checkins.close')} style={styles.removeImageBtn} onPress={() => {
                     console.log('[Community] Post image removed');
                     setPostImageUri(null);
                   }}>
@@ -2509,7 +2521,7 @@ function ComposerSheet({
               ) : null}
               <TouchableOpacity style={[styles.imagePickerBtn, { borderColor }]} onPress={() => handlePickImage()}>
                 <Plus size={16} color={colors.primary} />
-                <Text style={[styles.imagePickerText, { color: colors.primary }]}>Add photo</Text>
+                <Text style={[styles.imagePickerText, { color: colors.primary }]}>{t('localization.checkins.addPhoto')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -2518,15 +2530,14 @@ function ComposerSheet({
           {composerType === 'meal' && (
             <View style={{ gap: spacing.sm }}>
               <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }}>
-                Pick a saved recipe to share:
-              </Text>
+                {t('localization.checkins.pickRecipe')}</Text>
               {savedRecipesLoading ? (
                 <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
               ) : savedRecipes.length === 0 ? (
                 <View style={{ alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl }}>
                   <UtensilsCrossed size={40} color={secondaryColor} />
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: textColor, textAlign: 'center' }}>No saved recipes yet</Text>
-                  <Text style={{ fontSize: 13, color: secondaryColor, textAlign: 'center' }}>Save recipes from the Recipes tab to share them here.</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: textColor, textAlign: 'center' }}>{t('localization.checkins.noRecipes')}</Text>
+                  <Text style={{ fontSize: 13, color: secondaryColor, textAlign: 'center' }}>{t('localization.checkins.saveRecipesHelp')}</Text>
                   <TouchableOpacity
                     style={[styles.browseRecipesBtn, { backgroundColor: colors.primary }]}
                     onPress={() => {
@@ -2535,7 +2546,7 @@ function ComposerSheet({
                       router.push('/(tabs)/(home)');
                     }}
                   >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Browse Recipes</Text>
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{t('localization.checkins.browseRecipes')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -2543,10 +2554,10 @@ function ComposerSheet({
                   {savedRecipes.map((row) => {
                     const recipe = row.recipe_data;
                     const isSelected = selectedRecipe?.id === recipe.id;
-                    const calDisplay = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)).toString() : null;
-                    const protDisplay = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)).toString() : null;
-                    const carbDisplay = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)).toString() : null;
-                    const fatDisplay = recipe.fat_per_serving != null ? Math.round(Number(recipe.fat_per_serving)).toString() : null;
+                    const calDisplay = recipe.calories_per_serving != null ? Math.round(Number(recipe.calories_per_serving)).toLocaleString(getAppLocale()) : null;
+                    const protDisplay = recipe.protein_per_serving != null ? Math.round(Number(recipe.protein_per_serving)).toLocaleString(getAppLocale()) : null;
+                    const carbDisplay = recipe.carbs_per_serving != null ? Math.round(Number(recipe.carbs_per_serving)).toLocaleString(getAppLocale()) : null;
+                    const fatDisplay = recipe.fat_per_serving != null ? Math.round(Number(recipe.fat_per_serving)).toLocaleString(getAppLocale()) : null;
                     return (
                       <TouchableOpacity
                         key={row.id}
@@ -2585,22 +2596,22 @@ function ComposerSheet({
                               ) : null}
                               {protDisplay ? (
                                 <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.protein + '18' }}>
-                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.protein }}>{protDisplay}{'g P'}</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.protein }}>{protDisplay}{t('localization.checkins.proteinUnit')}</Text>
                                 </View>
                               ) : null}
                               {carbDisplay ? (
                                 <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.carbs + '18' }}>
-                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.carbs }}>{carbDisplay}{'g C'}</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.carbs }}>{carbDisplay}{t('localization.checkins.carbsUnit')}</Text>
                                 </View>
                               ) : null}
                               {fatDisplay ? (
                                 <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.fats + '18' }}>
-                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.fats }}>{fatDisplay}{'g F'}</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.fats }}>{fatDisplay}{t('localization.checkins.fatUnit')}</Text>
                                 </View>
                               ) : null}
                             </View>
                             {(recipe.calories_per_serving != null || recipe.protein_per_serving != null) ? (
-                              <Text style={{ fontSize: 11, color: secondaryColor }}>Per serving</Text>
+                              <Text style={{ fontSize: 11, color: secondaryColor }}>{t('localization.checkins.perServing')}</Text>
                             ) : null}
                           </View>
                           {isSelected ? (
@@ -2615,7 +2626,7 @@ function ComposerSheet({
                   {selectedRecipe ? (
                     <TextInput
                       style={[styles.composeInput, { color: textColor, borderColor, marginTop: spacing.sm }]}
-                      placeholder="Add a caption (optional)..."
+                      placeholder={t('localization.checkins.caption')}
                       placeholderTextColor={secondaryColor}
                       multiline
                       value={mealCaption}
@@ -2631,27 +2642,26 @@ function ComposerSheet({
           {composerType === 'progress' && (
             <View style={{ gap: spacing.sm }}>
               <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }}>
-                Select what to share from your real data:
-              </Text>
+                {t('localization.checkins.shareRealData')}</Text>
               {progressLoading ? (
                 <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
               ) : progressStats.length === 0 ? (
-                <Text style={{ color: secondaryColor, fontSize: 14 }}>No data available yet. Start tracking to share progress!</Text>
+                <Text style={{ color: secondaryColor, fontSize: 14 }}>{t('localization.checkins.noProgressData')}</Text>
               ) : (
                 progressStats.map(stat => {
                   let statValueDisplay = String(stat.value);
                   let statSubLabel: string | null = null;
                   if (stat.key === 'streak_days') {
-                    statValueDisplay = `${stat.value} days`;
+                    statValueDisplay = t('localization.checkins.numberDays', { days: Number(stat.value).toLocaleString(getAppLocale()) });
                   } else if (stat.key === 'consistency_score') {
-                    statValueDisplay = `${stat.value}%`;
+                    statValueDisplay = formatPercent(Number(stat.value));
                   } else if (stat.key === 'weight_goal_pct') {
-                    statValueDisplay = `${stat.value}% toward goal`;
+                    statValueDisplay = t('localization.checkins.towardGoal', { percent: formatPercent(Number(stat.value)) });
                   } else if (stat.key === 'steps_today') {
-                    statValueDisplay = `${Number(stat.value).toLocaleString()} steps`;
-                    statSubLabel = `Goal: ${Number(stat.meta?.steps_goal ?? 10000).toLocaleString()}`;
+                    statValueDisplay = t('localization.checkins.numberSteps', { steps: Number(stat.value).toLocaleString(getAppLocale()) });
+                    statSubLabel = t('localization.checkins.stepsGoal', { steps: Number(stat.meta?.steps_goal ?? 10000).toLocaleString(getAppLocale()) });
                   } else if (stat.key === 'gym_checked_in') {
-                    statValueDisplay = stat.value === 'Trained' ? 'Trained today ✓' : 'Not yet today';
+                    statValueDisplay = stat.value === 'Trained' ? t('localization.checkins.trainedToday') : t('localization.checkins.notYetToday');
                   }
                   return (
                     <TouchableOpacity
@@ -2667,7 +2677,7 @@ function ComposerSheet({
                     >
                       <Text style={{ fontSize: 22 }}>{stat.emoji}</Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{stat.label}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{t(stat.label)}</Text>
                         <Text style={{ fontSize: 16, fontWeight: '800', color: stat.selected ? colors.primary : textColor }}>{statValueDisplay}</Text>
                         {statSubLabel ? <Text style={{ fontSize: 12, color: secondaryColor }}>{statSubLabel}</Text> : null}
                       </View>
@@ -2695,13 +2705,13 @@ function ComposerSheet({
               >
                 <Text style={{ fontSize: 22 }}>📸</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>Photo Progress</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>{t('localization.checkins.photoProgress')}</Text>
                   <Text style={{ fontSize: 13, color: selectedPhotos.length > 0 ? colors.primary : secondaryColor, fontWeight: selectedPhotos.length > 0 ? '700' : '400' }}>
                     {selectedPhotos.length === 0
-                      ? 'Share before & after photos'
+                      ? t('localization.checkins.shareBeforeAfter')
                       : selectedPhotos.length === 1
-                      ? '1 photo selected'
-                      : `${selectedPhotos.length} photos selected (before & after)`}
+                      ? t('localization.checkins.onePhotoSelected')
+                      : t('localization.checkins.photosSelected', { count: selectedPhotos.length })}
                   </Text>
                 </View>
                 {selectedPhotos.length > 0 ? (
@@ -2716,9 +2726,9 @@ function ComposerSheet({
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                   {selectedPhotos.map((photo) => {
                     const photoDateDisplay = photo.date
-                      ? new Date(photo.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                      : new Date(photo.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    const weightText = photo.weight != null ? `${photo.weight} ${photo.weight_unit ?? 'lbs'}` : null;
+                      ? new Date(photo.date).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' })
+                      : new Date(photo.created_at).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
+                    const weightText = photo.weight != null ? `${Number(photo.weight).toLocaleString(getAppLocale())} ${photo.weight_unit ?? 'lbs'}` : null;
                     return (
                       <View key={photo.id} style={{ flex: 1, position: 'relative', aspectRatio: 3 / 4, borderRadius: 10, overflow: 'hidden' }}>
                         {ViewShot ? (
@@ -2759,7 +2769,7 @@ function ComposerSheet({
                           ) : null}
                         </View>
                         {/* Remove button */}
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityLabel={t('localization.checkins.close')}
                           style={{ position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
                           onPress={() => {
                             console.log('[Community] Selected photo removed:', photo.id);
@@ -2795,12 +2805,12 @@ function ComposerSheet({
 
                 const selectedForPreview = progressStats.filter(s => s.selected);
                 const previewCards: PvCard[] = selectedForPreview.map(s => {
-                  if (s.key === 'streak_days') return { key: s.key, Icon: Flame, value: `${s.value} days`, label: 'Current Streak', barPct: Math.min(1, Number(s.value) / 100) };
-                  if (s.key === 'consistency_score') return { key: s.key, Icon: CalendarDays, value: `${s.value}%`, label: 'Weekly Consistency', barPct: Math.min(1, Number(s.value) / 100) };
-                  if (s.key === 'weight_goal_pct') return { key: s.key, Icon: Target, value: `${s.value}%`, label: 'Weight Progress', barPct: Math.min(1, Number(s.value) / 100) };
-                  if (s.key === 'steps_today') return { key: s.key, Icon: Footprints, value: Number(s.value).toLocaleString(), label: `of ${Number(s.meta?.steps_goal ?? 10000).toLocaleString()} steps`, barPct: Math.min(1, Number(s.value) / Number(s.meta?.steps_goal ?? 10000)) };
-                  if (s.key === 'gym_checked_in') return { key: s.key, Icon: Dumbbell, value: s.value === 'Trained' ? 'Workout complete' : 'Not yet', label: "Today's Gym", barPct: null, gymDone: s.value === 'Trained' };
-                  if (s.key === 'weight_value') return { key: s.key, Icon: Target, value: `${Number(s.value).toFixed(1)} lbs`, label: 'Current Weight', barPct: null };
+                  if (s.key === 'streak_days') return { key: s.key, Icon: Flame, value: t('localization.checkins.numberDays', { days: Number(s.value).toLocaleString(getAppLocale()) }), label: t('localization.checkins.currentStreak'), barPct: Math.min(1, Number(s.value) / 100) };
+                  if (s.key === 'consistency_score') return { key: s.key, Icon: CalendarDays, value: formatPercent(Number(s.value)), label: t('localization.checkins.weeklyConsistency'), barPct: Math.min(1, Number(s.value) / 100) };
+                  if (s.key === 'weight_goal_pct') return { key: s.key, Icon: Target, value: formatPercent(Number(s.value)), label: t('localization.checkins.weightProgress'), barPct: Math.min(1, Number(s.value) / 100) };
+                  if (s.key === 'steps_today') return { key: s.key, Icon: Footprints, value: Number(s.value).toLocaleString(getAppLocale()), label: t('localization.checkins.ofSteps', { steps: Number(s.meta?.steps_goal ?? 10000).toLocaleString(getAppLocale()) }), barPct: Math.min(1, Number(s.value) / Number(s.meta?.steps_goal ?? 10000)) };
+                  if (s.key === 'gym_checked_in') return { key: s.key, Icon: Dumbbell, value: s.value === 'Trained' ? t('localization.checkins.workoutComplete') : t('localization.checkins.notYet'), label: t('localization.checkins.todayGym'), barPct: null, gymDone: s.value === 'Trained' };
+                  if (s.key === 'weight_value') return { key: s.key, Icon: Target, value: `${Number(s.value).toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} lbs`, label: t('localization.checkins.currentWeight'), barPct: null };
                   return null;
                 }).filter(Boolean) as PvCard[];
 
@@ -2834,7 +2844,7 @@ function ComposerSheet({
                 const pvCount = previewCards.length;
                 return (
                   <View style={{ opacity: 0.95, marginTop: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: secondaryColor, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Preview</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: secondaryColor, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('localization.checkins.preview')}</Text>
                     {pvCount === 1 ? (
                       <View style={{ backgroundColor: pvOuterBg, borderRadius: 12, borderWidth: 1, borderColor: pvOuterBorder, padding: 10 }}>
                         {renderPvCard(previewCards[0], 26, 12)}
@@ -2881,7 +2891,7 @@ function ComposerSheet({
               })() : null}
               <TextInput
                 style={[styles.composeInput, { color: textColor, borderColor, marginTop: spacing.sm }]}
-                placeholder="Add a caption (optional)..."
+                placeholder={t('localization.checkins.caption')}
                 placeholderTextColor={secondaryColor}
                 multiline
                 value={progressText}
@@ -2908,6 +2918,7 @@ interface ReportModalProps {
 const REPORT_REASONS = ['Spam', 'Inappropriate', 'Other'];
 
 function ReportModal({ visible, postId, onClose, isDark, currentUserId }: ReportModalProps) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const textColor = isDark ? colors.textDark : colors.primaryText;
@@ -2941,7 +2952,7 @@ function ReportModal({ visible, postId, onClose, isDark, currentUserId }: Report
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.menuOverlay} onPress={onClose}>
         <View style={[styles.reportSheet, { backgroundColor: cardBg }]}>
-          <Text style={[styles.reportTitle, { color: textColor }]}>Report this post?</Text>
+          <Text style={[styles.reportTitle, { color: textColor }]}>{t('localization.checkins.reportPost')}</Text>
           {REPORT_REASONS.map((r) => (
             <TouchableOpacity
               key={r}
@@ -2951,7 +2962,7 @@ function ReportModal({ visible, postId, onClose, isDark, currentUserId }: Report
                 setReason(r);
               }}
             >
-              <Text style={[styles.reportOptionText, { color: reason === r ? colors.primary : textColor }]}>{r}</Text>
+              <Text style={[styles.reportOptionText, { color: reason === r ? colors.primary : textColor }]}>{t(`localization.checkins.reportReasons.${r}`)}</Text>
               {reason === r && <Check size={16} color={colors.primary} />}
             </TouchableOpacity>
           ))}
@@ -2960,7 +2971,7 @@ function ReportModal({ visible, postId, onClose, isDark, currentUserId }: Report
             onPress={handleSubmit}
             disabled={!reason || submitting}
           >
-            {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.postBtnText}>Submit report</Text>}
+            {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.postBtnText}>{t('localization.checkins.submitReport')}</Text>}
           </TouchableOpacity>
         </View>
       </Pressable>
@@ -2978,6 +2989,7 @@ interface AutoShareSettingsProps {
 }
 
 function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: AutoShareSettingsProps) {
+  const { t } = useTranslation();
   const [autoShareAll, setAutoShareAll] = useState(true);
   const [autoShareStreaks, setAutoShareStreaks] = useState(true);
   const [autoShareWeekly, setAutoShareWeekly] = useState(true);
@@ -3071,13 +3083,13 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
       <View style={{ flex: 1, backgroundColor: bgColor }}>
         {/* Header */}
         <View style={[styles.sheetHeader, { borderBottomColor: borderColor }]}>
-          <TouchableOpacity onPress={() => {
+          <TouchableOpacity accessibilityLabel={t('localization.checkins.close')} onPress={() => {
             console.log('[Community] Auto-share settings closed');
             onClose();
           }}>
             <X size={22} color={secondaryColor} />
           </TouchableOpacity>
-          <Text style={[styles.sheetTitle, { color: textColor }]}>Auto-Share Settings</Text>
+          <Text style={[styles.sheetTitle, { color: textColor }]}>{t('localization.checkins.autoShareSettings')}</Text>
           <View style={{ width: 36 }} />
         </View>
 
@@ -3089,8 +3101,8 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
             <View style={[styles.settingsCard, { backgroundColor: cardBg, borderColor }]}>
               <View style={styles.settingsRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.settingsLabel, { color: textColor }]}>Enable auto-sharing</Text>
-                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Automatically share achievements to the community</Text>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>{t('localization.checkins.enableAutoShare')}</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>{t('localization.checkins.autoShareHelp')}</Text>
                 </View>
                 <Switch
                   value={autoShareAll}
@@ -3105,8 +3117,8 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
             <View style={[styles.settingsCard, { backgroundColor: cardBg, borderColor, opacity: autoShareAll ? 1 : 0.5 }]}>
               <View style={[styles.settingsRow, { borderBottomWidth: 1, borderBottomColor: borderColor, paddingBottom: spacing.md, marginBottom: spacing.md }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.settingsLabel, { color: textColor }]}>Streak milestones</Text>
-                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share when you hit 7, 14, 30, 60, 100 day streaks</Text>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>{t('localization.checkins.streakMilestones')}</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>{t('localization.checkins.streakMilestonesHelp')}</Text>
                 </View>
                 <Switch
                   value={autoShareStreaks && autoShareAll}
@@ -3118,8 +3130,8 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
               </View>
               <View style={[styles.settingsRow, { borderBottomWidth: 1, borderBottomColor: borderColor, paddingBottom: spacing.md, marginBottom: spacing.md }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.settingsLabel, { color: textColor }]}>Weekly recap</Text>
-                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share your weekly recap when consistency is 70% or higher</Text>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>{t('localization.checkins.weeklyRecap')}</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>{t('localization.checkins.weeklyRecapHelp')}</Text>
                 </View>
                 <Switch
                   value={autoShareWeekly && autoShareAll}
@@ -3131,8 +3143,8 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
               </View>
               <View style={[styles.settingsRow, { borderTopWidth: 0, paddingTop: 0, marginTop: 0 }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.settingsLabel, { color: textColor }]}>Weight goal milestones</Text>
-                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>Share when you reach 25%, 50%, 75% and 100% of your weight goal</Text>
+                  <Text style={[styles.settingsLabel, { color: textColor }]}>{t('localization.checkins.weightMilestones')}</Text>
+                  <Text style={[styles.settingsDesc, { color: secondaryColor }]}>{t('localization.checkins.weightMilestonesHelp')}</Text>
                 </View>
                 <Switch
                   value={autoShareWeight && autoShareAll}
@@ -3146,7 +3158,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
 
             {/* Audience */}
             <View style={[styles.settingsCard, { backgroundColor: cardBg, borderColor }]}>
-              <Text style={[styles.settingsLabel, { color: textColor, marginBottom: spacing.sm }]}>Audience</Text>
+              <Text style={[styles.settingsLabel, { color: textColor, marginBottom: spacing.sm }]}>{t('localization.checkins.audience')}</Text>
               {(['public', 'followers'] as const).map(opt => (
                 <TouchableOpacity
                   key={opt}
@@ -3154,7 +3166,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
                   style={[styles.audienceOption, { borderColor: audience === opt ? colors.primary : borderColor, backgroundColor: audience === opt ? colors.primary + '12' : 'transparent' }]}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '600', color: audience === opt ? colors.primary : textColor }}>
-                    {opt === 'public' ? 'Public' : 'Followers only'}
+                    {opt === 'public' ? t('localization.checkins.public') : t('localization.checkins.followersOnly')}
                   </Text>
                   {audience === opt ? <Check size={16} color={colors.primary} /> : null}
                 </TouchableOpacity>
@@ -4043,16 +4055,16 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
     console.log('[Community] Network request: block user:', userId);
     const { error } = await supabase.from('community_blocks').upsert({ blocker_id: currentUserId, blocked_id: userId });
     console.log('[Community] Block result, error:', error?.message ?? 'none');
-    Alert.alert('User blocked');
+    Alert.alert(t('localization.checkins.blocked'));
   };
 
   // ── Delete post ──
   const handleDelete = async (postId: string) => {
     console.log('[Community] Delete post pressed:', postId);
-    Alert.alert('Delete post?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('localization.checkins.deletePost'), t('localization.checkins.cannotUndo'), [
+      { text: t('localization.checkins.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('localization.checkins.delete'),
         style: 'destructive',
         onPress: async () => {
           console.log('[Community] Network request: delete post from social_posts:', postId);
@@ -4234,9 +4246,9 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
   // ── Pill selector ──
   const tabLabels: { key: CommunityTab; label: string }[] = [
-    { key: 'feed', label: 'Feed' },
-    { key: 'friends', label: 'Friends' },
-    { key: 'club', label: 'Premium Club' },
+    { key: 'feed', label: t('localization.checkins.feed') },
+    { key: 'friends', label: t('localization.checkins.friends') },
+    { key: 'club', label: t('localization.checkins.premiumClub') },
   ];
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -4256,9 +4268,9 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
     <View style={[styles.root, { backgroundColor: bgColor }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: borderColor }]}>
-        <Text style={[styles.headerTitle, { color: textColor }]}>Community</Text>
+        <Text style={[styles.headerTitle, { color: textColor }]}>{t('localization.checkins.community')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityLabel={t('localization.checkins.reportBug')}
             onPress={() => {
               console.log('[Community] Bug report icon pressed');
               router.push('/bug-report?tab_source=community');
@@ -4279,7 +4291,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               danger: isDark ? '#FDA4AF' : '#B91C1C',
             }} />
           )}
-          <TouchableOpacity
+          <TouchableOpacity accessibilityLabel={t('localization.checkins.autoShareSettings')}
             onPress={() => {
               console.log('[Community] Auto-share settings button pressed');
               setShowAutoShareSettings(true);
@@ -4288,7 +4300,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
           >
             <Settings size={20} color={secondaryColor} />
           </TouchableOpacity>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityLabel={t('localization.checkins.newPost')}
             onPress={() => {
               console.log('[Community] Compose button pressed');
               setShowCreatePost(true);
@@ -4339,13 +4351,11 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
             {/* Title */}
             <Text style={{ fontSize: 24, fontWeight: '800', color: isDark ? colors.textDark : colors.primaryText, textAlign: 'center', marginBottom: 14, letterSpacing: -0.3 }}>
-              Help Us Build Our Community
-            </Text>
+              {t('localization.checkins.buildCommunity')}</Text>
 
             {/* Description */}
             <Text style={{ fontSize: 15, color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', lineHeight: 23, marginBottom: 36, maxWidth: 300 }}>
-              Thanks for joining Macro Goal! Once we reach 1,000 active members, the Community feed will unlock for everyone.
-            </Text>
+              {t('localization.checkins.unlockCommunity')}</Text>
 
             {/* Progress bar */}
             <View style={{ width: '100%', marginBottom: 10 }}>
@@ -4361,8 +4371,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
             {/* Counter */}
             <Text style={{ fontSize: 17, fontWeight: '700', color: isDark ? colors.textDark : colors.primaryText, marginBottom: 40 }}>
-              {activeUserCount.toLocaleString()} / 1,000 active members
-            </Text>
+              {activeUserCount.toLocaleString(getAppLocale())} {t('localization.checkins.activeMembersSuffix')}</Text>
 
             {/* CTA button */}
             <TouchableOpacity
@@ -4387,7 +4396,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               activeOpacity={0.85}
             >
               <Text style={{ fontSize: 16 }}>🎉</Text>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Invite a Friend — Help Us Grow</Text>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{t('localization.checkins.inviteFriend')}</Text>
             </TouchableOpacity>
           </ScrollView>
         ) : (
@@ -4404,8 +4413,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               ) : (
                 <View style={styles.emptyState}>
                   <Text style={[styles.emptyStateText, { color: secondaryColor }]}>
-                    No posts yet. Be the first to share!
-                  </Text>
+                    {t('localization.checkins.noPosts')}</Text>
                 </View>
               )
             }
@@ -4443,7 +4451,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               router.push('/referrals');
             }}
           >
-            <Text style={styles.inviteBtnText}>Your Journey is Better With a Friend 🤝</Text>
+            <Text style={styles.inviteBtnText}>{t('localization.checkins.journeyWithFriend')}</Text>
           </TouchableOpacity>
 
           {/* Search bar */}
@@ -4451,7 +4459,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
             <Search size={18} color={secondaryColor} />
             <TextInput
               style={[styles.searchInput, { color: textColor }]}
-              placeholder="Search by username..."
+              placeholder={t('localization.checkins.searchUsername')}
               placeholderTextColor={secondaryColor}
               value={searchQuery}
               onChangeText={handleSearchChange}
@@ -4483,7 +4491,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
                       disabled={communityPrivacyEnabled ? !requestState || !!outboundBusy[user.id] : undefined}
                     >
                       <Text style={[styles.followBtnText, isFollowing && { color: colors.primary }]}>
-                        {communityPrivacyEnabled ? requestLabel : isFollowing ? 'Following' : 'Follow'}
+                        {communityPrivacyEnabled ? requestLabel : isFollowing ? t('localization.checkins.following') : t('localization.checkins.follow')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -4495,15 +4503,15 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
           {/* Weekly Consistency Leaderboard */}
           <View style={{ marginTop: spacing.lg }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-              <Text style={[styles.sectionTitle, { color: textColor }]}>Weekly Consistency</Text>
-              <Text style={{ fontSize: 11, color: secondaryColor }}>Mon – Today</Text>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>{t('localization.checkins.weeklyConsistency')}</Text>
+              <Text style={{ fontSize: 11, color: secondaryColor }}>{t('localization.checkins.monToday')}</Text>
             </View>
 
             {leaderboardLoading ? (
               <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
             ) : leaderboard.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>{communityPrivacyEnabled && privacyErrors.weekly ? privacyCopy.unavailable : 'Follow people to see the leaderboard.'}</Text>
+                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>{communityPrivacyEnabled && privacyErrors.weekly ? privacyCopy.unavailable : t('localization.checkins.followLeaderboard')}</Text>
               </View>
             ) : (
               <View style={{ backgroundColor: cardBg, borderRadius: 16, borderWidth: 1, borderColor, overflow: 'hidden' }}>
@@ -4529,7 +4537,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
                         !isLast && { borderBottomWidth: 1, borderBottomColor: borderColor },
                       ]}
                     >
-                      <Text style={{ width: 28, fontSize: 13, fontWeight: '700', color: rankColor }}>#{entry.rank}</Text>
+                      <Text style={{ width: 28, fontSize: 13, fontWeight: '700', color: rankColor }}>#{Number(entry.rank).toLocaleString(getAppLocale())}</Text>
                       {entry.avatarUrl ? (
                         <Image source={{ uri: entry.avatarUrl }} style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10 }} resizeMode="cover" />
                       ) : (
@@ -4539,16 +4547,16 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 14, fontWeight: nameWeight, color: textColor }} numberOfLines={1}>
-                          {entry.isMe ? 'You' : entry.name}
+                          {entry.isMe ? t('localization.checkins.you') : entry.name}
                         </Text>
                         {!entry.isMe && entry.username ? (
                           <Text style={{ fontSize: 11, color: secondaryColor }}>@{entry.username}</Text>
                         ) : null}
                       </View>
                       {entry.noActivity ? (
-                        <Text style={{ fontSize: 12, color: secondaryColor, fontStyle: 'italic' }}>Sin actividad</Text>
+                        <Text style={{ fontSize: 12, color: secondaryColor, fontStyle: 'italic' }}>{t('localization.checkins.noActivity')}</Text>
                       ) : (
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor }}>{entry.score}</Text>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor }}>{Number(entry.score).toLocaleString(getAppLocale())}</Text>
                       )}
                     </TouchableOpacity>
                   );
@@ -4564,7 +4572,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
                     activeOpacity={0.7}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primary }}>
-                      {showAllLeaderboard ? 'Show less' : `View all (${leaderboard.length})`}
+                      {showAllLeaderboard ? t('localization.checkins.showLess') : t('localization.checkins.viewAllCount', { count: leaderboard.length.toLocaleString(getAppLocale()) })}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -4574,14 +4582,14 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
           {/* Following list */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: spacing.lg }}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Following</Text>
-            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{communityPrivacyEnabled && followingCount === null ? privacyCopy.unavailable : <>{followingCount} people</>}</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('localization.checkins.following')}</Text>
+            <Text style={[styles.sectionSubtitle, { color: secondaryColor }]}>{communityPrivacyEnabled && followingCount === null ? privacyCopy.unavailable : <>{Number(followingCount).toLocaleString(getAppLocale())} {t('localization.checkins.peopleSuffix')}</>}</Text>
           </View>
 
           {following.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyStateText, { color: secondaryColor }]}>
-                {communityPrivacyEnabled && privacyErrors.friends ? privacyCopy.unavailable : "You're not following anyone yet. Search above to find friends."}
+                {communityPrivacyEnabled && privacyErrors.friends ? privacyCopy.unavailable : t('localization.checkins.noFollowing')}
               </Text>
             </View>
           ) : (
@@ -4599,7 +4607,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
                   <View style={{ flex: 1, marginLeft: spacing.sm }}>
                     <Text style={[styles.followingName, { color: textColor }]}>{user.name || user.username}</Text>
                     <Text style={[styles.followingHandle, { color: secondaryColor }]}>@{user.username}</Text>
-                    <Text style={[styles.followingActivity, { color: secondaryColor }]}>Active recently</Text>
+                    <Text style={[styles.followingActivity, { color: secondaryColor }]}>{t('localization.checkins.activeRecently')}</Text>
                   </View>
                   <ChevronRight size={18} color={secondaryColor} />
                 </TouchableOpacity>
@@ -4608,8 +4616,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
           )}
 
           <Text style={[styles.privacyNote, { color: secondaryColor }]}>
-            You only see what each person chooses to share.
-          </Text>
+            {t('localization.checkins.privacyNote')}</Text>
         </ScrollView>
       )}
 
@@ -4623,11 +4630,10 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
       {activeTab === 'club' && !premiumLoading && !isPremium && (
         <View style={[styles.gateContainer, { backgroundColor: bgColor }]}>
           <Lock size={48} color={colors.primary} />
-          <Text style={[styles.gateTitle, { color: textColor }]}>Macro Goal Premium Club</Text>
-          <Text style={[styles.gateBadge, { color: secondaryColor }]}>Private · Included with Premium</Text>
+          <Text style={[styles.gateTitle, { color: textColor }]}>{t('localization.checkins.brandPremiumClub')}</Text>
+          <Text style={[styles.gateBadge, { color: secondaryColor }]}>{t('localization.checkins.privateIncluded')}</Text>
           <Text style={[styles.gateDesc, { color: secondaryColor }]}>
-            Support, practical ideas, and progress together.
-          </Text>
+            {t('localization.checkins.clubSupport')}</Text>
           <TouchableOpacity
             style={[styles.inviteBtn, { marginTop: spacing.lg, paddingHorizontal: spacing.xl }]}
             onPress={() => {
@@ -4635,7 +4641,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               router.push('/subscription');
             }}
           >
-            <Text style={styles.inviteBtnText}>Unlock Premium Club</Text>
+            <Text style={styles.inviteBtnText}>{t('localization.checkins.unlockClub')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -4653,11 +4659,10 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               <View style={[styles.clubHeader, { backgroundColor: cardBg, borderColor, borderWidth: 1, borderRadius: 16, padding: spacing.lg, marginBottom: spacing.md }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
                   <Lock size={18} color={colors.primary} />
-                  <Text style={[styles.clubTitle, { color: textColor }]}>Premium Club</Text>
+                  <Text style={[styles.clubTitle, { color: textColor }]}>{t('localization.checkins.premiumClub')}</Text>
                 </View>
                 <Text style={{ fontSize: 14, color: secondaryColor, lineHeight: 20 }}>
-                  You're here because you're committed to transforming your body. Let's share our progress, support each other, and reach our goals together.
-                </Text>
+                  {t('localization.checkins.clubWelcome')}</Text>
               </View>
 
               {isFounder && clubMemberCount !== null && (
@@ -4681,11 +4686,10 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Users size={18} color="#16A34A" />
                     <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#4ADE80' : '#16A34A' }}>
-                      {clubMemberCount}
+                      {Number(clubMemberCount).toLocaleString(getAppLocale())}
                     </Text>
                     <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#4ADE80' : '#16A34A' }}>
-                      Premium Members
-                    </Text>
+                      {t('localization.checkins.premiumMembers')}</Text>
                   </View>
                   <ChevronRight size={16} color="#16A34A" />
                 </TouchableOpacity>
@@ -4699,7 +4703,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
             ) : (
               <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>No posts yet. Start the conversation!</Text>
+                <Text style={[styles.emptyStateText, { color: secondaryColor }]}>{t('localization.checkins.noClubPosts')}</Text>
               </View>
             )
           }
@@ -4779,13 +4783,12 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
         <View style={{ flex: 1, backgroundColor: isDark ? colors.backgroundDark : colors.primaryBackground }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? colors.borderDark : colors.border }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: isDark ? colors.textDark : colors.primaryText }}>
-              Premium Members
-            </Text>
+              {t('localization.checkins.premiumMembers')}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: isDark ? colors.textDark : colors.primaryText }}>
-                ({clubMemberCount ?? 0})
+                ({Number(clubMemberCount ?? 0).toLocaleString(getAppLocale())})
               </Text>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityLabel={t('localization.checkins.close')}
                 onPress={() => {
                   console.log('[Community] Member list modal closed');
                   setShowMemberList(false);

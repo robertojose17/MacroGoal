@@ -1,3 +1,5 @@
+import { getAppLocale } from '@/lib/localization';
+import { useTranslation } from 'react-i18next';
 /**
  * Recipe Finder Detail Screen
  * Full recipe view with ingredients, instructions, reviews, and food diary logging
@@ -141,6 +143,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function RecipeFinderDetailScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ recipe: string }>();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -176,7 +179,7 @@ export default function RecipeFinderDetailScreen() {
 
       return {
         ...parsed,
-        name: String(parsed.name ?? parsed.title ?? 'Recipe'),
+        name: String(parsed.name ?? parsed.title ?? t('localization.screens.recipe6')),
         description: String(parsed.description ?? ''),
         source_name: String(parsed.source_name ?? ''),
         tags: Array.isArray(parsed.tags) ? parsed.tags.map((t: any) => String(t)) : [],
@@ -208,6 +211,7 @@ export default function RecipeFinderDetailScreen() {
 
   // AI macro fit state
   const [macroFitNote, setMacroFitNote] = useState<string | null>(null);
+  const [adjustedServingCount, setAdjustedServingCount] = useState<number | null>(null);
   const [remainingCalories, setRemainingCalories] = useState(0);
   const [remainingProtein, setRemainingProtein] = useState(0);
 
@@ -286,20 +290,20 @@ export default function RecipeFinderDetailScreen() {
     if (isSaved) {
       setIsSaved(false);
       await unsaveRecipe(recipe.id);
-      showToast('Recipe removed from saved');
+      showToast(t('localization.screens.recipe0'));
     } else {
       setIsSaved(true);
       await saveRecipe({ ...recipe, is_saved: true });
-      showToast('Recipe saved!');
+      showToast(t('localization.screens.recipe1'));
     }
-  }, [isSaved, recipe, saveRecipe, unsaveRecipe, showToast]);
+  }, [isSaved, recipe, saveRecipe, unsaveRecipe, showToast, t]);
 
   // ─── Make it fit my macros ──────────────────────────────────────────────────
   const handleMacroFit = useCallback(async () => {
     if (!recipe) return;
     console.log('[RecipeDetail] Make it fit my macros — remainingCalories:', remainingCalories, 'remainingProtein:', remainingProtein);
     if (remainingCalories <= 0) {
-      showToast('No remaining calories today!');
+      showToast(t('localization.screens.recipe2'));
       return;
     }
     const messages: ChatMessage[] = [
@@ -322,14 +326,15 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
         const parsed = JSON.parse(jsonMatch[0]);
         const adj = Math.max(0.5, Math.min(10, Number(parsed.adjusted_servings) || 1));
         setServings(adj);
-        setMacroFitNote(parsed.note || `Adjusted to ${adj} serving(s) to fit your remaining macros.`);
+        setMacroFitNote(parsed.note || '');
+        setAdjustedServingCount(adj);
         console.log('[RecipeDetail] Macro fit — adjusted to', adj, 'servings');
       }
     } catch (e: any) {
       console.error('[RecipeDetail] handleMacroFit error:', e?.message);
-      showToast('Could not adjust servings. Try again.');
+      showToast(t('localization.screens.recipe3'));
     }
-  }, [remainingCalories, remainingProtein, recipe, sendMessage, showToast]);
+  }, [remainingCalories, remainingProtein, recipe, sendMessage, showToast, t]);
 
   // ─── Log to food diary ──────────────────────────────────────────────────────
   const handleLogToDiary = useCallback(async () => {
@@ -340,12 +345,12 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
     const logFatLocal = Math.round(recipe.fat_per_serving * logServings);
     const logFiberLocal = Math.round(recipe.fiber_per_serving * logServings);
     console.log('[recipe-finder-detail] handleLogToDiary pressed', { recipeId: recipe.id, logServings });
-    const servingDesc = logServings === 1 ? '1 serving' : `${logServings} servings`;
+    const servingDesc = t('localization.screens.servingCount', { count: logServings, quantity: logServings.toLocaleString(getAppLocale()) });
     console.log('[RecipeDetail] Log to diary — recipe:', recipe.name, 'servings:', logServings, 'calories:', logCaloriesLocal, 'protein:', logProteinLocal);
     setLogging(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { showToast('Please sign in to log food'); return; }
+      if (!user) { showToast(t('localization.screens.recipe4')); return; }
       const today = toLocalDateString();
 
       // Insert a temporary food entry so the diary shows the recipe name cleanly
@@ -394,21 +399,21 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
       if (rpcError) throw rpcError;
       console.log('[RecipeDetail] Logged to diary successfully via Supabase RPC');
       setLogSheetVisible(false);
-      showToast(`${recipe.name} added to diary!`);
+      showToast(t('localization.screens.recipeLogged', { name: recipe.name }));
     } catch (e: any) {
       console.error('[RecipeDetail] handleLogToDiary error:', e?.message);
-      showToast('Failed to log recipe. Try again.');
+      showToast(t('localization.screens.recipe5'));
     } finally {
       setLogging(false);
     }
-  }, [recipe, logServings, showToast]);
+  }, [recipe, logServings, showToast, t]);
 
   if (!recipe) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-        <Stack.Screen options={{ title: 'Recipe', headerShown: true }} />
+        <Stack.Screen options={{ title: t('localization.screens.recipe6'), headerShown: true }} />
         <View style={styles.centered}>
-          <Text style={[styles.emptyText, { color: subColor }]}>Recipe not found.</Text>
+          <Text style={[styles.emptyText, { color: subColor }]}>{t('localization.screens.recipe7')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -518,15 +523,15 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
 
           {/* Macro pills */}
           <View style={[styles.macroPillsRow, { paddingHorizontal: spacing.md }]}>
-            <MacroPill label="Calories" value={scaledCalories} unit=" kcal" bgColor={colors.calories} isDark={isDark} />
-            <MacroPill label="Protein" value={scaledProtein} unit="g" bgColor={colors.protein} isDark={isDark} />
-            <MacroPill label="Carbs" value={scaledCarbs} unit="g" bgColor={colors.carbs} isDark={isDark} />
-            <MacroPill label="Fat" value={scaledFat} unit="g" bgColor={colors.fats} isDark={isDark} />
+            <MacroPill label={t('localization.screens.recipe8')} value={scaledCalories} unit=" kcal" bgColor={colors.calories} isDark={isDark} />
+            <MacroPill label={t('localization.screens.recipe9')} value={scaledProtein} unit="g" bgColor={colors.protein} isDark={isDark} />
+            <MacroPill label={t('localization.screens.recipe10')} value={scaledCarbs} unit="g" bgColor={colors.carbs} isDark={isDark} />
+            <MacroPill label={t('localization.screens.recipe11')} value={scaledFat} unit="g" bgColor={colors.fats} isDark={isDark} />
           </View>
 
           {/* Servings selector */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md, marginTop: spacing.sm }]}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Servings</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('localization.screens.recipe12')}</Text>
             <View style={styles.servingsRow}>
               <Pressable
                 onPress={() => {
@@ -536,10 +541,11 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 }}
                 style={[styles.servingsBtn, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
                 accessibilityRole="button"
+                accessibilityLabel={t('localization.screens.decreaseServings')}
               >
                 <Minus size={18} color={colors.primary} />
               </Pressable>
-              <Text style={[styles.servingsValue, { color: textColor }]}>{servings}</Text>
+              <Text style={[styles.servingsValue, { color: textColor }]}>{servings.toLocaleString(getAppLocale())}</Text>
               <Pressable
                 onPress={() => {
                   const next = Math.min(20, servings + 0.5);
@@ -548,6 +554,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 }}
                 style={[styles.servingsBtn, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
                 accessibilityRole="button"
+                accessibilityLabel={t('localization.screens.increaseServings')}
               >
                 <Plus size={18} color={colors.primary} />
               </Pressable>
@@ -568,12 +575,12 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 <Sparkles size={16} color={colors.primary} />
               )}
               <Text style={[styles.macroFitBtnText, { color: colors.primary }]}>
-                {aiLoading ? 'Adjusting...' : 'Make it fit my macros'}
+                {aiLoading ? t('localization.screens.recipe13') : t('localization.screens.recipe14')}
               </Text>
             </Pressable>
-            {macroFitNote && (
+            {(macroFitNote || adjustedServingCount !== null) && (
               <View style={[styles.macroFitNote, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
-                <Text style={[styles.macroFitNoteText, { color: colors.primary }]}>{macroFitNote}</Text>
+                <Text style={[styles.macroFitNoteText, { color: colors.primary }]}>{macroFitNote || t('localization.screens.recipeAdjusted', { count: adjustedServingCount ?? 0, quantity: (adjustedServingCount ?? 0).toLocaleString(getAppLocale()) })}</Text>
               </View>
             )}
           </View>
@@ -589,7 +596,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
               accessibilityRole="button"
             >
               <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Ingredients ({(recipe.ingredients ?? []).length})
+                {t('localization.screens.ingredients', { count: (recipe.ingredients ?? []).length })}
               </Text>
               {ingredientsExpanded
                 ? <ChevronUp size={18} color={subColor} />
@@ -623,7 +630,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
               accessibilityRole="button"
             >
               <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Instructions ({(recipe.instructions ?? []).length} steps)
+                {t('localization.screens.instructions', { count: (recipe.instructions ?? []).length })}
               </Text>
               {instructionsExpanded
                 ? <ChevronUp size={18} color={subColor} />
@@ -651,7 +658,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 accessibilityRole="button"
               >
                 <Text style={[styles.sectionTitle, { color: textColor }]}>
-                  Reviews ({(recipe.reviews ?? []).length})
+                  {t('localization.screens.reviews', { count: (recipe.reviews ?? []).length })}
                 </Text>
                 {reviewsExpanded
                   ? <ChevronUp size={18} color={subColor} />
@@ -692,7 +699,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
             onPress={handleToggleSave}
             style={[styles.bookmarkBtn, { borderColor }]}
             accessibilityRole="button"
-            accessibilityLabel={isSaved ? 'Unsave recipe' : 'Save recipe'}
+            accessibilityLabel={isSaved ? t('localization.screens.recipe15') : t('localization.screens.recipe16')}
           >
             {isSaved
               ? <BookmarkCheck size={22} color={colors.primary} fill={colors.primary} />
@@ -707,7 +714,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
             style={[styles.logBtn, { backgroundColor: colors.primary }]}
             accessibilityRole="button"
           >
-            <Text style={styles.logBtnText}>Log to Food Diary</Text>
+            <Text style={styles.logBtnText}>{t('localization.screens.recipe17')}</Text>
           </Pressable>
         </View>
       </View>
@@ -740,7 +747,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
 
           {/* Servings */}
           <View style={styles.logSheetRow}>
-            <Text style={[styles.logSheetLabel, { color: subColor }]}>Servings</Text>
+            <Text style={[styles.logSheetLabel, { color: subColor }]}>{t('localization.screens.recipe12')}</Text>
             <View style={styles.servingsRow}>
               <Pressable
                 onPress={() => {
@@ -750,10 +757,11 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 }}
                 style={[styles.servingsBtn, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
                 accessibilityRole="button"
+                accessibilityLabel={t('localization.screens.decreaseServings')}
               >
                 <Minus size={16} color={colors.primary} />
               </Pressable>
-              <Text style={[styles.servingsValue, { color: textColor }]}>{logServings}</Text>
+              <Text style={[styles.servingsValue, { color: textColor }]}>{logServings.toLocaleString(getAppLocale())}</Text>
               <Pressable
                 onPress={() => {
                   const next = Math.min(20, logServings + 0.5);
@@ -762,6 +770,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 }}
                 style={[styles.servingsBtn, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
                 accessibilityRole="button"
+                accessibilityLabel={t('localization.screens.increaseServings')}
               >
                 <Plus size={16} color={colors.primary} />
               </Pressable>
@@ -777,17 +786,17 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
             <View style={[styles.logMacroDivider, { backgroundColor: borderColor }]} />
             <View style={styles.logMacroItem}>
               <Text style={[styles.logMacroValue, { color: colors.protein }]}>{logProtein}g</Text>
-              <Text style={[styles.logMacroLabel, { color: subColor }]}>protein</Text>
+              <Text style={[styles.logMacroLabel, { color: subColor }]}>{t('localization.screens.recipe19')}</Text>
             </View>
             <View style={[styles.logMacroDivider, { backgroundColor: borderColor }]} />
             <View style={styles.logMacroItem}>
               <Text style={[styles.logMacroValue, { color: colors.carbs }]}>{logCarbs}g</Text>
-              <Text style={[styles.logMacroLabel, { color: subColor }]}>carbs</Text>
+              <Text style={[styles.logMacroLabel, { color: subColor }]}>{t('localization.screens.recipe20')}</Text>
             </View>
             <View style={[styles.logMacroDivider, { backgroundColor: borderColor }]} />
             <View style={styles.logMacroItem}>
               <Text style={[styles.logMacroValue, { color: colors.fats }]}>{logFat}g</Text>
-              <Text style={[styles.logMacroLabel, { color: subColor }]}>fat</Text>
+              <Text style={[styles.logMacroLabel, { color: subColor }]}>{t('localization.screens.recipe21')}</Text>
             </View>
           </View>
 
@@ -800,7 +809,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           >
             {logging
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.addToLogBtnText}>Add to Log</Text>}
+              : <Text style={styles.addToLogBtnText}>{t('localization.screens.recipe18')}</Text>}
           </Pressable>
         </View>
       </Modal>

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import React, { useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, AppState, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
@@ -7,6 +9,7 @@ import { createSupabaseInboxAuthBinding } from '../communityPrivacyV2/supabaseIn
 /** Mounted only by the enabled branch. Scope loss removes the body (and all
  * retained profile/comments/modal state) before an old response can be rendered. */
 export function ProtectedReaderBoundary({ children, scopeKey = '' }: { children: React.ReactNode; scopeKey?: string }) {
+  useTranslation();
   const binding = useMemo(() => createSupabaseInboxAuthBinding(supabase.auth), []);
   const auth = useSyncExternalStore(binding.subscribe, binding.getSnapshot, binding.getSnapshot);
   const focused = useIsFocused();
@@ -25,7 +28,7 @@ export function ProtectedReaderBoundary({ children, scopeKey = '' }: { children:
   }, []);
   if (!active || !auth.session) return <View accessibilityRole="summary">
     {active && auth.status === 'loading' ? <ActivityIndicator /> :
-      <Text>{active ? 'Sign in to view this content.' : 'Content hidden while this screen is inactive.'}</Text>}
+      <Text>{active ? t('localization.social.sign_in_to_view_this_content') : t('localization.social.content_hidden_while_this_screen_is_inactive')}</Text>}
   </View>;
   return <React.Fragment key={`${auth.session.userId}:${auth.session.sessionKey}:${scopeKey}`}>{children}</React.Fragment>;
 }

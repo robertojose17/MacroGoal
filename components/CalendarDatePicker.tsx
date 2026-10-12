@@ -1,3 +1,6 @@
+import { getAppLocale } from '@/lib/localization';
+import { configureCalendarLocale } from '@/components/calendarLocale';
+import { useTranslation } from 'react-i18next';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -27,21 +30,23 @@ export default function CalendarDatePicker({
   visible,
   onClose,
   onSelectDate,
-  initialDate = new Date(),
+  initialDate,
   maxDate = new Date(),
   minDate,
-  title = 'Select Date',
+  title,
 }: CalendarDatePickerProps) {
+  const { t, i18n } = useTranslation();
+  configureCalendarLocale();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [selectedDate, setSelectedDate] = useState<string>(
-    toLocalDateString(initialDate)
+    toLocalDateString(initialDate ?? new Date())
   );
 
   useEffect(() => {
-    setSelectedDate(toLocalDateString(initialDate));
-  }, [initialDate]);
+    if (visible) setSelectedDate(toLocalDateString(initialDate ?? new Date()));
+  }, [initialDate, visible]);
 
   const handleDayPress = (day: DateData) => {
     console.log('[CalendarDatePicker] Day pressed:', day.dateString);
@@ -122,10 +127,11 @@ export default function CalendarDatePicker({
                 { color: isDark ? colors.textDark : colors.text },
               ]}
             >
-              {title}
+              {title ?? t('localization.shared.selectDate')}
             </Text>
 
             <Calendar
+              key={i18n.resolvedLanguage || i18n.language}
               current={selectedDate}
               onDayPress={handleDayPress}
               markedDates={markedDates}
@@ -155,7 +161,7 @@ export default function CalendarDatePicker({
                     { color: isDark ? colors.textDark : colors.text },
                   ]}
                 >
-                  Cancel
+                  {t('localization.shared.cancel')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -167,7 +173,7 @@ export default function CalendarDatePicker({
                 onPress={handleConfirm}
               >
                 <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>
-                  Confirm
+                  {t('localization.shared.confirm')}
                 </Text>
               </TouchableOpacity>
             </View>

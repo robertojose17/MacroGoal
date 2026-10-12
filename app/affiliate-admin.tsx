@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -42,7 +43,7 @@ function formatMoney(amount: number | undefined | null): string {
 function formatDate(dateStr: string | undefined | null): string {
   if (!dateStr) return '—';
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(dateStr).toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }

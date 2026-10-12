@@ -527,7 +527,7 @@ export default function AffiliateWelcomeScreen() {
               {termsChecked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
             </View>
             <Text style={[termsGateStyles.checkboxLabel, { color: termsTextColor }]}>
-              I have read and agree to the Macro Goal Creator Program Terms
+              {t('localization.completion.acceptCreatorTerms')}
             </Text>
           </TouchableOpacity>
 
@@ -541,7 +541,7 @@ export default function AffiliateWelcomeScreen() {
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={[termsGateStyles.continueButtonText, { color: continueDisabled ? termsMutedColor : '#FFFFFF' }]}>
-                Continue
+                {t('localization.completion.continue')}
               </Text>
             )}
           </TouchableOpacity>
@@ -570,11 +570,11 @@ export default function AffiliateWelcomeScreen() {
             </Animated.View>
 
             <Text style={styles.headline}>
-              {"You're In!"}
+              {t('localization.screens.affiliateIn')}
             </Text>
 
             <Text style={styles.subheadline}>
-              Apply to become an affiliate and start earning 50% commission on every referral you convert to Premium.
+              {t('localization.screens.affiliateCommission')}
             </Text>
           </View>
 
@@ -584,7 +584,7 @@ export default function AffiliateWelcomeScreen() {
               onPress={handleApply}
               activeOpacity={0.85}
             >
-              <Text style={[styles.primaryButtonText, { color: '#000' }]}>Apply to Become an Affiliate</Text>
+              <Text style={[styles.primaryButtonText, { color: '#000' }]}>{t('localization.screens.affiliateApply')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,3 +1,5 @@
+import { getAppLocale } from '@/lib/localization';
+import { challengeUnitLabel } from '@/components/challengeUnitLabel';
 /**
  * ChallengeDashboardCard
  *
@@ -226,11 +228,11 @@ export default function ChallengeDashboardCard({
     : t('sevenDayChallenge.completeTodaysMission');
   const missionCurrent = mission?.current ?? 0;
   const missionTarget = mission?.target ?? 1;
-  const missionUnit = mission?.unit ?? '';
+  const missionUnit = challengeUnitLabel(mission?.unit ?? '');
   const missionProgress = missionTarget > 0 ? missionCurrent / missionTarget : 0;
   const missionProgressText = missionUnit
-    ? t('sevenDayChallenge.progressWithUnit', { current: missionCurrent, target: missionTarget, unit: missionUnit })
-    : t('sevenDayChallenge.progressLogged', { current: missionCurrent, target: missionTarget });
+    ? t('localization.shared.missionProgress', { current: missionCurrent.toLocaleString(getAppLocale()), target: missionTarget.toLocaleString(getAppLocale()), unit: missionUnit })
+    : t('sevenDayChallenge.progressLogged', { current: missionCurrent.toLocaleString(getAppLocale()), target: missionTarget.toLocaleString(getAppLocale()) });
 
   const headerTitleText = t('sevenDayChallenge.headerTitle');
   const taglineText = t('sevenDayChallenge.tagline');

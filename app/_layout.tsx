@@ -1,7 +1,8 @@
 import { useCommunityPrivacyRolloutLifecycle } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 
 import '@/lib/i18n';
-import i18n from '@/lib/i18n';
+import { languageReady } from '@/lib/i18n';
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from "react";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -69,6 +70,13 @@ try {
 }
 
 export default function RootLayout() {
+  const { t } = useTranslation();
+  const [languageHydrated, setLanguageHydrated] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    languageReady.then(() => { if (mounted) setLanguageHydrated(true); });
+    return () => { mounted = false; };
+  }, []);
   useCommunityPrivacyRolloutLifecycle();
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -314,7 +322,7 @@ export default function RootLayout() {
   // start segments is [] which caused the old guard to bail and leave the
   // blank index.tsx spinner on screen forever.
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !languageHydrated) return;
     if (hasNavigatedRef.current) return;
 
     console.log("[Navigation] isReady=true, session:", session?.user?.id ?? "none");
@@ -408,7 +416,7 @@ export default function RootLayout() {
 
     navigate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReady, session]);
+  }, [isReady, session, languageHydrated]);
 
   // ─── OneSignal notification click handler ────────────────────────────────
   // Deferred to ensure OneSignal.initialize() (called in NotificationContext)
@@ -546,6 +554,8 @@ export default function RootLayout() {
     },
   };
 
+  if (!languageHydrated) return null;
+
   const content = (
     <NotificationProvider>
       <ErrorBoundary>
@@ -656,7 +666,7 @@ export default function RootLayout() {
                     sheetGrabberVisible: true,
                     sheetAllowedDetents: [0.5, 0.75],
                     headerShown: true,
-                    title: i18n.t('tracker.logEntry'),
+                    title: t('tracker.logEntry'),
                   }}
                 />
                 <Stack.Screen
@@ -666,7 +676,7 @@ export default function RootLayout() {
                     sheetGrabberVisible: true,
                     sheetAllowedDetents: [0.75, 1.0],
                     headerShown: true,
-                    title: i18n.t('tracker.newTracker'),
+                    title: t('tracker.newTracker'),
                   }}
                 />
                 <Stack.Screen
@@ -674,7 +684,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: i18n.t('nav.consistencyScore'),
+                    title: t('nav.consistencyScore'),
                   }}
                 />
                 <Stack.Screen
@@ -682,7 +692,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: i18n.t('nav.weightProgress'),
+                    title: t('nav.weightProgress'),
                   }}
                 />
                 <Stack.Screen
@@ -690,7 +700,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: i18n.t('nav.inviteFriends'),
+                    title: t('nav.inviteFriends'),
                   }}
                 />
                 <Stack.Screen
@@ -698,16 +708,16 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: i18n.t('nav.affiliateApplication'),
+                    title: t('nav.affiliateApplication'),
                   }}
                 />
                 <Stack.Screen
                   name="affiliate-welcome"
-                  options={{ title: i18n.t('nav.creatorProgram'), headerShown: false }}
+                  options={{ title: t('nav.creatorProgram'), headerShown: false }}
                 />
                 <Stack.Screen
                   name="affiliate-admin"
-                  options={{ title: i18n.t('nav.affiliateAdmin'), headerShown: true }}
+                  options={{ title: t('nav.affiliateAdmin'), headerShown: true }}
                 />
 
                 <Stack.Screen
@@ -715,7 +725,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: 'Profile',
+                    title: t('localization.settings.profileTitle'),
                   }}
                 />
                 <Stack.Screen
@@ -727,7 +737,7 @@ export default function RootLayout() {
                   options={{
                     headerShown: true,
                     headerBackButtonDisplayMode: 'minimal',
-                    title: 'Post',
+                    title: t('localization.settings.postTitle'),
                   }}
                 />
               </Stack>

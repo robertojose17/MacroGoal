@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -20,9 +21,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 type Tab = 'steps';
 
 function formatShortDate(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getMonth()]} ${date.getDate()}`;
+  return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
 function SkeletonLine({ width, height = 13, isDark }: { width: number | string; height?: number; isDark: boolean }) {
@@ -60,7 +59,7 @@ function LeaderboardRow({
   const subColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const hasMedal = entry.rank <= 3;
   const rankLabel = hasMedal ? null : String(entry.rank);
-  const valueFormatted = entry.totalValue.toLocaleString('en-US');
+  const valueFormatted = entry.totalValue.toLocaleString(getAppLocale());
   const youSuffix = entry.isYou ? ` · ${t('leaderboard.you')}` : '';
   const rowBg = entry.isYou
     ? isDark

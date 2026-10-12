@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
@@ -107,11 +108,11 @@ const formatDateRange = (start: string, end: string): string => {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', opts)}`;
+  return `${s.toLocaleDateString(getAppLocale(), opts)} – ${e.toLocaleDateString(getAppLocale(), opts)}`;
 };
 
 const formatShortDate = (date: Date): string =>
-  date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 
 const getMonday = (d: Date): Date => {
   const date = new Date(d);
@@ -130,7 +131,7 @@ const getSunday = (d: Date): Date => {
 
 const formatDayHeader = (dateStr: string): string => {
   const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  return d.toLocaleDateString(getAppLocale(), { weekday: 'long', month: 'long', day: 'numeric' });
 };
 
 // ─── Calendar Component ───────────────────────────────────────────────────────
@@ -377,13 +378,13 @@ export default function HomeScreen() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
         console.error('[Home] Error getting user:', userError);
-        setError(t('home.failedToAuthenticate'));
+        setError('home.failedToAuthenticate');
         setLoading(false);
         return;
       }
       if (!user) {
         console.log('[Home] No user found');
-        setError(t('home.noUserSession'));
+        setError('home.noUserSession');
         setLoading(false);
         return;
       }
@@ -450,7 +451,7 @@ export default function HomeScreen() {
 
       if (mealsError) {
         console.error('[Home] Error loading meals:', mealsError);
-        setError(t('home.failedToLoadMeals'));
+        setError('home.failedToLoadMeals');
       } else {
         console.log('[Home] Meals loaded for', dateString, ':', mealsData?.length || 0, 'meals');
 
@@ -512,7 +513,7 @@ export default function HomeScreen() {
       }
     } catch (err: any) {
       console.error('[Home] Error in loadData:', err);
-      setError(err?.message || t('home.unexpectedError'));
+      setError('home.unexpectedError');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1036,8 +1037,8 @@ export default function HomeScreen() {
   const daySheetTitle = selectedDayStr ? formatDayHeader(selectedDayStr) : '';
   const leftArrowDisabled = false;
   const rightArrowDisabled = isTodayOrFuture();
-  const todayLabel = isToday() ? t('common.today') : selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const dateDisplay = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const todayLabel = isToday() ? t('common.today') : selectedDate.toLocaleDateString(getAppLocale(), { weekday: 'short' });
+  const dateDisplay = selectedDate.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 
   // ── Render helpers ──
 
@@ -1056,7 +1057,7 @@ export default function HomeScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.errorContainer}>
           <IconSymbol ios_icon_name="exclamationmark.triangle" android_material_icon_name="warning" size={48} color={colors.error} />
-          <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>{error}</Text>
+          <Text style={[styles.errorText, { color: isDark ? colors.textDark : colors.text }]}>{error ? t(error) : null}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadData}>
             <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
@@ -1620,7 +1621,7 @@ export default function HomeScreen() {
           <Search size={18} color={subColor} />
           <TextInput
             style={[recipeTabStyles.searchInput, { color: isDark ? colors.textDark : colors.text }]}
-            placeholder="Search recipes..."
+            placeholder={t('localization.screens.home0')}
             placeholderTextColor={subColor}
             value={recipeQuery}
             onChangeText={handleRecipeSearchChange}
@@ -1643,8 +1644,8 @@ export default function HomeScreen() {
             </ScrollView>
           ) : recipeFinderError ? (
             <View style={recipeTabStyles.emptyState}>
-              <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>Search failed</Text>
-              <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>{recipeFinderError}</Text>
+              <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('localization.screens.home1')}</Text>
+              <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>{t('localization.screens.recipeSearchFailed')}</Text>
             </View>
           ) : (
             <FlatList
@@ -1662,15 +1663,15 @@ export default function HomeScreen() {
               onEndReachedThreshold={0.3}
               ListEmptyComponent={
                 <View style={recipeTabStyles.emptyState}>
-                  <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>No recipes found</Text>
-                  <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>Try a different search term</Text>
+                  <Text style={[recipeTabStyles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('localization.screens.home2')}</Text>
+                  <Text style={[recipeTabStyles.emptySubtitle, { color: subColor }]}>{t('localization.screens.home3')}</Text>
                 </View>
               }
               ListFooterComponent={
                 recipeFinderLoadingMore ? (
                   <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
                 ) : !recipeFinderHasMore && recipeFinderResults.length > 0 ? (
-                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>No more recipes</Text>
+                  <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>{t('localization.screens.home4')}</Text>
                 ) : null
               }
             />
@@ -1689,13 +1690,13 @@ export default function HomeScreen() {
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.sm }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <IconSymbol ios_icon_name="heart.fill" android_material_icon_name="favorite" size={18} color="#EF4444" />
-                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>Saved Recipes</Text>
+                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>{t('localization.screens.home5')}</Text>
                   </View>
                 </View>
                 {savedRecipes.length === 0 ? (
                   <View style={[recipeTabStyles.emptyHorizontal, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md }]}>
                     <Bookmark size={24} color={subColor} />
-                    <Text style={[recipeTabStyles.emptyHorizontalText, { color: subColor }]}>Save recipes you love to find them here</Text>
+                    <Text style={[recipeTabStyles.emptyHorizontalText, { color: subColor }]}>{t('localization.screens.savedEmpty')}</Text>
                   </View>
                 ) : (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={recipeTabStyles.horizontalList}>
@@ -1707,9 +1708,9 @@ export default function HomeScreen() {
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.lg }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={18} color={colors.primary} />
-                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>Trending Now</Text>
+                    <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>{t('localization.screens.home6')}</Text>
                   </View>
-                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>Most clicked in the last 48h</Text>
+                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>{t('localization.screens.home7')}</Text>
                 </View>
                 {popularLoading ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={recipeTabStyles.horizontalList}>
@@ -1723,8 +1724,8 @@ export default function HomeScreen() {
                   </ScrollView>
                 ) : null}
                 <View style={[recipeTabStyles.sectionHeader, { marginTop: spacing.md }]}>
-                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>✨ Discover</Text>
-                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>Endless fitness recipes, just for you</Text>
+                  <Text style={[recipeTabStyles.sectionTitle, { color: isDark ? colors.textDark : colors.text, fontSize: 18 }]}>✨ {t('localization.screens.home8')}</Text>
+                  <Text style={[recipeTabStyles.sectionSubtitle, { color: subColor }]}>{t('localization.screens.home9')}</Text>
                 </View>
                 {browseLoading && (
                   <View style={{ paddingHorizontal: spacing.md }}>
@@ -1742,7 +1743,7 @@ export default function HomeScreen() {
               browseLoadingMore ? (
                 <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
               ) : !browseHasMore && browseResults.length > 0 ? (
-                <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>No more recipes</Text>
+                <Text style={{ textAlign: 'center', color: subColor, fontSize: 13, marginVertical: spacing.md }}>{t('localization.screens.home4')}</Text>
               ) : null
             }
           />
@@ -1755,7 +1756,7 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       {/* ── Fixed Food Header ── */}
       <View style={[styles.foodHeader, { borderBottomColor: isDark ? colors.borderDark : colors.border, backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-        <Text style={[styles.foodHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>Food</Text>
+        <Text style={[styles.foodHeaderTitle, { color: isDark ? colors.textDark : colors.text }]}>{t('localization.screens.home10')}</Text>
         <TouchableOpacity
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={() => {
@@ -1800,7 +1801,7 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               <Text style={[styles.segmentButtonText, { color: activeTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-                Recipes
+                {t('localization.completion.recipes')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1894,11 +1895,11 @@ export default function HomeScreen() {
           const result = await executePurchase();
           if (result.success) {
             console.log('[Home] Streak rescue purchase succeeded, streak restored to:', lostStreakValue);
-            Alert.alert('¡Racha restaurada!', `¡Tu racha de ${lostStreakValue} días fue restaurada!`);
+            Alert.alert(t('localization.screens.streakRestored'), t('localization.screens.streakRestoredBody', { count: lostStreakValue }));
             await refreshRescue();
           } else if (result.error) {
             console.warn('[Home] Streak rescue purchase failed:', result.error);
-            Alert.alert('Error', result.error);
+            Alert.alert(t('common.error'), result.error);
           }
         }}
         onDismiss={() => {

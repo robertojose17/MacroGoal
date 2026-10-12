@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
@@ -77,7 +78,7 @@ export default function PrivacyPolicyScreen() {
           </Text>
 
           <Text style={[styles.lastUpdated, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {t('privacyPolicy.lastUpdated', { date: new Date().toLocaleDateString() })}
+            {t('privacyPolicy.lastUpdated', { date: new Date().toLocaleDateString(getAppLocale()) })}
           </Text>
         </View>
       </ScrollView>

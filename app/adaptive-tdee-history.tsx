@@ -1,3 +1,4 @@
+import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback } from 'react';
 import {
@@ -44,7 +45,7 @@ interface GoalData {
 function formatWeekDate(dateStr: string): string {
   try {
     const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
   } catch {
     return dateStr;
   }
