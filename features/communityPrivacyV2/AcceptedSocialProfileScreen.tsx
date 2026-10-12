@@ -1,9 +1,10 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image,
   Modal, TextInput, FlatList, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ProfileScreenState } from './profileScreenController';
-import { profileAction } from './profileScreenController';
+import { profileAction, profileLoadErrorCode } from './profileScreenController';
 import type { OutboundAction } from './outboundFollowAdapter';
 import { amountText, goalProgress, metricText, relativePostTime, safeProfileAvatar, visibleProfile } from './profileScreenPresentation';
 import type { ConnectionDirection } from './profileSupplementTypes';
@@ -21,6 +22,7 @@ interface Props {
   onAction?(action: OutboundAction): void;
   onConnections?(direction: ConnectionDirection): void;
   onCloseConnections?(): void;
+  onOpenConnection?(userId: string): void;
   onBlockConfirm?(confirmedScopeKey: string): void;
 }
 const rangeLabels: Record<NutritionRange, string> = { today: 'Today', '7d': '7 Days', '30d': '30 Days', custom: 'Custom' };
@@ -29,7 +31,9 @@ const macroColors = { protein: '#29a583', carbs: '#d89d32', fats: '#9d74c5', fib
 
 /** Snapshot-only renderer. No database, auth, HTTP, storage, raw health or post-media access. */
 export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range = 'today', custom,
-  onRefresh, onRange, onCustom, onAction, onConnections, onCloseConnections, onBlockConfirm }: Props) {
+  onRefresh, onRange, onCustom, onAction, onConnections, onCloseConnections, onOpenConnection, onBlockConfirm }: Props) {
+  const { i18n } = useTranslation();
+  const spanish = (i18n.resolvedLanguage || i18n.language || 'en').startsWith('es');
   const dark = useColorScheme() === 'dark';
   const palette = { bg: dark ? '#111827' : '#f7f8fa', card: dark ? '#1f2937' : '#fff',
     text: dark ? '#f9fafb' : '#111827', muted: dark ? '#b3bbc9' : '#5d6675', border: dark ? '#374151' : '#e5e7eb' };
@@ -46,6 +50,7 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
   const displayName = identity?.name || identity?.full_name || identity?.username || 'Profile';
   const avatar = identity ? safeProfileAvatar(identity.id, identity.avatar_url) : null;
   const action = profileAction(profile);
+  const loadErrorCode = profileLoadErrorCode(state.loadError);
   const text = { color: palette.text };
   const muted = { color: palette.muted };
   const card = { backgroundColor: palette.card, borderColor: palette.border };
@@ -69,7 +74,8 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
           <ActivityIndicator color="#19a377" /><Text style={muted}>{state.blockBusy ? 'Blocking user…' : state.busy ? 'Updating request…' : 'Loading profile…'}</Text>
         </View> : state.status === 'error' ? <View style={styles.message}>
           <Text accessibilityLiveRegion="polite" style={muted}>{state.outcome === 'block_unconfirmed' ? 'Block could not be confirmed. Refresh to check this profile before trying again.' : 'Profile could not be loaded.'}</Text>
-          <TouchableOpacity accessibilityRole="button" style={styles.button} onPress={onRefresh}><Text style={styles.buttonText}>Try again</Text></TouchableOpacity>
+          {loadErrorCode && <Text accessibilityLiveRegion="polite" selectable style={muted}>{spanish ? 'Código' : 'Code'}: {loadErrorCode}</Text>}
+          <TouchableOpacity accessibilityRole="button" style={styles.button} onPress={onRefresh}><Text style={styles.buttonText}>{spanish ? 'Intentar de nuevo' : 'Try again'}</Text></TouchableOpacity>
         </View> : !identity ? <Text style={[styles.message, muted]}>{state.outcome === 'blocked' ? 'This user is blocked.' : 'This account is not available.'}</Text> : <>
           <View style={styles.header}>
             {avatar ? <Image accessibilityLabel={`${displayName} avatar`} source={{ uri: avatar }} style={styles.avatar} /> :
@@ -93,9 +99,9 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
             style={styles.button} disabled={state.busy || !onAction} onPress={() => onAction?.(action)}>
             <Text style={styles.buttonText}>{actionLabel}</Text>
           </TouchableOpacity>}
-          {profile && !profile.is_own_profile && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Block user"
+          {profile && !profile.is_own_profile && <TouchableOpacity accessibilityRole="button" accessibilityLabel={spanish ? 'Bloquear usuario' : 'Block user'}
             disabled={state.busy || !onBlockConfirm} style={styles.touch} onPress={() => setBlockScopeKey(state.scopeKey)}>
-            <Text style={{ color: '#B91C1C' }}>Block user</Text>
+            <Text style={{ color: '#B91C1C' }}>{spanish ? 'Bloquear usuario' : 'Block user'}</Text>
           </TouchableOpacity>}
           {profile?.follow_request_state === 'pending' && <Text style={[styles.notice, muted]}>Request pending. Statistics appear after this person accepts.</Text>}
           {state.outcome === 'unconfirmed' && <Text accessibilityLiveRegion="polite" style={[styles.notice, muted]}>
@@ -157,26 +163,31 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
       <View style={styles.modalBackdrop}><View style={[styles.modal, card, { maxHeight: '80%' }]}>
         <Text style={[styles.sectionTitle, text]}>{state.connections?.direction === 'followers' ? 'Followers' : 'Following'}</Text>
         {state.connections?.status === 'loading' ? <ActivityIndicator accessibilityLabel="Loading connections" color="#19a377" /> :
+          state.connections?.status === 'error' ? <Text accessibilityLiveRegion="polite" style={muted}>{spanish ? 'No se pudo cargar la lista. Ciérrala e inténtalo de nuevo.' : 'Connections could not be loaded. Close and try again.'}</Text> :
           state.connections?.items.length === 0 ? <Text style={muted}>{state.connections.direction === 'followers' ? 'No followers yet' : 'Not following anyone yet'}</Text> :
             <FlatList data={state.connections?.items ?? []} keyExtractor={item => item.id} renderItem={({ item }) => {
               const name = item.name || item.full_name || item.username || 'User';
               const uri = safeProfileAvatar(item.id, item.avatar_url);
-              return <View style={styles.connectionRow}>
+              return <TouchableOpacity style={styles.connectionRow} accessibilityRole="button"
+                accessibilityLabel={spanish ? `Ver perfil de ${name}` : `View ${name}'s profile`}
+                disabled={state.busy || state.status !== 'ready' || state.connections?.status !== 'ready' || !onOpenConnection}
+                onPress={() => onOpenConnection?.(item.id)}>
                 {uri ? <Image accessibilityLabel={`${name} avatar`} source={{ uri }} style={styles.smallAvatar} /> :
                   <View style={[styles.smallAvatar, styles.avatarFallback]}><Text style={styles.buttonText}>{name.charAt(0).toUpperCase()}</Text></View>}
                 <View style={{ flex: 1 }}><Text style={text}>{name}</Text>{!!item.username && <Text style={muted}>@{item.username}</Text>}</View>
-              </View>;
+                <Text style={muted} accessibilityElementsHidden>›</Text>
+              </TouchableOpacity>;
             }} />}
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close connections" style={styles.touch} onPress={onCloseConnections}><Text style={text}>Close</Text></TouchableOpacity>
       </View></View>
     </Modal>
     <Modal visible={!!blockScopeKey && blockScopeKey === state.scopeKey && !!identity && !unavailable} transparent animationType="fade" onRequestClose={() => setBlockScopeKey(null)}>
       <View style={styles.modalBackdrop}><View style={[styles.modal, card]}>
-        <Text style={[styles.sectionTitle, text]}>Block {displayName}?</Text>
-        <Text style={muted}>You and this person will no longer be able to see each other’s profile or posts.</Text>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Confirm block user" style={[styles.button, { backgroundColor: '#B91C1C' }]}
-          onPress={() => { const key = blockScopeKey; setBlockScopeKey(null); if (key) onBlockConfirm?.(key); }}><Text style={styles.buttonText}>Block</Text></TouchableOpacity>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancel block" style={styles.touch} onPress={() => setBlockScopeKey(null)}><Text style={text}>Cancel</Text></TouchableOpacity>
+        <Text style={[styles.sectionTitle, text]}>{spanish ? `¿Bloquear a ${displayName}?` : `Block ${displayName}?`}</Text>
+        <Text style={muted}>{spanish ? 'Tú y esta persona ya no podrán ver el perfil ni las publicaciones del otro.' : 'You and this person will no longer be able to see each other’s profile or posts.'}</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={spanish ? 'Confirmar bloqueo' : 'Confirm block user'} style={[styles.button, { backgroundColor: '#B91C1C' }]}
+          onPress={() => { const key = blockScopeKey; setBlockScopeKey(null); if (key) onBlockConfirm?.(key); }}><Text style={styles.buttonText}>{spanish ? 'Bloquear' : 'Block'}</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={spanish ? 'Cancelar bloqueo' : 'Cancel block'} style={styles.touch} onPress={() => setBlockScopeKey(null)}><Text style={text}>{spanish ? 'Cancelar' : 'Cancel'}</Text></TouchableOpacity>
       </View></View>
     </Modal>
     <Modal visible={rangeEditor && !unavailable && !!user} transparent animationType="fade" onRequestClose={() => setRangeEditor(false)}>
@@ -216,3 +227,4 @@ const styles = StyleSheet.create({
   post: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 10 }, postMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   input: { borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 44 },
 });
+

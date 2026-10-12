@@ -23,6 +23,7 @@ export default function AcceptedSocialProfileRoute() {
 function ConfiguredProfileRoute({ services, target, onBack }: {
   services: ProfileScreenServices; target: string; onBack: () => void;
 }) {
+  const router = useRouter();
   const focused = useIsFocused();
   const [windowFocused, setWindowFocused] = useState(true);
   const [appState, setAppState] = useState(AppState.currentState);
@@ -68,5 +69,13 @@ function ConfiguredProfileRoute({ services, target, onBack }: {
       setCustom({ fromDate, toDate }); setCalendarNow(new Date()); setRange('custom'); return true;
     }} onAction={action => { void controller.change(action); }}
     onConnections={direction => { void controller.openConnections(direction); }} onCloseConnections={controller.closeConnections}
+    onOpenConnection={id => {
+      const latest = controller.getSnapshot();
+      if (!active || unavailable || latest.scopeKey !== scopeKey || latest.busy || latest.status !== 'ready' ||
+        latest.connections?.status !== 'ready' || !latest.connections.items.some(person => person.id === id)) return;
+      controller.closeConnections();
+      router.push({ pathname: '/social-profile-view', params: { userId: id } });
+    }}
     onBlockConfirm={key => { void controller.block(key).then(confirmed => { if (confirmed) onBack(); }); }} />;
 }
+

@@ -1,5 +1,5 @@
 /** LOCAL ADDITIVE DRAFT. Not part of the frozen inactive 14-file package. */
-import type { ClientSession, ApiResult } from './communityProfileApi';
+import type { ClientSession, ApiResult, FailureKind } from './communityProfileApi';
 import type { ProfileInput } from './clientContracts';
 import type { ProfileResponseV2, FollowRequestDescriptor } from './profileContracts';
 import { parseProfileResponse, validateProfileInput } from './responseValidation';
@@ -26,7 +26,21 @@ export interface OutboundChangeInput extends OutboundContext {
   requestId: string | null;
   expectedRevision: string;
 }
-export type OutboundReadResult = { ok: true; value: ProfileResponseV2 } | { ok: false };
+export interface OutboundReadError { kind: FailureKind; status?: number }
+export type OutboundReadResult = { ok: true; value: ProfileResponseV2 } | { ok: false; error?: OutboundReadError };
+/** Copy only known scalar diagnostics. No body, exception, session or URL survives. */
+function readError(error: unknown): OutboundReadError | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  try {
+    const input = error as { kind?: unknown; status?: unknown };
+    const kinds: readonly FailureKind[] = ['invalid_input', 'unauthenticated', 'session_unavailable',
+      'forbidden', 'not_found', 'rate_limited', 'network', 'server', 'invalid_response', 'aborted', 'stale_response'];
+    if (typeof input.kind !== 'string' || !kinds.some(kind => kind === input.kind)) return undefined;
+    const status = typeof input.status === 'number' && [200,400,401,403,404,405,408,409,422,429,500,502,503,504].includes(input.status)
+      ? input.status : undefined;
+    return { kind: input.kind as FailureKind, ...(status === undefined ? {} : { status }) };
+  } catch { return undefined; }
+}
 export type OutboundChangeResult =
   | { ok: true; value: { confirmation: OutboundConfirmation; profile: ProfileResponseV2 | null } }
   | { ok: false; profile: ProfileResponseV2 | null };
@@ -86,14 +100,19 @@ export function createOutboundFollowAdapter(deps: OutboundDependencies) {
         isAnonymous: false, expiresAtSeconds: s.expiresAtSeconds };
     } catch { return null; }
   }
-  async function read(context: OutboundContext, p: ProfileInput, mine: number, arm: boolean, minimum?: OutboundConfirmation | null): Promise<ProfileResponseV2 | null> {
-    if (!(await auth(context.session, context.signal)) || mine !== generation) return null;
+  async function read(context: OutboundContext, p: ProfileInput, mine: number, arm: boolean, minimum?: OutboundConfirmation | null, report?: (error: OutboundReadError | undefined) => void): Promise<ProfileResponseV2 | null> {
+    if (!(await auth(context.session, context.signal)) || mine !== generation) {
+      report?.({ kind: context.signal.aborted ? 'aborted' : mine !== generation ? 'stale_response' : 'session_unavailable' }); return null;
+    }
     try {
       const result = await deps.fetchProfile(p, { signal: context.signal });
-      if (!result.ok || !(await auth(context.session, context.signal)) || mine !== generation) return null;
+      if (!result.ok) { report?.(readError(result.error)); return null; }
+      if (!(await auth(context.session, context.signal)) || mine !== generation) {
+        report?.({ kind: context.signal.aborted ? 'aborted' : mine !== generation ? 'stale_response' : 'session_unavailable' }); return null;
+      }
       // Revalidate the injected reader's output against this exact caller/target/date contract.
       const value = parseProfileResponse(result.value, p, context.session.userId.toLowerCase());
-      if (!value) return null;
+      if (!value) { report?.({ kind: 'invalid_response' }); return null; }
       if (minimum && value.can_discover_profile) {
         const d = value.follow_request, confirmed = minimum.follow_request;
         if (!d || d.request_id !== confirmed.request_id || BigInt(d.revision) < BigInt(confirmed.revision) ||
@@ -118,9 +137,10 @@ export function createOutboundFollowAdapter(deps: OutboundDependencies) {
       try { invalidate(); } catch { return { ok: false }; }
       const mine = generation;
       const p = validateProfileInput(context.profile);
-      if (!p || !validExpected(context.session)) return { ok: false };
-      const value = await read(context, p, mine, !busy);
-      return value ? { ok: true, value } : { ok: false };
+      if (!p || !validExpected(context.session)) return { ok: false, error: { kind: 'invalid_input' } };
+      let error: OutboundReadError | undefined;
+      const value = await read(context, p, mine, !busy, undefined, diagnostic => { error = diagnostic; });
+      return value ? { ok: true, value } : { ok: false, ...(error ? { error } : {}) };
     },
     async change(input: OutboundChangeInput): Promise<OutboundChangeResult> {
       const p = validateProfileInput(input.profile);
@@ -152,3 +172,4 @@ export function createOutboundFollowAdapter(deps: OutboundDependencies) {
     },
   };
 }
+

@@ -4,12 +4,38 @@ import type { OutboundAction, OutboundSession, createOutboundFollowAdapter } fro
 import type { ConnectionDirection, ProfileConnectionsState, ProfilePostsState, ProfileSupplementAdapter } from './profileSupplementTypes';
 import { validateProfileInput } from './responseValidation';
 
+
+/** Only bounded diagnostic categories enter UI state. Never retain raw errors or bodies. */
+const PROFILE_LOAD_ERROR_KINDS = ['invalid_input', 'unauthenticated', 'session_unavailable',
+  'forbidden', 'not_found', 'rate_limited', 'network', 'server', 'invalid_response',
+  'aborted', 'stale_response', 'posts_unavailable', 'connections_unavailable', 'unknown'] as const;
+export type ProfileLoadErrorKind = typeof PROFILE_LOAD_ERROR_KINDS[number];
+export interface ProfileLoadError { kind: ProfileLoadErrorKind; status?: number }
+const PROFILE_LOAD_HTTP_STATUSES = [200, 400, 401, 403, 404, 405, 408, 409, 422, 429, 500, 502, 503, 504] as const;
+export function sanitizeProfileLoadError(error: unknown): ProfileLoadError {
+  if (!error || typeof error !== 'object') return { kind: 'unknown' };
+  try {
+    const input = error as { kind?: unknown; status?: unknown };
+    const kind = typeof input.kind === 'string' && PROFILE_LOAD_ERROR_KINDS.some(value => value === input.kind)
+      ? input.kind as ProfileLoadErrorKind : 'unknown';
+    const status = typeof input.status === 'number' && PROFILE_LOAD_HTTP_STATUSES.some(value => value === input.status)
+      ? input.status : undefined;
+    return { kind, ...(status === undefined ? {} : { status }) };
+  } catch { return { kind: 'unknown' }; }
+}
+export function profileLoadErrorCode(error: ProfileLoadError | null | undefined): string | null {
+  if (!error) return null;
+  const clean = sanitizeProfileLoadError(error);
+  return `PROFILE_${clean.kind.toUpperCase()}${clean.status === undefined ? '' : `_${clean.status}`}`;
+}
+
 export type ProfileScreenAdapter = ReturnType<typeof createOutboundFollowAdapter>;
 export interface ProfileScreenScope { session: OutboundSession; profile: ProfileInput }
 export interface ProfileScreenState {
   scopeKey: string | null;
   status: 'idle' | 'loading' | 'ready' | 'error';
   profile: ProfileResponseV2 | null;
+  loadError: ProfileLoadError | null;
   busy: boolean;
   outcome: 'updated' | 'unconfirmed' | 'blocked' | 'block_unconfirmed' | null;
   blockBusy: boolean;
@@ -21,7 +47,7 @@ export function screenScopeKey(scope: ProfileScreenScope | null): string | null 
     scope.profile.fromDate, scope.profile.toDate, scope.profile.today]) : null;
 }
 export function emptyProfileScreenState(scopeKey: string | null = null): ProfileScreenState {
-  return { scopeKey, status: scopeKey ? 'loading' : 'idle', profile: null, busy: false, outcome: null, blockBusy: false,
+  return { scopeKey, status: scopeKey ? 'loading' : 'idle', profile: null, loadError: null, busy: false, outcome: null, blockBusy: false,
     connections: { direction: null, status: 'idle', items: [] },
     posts: { status: 'idle', items: [], nextCursor: null, loadingMore: false } };
 }
@@ -55,7 +81,7 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
   }
   const adapter = createAdapter(() => {
     clearSupplements();
-    emit({ ...state, profile: null, outcome: null,
+    emit({ ...state, profile: null, loadError: null, outcome: null,
       connections: { direction: null, status: 'idle', items: [] },
       posts: { status: 'idle', items: [], nextCursor: null, loadingMore: false } });
   });
@@ -64,7 +90,7 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
 
   async function refresh() {
     if (!scope) return;
-    if (mutation) { queuedRefresh = true; clearSupplements(); emit({ ...state, status: 'loading', profile: null,
+    if (mutation) { queuedRefresh = true; clearSupplements(); emit({ ...state, status: 'loading', profile: null, loadError: null,
       connections: { direction: null, status: 'idle', items: [] }, posts: { status: 'idle', items: [], nextCursor: null, loadingMore: false } }); return; }
     stopRead();
     const mine = generation, key = state.scopeKey!;
@@ -74,10 +100,11 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
     try {
       const result = await adapter.refresh({ ...started, signal: controller.signal });
       if (!current(key, mine) || controller.signal.aborted) return;
-      emit({ ...state, status: result.ok ? 'ready' : 'error', profile: result.ok ? result.value : null });
+      emit({ ...state, status: result.ok ? 'ready' : 'error', profile: result.ok ? result.value : null,
+        loadError: result.ok ? null : sanitizeProfileLoadError(result.error) });
       if (result.ok && result.value.can_view_profile) void loadPosts();
     } catch {
-      if (current(key, mine) && !controller.signal.aborted) emit({ ...state, status: 'error', profile: null });
+      if (current(key, mine) && !controller.signal.aborted) emit({ ...state, status: 'error', profile: null, loadError: { kind: 'unknown' } });
     } finally { if (readAbort === controller) readAbort = null; }
   }
   function setScope(next: ProfileScreenScope | null) {
@@ -99,7 +126,7 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
     const mine = generation, key = state.scopeKey!;
     const controller = new AbortController(); mutation = controller;
     clearSupplements();
-    emit({ ...state, profile: null, busy: true, outcome: null,
+    emit({ ...state, profile: null, loadError: null, busy: true, outcome: null,
       connections: { direction: null, status: 'idle', items: [] },
       posts: { status: 'idle', items: [], nextCursor: null, loadingMore: false } }); // Clear before the first await or transport call.
     try {
@@ -119,9 +146,9 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
       if (queuedRefresh && scope) { queuedRefresh = false; void refresh(); }
     }
   }
-  function supplementFailure() {
+  function supplementFailure(kind: 'posts_unavailable' | 'connections_unavailable') {
     stopRead(); adapter.invalidate();
-    emit({ ...state, status: 'error', profile: null }); // A denial may mean acceptance/block changed.
+    emit({ ...state, status: 'error', profile: null, loadError: { kind } }); // A denial may mean acceptance/block changed.
   }
   async function loadPosts() {
     if (!supplements || !scope || !state.profile?.can_view_profile) return;
@@ -131,10 +158,10 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
     try {
       const result = await supplements.posts({ ...started, cursor: null, signal: controller.signal });
       if (!current(key, mine) || controller.signal.aborted || postsAbort !== controller) return;
-      if (!result.ok || result.value.targetUserId !== started.targetUserId) { supplementFailure(); return; }
+      if (!result.ok || result.value.targetUserId !== started.targetUserId) { supplementFailure('posts_unavailable'); return; }
       emit({ ...state, posts: { status: 'ready', items: result.value.items,
         nextCursor: result.value.nextCursor, loadingMore: false } });
-    } catch { if (current(key, mine) && !controller.signal.aborted) supplementFailure(); }
+    } catch { if (current(key, mine) && !controller.signal.aborted) supplementFailure('posts_unavailable'); }
     finally { if (postsAbort === controller) postsAbort = null; }
   }
   async function openConnections(direction: ConnectionDirection) {
@@ -147,9 +174,9 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
     try {
       const result = await supplements.connections({ ...started, direction, signal: controller.signal });
       if (!current(key, mine) || controller.signal.aborted || serial !== connectionSerial) return;
-      if (!result.ok || result.value.targetUserId !== started.targetUserId || result.value.direction !== direction) { supplementFailure(); return; }
+      if (!result.ok || result.value.targetUserId !== started.targetUserId || result.value.direction !== direction) { supplementFailure('connections_unavailable'); return; }
       emit({ ...state, connections: { direction, status: 'ready', items: result.value.items } });
-    } catch { if (current(key, mine) && !controller.signal.aborted && serial === connectionSerial) supplementFailure(); }
+    } catch { if (current(key, mine) && !controller.signal.aborted && serial === connectionSerial) supplementFailure('connections_unavailable'); }
     finally { if (connectionsAbort === controller) connectionsAbort = null; }
   }
   function closeConnections() {
@@ -184,3 +211,4 @@ export function createProfileScreenController(createAdapter: (clear: () => void)
     listeners.add(listener); return () => { listeners.delete(listener); };
   }, setScope, refresh, change, openConnections, closeConnections, block };
 }
+

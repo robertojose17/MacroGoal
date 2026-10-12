@@ -4,6 +4,7 @@ import type { CommunityPrivacyActivation, CommunityPrivacyScope } from '@/featur
 import { remainingCommunityReads } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
 import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibility/ProtectedReaderBoundary';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
@@ -126,6 +127,10 @@ export default function ProfileScreen() {
 function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivation }) {
   const privacyProtected = activation.mode === 'protected';
   const router = useRouter();
+  const { i18n } = useTranslation();
+  const spanish = (i18n.resolvedLanguage || i18n.language || 'en').startsWith('es');
+  const connectionNavigation = useRef(false);
+  const profileFocused = useRef(true);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isPremium } = usePremium();
@@ -499,7 +504,8 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
 
   const openFollowModal = async (type: FollowModalType) => {
     return withCommunityPrivacyScope(async scope => {
-    if (!user || !type) return;
+    if (!user || !type || !profileFocused.current) return;
+    connectionNavigation.current = false;
     console.log('[Profile] openFollowModal — type:', type, 'user_id:', user.id);
     setFollowModalType(type);
     setFollowModalLoading(true);
@@ -564,10 +570,37 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   };
 
   const closeFollowModal = () => {
+    connectionNavigation.current = true;
     if (privacyProtected) { ++followReadSequence.current; followReadAbort.current?.abort(); setFollowModalLoading(false); }
     console.log('[Profile] closeFollowModal');
     setFollowModalType(null);
     setFollowModalUsers([]);
+  };
+
+  useFocusEffect(useCallback(() => {
+    profileFocused.current = true;
+    connectionNavigation.current = false;
+    return () => {
+      profileFocused.current = false;
+      connectionNavigation.current = true;
+      ++followReadSequence.current;
+      followReadAbort.current?.abort();
+      setFollowModalType(null);
+      setFollowModalUsers([]);
+      setFollowModalLoading(false);
+    };
+  }, []));
+
+  const openConnectionProfile = (id: string) => {
+    if (!profileFocused.current || connectionNavigation.current || followModalLoading || followReadError ||
+      !followModalType || !followModalUsers.some(person => person.id === id)) return;
+    connectionNavigation.current = true;
+    void withCommunityPrivacyScope(async scope => {
+      scope.assertCurrent();
+      if (!profileFocused.current) return;
+      closeFollowModal();
+      router.push({ pathname: '/social-profile-view', params: { userId: id } });
+    }, activation.scopeKey).catch(() => { connectionNavigation.current = false; });
   };
 
   const handleSettingsPress = () => {
@@ -1005,7 +1038,11 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                   const itemInitial = itemName.charAt(0).toUpperCase();
                   const itemUsername = item.username ? `@${item.username}` : '';
                   return (
-                    <View style={[styles.followUserRow, { borderBottomColor: borderColor }]}>
+                    <TouchableOpacity style={[styles.followUserRow, { borderBottomColor: borderColor }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={spanish ? `Ver perfil de ${itemName}` : `View ${itemName}'s profile`}
+                      disabled={followModalLoading || followReadError}
+                      onPress={() => openConnectionProfile(item.id)}>
                       {item.avatar_url ? (
                         <Image
                           source={resolveImageSource(item.avatar_url)}
@@ -1023,7 +1060,8 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                           <Text style={[styles.followUserUsername, { color: secondaryText }]}>{itemUsername}</Text>
                         ) : null}
                       </View>
-                    </View>
+                      <Text style={{ color: secondaryText }} accessibilityElementsHidden>›</Text>
+                    </TouchableOpacity>
                   );
                 }}
               />
@@ -1477,3 +1515,4 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 });
+
