@@ -1,3 +1,4 @@
+import { ConfiguredFollowerActions } from '@/features/communityPrivacyV2/ConfiguredFollowerActions';
 import { CommunityPrivacyRolloutBoundary } from '@/features/communityPrivacyV2/CommunityPrivacyRolloutBoundary';
 import { withCommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 import type { CommunityPrivacyActivation, CommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
@@ -160,6 +161,9 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Follow modal
+  const [followerActionTarget, setFollowerActionTarget] = useState<{ id: string; name: string } | null>(null);
+  const followerActionNavigation = useRef(false);
+  const followerCountRefresh = useRef(0);
   const [followModalType, setFollowModalType] = useState<FollowModalType>(null);
   const [followModalUsers, setFollowModalUsers] = useState<FollowUser[]>([]);
   const [followModalLoading, setFollowModalLoading] = useState(false);
@@ -361,6 +365,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   };
 
   const loadData = async () => {
+    const followerCountSequence = privacyProtected ? ++followerCountRefresh.current : 0;
     return withCommunityPrivacyScope(async scope => {
     console.log('[Profile] loadData — starting');
     try {
@@ -403,7 +408,9 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       }
 
       setPostsCount(postsResult.count ?? 0);
-      setFollowersCount(privacyProtected ? followersResult.count : (followersResult.error ? 0 : (followersResult.count ?? 0)));
+      if (!privacyProtected || followerCountSequence === followerCountRefresh.current) {
+        setFollowersCount(privacyProtected ? followersResult.count : (followersResult.error ? 0 : (followersResult.count ?? 0)));
+      }
       setFollowingCount(privacyProtected ? followingResult.count : (followingResult.error ? 0 : (followingResult.count ?? 0)));
 
       if (goalsResult.data) {
@@ -521,7 +528,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
         try {
           const identities = await remainingCommunityReads.connections(user.id, type, request.signal);
       scope.assertCurrent();
-          if (!request.signal.aborted && sequence === followReadSequence.current) setFollowModalUsers(identities);
+          if (!request.signal.aborted && sequence === followReadSequence.current) { setFollowModalUsers(identities); if (type === 'followers') { ++followerCountRefresh.current; setFollowersCount(identities.length); } }
         } catch {
           if (!request.signal.aborted && sequence === followReadSequence.current) { setFollowModalUsers([]); setFollowReadError(true); }
         } finally {
@@ -582,6 +589,9 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     connectionNavigation.current = false;
     return () => {
       profileFocused.current = false;
+      followerActionNavigation.current = true;
+      ++followerCountRefresh.current;
+      setFollowerActionTarget(null);
       connectionNavigation.current = true;
       ++followReadSequence.current;
       followReadAbort.current?.abort();
@@ -601,6 +611,61 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       closeFollowModal();
       router.push({ pathname: '/social-profile-view', params: { userId: id } });
     }, activation.scopeKey).catch(() => { connectionNavigation.current = false; });
+  };
+
+  const openFollowerActions = (person: FollowUser) => {
+    if (!privacyProtected || activation.rollout !== 'general' || !profileFocused.current ||
+      connectionNavigation.current || followModalLoading || followReadError || followModalType !== 'followers' ||
+      !user?.id || activation.actorId !== user.id || !followModalUsers.some(row => row.id === person.id)) return;
+    connectionNavigation.current = true;
+    followerActionNavigation.current = false;
+    closeFollowModal();
+    setFollowerActionTarget({ id: person.id, name: person.full_name || person.username || 'User' });
+  };
+
+  const refreshFollowerCount = () => {
+    const actorId = user?.id;
+    if (!actorId || !privacyProtected || !profileFocused.current) return;
+    const sequence = ++followerCountRefresh.current;
+    setFollowersCount(null);
+    void withCommunityPrivacyScope(async scope => {
+      scope.assertActor(actorId);
+      const result = await scopedAcceptedConnectionCount(scope, actorId, 'followers');
+      scope.assertCurrent();
+      if (profileFocused.current && sequence === followerCountRefresh.current) setFollowersCount(result.count);
+    }, activation.scopeKey).catch(() => {});
+  };
+
+  const invalidateFollowerSummary = () => {
+    const actorId = user?.id;
+    if (!actorId || !privacyProtected || !profileFocused.current) return;
+    void withCommunityPrivacyScope(async scope => {
+      scope.assertActor(actorId); scope.assertCurrent();
+      if (!profileFocused.current) return;
+      ++followerCountRefresh.current;
+      setFollowersCount(null);
+      ++followReadSequence.current;
+      followReadAbort.current?.abort();
+      setFollowModalUsers([]);
+      setFollowModalLoading(false);
+    }, activation.scopeKey).catch(() => {});
+  };
+
+  const closeFollowerActions = (pendingMutation = false) => {
+    setFollowerActionTarget(null);
+    if (!pendingMutation && profileFocused.current) void openFollowModal('followers');
+  };
+
+  const viewFollowerActionProfile = () => {
+    if (!profileFocused.current || followerActionNavigation.current || !followerActionTarget) return;
+    followerActionNavigation.current = true;
+    const id = followerActionTarget.id;
+    setFollowerActionTarget(null);
+    void withCommunityPrivacyScope(async scope => {
+      scope.assertCurrent();
+      if (!profileFocused.current) return;
+      router.push({ pathname: '/social-profile-view', params: { userId: id } });
+    }, activation.scopeKey).catch(() => { followerActionNavigation.current = false; });
   };
 
   const handleSettingsPress = () => {
@@ -1121,7 +1186,8 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                   const itemInitial = itemName.charAt(0).toUpperCase();
                   const itemUsername = item.username ? `@${item.username}` : '';
                   return (
-                    <TouchableOpacity style={[styles.followUserRow, { borderBottomColor: borderColor }]}
+                    <View style={[styles.followUserRow, { borderBottomColor: borderColor }]}>
+                    <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 }}
                       accessibilityRole="button"
                       accessibilityLabel={spanish ? `Ver perfil de ${itemName}` : `View ${itemName}'s profile`}
                       disabled={followModalLoading || followReadError}
@@ -1145,6 +1211,15 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
                       </View>
                       <Text style={{ color: secondaryText }} accessibilityElementsHidden>›</Text>
                     </TouchableOpacity>
+                    {privacyProtected && activation.rollout === 'general' && followModalType === 'followers' &&
+                      <TouchableOpacity accessibilityRole="button"
+                        accessibilityLabel={spanish ? `Opciones de ${itemName}` : `Options for ${itemName}`}
+                        disabled={followModalLoading || followReadError}
+                        style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+                        onPress={() => openFollowerActions(item)}>
+                        <Text style={{ color: textColor, fontSize: 24 }}>⋯</Text>
+                      </TouchableOpacity>}
+                    </View>
                   );
                 }}
               />
@@ -1152,6 +1227,12 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {privacyProtected && user?.id && followerActionTarget &&
+        <ConfiguredFollowerActions key={`${activation.scopeKey}:${user.id}:${followerActionTarget.id}`}
+          activation={activation} ownerId={user.id} requester={followerActionTarget}
+          onClose={closeFollowerActions} onViewProfile={viewFollowerActionProfile}
+          onRelationshipChanged={refreshFollowerCount} onRelationshipInvalidated={invalidateFollowerSummary} />}
 
       {/* ── Tooltip Modal ───────────────────────────────────────────────────── */}
       <Modal
