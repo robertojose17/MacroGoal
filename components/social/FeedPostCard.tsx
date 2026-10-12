@@ -1,3 +1,5 @@
+import {PrivatePhotoImage} from '@/components/PrivatePhotoImage';
+import {sharedReference} from '@/utils/resolveShared';
 import { getAppLocale } from '@/lib/localization';
 import { useTranslation } from 'react-i18next';
 import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
@@ -337,44 +339,6 @@ export default function FeedPostCard({
   useTranslation();
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
-  const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const stats = post.progress_stats as Record<string, unknown> | null | undefined;
-    const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string }[] | null | undefined;
-    if (!photoProgress || photoProgress.length === 0) return;
-
-    const needsSigning = photoProgress.filter(p => p.storage_path);
-    if (needsSigning.length === 0) return;
-
-    let cancelled = false;
-    (async () => {
-      console.log('[FeedPostCard] Generating signed URLs for', needsSigning.length, 'photo(s), post:', post.id);
-      const urlMap: Record<string, string> = {};
-      for (const p of needsSigning) {
-        if (!p.storage_path) continue;
-        try {
-          const { data } = await supabase.storage
-            .from('check-in-photos')
-            .createSignedUrl(p.storage_path, 3600);
-          if (data?.signedUrl && !cancelled) {
-            urlMap[p.storage_path] = data.signedUrl;
-          }
-        } catch (e) {
-          console.warn('[FeedPostCard] Failed to sign photo URL:', p.storage_path, e);
-        }
-      }
-      if (!cancelled) {
-        console.log('[FeedPostCard] Signed URLs resolved:', Object.keys(urlMap).length, 'for post:', post.id);
-        setResolvedPhotoUrls(urlMap);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.id]);
-
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -581,22 +545,18 @@ export default function FeedPostCard({
       ].filter(Boolean) as ProgressCardDef[];
 
       // Photo progress — render before stat cards
-      const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string; date: string; weight: number | null; weight_unit: string | null; cropData?: { scale: number; translateX: number; translateY: number } }[] | null | undefined;
+      const photoProgress = stats?.photo_progress as { media_id?: string; storage_path?: string; photo_url?: string; date: string; weight: number | null; weight_unit: string | null; cropData?: { scale: number; translateX: number; translateY: number } }[] | null | undefined;
       const photoProgressNode = photoProgress && photoProgress.length > 0 ? (
         <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
           {photoProgress.length === 1 ? (
             <View style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
               <View style={{ width: '100%', aspectRatio: 3/4, overflow: 'hidden' }}>
-                <Image
-                  source={{ uri: resolvedPhotoUrls[photoProgress[0].storage_path ?? ''] ?? photoProgress[0].photo_url ?? '' }}
+                <PrivatePhotoImage
+                  reference={sharedReference(photoProgress[0].media_id)}
                   style={{
                     width: '100%',
                     height: '100%',
-                    transform: photoProgress[0].cropData ? [
-                      { scale: photoProgress[0].cropData.scale },
-                      { translateX: photoProgress[0].cropData.translateX },
-                      { translateY: photoProgress[0].cropData.translateY },
-                    ] : [],
+                    transform: [],
                   }}
                   resizeMode="cover"
                 />
@@ -618,16 +578,12 @@ export default function FeedPostCard({
                 return (
                   <View key={idx} style={{ flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
                     <View style={{ width: '100%', aspectRatio: 3/4, overflow: 'hidden' }}>
-                      <Image
-                        source={{ uri: resolvedPhotoUrls[photo.storage_path ?? ''] ?? photo.photo_url ?? '' }}
+                      <PrivatePhotoImage
+                        reference={sharedReference(photo.media_id)}
                         style={{
                           width: '100%',
                           height: '100%',
-                          transform: photo.cropData ? [
-                            { scale: photo.cropData.scale },
-                            { translateX: photo.cropData.translateX },
-                            { translateY: photo.cropData.translateY },
-                          ] : [],
+                          transform: [],
                         }}
                         resizeMode="cover"
                       />

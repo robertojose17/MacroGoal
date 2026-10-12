@@ -287,7 +287,10 @@ export async function fetchFollowers(userId?: string): Promise<SearchUser[]> {
 
 // ─── Post CRUD — direct Supabase (no edge function needed) ───────────────────
 
-export async function createPost(post: CreatePostInput): Promise<SocialPost> {
+export async function createPost(post: CreatePostInput, publicationId?: string): Promise<SocialPost> {
+  if(publicationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(publicationId))throw Error('Invalid publication');
+  const photos=post.progress_stats?.photo_progress;
+  if(photos!==undefined && (!Array.isArray(photos)||photos.length>4||photos.some(p=>!p||typeof p.media_id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p.media_id)||Object.keys(p).some(k=>!['media_id','date','weight','weight_unit'].includes(k)))))throw Error('Invalid progress media');
   return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] createPost — type:', post.post_type, 'type_v2:', post.post_type_v2, 'public:', post.is_public);
   const { data: { session } } = await supabase.auth.getSession();
@@ -297,6 +300,7 @@ export async function createPost(post: CreatePostInput): Promise<SocialPost> {
   const { data, error } = await scope.request(supabase
     .from('social_posts')
     .insert({
+      ...(publicationId ? {id:publicationId,audience:'public'} : {}),
       user_id: session.user.id,
       post_type: post.post_type ?? 'text',
       post_type_v2: post.post_type_v2 ?? null,
@@ -328,7 +332,14 @@ export async function createPost(post: CreatePostInput): Promise<SocialPost> {
     .single());
 
   if (error) {
-    console.error('[SocialApi] createPost error:', error.message, error.code);
+    if(publicationId){
+      // Ambiguous insert or duplicate retry: read exact own deterministic ID.
+      // Never overwrite an existing row and never generate another ID here.
+      const recovered=await scope.request(supabase.from('social_posts').select('*').eq('id',publicationId).eq('user_id',session.user.id).maybeSingle());
+      const row=recovered.data;
+      const equal=(a:unknown,b:unknown):boolean=>{if(a===b)return true;if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;const x=Object.keys(a).sort(),y=Object.keys(b).sort();return JSON.stringify(x)===JSON.stringify(y)&&x.every(k=>equal((a as any)[k],(b as any)[k]));};
+      if(!recovered.error&&row&&row.id===publicationId&&row.user_id===session.user.id&&row.post_type_v2===post.post_type_v2&&row.is_public===(post.is_public!==false)&&row.audience==='public'&&row.section===(post.section??'feed')&&row.content===(post.content??null)&&equal(row.progress_stats,post.progress_stats??null))return row as unknown as SocialPost;
+    }
     throw error;
   }
   console.log('[SocialApi] createPost — success, id:', data?.id);

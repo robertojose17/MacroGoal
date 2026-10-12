@@ -1,3 +1,4 @@
+import {createSharedUploadAdapter} from './sharedUploadAdapter.ts';
 import { createOwnerMediaHandler } from './ownerMediaAdapter.ts';
 // LOCAL REVIEW CANDIDATE — not deployed. Authenticated media client cutover required.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
@@ -15,8 +16,10 @@ async function boundedBody(req:Request,max:number):Promise<string>{
   const bytes=new Uint8Array(size);let at=0;for(const chunk of chunks){bytes.set(chunk,at);at+=chunk.byteLength;}return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
 }
 const ownerMediaHandler=createOwnerMediaHandler();
+const sharedUploadHandler=createSharedUploadAdapter(createClient(PROJECT,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}}),PROJECT);
 Deno.serve(async(req:Request)=>{
   const incomingPath=new URL(req.url).pathname;
+  if(incomingPath.startsWith('/functions/v1/check-in-photos/shared/')||incomingPath.startsWith('/check-in-photos/shared/'))return sharedUploadHandler(req);
   if(incomingPath.startsWith('/functions/v1/check-in-photos/media/') || incomingPath.startsWith('/check-in-photos/media/'))return ownerMediaHandler(req);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   try{

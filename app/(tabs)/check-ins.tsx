@@ -1,3 +1,9 @@
+import {progressMediaCopy} from '@/utils/progressMediaCopy';
+import {PrivateProgressCapture} from '@/components/PrivateProgressCapture';
+import {publishProgress,type PublicationCheckpoint,type CapturedPhoto} from '@/utils/publication';
+import {freshPublicationKey,publicationActor,uploadProgressDerivative,bindProgressDerivatives} from '@/utils/progressMediaClient';
+import {PrivatePhotoImage} from '@/components/PrivatePhotoImage';
+import {sharedReference} from '@/utils/resolveShared';
 import { getAppLocale } from '@/lib/localization';
 /**
  * Community Tab — Feed / Friends / Premium Club
@@ -228,7 +234,7 @@ type CheckInPhoto = {
   id: string;
   user_id: string;
   photo_url: string;       // signed URL — for display in picker only
-  storage_path?: string;   // raw storage path — save this to DB
+  media_id?: string; storage_path?: string;   // raw storage path — save this to DB
   created_at: string;
   weight?: number | null;
   weight_unit?: string | null;
@@ -770,37 +776,6 @@ function PostCard({
   const { t } = useTranslation();
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
-  const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const stats = post.progress_stats as Record<string, unknown> | null | undefined;
-    const photoProgress = stats?.photo_progress as { storage_path?: string; photo_url?: string }[] | null | undefined;
-    if (!photoProgress || photoProgress.length === 0) return;
-    const needsSigning = photoProgress.filter(p => p.storage_path);
-    if (needsSigning.length === 0) return;
-    let cancelled = false;
-    (async () => {
-      const urlMap: Record<string, string> = {};
-      for (const p of needsSigning) {
-        if (!p.storage_path) continue;
-        try {
-          const { data } = await supabase.storage
-            .from('check-in-photos')
-            .createSignedUrl(p.storage_path, 3600);
-          if (data?.signedUrl && !cancelled) {
-            urlMap[p.storage_path] = data.signedUrl;
-          }
-        } catch (e) {
-          console.warn('[PostCard] Failed to sign photo URL:', p.storage_path, e);
-        }
-      }
-      if (!cancelled) setResolvedPhotoUrls(urlMap);
-    })();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.id]);
-
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textColor = isDark ? colors.textDark : colors.primaryText;
   const secondaryColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
@@ -984,7 +959,7 @@ function PostCard({
 
       // Photo progress
       const photoProgress = stats?.photo_progress as {
-        storage_path?: string;
+        media_id?: string; storage_path?: string;
         photo_url?: string;
         date: string;
         weight: number | null;
@@ -996,16 +971,12 @@ function PostCard({
         <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
           {photoProgress.length === 1 ? (
             <View style={{ borderRadius: 12, overflow: 'hidden', width: '100%', aspectRatio: 3/4 }}>
-              <Image
-                source={{ uri: resolvedPhotoUrls[photoProgress[0].storage_path ?? ''] ?? photoProgress[0].photo_url ?? '' }}
+              <PrivatePhotoImage
+                reference={sharedReference(photoProgress[0].media_id)}
                 style={{
                   width: '100%',
                   height: '100%',
-                  transform: photoProgress[0].cropData ? [
-                    { scale: photoProgress[0].cropData.scale },
-                    { translateX: photoProgress[0].cropData.translateX },
-                    { translateY: photoProgress[0].cropData.translateY },
-                  ] : [],
+                  transform: [],
                 }}
                 resizeMode="cover"
               />
@@ -1022,16 +993,12 @@ function PostCard({
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {photoProgress.map((photo, idx) => (
                 <View key={idx} style={{ flex: 1, borderRadius: 12, overflow: 'hidden', aspectRatio: 3/4 }}>
-                  <Image
-                    source={{ uri: resolvedPhotoUrls[photo.storage_path ?? ''] ?? photo.photo_url ?? '' }}
+                  <PrivatePhotoImage
+                    reference={sharedReference(photo.media_id)}
                     style={{
                       width: '100%',
                       height: '100%',
-                      transform: photo.cropData ? [
-                        { scale: photo.cropData.scale },
-                        { translateX: photo.cropData.translateX },
-                        { translateY: photo.cropData.translateY },
-                      ] : [],
+                      transform: [],
                     }}
                     resizeMode="cover"
                   />
@@ -1885,6 +1852,10 @@ function ComposerSheet({
   const [photosLoading, setPhotosLoading] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<CheckInPhoto[]>([]);
   const photoViewShotRefs = useRef<Record<string, any>>({});
+  const publication = useRef<PublicationCheckpoint<Awaited<ReturnType<typeof createPost>>>|null>(null);
+  const publishLock = useRef(false);
+  const composerActive = useRef(visible);
+  composerActive.current = visible;
 
   const [posting, setPosting] = useState(false);
 
@@ -2192,9 +2163,11 @@ function ComposerSheet({
   };
 
   const handlePost = async () => {
-    if (!canPost()) return;
+    if (!canPost() || publishLock.current) return;
+    publishLock.current = true;
     console.log('[Community] Posting — type:', composerType, 'section:', section);
     setPosting(true);
+    const captured: CapturedPhoto[] = [];
     try {
       let postData: Parameters<typeof createPost>[0];
 
@@ -2234,32 +2207,14 @@ function ComposerSheet({
             statsObj['steps_goal'] = s.meta.steps_goal;
           }
         });
-        // Include photo progress if selected — capture ViewShot to bake in zoom/pan
-        if (selectedPhotos.length > 0) {
-          console.log('[Community] Capturing ViewShot for', selectedPhotos.length, 'photo(s) before posting');
-          const capturedPhotos = await Promise.all(
-            selectedPhotos.map(async (p) => {
-              try {
-                const ref = photoViewShotRefs.current[p.id];
-                if (ref?.capture) {
-                  const uri = await ref.capture();
-                  console.log('[Community] ViewShot captured for photo:', p.id, uri);
-                  return { ...p, photo_url: uri };
-                }
-              } catch (e) {
-                console.warn('[Community] ViewShot capture failed for photo:', p.id, e);
-              }
-              return p;
-            })
-          );
-          statsObj['photo_progress'] = capturedPhotos.map(p => ({
-            storage_path: null,
-            photo_url: p.photo_url,
-            date: p.date ?? p.created_at.split('T')[0],
-            weight: p.weight ?? null,
-            weight_unit: p.weight_unit ?? null,
-            cropData: p.cropData ?? null,
-          }));
+        // Explicit Publish is the only upload trigger. No capture fallback.
+        if (selectedPhotos.length > 0 && (!publication.current || publication.current.slots.length < publication.current.sources.length)) {
+          for (const p of selectedPhotos) {
+            const ref = photoViewShotRefs.current[p.id];
+            if (!composerActive.current || !ref?.capture) throw Error('Photo not ready');
+            const uri = await ref.capture();
+            captured.push({sourceId:p.id,uri,date:p.date ?? p.created_at.split('T')[0],weight:p.weight ?? null,weight_unit:p.weight_unit ?? null});
+          }
         }
         const statLabels = selectedStats.map(s => `${s.emoji} ${s.key === 'gym_checked_in' ? t(s.value === 'Trained' ? 'localization.checkins.workoutComplete' : 'localization.checkins.notYet') : Number(s.value).toLocaleString(getAppLocale())} ${t(s.label)}`).join(', ');
         postData = {
@@ -2272,7 +2227,15 @@ function ComposerSheet({
       }
 
       console.log('[Community] Network request: createPost, type:', postData.post_type_v2, 'section:', section);
-      const result = await createPost({ ...postData, section });
+      const result = (captured.length || publication.current) ? await publishProgress(captured,{
+        intent:JSON.stringify({section,postData,selected:selectedPhotos.map(p=>({id:p.id,date:p.date,weight:p.weight,unit:p.weight_unit,crop:p.cropData}))}),
+        actor:async()=>{if(!composerActive.current)throw Error('Composer closed');const a=await publicationActor();if(a.id!==currentUserId)throw Error('Session changed');return a;},
+        correlationKey:freshPublicationKey,upload:uploadProgressDerivative,
+        create:(id,slots)=>createPost({...postData,section,progress_stats:{...postData.progress_stats,photo_progress:slots}},id),
+        bind:bindProgressDerivatives,
+      },publication) : await createPost({ ...postData, section });
+      postData = {...postData,content:result.content ?? undefined,progress_stats:result.progress_stats as Record<string,unknown>};
+      publication.current = null;
       console.log('[Community] Post created successfully, id:', result?.id);
 
       // Build optimistic post for immediate prepend
@@ -2319,9 +2282,11 @@ function ComposerSheet({
       onPosted(optimisticPost);
       onClose();
     } catch (e) {
-      console.error('[Community] Post failed:', e);
-      Alert.alert(t('localization.checkins.error'), t('localization.checkins.postError'));
+      console.error('[Community] Post failed');
+      Alert.alert(t('localization.checkins.error'), publication.current ? progressMediaCopy(getAppLocale()).failed : t('localization.checkins.postError'));
     } finally {
+      for(const p of captured){try{if(p.uri.startsWith('file:'))require('react-native-view-shot').releaseCapture(p.uri);}catch{}}
+      publishLock.current = false;
       setPosting(false);
     }
   };
@@ -2360,13 +2325,14 @@ function ComposerSheet({
             {posting ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.postBtnText}>{t('localization.checkins.post')}</Text>
+              <Text style={styles.postBtnText}>{publication.current ? progressMediaCopy(getAppLocale()).retry : t('localization.checkins.post')}</Text>
             )}
           </TouchableOpacity>
         </View>
 
+        {publication.current ? <Text style={{padding:spacing.md,color:secondaryColor}} accessibilityLiveRegion="polite">{progressMediaCopy(getAppLocale()).pending}</Text> : null}
         {/* Type selector toolbar */}
-        <View style={[styles.composerToolbar, { borderBottomColor: borderColor }]}>
+        <View pointerEvents={posting || publication.current ? 'none' : 'auto'} style={[styles.composerToolbar, { borderBottomColor: borderColor }]}>
           {composerTypes.map(({ key, icon, label }) => {
             const isActive = composerType === key;
             const tColor = typeColors[key];
@@ -2453,8 +2419,8 @@ function ComposerSheet({
                       activeOpacity={0.8}
                     >
                       <View style={{ position: 'relative' }}>
-                        <Image
-                          source={{ uri: item.photo_url }}
+                        <PrivatePhotoImage
+                          reference={`macrogoal-private-photo:original/${item.id}`}
                           style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 10, borderWidth: isSelected ? 3 : 0, borderColor: colors.primary }}
                           resizeMode="cover"
                         />
@@ -2480,6 +2446,7 @@ function ComposerSheet({
           </View>
         </Modal>
 
+        <View style={{flex:1}} pointerEvents={posting || publication.current ? 'none' : 'auto'}>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
           {/* Author row */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md }}>
@@ -2499,7 +2466,7 @@ function ComposerSheet({
           {/* ── POST ── */}
           {composerType === 'post' && (
             <View>
-              <TextInput
+              <TextInput editable={!posting && !publication.current}
                 style={[styles.composeInput, { color: textColor, borderColor }]}
                 placeholder={t('localization.checkins.mindPlaceholder')}
                 placeholderTextColor={secondaryColor}
@@ -2624,7 +2591,7 @@ function ComposerSheet({
                     );
                   })}
                   {selectedRecipe ? (
-                    <TextInput
+                    <TextInput editable={!posting && !publication.current}
                       style={[styles.composeInput, { color: textColor, borderColor, marginTop: spacing.sm }]}
                       placeholder={t('localization.checkins.caption')}
                       placeholderTextColor={secondaryColor}
@@ -2731,36 +2698,7 @@ function ComposerSheet({
                     const weightText = photo.weight != null ? `${Number(photo.weight).toLocaleString(getAppLocale())} ${photo.weight_unit ?? 'lbs'}` : null;
                     return (
                       <View key={photo.id} style={{ flex: 1, position: 'relative', aspectRatio: 3 / 4, borderRadius: 10, overflow: 'hidden' }}>
-                        {ViewShot ? (
-                          <ViewShot
-                            ref={(r) => { photoViewShotRefs.current[photo.id] = r; }}
-                            style={{ flex: 1 }}
-                            options={{ format: 'jpg', quality: 0.9 }}
-                          >
-                            <ScrollView
-                              style={{ flex: 1 }}
-                              contentContainerStyle={{ flexGrow: 1 }}
-                              maximumZoomScale={4}
-                              minimumZoomScale={1}
-                              bouncesZoom={true}
-                              showsHorizontalScrollIndicator={false}
-                              showsVerticalScrollIndicator={false}
-                              centerContent={true}
-                            >
-                              <Image
-                                source={{ uri: photo.photo_url }}
-                                style={{ width: '100%', aspectRatio: 3 / 4 }}
-                                resizeMode="cover"
-                              />
-                            </ScrollView>
-                          </ViewShot>
-                        ) : (
-                          <Image
-                            source={{ uri: photo.photo_url }}
-                            style={{ flex: 1 }}
-                            resizeMode="cover"
-                          />
-                        )}
+                        <PrivateProgressCapture photoId={photo.id} ref={(r) => {photoViewShotRefs.current[photo.id]=r;}} />
                         {/* Date/weight overlay */}
                         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, padding: 6 }}>
                           <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{photoDateDisplay}</Text>
@@ -2889,7 +2827,7 @@ function ComposerSheet({
                   </View>
                 );
               })() : null}
-              <TextInput
+              <TextInput editable={!posting && !publication.current}
                 style={[styles.composeInput, { color: textColor, borderColor, marginTop: spacing.sm }]}
                 placeholder={t('localization.checkins.caption')}
                 placeholderTextColor={secondaryColor}
@@ -2900,6 +2838,7 @@ function ComposerSheet({
             </View>
           )}
         </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
