@@ -1,3 +1,4 @@
+import { BlockedAccountsSettingsEntry } from '@/features/blockedAccounts/BlockedAccountsSettingsEntry';
 import { getAppLocale, translatePreference } from '@/lib/localization';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -1784,6 +1785,7 @@ export default function SettingsScreen() {
 
         {/* ── Actions ─────────────────────────────────────────────────────── */}
         <View style={[styles.actionsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <BlockedAccountsSettingsEntry />
           {/* Send Feedback */}
           <TouchableOpacity
             style={styles.actionRow}
