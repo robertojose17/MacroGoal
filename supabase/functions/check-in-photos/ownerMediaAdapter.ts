@@ -17,6 +17,19 @@ export function createOwnerMediaHandler(){ return async(req:Request)=>{
         projectUrl:url,
         findOwnedPhoto:async(owner,photoId)=>{const {data,error}=await admin.from('check_in_photos').select('id,user_id,check_in_id,storage_path,photo_url').eq('id',photoId).eq('user_id',owner).maybeSingle();return error?null:data;},
         ownsCheckIn:async(owner,checkInId)=>{const {data,error}=await admin.from('check_ins').select('id').eq('id',checkInId).eq('user_id',owner).maybeSingle();return !error&&!!data;},
+        ownerReadFallback:{
+          parentState:async(owner,checkInId)=>{
+            // Do NOT filter by owner: that would conflate foreign parents with absent parents.
+            const {data,error}=await admin.from('check_ins').select('id,user_id').eq('id',checkInId).maybeSingle();
+            if(error)return 'error';
+            if(data===null)return 'missing';
+            return data?.id===checkInId&&data?.user_id===owner?'owned':'foreign';
+          },
+          objectExists:async(ref)=>{
+            const {data,error}=await admin.storage.from(ref.bucket).info(ref.path);
+            return !error&&!!data&&data.name===ref.path&&data.bucketId===ref.bucket&&typeof data.size==='number'&&Number.isFinite(data.size)&&data.size>0&&data.size<=12*1024*1024;
+          },
+        },
       })(actor,id);
       return createSharedReadAdapter(admin,viewer)(actor,id);
     },
