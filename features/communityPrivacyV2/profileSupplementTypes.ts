@@ -3,6 +3,8 @@ import type { OutboundSession } from './outboundFollowAdapter';
 export type ConnectionDirection = 'followers' | 'following';
 export interface SelectedProfilePost {
   id: string; content: string | null; created_at: string; likes_count: number; post_type: string;
+  /** Server-vetted post-bound derivatives only; never original paths or URLs. */
+  shared_media_ids?: string[];
 }
 export interface ProfilePostPage {
   targetUserId: string; items: SelectedProfilePost[]; hasMore: boolean; nextCursor: string | null;

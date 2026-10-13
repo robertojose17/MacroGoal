@@ -1,3 +1,5 @@
+import { PrivatePhotoImage } from '@/components/PrivatePhotoImage';
+import { privatePhotoReference } from '@/utils/privatePhotoClient';
 import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
@@ -28,7 +30,7 @@ interface Props {
 }
 const macroColors = { protein: '#29a583', carbs: '#d89d32', fats: '#9d74c5', fiber: '#4e91d6' } as const;
 
-/** Snapshot-only renderer. No database, auth, HTTP, storage, raw health or post-media access. */
+/** Selected profile snapshot; only vetted derivative IDs reach the authenticated media component. */
 export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range = 'today', custom,
   onRefresh, onRange, onCustom, onAction, onConnections, onCloseConnections, onOpenConnection, onBlockConfirm }: Props) {
   useTranslation();
@@ -150,6 +152,10 @@ export function AcceptedSocialProfileScreen({ state, onBack, unavailable, range 
               {state.posts?.status === 'loading' ? <ActivityIndicator accessibilityLabel={t('localization.social.loading_posts')} color="#19a377" /> :
                 state.posts?.status === 'ready' ? state.posts.items.length === 0 ? <Text style={muted}>{t('localization.social.no_posts_yet')}</Text> : <>
                   {state.posts.items.map(post => <View key={post.id} style={[styles.post, { borderColor: palette.border }]}>
+                    {(post.shared_media_ids ?? []).map(mediaId => <PrivatePhotoImage
+                      key={`${state.scopeKey}:${post.id}:${mediaId}`}
+                      reference={privatePhotoReference({ kind: 'shared', id: mediaId })}
+                      style={styles.sharedPhoto} resizeMode="contain" />)}
                     {post.content !== null && <Text style={[styles.bio, text]}>{post.content}</Text>}
                     <View style={styles.postMeta}><Text style={muted}>{relativePostTime(post.created_at)}</Text>
                       <Text accessibilityLabel={t('localization.social.likes_count', { count: post.likes_count })} style={muted}>♥ {post.likes_count}</Text>
@@ -226,6 +232,7 @@ const styles = StyleSheet.create({
   calories: { fontSize: 30, fontWeight: '700' }, macros: { flex: 1, minWidth: 135, gap: 12 }, macro: { gap: 4 }, track: { height: 6, borderRadius: 3, overflow: 'hidden' }, fill: { height: 6, borderRadius: 3 },
   modalBackdrop: { flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 24 }, modal: { padding: 20, borderRadius: 16, gap: 14 },
   connectionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }, smallAvatar: { width: 44, height: 44, borderRadius: 22 },
+  sharedPhoto: { width: '100%', height: 280, borderRadius: 12 },
   post: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 10 }, postMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   input: { borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 44 },
 });

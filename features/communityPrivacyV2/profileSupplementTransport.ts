@@ -26,15 +26,20 @@ export function parseProfilePostPage(raw: unknown, target: string, priorCursor: 
   let previous: { stamp: string; id: string } | null = null;
   const items: ProfilePostPage['items'] = [];
   for (const row of raw.items) {
-    if (!exact(row, ['id', 'content', 'created_at', 'likes_count', 'post_type']) || typeof row.id !== 'string' || !UUID.test(row.id) || row.id !== row.id.toLowerCase() || ids.has(row.id) ||
+    const hasMedia = !!row && typeof row === 'object' && Object.hasOwn(row, 'shared_media_ids');
+    if (!exact(row, hasMedia ? ['id', 'content', 'created_at', 'likes_count', 'post_type', 'shared_media_ids'] : ['id', 'content', 'created_at', 'likes_count', 'post_type']) || typeof row.id !== 'string' || !UUID.test(row.id) || row.id !== row.id.toLowerCase() || ids.has(row.id) ||
       !(row.content === null || typeof row.content === 'string' && row.content.length <= 100000) ||
       typeof row.created_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(row.created_at) || !Number.isFinite(Date.parse(row.created_at)) ||
       typeof row.likes_count !== 'number' || !Number.isSafeInteger(row.likes_count) || row.likes_count < 0 ||
       typeof row.post_type !== 'string' || row.post_type.length > 100) return null;
+    const media = hasMedia ? row.shared_media_ids : undefined;
+    if (hasMedia && (!Array.isArray(media) || media.length > 4 ||
+      media.some(id => typeof id !== 'string' || !UUID.test(id) || id !== id.toLowerCase()) ||
+      new Set(media).size !== media.length)) return null;
     const current = { stamp: row.created_at, id: row.id.toLowerCase() };
     if (previous && (current.stamp > previous.stamp || current.stamp === previous.stamp && current.id >= previous.id)) return null;
     previous = current; ids.add(row.id);
-    items.push({ id: row.id, content: row.content, created_at: row.created_at, likes_count: row.likes_count, post_type: row.post_type });
+    items.push({ id: row.id, content: row.content, created_at: row.created_at, likes_count: row.likes_count, post_type: row.post_type, ...(hasMedia ? { shared_media_ids: [...media as string[]] } : {}) });
   }
   return { targetUserId: target, items, hasMore: raw.hasMore, nextCursor: raw.nextCursor };
 }
@@ -84,7 +89,7 @@ export function createProfileSupplementTransport({ client, getSession, timeoutMs
     posts(input: SupplementContext & { cursor: string | null }): Promise<SupplementResult<ProfilePostPage>> {
       const target = input.targetUserId.toLowerCase(), cursor = input.cursor;
       if (!(cursor === null || typeof cursor === 'string' && cursor.length > 0 && cursor.length <= 160)) return Promise.resolve(failed());
-      return execute(input, (session, signal) => client.rpc('list_profile_posts', {
+      return execute(input, (session, signal) => client.rpc('list_profile_posts_with_media', {
         p_target_id: target, p_limit: 20, p_cursor: cursor,
       }, { get: false, head: false }).setHeader('Authorization', `Bearer ${session.accessToken}`).abortSignal(signal),
       data => parseProfilePostPage(data, target, cursor));
