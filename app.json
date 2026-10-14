@@ -100,7 +100,8 @@
       [
         "onesignal-expo-plugin",
         {
-          "mode": "production"
+          "mode": "production",
+          "nseBundleIdentifier": "onesignalnotificationserviceextension"
         }
       ],
       "expo-localization",
