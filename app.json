@@ -121,6 +121,9 @@
       "typedRoutes": true
     },
     "extra": {
+      "eas": {
+        "projectId": "b374d7d3-6b24-4cc0-a0ff-07afeb17af36"
+      },
       "router": {},
       "oneSignalAppId": "9249650b-d254-4323-9e5e-d1c0d99c194a",
       "fooddataCentralApiKey": "2cILVFzO3AdhZSQjt8teTzmF0DMIdDTt0nHgGmCW",
