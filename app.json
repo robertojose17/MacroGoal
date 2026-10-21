@@ -101,7 +101,8 @@
       [
         "onesignal-expo-plugin",
         {
-          "mode": "production"
+          "mode": "production",
+          "nseBundleIdentifier": "onesignalnotificationserviceextension"
         }
       ],
       "expo-localization",
@@ -126,7 +127,8 @@
       "eas": {
         "projectId": "b374d7d3-6b24-4cc0-a0ff-07afeb17af36"
       },
-      "oneSignalAppId": "9249650b-d254-4323-9e5e-d1c0d99c194a",      "revenueCat": {
+      "oneSignalAppId": "9249650b-d254-4323-9e5e-d1c0d99c194a",
+      "revenueCat": {
         "iosApiKey": "appl_TZdEZxwrVNJdRUPcoavoXaVUCSE",
         "androidApiKey": "goog_uwoSQeEZUKgjjwHZDKXDoaoJqAk",
         "offeringIdentifier": "Monthly_MG",
