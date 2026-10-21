@@ -160,6 +160,7 @@ export default function MyMealsScreen() {
       pathname: '/my-meals-details',
       params: {
         mealId: meal.id,
+        ...(params.coachReview === 'true' ? { coachReview: 'true', coachOwner: params.coachOwner as string | undefined } : {}),
         meal: mealType,
         date: date,
         returnTo: returnTo,
@@ -360,7 +361,8 @@ export default function MyMealsScreen() {
                 onPress={(e) => {
                   e.stopPropagation();
                   if (!isSwiping) {
-                    handleQuickAddMeal(meal);
+                    if (params.coachReview === 'true') handleSelectMeal(meal);
+                    else handleQuickAddMeal(meal);
                   }
                 }}
                 activeOpacity={0.7}

@@ -1,3 +1,7 @@
+import { coachDailyServices } from '@/utils/coachDailyServices';
+import CoachDailyAction from '@/components/CoachDailyAction';
+// Enable only after the existing app backend supports the reviewed daily contract.
+const COACH_DAILY_ACTION_INTEGRATED = true;
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -991,7 +995,7 @@ export default function CoachScreen() {
   const freeMessageCountRef = useRef<number>(0);
   const savedActionProposalRef = useRef<any>(null);
 
-  const { isPremium, loading: premiumLoading } = usePremium();
+  const { isPremium, loading: premiumLoading, error: premiumError } = usePremium();
 
   const {
     sendMessage,
@@ -1380,6 +1384,8 @@ export default function CoachScreen() {
   // in a single setState call, so this effect always sees consistent values.
   useEffect(() => {
     if (!initResult) return;
+    // The deterministic daily entrypoint must not also dispatch a paid welcome message.
+    if (COACH_DAILY_ACTION_INTEGRATED) return;
     if (firstMessageSentRef.current) return;
 
     (async () => {
@@ -2321,6 +2327,7 @@ export default function CoachScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {COACH_DAILY_ACTION_INTEGRATED && <CoachDailyAction services={coachDailyServices} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
           {/* ── Proactive insight card — welcome state only ── */}
           {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && proactiveInsight && (
             <View style={[styles.insightCard, { backgroundColor: isDark ? '#1A1D35' : '#F0F4FF', borderLeftColor: colors.primary }]}>

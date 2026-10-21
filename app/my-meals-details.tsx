@@ -1,5 +1,7 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { addReviewedSavedMeal, prepareSavedMealDiaryItems, type ManualAddResult } from '@/utils/manualSavedMealAdd';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator, Animated } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -111,9 +113,12 @@ export default function MyMealsDetailsScreen() {
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const es = i18n.language.toLowerCase().startsWith('es');
   const insets = useSafeAreaInsets();
 
+  const coachReview = params.coachReview === 'true';
+  const coachOwner = params.coachOwner as string | undefined;
   const mealId = params.mealId as string;
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
@@ -126,6 +131,26 @@ export default function MyMealsDetailsScreen() {
   const [servingsMultiplier, setServingsMultiplier] = useState('1');
   const [adding, setAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const reviewNutritionComplete = !!savedMeal && savedMeal.saved_meal_items.length > 0 && savedMeal.saved_meal_items.every(item =>
+    [item.calories, item.protein, item.carbs, item.fat].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0));
+  const [loadError, setLoadError] = useState(false);
+  const [authRevision, setAuthRevision] = useState(0);
+  const [manualOutcome, setManualOutcome] = useState<ManualAddResult | null>(null);
+  const loadedOwner = useRef<string | null>(null);
+  const loadGeneration = useRef(0);
+  const addClaim = useRef(false);
+  const saveStopped = useRef(false);
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user.id !== loadedOwner.current) {
+        loadGeneration.current++;
+        loadedOwner.current = null;
+        setSavedMeal(null);
+        setAuthRevision(value => value + 1);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const [bannerQueue, setBannerQueue] = useState<string[]>([]);
   const [currentBanner, setCurrentBanner] = useState<string | null>(null);
@@ -134,10 +159,15 @@ export default function MyMealsDetailsScreen() {
   const bannerTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadSavedMeal = useCallback(async () => {
-    if (!mealId) return;
-
+    const generation = ++loadGeneration.current;
+    loadedOwner.current = null;
+    setSavedMeal(null);
+    setLoadError(false);
+    if (!mealId) { setLoadError(true); return; }
     try {
       setLoading(true);
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user || (coachReview && ((coachOwner && coachOwner !== user.id) || date !== toLocalDateString()))) throw Error('scope_changed');
       const { data, error } = await supabase
         .from(TABLE_SAVED_MEALS)
         .select(`
@@ -186,32 +216,27 @@ export default function MyMealsDetailsScreen() {
           )
         `)
         .eq('id', mealId)
+        .eq('user_id', user.id)
         .single();
 
-      if (error) {
-        console.error('Error loading saved meal:', error);
-        Alert.alert(t('common.error'), t('myMealsDetails.failedToLoad'));
-        router.back();
-        return;
-      }
-
-      console.log('[MyMealsDetails] ✅ Loaded meal:', data.name);
-      console.log('[MyMealsDetails] Items count:', data.saved_meal_items?.length || 0);
-
+      if (error || !data) throw Error('meal_unavailable');
+      const current = await supabase.auth.getUser();
+      if (generation !== loadGeneration.current || current.error || current.data.user?.id !== user.id) return;
+      loadedOwner.current = user.id;
       setSavedMeal(data as SavedMeal);
-      setLoading(false);
-    } catch (error) {
-      console.error('[MyMealsDetails] ❌ Error in loadSavedMeal:', error);
-      Alert.alert(t('common.error'), t('common.unexpectedError'));
-      router.back();
-      setLoading(false);
+    } catch {
+      if (generation === loadGeneration.current) { setLoadError(true); setSavedMeal(null); }
+    } finally {
+      if (generation === loadGeneration.current) setLoading(false);
     }
-  }, [mealId, router, t]);
+  }, [mealId, coachReview, coachOwner, date]);
 
   useFocusEffect(
     useCallback(() => {
       console.log('[MyMealsDetails] Screen focused');
       const flushDraftAndLoad = async () => {
+        // Review navigation must never flush drafts or mutate a saved meal.
+        if (coachReview) { await loadSavedMeal(); return; }
         const draft = await loadDraft();
         console.log('[MyMealsDetails] Draft items found:', draft.length);
         if (draft.length > 0 && mealId) {
@@ -244,8 +269,9 @@ export default function MyMealsDetailsScreen() {
         }
         loadSavedMeal();
       };
-      flushDraftAndLoad();
-    }, [loadSavedMeal, mealId])
+      void flushDraftAndLoad();
+      return () => { loadGeneration.current++; };
+    }, [loadSavedMeal, mealId, coachReview, authRevision])
   );
 
   const calculateTotals = () => {
@@ -351,20 +377,23 @@ export default function MyMealsDetailsScreen() {
   }, [router]);
 
   const handleAddToMeal = async () => {
-    if (!savedMeal) return;
-
-    const multiplier = parseFloat(servingsMultiplier);
-    if (!multiplier || multiplier <= 0) {
+    if (!savedMeal || addClaim.current || saveStopped.current) return;
+    if (coachReview && !reviewNutritionComplete) return;
+    const owner = loadedOwner.current;
+    const generation = loadGeneration.current;
+    if (!owner || (coachReview && date !== toLocalDateString())) { setLoadError(true); setSavedMeal(null); return; }
+    const multiplier = Number(servingsMultiplier);
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
       Alert.alert(t('common.error'), t('myMealsDetails.invalidServings'));
       return;
     }
 
-    console.log('[MyMealsDetails] Add to meal pressed, multiplier:', multiplier);
+    addClaim.current = true;
     setAdding(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      if (!user || user.id !== owner || generation !== loadGeneration.current) {
         Alert.alert(t('common.error'), t('common.loggedIn'));
         setAdding(false);
         return;
@@ -399,37 +428,34 @@ export default function MyMealsDetailsScreen() {
         return;
       }
 
-      // Add all items from saved meal via RPC (one call per item)
-      const validItems = savedMeal.saved_meal_items.filter(item => item.food_items || item.foods || item.food_name);
-
-      for (const item of validItems) {
-        const macros = calcItemMacros(item, multiplier);
-        const itemName = item.food_items?.name ?? item.foods?.name ?? item.food_name ?? '';
+      // Preflight every item before any diary RPC; name-only items need the explicit fallback.
+      let diaryItems;
+      try {
+        diaryItems = prepareSavedMealDiaryItems(savedMeal.saved_meal_items, multiplier, calcItemMacros);
+      } catch {
+        setManualOutcome({ status: 'unavailable', completed: 0 });
+        return;
+      }
+      const outcome = await addReviewedSavedMeal({
+        owner, date, mealId, mealType, items: diaryItems, store: AsyncStorage,
+        isCurrent: () => generation === loadGeneration.current && loadedOwner.current === owner && (!coachReview || date === toLocalDateString()),
+        currentOwner: async () => { const auth = await supabase.auth.getUser(); return auth.error ? undefined : auth.data.user?.id; },
+        write: async item => {
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+          ...item,
           p_user_id: user.id,
           p_date: date,
           p_meal_type: mealType,
-          p_food_id: item.food_id ?? null,
-          p_food_item_id: item.food_item_id ?? null,
-          p_quantity: item.servings_count * multiplier,
-          p_calories: macros.calories,
-          p_protein: macros.protein,
-          p_carbs: macros.carbs,
-          p_fats: macros.fats,
-          p_fiber: macros.fiber,
-          p_serving_description: `${Math.round(item.servings_count * multiplier)} × ${Math.round(item.serving_amount)} ${item.serving_unit}`,
-          p_grams: Math.round(item.serving_amount * item.servings_count * multiplier),
           p_logged_at: new Date().toISOString(),
         });
 
-        if (rpcError) {
-          console.error('log_food RPC error for item:', itemName, rpcError);
-          Alert.alert(t('common.error'), t('myMealsDetails.failedToAddFoods'));
-          setAdding(false);
-          return;
-        }
-
-      }
+          if (rpcError) throw rpcError;
+        },
+      });
+      if (outcome.status === 'review' || outcome.status === 'complete') saveStopped.current = true;
+      if (generation !== loadGeneration.current) return;
+      setManualOutcome(outcome);
+      if (outcome.status !== 'complete') return;
 
       const mealLabels: Record<string, string> = {
         breakfast: t('common.breakfast'),
@@ -448,7 +474,7 @@ export default function MyMealsDetailsScreen() {
       console.error('Error in handleAddToMeal:', error);
       Alert.alert(t('common.error'), t('common.unexpectedError'));
       setAdding(false);
-    }
+    } finally { addClaim.current = false; setAdding(false); }
   };
 
   if (loading || !savedMeal) {
@@ -458,10 +484,11 @@ export default function MyMealsDetailsScreen() {
         edges={['top']}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          {!loadError && <ActivityIndicator size="large" color={colors.primary} />}
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            {t('myMealsDetails.loadingMealDetails')}
+            {loadError ? (es ? 'No se pudo verificar esta comida. Vuelve a elegirla.' : 'This meal could not be verified. Please select it again.') : t('myMealsDetails.loadingMealDetails')}
           </Text>
+          {loadError && <TouchableOpacity accessibilityRole="button" onPress={() => router.back()}><Text style={{ color: colors.primary }}>{es ? 'Volver' : 'Go back'}</Text></TouchableOpacity>}
         </View>
       </SafeAreaView>
     );
@@ -500,7 +527,8 @@ export default function MyMealsDetailsScreen() {
           {t('myMealsDetails.title')}
         </Text>
         <TouchableOpacity
-          style={styles.editButton}
+          disabled={coachReview}
+          style={[styles.editButton, coachReview && { opacity: 0 }]}
           onPress={() => {
             const next = !isEditing;
             console.log('[MyMealsDetails] Edit toggle pressed, isEditing:', next);
@@ -666,11 +694,20 @@ export default function MyMealsDetailsScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
+      {coachReview && !reviewNutritionComplete && <Text accessibilityRole="alert" style={{ padding: 16, color: isDark ? colors.textDark : colors.text }}>{es ? 'Faltan datos de nutrición de esta comida. No se puede añadir desde esta revisión.' : 'This meal has incomplete nutrition. It cannot be added from this review.'}</Text>}
+      {manualOutcome && manualOutcome.status !== 'complete' && <View style={{ padding: 16, backgroundColor: isDark ? colors.cardDark : colors.card }}>
+        <Text accessibilityRole="alert" style={{ color: isDark ? colors.textDark : colors.text }}>
+          {manualOutcome.status === 'review'
+            ? (es ? 'El guardado pudo completarse solo en parte. No lo repitas. Revisa el diario y añade por separado lo que falte.' : 'The save may have completed only partly. Do not repeat it. Review your diary and add any missing foods separately.')
+            : (es ? 'No se inició el guardado. Revisa tu conexión y vuelve a intentarlo.' : 'Saving did not start. Check your connection and try again.')}
+        </Text>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/(tabs)/(home)')}><Text style={{ color: colors.primary, paddingVertical: 12 }}>{es ? 'Revisar diario' : 'Review diary'}</Text></TouchableOpacity>
+      </View>}
       <View style={[styles.footer, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
         <TouchableOpacity
           style={[styles.addButton, { backgroundColor: colors.primary, opacity: adding ? 0.7 : 1 }]}
           onPress={handleAddToMeal}
-          disabled={adding || validItems.length === 0}
+          disabled={adding || validItems.length === 0 || manualOutcome?.status === 'review' || manualOutcome?.status === 'complete' || (coachReview && (missingItemsCount > 0 || !reviewNutritionComplete))}
           activeOpacity={0.7}
         >
           {adding ? (
