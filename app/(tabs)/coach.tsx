@@ -1,5 +1,7 @@
+import CoachConversationActions from '@/components/CoachConversationActions';
+import type { MealComposer } from '@/utils/coachMealComposer';
 import { isMealHelpRequest } from '@/utils/coachJourney';
-import { coachDailyServices } from '@/utils/coachDailyServices';
+import { coachDailyServices, COACH_CONVERSATION_READY } from '@/utils/coachDailyServices';
 import CoachDailyAction from '@/components/CoachDailyAction';
 // Enable only after the existing app backend supports the reviewed daily contract.
 const COACH_DAILY_ACTION_INTEGRATED = true;
@@ -969,6 +971,7 @@ export default function CoachScreen() {
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefillSentRef = useRef(false);
+  const draftedPrefillsRef = useRef(new Set<string>());
 
   const [inputText, setInputText] = useState('');
   const [latestRecommendation, setLatestRecommendation] = useState<CoachRecommendation | null>(null);
@@ -991,6 +994,12 @@ export default function CoachScreen() {
   // ── Premium gate ──────────────────────────────────────────────────────────
   const [isGated, setIsGated] = useState(false);
   const [mealHelpRequest, setMealHelpRequest] = useState(0);
+  const [activeMealCard,setActiveMealCard]=useState<string|null>(null);
+  const composerOwner=useRef<string|null>(null);
+  const composerBindings=useRef(new Map<string,(value:MealComposer|null)=>void>());
+  const composerFor=(id:string)=>{let bind=composerBindings.current.get(id);if(!bind){bind=value=>{if(value){composerOwner.current=id;setMealComposer(value);}else if(composerOwner.current===id){composerOwner.current=null;setMealComposer(null);}};composerBindings.current.set(id,bind);}return bind;};
+  const [mealJourneyActive, setMealJourneyActive] = useState(false);
+  const [mealComposer, setMealComposer] = useState<MealComposer|null>(null);
   const conversationInputRef = useRef<TextInput>(null);
 
   // Tracks how many real (non-sentinel) messages the free user has sent.
@@ -1002,6 +1011,8 @@ export default function CoachScreen() {
 
   const {
     sendMessage,
+    conversationPending,
+    recoverConversation,
     loading,
     pendingAction,
     clearPendingAction,
@@ -1010,7 +1021,7 @@ export default function CoachScreen() {
     conversationId,
     setConversationId,
     initResult,
-  } = useAICoach({ weightUnit: userWeightUnit });
+  } = useAICoach({ weightUnit: userWeightUnit, mealConversation: COACH_CONVERSATION_READY });
 
   // ── History state ──────────────────────────────────────────────────────────
   const [showHistory, setShowHistory] = useState(false);
@@ -1441,6 +1452,16 @@ export default function CoachScreen() {
 
   // ── Prefill message from ¿Qué como? flow ─────────────────────────────────
   useEffect(() => {
+    if (COACH_CONVERSATION_READY) {
+      if (!prefill_message || !initResult) return;
+      if (!draftedPrefillsRef.current.has(prefill_message)) {
+        draftedPrefillsRef.current.add(prefill_message);
+        setInputText(current => !current ? prefill_message : current === prefill_message ? current : `${current}\n\n${prefill_message}`);
+      }
+      // Consume the navigation parameter, not the draft. Only Send may dispatch.
+      router.setParams({ prefill_message: undefined });
+      return;
+    }
     if (!prefill_message || prefillSentRef.current) return;
     if (!initResult) return; // wait until coach is initialized
 
@@ -1555,7 +1576,7 @@ export default function CoachScreen() {
         return;
       }
 
-      if (COACH_DAILY_ACTION_INTEGRATED && isMealHelpRequest(trimmed)) {
+      if (COACH_DAILY_ACTION_INTEGRATED && !COACH_CONVERSATION_READY && isMealHelpRequest(trimmed)) {
         setInputText('');
         setMessages(prev => [...prev, { id: genId(), role: 'user', content: trimmed, timestamp: Date.now() }]);
         setMealHelpRequest(value => value + 1);
@@ -1699,9 +1720,10 @@ export default function CoachScreen() {
   );
 
   const handleSendPress = useCallback(() => {
+    if (mealComposer?.submit(inputText)) { setInputText(''); scrollToBottom(); return; }
     console.log('[AICoach] Send button pressed');
     handleSend(inputText);
-  }, [handleSend, inputText]);
+  }, [handleSend, inputText, mealComposer]);
 
   // ── Intercept pendingAction and attach it inline to the last assistant message ──
   useEffect(() => {
@@ -2223,7 +2245,7 @@ export default function CoachScreen() {
   const isOnlyWelcome = !hasUserMessages && messages.length <= 1;
   const effectivelyGated = isGated && !isPremium;
   const showCravingChips = !isOnlyWelcome && inputText.length === 0 && !loading && !effectivelyGated;
-  const canSend = inputText.trim().length > 0 && !loading && !premiumLoading && !effectivelyGated;
+  const canSend = inputText.trim().length > 0 && !(COACH_CONVERSATION_READY && conversationPending) && !mealComposer?.disabled && !loading && !premiumLoading && !effectivelyGated;
 
   const quickActionsLabel = t('coach.whatDoYouNeed');
 
@@ -2341,7 +2363,7 @@ export default function CoachScreen() {
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={0}
       >
         <ScrollView
           ref={scrollViewRef}
@@ -2476,25 +2498,18 @@ export default function CoachScreen() {
 
             return (
               <View key={message.id} style={styles.assistantMessageWrapper}>
-                <Image
-                  source={require('@/assets/images/ff4ef6e4-805c-4f79-a014-9784ebe735d9.jpeg')}
-                  style={styles.coachAvatarImage}
-                  resizeMode="cover"
-                />
                 <View style={styles.assistantBubbleColumn}>
-                  <Text style={[styles.coachLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                    {t('coach.coach')}
-                  </Text>
                   {isWaitingForFirstToken ? (
-                    <TypingIndicator isDark={isDark} />
+                    <View><TypingIndicator isDark={isDark} />{COACH_CONVERSATION_READY && <Text style={{color:colors.textSecondary}}>{i18n.language.startsWith('es')?'Esperando la respuesta de tu coach…':'Waiting for your coach’s response…'}</Text>}</View>
                   ) : (
-                  <View style={[styles.assistantBubble, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+                  <View style={styles.assistantBubble}>
                     <View>
                       {structuredNodes}
                       {isThisStreaming && (
                         <StreamingCursor isDark={isDark} />
                       )}
                     </View>
+                    {COACH_CONVERSATION_READY && message.mealConversation && !isThisStreaming && coachDailyServices.experience && <CoachConversationActions service={coachDailyServices.experience} handoff={message.mealConversation} hasConversation showRecovery={index===visibleMessages.length-1} onPrompt={handleSend} active={activeMealCard?activeMealCard===message.id:index===visibleMessages.length-1} onResume={()=>setActiveMealCard(message.id)} onComposer={composerFor(message.id)} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
                     {message.guidedMealChoice && index === visibleMessages.length - 1 && !isThisStreaming && <TouchableOpacity accessibilityRole="button" style={{ marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: '#27614D' }} onPress={() => { setMealHelpRequest(value => value + 1); scrollViewRef.current?.scrollTo({ y: 0, animated: true }); }}><Text style={{ color: '#FFF', fontWeight: '600' }}>{getAppLocale().startsWith('es') ? 'Elegir una comida juntos' : 'Choose a meal together'}</Text></TouchableOpacity>}
                     {message.showUpgradeButton && (
                       <View style={{ marginTop: 16 }}>
@@ -2555,7 +2570,7 @@ export default function CoachScreen() {
           })}
 
           {/* ── Craving chips hub — welcome state only ── */}
-          {COACH_DAILY_ACTION_INTEGRATED && <CoachDailyAction services={coachDailyServices} mealRequest={mealHelpRequest} hasConversation={visibleMessages.some(message => message.role === 'user')} onConversation={() => { conversationEngaged.current = true; scrollToBottom(); conversationInputRef.current?.focus(); }} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
+          {COACH_DAILY_ACTION_INTEGRATED && (!COACH_CONVERSATION_READY || !visibleMessages.some(m=>m.mealConversation)) && <CoachDailyAction services={coachDailyServices} mealRequest={mealHelpRequest} conversational={COACH_CONVERSATION_READY} handoff={visibleMessages.length&&visibleMessages[visibleMessages.length-1].role==='assistant'?visibleMessages[visibleMessages.length-1].mealConversation:undefined} onPrompt={handleSend} onComposer={setMealComposer} onJourneyActive={setMealJourneyActive} hasConversation={visibleMessages.some(message => message.role === 'user')} onConversation={() => { conversationEngaged.current = true; scrollToBottom(); conversationInputRef.current?.focus(); }} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
           {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -2580,6 +2595,14 @@ export default function CoachScreen() {
 
         </ScrollView>
 
+        {COACH_CONVERSATION_READY && conversationPending && !loading && (
+          <TouchableOpacity accessibilityRole="button" disabled={!isPremium || premiumLoading || effectivelyGated}
+            style={{minHeight:44,paddingHorizontal:16,paddingVertical:12}}
+            onPress={()=>void recoverConversation().catch(()=>{})}>
+            <Text style={{color:colors.primary}}>{i18n.language.startsWith('es')?'Recuperar la respuesta pendiente':'Recover pending response'}</Text>
+          </TouchableOpacity>
+        )}
+
         {/* ── Craving chips — rendered inside ScrollView after welcome message ── */}
 
         {/* ── Gated hint above input bar ── */}
@@ -2592,6 +2615,7 @@ export default function CoachScreen() {
         )}
 
         {/* ── Input bar ── */}
+        {<>
         <View
           style={[
             styles.inputContainer,
@@ -2610,7 +2634,7 @@ export default function CoachScreen() {
                 color: isDark ? colors.textDark : colors.text,
               },
             ]}
-            placeholder={premiumLoading ? t('common.loading') : t('coach.askCoach')}
+            placeholder={premiumLoading ? t('common.loading') : mealComposer?.placeholder ?? t('coach.askCoach')}
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={inputText}
             onChangeText={(t) => {
@@ -2637,6 +2661,7 @@ export default function CoachScreen() {
             />
           </TouchableOpacity>
         </View>
+        </>}
       </KeyboardAvoidingView>
 
       {/* ── Conversation History Modal ── */}
@@ -2887,8 +2912,9 @@ const styles = StyleSheet.create({
   assistantMessageWrapper: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
-    maxWidth: '85%',
-    marginBottom: spacing.md,
+    maxWidth: '100%',
+    width: '100%',
+    marginBottom: spacing.lg,
     gap: spacing.sm,
     alignItems: 'flex-start',
   },
@@ -2912,10 +2938,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   assistantBubble: {
-    borderRadius: borderRadius.lg,
-    borderBottomLeftRadius: 4,
-    padding: spacing.md,
-    elevation: 1,
+    paddingVertical: spacing.sm,
+    backgroundColor: 'transparent',
   },
   assistantBubbleTime: {
     fontSize: 11,

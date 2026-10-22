@@ -1,3 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createConversationTransport } from '@/utils/coachConversationTransport';
+import { parseMealConversation, type ScopedMealConversation } from '@/utils/coachMealConversation';
+import { toLocalDateString } from '@/utils/dateUtils';
 import { isSameCoachDay } from '@/utils/coachJourney';
 import { isCoachPlaceholder } from '@/hooks/coachMessageLocalization';
 
@@ -83,6 +87,7 @@ export type Message = {
   actionStatus?: 'pending' | 'confirming' | 'confirmed' | 'declined';
   suggestions?: string[];
   guidedMealChoice?: boolean;
+  mealConversation?: ScopedMealConversation;
 };
 
 type State =
@@ -92,6 +97,7 @@ type State =
   | { status: 'error'; error: string };
 
 type UseAICoachOptions = {
+  mealConversation?: boolean;
   weightUnit?: string;
 };
 
@@ -124,6 +130,17 @@ function genMsgId() {
 }
 
 export function useAICoach(options?: UseAICoachOptions) {
+  const [conversationPending,setConversationPending]=useState(false);
+  const journal=useRef<ReturnType<typeof createConversationTransport>|null>(null);
+  if(!journal.current)journal.current=createConversationTransport({store:AsyncStorage,scope:SUPABASE_PROJECT_URL,owner:async()=>{const {data,error}=await supabase.auth.getUser();return error?undefined:data.user?.id;},today:toLocalDateString,newId:()=> 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const n=Math.floor(Math.random()*16);return(c==='x'?n:(n&3)|8).toString(16);}),invoke:async (body,owner)=>{const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token||session.user.id!==owner)throw Error('unauthorized');return expoFetch(`${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_ANON_KEY},body:JSON.stringify(body),signal:AbortSignal.timeout(45000)});}});
+  useEffect(()=>{
+    if(!options?.mealConversation)return;
+    let active=true,version=0;
+    const refresh=()=>{const ownVersion=++version;void journal.current!.pending().then(p=>{if(active&&version===ownVersion)setConversationPending(!!p)}).catch(()=>{if(active&&version===ownVersion)setConversationPending(true)});};
+    refresh();const timer=setInterval(refresh,15000);
+    const {data:{subscription}}=supabase.auth.onAuthStateChange(()=>{setConversationPending(false);setTimeout(()=>{if(active)refresh();},0);});
+    return()=>{active=false;clearInterval(timer);subscription.unsubscribe();};
+  },[options?.mealConversation]);
   const [state, setState] = useState<State>({ status: 'idle', error: null });
   const [pendingAction, setPendingAction] = useState<ActionProposal | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -279,7 +296,7 @@ export function useAICoach(options?: UseAICoachOptions) {
 
   // ── Non-streaming sendMessage ──────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (apiMessages: CoachMessage[], userId?: string, isFirstMessage?: boolean, isReturningUserOpen?: boolean): Promise<void> => {
+    async (apiMessages: CoachMessage[], userId?: string, isFirstMessage?: boolean, isReturningUserOpen?: boolean, recoverScoped = false): Promise<void> => {
       if (!apiMessages || apiMessages.length === 0) {
         console.log('[useAICoach] No messages to send');
         return;
@@ -289,7 +306,7 @@ export function useAICoach(options?: UseAICoachOptions) {
 
       const newUserMsg = apiMessages[apiMessages.length - 1];
       const lastUserContent = newUserMsg?.content ?? '';
-      const useWeb = needsWebSearch(lastUserContent);
+      const useWeb = options?.mealConversation ? false : needsWebSearch(lastUserContent);
 
       // Build full history: filter out streaming/placeholder/sentinel messages,
       // then append the new user message (deduplicating if already present).
@@ -314,9 +331,11 @@ export function useAICoach(options?: UseAICoachOptions) {
           ? historyMessages.slice(historyMessages.length - MAX_HISTORY)
           : historyMessages;
 
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let placeholderMsg: Message = {id:genMsgId(),role:'assistant',content:'',timestamp:Date.now(),isStreaming:true};
       console.log('[useAICoach] Sending request to ai-coach');
       console.log('[useAICoach] History messages (from DB):', messagesRef.current.length, '→ sending:', fullMessages.length);
-      console.log('[useAICoach] Last user message:', lastUserContent.slice(0, 80));
+      // Do not log user conversation content.
       console.log('[useAICoach] weight_unit:', weightUnit);
       console.log('[useAICoach] conversation_id:', conversationId);
       console.log('[useAICoach] use_web:', useWeb);
@@ -326,11 +345,14 @@ export function useAICoach(options?: UseAICoachOptions) {
         // Fetch session and ensure we have a valid access token — never fall back to anon key
         let { data: { session } } = await supabase.auth.getSession();
         let jwt = session?.access_token;
+        let requestOwner = session?.user?.id;
+        const requestDay = toLocalDateString();
 
         if (!jwt) {
           console.warn('[useAICoach] No access token — attempting session refresh');
           const { data: refreshData } = await supabase.auth.refreshSession();
           jwt = refreshData?.session?.access_token;
+          requestOwner = refreshData?.session?.user?.id;
         }
 
         if (!jwt) {
@@ -350,7 +372,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         }
 
         // Add placeholder while waiting
-        const placeholderMsg: Message = {
+        placeholderMsg = {
           id: genMsgId(),
           role: 'assistant',
           content: '',
@@ -364,12 +386,12 @@ export function useAICoach(options?: UseAICoachOptions) {
         console.log('[useAICoach] Sending request with valid JWT (length:', jwt.length, ')');
 
         const abortController = new AbortController();
-        const timeoutId = setTimeout(() => {
+        timeoutId = setTimeout(() => {
           abortController.abort();
           console.warn('[useAICoach] Request timed out after 30s — aborting');
         }, 30000);
 
-        const response = await expoFetch(
+        const response = options?.mealConversation ? await journal.current!.run({messages:fullMessages,weight_unit:weightUnit,conversation_id:conversationIdRef.current??null,language:i18n.language},recoverScoped) : await expoFetch(
           `${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,
           {
             method: 'POST',
@@ -423,7 +445,8 @@ export function useAICoach(options?: UseAICoachOptions) {
           throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
         }
 
-        // Response is OK — cancel the timeout so it doesn't fire during streaming
+        if(options?.mealConversation)setConversationPending(false);
+        // Response is OK - cancel the timeout so it doesn't fire during streaming
         clearTimeout(timeoutId);
 
         // Read SSE stream token by token
@@ -434,6 +457,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         let actionProposal: ActionProposal | null = null;
         let suggestions: string[] | null = null;
         let guidedMealChoice = false;
+        let mealConversation: ScopedMealConversation['value'] | null = null;
         let buffer = '';
 
         try {
@@ -466,6 +490,7 @@ export function useAICoach(options?: UseAICoachOptions) {
                   actionProposal = parsed.action_proposal || null;
                   suggestions = parsed.suggestions || null;
                   guidedMealChoice = parsed.guided_meal_choice?.schema === 'guided_meal_choice_v1' && parsed.guided_meal_choice?.status === 'clarify';
+                  mealConversation = options?.mealConversation ? parseMealConversation(parsed.meal_conversation) : null;
                   if (parsed.corrected_text) {
                     fullText = parsed.corrected_text;
                   }
@@ -490,6 +515,7 @@ export function useAICoach(options?: UseAICoachOptions) {
                 actionProposal = parsed.action_proposal || null;
                 suggestions = parsed.suggestions || null;
                   guidedMealChoice = parsed.guided_meal_choice?.schema === 'guided_meal_choice_v1' && parsed.guided_meal_choice?.status === 'clarify';
+                  mealConversation = options?.mealConversation ? parseMealConversation(parsed.meal_conversation) : null;
                 if (parsed.corrected_text) {
                   fullText = parsed.corrected_text;
                 }
@@ -516,6 +542,12 @@ export function useAICoach(options?: UseAICoachOptions) {
           return;
         }
 
+        // A typed intake is actionable only for the same authenticated local day.
+        const finalOwner = (mealConversation || options?.mealConversation) ? (await supabase.auth.getUser()).data.user?.id : undefined;
+        if(options?.mealConversation && (finalOwner !== requestOwner || requestDay !== toLocalDateString()))throw Error('scope_changed');
+        if(options?.mealConversation){actionProposal=null;suggestions=null;}
+        const scopedMealConversation = mealConversation && requestOwner && finalOwner === requestOwner && requestDay === toLocalDateString() ? {value:mealConversation,owner:requestOwner,date:requestDay} : undefined;
+
         // Finalize message
         if (isMountedRef.current) {
           setMessages((prev) =>
@@ -529,7 +561,8 @@ export function useAICoach(options?: UseAICoachOptions) {
                       ? { actionProposal, actionStatus: 'pending' as const }
                       : {}),
                     ...(suggestions ? { suggestions } : {}),
-                    ...(guidedMealChoice ? { guidedMealChoice: true } : {}),
+                    ...(guidedMealChoice && !options?.mealConversation ? { guidedMealChoice: true } : {}),
+                    ...(scopedMealConversation ? { mealConversation: scopedMealConversation } : {}),
                   }
                 : m
             )
@@ -575,6 +608,10 @@ export function useAICoach(options?: UseAICoachOptions) {
         }
       } catch (e: any) {
         clearTimeout(timeoutId);
+        if(options?.mealConversation){
+          setConversationPending(!!await journal.current!.pending().catch(()=>true));
+          setMessages(prev=>prev.filter(m=>m.id!==placeholderMsg.id));
+        }
         if (e?.name === 'AbortError') {
           console.warn('[useAICoach] Request aborted (timeout)');
           if (isMountedRef.current) {
@@ -602,13 +639,15 @@ export function useAICoach(options?: UseAICoachOptions) {
         throw e;
       }
     },
-    [weightUnit, conversationId]
+    [weightUnit, conversationId, options?.mealConversation]
   );
 
   const loading = state.status === 'loading';
   const error = state.status === 'error' ? state.error : null;
 
+  const recoverConversation=useCallback(async()=>{const record=await journal.current!.pending();if(!record)return;await sendMessage(record.body.messages.map(m=>({...m,timestamp:m.timestamp??Date.now()})),undefined,false,false,true);},[sendMessage]);
   return {
+    conversationPending,recoverConversation,
     sendMessage,
     loading,
     error,

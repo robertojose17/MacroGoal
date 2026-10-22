@@ -1,9 +1,11 @@
+import {parseConstraints} from './coachDietaryConstraints';
 import { NUTRIENTS, validMealEvidence, type MealEvidence, type MealReviewContext, type PreparedMealEntry } from './coachMealReview';
 
 // DTO boundary for the documented meal_explore_v1 option. Transport admission,
 // receipt ownership and recovery are deliberately NOT implemented here.
 export function mealEvidenceFromOption(row: any, mode: 'cook' | 'quick' | 'eat_out'): MealEvidence | null {
   if (!row || row.review_required !== true || !row.provenance || !row.nutrition || !Array.isArray(row.ingredients) || !Array.isArray(row.instructions)) return null;
+  const dietary=row.dietary_constraints?parseConstraints(row.dietary_constraints):null;if(row.dietary_constraints&&!dietary)return null;
   const p = row.provenance;
   if (row.physical_portion && (!Number.isFinite(row.physical_portion.grams) || row.physical_portion.grams <= 0 || !['source_reported','estimated'].includes(row.physical_portion.authority))) return null;
   if (row.identity && (typeof row.identity.kind !== 'string' || ['entity','variant','portion_label'].some(k => row.identity[k] !== undefined && typeof row.identity[k] !== 'string'))) return null;
@@ -12,9 +14,13 @@ export function mealEvidenceFromOption(row: any, mode: 'cook' | 'quick' | 'eat_o
     try { const u = new URL(p.source_url); if (u.protocol !== 'https:' || u.username || u.password || u.port || !/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(u.hostname) || /^(?:\d+\.){3}\d+$/.test(u.hostname) || /\.(local|internal|test)$/i.test(u.hostname)) return null; url = u.href; } catch { return null; }
   }
   if (p.kind === 'gallery' && (typeof p.gallery_id !== 'string' || !p.gallery_id.trim())) return null;
+  let venue:MealEvidence['venue'];
+  if(row.venue){const v=row.venue;const publicURL=(x:unknown)=>{try{const u=new URL(String(x));return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(u.hostname)&&!/(?:^\d+\.|\.(?:local|internal|test)$)/i.test(u.hostname)?u.href:null;}catch{return null;}};const source=publicURL(v.source_url);if(typeof v.name!=='string'||!v.name.trim()||!source)return null;const addressSource=publicURL(v.address_source_url);venue={name:v.name,sourceUrl:source,...(typeof v.address==='string'&&v.address.trim()&&addressSource?{address:v.address,addressSourceUrl:addressSource}:{})};}
   const value: MealEvidence = { id: row.id, name: row.name, kind: mode === 'eat_out' ? 'restaurant' : p.kind === 'gallery' ? 'gallery' : 'recipe',
     provenance: { kind: p.kind, label: url ? new URL(url).hostname : p.kind === 'gallery' ? 'Macro Goal gallery' : p.kind === 'official' ? 'Official menu' : 'Meal source', ...(url ? { url } : {}), ...(p.gallery_id ? { galleryId: p.gallery_id } : {}) },
     nutrition: { authority: row.nutrition.authority, basis: row.nutrition.basis, values: row.nutrition.values, assumptions: row.nutrition.assumptions },
+    ...(venue?{venue}:{}),
+    ...(dietary?{dietaryConstraints:dietary}:{}),
     ...(row.source_nutrition ? { sourceNutrition: row.source_nutrition } : {}),
     ...(row.identity ? { identity: row.identity } : {}),
     ...(row.physical_portion ? { physicalPortion: row.physical_portion } : {}),

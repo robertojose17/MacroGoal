@@ -1,3 +1,4 @@
+import type {DietaryConstraints} from './coachDietaryConstraints';
 import { dailyAccess, type DailyAccess, type DailyMealSlot } from './coachDailyAction';
 import { addReviewedSavedMeal } from './manualSavedMealAdd';
 
@@ -11,6 +12,8 @@ export type MealEvidence = {
   provenance: { kind: 'gallery' | 'official' | 'publisher' | 'estimate'; label: string; url?: string; galleryId?: string };
   nutrition: { authority: 'official' | 'publisher_reported' | 'estimated' | 'user_edited' | 'unknown';
     basis: { amount: number; unit: string; label: string }; values: MealNutrition; assumptions: string[] };
+  dietaryConstraints?:DietaryConstraints;
+  venue?: {name:string;sourceUrl:string;address?:string;addressSourceUrl?:string};
   sourceNutrition?: MealEvidence['nutrition'];
   identity?: { kind: string; entity?: string; variant?: string; portion_label?: string };
   physicalPortion?: { grams: number; authority: 'source_reported' | 'estimated' };

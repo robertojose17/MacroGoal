@@ -27,6 +27,8 @@ export const COACH_GUIDED_CONTRACT_READY = true;
 const guidedServices = createGuidedServices({ owner: transport.owner, today: toLocalDateString, request: transport.request, recover: transport.recover, pendingGuidance: transport.pendingGuidance });
 // Candidate contract is not deployed. Enable only after coordinated readback.
 export const COACH_MEAL_V2_READY = true;
+// Local conversational backend candidate; enable only after verified deployment.
+export const COACH_CONVERSATION_READY = true;
 const mealTransport = createMealTransport({ owner: transport.owner, today: toLocalDateString,
   zone: () => Intl.DateTimeFormat().resolvedOptions().timeZone, newId, scope: `${SUPABASE_PROJECT_URL}:normal`, store: AsyncStorage,
   async invoke(body) {

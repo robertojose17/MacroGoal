@@ -93,7 +93,7 @@ test('Coach-origin plus selects existing details instead of invoking quick add',
 test('deployed integration retains server admission and suppresses automatic paid welcome', () => {
   const screen = fs.readFileSync(require('node:path').join(__dirname, '../app/(tabs)/coach.tsx'), 'utf8');
   assert.match(screen, /const COACH_DAILY_ACTION_INTEGRATED = true/);
-  assert.match(screen, /COACH_DAILY_ACTION_INTEGRATED && <CoachDailyAction/);
+  assert.match(screen, /COACH_DAILY_ACTION_INTEGRATED && \(.*?<CoachDailyAction/);
   assert.ok(screen.includes('if (COACH_DAILY_ACTION_INTEGRATED) return;'));
   assert.match(screen, /gated=\{isGated\}/);
 });

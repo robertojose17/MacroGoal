@@ -1,3 +1,6 @@
+import CoachConversationActions from '@/components/CoachConversationActions';
+import type { ScopedMealConversation } from '@/utils/coachMealConversation';
+import type { MealComposer } from '@/utils/coachMealComposer';
 import { holdRecipeReview, clearRecipeReview } from '@/utils/coachRecipeReview';
 import { clearMealReview } from '@/utils/coachMealReview';
 import CoachMealConversation from '@/components/CoachMealConversation';
@@ -19,9 +22,10 @@ export type GuidedServices = DailyActionServices & {
   guided?(access: DailyAccess, date: string, meal: JourneyDraft['meal'], guidance: MealGuidance): Promise<GuidedResult>;
   recoverGuided?(access: DailyAccess, date: string, meal: JourneyDraft['meal'], guidance: MealGuidance): Promise<GuidedResult>;
 };
-type Props = DailyAccess & { services?: GuidedServices; hasConversation?: boolean; mealRequest?: number; onConversation?: () => void };
+type Props = DailyAccess & { services?: GuidedServices; hasConversation?: boolean; mealRequest?: number; conversational?: boolean; handoff?:ScopedMealConversation; onPrompt?:(text:string)=>void; onConversation?: () => void; onJourneyActive?: (active:boolean) => void; onComposer?: (composer:MealComposer|null)=>void };
 
 export default function CoachDailyAction(props: Props) {
+  if(props.conversational&&props.services?.experience)return <CoachConversationActions {...props} service={props.services.experience} />;
   return props.services?.experience ? <CoachMealConversation {...props} experience={props.services.experience} summaryServices={props.services} /> : <CoachDailyActionContent {...props} />;
 }
 export function CoachDailyActionContent(props: Props) {

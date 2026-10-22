@@ -1,3 +1,4 @@
+import {constraintLines} from '@/utils/coachDietaryConstraints';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +63,7 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
         </>}
         {prepared && <Text style={s.body}>{prepared.portionLabel}</Text>}
         {NUTRIENTS.map((key,i) => <View key={key} style={s.nutrient}><Text style={s.body}>{labels[i]}{key === 'calories' ? ' (kcal)' : ' (g)'}</Text>{editing && !prepared ? <TextInput accessibilityLabel={labels[i]} keyboardType="decimal-pad" editable={!busy} style={s.valueInput} value={edits[key] ?? (shown?.[key] == null ? '' : String(Math.round(shown[key]! * 10) / 10))} placeholder={say('Unknown', 'Desconocido')} onChangeText={value => { change(); setEdits(values => ({ ...values, [key]: value })); }} /> : <Text style={s.body}>{shown?.[key] == null ? say('Unknown', 'Desconocido') : String(Math.round(shown[key]! * 10) / 10)}</Text>}</View>)}
+        {source.dietaryConstraints&&constraintLines(source.dietaryConstraints,i18n.language.startsWith('es')).map(line=><Text key={line} style={s.muted}>{line}</Text>)}
         {(prepared?.assumptions ?? source.nutrition.assumptions).map((assumption,i) => <Text key={i} style={s.muted}>• {assumption}</Text>)}
         <Text style={s.muted}>{source.allergyStatus === 'contains_declared_allergen' ? say('The source lists an allergen you asked to avoid. Review before choosing this food.', 'La fuente indica un alérgeno que quieres evitar. Revísalo antes de elegir esta comida.') : say('Allergen information is not guaranteed. Confirm ingredients with the source or restaurant.', 'La información de alérgenos no está garantizada. Confirma los ingredientes con la fuente o el restaurante.')}</Text>
         {status === 'error' && <Text accessibilityRole="alert" style={s.body}>{say('The review could not be completed. No successful save has been confirmed.', 'No se pudo completar la revisión. No se ha confirmado que se haya guardado.')}</Text>}
