@@ -95,3 +95,83 @@ test('saved-card restore fails closed after account switch while parsing receipt
 
 test('confirmed dietary restrictions survive same-day restart and empty later model intake does not erase them',async()=>{const f=fixture();const {emptyConstraints,mergeConstraints}=require('../utils/coachDietaryConstraints');const c={...emptyConstraints(),allergens:['peanuts'],dietary_preferences:['vegan']};await f.services.confirmConstraints(c,'A','2026-10-22');assert.deepEqual(await f.services.confirmedConstraints(),c);assert.deepEqual(mergeConstraints(await f.services.confirmedConstraints(),emptyConstraints()),c);f.state.owner='B';assert.deepEqual(await f.services.confirmedConstraints(),emptyConstraints());f.state.owner='A';f.state.day='2026-10-23';assert.deepEqual(await f.services.confirmedConstraints(),emptyConstraints());await assert.rejects(f.services.confirmConstraints(c,'A','2026-10-22'),/scope_changed/);});
 test('invalid dietary metadata cannot become measured or allergy-safe evidence',()=>{const {parseConstraints,mergeConstraints,emptyConstraints}=require('../utils/coachDietaryConstraints');assert.equal(parseConstraints({...emptyConstraints(),verification:'verified'}),null);assert.equal(parseConstraints({...emptyConstraints(),allergens:['']}),null);assert.equal(mergeConstraints({...emptyConstraints(),exclusions:Array.from({length:12},(_,i)=>String(i))},{...emptyConstraints(),exclusions:['extra']}),null);});
+
+async function stoppedFixture(){
+ const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',public_area:'Orlando, Florida'},'dinner');
+ f.receipts.get(found.requestId).discovery_request.area='Orlando, Florida';
+ const original=f.deps.invoke;let parentId;
+ f.deps.invoke=async body=>{if(body.operation==='discover'){f.calls.push(body);parentId??=body.request_id;return Response.json({error:'execution_stopped',request_id:body.request_id,execution_state:'stopped',retry_eligible:true,successor_request_id:null},{status:409});}return original(body)};
+ const offer=await f.services.discover(f.access,found);assert.equal(offer.kind,'retry_available');
+ return {...f,found,offer,original,parentId};
+}
+test('verified stopped discovery offers original details without automatically creating a successor; reload rechecks same ID',async()=>{
+ const f=await stoppedFixture();assert.equal(f.offer.publicRequest.food,'chicken rice');assert.equal(f.offer.publicRequest.area,'Orlando, Florida');
+ assert.equal(f.calls.filter(b=>b.operation==='discover').length,1);const parent=await f.transport.pending(f.access);assert.equal(parent.envelope.request_id,f.parentId);
+ const restarted=createMealTransport(f.deps);assert.equal((await restarted.retry(f.access,f.offer)).reason,'retry_confirmation_expired');
+ const recovered=await restarted.recover(f.access);assert.equal(recovered.kind,'retry_available');assert.equal(recovered.requestId,f.parentId);
+ assert.ok(f.calls.filter(b=>b.operation==='discover').every(b=>b.request_id===f.parentId));assert.equal(f.writes.length,0);
+});
+test('explicit successor is durable before dispatch, retains parent, and lost reply/restart uses exactly that ID',async()=>{
+ const f=await stoppedFixture(),parent=await f.transport.pending(f.access),terminal=f.deps.invoke;let child;
+ f.deps.invoke=async body=>{if(body.operation==='discover'&&body.retry_of_request_id){f.calls.push(body);child=body;assert.deepEqual((await f.transport.pending(f.access)).envelope,body);throw Error('lost reply')}return terminal(body)};
+ assert.equal((await f.transport.retry(f.access,f.offer)).kind,'pending');assert.equal(child.retry_of_request_id,f.parentId);assert.notEqual(child.request_id,f.parentId);assert.equal(child.source_request_id,parent.envelope.source_request_id);assert.equal(child.time_zone,parent.envelope.time_zone);assert.equal(child.consent,true);
+ const archived=[...f.rows].find(([k])=>k.endsWith(':stopped:'+f.parentId));assert.deepEqual(JSON.parse(archived[1]).envelope,parent.envelope);
+ f.deps.invoke=f.original;const restarted=createMealTransport(f.deps);const result=await restarted.recover(f.access);assert.equal(result.kind,'ready');assert.deepEqual(f.calls.at(-1),child);assert.equal((await restarted.pending(f.access)).completed,true);assert.equal(f.writes.length,0);
+});
+test('unknown, active, mismatched or successor-claimed responses never authorize a fresh ID',async()=>{
+ for(const patch of [{execution_state:'generating'},{execution_state:'committing'},{retry_eligible:false},{successor_request_id:'22222222-2222-4222-8222-222222222222'},{request_id:'22222222-2222-4222-8222-222222222222'},{execution_state:undefined}]){
+  const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out'},'dinner');f.deps.invoke=async b=>{f.calls.push(b);return Response.json({error:'execution_stopped',request_id:b.request_id,execution_state:'stopped',retry_eligible:true,successor_request_id:null,...patch},{status:409})};
+  const result=await f.services.discover(f.access,found);assert.equal(result.kind,'pending');const before=await f.transport.pending(f.access);await f.transport.recover(f.access);assert.equal((await f.transport.pending(f.access)).envelope.request_id,before.envelope.request_id);assert.equal(f.calls.length,3);
+ }
+});
+test('double confirmation cannot create two successors and scope changes or failed persistence dispatch none',async()=>{
+ const f=await stoppedFixture(),invoke=f.deps.invoke;let release;f.deps.invoke=body=>new Promise(resolve=>{release=()=>invoke(body).then(resolve)});
+ const first=f.transport.retry(f.access,f.offer);while(!release)await new Promise(r=>setImmediate(r));const second=await f.transport.retry(f.access,f.offer);assert.equal(second.reason,'execution_active');
+ f.state.owner='B';release();assert.equal((await first).reason,'scope_changed');assert.equal(f.calls.filter(b=>b.retry_of_request_id).length,0);
+ const g=await stoppedFixture();g.deps.store.setItem=async()=>{throw Error('disk full')};assert.equal((await g.transport.retry(g.access,g.offer)).kind,'pending');assert.equal(g.calls.filter(b=>b.retry_of_request_id).length,0);assert.equal((await g.transport.pending(g.access)).envelope.request_id,g.parentId);
+ const h=await stoppedFixture();h.state.day='2026-10-23';assert.equal((await h.transport.retry(h.access,h.offer)).kind,'blocked');assert.equal(h.calls.filter(b=>b.retry_of_request_id).length,0);
+});
+
+test('real meal bridge accepts the client successor contract, preserves public query and existing retry guard',async()=>{
+ const path=require('node:path'),root=path.join(__dirname,'../supabase/functions/ai-coach');
+ const {createMealExploreRoute}=require(path.join(root,'meal-explore-route.ts')),{mealDiscoveryRetryCheck}=require(path.join(root,'meal-discovery-retry.ts')),{coachRequest}=require(path.join(root,'_shared/coach-access.ts'));
+ const owner='3af0eabf-e742-4657-80c4-130dfa867502',sourceId='33333333-3333-4333-8333-333333333333',parentId='44444444-4444-4444-8444-444444444444';
+ const source={owner,date:'2026-10-22',schema:'meal_explore_v1',status:'discovery_available',options:[],discovery_request:{food:'grilled chicken rice and vegetables',mode:'restaurant',area:'Orlando, Florida',preference:'high_protein'},paid_capabilities:{discovery:true,estimate:true,reason:null}};
+ const db={auth:{getUser:async()=>({data:{user:{id:owner}}})},from:table=>({select:()=>({eq:()=>table==='subscriptions'?Promise.resolve({data:[{entitlement_ids:['Macrogoal Pro'],status:'active',expiration_at:null}]}):{maybeSingle:async()=>({data:{permission_level:1}})}})}),rpc:async(name)=>name==='coach_web_pilot_enabled_v1'?{data:true}:name==='coach_recover_requests_v1'?{data:[{request_id:sourceId,state:'completed',request_payload:{journey:'meal_explore_v1'},result:{manual_handoff_v1:{body:source}}}]}:{error:'unexpected_rpc'}};
+ let parent,executions=0;const bridged=[];
+ const route=createMealExploreRoute(db,async req=>{const body=await req.json();bridged.push(body);if(!body.retry_of_request_id){parent??={user_id:owner,request_id:body.request_id,request_payload:body,state:'uncertain',execution_state:'stopped',retry_eligible:true,successor_request_id:null};return Response.json({error:'execution_stopped',request_id:body.request_id,execution_state:'stopped',retry_eligible:true,successor_request_id:null},{status:409});}
+  assert.equal(body.retry_consent,true);assert.equal(mealDiscoveryRetryCheck(parent,{owner,parentId:body.retry_of_request_id,requestId:body.request_id,fingerprint:coachRequest(body).fingerprintInput,confirmed:body.retry_consent}),null);executions++;return new Response(`data: ${JSON.stringify({done:true,request_id:body.request_id,usage_status:'completed'})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});
+ },undefined,()=>Date.parse('2026-10-22T12:00:00Z'));
+ const rows=new Map(),access={isPremium:true,premiumLoading:false,gated:false,busy:false};let ids=0;
+ const transport=createMealTransport({scope:'bridge-test',owner:async()=>owner,today:()=>source.date,zone:()=> 'UTC',newId:()=>++ids===1?parentId:'55555555-5555-4555-8555-555555555555',store:{getItem:async k=>rows.get(k)??null,setItem:async(k,v)=>rows.set(k,v),removeItem:async k=>rows.delete(k)},invoke:async body=>body.intent==='recover_daily'?Response.json(source):route(new Request('https://offline.invalid',{method:'POST',headers:{authorization:'Bearer offline'},body:JSON.stringify(body)}))});
+ const offer=await transport.run(access,{operation:'discover',source_request_id:sourceId,consent:true},{meal:'dinner',mode:'eat_out'});assert.equal(offer.kind,'retry_available');assert.equal(executions,0);
+ const response=await transport.retry(access,offer);assert.equal(response.kind,'ready');assert.equal(executions,1);assert.deepEqual(bridged[0].messages,bridged.at(-1).messages);assert.match(bridged.at(-1).messages[0].content,/grilled chicken rice and vegetables/);assert.match(bridged.at(-1).messages[0].content,/Orlando, Florida/);assert.equal(bridged.at(-1).meal_source_request_id,sourceId);assert.equal(bridged.at(-1).retry_of_request_id,parentId);
+});
+
+test('a claimed successor or revoked eligibility during confirmation preserves the parent and never starts another',async()=>{
+ for(const patch of [{successor_request_id:'66666666-6666-4666-8666-666666666666'},{retry_eligible:false},{execution_state:'committing'}]){
+  const f=await stoppedFixture();f.deps.invoke=async b=>{f.calls.push(b);return Response.json({error:'execution_stopped',request_id:b.request_id,execution_state:'stopped',retry_eligible:true,successor_request_id:null,...patch},{status:409})};
+  assert.equal((await f.transport.retry(f.access,f.offer)).reason,'retry_state_changed');assert.equal((await f.transport.pending(f.access)).envelope.request_id,f.parentId);assert.equal(f.calls.filter(b=>b.retry_of_request_id).length,0);
+ }
+ const f=await stoppedFixture();const result=await f.transport.run(f.access,{operation:'discover',source_request_id:f.found.requestId,consent:true,retry_of_request_id:f.parentId,retry_consent:true},{meal:'dinner',mode:'eat_out'});assert.equal(result.reason,'retry_confirmation_required');
+});
+test('confirmed retry service imports completed options without a chat turn or diary write',async()=>{
+ const f=await stoppedFixture(),terminal=f.deps.invoke;f.deps.invoke=b=>b.retry_of_request_id?f.original(b):terminal(b);
+ const result=await f.services.retrySearch(f.access,f.offer);assert.equal(result.kind,'ready');assert.equal(result.options[0].kind,'restaurant');assert.equal(f.calls.filter(b=>b.retry_of_request_id).length,1);assert.equal(f.calls.at(-1).operation,'import_discovery');assert.equal(f.calls.some(b=>b.experience==='conversation_v1'),false);assert.equal(f.writes.length,0);
+});
+
+test('parent-ID replay or denial cannot complete or retire the saved child; restart retries only that exact child',async()=>{
+ for(const outcome of ['completed_parent','parent_denial','retry_exists']){
+  const f=await stoppedFixture(),terminal=f.deps.invoke;let child;
+  f.deps.invoke=async body=>{if(!body.retry_of_request_id)return terminal(body);f.calls.push(body);child??=body;assert.deepEqual(body,child);
+   if(outcome==='completed_parent')return new Response(`data: ${JSON.stringify({done:true,request_id:f.parentId,execution_state:'completed',usage_status:'completed'})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});
+   return Response.json({error:outcome==='retry_exists'?'retry_exists':'retry_not_eligible',request_id:f.parentId,execution_state:'stopped',retry_eligible:false,successor_request_id:outcome==='retry_exists'?child.request_id:null,admission_state:'not_admitted'},{status:409});
+  };
+  assert.equal((await f.transport.retry(f.access,f.offer)).kind,'pending');const saved=await f.transport.pending(f.access);assert.equal(saved.envelope.request_id,child.request_id);assert.notEqual(child.request_id,f.parentId);assert.equal(saved.completed,undefined);
+  const restarted=createMealTransport(f.deps);assert.equal((await restarted.recover(f.access)).kind,'pending');assert.deepEqual((await restarted.pending(f.access)).envelope,child);assert.equal(f.calls.filter(b=>b.retry_of_request_id).length,2);assert.equal(f.calls.filter(b=>b.operation==='import_discovery').length,0);
+  const calls=f.calls.length;assert.equal((await restarted.run(f.access,{operation:'explore',...input,food_query:'salmon'},{meal:'dinner',mode:'cook'})).kind,'pending');assert.equal(f.calls.length,calls);
+ }
+});
+test('stale original source receipt cannot offer a cross-day retry or reconstruct details from conversation',async()=>{
+ const f=await stoppedFixture();f.receipts.get(f.found.requestId).date='2026-10-21';const result=await f.transport.recover(f.access);assert.equal(result.reason,'retry_details_unavailable');assert.equal((await f.transport.pending(f.access)).envelope.request_id,f.parentId);assert.equal(f.calls.filter(b=>b.retry_of_request_id).length,0);
+});

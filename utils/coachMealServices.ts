@@ -1,7 +1,7 @@
 import {parseConstraints,emptyConstraints,type DietaryConstraints} from './coachDietaryConstraints';
 import type { DailyMealSlot } from './coachDailyAction';
 import { dailyAccess } from './coachDailyAction';
-import { createMealTransport, type MealAccess, type MealExploreInput, type MealResponse } from './coachMealTransport';
+import { createMealTransport, type MealAccess, type MealExploreInput, type MealResponse, type MealRetryOffer } from './coachMealTransport';
 import { createMealReviewSession, NUTRIENTS, scaleMealNutrition, type MealReviewContext, type MealReviewDependencies, type MealReviewEdit, type MealEvidence, type PreparedMealEntry } from './coachMealReview';
 import { existingMealLogPayload, mealEvidenceFromOption } from './coachMealReviewAdapter';
 
@@ -63,6 +63,7 @@ export function createMealServices(deps: {
    if(!source.capabilities.discovery||!source.publicRequest||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:source.capabilities.reason??'discovery_unavailable'} as const;
    return importDiscovery(access,await deps.transport.run(access,{operation:'discover',source_request_id:source.requestId,consent:true},{meal:source.meal,mode:source.mode}));
   },
+  retrySearch:async(access:MealAccess,offer:MealRetryOffer)=>importDiscovery(access,await deps.transport.retry(access,offer)),
   estimate:async(access:MealAccess,source:MealChoices,optionId:string,portionLabel?:string)=>{
    if(!source.capabilities.estimate||!source.options.some(o=>o.id===optionId)||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:source.capabilities.reason??'estimate_unavailable'} as const;
    return choices(await deps.transport.run(access,{operation:'estimate',source_request_id:source.requestId,option_id:optionId,consent:true,...(portionLabel?{portion_label:portionLabel}:{})},{meal:source.meal,mode:source.mode}));

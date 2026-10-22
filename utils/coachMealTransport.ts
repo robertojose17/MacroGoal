@@ -2,11 +2,12 @@ import { dailyAccess, type DailyAccess, type DailyMealSlot } from './coachDailyA
 import { mealEvidenceFromOption } from './coachMealReviewAdapter';
 
 export type MealExploreInput = { food_query: string; mode: 'cook'|'quick'|'eat_out'; exclusions: string[]; allergens: string[]; dietary_preferences?:string[]; available_minutes?: number; restaurant?: string; public_area?: string; preference?: 'balanced'|'high_protein'|'lower_calorie'|'preferred_food' };
-export type MealRequest = ({ operation:'explore' } & MealExploreInput) | { operation:'discover'; source_request_id:string; consent:true } | { operation:'estimate'; source_request_id:string; option_id:string; consent:true; portion_label?:string } | { operation:'import_discovery'; source_request_id:string } | { operation:'review'; source_request_id:string; option_id:string; servings:number; edited_values?:Partial<Record<'calories'|'protein'|'carbs'|'fats'|'fiber',number>>; estimate_acknowledged:boolean; ingredient_review_acknowledged:boolean; modification?:string };
+export type MealRequest = ({ operation:'explore' } & MealExploreInput) | { operation:'discover'; source_request_id:string; consent:true; retry_of_request_id?:string; retry_consent?:true } | { operation:'estimate'; source_request_id:string; option_id:string; consent:true; portion_label?:string } | { operation:'import_discovery'; source_request_id:string } | { operation:'review'; source_request_id:string; option_id:string; servings:number; edited_values?:Partial<Record<'calories'|'protein'|'carbs'|'fats'|'fiber',number>>; estimate_acknowledged:boolean; ingredient_review_acknowledged:boolean; modification?:string };
 type Envelope = MealRequest & { intent:'meal_choice'; experience:'meal_v2'; request_id:string; time_zone:string };
 export type MealPending = { owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; envelope:Envelope; recovery:'daily'|'discovery'; completed?:boolean };
 type Store = { getItem(k:string):Promise<string|null>; setItem(k:string,v:string):Promise<void>; removeItem(k:string):Promise<void> };
-export type MealResponse = { kind:'ready'; requestId:string; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; body:any } | { kind:'blocked'|'unavailable'|'pending'; reason:string };
+export type MealRetryOffer = {kind:'retry_available';reason:'search_stopped';requestId:string;owner:string;date:string;meal:DailyMealSlot;mode:MealExploreInput['mode'];publicRequest:Record<string,unknown>};
+export type MealResponse = { kind:'ready'; requestId:string; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; body:any } | MealRetryOffer | { kind:'blocked'|'unavailable'|'pending'; reason:string };
 export type MealAccess = DailyAccess | (()=>DailyAccess);
 const ready=(access:MealAccess)=>dailyAccess(typeof access==='function'?access():access)==='ready';
 const canonical=(v:any):string=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}':JSON.stringify(v);
@@ -14,18 +15,19 @@ const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{
 function validEnvelope(e:any){
  if(!e||!uuid(e.request_id)||e.intent!=='meal_choice'||e.experience!=='meal_v2'||typeof e.time_zone!=='string'||e.time_zone.length>100)return false;
  const common=['intent','experience','operation','request_id','time_zone'];
- const fields=e.operation==='explore'?['food_query','mode','exclusions','allergens','dietary_preferences','available_minutes','restaurant','public_area','preference']:e.operation==='discover'?['source_request_id','consent']:e.operation==='estimate'?['source_request_id','option_id','consent','portion_label']:e.operation==='import_discovery'?['source_request_id']:e.operation==='review'?['source_request_id','option_id','servings','edited_values','estimate_acknowledged','ingredient_review_acknowledged','modification']:null;
+ const fields=e.operation==='explore'?['food_query','mode','exclusions','allergens','dietary_preferences','available_minutes','restaurant','public_area','preference']:e.operation==='discover'?['source_request_id','consent','retry_of_request_id','retry_consent']:e.operation==='estimate'?['source_request_id','option_id','consent','portion_label']:e.operation==='import_discovery'?['source_request_id']:e.operation==='review'?['source_request_id','option_id','servings','edited_values','estimate_acknowledged','ingredient_review_acknowledged','modification']:null;
  if(!fields||Object.keys(e).some(k=>![...common,...fields].includes(k)))return false;
  const short=(v:any,max=160)=>typeof v==='string'&&v.length<=max;
  if(e.operation==='explore')return short(e.food_query)&&['cook','quick','eat_out'].includes(e.mode)&&[e.exclusions,e.allergens,e.dietary_preferences??[]].every(xs=>Array.isArray(xs)&&xs.length<=12&&xs.every(v=>short(v,60)))&&(e.restaurant===undefined||short(e.restaurant))&&(e.public_area===undefined||short(e.public_area))&&(e.available_minutes===undefined||Number.isInteger(e.available_minutes)&&e.available_minutes>=1&&e.available_minutes<=240)&&(e.preference===undefined||['balanced','high_protein','lower_calorie','preferred_food'].includes(e.preference));
  if(!uuid(e.source_request_id)||e.source_request_id===e.request_id)return false;
- if(e.operation==='discover')return e.consent===true;
+ if(e.operation==='discover')return e.consent===true&&(e.retry_of_request_id===undefined?e.retry_consent===undefined:uuid(e.retry_of_request_id)&&e.retry_of_request_id!==e.request_id&&e.retry_of_request_id!==e.source_request_id&&e.retry_consent===true);
  if(e.operation==='estimate')return e.consent===true&&short(e.option_id,200)&&e.option_id.length>0&&(e.portion_label===undefined||short(e.portion_label,160)&&e.portion_label.trim().length>0);
  if(e.operation==='review')return short(e.option_id,200)&&e.option_id.length>0&&typeof e.servings==='number'&&Number.isFinite(e.servings)&&e.servings>0&&e.servings<=20&&typeof e.estimate_acknowledged==='boolean'&&typeof e.ingredient_review_acknowledged==='boolean'&&(e.modification===undefined||short(e.modification,300))&&(e.edited_values===undefined||e.edited_values&&typeof e.edited_values==='object'&&!Array.isArray(e.edited_values)&&Object.entries(e.edited_values).every(([k,v])=>['calories','protein','carbs','fats','fiber'].includes(k)&&typeof v==='number'&&Number.isFinite(v)&&v>=0));
  return true;
 }
 const locks=new Set<string>();
 export function createMealTransport(deps:{owner():Promise<string|undefined>;today():string;zone():string;newId():string;scope:string;store:Store;invoke(body:Record<string,unknown>):Promise<Response>}) {
+ const retryOffers=new WeakSet<MealRetryOffer>();
  const key=(owner:string,date:string)=>'coach_meal_v2:'+JSON.stringify([deps.scope,owner,date]);
  const scopeOK=async(owner:string,date:string,zone:string)=>await deps.owner()===owner&&deps.today()===date&&deps.zone()===zone;
  const valid=(r:any,owner:string,date:string,zone:string):r is MealPending=>r?.owner===owner&&r.date===date&&['breakfast','lunch','dinner','snack'].includes(r.meal)&&['cook','quick','eat_out'].includes(r.mode)&&r.envelope?.time_zone===zone&&validEnvelope(r.envelope)&&r.recovery===(r.envelope.operation==='discover'?'discovery':'daily');
@@ -53,18 +55,46 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
   }catch{return {kind:'unavailable',reason:'saved_options_unavailable'};}
  }
 
- async function run(access:MealAccess,request:MealRequest,selection:{meal:DailyMealSlot;mode:MealExploreInput['mode']},recover=false):Promise<MealResponse>{
+ const stopped=(value:any,record:MealPending)=>record.envelope.operation==='discover'&&value?.request_id===record.envelope.request_id&&value.execution_state==='stopped'&&value.retry_eligible===true&&value.successor_request_id===null;
+ async function offerRetry(access:MealAccess,record:MealPending):Promise<MealResponse>{
+  if(record.envelope.operation!=='discover')return {kind:'pending',reason:'recovery_scope_mismatch'};
+  // Read the original admitted source, not reconstructed conversation text.
+  const response=await deps.invoke({intent:'recover_daily',request_id:record.envelope.source_request_id,journey:'meal_explore_v1'});
+  if(!response.ok)return {kind:'pending',reason:'retry_details_unavailable'};
+  const source=await response.json();
+  if(!await scopeOK(record.owner,record.date,record.envelope.time_zone)||!ready(access))return {kind:'blocked',reason:'scope_changed'};
+  const query=source?.discovery_request;
+  if(source?.schema!=='meal_explore_v1'||source.owner!==record.owner||source.date!==record.date||source.status!=='discovery_available'||!query||typeof query.food!=='string'||!query.food.trim()||query.food.length>160||!['recipe','restaurant'].includes(query.mode)||query.mode==='restaurant'&&(typeof query.area!=='string'||!query.area.trim()))return {kind:'pending',reason:'retry_details_unavailable'};
+  if(source.paid_capabilities?.discovery!==true)return {kind:'blocked',reason:source.paid_capabilities?.reason??'discovery_unavailable'};
+  const offer:MealRetryOffer={kind:'retry_available',reason:'search_stopped',requestId:record.envelope.request_id,owner:record.owner,date:record.date,meal:record.meal,mode:record.mode,publicRequest:query};
+  retryOffers.add(offer);return offer;
+ }
+ async function run(access:MealAccess,request:MealRequest,selection:{meal:DailyMealSlot;mode:MealExploreInput['mode']},recover=false,retryOffer?:MealRetryOffer):Promise<MealResponse>{
   if(!ready(access))return {kind:'blocked',reason:'access_unavailable'};
+  if(request.operation==='discover'&&request.retry_of_request_id&&!recover&&!retryOffer)return {kind:'blocked',reason:'retry_confirmation_required'};
   let k:string|undefined,locked=false;
   try{
    const owner=await deps.owner(),date=deps.today(),zone=deps.zone();if(!owner)return {kind:'blocked',reason:'unauthorized'};
    k=key(owner,date);if(locks.has(k))return {kind:'pending',reason:'execution_active'};locks.add(k);locked=true;
    const raw=await deps.store.getItem(k),previous=raw?JSON.parse(raw):null;
    if(previous&&!valid(previous,owner,date,zone))return {kind:'blocked',reason:'journal_scope_mismatch'};
+   if(retryOffer){
+    if(!retryOffers.has(retryOffer)||!previous||previous.envelope.operation!=='discover'||previous.envelope.request_id!==retryOffer.requestId||retryOffer.owner!==owner||retryOffer.date!==date)return {kind:'blocked',reason:'retry_confirmation_expired'};
+    // Recheck the known terminal parent before creating a successor. The server
+    // remains authoritative if another device already claimed its one successor.
+    const checked=await deps.invoke(previous.envelope);let terminal:any;
+    if(!checked.ok){try{terminal=await checked.json();}catch{}}
+    if(!await scopeOK(owner,date,zone)||!ready(access))return {kind:'blocked',reason:'scope_changed'};
+    if(!stopped(terminal,previous))return {kind:'pending',reason:'retry_state_changed'};
+    retryOffers.delete(retryOffer);
+    const {intent,experience,request_id,time_zone,...original}=previous.envelope;
+    request={...original,retry_of_request_id:request_id,retry_consent:true};
+    await deps.store.setItem(k+':stopped:'+request_id,JSON.stringify(previous));
+   }
    const requestOf=(e:Envelope)=>Object.fromEntries(Object.entries(e).filter(([name])=>!['request_id','time_zone','intent','experience'].includes(name)));
    const identical=previous&&canonical(requestOf(previous.envelope))===canonical(request)&&previous.meal===selection.meal&&previous.mode===selection.mode;
    if(recover&&!identical)return {kind:'blocked',reason:'recovery_scope_mismatch'};
-   if(previous&&!recover&&!(previous.completed&&previous.envelope.operation==='discover'&&request.operation==='import_discovery'&&request.source_request_id===previous.envelope.request_id))return {kind:'pending',reason:'recover_existing_request'};
+   if(previous&&!recover&&!retryOffer&&!(previous.completed&&previous.envelope.operation==='discover'&&request.operation==='import_discovery'&&request.source_request_id===previous.envelope.request_id))return {kind:'pending',reason:'recover_existing_request'};
    const record:MealPending=recover?previous:{owner,date,...selection,envelope:{intent:'meal_choice',experience:'meal_v2',...request,request_id:deps.newId(),time_zone:zone},recovery:request.operation==='discover'?'discovery':'daily'};
    if(!valid(record,owner,date,zone))return {kind:'blocked',reason:'invalid_envelope'};
    if(!recover)await deps.store.setItem(k,JSON.stringify(record));
@@ -72,7 +102,7 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
    if(record.completed&&record.recovery==='discovery')return {kind:'ready',requestId:record.envelope.request_id,owner,date,meal:record.meal,mode:record.mode,body:{done:true,request_id:record.envelope.request_id,usage_status:'completed'}};
    const body=recover&&record.recovery==='daily'?{intent:'recover_daily',request_id:record.envelope.request_id,journey:'meal_explore_v1'}:record.envelope;
    const response=await deps.invoke(body);
-   if(!response.ok){let error:any={};try{error=await response.json();}catch{}if(!await scopeOK(owner,date,zone))return {kind:'blocked',reason:'scope_changed'};if(error.request_id===record.envelope.request_id&&error.admission_state==='not_admitted')await deps.store.removeItem(k);return {kind:[401,403,429].includes(response.status)?'blocked':'pending',reason:typeof error.error==='string'?error.error:'request_unresolved'};}
+   if(!response.ok){let error:any={};try{error=await response.json();}catch{}if(!await scopeOK(owner,date,zone))return {kind:'blocked',reason:'scope_changed'};if(stopped(error,record))return offerRetry(access,record);if(error.request_id===record.envelope.request_id&&error.admission_state==='not_admitted')await deps.store.removeItem(k);return {kind:[401,403,429].includes(response.status)?'blocked':'pending',reason:typeof error.error==='string'?error.error:'request_unresolved'};}
    let output:any;
    if(record.recovery==='discovery'){
     if(!response.headers.get('content-type')?.includes('text/event-stream'))return {kind:'pending',reason:'discovery_stream_expected'};
@@ -81,6 +111,7 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
     const decoder=new TextDecoder();let buffer='',size=0;
     if(reader){try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>1024*1024)throw Error('stream_too_large');buffer+=decoder.decode(part.value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()??'';for(const line of lines)parse(line);}buffer+=decoder.decode();if(buffer.trim())parse(buffer);}finally{reader.releaseLock();}}
     else{const text=await response.text();if(text.length>1024*1024)throw Error('stream_too_large');text.split('\n').forEach(parse);}
+    if(stopped(output,record))return offerRetry(access,record);
     if(output?.done&&output.request_id===record.envelope.request_id&&output.usage_status==='refunded'&&await scopeOK(owner,date,zone)&&ready(access)){await deps.store.removeItem(k);return {kind:'blocked',reason:'discovery_not_completed'};}
     if(!output?.done||output.request_id!==record.envelope.request_id||output.usage_status!=='completed')return {kind:'pending',reason:'discovery_unresolved'};
    }else{
@@ -95,5 +126,5 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
    return {kind:'ready',requestId:record.envelope.request_id,owner,date,meal:record.meal,mode:record.mode,body:output};
   }catch{return {kind:'pending',reason:'dispatch_or_recovery_unknown'};}finally{if(k&&locked)locks.delete(k);}
  }
- return {pending,saved,restore,run,recover:async(access:MealAccess)=>{const record=await pending(access);if(!record)return {kind:'blocked',reason:'no_pending_request'} as MealResponse;const {intent,experience,request_id,time_zone,...request}=record.envelope;return run(access,request,{meal:record.meal,mode:record.mode},true);}};
+ return {pending,saved,restore,run,retry:async(access:MealAccess,offer:MealRetryOffer)=>run(access,{operation:'discover',source_request_id:offer.requestId,consent:true},{meal:offer.meal,mode:offer.mode},false,offer),recover:async(access:MealAccess)=>{const record=await pending(access);if(!record)return {kind:'blocked',reason:'no_pending_request'} as MealResponse;const {intent,experience,request_id,time_zone,...request}=record.envelope;return run(access,request,{meal:record.meal,mode:record.mode},true);}};
 }

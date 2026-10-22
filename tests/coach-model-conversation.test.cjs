@@ -64,3 +64,13 @@ test('specific food handoff survives client exploration input and search disclos
   for(const es of [false,true]){const lines=mealSearchDisclosure(request,es);assert.ok(lines.includes((es?'Buscar: ':'Look for: ')+food));assert.ok(lines.some(line=>line.includes('Orlando, Florida')));}
  }
 });
+
+test('terminal search retry shows original details and requires a separate explicit confirmation with no automatic execution',async()=>{
+ const h=harness();try{
+  const offer={kind:'retry_available',reason:'search_stopped',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'old-request',publicRequest:{food:'grilled chicken rice and vegetables',area:'Orlando, Florida',mode:'restaurant',preference:'high_protein'}};
+  h.render();h.states[0]=offer;h.states[2]=true;h.props.service.retrySearch=async(_access,value)=>{h.calls.push({operation:'retrySearch',value});return {kind:'pending',reason:'unknown'}};
+  let tree=h.render();assert.equal(h.calls.length,0);assert.match(h.text(tree),/grilled chicken rice and vegetables/);assert.match(h.text(tree),/Orlando, Florida/);assert.match(h.text(tree),/earlier attempt may still count/);assert.equal(h.button(tree,'Retry search'),undefined);
+  h.button(tree,'Not now').props.onPress();tree=h.render();assert.equal(h.calls.length,0);assert.ok(h.button(tree,'Retry search'));
+  h.states[0]=offer;tree=h.render();const submit=h.button(tree,'Confirm new search');submit.props.onPress();submit.props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,1);assert.equal(h.calls[0].value,offer);
+ }finally{h.restore()}
+});
