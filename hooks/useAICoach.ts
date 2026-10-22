@@ -303,15 +303,37 @@ export function useAICoach(options?: UseAICoachOptions) {
       if(!active||ownVersion!==version||!isMountedRef.current)return;
       setMessages(prev=>{
         if(!active||ownVersion!==version)return prev;
-        let next=[...prev];
-        for(const row of rows){
+        const next=[...prev];
+        let matchBefore=next.length;
+        for(const row of [...rows].reverse()){
           const value=parseMealConversation(row.reply.mealConversation);
           const mealConversation=value?{value,owner:row.owner,date:row.date}:undefined;
           const id='accepted-'+row.requestId;
-          const existing=next.findIndex(m=>m.id===id||(m.role==='assistant'&&m.content===row.reply.content&&Math.abs(m.timestamp-row.reply.timestamp)<10000));
-          if(existing>=0){next[existing]={...next[existing],...(mealConversation?{mealConversation}:{})};continue;}
-          if(!next.some(m=>m.role==='user'&&m.content===row.user.content&&Math.abs(m.timestamp-row.user.timestamp)<10000))next.push({id:id+'-user',role:'user',...row.user});
-          next.push({id,role:'assistant',content:row.reply.content,timestamp:row.reply.timestamp,...(mealConversation?{mealConversation}:{})});
+          // Remote history uses database IDs and save timestamps, not the client
+          // request ID or send time. Reconcile ordered complete turns, once each,
+          // so slow replies do not duplicate and repeated identical turns remain.
+          let existing=-1;
+          for(let index=matchBefore-1;index>=0;index--){const m=next[index];
+            if(m.id===id||(m.role==='assistant'&&m.content===row.reply.content&&
+              next[index-1]?.role==='user'&&next[index-1].content===row.user.content)){existing=index;break;}}
+          if(existing>=0){matchBefore=Math.max(0,existing-1);next[existing]={...next[existing],...(mealConversation?{mealConversation}:{})};continue;}
+          // Separate history inserts can leave only the assistant. Attach the
+          // missing user only for a unique orphan/accepted reply match. Repeated
+          // text or a reply already paired with another user remains untouched.
+          const matchingReplies=next.map((m,index)=>({m,index})).filter(({m})=>m.role==='assistant'&&m.content===row.reply.content);
+          const orphan=matchingReplies.length===1?matchingReplies[0]:undefined;
+          if(orphan&&orphan.index<matchBefore&&next[orphan.index-1]?.role!=='user'&&
+            rows.filter(r=>r.reply.content===row.reply.content).length===1){
+            next[orphan.index]={...orphan.m,...(mealConversation?{mealConversation}:{})};
+            next.splice(orphan.index,0,{id:id+'-user',role:'user',...row.user});
+            matchBefore=orphan.index;
+            continue;
+          }
+          const preceding=next[matchBefore-1];
+          const hasUser=preceding?.role==='user'&&preceding.content===row.user.content;
+          const restored:Message[]=[...(hasUser?[]:[{id:id+'-user',role:'user' as const,...row.user}]),{id,role:'assistant',content:row.reply.content,timestamp:row.reply.timestamp,...(mealConversation?{mealConversation}:{})}];
+          next.splice(matchBefore,0,...restored);
+          if(hasUser)matchBefore--;
         }
         return next;
       });
