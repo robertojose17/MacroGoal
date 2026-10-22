@@ -1,3 +1,4 @@
+import { conversationFailureCopy } from '@/utils/coachConversationCopy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createConversationTransport } from '@/utils/coachConversationTransport';
 import { parseMealConversation, type ScopedMealConversation } from '@/utils/coachMealConversation';
@@ -88,6 +89,7 @@ export type Message = {
   suggestions?: string[];
   guidedMealChoice?: boolean;
   mealConversation?: ScopedMealConversation;
+  isCoachNotice?: boolean;
 };
 
 type State =
@@ -132,7 +134,7 @@ function genMsgId() {
 export function useAICoach(options?: UseAICoachOptions) {
   const [conversationPending,setConversationPending]=useState(false);
   const journal=useRef<ReturnType<typeof createConversationTransport>|null>(null);
-  if(!journal.current)journal.current=createConversationTransport({store:AsyncStorage,scope:SUPABASE_PROJECT_URL,owner:async()=>{const {data,error}=await supabase.auth.getUser();return error?undefined:data.user?.id;},today:toLocalDateString,newId:()=> 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const n=Math.floor(Math.random()*16);return(c==='x'?n:(n&3)|8).toString(16);}),invoke:async (body,owner)=>{const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token||session.user.id!==owner)throw Error('unauthorized');return expoFetch(`${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_ANON_KEY},body:JSON.stringify(body),signal:AbortSignal.timeout(45000)});}});
+  if(!journal.current)journal.current=createConversationTransport({store:AsyncStorage,scope:SUPABASE_PROJECT_URL,owner:async()=>{const {data,error}=await supabase.auth.getUser();return error?undefined:data.user?.id;},today:toLocalDateString,newId:()=> 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const n=Math.floor(Math.random()*16);return(c==='x'?n:(n&3)|8).toString(16);}),invoke:async (body,owner,signal)=>{const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token||session.user.id!==owner)throw Error('unauthorized');return expoFetch(`${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_ANON_KEY},body:JSON.stringify(body),signal});}});
   useEffect(()=>{
     if(!options?.mealConversation)return;
     let active=true,version=0;
@@ -311,7 +313,7 @@ export function useAICoach(options?: UseAICoachOptions) {
       // Build full history: filter out streaming/placeholder/sentinel messages,
       // then append the new user message (deduplicating if already present).
       const historyMessages: CoachMessage[] = messagesRef.current
-        .filter((m) => !m.isStreaming && !isCoachPlaceholder(m.content))
+        .filter((m) => !m.isStreaming && !m.isCoachNotice && !isCoachPlaceholder(m.content))
         .map((m) => ({ role: m.role, content: m.content, timestamp: m.timestamp }));
 
       // Avoid duplicating the new user message if it's already the last item in history
@@ -357,6 +359,7 @@ export function useAICoach(options?: UseAICoachOptions) {
 
         if (!jwt) {
           console.error('[useAICoach] Session expired after refresh attempt — aborting request');
+          if(options?.mealConversation)throw Error('unauthorized');
           const sessionErrMsg: Message = {
             id: genMsgId(),
             role: 'assistant',
@@ -380,13 +383,13 @@ export function useAICoach(options?: UseAICoachOptions) {
           isStreaming: true,
         };
         if (isMountedRef.current) {
-          setMessages((prev) => [...prev, placeholderMsg]);
+          setMessages((prev) => [...prev.filter(m=>!m.isCoachNotice), placeholderMsg]);
         }
 
         console.log('[useAICoach] Sending request with valid JWT (length:', jwt.length, ')');
 
         const abortController = new AbortController();
-        timeoutId = setTimeout(() => {
+        if(!options?.mealConversation)timeoutId = setTimeout(() => {
           abortController.abort();
           console.warn('[useAICoach] Request timed out after 30s — aborting');
         }, 30000);
@@ -609,8 +612,14 @@ export function useAICoach(options?: UseAICoachOptions) {
       } catch (e: any) {
         clearTimeout(timeoutId);
         if(options?.mealConversation){
-          setConversationPending(!!await journal.current!.pending().catch(()=>true));
-          setMessages(prev=>prev.filter(m=>m.id!==placeholderMsg.id));
+          const pending=!!await journal.current!.pending().catch(()=>true);
+          if(isMountedRef.current){
+            setConversationPending(pending);
+            const notice:Message={id:'coach-conversation-notice',role:'assistant',content:conversationFailureCopy(e?.message,pending,i18n.language.startsWith('es')),timestamp:Date.now(),isStreaming:false,isCoachNotice:true};
+            setMessages(prev=>[...prev.filter(m=>m.id!==placeholderMsg.id&&!m.isCoachNotice),notice]);
+            setState({status:'error',error:e?.message??'conversation_recovery_required'});
+          }
+          return; // One inline message; no duplicate native alert or automatic retry.
         }
         if (e?.name === 'AbortError') {
           console.warn('[useAICoach] Request aborted (timeout)');
@@ -645,7 +654,7 @@ export function useAICoach(options?: UseAICoachOptions) {
   const loading = state.status === 'loading';
   const error = state.status === 'error' ? state.error : null;
 
-  const recoverConversation=useCallback(async()=>{const record=await journal.current!.pending();if(!record)return;await sendMessage(record.body.messages.map(m=>({...m,timestamp:m.timestamp??Date.now()})),undefined,false,false,true);},[sendMessage]);
+  const recoverConversation=useCallback(async()=>{try{const record=await journal.current!.pending();if(!record){setConversationPending(false);return;}await sendMessage(record.body.messages.map(m=>({...m,timestamp:m.timestamp??Date.now()})),undefined,false,false,true);}catch{if(isMountedRef.current){setState({status:'error',error:'conversation_recovery_required'});setMessages(prev=>[...prev.filter(m=>!m.isCoachNotice),{id:'coach-conversation-notice',role:'assistant',content:conversationFailureCopy(undefined,true,i18n.language.startsWith('es')),timestamp:Date.now(),isCoachNotice:true}]);}}},[sendMessage]);
   return {
     conversationPending,recoverConversation,
     sendMessage,

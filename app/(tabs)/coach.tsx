@@ -1555,7 +1555,7 @@ export default function CoachScreen() {
   const handleSend = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || loading || premiumLoading || premiumError) return;
+      if (!trimmed || loading || premiumLoading || premiumError || (COACH_CONVERSATION_READY && conversationPending)) return;
 
       // ── Intercept text confirmations for pending action proposals ──────────
       const CONFIRM_PHRASES = ['yes', 'sí', 'si', 'confirm', 'ok', 'sure', 'do it', 'go ahead', 'create it', 'save it', 'create plan', 'save plan', 'yep', 'yeah', 'yup'];
@@ -1682,7 +1682,7 @@ export default function CoachScreen() {
         if (!isMountedRef.current) return;
         console.error('[AICoach] Error from sendMessage:', e?.message);
 
-        if (!e?.isSubscriptionError) {
+        if (!COACH_CONVERSATION_READY && !e?.isSubscriptionError) {
           Alert.alert(t('common.error'), t('localization.coach.requestFailed'));
           const errMsg: MessageWithId = {
             id: genId(),
@@ -1694,7 +1694,7 @@ export default function CoachScreen() {
         }
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, premiumError, t]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, premiumError, conversationPending, t]
   );
 
   // Keep ref in sync so the premium-upgrade effect can call handleSend without
@@ -2593,15 +2593,17 @@ export default function CoachScreen() {
             </View>
           )}
 
-        </ScrollView>
-
         {COACH_CONVERSATION_READY && conversationPending && !loading && (
+          <View style={{paddingHorizontal:16,paddingVertical:8}}>
+          {!messages.some(m=>m.isCoachNotice) && <Text style={{color:colors.text}}>{locale.startsWith('es')?'Tu último mensaje aún no tiene una respuesta confirmada. Reintenta este mensaje antes de enviar otro.':'Your last message has no confirmed reply. Retry this message before sending another.'}</Text>}
           <TouchableOpacity accessibilityRole="button" disabled={!isPremium || premiumLoading || effectivelyGated}
             style={{minHeight:44,paddingHorizontal:16,paddingVertical:12}}
             onPress={()=>void recoverConversation().catch(()=>{})}>
-            <Text style={{color:colors.primary}}>{locale.startsWith('es')?'Recuperar la respuesta pendiente':'Recover pending response'}</Text>
+            <Text style={{color:colors.primary}}>{locale.startsWith('es')?'Reintentar mensaje':'Retry message'}</Text>
           </TouchableOpacity>
+          </View>
         )}
+        </ScrollView>
 
         {/* ── Craving chips — rendered inside ScrollView after welcome message ── */}
 
