@@ -291,6 +291,37 @@ export function useAICoach(options?: UseAICoachOptions) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Restore locally accepted replies only after remote history initialization.
+  // This is local storage recovery, never a new AI request or server write.
+  useEffect(()=>{
+    if(!options?.mealConversation||!initResult)return;
+    let active=true,version=0;
+    const restore=async()=>{const ownVersion=++version;try{
+      const rows=await journal.current!.restoreAccepted();
+      const pending=!!await journal.current!.pending();
+      if(rows.length&&((await supabase.auth.getUser()).data.user?.id!==rows[0].owner||toLocalDateString()!==rows[0].date))return;
+      if(!active||ownVersion!==version||!isMountedRef.current)return;
+      setMessages(prev=>{
+        if(!active||ownVersion!==version)return prev;
+        let next=[...prev];
+        for(const row of rows){
+          const value=parseMealConversation(row.reply.mealConversation);
+          const mealConversation=value?{value,owner:row.owner,date:row.date}:undefined;
+          const id='accepted-'+row.requestId;
+          const existing=next.findIndex(m=>m.id===id||(m.role==='assistant'&&m.content===row.reply.content&&Math.abs(m.timestamp-row.reply.timestamp)<10000));
+          if(existing>=0){next[existing]={...next[existing],...(mealConversation?{mealConversation}:{})};continue;}
+          if(!next.some(m=>m.role==='user'&&m.content===row.user.content&&Math.abs(m.timestamp-row.user.timestamp)<10000))next.push({id:id+'-user',role:'user',...row.user});
+          next.push({id,role:'assistant',content:row.reply.content,timestamp:row.reply.timestamp,...(mealConversation?{mealConversation}:{})});
+        }
+        return next;
+      });
+      setConversationPending(pending);
+    }catch{/* Existing pending reference remains available for explicit retry. */}};
+    void restore();
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'||event==='SIGNED_IN'){version++;setMessages([]);void restore();}});
+    return()=>{active=false;version++;subscription.unsubscribe();};
+  },[initResult,options?.mealConversation]);
+
   const clearPendingAction = useCallback(() => {
     console.log('[useAICoach] Clearing pending action');
     setPendingAction(null);
@@ -448,13 +479,16 @@ export function useAICoach(options?: UseAICoachOptions) {
           throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
         }
 
-        if(options?.mealConversation)setConversationPending(false);
         // Response is OK - cancel the timeout so it doesn't fire during streaming
         clearTimeout(timeoutId);
 
         // Read SSE stream token by token
         console.log('[useAICoach] Reading SSE stream');
-        const reader = response.body!.getReader();
+        // Journaled replies are already buffered and committed. React Native's
+        // global Response supports text(), but not body.getReader(). Only the
+        // original expo/fetch response in the legacy path is a native stream.
+        const reader = options?.mealConversation ? null : response.body!.getReader();
+        let committedText = options?.mealConversation ? await response.text() : null;
         const decoder = new TextDecoder();
         let fullText = '';
         let actionProposal: ActionProposal | null = null;
@@ -465,9 +499,14 @@ export function useAICoach(options?: UseAICoachOptions) {
 
         try {
           for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
+            if (reader) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+            } else if (committedText !== null) {
+              buffer += committedText;
+              committedText = null;
+            } else break;
             const lines = buffer.split('\n');
             buffer = lines.pop() ?? '';
             for (const line of lines) {
@@ -502,7 +541,7 @@ export function useAICoach(options?: UseAICoachOptions) {
             }
           }
         } finally {
-          reader.releaseLock();
+          reader?.releaseLock();
         }
 
         // Flush any remaining data in buffer after stream ends
@@ -551,6 +590,11 @@ export function useAICoach(options?: UseAICoachOptions) {
         if(options?.mealConversation){actionProposal=null;suggestions=null;}
         const scopedMealConversation = mealConversation && requestOwner && finalOwner === requestOwner && requestDay === toLocalDateString() ? {value:mealConversation,owner:requestOwner,date:requestDay} : undefined;
 
+        if(options?.mealConversation && isMountedRef.current){
+          await journal.current!.acknowledge(response.headers.get('x-coach-request-id'),{content:fullText,timestamp:placeholderMsg.timestamp,...(scopedMealConversation?{mealConversation:scopedMealConversation.value}:{})});
+          if((await supabase.auth.getUser()).data.user?.id!==requestOwner||requestDay!==toLocalDateString())throw Error('scope_changed');
+          if(isMountedRef.current)setConversationPending(false);
+        }
         // Finalize message
         if (isMountedRef.current) {
           setMessages((prev) =>

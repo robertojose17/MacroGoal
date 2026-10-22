@@ -1,6 +1,7 @@
 type Store={getItem(key:string):Promise<string|null>;setItem(key:string,value:string):Promise<void>;removeItem(key:string):Promise<void>};
 export type ChatEnvelope={experience:'conversation_v1';request_id:string;messages:{role:'user'|'assistant';content:string;timestamp?:number}[];language?:string;weight_unit?:string;conversation_id?:string|null};
 type Record={owner:string;date:string;body:ChatEnvelope};
+export type AcceptedConversation={owner:string;date:string;requestId:string;user:{content:string;timestamp:number};reply:{content:string;timestamp:number;mealConversation?:unknown}};
 const locks=new Set<string>();const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export function createConversationTransport(deps:{store:Store;scope:string;owner():Promise<string|undefined>;today():string;newId():string;timeoutMs?:number;invoke(body:ChatEnvelope,owner:string,signal:AbortSignal):Promise<Response>}){
  const key=(owner:string,date:string)=>`coach_conversation_v1:${JSON.stringify([deps.scope,owner,date])}`;
@@ -33,8 +34,36 @@ export function createConversationTransport(deps:{store:Store;scope:string;owner
    }
    if(response.ok&&response.headers.get('content-type')?.includes('text/event-stream'))for(const block of text.split(/\r?\n\r?\n/)){const data=block.split(/\r?\n/).filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trim()).join('\n');if(!data)continue;try{const value=JSON.parse(data);if(value.done)done=value;}catch{}}
    if(!done||done.request_id!==record.body.request_id||typeof done.corrected_text!=='string'||!done.corrected_text.trim())throw Error('conversation_recovery_required');
-   await deps.store.removeItem(k);if(await deps.owner()!==owner||deps.today()!==date)throw Error('scope_changed');return new Response(text,{status:response.status,headers:response.headers});
+   const committed=new Response(text,{status:response.status,headers:response.headers});
+   committed.headers.set('x-coach-request-id',record.body.request_id);
+   return committed; // Keep durable recovery until the consumer accepts the reply.
   }finally{locks.delete(k);}
  }
- return {pending,run};
+ async function accepted(){
+  const owner=await deps.owner(),date=deps.today();if(!owner)return [] as AcceptedConversation[];
+  const raw=await deps.store.getItem(key(owner,date)+':accepted');let rows:AcceptedConversation[]=[];
+  try{const parsed=JSON.parse(raw??'[]');if(Array.isArray(parsed)&&parsed.length<=10)rows=parsed.filter(r=>r?.owner===owner&&r.date===date&&uuid.test(r.requestId)&&[r.user,r.reply].every(m=>typeof m?.content==='string'&&m.content.length>0&&m.content.length<=131072&&Number.isFinite(m.timestamp)));}catch{}
+  if(await deps.owner()!==owner||deps.today()!==date)throw Error('scope_changed');
+  return rows;
+ }
+ async function acknowledge(requestId:string|null,reply:AcceptedConversation['reply']){
+  const record=await pending();if(!record||record.body.request_id!==requestId)throw Error('conversation_ack_mismatch');
+  if(!reply||typeof reply.content!=='string'||!reply.content.trim()||reply.content.length>131072||!Number.isFinite(reply.timestamp))throw Error('invalid_conversation_acceptance');
+  const previous=await accepted(),user=record.body.messages.at(-1)!;
+  const rows=[...previous.filter(r=>r.requestId!==requestId),{owner:record.owner,date:record.date,requestId:record.body.request_id,user:{content:user.content,timestamp:user.timestamp??reply.timestamp},reply}].slice(-10);
+  if(await deps.owner()!==record.owner||deps.today()!==record.date)throw Error('scope_changed');
+  // Persist accepted transcript before retiring recovery. A crash between these
+  // writes leaves both records; restoration reconciles them without a provider.
+  await deps.store.setItem(key(record.owner,record.date)+':accepted',JSON.stringify(rows));
+  if(await deps.owner()!==record.owner||deps.today()!==record.date)throw Error('scope_changed');
+  await deps.store.removeItem(key(record.owner,record.date));
+ }
+ async function restoreAccepted(){
+  const rows=await accepted(),record=await pending();
+  const match=record&&rows.find(r=>r.requestId===record.body.request_id&&r.owner===record.owner&&r.date===record.date);
+  if(match)await acknowledge(match.requestId,match.reply);
+  if(rows.length&&(await deps.owner()!==rows[0].owner||deps.today()!==rows[0].date))throw Error('scope_changed');
+  return rows;
+ }
+ return {pending,run,acknowledge,restoreAccepted};
 }
