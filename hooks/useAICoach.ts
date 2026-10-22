@@ -1,3 +1,4 @@
+import { isSameCoachDay } from '@/utils/coachJourney';
 import { isCoachPlaceholder } from '@/hooks/coachMessageLocalization';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -81,6 +82,7 @@ export type Message = {
   actionProposal?: ActionProposal;
   actionStatus?: 'pending' | 'confirming' | 'confirmed' | 'declined';
   suggestions?: string[];
+  guidedMealChoice?: boolean;
 };
 
 type State =
@@ -186,11 +188,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         const conversations: { id: string; last_message_at: string; created_at: string }[] = await listRes.json();
         console.log('[useAICoach] Conversations fetched, count:', conversations.length);
 
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayConv = conversations.find((c) => {
-          const d = (c.last_message_at || c.created_at || '').split('T')[0];
-          return d === todayStr;
-        });
+        const todayConv = conversations.find(c => isSameCoachDay(c.last_message_at || c.created_at || ''));
 
         let finalConvId: string | null = null;
         let finalHasHistory = false;
@@ -435,6 +433,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         let fullText = '';
         let actionProposal: ActionProposal | null = null;
         let suggestions: string[] | null = null;
+        let guidedMealChoice = false;
         let buffer = '';
 
         try {
@@ -466,6 +465,7 @@ export function useAICoach(options?: UseAICoachOptions) {
                 if (parsed.done) {
                   actionProposal = parsed.action_proposal || null;
                   suggestions = parsed.suggestions || null;
+                  guidedMealChoice = parsed.guided_meal_choice?.schema === 'guided_meal_choice_v1' && parsed.guided_meal_choice?.status === 'clarify';
                   if (parsed.corrected_text) {
                     fullText = parsed.corrected_text;
                   }
@@ -489,6 +489,7 @@ export function useAICoach(options?: UseAICoachOptions) {
               if (parsed.done) {
                 actionProposal = parsed.action_proposal || null;
                 suggestions = parsed.suggestions || null;
+                  guidedMealChoice = parsed.guided_meal_choice?.schema === 'guided_meal_choice_v1' && parsed.guided_meal_choice?.status === 'clarify';
                 if (parsed.corrected_text) {
                   fullText = parsed.corrected_text;
                 }
@@ -528,6 +529,7 @@ export function useAICoach(options?: UseAICoachOptions) {
                       ? { actionProposal, actionStatus: 'pending' as const }
                       : {}),
                     ...(suggestions ? { suggestions } : {}),
+                    ...(guidedMealChoice ? { guidedMealChoice: true } : {}),
                   }
                 : m
             )

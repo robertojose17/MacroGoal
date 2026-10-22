@@ -1,3 +1,4 @@
+import { isMealHelpRequest } from '@/utils/coachJourney';
 import { coachDailyServices } from '@/utils/coachDailyServices';
 import CoachDailyAction from '@/components/CoachDailyAction';
 // Enable only after the existing app backend supports the reviewed daily contract.
@@ -989,6 +990,8 @@ export default function CoachScreen() {
 
   // ── Premium gate ──────────────────────────────────────────────────────────
   const [isGated, setIsGated] = useState(false);
+  const [mealHelpRequest, setMealHelpRequest] = useState(0);
+  const conversationInputRef = useRef<TextInput>(null);
 
   // Tracks how many real (non-sentinel) messages the free user has sent.
   // __FIRST_INTERACTION__ does NOT count. Gate fires when >= 1.
@@ -1520,8 +1523,9 @@ export default function CoachScreen() {
     }, 100);
   }, []);
 
+  const conversationEngaged = useRef(false);
   useEffect(() => {
-    scrollToBottom();
+    if (!COACH_DAILY_ACTION_INTEGRATED || conversationEngaged.current) scrollToBottom();
   }, [messages.length, loading, scrollToBottom]);
 
   const handleConfirmInlineRef = useRef<(messageId: string) => void>(() => {});
@@ -1530,7 +1534,7 @@ export default function CoachScreen() {
   const handleSend = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || loading) return;
+      if (!trimmed || loading || premiumLoading || premiumError) return;
 
       // ── Intercept text confirmations for pending action proposals ──────────
       const CONFIRM_PHRASES = ['yes', 'sí', 'si', 'confirm', 'ok', 'sure', 'do it', 'go ahead', 'create it', 'save it', 'create plan', 'save plan', 'yep', 'yeah', 'yup'];
@@ -1551,6 +1555,24 @@ export default function CoachScreen() {
         return;
       }
 
+      if (COACH_DAILY_ACTION_INTEGRATED && isMealHelpRequest(trimmed)) {
+        setInputText('');
+        setMealHelpRequest(value => value + 1);
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        return;
+      }
+
+      if (COACH_DAILY_ACTION_INTEGRATED && !isPremium) {
+        setInputText('');
+        setMessages(prev => [...prev, { id: genId(), role: 'user', content: trimmed, timestamp: Date.now() }, {
+          id: genId(), role: 'assistant', timestamp: Date.now(),
+          content: getAppLocale().startsWith('es') ? 'Podemos explorar cómo elegir una comida en la vista previa. Para conversar sobre tu día y recibir orientación personalizada, necesitas Premium.' : 'You can explore choosing a meal in the guided preview. Personalized conversation about your day requires Premium.',
+          showUpgradeButton: true, isPremiumGate: true,
+        }]);
+        return;
+      }
+
+      conversationEngaged.current = true;
       console.log('[AICoach] Send button pressed, message:', trimmed.slice(0, 80));
 
       // ── If user is premium, clear any stale gate state immediately ───────────
@@ -1650,7 +1672,7 @@ export default function CoachScreen() {
         }
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, t]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, premiumError, t]
   );
 
   // Keep ref in sync so the premium-upgrade effect can call handleSend without
@@ -2327,9 +2349,9 @@ export default function CoachScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {COACH_DAILY_ACTION_INTEGRATED && <CoachDailyAction services={coachDailyServices} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
+          {COACH_DAILY_ACTION_INTEGRATED && <CoachDailyAction services={coachDailyServices} mealRequest={mealHelpRequest} hasConversation={visibleMessages.some(message => message.role === 'user')} onConversation={() => { conversationEngaged.current = true; scrollToBottom(); conversationInputRef.current?.focus(); }} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
           {/* ── Proactive insight card — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && proactiveInsight && (
+          {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && proactiveInsight && (
             <View style={[styles.insightCard, { backgroundColor: isDark ? '#1A1D35' : '#F0F4FF', borderLeftColor: colors.primary }]}>
               <Text style={[styles.insightCardLabel, { color: colors.primary }]}>
                 {t('coach.coachInsightLabel')}
@@ -2356,7 +2378,7 @@ export default function CoachScreen() {
           )}
 
           {/* ── MGCS: Follow-up card — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && pendingFollowUp && (
+          {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && pendingFollowUp && (
             <View style={[styles.followUpCard, { backgroundColor: isDark ? colors.cardDark : '#FFFBEB', borderColor: isDark ? '#92400E' : '#FCD34D' }]}>
               <View style={styles.followUpCardHeader}>
                 <View style={styles.followUpBadge}>
@@ -2414,7 +2436,7 @@ export default function CoachScreen() {
 
 
           {/* ── Phase 8 Status Card — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && latestRecommendation && (
+          {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && latestRecommendation && (
             <View style={styles.statusCardSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 {t('coach.tapForAssessment')}
@@ -2473,6 +2495,7 @@ export default function CoachScreen() {
                         <StreamingCursor isDark={isDark} />
                       )}
                     </View>
+                    {message.guidedMealChoice && index === visibleMessages.length - 1 && !isThisStreaming && <TouchableOpacity accessibilityRole="button" style={{ marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: '#27614D' }} onPress={() => { setMealHelpRequest(value => value + 1); scrollViewRef.current?.scrollTo({ y: 0, animated: true }); }}><Text style={{ color: '#FFF', fontWeight: '600' }}>{getAppLocale().startsWith('es') ? 'Elegir una comida juntos' : 'Choose a meal together'}</Text></TouchableOpacity>}
                     {message.showUpgradeButton && (
                       <View style={{ marginTop: 16 }}>
                         <View style={{
@@ -2532,7 +2555,7 @@ export default function CoachScreen() {
           })}
 
           {/* ── Craving chips hub — welcome state only ── */}
-          {isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
+          {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 {t('coach.whatDoYouNeed')}
@@ -2568,6 +2591,7 @@ export default function CoachScreen() {
         )}
 
         {/* ── Input bar ── */}
+        <Text style={{ paddingHorizontal: 20, paddingBottom: 6, fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>{getAppLocale().startsWith('es') ? 'Conversación general. Usa la guía para revisar opciones de comida verificadas.' : 'General conversation. Use meal guidance to review verified food options.'}</Text>
         <View
           style={[
             styles.inputContainer,
@@ -2578,6 +2602,7 @@ export default function CoachScreen() {
           ]}
         >
           <TextInput
+            ref={conversationInputRef}
             style={[
               styles.input,
               {

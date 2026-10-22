@@ -1,3 +1,4 @@
+import { createGuidedServices } from './coachGuidedServices';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { toLocalDateString } from './dateUtils';
@@ -14,7 +15,12 @@ const transport = createCoachDailyTransport(supabase, AsyncStorage,
   toLocalDateString, () => Intl.DateTimeFormat().resolvedOptions().timeZone, newId);
 
 // Construction performs no I/O. All calls still enter premium/UI gates, server
-// admission and strict response parsing; the screen's safety flag stays off.
-export const coachDailyServices = createManualHandoffServices({
+// admission and strict response parsing.
+const dailyServices = createManualHandoffServices({
   catalogSource: 'owned_saved_meals', owner: transport.owner, request: transport.request, recover: transport.recover,
 });
+
+// Verified ai-coach v204: reviewed 46-file manifest 67792e654b8d2623.
+export const COACH_GUIDED_CONTRACT_READY = true;
+const guidedServices = createGuidedServices({ owner: transport.owner, today: toLocalDateString, request: transport.request, recover: transport.recover, pendingGuidance: transport.pendingGuidance });
+export const coachDailyServices = { ...dailyServices, ...(COACH_GUIDED_CONTRACT_READY ? guidedServices : {}) };

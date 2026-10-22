@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { readRecipeReview, reviewRecipeModel, addCoachRecipe } from '@/utils/coachRecipeReview';
 import { getAppLocale } from '@/lib/localization';
 import { useTranslation } from 'react-i18next';
 /**
@@ -144,8 +146,14 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function RecipeFinderDetailScreen() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ recipe: string }>();
+  const params = useLocalSearchParams<{ recipe: string; coachReviewKey?: string }>();
   const router = useRouter();
+  const coachReview = readRecipeReview(params.coachReviewKey);
+  const isCoachReview = !!params.coachReviewKey;
+  const [reviewValid, setReviewValid] = useState(false);
+  const [reviewMessage, setReviewMessage] = useState('');
+  const addClaim = useRef(false);
+  const es = getAppLocale().startsWith('es');
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
@@ -156,6 +164,7 @@ export default function RecipeFinderDetailScreen() {
   // Parse recipe from params
   const recipe: RecipeResult | null = (() => {
     try {
+      if (isCoachReview) return coachReview ? reviewRecipeModel(coachReview) as RecipeResult : null;
       if (!params.recipe) return null;
       const parsed = JSON.parse(params.recipe);
       console.log('[RecipeDetail] Parsed recipe from params — id:', parsed?.id, 'name:', parsed?.name || parsed?.title);
@@ -198,7 +207,7 @@ export default function RecipeFinderDetailScreen() {
     }
   })();
 
-  const [servings, setServings] = useState(1);
+  const [servings, setServings] = useState(coachReview?.option.source_servings ?? 1);
   const [isSaved, setIsSaved] = useState(recipe?.is_saved ?? false);
   const [ingredientsExpanded, setIngredientsExpanded] = useState(true);
   const [instructionsExpanded, setInstructionsExpanded] = useState(true);
@@ -227,7 +236,7 @@ export default function RecipeFinderDetailScreen() {
 
   // ─── Track popular recipe click on mount ────────────────────────────────────
   useEffect(() => {
-    if (!recipe?.id) return;
+    if (isCoachReview || !recipe?.id) return;
     console.log('[RecipeDetail] Tracking click for recipe id:', recipe.id);
     supabase.functions.invoke('popular-recipes', {
       method: 'POST',
@@ -274,8 +283,21 @@ export default function RecipeFinderDetailScreen() {
         console.warn('[RecipeDetail] loadRemaining error:', e);
       }
     }
-    loadRemaining();
+    if (!isCoachReview) loadRemaining();
   }, []);
+
+  useEffect(() => {
+    if (!isCoachReview) return;
+    let live = true, revision = 0;
+    const check = async () => {
+      const id = ++revision;
+      const auth = await supabase.auth.getUser();
+      if (live && id === revision) setReviewValid(!!coachReview && !auth.error && auth.data.user?.id === coachReview.owner && toLocalDateString() === coachReview.date);
+    };
+    void check();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { setReviewValid(false); void check(); });
+    return () => { live = false; subscription.unsubscribe(); };
+  }, [isCoachReview, coachReview]);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -285,7 +307,7 @@ export default function RecipeFinderDetailScreen() {
 
   // ─── Save / unsave ──────────────────────────────────────────────────────────
   const handleToggleSave = useCallback(async () => {
-    if (!recipe) return;
+    if (isCoachReview || !recipe) return;
     console.log('[RecipeDetail] Toggle save — currently saved:', isSaved, 'recipe:', recipe.name);
     if (isSaved) {
       setIsSaved(false);
@@ -300,7 +322,7 @@ export default function RecipeFinderDetailScreen() {
 
   // ─── Make it fit my macros ──────────────────────────────────────────────────
   const handleMacroFit = useCallback(async () => {
-    if (!recipe) return;
+    if (isCoachReview || !recipe) return;
     console.log('[RecipeDetail] Make it fit my macros — remainingCalories:', remainingCalories, 'remainingProtein:', remainingProtein);
     if (remainingCalories <= 0) {
       showToast(t('localization.screens.recipe2'));
@@ -338,7 +360,21 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
 
   // ─── Log to food diary ──────────────────────────────────────────────────────
   const handleLogToDiary = useCallback(async () => {
-    if (!recipe) return;
+    if (!recipe || addClaim.current) return;
+    if (isCoachReview) {
+      if (!coachReview || !reviewValid) return;
+      addClaim.current = true; setLogging(true);
+      try {
+        const outcome = await addCoachRecipe(coachReview, logServings, {
+          owner: async () => { const auth = await supabase.auth.getUser(); return auth.error ? undefined : auth.data.user?.id; },
+          today: toLocalDateString, store: AsyncStorage,
+          write: async body => { const { error } = await (supabase as any).rpc('log_food', body); if (error) throw error; },
+        });
+        setLogSheetVisible(false);
+        setReviewMessage(outcome.status === 'complete' ? (es ? 'Añadida al diario.' : 'Added to diary.') : (es ? 'Revisa el diario antes de continuar; no se reintentó el registro.' : 'Review your diary before continuing; the entry was not retried.'));
+      } finally { addClaim.current = false; setLogging(false); }
+      return;
+    }
     const logCaloriesLocal = Math.round(recipe.calories_per_serving * logServings);
     const logProteinLocal = Math.round(recipe.protein_per_serving * logServings);
     const logCarbsLocal = Math.round(recipe.carbs_per_serving * logServings);
@@ -406,9 +442,9 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
     } finally {
       setLogging(false);
     }
-  }, [recipe, logServings, showToast, t]);
+  }, [recipe, logServings, showToast, t, coachReview, isCoachReview, reviewValid, es]);
 
-  if (!recipe) {
+  if (!recipe || (isCoachReview && !reviewValid)) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
         <Stack.Screen options={{ title: t('localization.screens.recipe6'), headerShown: true }} />
@@ -437,6 +473,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
   // ─── Scaled ingredients ──────────────────────────────────────────────────────
   const scalingRatio = servings / (recipe.servings || 1);
   const scaledIngredients = (recipe.ingredients ?? []).map((ing) => {
+    if (isCoachReview) return { ...ing, scaledCalories: 0 };
     const match = String(ing.amount ?? '').match(/^([\d./]+)\s*(.*)/);
     if (!match) return { ...ing, scaledCalories: Math.round((ing.calories || 0) * scalingRatio) };
     let originalNum: number;
@@ -485,13 +522,15 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
         >
           {/* Hero image */}
-          <RecipeImage
+          {!isCoachReview && <RecipeImage
             recipeId={recipe.id}
             initialUrl={recipe.image_url}
             style={styles.heroImage}
             iconSize={56}
-          />
+          />}
 
+          {isCoachReview && <View style={{ padding: spacing.md, paddingTop: 90 }}><Text style={{ color: textColor }}>{es ? 'Revisión de Coach · ' : 'Coach review · '}{coachReview ? (es ? { breakfast: 'Desayuno', lunch: 'Almuerzo', dinner: 'Cena', snack: 'Snack' } : { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' })[coachReview.meal] : ''} · {coachReview?.date}</Text><Text style={{ color: subColor }}>{es ? 'Las macros corresponden a la porción seleccionada. Ingredientes e instrucciones conservan la receta original de ' : 'Macros describe the selected portion. Ingredients and instructions remain the original recipe for '}{coachReview?.option.recipe?.source_servings}{es ? ' porciones. Confirma abajo antes de añadir al diario.' : ' servings. Confirm below before adding to your diary.'}</Text>{recipe.source_url && <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(recipe.source_url!); }}><Text style={{ color: colors.primary }}>{es ? 'Abrir fuente publicada' : 'Open published source'} · {recipe.source_name}</Text></Pressable>}</View>}
+          {reviewMessage ? <Text accessibilityRole="alert" style={{ padding: spacing.md, color: textColor }}>{reviewMessage}</Text> : null}
           {/* Header section */}
           <View style={[styles.section, { paddingTop: spacing.md }]}>
             <Text style={[styles.recipeName, { color: textColor }]}>{recipe.name}</Text>
@@ -562,7 +601,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           </View>
 
           {/* Make it fit my macros */}
-          <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.sm }}>
+          {!isCoachReview && <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.sm }}>
             <Pressable
               onPress={handleMacroFit}
               style={[styles.macroFitBtn, { borderColor: colors.primary + '60' }]}
@@ -583,7 +622,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 <Text style={[styles.macroFitNoteText, { color: colors.primary }]}>{macroFitNote || t('localization.screens.recipeAdjusted', { count: adjustedServingCount ?? 0, quantity: (adjustedServingCount ?? 0).toLocaleString(getAppLocale()) })}</Text>
               </View>
             )}
-          </View>
+          </View>}
 
           {/* Ingredients */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor, marginHorizontal: spacing.md, marginTop: spacing.md }]}>
@@ -613,7 +652,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
                 <Text style={[styles.ingredientName, { color: textColor }]}>{String(ing.name ?? '')}</Text>
                 <View style={styles.ingredientRight}>
                   <Text style={[styles.ingredientAmount, { color: subColor }]}>{String(ing.amount ?? '')}</Text>
-                  <Text style={[styles.ingredientCals, { color: subColor }]}>{ing.scaledCalories} cal</Text>
+                  {!isCoachReview && <Text style={[styles.ingredientCals, { color: subColor }]}>{ing.scaledCalories} cal</Text>}
                 </View>
               </View>
             ))}
@@ -695,7 +734,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
             },
           ]}
         >
-          <Pressable
+          {!isCoachReview && <Pressable
             onPress={handleToggleSave}
             style={[styles.bookmarkBtn, { borderColor }]}
             accessibilityRole="button"
@@ -704,7 +743,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
             {isSaved
               ? <BookmarkCheck size={22} color={colors.primary} fill={colors.primary} />
               : <Bookmark size={22} color={subColor} />}
-          </Pressable>
+          </Pressable>}
           <Pressable
             onPress={() => {
               console.log('[RecipeDetail] Log to Food Diary button pressed');
@@ -804,7 +843,7 @@ Return ONLY a JSON object: { "adjusted_servings": 1.5, "note": "explanation" }`,
           <Pressable
             onPress={handleLogToDiary}
             style={[styles.addToLogBtn, { backgroundColor: colors.primary }]}
-            disabled={logging}
+            disabled={logging || (isCoachReview && (!reviewValid || !!coachReview?.stopped))}
             accessibilityRole="button"
           >
             {logging
