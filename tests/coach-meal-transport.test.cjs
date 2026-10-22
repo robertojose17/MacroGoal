@@ -1,0 +1,84 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpile(fs.readFileSync(f,'utf8'),{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}),f);
+const {createMealTransport}=require('../utils/coachMealTransport.ts'),{createMealServices}=require('../utils/coachMealServices.ts'),{editMealNutrition}=require('../utils/coachMealReview.ts');
+const input={food_query:'chicken rice',mode:'cook',exclusions:[],allergens:[],preference:'preferred_food'};
+const option=(estimated=false,restaurant=false)=>({id:restaurant?'menu-dish':'gallery-one',name:'Chicken and rice',ingredients:restaurant?[]:['chicken','rice'],instructions:restaurant?[]:['Cook chicken and rice.'],prep_minutes:null,provenance:restaurant?{kind:'official',source_url:'https://example.com/menu'}:{kind:'gallery',gallery_id:'gallery-one'},nutrition:{authority:'estimated',basis:{amount:1,unit:'serving',label:estimated?'1 bowl, approximately 350 g':'1 gallery entry; physical serving size unspecified'},values:{calories:500,protein:35,carbs:50,fats:17,fiber:estimated?4:null},assumptions:['Portion size is estimated.'],confidence:'low'},allergy_status:'requires_review',review_required:true});
+function fixture(){
+ const state={owner:'A',day:'2026-10-22',zone:'America/Puerto_Rico',access:{isPremium:true,premiumLoading:false,gated:false,busy:false},lose:false,deny:false,capabilities:true};
+ const rows=new Map(),receipts=new Map(),calls=[],writes=[];let ids=0;
+ const store={getItem:async k=>rows.get(k)??null,setItem:async(k,v)=>rows.set(k,v),removeItem:async k=>rows.delete(k)};
+ const json=(extra={})=>({schema:'meal_explore_v1',owner:'A',date:'2026-10-22',status:'options',options:[option()],paid_capabilities:{discovery:state.capabilities,estimate:state.capabilities,reason:state.capabilities?null:'pilot_not_enabled',budget_checked:false},...extra});
+ const deps={scope:'normal',owner:async()=>state.owner,today:()=>state.day,zone:()=>state.zone,newId:()=>`11111111-1111-4111-8111-${String(++ids).padStart(12,'0')}`,store,invoke:async body=>{
+  calls.push(body);if(state.deny)return Response.json({error:'pilot_not_enabled',request_id:body.request_id,admission_state:'not_admitted'},{status:403});
+  if(body.intent==='recover_daily'){assert.equal(body.journey,'meal_explore_v1');return Response.json(receipts.get(body.request_id));}
+  if(body.operation==='discover'){if(state.lose)throw Error('connection lost');return new Response(`data: ${JSON.stringify({done:true,request_id:body.request_id,usage_status:'completed'})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});}
+  let response;
+  if(body.operation==='explore')response=json(body.mode==='eat_out'?{status:'discovery_available',options:[],discovery_request:{mode:'restaurant',food:body.food_query,restaurant:body.restaurant}}:{});
+  else if(body.operation==='estimate')response=json({options:[option(true,receipts.get(body.source_request_id)?.options?.[0]?.provenance.kind==='official')]});
+  else if(body.operation==='import_discovery')response=json({options:[option(false,true)]});
+  else if(body.operation==='review'){
+   const original=receipts.get(body.source_request_id).options.find(o=>o.id===body.option_id);
+   const values=Object.fromEntries(Object.entries(original.nutrition.values).map(([k,v])=>[k,body.edited_values?.[k]??(v===null?null:Math.round(v*body.servings*10)/10)]));
+   response=json({status:'review',options:[],review:{option_id:original.id,name:original.name,servings:body.servings,values,authority:body.edited_values?'user_edited':original.nutrition.authority,original_source:original.provenance,original_nutrition:original.nutrition,assumptions:original.nutrition.assumptions,ready_for_explicit_confirmation:Object.values(values).every(v=>v!==null)&&body.estimate_acknowledged&&body.ingredient_review_acknowledged,logged:false}});
+  }
+  receipts.set(body.request_id,response);if(state.lose)throw Error('connection lost');return Response.json(response);
+ }};
+ const transport=createMealTransport(deps),services=createMealServices({transport,owner:deps.owner,today:deps.today,store,subscribeInvalidation:()=>()=>{},write:async body=>writes.push(body)});
+ return {state,rows,receipts,calls,writes,deps,transport,services,access:()=>state.access,json};
+}
+test('gallery -> explicit automatic estimate -> review -> explicit log uses same app contract and preserves provenance',async()=>{
+ const f=fixture();const found=await f.services.explore(f.access,input,'dinner');assert.equal(found.kind,'ready');assert.equal(found.options[0].nutrition.values.fiber,null);assert.equal(f.calls.length,1);assert.equal(f.calls[0].experience,'meal_v2');assert.equal(f.writes.length,0);
+ const estimated=await f.services.estimate(f.access,found,found.options[0].id);assert.equal(f.calls[1].operation,'estimate');assert.equal(f.calls[1].consent,true);assert.equal(f.calls[1].source_request_id,found.requestId);assert.equal(estimated.options[0].nutrition.values.fiber,4);
+ const session=f.services.review(estimated,estimated.options[0].id,f.access),edit={...editMealNutrition(session.context.option,1.5,{}),estimateAcknowledged:true,ingredientAcknowledged:true};
+ const reviewed=await session.prepare(edit);assert.ok(reviewed);assert.equal(f.writes.length,0);assert.equal((await session.confirm(reviewed,true)).status,'complete');assert.equal(f.writes.length,1);assert.equal(f.writes[0].p_calories,750);assert.equal(f.writes[0].p_fiber,6);assert.equal(f.writes[0].p_meal_type,'dinner');assert.match(f.writes[0].p_serving_description,/ESTIMATE/);assert.equal(f.writes[0].p_food_id,null);assert.ok(f.writes[0].p_logged_at);
+});
+test('restaurant -> explicit discovery SSE -> import -> estimate -> in-app review -> explicit log, no recipe instructions required',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example restaurant'},'lunch');assert.equal(f.calls.length,1);assert.equal(found.options.length,0);
+ const menu=await f.services.discover(f.access,found);assert.deepEqual(f.calls.slice(1).map(b=>b.operation),['discover','import_discovery']);assert.notEqual(f.calls[1].request_id,f.calls[2].request_id);assert.equal(menu.options[0].kind,'restaurant');assert.deepEqual(menu.options[0].instructions,[]);
+ const estimate=await f.services.estimate(f.access,menu,menu.options[0].id),session=f.services.review(estimate,estimate.options[0].id,f.access);
+ const review=await session.prepare({...editMealNutrition(session.context.option,1,{}),estimateAcknowledged:true,ingredientAcknowledged:true});assert.equal(f.writes.length,0);await session.confirm(review,true);assert.equal(f.writes.length,1);assert.equal(f.writes[0].p_meal_type,'lunch');
+});
+test('restart recovery retains custom explore inputs and ID and never resends an uncertain paid estimate',async()=>{
+ const f=fixture();f.state.lose=true;assert.equal((await f.services.explore(f.access,input,'dinner')).kind,'pending');const original=f.calls[0];assert.equal((await f.services.explore(f.access,{...input,food_query:'salmon'},'dinner')).kind,'pending');assert.equal(f.calls.length,1);
+ f.state.lose=false;const restarted=createMealTransport(f.deps),recovered=await restarted.recover(f.access);assert.equal(recovered.kind,'ready');assert.deepEqual(f.calls[1],{intent:'recover_daily',request_id:original.request_id,journey:'meal_explore_v1'});assert.equal(f.rows.size,0);
+ const found=await f.services.explore(f.access,input,'dinner');f.state.lose=true;await f.services.estimate(f.access,found,found.options[0].id);const estimateId=f.calls.at(-1).request_id;f.state.lose=false;await restarted.recover(f.access);assert.equal(f.calls.at(-1).request_id,estimateId);assert.equal(f.calls.at(-1).intent,'recover_daily');assert.equal(f.calls.filter(b=>b.operation==='estimate').length,1);
+});
+test('uncertain modern discovery recovers with identical bridge, then imports once with new ID',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example'},'dinner');f.state.lose=true;await f.services.discover(f.access,found);const original=f.calls.at(-1);assert.equal(original.operation,'discover');f.state.lose=false;const result=await f.services.recover(f.access);assert.equal(result.kind,'ready');assert.deepEqual(f.calls.at(-2),original);assert.equal(f.calls.at(-1).operation,'import_discovery');assert.equal(f.calls.filter(b=>b.intent==='recover_daily').length,0);
+});
+test('paid eligibility false exposes no runnable operation and never auto-dispatches after empty gallery',async()=>{const f=fixture();f.state.capabilities=false;const found=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example'},'dinner');assert.equal(found.capabilities.discovery,false);assert.equal((await f.services.discover(f.access,found)).kind,'blocked');assert.equal((await f.services.estimate(f.access,found,'unknown')).kind,'blocked');assert.equal(f.calls.length,1);});
+test('free, loading, error, usage gates, revoked owner and midnight block transport and stale review',async()=>{for(const patch of [{isPremium:false},{premiumLoading:true},{premiumError:'offline'},{gated:true},{busy:true}]){const f=fixture();f.state.access={...f.state.access,...patch};assert.equal((await f.services.explore(f.access,input,'dinner')).kind,'blocked');assert.equal(f.calls.length,0);}for(const mutate of [f=>f.state.owner='B',f=>f.state.day='2026-10-23',f=>f.state.access.isPremium=false]){const f=fixture(),invoke=f.deps.invoke;f.deps.invoke=async b=>{const result=await invoke(b);mutate(f);return result};assert.equal((await f.services.explore(f.access,input,'dinner')).kind,'blocked');}});
+test('denied discovery returns actual gate with no fallback and no second request',async()=>{const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example'},'dinner');f.state.deny=true;const result=await f.services.discover(f.access,found);assert.equal(result.kind,'blocked');assert.equal(result.reason,'pilot_not_enabled');assert.equal(f.calls.length,2);});
+test('parallel calls do not unlock another running request; corrupted recovery envelope never dispatches',async()=>{const f=fixture(),invoke=f.deps.invoke;let release;f.deps.invoke=body=>new Promise(r=>release=()=>invoke(body).then(r));const first=f.services.explore(f.access,input,'dinner');while(!release)await new Promise(r=>setImmediate(r));await f.services.explore(f.access,input,'dinner');await f.services.explore(f.access,input,'dinner');assert.equal(f.calls.length,0);release();await first;f.state.lose=true;f.deps.invoke=invoke;await f.services.explore(f.access,input,'dinner');const [key,raw]=[...f.rows][0],row=JSON.parse(raw);row.envelope.unauthorized_extra='bad';f.rows.set(key,JSON.stringify(row));const count=f.calls.length;assert.equal((await f.transport.recover(f.access)).kind,'blocked');assert.equal(f.calls.length,count);});
+test('review restart restores selected-portion total edits and uses recovered receipt without another prepare call',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,input,'dinner'),session=f.services.review(found,found.options[0].id,f.access);
+ f.state.lose=true;const edit={...editMealNutrition(session.context.option,2,{protein:'48',fiber:'7'}),estimateAcknowledged:true,ingredientAcknowledged:true};assert.equal(await session.prepare(edit),null);const original=f.calls.at(-1);f.state.lose=false;
+ const recovered=await f.services.recover(f.access);assert.equal(recovered.kind,'recovered_review');assert.equal(recovered.session.initialEdit.multiplier,2);assert.equal(recovered.session.initialEdit.values.protein,48);const count=f.calls.length;
+ const prepared=await recovered.session.prepare(recovered.session.initialEdit);assert.ok(prepared);assert.equal(f.calls.length,count);assert.equal(f.calls.at(-1).request_id,original.request_id);await recovered.session.confirm(prepared,true);assert.equal(f.writes[0].p_protein,48);assert.equal(f.writes[0].p_fiber,7);
+});
+test('completed receipt prevents duplicate Add even after reopening the same meal review',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,input,'dinner');
+ for(let i=0;i<2;i++){const session=f.services.review(found,found.options[0].id,f.access);const reviewed=await session.prepare({...editMealNutrition(session.context.option,1,{fiber:'4'}),estimateAcknowledged:true,ingredientAcknowledged:true});assert.equal((await session.confirm(reviewed,true)).status,'complete');}
+ assert.equal(f.writes.length,1);
+});
+test('known refunded discovery is terminal without import or automatic retry; uncertainty stays recoverable',async()=>{
+ for(const status of ['refunded','uncertain']){const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example'},'dinner');f.deps.invoke=async body=>new Response(`data: ${JSON.stringify({done:true,request_id:body.request_id,usage_status:status})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});const result=await f.services.discover(f.access,found);assert.equal(result.kind,status==='refunded'?'blocked':'pending');assert.equal(f.rows.size,status==='refunded'?0:1);}
+});
+
+test('actual recovered service plus review component allows portion edit, ingredient re-acknowledgement and explicit Add',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,input,'dinner'),estimated=await f.services.estimate(f.access,found,found.options[0].id),session=f.services.review(estimated,estimated.options[0].id,f.access);
+ f.state.lose=true;assert.equal(await session.prepare({...editMealNutrition(session.context.option,1,{}),estimateAcknowledged:true,ingredientAcknowledged:true}),null);f.state.lose=false;
+ const recovered=await f.services.recover(f.access);assert.equal(recovered.kind,'recovered_review');assert.equal(recovered.session.initialEdit.ingredientAcknowledged,true);
+ const React=require('react'),Module=require('node:module'),path=require('node:path'),original=Module._load,states=[],refs=[];let cursor=0,ref=0;
+ const fake={...React,useState(init){const i=cursor++;if(!(i in states))states[i]=i===0?true:typeof init==='function'?init():init;return [states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useEffect(){},useRef(init){const i=ref++;return refs[i]??(refs[i]={current:init})}};
+ const previousTSX=require.extensions['.tsx'];require.extensions['.tsx']=(m,p)=>m._compile(ts.transpile(fs.readFileSync(p,'utf8'),{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}),p);
+ Module._load=function(name,parent,isMain){if(name==='react')return fake;if(name==='react-native')return new Proxy({StyleSheet:{create:x=>x}},{get:(o,k)=>o[k]??String(k)});if(name==='react-i18next')return {useTranslation:()=>({i18n:{language:'en'}})};if(name.startsWith('@/'))return original.call(this,path.resolve(__dirname,'..',name.slice(2)),parent,isMain);return original.call(this,name,parent,isMain)};
+ try{
+  const file=require.resolve('../components/CoachMealReview.tsx');delete require.cache[file];const Component=require(file).default,render=()=>{cursor=ref=0;return Component({session:recovered.session,onCancel(){}})};
+  const nodes=n=>!n||typeof n!=='object'?[]:[n,...React.Children.toArray(n.props?.children).flatMap(nodes)],text=n=>n==null?'':typeof n==='string'||typeof n==='number'?String(n):React.Children.toArray(n.props?.children).map(text).join(' ');
+  const button=(tree,label)=>nodes(tree).find(n=>n.props?.accessibilityRole==='button'&&text(n)===label),ingredient=tree=>nodes(tree).find(n=>n.props?.accessibilityRole==='checkbox'&&text(n).includes('ingredient and allergy'));
+  let tree=render();nodes(tree).find(n=>n.props?.accessibilityLabel==='Portion multiplier').props.onChangeText('1.5');tree=render();assert.match(text(tree),/750/);assert.equal(f.writes.length,0);
+  const checkbox=ingredient(tree);assert.ok(checkbox,'ingredient acknowledgement remains visible after recovery and portion change');assert.equal(checkbox.props.accessibilityState.checked,false);checkbox.props.onPress();tree=render();nodes(tree).find(n=>n.props?.accessibilityRole==='checkbox'&&text(n).includes('Use these labeled estimates')).props.onPress();
+  button(render(),'Review diary entry').props.onPress();await new Promise(r=>setImmediate(r));tree=render();assert.equal(f.calls.at(-1).ingredient_review_acknowledged,true);assert.equal(f.calls.at(-1).servings,1.5);assert.equal(f.writes.length,0);assert.equal(button(tree,'Add to diary').props.disabled,false);button(tree,'Add to diary').props.onPress();await new Promise(r=>setImmediate(r));assert.equal(f.writes.length,1);assert.equal(f.writes[0].p_calories,750);assert.match(text(render()),/Added to your diary/);
+ }finally{Module._load=original;if(previousTSX)require.extensions['.tsx']=previousTSX;else delete require.extensions['.tsx'];}
+});

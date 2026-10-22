@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readRecipeReview, reviewRecipeModel, addCoachRecipe } from '@/utils/coachRecipeReview';
 import { getAppLocale } from '@/lib/localization';
+import CoachMealReview from '@/components/CoachMealReview';
+import { readMealReview, clearMealReview } from '@/utils/coachMealReview';
 import { useTranslation } from 'react-i18next';
 /**
  * Recipe Finder Detail Screen
@@ -145,6 +147,20 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function RecipeFinderDetailScreen() {
+  const params = useLocalSearchParams<{ coachMealReviewKey?: string }>();
+  const router = useRouter();
+  const { i18n } = useTranslation();
+  if (params.coachMealReviewKey) {
+    const session = readMealReview(params.coachMealReviewKey);
+    return <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF' }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      {session ? <CoachMealReview session={session} onCancel={() => { clearMealReview(); router.back(); }} /> : <View style={{ padding: 24 }}><Text>{i18n.language.startsWith('es') ? 'Esta revisión ya no está disponible. Vuelve al Coach.' : 'This review is no longer available. Return to Coach.'}</Text><Pressable accessibilityRole="button" style={{ minHeight: 44, padding: 12 }} onPress={() => router.back()}><Text>{i18n.language.startsWith('es') ? 'Volver' : 'Back'}</Text></Pressable></View>}
+    </SafeAreaView>;
+  }
+  return <RecipeFinderDetailContent />;
+}
+
+export function RecipeFinderDetailContent() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ recipe: string; coachReviewKey?: string }>();
   const router = useRouter();

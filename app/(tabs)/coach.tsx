@@ -1557,8 +1557,9 @@ export default function CoachScreen() {
 
       if (COACH_DAILY_ACTION_INTEGRATED && isMealHelpRequest(trimmed)) {
         setInputText('');
+        setMessages(prev => [...prev, { id: genId(), role: 'user', content: trimmed, timestamp: Date.now() }]);
         setMealHelpRequest(value => value + 1);
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        scrollToBottom();
         return;
       }
 
@@ -2349,7 +2350,6 @@ export default function CoachScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {COACH_DAILY_ACTION_INTEGRATED && <CoachDailyAction services={coachDailyServices} mealRequest={mealHelpRequest} hasConversation={visibleMessages.some(message => message.role === 'user')} onConversation={() => { conversationEngaged.current = true; scrollToBottom(); conversationInputRef.current?.focus(); }} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
           {/* ── Proactive insight card — welcome state only ── */}
           {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && proactiveInsight && (
             <View style={[styles.insightCard, { backgroundColor: isDark ? '#1A1D35' : '#F0F4FF', borderLeftColor: colors.primary }]}>
@@ -2555,6 +2555,7 @@ export default function CoachScreen() {
           })}
 
           {/* ── Craving chips hub — welcome state only ── */}
+          {COACH_DAILY_ACTION_INTEGRATED && <CoachDailyAction services={coachDailyServices} mealRequest={mealHelpRequest} hasConversation={visibleMessages.some(message => message.role === 'user')} onConversation={() => { conversationEngaged.current = true; scrollToBottom(); conversationInputRef.current?.focus(); }} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
           {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>
               <Text style={[styles.quickActionsLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -2582,7 +2583,7 @@ export default function CoachScreen() {
         {/* ── Craving chips — rendered inside ScrollView after welcome message ── */}
 
         {/* ── Gated hint above input bar ── */}
-        {isGated && !isPremium && (
+        {isGated && !isPremium && !premiumLoading && !premiumError && (
           <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center' }}>
             <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, fontSize: 12, textAlign: 'center' }}>
               {t('coach.upgradeToPremium')}
@@ -2591,7 +2592,6 @@ export default function CoachScreen() {
         )}
 
         {/* ── Input bar ── */}
-        <Text style={{ paddingHorizontal: 20, paddingBottom: 6, fontSize: 11, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>{getAppLocale().startsWith('es') ? 'Conversación general. Usa la guía para revisar opciones de comida verificadas.' : 'General conversation. Use meal guidance to review verified food options.'}</Text>
         <View
           style={[
             styles.inputContainer,

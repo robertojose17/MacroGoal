@@ -54,10 +54,10 @@ const ANDROID_AD_UNIT_ID = 'ca-app-pub-5592015069000241/2517891620'; // Android
 export function AdBannerFooter() {
   const colorScheme = useColorScheme();
   const [adLoaded, setAdLoaded] = useState(false);
-  const { isPremium } = usePremium();
+  const { isPremium, loading, error } = usePremium();
 
   if (Platform.OS === 'web' || !isBannerAdAvailable) return null;
-  if (isPremium) return null;
+  if (loading || error || isPremium) return null;
 
   const adUnitId = __DEV__
     ? TestIds?.ADAPTIVE_BANNER

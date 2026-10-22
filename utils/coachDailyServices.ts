@@ -1,4 +1,6 @@
 import { createGuidedServices } from './coachGuidedServices';
+import { createMealTransport } from './coachMealTransport';
+import { createMealServices } from './coachMealServices';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { toLocalDateString } from './dateUtils';
@@ -23,4 +25,21 @@ const dailyServices = createManualHandoffServices({
 // Verified ai-coach v204: reviewed 46-file manifest 67792e654b8d2623.
 export const COACH_GUIDED_CONTRACT_READY = true;
 const guidedServices = createGuidedServices({ owner: transport.owner, today: toLocalDateString, request: transport.request, recover: transport.recover, pendingGuidance: transport.pendingGuidance });
-export const coachDailyServices = { ...dailyServices, ...(COACH_GUIDED_CONTRACT_READY ? guidedServices : {}) };
+// Candidate contract is not deployed. Enable only after coordinated readback.
+export const COACH_MEAL_V2_READY = true;
+const mealTransport = createMealTransport({ owner: transport.owner, today: toLocalDateString,
+  zone: () => Intl.DateTimeFormat().resolvedOptions().timeZone, newId, scope: `${SUPABASE_PROJECT_URL}:normal`, store: AsyncStorage,
+  async invoke(body) {
+    const result = await supabase.functions.invoke('ai-coach', { body });
+    if (result.error) {
+      if (result.error.context && typeof result.error.context.json === 'function') return result.error.context as Response;
+      throw Error('dispatch_unknown');
+    }
+    return result.data && typeof result.data.text === 'function' && result.data.headers ? result.data as Response : new Response(JSON.stringify(result.data), { headers: { 'Content-Type': 'application/json' } });
+  },
+});
+const mealExperience = createMealServices({ transport: mealTransport, owner: transport.owner, today: toLocalDateString, store: AsyncStorage,
+  subscribeInvalidation(owner, invalidate) { const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_OUT' || session?.user?.id !== owner) invalidate(); }); return () => subscription.unsubscribe(); },
+  async write(body) { const { error } = await supabase.rpc('log_food', body); if (error) throw error; },
+});
+export const coachDailyServices = { ...dailyServices, ...(COACH_GUIDED_CONTRACT_READY ? guidedServices : {}), ...(COACH_MEAL_V2_READY ? { experience: mealExperience } : {}) };

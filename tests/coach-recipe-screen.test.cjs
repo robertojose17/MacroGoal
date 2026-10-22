@@ -27,7 +27,7 @@ test('actual existing Recipe Detail opens without writes/provider/image calls an
     return realLoad.call(this,name,parent,isMain);
   };
   let tree;
-  try {const Screen=require('../app/recipe-finder-detail.tsx').default;tree=Screen();for(const effect of effects)effect();} finally {Module._load=realLoad;}
+  try {const Screen=require('../app/recipe-finder-detail.tsx').RecipeFinderDetailContent;tree=Screen();for(const effect of effects)effect();} finally {Module._load=realLoad;}
   const nodes=[];function walk(n){if(!n||typeof n!=='object')return;if(Array.isArray(n)){n.forEach(walk);return;}nodes.push(n);walk(n.props?.children)}walk(tree);
   assert.equal(nodes.some(n=>n.type==='RecipeImage'),false);
   assert.equal(nodes.some(n=>n.props?.onPress?.name==='handleMacroFit'),false);

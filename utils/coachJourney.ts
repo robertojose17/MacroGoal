@@ -17,7 +17,7 @@ export type GuidedOption = {
   fit_explanation: string; review: { kind: 'saved_meal' | 'recipe' | 'source'; id: string };
 };
 export type GuidedResult = { kind: 'ready'; owner: string; date: string; meal: DailyMealSlot; options: GuidedOption[]; reason?: string } | { kind: 'blocked' | 'unavailable' | 'permission' | 'locked' };
-export type JourneyDraft = { mode: MealMode; meal: DailyMealSlot; remaining: number; avoid: string; allergens: string; diet: 'unrestricted' | 'vegetarian' | 'vegan'; preference: 'balanced' | 'protein'; diaryComplete: boolean | null };
+export type JourneyDraft = { mode: MealMode; meal: DailyMealSlot; remaining: number; avoid: string; allergens: string; diet: 'unrestricted' | 'vegetarian' | 'vegan'; preference: 'balanced' | 'protein'; diaryComplete: boolean | null; question?: 'meal' | 'diary' | 'remaining' | 'preferences' };
 export const newJourney = (): JourneyDraft => ({ mode: 'cook', meal: 'lunch', remaining: 2, avoid: '', allergens: '', diet: 'unrestricted', preference: 'balanced', diaryComplete: null });
 
 export function guidance(draft: JourneyDraft): MealGuidance | null {

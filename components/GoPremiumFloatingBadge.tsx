@@ -10,7 +10,7 @@ export default function GoPremiumFloatingBadge() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { isPremium, loading } = usePremium();
+  const { isPremium, loading, error } = usePremium();
   const [visible, setVisible] = useState(true);
   const { t } = useTranslation();
 
@@ -24,10 +24,12 @@ export default function GoPremiumFloatingBadge() {
     router.push('/subscription');
   };
 
-  const TAB_PATHS = ['/', '/dashboard', '/(home)', '/coach', '/check-ins', '/profile'];
+  // Coach owns an inline preview/paywall action; a global floating badge covers
+  // its composer and competes with the conversation.
+  const TAB_PATHS = ['/', '/dashboard', '/(home)', '/check-ins', '/profile'];
   const isAllowedScreen = TAB_PATHS.some(p => pathname === p || (p !== '/' && pathname.startsWith(p + '/')));
 
-  if (!visible || loading || isPremium || !isAllowedScreen) return null;
+  if (!visible || loading || error || isPremium || !isAllowedScreen) return null;
 
   const bottomOffset = insets.bottom + 120;
 

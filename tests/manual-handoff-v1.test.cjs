@@ -94,7 +94,7 @@ test('existing Details review path skips draft writes, binds ownership, and expo
   assert.match(source,/addClaim\.current \|\| saveStopped\.current/);
   const card=fs.readFileSync(path.join(__dirname,'../components/CoachDailyAction.tsx'),'utf8');
   assert.doesNotMatch(card,/loadDailyAction\(|\.rpc\(|\.insert\(/);
-  assert.match(card,/Review portion & meal/);
+  assert.match(card,/Review portion/);
 });
 
 function savedItem(patch={}){
