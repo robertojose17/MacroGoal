@@ -1,3 +1,5 @@
+import {mealDiscoveryRetryCheck} from './meal-discovery-retry.ts';
+import {classifyStructuredProviderError} from './planner-provider-error.ts';
 import {confirmedDiscoveryArgs} from './meal-discovery-consent.ts';
 import { buildPrivateNutritionSnapshot, personalizeVerifiedOptions, currentRequestedSourceServings, trustedMealFacts, guardPersonalizedMealText } from './coach-meal-personalization.ts';
 import { readOwnedRestaurantReceipt, ownedRestaurantPool, restaurantSummary, restaurantFollowupAction, nextRestaurantOptions, retainedRestaurantOptions, makeRestaurantPool, publicRestaurantChoices, type RestaurantPool } from './coach-restaurant-followup.ts';
@@ -156,7 +158,9 @@ function goalProposalReviewText(mutation:ReturnType<typeof normalizeCoachMutatio
 // must keep the request reservation open when the provider omits usage.cost.
 async function callStructuredPhase(messages:{role:string;content:string}[],maxTokens:number,onReceipt:((cost:number|null,generationId:string|null)=>void)|undefined,allowToolRequest:boolean,phaseLimitMs:number,deadlineAt:number,parentSignal?:AbortSignal,responseFormat:unknown=structuredCoachResponseFormat(allowToolRequest),diagnosticRequestId?:string) {
   let observedStatus:number|undefined;
+  let providerDiagnostic:ReturnType<typeof classifyStructuredProviderError>|undefined;
   const logFailure=(errorCode:'http_error'|'aborted'|'timeout'|'input_budget'|'truncated'|'invalid_response'|'provider_error'|'transport_error'|'cost_unavailable',knownCost:unknown)=>console.warn('[AICoach] Structured provider phase failed',{
+    ...providerDiagnostic,
     phase:allowToolRequest?'planner':'final',error_code:errorCode,cost_status:typeof knownCost==='number'&&Number.isFinite(knownCost)&&knownCost>=0?'known':'unknown',
     ...(observedStatus!==undefined&&observedStatus>=100&&observedStatus<=599?{http_status:observedStatus}:{}),
     ...(typeof diagnosticRequestId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(diagnosticRequestId)?{request_id:diagnosticRequestId}:{})
@@ -172,6 +176,7 @@ async function callStructuredPhase(messages:{role:string;content:string}[],maxTo
   const cost=typeof data?.usage?.cost==='number'&&Number.isFinite(data.usage.cost)&&data.usage.cost>=0?data.usage.cost:null;
   const generationId=typeof data?.id==='string'&&/^[A-Za-z0-9_-]{1,120}$/.test(data.id)?data.id:null;
   onReceipt?.(cost,generationId);
+  if(!response.ok)providerDiagnostic=classifyStructuredProviderError(data);
   if(!response.ok)throw Object.assign(new Error(`provider_http_${response.status}`),{knownCost:cost,generationId,errorCode:'provider_error'});
   const raw=data?.choices?.[0]?.message?.content;
   if(data?.choices?.[0]?.finish_reason!=='stop'){
@@ -259,6 +264,8 @@ const handler = (async (req) => {
     let body: {
       request_id?: string;
       retry_of_request_id?: string;
+      retry_consent?: boolean;
+      meal_source_request_id?: string;
       messages?: { role: string; content: string; timestamp?: number }[];
       user_id?: string;
       weight_unit?: string;
@@ -293,6 +300,7 @@ const handler = (async (req) => {
     if (receiptError || !Array.isArray(receipts)) return reject('receipt_unavailable',503);
     const prior = receipts.find((r:any)=>r.request_id===parsedRequest.requestId);
     if (prior) {
+      if(prior.user_id!==undefined&&prior.user_id!==authUser.id)return reject('receipt_unavailable',503);
       let priorRequest: ReturnType<typeof coachRequest>;
       try { const {lookup_context:_serverDerivedContext,...originalRequestFields}=prior.request_payload??{};priorRequest=coachRequest({...originalRequestFields,request_id:parsedRequest.requestId}); }
       catch { return reject('receipt_identity_unavailable',503); }
@@ -307,6 +315,10 @@ const handler = (async (req) => {
       const {data:parents,error:parentError}=await supabase.rpc('coach_recover_requests_v1',{p_user_id:authUser.id,p_request_id:parsedRequest.retryOfRequestId,p_offset:0});
       if(parentError||!Array.isArray(parents))return reject('receipt_unavailable',503);
       const parent=parents.find((r:any)=>r.request_id===parsedRequest.retryOfRequestId);
+      if(body.meal_source_request_id){
+        const denial=mealDiscoveryRetryCheck(parent,{owner:authUser.id,parentId:parsedRequest.retryOfRequestId,requestId:parsedRequest.requestId,fingerprint:parsedRequest.fingerprintInput,confirmed:body.retry_consent===true});
+        if(denial)return new Response(JSON.stringify({error:denial.error,...(denial.error==='retry_not_found'?{}:executionMetadata(parent))}),{status:denial.status,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      }
       if(!parent||parent.request_payload?.conversation_id!==(body.conversation_id||null))return reject('retry_not_found',404);
       let original:ReturnType<typeof coachRequest>;
       try{const {lookup_context:_context,...fields}=parent.request_payload??{};original=coachRequest({...fields,request_id:parent.request_id});}catch{return reject('receipt_identity_unavailable',503);}

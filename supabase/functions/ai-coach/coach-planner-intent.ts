@@ -12,7 +12,8 @@ function slotValueSchema(key:typeof keys[number]){
  if(key==='country')return {type:'string',pattern:'^[A-Z]{2}$'};
  return {type:'string',minLength:1,maxLength:key==='food'?72:48};
 }
-function slotSchema(key:typeof keys[number]){return {anyOf:[{type:'object',additionalProperties:false,properties:{value:slotValueSchema(key),...slotEvidence},required:['value','quote','message_index']},{type:'null'}]};}
+// Object-only constraints do not apply to null; nested value enums remain unchanged.
+function slotSchema(key:typeof keys[number]){return {type:['object','null'],additionalProperties:false,properties:{value:slotValueSchema(key),...slotEvidence},required:['value','quote','message_index']};}
 type ReplyState={kind:'ordinary'|'clarify'|'lookup';context:LookupContext|null};
 const replyStates=new WeakMap<object,ReplyState>();
 export function plannerReplyState(reply:unknown):ReplyState|undefined{return reply&&typeof reply==='object'?replyStates.get(reply as object):undefined;}
