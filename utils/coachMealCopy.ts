@@ -24,5 +24,5 @@ export function mealFailureMessage(reason:string,es:boolean):string {
  if(mealFailureKind(reason)==='permission')return say('Web search is not enabled or its permission could not be verified. You can still browse recipes or return to our conversation.','La búsqueda web no está habilitada o no pude verificar su permiso. Puedes explorar recetas o volver a la conversación.');
  if(mealFailureKind(reason)==='limit')return say('Search is paused by a usage or budget limit. No automatic retry will run. You can browse recipes instead.','La búsqueda está pausada por un límite de uso o presupuesto. No se reintentará automáticamente. Puedes explorar recetas.');
  if(mealFailureKind(reason)==='session')return say('Your account or day changed, or your session needs checking. Return to Coach and choose again.','Tu cuenta o día cambió, o hay que verificar tu sesión. Vuelve al Coach y elige de nuevo.');
- return say('I could not complete this search. That does not tell me whether your Premium access is the cause. Your choices are kept.','No pude completar esta búsqueda. Eso no confirma que se deba a tu acceso Premium. Tus opciones se conservan.');
+ return say('I could not complete this search. Your choices are saved.','No pude completar esta b\u00fasqueda. Tus opciones est\u00e1n guardadas.');
 }
