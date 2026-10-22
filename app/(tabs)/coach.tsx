@@ -2500,7 +2500,7 @@ export default function CoachScreen() {
               <View key={message.id} style={styles.assistantMessageWrapper}>
                 <View style={styles.assistantBubbleColumn}>
                   {isWaitingForFirstToken ? (
-                    <View><TypingIndicator isDark={isDark} />{COACH_CONVERSATION_READY && <Text style={{color:colors.textSecondary}}>{i18n.language.startsWith('es')?'Esperando la respuesta de tu coach…':'Waiting for your coach’s response…'}</Text>}</View>
+                    <View><TypingIndicator isDark={isDark} />{COACH_CONVERSATION_READY && <Text style={{color:colors.textSecondary}}>{locale.startsWith('es')?'Esperando la respuesta de tu coach…':'Waiting for your coach’s response…'}</Text>}</View>
                   ) : (
                   <View style={styles.assistantBubble}>
                     <View>
@@ -2599,7 +2599,7 @@ export default function CoachScreen() {
           <TouchableOpacity accessibilityRole="button" disabled={!isPremium || premiumLoading || effectivelyGated}
             style={{minHeight:44,paddingHorizontal:16,paddingVertical:12}}
             onPress={()=>void recoverConversation().catch(()=>{})}>
-            <Text style={{color:colors.primary}}>{i18n.language.startsWith('es')?'Recuperar la respuesta pendiente':'Recover pending response'}</Text>
+            <Text style={{color:colors.primary}}>{locale.startsWith('es')?'Recuperar la respuesta pendiente':'Recover pending response'}</Text>
           </TouchableOpacity>
         )}
 
