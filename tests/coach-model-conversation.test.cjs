@@ -53,3 +53,14 @@ test('actual hook reload merges remote and accepted turns once despite timestamp
   assert.equal(calls.length,12);assert.ok(calls.every(c=>c.method==='GET'&&!c.url.endsWith('/ai-coach')));
  }finally{Module._load=original;}
 });
+
+test('specific food handoff survives client exploration input and search disclosure without generic substitution',()=>{
+ const {mealSearchDisclosure}=require('../utils/coachMealCopy');
+ for(const food of ['grilled chicken, rice and vegetables','pollo a la parrilla con arroz y vegetales']){
+  const value=parseMealConversation({...handoff(),fields:{...handoff().fields,food_query:food,public_area:'Orlando, Florida'}});
+  assert.ok(value);const input=mealConversationInput(value,{exclusions:[],allergens:[]});
+  assert.equal(input.food_query,food);assert.equal(input.public_area,'Orlando, Florida');
+  const request={food:input.food_query,area:input.public_area,preference:input.preference};
+  for(const es of [false,true]){const lines=mealSearchDisclosure(request,es);assert.ok(lines.includes((es?'Buscar: ':'Look for: ')+food));assert.ok(lines.some(line=>line.includes('Orlando, Florida')));}
+ }
+});
