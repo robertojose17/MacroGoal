@@ -168,3 +168,18 @@ test('late pending read cannot update an unmounted or invalidated component or d
   }finally{cleanup?.();h.restore();}
  }
 });
+
+test('no-results recovery preserves the requested meal and constraints; editing only prepares a separately consented search',async()=>{
+ const h=harness();try{
+  const input={mode:'eat_out',food_query:'grilled chicken rice and vegetables',public_area:'Orlando, Florida',preference:'high_protein',exclusions:['onion'],allergens:['milk'],dietary_preferences:[]};
+  const source={kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'completed-import',options:[],noResults:{input},capabilities:{discovery:true,estimate:false,reason:null}};
+  let composer;h.props.onComposer=v=>composer=v;h.render();h.states[0]=source;
+  let tree=h.render();assert.match(h.text(tree),/couldn’t find usable meal details/);assert.match(h.text(tree),/grilled chicken rice and vegetables/);assert.match(h.text(tree),/Orlando, Florida/);assert.equal(h.button(tree,'Review updated search').props.disabled,true);assert.equal(h.calls.length,0);
+  h.button(tree,'Change area').props.onPress();tree=h.render();h.effects[0]();assert.match(composer.placeholder,/city or area/);composer.submit('Winter Park, Florida');tree=h.render();assert.equal(h.calls.length,0);assert.match(h.text(tree),/Winter Park/);
+  h.button(tree,'Change food').props.onPress();tree=h.render();const dispose=h.effects[0]();const staleComposer=composer;h.button(tree,'Cancel edit').props.onPress();dispose();tree=h.render();h.effects[0]();assert.equal(composer,null);staleComposer.submit('discarded edit');assert.match(h.text(h.render()),/grilled chicken rice and vegetables/);assert.equal(h.calls.length,0);
+  h.button(tree,'Change area').props.onPress();tree=h.render();h.effects[0]();composer.submit('Maitland');tree=h.render();assert.match(h.text(tree),/Maitland/);h.button(tree,'Change area').props.onPress();tree=h.render();h.effects[0]();composer.submit('Winter Park, Florida');tree=h.render();assert.equal(h.calls.length,0);
+  h.props.service.explore=async(_access,value,meal)=>{h.calls.push({operation:'explore',value,meal});return {...source,noResults:undefined,publicRequest:{food:value.food_query,area:value.public_area,preference:value.preference}}};
+  h.button(tree,'Review updated search').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();assert.equal(h.calls.length,1);assert.deepEqual(h.calls[0],{operation:'explore',value:{...input,public_area:'Winter Park, Florida'},meal:'dinner'});assert.ok(h.button(tree,'Review web search'));assert.equal(h.button(tree,'Search these details'),undefined);
+  h.button(tree,'Review web search').props.onPress();tree=h.render();assert.ok(h.button(tree,'Search these details'));assert.equal(h.calls.length,1);assert.match(h.text(tree),/OpenRouter/);
+ }finally{h.restore()}
+});

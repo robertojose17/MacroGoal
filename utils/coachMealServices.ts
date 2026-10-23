@@ -4,8 +4,9 @@ import { dailyAccess } from './coachDailyAction';
 import { createMealTransport, type MealAccess, type MealExploreInput, type MealResponse, type MealRetryOffer } from './coachMealTransport';
 import { createMealReviewSession, NUTRIENTS, scaleMealNutrition, type MealReviewContext, type MealReviewDependencies, type MealReviewEdit, type MealEvidence, type PreparedMealEntry } from './coachMealReview';
 import { existingMealLogPayload, mealEvidenceFromOption } from './coachMealReviewAdapter';
+import {noResultsContext} from './coachNoResults';
 
-export type MealChoices = { kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; question?:string; publicRequest?:Record<string,unknown>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
+export type MealChoices = { kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; question?:string; publicRequest?:Record<string,unknown>; noResults?:NonNullable<ReturnType<typeof noResultsContext>>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
 export type MealChoiceOutcome = MealChoices | Exclude<MealResponse,{kind:'ready'}>;
 export const estimatePublicDetails = (option:MealEvidence, portionLabel?:string) => ({ name:option.name.slice(0,160), identity:portionLabel ? {...option.identity, portion_label:portionLabel} : option.identity??null, physical_portion:option.physicalPortion??null, source:{url:option.provenance.url??null,nutrition:{authority:(option.sourceNutrition??option.nutrition).authority,basis:(option.sourceNutrition??option.nutrition).basis,values:(option.sourceNutrition??option.nutrition).values}}, ingredients:(option.ingredients??[]).slice(0,30).map(s=>s.slice(0,180)) });
 export function createMealServices(deps: {
@@ -17,12 +18,14 @@ export function createMealServices(deps: {
  function choices(result:MealResponse):MealChoiceOutcome {
   if(result.kind!=='ready')return result;
   const b=result.body;if(b.schema!=='meal_explore_v1'||!['options','clarify','discovery_available'].includes(b.status)||!Array.isArray(b.options))return {kind:'unavailable',reason:'invalid_meal_response'};
+  const noResults=b.outcome==='no_validated_options'?noResultsContext(b,result.mode,result.requestId):null;
+  if(b.outcome==='no_validated_options'&&!noResults)return {kind:'unavailable',reason:'no_results_context_unavailable'};
   const options=b.options.map((o:any)=>mealEvidenceFromOption(o,result.mode));
   if(options.some((o:MealEvidence|null)=>!o)||b.status==='options'&&!options.length)return {kind:'unavailable',reason:'invalid_meal_option'};
   if(b.question&&!['food_query','mode','restaurant','dish_and_portion','portion_label','public_area'].includes(b.question.key))return {kind:'unavailable',reason:'unsupported_question'};
   return {kind:'ready',owner:result.owner,date:result.date,meal:result.meal,mode:result.mode,requestId:result.requestId,options,
    capabilities:{discovery:b.paid_capabilities?.discovery===true,estimate:b.paid_capabilities?.estimate===true,reason:typeof b.paid_capabilities?.reason==='string'?b.paid_capabilities.reason:null},
-   ...(b.question?{question:b.question.key}:{}),...(b.discovery_request&&typeof b.discovery_request==='object'?{publicRequest:b.discovery_request}:{})};
+   ...(b.question&&!noResults?{question:b.question.key}:{}),...(noResults?{noResults}:{}),...(b.discovery_request&&typeof b.discovery_request==='object'?{publicRequest:b.discovery_request}:{})};
  }
  function session(context:MealReviewContext,access:()=>ReturnType<MealReviewDependencies['access']>,cached?:{response:MealResponse;edit:MealReviewEdit}) {
   return createMealReviewSession(context,{

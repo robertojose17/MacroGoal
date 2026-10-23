@@ -1,5 +1,6 @@
 import { dailyAccess, type DailyAccess, type DailyMealSlot } from './coachDailyAction';
 import { mealEvidenceFromOption } from './coachMealReviewAdapter';
+import {noResultsContext} from './coachNoResults';
 
 export type MealExploreInput = { food_query: string; mode: 'cook'|'quick'|'eat_out'; exclusions: string[]; allergens: string[]; dietary_preferences?:string[]; available_minutes?: number; restaurant?: string; public_area?: string; preference?: 'balanced'|'high_protein'|'lower_calorie'|'preferred_food' };
 export type MealRequest = ({ operation:'explore' } & MealExploreInput) | { operation:'discover'; source_request_id:string; consent:true; retry_of_request_id?:string; retry_consent?:true } | { operation:'estimate'; source_request_id:string; option_id:string; consent:true; portion_label?:string } | { operation:'import_discovery'; source_request_id:string } | { operation:'review'; source_request_id:string; option_id:string; servings:number; edited_values?:Partial<Record<'calories'|'protein'|'carbs'|'fats'|'fiber',number>>; estimate_acknowledged:boolean; ingredient_review_acknowledged:boolean; modification?:string };
@@ -50,7 +51,7 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
    const response=await deps.invoke({intent:'recover_daily',request_id:r.requestId,journey:'meal_explore_v1'});
    if(!response.ok)return {kind:'unavailable',reason:'saved_options_unavailable'};
    const b=await response.json();if(!await scopeOK(r.owner,r.date,r.zone)||!ready(access))return {kind:'blocked',reason:'scope_changed'};
-   if(b?.schema!=='meal_explore_v1'||b.owner!==r.owner||b.date!==r.date||b.status!=='options'||!Array.isArray(b.options)||!b.options.length||b.options.length>3||b.options.some((o:any)=>!mealEvidenceFromOption(o,r.mode)))return {kind:'unavailable',reason:'saved_options_unavailable'};
+   if(b?.schema!=='meal_explore_v1'||b.owner!==r.owner||b.date!==r.date||!(b.status==='options'||b.outcome==='no_validated_options')||!Array.isArray(b.options)||b.options.length>3||b.status==='options'&&!b.options.length||b.options.some((o:any)=>!mealEvidenceFromOption(o,r.mode))||b.outcome==='no_validated_options'&&!noResultsContext(b,r.mode,r.requestId))return {kind:'unavailable',reason:'saved_options_unavailable'};
    return {kind:'ready',owner:r.owner,date:r.date,meal:r.meal,mode:r.mode,requestId:r.requestId,body:b};
   }catch{return {kind:'unavailable',reason:'saved_options_unavailable'};}
  }
@@ -120,12 +121,13 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
     if(!output?.done||output.request_id!==record.envelope.request_id||output.usage_status!=='completed')return {kind:'pending',reason:'discovery_unresolved'};
    }else{
     output=await response.json();if(output?.schema!=='meal_explore_v1'||output.owner!==owner||output.date!==date||!['options','clarify','discovery_available','review'].includes(output.status)||!Array.isArray(output.options)||output.options.length>3)return {kind:'pending',reason:'receipt_scope_mismatch'};
+    if(output.outcome==='no_validated_options'&&!noResultsContext(output,record.mode,record.envelope.request_id))return {kind:'pending',reason:'no_results_context_unavailable'};
     if(output.options.some((o:any)=>!mealEvidenceFromOption(o,record.mode))||new Set(output.options.map((o:any)=>o.id)).size!==output.options.length||output.status==='options'&&!output.options.length)return {kind:'pending',reason:'invalid_meal_option'};
     if(record.envelope.operation==='review'&&(output.status!=='review'||output.review?.logged!==false||output.review.option_id!==record.envelope.option_id||output.review.servings!==record.envelope.servings))return {kind:'pending',reason:'review_scope_mismatch'};
     if(record.envelope.operation!=='review'&&output.status==='review')return {kind:'pending',reason:'unexpected_review'};
    }
    if(!await scopeOK(owner,date,zone)||!ready(access))return {kind:'blocked',reason:'scope_changed'};
-   if(record.recovery==='daily'&&output.status==='options')await deps.store.setItem(k+':completed',JSON.stringify({owner,date,zone,requestId:record.envelope.request_id,meal:record.meal,mode:record.mode}));
+   if(record.recovery==='daily'&&(output.status==='options'||output.outcome==='no_validated_options'))await deps.store.setItem(k+':completed',JSON.stringify({owner,date,zone,requestId:record.envelope.request_id,meal:record.meal,mode:record.mode}));
    if(record.recovery==='discovery')await deps.store.setItem(k,JSON.stringify({...record,completed:true}));else await deps.store.removeItem(k);
    return {kind:'ready',requestId:record.envelope.request_id,owner,date,meal:record.meal,mode:record.mode,body:output};
   }catch{return {kind:'pending',reason:'dispatch_or_recovery_unknown'};}finally{if(k&&locked)locks.delete(k);}

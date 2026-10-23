@@ -194,3 +194,50 @@ test('explicit stopped-child recovery still rejects active, claimed, mismatched 
   const response=await f.transport.recover(f.access);assert.equal(response.kind,'pending');assert.deepEqual((await f.transport.pending(f.access)).envelope,child.envelope);assert.equal(f.calls.length,priorCalls+1);
  }
 });
+
+test('no-results import preserves owned original context and reload restores it without discovery; revised explore gets its own source',async()=>{
+ const f=fixture(),constraints={exclusions:['onion'],allergens:['milk'],dietary_preferences:[],provenance:'user_provided',verification:'unverified'};
+ const found=await f.services.explore(f.access,{...input,mode:'eat_out',public_area:'Orlando',exclusions:['onion'],allergens:['milk']},'dinner');const base=f.deps.invoke;
+ const discoverySources=new Map();f.deps.invoke=async body=>{if(body.operation==='discover')discoverySources.set(body.request_id,body.source_request_id);if(body.operation!=='import_discovery')return base(body);f.calls.push(body);const response=f.json({status:'clarify',outcome:'no_validated_options',question:{key:'dish_and_portion'},reason:'source_evidence_unavailable',options:[],source_request_id:discoverySources.get(body.source_request_id),discovery_request:{mode:'restaurant',food:'chicken rice',area:'Orlando',preference:'high_protein'},dietary_constraints:constraints,next_action:'revise_search',retry_automatically:false,server_auto_logging:false,confirmation_transport:'existing_log_food'});f.receipts.set(body.request_id,response);return Response.json(response)};
+ const result=await f.services.discover(f.access,found);assert.equal(result.kind,'ready');assert.equal(result.noResults.sourceRequestId,found.requestId);assert.deepEqual(result.noResults.input.allergens,['milk']);assert.equal(result.question,undefined);assert.equal(result.options.length,0);assert.equal(await f.transport.pending(f.access),null);
+ const count=f.calls.length,restarted=createMealTransport(f.deps);const restored=await restarted.restore(f.access);assert.equal(restored.kind,'ready');assert.equal(restored.body.source_request_id,found.requestId);assert.deepEqual(f.calls.slice(count).map(b=>b.intent),['recover_daily']);
+ const revised=await f.services.explore(f.access,{...result.noResults.input,public_area:'Winter Park'},'dinner');assert.equal(revised.kind,'ready');assert.equal(f.calls.at(-1).operation,'explore');assert.equal(f.calls.at(-1).source_request_id,undefined);assert.notEqual(revised.requestId,result.requestId);assert.notEqual(revised.requestId,found.requestId);assert.equal(f.writes.length,0);
+ const discovered=await f.services.discover(f.access,revised);assert.equal(f.calls.findLast(b=>b.operation==='discover').source_request_id,revised.requestId);assert.equal(discovered.kind,'ready');assert.equal(discovered.noResults.sourceRequestId,revised.requestId);
+});
+
+test('no-results parser rejects missing, foreign-mode or contradictory context instead of inventing it',()=>{
+ const {noResultsContext}=require('../utils/coachNoResults');const source='22222222-2222-4222-8222-222222222222',receipt='33333333-3333-4333-8333-333333333333';
+ const constraints={exclusions:[],allergens:['milk'],dietary_preferences:[],provenance:'user_provided',verification:'unverified'};
+ const body={status:'clarify',outcome:'no_validated_options',question:{key:'dish_and_portion'},reason:'source_evidence_unavailable',options:[],source_request_id:source,discovery_request:{mode:'restaurant',food:'chicken',area:'Orlando'},dietary_constraints:constraints,next_action:'revise_search',retry_automatically:false,server_auto_logging:false,confirmation_transport:'existing_log_food'};
+ assert.ok(noResultsContext(body,'eat_out',receipt));for(const patch of [{source_request_id:undefined},{source_request_id:receipt},{dietary_constraints:undefined},{discovery_request:undefined},{discovery_request:{...body.discovery_request,mode:'recipe'}},{discovery_request:{...body.discovery_request,area:undefined}},{discovery_request:{...body.discovery_request,dietary_constraints:{...constraints,allergens:[]}}},{retry_automatically:true},{options:[{}]},{reason:'anything_else'}])assert.equal(noResultsContext({...body,...patch},'eat_out',receipt),null);
+});
+
+test('actual backend import branch composes with client services and durable no-results recovery',async()=>{
+ const vm=require('node:vm'),{importedDiscoveryOutcome}=require('../supabase/functions/ai-coach/meal-retrieval-outcome');
+ const src=fs.readFileSync(require.resolve('../supabase/functions/ai-coach/meal-explore-route.ts'),'utf8'),start=src.indexOf("if(b.operation==='import_discovery'){"),end=src.indexOf("if(b.operation==='review'){",start);
+ assert.ok(start>0&&end>start);
+ for(const filtered of [false,true]){
+  const f=fixture(),constraints={exclusions:['onion'],allergens:['milk'],dietary_preferences:[],provenance:'user_provided',verification:'unverified'};
+  const found=await f.services.explore(f.access,{...input,mode:'eat_out',public_area:'Orlando'},'dinner');
+  const original={discovery_request:{mode:'restaurant',food:'grilled chicken rice and vegetables',area:'Orlando',preference:'high_protein'},dietary_constraints:constraints};let sourceChecks=0;const base=f.deps.invoke;
+  f.deps.invoke=async body=>{
+   if(body.operation!=='import_discovery')return base(body);
+   f.calls.push(body);
+   const context={b:body,owner:'A',date:f.state.day,db:{rpc:async(_name,args)=>({data:[{request_id:body.source_request_id,state:'completed',user_id:'A',created_at:'2026-10-22T12:00:00Z',request_payload:{meal_source_request_id:found.requestId},result:{}}]})},localDay:()=>f.state.day,source:async id=>{assert.equal(id,found.requestId);sourceChecks++;return original},dietaryConstraints:x=>x,ownedDiscoveryMeals:()=>filtered?[{id:'candidate'}]:[],constrainMeals:()=>[],importedDiscoveryOutcome,json:x=>x};
+   vm.createContext(context);vm.runInContext(ts.transpile('globalThis.run=async()=>{'+src.slice(start,end)+'};',{target:ts.ScriptTarget.ES2022}),context);
+   const response=f.json(await context.run());f.receipts.set(body.request_id,response);return Response.json(response);
+  };
+  const result=await f.services.discover(f.access,found);assert.equal(result.kind,'ready');assert.equal(sourceChecks,1);assert.equal(result.options.length,0);assert.equal(result.question,undefined);assert.equal(result.noResults.sourceRequestId,found.requestId);assert.equal(result.noResults.reason,filtered?'dietary_constraints_filtered':'source_evidence_unavailable');assert.deepEqual(result.noResults.input.allergens,['milk']);
+  const before=f.calls.length,restored=await createMealTransport(f.deps).restore(f.access);assert.equal(restored.kind,'ready');assert.equal(restored.body.source_request_id,found.requestId);assert.deepEqual(f.calls.slice(before).map(b=>b.intent),['recover_daily']);assert.equal(f.writes.length,0);
+ }
+});
+
+test('additive outcome takes precedence over legacy clarification and malformed context is not downgraded to a question',async()=>{
+ for(const malformed of [false,true]){
+  const f=fixture(),base=f.deps.invoke;f.deps.invoke=async body=>body.operation==='explore'?Response.json(f.json({status:'clarify',outcome:'no_validated_options',question:{key:'dish_and_portion'},reason:'source_evidence_unavailable',options:[],next_action:'revise_search',retry_automatically:false,server_auto_logging:false,confirmation_transport:'existing_log_food',source_request_id:'22222222-2222-4222-8222-222222222222',discovery_request:{mode:'recipe',food:'chicken rice'},...(!malformed?{dietary_constraints:{exclusions:[],allergens:[],dietary_preferences:[],provenance:'user_provided',verification:'unverified'}}:{})})):base(body);
+  const result=await f.services.explore(f.access,input,'dinner');assert.equal(result.question,undefined);
+  if(malformed){assert.equal(result.kind,'pending');assert.equal(result.reason,'no_results_context_unavailable');assert.ok(await f.transport.pending(f.access));}
+  else {assert.equal(result.kind,'ready');assert.ok(result.noResults);assert.equal(await f.transport.pending(f.access),null);}
+ }
+ const f=fixture();f.deps.invoke=async()=>Response.json(f.json({status:'clarify',question:{key:'dish_and_portion'},options:[]}));const legacy=await f.services.explore(f.access,input,'dinner');assert.equal(legacy.kind,'ready');assert.equal(legacy.question,'dish_and_portion');assert.equal(legacy.noResults,undefined);
+});
