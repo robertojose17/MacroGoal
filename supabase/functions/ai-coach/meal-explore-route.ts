@@ -5,7 +5,7 @@ import {dietaryConstraints,constrainMeals} from './dietary-constraints.ts';
 import {currentMealCapabilities} from './meal-paid-capabilities.ts';
 import {discoveryConsentMessage} from './meal-discovery-consent.ts';
 import {createPaidMealAdmission} from './manual/paid-meal-admission.ts';
-import {estimateMeal} from './meal-auto-estimate.ts';
+import {estimateMeal,needsExplicitEstimatePortion} from './meal-auto-estimate.ts';
 import {guardedChat} from './chat-access.ts';
 import {createV202Admission} from './manual/v202-admission.ts';
 import {savedMealReviewPolicy} from './manual/saved-meal-policy.ts';
@@ -51,14 +51,14 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    const prior=await source(b.source_request_id),option=prior.options?.find((o:MealOption)=>o.id===b.option_id);
    if(!option)return json({error:'option_not_found'},404);
    try{if(b.portion_label!==undefined)validatePublicPortion(b.portion_label);if(option.identity?.kind==='general_meal')validateGeneralEstimateOption(b.portion_label?{...option,identity:{...option.identity,portion_label:b.portion_label}}:option);}catch(e){return validationError((e as Error).message);}
-   if(option.identity?.kind==='restaurant'&&!option.identity.variant&&!option.identity.portion_label&&!b.portion_label)return json({schema:'meal_explore_v1',owner,date,status:'clarify',question:{key:'portion_label'},options:[]});
+   if(needsExplicitEstimatePortion(option)&&!b.portion_label)return json({schema:'meal_explore_v1',owner,date,status:'clarify',question:{key:'portion_label'},options:[]});
    if(!WEB_SEARCH_APPROVED||!WEB_PILOT_USER_IDS.includes(owner))return json({error:'existing_search_pilot_required',admission_state:'not_admitted'},403);
    const opt=await db.rpc('coach_web_pilot_enabled_v1',{p_user_id:owner});if(opt.error||opt.data!==true)return json({error:'existing_search_opt_in_required',admission_state:'not_admitted'},403);
    const key=estimator?.key();if(!key)return json({error:'estimator_not_configured',admission_state:'not_admitted'},503);
    const payload={...b,contract:'manual_v1',intent:'recommend',journey:'meal_explore_v1'};
    const paid=createPaidMealAdmission(db,policy,now,resolve);
    const result=await paid.run({ownerId:owner,requestId:b.request_id,intent:'recommend',fingerprint:canonical(payload)},async context=>{
-    const selected=b.portion_label?{...option,identity:{...option.identity,portion_label:b.portion_label}}:option;
+    const selected=b.portion_label?{...option,physical_portion:b.portion_label===option.identity?.portion_label?option.physical_portion:undefined,identity:{...option.identity,portion_label:b.portion_label}}:option;
     const estimated=await estimateMeal(selected,context,key,estimator?.fetcher);
     return json({schema:'meal_explore_v1',owner,date,status:'options',options:[estimated],next_action:'review_option',confirmation_transport:'existing_log_food',server_auto_logging:false});
    });

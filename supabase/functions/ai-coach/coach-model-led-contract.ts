@@ -191,7 +191,7 @@ export function publicDiscoveryQuery(args: DiscoverFoodArgs): string {
 }
 
 /** Discovery projection contains identity only. Evidence IDs/URLs remain on the private receipt. */
-export function projectDiscoveryOptions(rows: unknown, requestId: string, trustedEvidenceIds: readonly string[]=[], privateBindings?:Record<string,{source_url:string;kind:DiscoveryKind;name:string;entity?:string;variant?:string;address?:string;address_source_url?:string;match?:RestaurantMatch;dietary_evidence?:string}>): DiscoveryOption[] {
+export function projectDiscoveryOptions(rows: unknown, requestId: string, trustedEvidenceIds: readonly string[]=[], privateBindings?:Record<string,{source_url:string;kind:DiscoveryKind;name:string;entity?:string;variant?:string;address?:string;address_source_url?:string;entity_source_url?:string;match?:RestaurantMatch;dietary_evidence?:string}>): DiscoveryOption[] {
   if (!Array.isArray(rows)) return [];
   const out:DiscoveryOption[]=[]; const seen=new Set<string>();
   for (const item of rows.slice(0,12)) {
@@ -214,7 +214,7 @@ export function projectDiscoveryOptions(rows: unknown, requestId: string, truste
     for(const keyName of ['brand','restaurant_name','retailer','address'] as const) if(typeof r[keyName]==='string'&&plain(r[keyName] as string,keyName==='address'?180:120)&&typeof fields[keyName]==='string'&&evidence.includes(fields[keyName] as string)&&trusted.has(fields[keyName] as string)) option[keyName]=r[keyName] as string;
     if(variant)option.variant=variant;
     if(r.match&&typeof r.match==='object')option.match=r.match as RestaurantMatch;
-    out.push(option);if(privateBindings)privateBindings[id]={...(typeof r.dietary_evidence==='string'&&r.dietary_evidence.length<=400?{dietary_evidence:r.dietary_evidence}:{}),...(option.match?{match:option.match}:{}),source_url:sourceKey,kind:option.kind,name:option.name,...(verifiedMerchant?{entity:(r.restaurant_name as string).trim()}:typeof r.retailer==='string'&&option.retailer?{entity:option.retailer}:{}),...(option.variant?{variant:option.variant}:{}),...(verifiedMerchant&&option.address&&typeof fields.address==='string'?{address:option.address,address_source_url:fields.address}:{})}; if(out.length===3)break;
+    out.push(option);if(privateBindings)privateBindings[id]={...(typeof r.dietary_evidence==='string'&&r.dietary_evidence.length<=400?{dietary_evidence:r.dietary_evidence}:{}),...(option.match?{match:option.match}:{}),source_url:sourceKey,kind:option.kind,name:option.name,...(verifiedMerchant?{entity:(r.restaurant_name as string).trim(),entity_source_url:fields.restaurant_name as string}:typeof r.retailer==='string'&&option.retailer?{entity:option.retailer}:{}),...(option.variant?{variant:option.variant}:{}),...(verifiedMerchant&&option.address&&typeof fields.address==='string'?{address:option.address,address_source_url:fields.address}:{})}; if(out.length===3)break;
   }
   return out;
 }
@@ -243,7 +243,7 @@ export function discoveryRowsFromEvidence(evidence:any, lookupOptions:unknown):{
     const restaurantId=locationId??metadataId(restaurantMeta),brandId=metadataId(brandMeta),retailerMetaId=metadataId(retailerMeta),addressMetaId=metadataId(addressMeta),variantMetaId=metadataId(variantMeta);
     for(const id of [restaurantId,brandId,retailerMetaId,addressMetaId,variantMetaId])if(id&&!ids.includes(id))ids.push(id);
     if(restaurantId)fieldEvidence.restaurant_name=restaurantId;
-    if(addressMetaId)fieldEvidence.address=addressMetaId;
+    if(locationId??addressMetaId)fieldEvidence.address=(locationId??addressMetaId)!;
     if(brandId)fieldEvidence.brand=brandId;
     if(retailerMetaId)fieldEvidence.retailer=retailerMetaId;
     if(variantMetaId)fieldEvidence.variant=variantMetaId;
@@ -252,7 +252,7 @@ export function discoveryRowsFromEvidence(evidence:any, lookupOptions:unknown):{
     const restaurantName=d.location?.evidence_status==='verified'?d.location.name:restaurantMeta?.value;
     const address=d.location?.evidence_status==='verified'?d.location.address:addressMeta?.value;
     const retailerName=retailer?.name??retailerMeta?.value,brand=retailer?.brand??brandMeta?.value,variant=variantMeta?.value;
-    return [{...(d.dietary_evidence?{dietary_evidence:d.dietary_evidence}:{}),...(d.match?{match:d.match}:{}),kind,name:d.name,evidence_ids:ids,field_evidence:fieldEvidence,nutrition_status:d.nutrition?'partial':'unavailable',missing_fields:[...(!d.portion?['serving']:[]),...(['calories','protein','carbs','fat','fiber'].filter((k:string)=>!Number.isFinite(d.nutrition?.fields?.[k]?.value)).map((k:string)=>k==='fat'?'fats':k))],...(restaurantName&&restaurantId?{restaurant_name:restaurantName}:{}),...(address&&addressMetaId?{address}:{}),...(retailerName&&retailerMetaId?{retailer:retailerName}:{}),...(brand&&brandId?{brand}:{}),...(variant&&variantMetaId?{variant}:{})}];
+    return [{...(d.dietary_evidence?{dietary_evidence:d.dietary_evidence}:{}),...(d.match?{match:d.match}:{}),kind,name:d.name,evidence_ids:ids,field_evidence:fieldEvidence,nutrition_status:d.nutrition?'partial':'unavailable',missing_fields:[...(!d.portion?['serving']:[]),...(['calories','protein','carbs','fat','fiber'].filter((k:string)=>!Number.isFinite(d.nutrition?.fields?.[k]?.value)).map((k:string)=>k==='fat'?'fats':k))],...(restaurantName&&restaurantId?{restaurant_name:restaurantName}:{}),...(address&&(locationId??addressMetaId)?{address}:{}),...(retailerName&&retailerMetaId?{retailer:retailerName}:{}),...(brand&&brandId?{brand}:{}),...(variant&&variantMetaId?{variant}:{})}];
   });
   return {rows,trustedIds};
 }

@@ -8,6 +8,11 @@ import {noResultsContext} from './coachNoResults';
 
 export type MealChoices = { kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; galleryNoMatch?:boolean; question?:string; publicRequest?:Record<string,unknown>; noResults?:NonNullable<ReturnType<typeof noResultsContext>>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
 export type MealChoiceOutcome = MealChoices | Exclude<MealResponse,{kind:'ready'}>;
+export function estimateNeedsPortion(option:MealEvidence):boolean {
+ if(option.identity?.portion_label?.trim())return false;
+ const mass=option.physicalPortion;
+ return !(mass?.authority==='source_reported'&&Number.isFinite(mass.grams)&&mass.grams>0);
+}
 export const estimatePublicDetails = (option:MealEvidence, portionLabel?:string) => ({ name:option.name.slice(0,160), identity:portionLabel ? {...option.identity, portion_label:portionLabel} : option.identity??null, physical_portion:option.physicalPortion??null, source:{url:option.provenance.url??null,nutrition:{authority:(option.sourceNutrition??option.nutrition).authority,basis:(option.sourceNutrition??option.nutrition).basis,values:(option.sourceNutrition??option.nutrition).values}}, ingredients:(option.ingredients??[]).slice(0,30).map(s=>s.slice(0,180)) });
 export function createMealServices(deps: {
   transport:ReturnType<typeof createMealTransport>;
@@ -74,7 +79,9 @@ export function createMealServices(deps: {
   retrySearch:async(access:MealAccess,offer:MealRetryOffer)=>importDiscovery(access,await deps.transport.retry(access,offer)),
   estimate:async(access:MealAccess,source:MealChoices,optionId:string,portionLabel?:string)=>{
    if(!source.capabilities.estimate||!source.options.some(o=>o.id===optionId)||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:source.capabilities.reason??'estimate_unavailable'} as const;
-   return choices(await deps.transport.run(access,{operation:'estimate',source_request_id:source.requestId,option_id:optionId,consent:true,...(portionLabel?{portion_label:portionLabel}:{})},{meal:source.meal,mode:source.mode}));
+   const originalPortion=source.options.find(o=>o.id===optionId)?.identity?.portion_label;
+   const override=portionLabel?.trim();
+   return choices(await deps.transport.run(access,{operation:'estimate',source_request_id:source.requestId,option_id:optionId,consent:true,...(override&&override!==originalPortion?.trim()?{portion_label:override}:{})},{meal:source.meal,mode:source.mode}));
   },
   async recover(access:()=>ReturnType<MealReviewDependencies['access']>){
    const pending=await deps.transport.pending(access);if(!pending)return {kind:'blocked',reason:'no_pending_request'} as const;
