@@ -1,3 +1,4 @@
+import {coachRecipeTimeLabel} from '@/utils/coachMealReviewAdapter';
 import {emptyConstraints,parseConstraints,mergeConstraints,constraintLines,type DietaryConstraints} from '@/utils/coachDietaryConstraints';
 import type { MealComposer } from '@/utils/coachMealComposer';
 import React,{useEffect,useRef,useState} from 'react';
@@ -98,6 +99,7 @@ export default function CoachConversationActions(props:Props){
    <Text style={s.title}>{o.venue?.name??o.name}</Text>{o.venue&&<Text style={s.body}>{o.name}</Text>}
    {o.match&&<><Text style={s.body}>{say('Related option','Opción similar')}</Text><Text style={s.muted}>{say('You asked for: ','Pediste: ')}{o.match.requestedFood}</Text>{o.match.differences.map((difference,i)=><Text key={i} style={s.muted}>{difference}</Text>)}</>}
    {o.venue?.address&&o.venue.addressSourceUrl&&<Text style={s.muted}>{o.venue.address}</Text>}
+   {coachRecipeTimeLabel(o,es)&&<Text style={s.muted}>{coachRecipeTimeLabel(o,es)}</Text>}
    <Text style={s.body}>{o.nutrition.basis.label}</Text><Text style={s.body}>{o.nutrition.values.calories??'—'} kcal · {o.nutrition.values.protein??'—'} g {say('protein','proteína')}</Text>
    <Text style={s.muted}>{['official','publisher_reported'].includes(o.nutrition.authority)?say('Source-reported nutrition','Nutrición publicada por la fuente'):say('Approximate or incomplete nutrition — not official values; review the portion and ingredients before adding','Nutrición aproximada o incompleta; no son valores oficiales. Revisa la porción y los ingredientes antes de añadir')}</Text>
    {o.kind==='general'&&!ready.capabilities.estimate&&Object.values(o.nutrition.values).some(x=>x===null)&&<Text style={s.body}>{say('Nutrition estimation is unavailable right now. Your meal and portion are saved.','La estimación nutricional no está disponible ahora. Tu comida y porción están guardadas.')}</Text>}

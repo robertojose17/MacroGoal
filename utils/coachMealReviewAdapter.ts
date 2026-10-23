@@ -25,6 +25,7 @@ export function mealEvidenceFromOption(row: any, mode: 'cook' | 'quick' | 'eat_o
 
     provenance: { kind: p.kind, label: general ? 'General meal estimate' : url ? new URL(url).hostname : p.kind === 'gallery' ? 'Macro Goal gallery' : p.kind === 'official' ? 'Official menu' : 'Meal source', ...(url ? { url } : {}), ...(p.gallery_id ? { galleryId: p.gallery_id } : {}) },
 
+    ...(mode!=='eat_out'&&row.identity?.kind==='recipe'&&url&&row.total_time?.authority==='source_reported'&&row.total_time.source_url===url&&Number.isInteger(row.total_time.minutes)&&row.total_time.minutes>0&&row.total_time.minutes<=1440?{totalTime:{minutes:row.total_time.minutes,authority:'source_reported',sourceUrl:url}}:{}),
     nutrition: { authority: row.nutrition.authority, basis: row.nutrition.basis, values: row.nutrition.values, assumptions: row.nutrition.assumptions },
     ...(venue?{venue}:{}),
     ...(match?{match}:{}),
@@ -48,3 +49,10 @@ export function existingMealLogPayload(context: MealReviewContext, entry: Prepar
     p_food_name: entry.name, p_food_brand: null, p_quantity: entry.multiplier, p_grams: entry.physicalPortion?.total_grams ?? null, p_serving_description: description,
     p_calories: entry.nutrition.calories, p_protein: entry.nutrition.protein, p_carbs: entry.nutrition.carbs, p_fats: entry.nutrition.fats, p_fiber: entry.nutrition.fiber };
 }
+
+export function coachRecipeTimeLabel(option:MealEvidence,es:boolean):string|null {
+  if(!['recipe','gallery'].includes(option.kind))return null;
+  return option.kind==='recipe'&&option.totalTime?.authority==='source_reported'&&option.totalTime.sourceUrl===option.provenance.url&&Number.isInteger(option.totalTime.minutes)&&option.totalTime.minutes>0&&option.totalTime.minutes<=1440
+    ? (es?'Tiempo total publicado: ':'Published total time: ')+option.totalTime!.minutes+' min'
+    : es?'Tiempo total desconocido; comprueba la fuente antes de planificar.':'Total time unknown; check the source before planning.';
+}

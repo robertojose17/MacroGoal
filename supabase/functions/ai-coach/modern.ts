@@ -876,7 +876,7 @@ INSTRUCTIONS:
         const query=publicDiscoveryQuery(args);
         const mapped={kind:'search' as const,query,food:args.food,mode:args.mode,...(args.restaurant?{restaurant:args.restaurant}:{}),area:[args.city,args.region,args.country].filter(Boolean).join(', ')};
         const row={phase:'discovery',cost:null as number|null,generation_id:null as string|null};phaseAudit.push(row);
-        const result=await searchFoodSources(query,requestId,{enabled:webEnabled,apiKey:OPENROUTER_API_KEY,fetch,language,intent:mapped,onAttempt:()=>{webLookupAttempted=true;},onReceipt:(cost,id)=>{row.cost=cost;row.generation_id=id;},reserveBudget:async()=>true});
+        const result=await searchFoodSources(query,requestId,{maxMinutes:args.max_minutes,enabled:webEnabled,apiKey:OPENROUTER_API_KEY,fetch,language,intent:mapped,onAttempt:()=>{webLookupAttempted=true;},onReceipt:(cost,id)=>{row.cost=cost;row.generation_id=id;},reserveBudget:async()=>true});
         webEvidence=result;privateProviderDiagnostic=result.privateProviderDiagnostic??null;emitPrivateProviderDiagnostic(requestId,privateProviderDiagnostic);
         if(['provider_error','transport_error','truncated','invalid_response'].includes(result.status??''))throw Object.assign(new Error('discovery_provider_failure'),{knownCost:result.reportedCost??null,generationId:result.generationId??null,errorCode:result.status});
         if(args.mode==='recipe'&&result.evidence?.candidates?.length){const verified=await verifyDiscoveredRecipe(result,{fetch,retrievedAt:new Date().toISOString(),language});verifiedFood=verified.verifiedFood;}

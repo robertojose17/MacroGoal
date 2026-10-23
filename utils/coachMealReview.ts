@@ -17,6 +17,7 @@ export type MealEvidence = {
   match?: {kind:'similar';requestedFood:string;differences:string[]};
   dietaryConstraints?:DietaryConstraints;
   venue?: {name:string;sourceUrl:string;address?:string;addressSourceUrl?:string};
+  totalTime?:{minutes:number;authority:"source_reported";sourceUrl:string}; // Independent of nutrition authority.
   sourceNutrition?: MealEvidence['nutrition'];
   identity?: { kind: string; entity?: string; variant?: string; portion_label?: string };
   physicalPortion?: { grams: number; authority: 'source_reported' | 'estimated' };

@@ -14,10 +14,11 @@ export function normalizedDiscoveryQuery(query:any){
  food=food.replace(/\bpollo\s+con\s+arroz\b/gi,'chicken and rice').replace(/\bchicken\s+(?:with\s+)?rice\b/gi,'chicken and rice');
  return {...query,food,...(minutes!==undefined?{max_minutes:minutes}:{})};
 }
-export function recipeTimingOptions<T extends {prep_minutes:number|null;nutrition:{assumptions:string[]}}>(options:T[],query:any):T[]{
+export function recipeTimingOptions<T extends {total_time?:{minutes:number;authority:'source_reported';source_url:string};prep_minutes:number|null;nutrition:{assumptions:string[]}}>(options:T[],query:any):T[]{
  const normalized=normalizedDiscoveryQuery(query??{}),minutes=normalized.mode==='recipe'?normalized.max_minutes:undefined;
  if(minutes===undefined)return options;
- return options.filter(o=>o.prep_minutes===null||o.prep_minutes<=minutes).map(o=>o.prep_minutes!==null?o:{...o,nutrition:{...o.nutrition,assumptions:[...o.nutrition.assumptions,`Preparation time is unknown; the requested maximum of ${minutes} minutes is not verified.`]}});
+ const published=(o:T)=>o.total_time?.authority==='source_reported'&&Number.isFinite(o.total_time.minutes)&&o.total_time.minutes>0&&o.total_time.minutes<=1440?o.total_time.minutes:null;
+ return options.filter(o=>published(o)===null||published(o)!<=minutes).map(o=>published(o)!==null?o:{...o,nutrition:{...o.nutrition,assumptions:[...o.nutrition.assumptions,`Preparation time is unknown; the requested maximum of ${minutes} minutes is not verified.`]}});
 }
 // Only called after owned source and explicit consent checks in meal-explore-route.
 export function discoveryConsentMessage(query:any){

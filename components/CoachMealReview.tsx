@@ -1,3 +1,4 @@
+import {coachRecipeTimeLabel} from '@/utils/coachMealReviewAdapter';
 import {coachCatalogPreview,type CatalogConsent} from '@/utils/coachCatalogIdentity';
 import {constraintLines} from '@/utils/coachDietaryConstraints';
 import React, { useEffect, useRef, useState } from 'react';
@@ -63,6 +64,7 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
       <Text accessibilityRole="header" style={s.title}>{source.name}</Text>      {source.match&&<><Text style={s.body}>{say('Related option','Opción similar')}: {source.match.requestedFood}</Text>{source.match.differences.map((difference,i)=><Text key={i} style={s.muted}>{difference}</Text>)}</>}
         {source.kind==='general'&&<Text style={s.muted}>{say('General meal estimate — not a verified restaurant item.','Estimación general de comida; no es un plato verificado de un restaurante.')}</Text>}
 
+      {coachRecipeTimeLabel(source,es)&&<Text style={s.muted}>{coachRecipeTimeLabel(source,es)}</Text>}
       <Text style={s.body}>{mealLabel} · {session.context.date}</Text>
       <Text style={s.body}>{authority(prepared?.authority ?? (edit?.changed.length ? 'user_edited' : source.nutrition.authority))}</Text>
       <Text style={s.muted}>{source.provenance.label}{source.provenance.url ? ` · ${source.provenance.url}` : ''}</Text>

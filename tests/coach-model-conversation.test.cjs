@@ -283,3 +283,16 @@ test('historical active card restores only its stable flow with explicit resume'
  assert.match(app,/showRecovery=\{activeMealCard\?activeMealCard===message\.id:/);
  }finally{h.restore()}
 });
+
+
+test('source total time is independent of estimated nutrition and legacy prep minutes stay unknown',()=>{
+ const url='https://example.com/recipe';
+ const make=()=>({id:'recipe',name:'Chicken rice',identity:{kind:'recipe'},provenance:{kind:'estimate',source_url:url},nutrition:{authority:'unknown',basis:{amount:1,unit:'serving',label:'one plate'},values:{calories:null,protein:null,carbs:null,fats:null,fiber:null},assumptions:[]},ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true});
+ const {coachRecipeTimeLabel}=require('../utils/coachMealReviewAdapter');
+ const valid={minutes:20,authority:'source_reported',source_url:url};
+ const cases=[valid,undefined,null,{...valid,authority:'estimated'},{...valid,source_url:'https://other.com/recipe'},{...valid,minutes:0},{...valid,minutes:1441},{...valid,minutes:'20'}];
+ for(const language of ['en','es'])for(const total of cases){const h=harness(true,language);try{const row={...make(),prep_minutes:20,active_minutes:20,total_time:total},option=mealEvidenceFromOption(row,'cook');assert.ok(option);assert.equal(option.nutrition.authority,'unknown');assert.equal(option.provenance.kind,'estimate');h.render();h.states[0]={kind:'ready',owner:'A',date:'2026-10-22',requestId:'receipt',meal:'lunch',mode:'cook',options:[option],capabilities:{estimate:false,discovery:false,reason:null}};const text=h.text(h.render());assert.ok(text.includes(total===valid?(language==='es'?'Tiempo total publicado: 20 min':'Published total time: 20 min'):(language==='es'?'Tiempo total desconocido':'Total time unknown')));assert.equal(h.calls.length,0);}finally{h.restore();}}
+ const gallery=mealEvidenceFromOption({...make(),total_time:valid,provenance:{kind:'gallery',gallery_id:'saved'}},'cook');assert.match(coachRecipeTimeLabel(gallery,false),/unknown/);assert.equal(coachRecipeTimeLabel(mealEvidenceFromOption({...make(),total_time:valid},'eat_out'),false),null);
+ const service=fs.readFileSync(path.join(__dirname,'../utils/coachMealServices.ts'),'utf8');assert.ok(service.includes('total_time:reviewSource?.total_time'));
+ const review=fs.readFileSync(path.join(__dirname,'../components/CoachMealReview.tsx'),'utf8');assert.ok(review.includes('coachRecipeTimeLabel(source,es)'));
+});
