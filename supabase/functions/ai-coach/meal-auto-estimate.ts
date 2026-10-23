@@ -1,3 +1,4 @@
+import {validateGeneralEstimateOption} from './general-meal.ts';
 import {fetchBoundedProviderJson,providerReceipt} from './bounded-provider-phase.ts';
 import {nutrients,type MealOption} from './gallery-meals.ts';
 import type {PaidContext} from './manual/paid-meal-admission.ts';
@@ -13,6 +14,7 @@ export function applyEstimate(option:MealOption,output:any):MealOption{
 }
 export async function estimateMeal(option:MealOption,context:PaidContext,key:string,fetcher:typeof fetch=fetch):Promise<MealOption>{
  if(!key)throw Error('estimator_not_configured');
+ if(option.identity?.kind==='general_meal')validateGeneralEstimateOption(option);
  if(option.identity?.kind==='restaurant'&&!option.identity.variant&&!option.identity.portion_label)throw Error('restaurant_portion_clarification_required');
  // Excludes owner, diary, goals, allergy profile and conversational messages. Public source identity and nutrition only; never send accumulated assumptions.
  const dish={name:option.name.slice(0,160),identity:option.identity??null,physical_portion:option.physical_portion??null,source:{url:option.provenance.source_url??null,nutrition:{authority:(option.source_nutrition??option.nutrition).authority,basis:(option.source_nutrition??option.nutrition).basis,values:(option.source_nutrition??option.nutrition).values}},ingredients:option.ingredients.slice(0,30).map(x=>x.slice(0,180))};

@@ -914,7 +914,7 @@ INSTRUCTIONS:
       const {rows,trustedIds}=discoveryRowsFromEvidence(webEvidence.evidence,completeOptions);
       // Broad recommendations finish with verified menu options; do not turn incomplete discovery into a verification task.
       const broadRestaurant=!!explicitArgs&&isBroadRestaurantRequest(explicitArgs);
-      modelLedDiscoveryBindings={};modelLedDiscoveryOptions=broadRestaurant?[]:projectDiscoveryOptions(rows,requestId,trustedIds,modelLedDiscoveryBindings);
+      modelLedDiscoveryBindings={};modelLedDiscoveryOptions=projectDiscoveryOptions(rows,requestId,trustedIds,modelLedDiscoveryBindings);
       if(broadRestaurant)modelLedChoices=[];
       const payload=JSON.stringify({text,choices:modelLedChoices});
       const sse=`data: ${JSON.stringify({choices:[{delta:{content:payload}}]})}\n\ndata: [DONE]\n\n`;

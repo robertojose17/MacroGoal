@@ -8,10 +8,12 @@ export const NUTRIENTS = ['calories', 'protein', 'carbs', 'fats', 'fiber'] as co
 export type Nutrient = typeof NUTRIENTS[number];
 export type MealNutrition = Record<Nutrient, number | null>;
 export type MealEvidence = {
-  id: string; name: string; kind: 'gallery' | 'restaurant' | 'recipe';
+  id: string; name: string; kind: 'gallery' | 'restaurant' | 'recipe' | 'general';
+
   provenance: { kind: 'gallery' | 'official' | 'publisher' | 'estimate'; label: string; url?: string; galleryId?: string };
   nutrition: { authority: 'official' | 'publisher_reported' | 'estimated' | 'user_edited' | 'unknown';
     basis: { amount: number; unit: string; label: string }; values: MealNutrition; assumptions: string[] };
+  match?: {kind:'similar';requestedFood:string;differences:string[]};
   dietaryConstraints?:DietaryConstraints;
   venue?: {name:string;sourceUrl:string;address?:string;addressSourceUrl?:string};
   sourceNutrition?: MealEvidence['nutrition'];
@@ -43,7 +45,8 @@ const validValues = (x: MealNutrition) => x && NUTRIENTS.every(k => x[k] === nul
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 export function validMealEvidence(o: MealEvidence): boolean {
   return !!o && typeof o.id === 'string' && !!o.id && typeof o.name === 'string' && !!o.name.trim() &&
-    ['gallery','restaurant','recipe'].includes(o.kind) && ['gallery','official','publisher','estimate'].includes(o.provenance?.kind) &&
+    ['gallery','restaurant','recipe','general'].includes(o.kind) && ['gallery','official','publisher','estimate'].includes(o.provenance?.kind) &&
+
     typeof o.provenance.label === 'string' && !!o.provenance.label.trim() &&
     ['official','publisher_reported','estimated','user_edited','unknown'].includes(o.nutrition?.authority) &&
     finite(o.nutrition.basis?.amount) && o.nutrition.basis.amount > 0 && typeof o.nutrition.basis.label === 'string' && !!o.nutrition.basis.label &&

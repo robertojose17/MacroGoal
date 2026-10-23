@@ -3,6 +3,8 @@ import { classifyItemIntegrity } from '../coach-nutrition-evidence.ts';
 import { normalizeCoachMutation } from './coach-action-contract.ts';
 
 export type LookupOption = {
+  dietary_evidence?:string;
+  match?:import('../restaurant-similarity.ts').RestaurantMatch;
   option_id: string;
   /** Internal-only source identity key, removed from client projections. */
   _source_url?: string;
@@ -83,6 +85,8 @@ export function projectLookupOptions(evidence:EvidenceResult|undefined,verifiedF
     const n=dish.nutrition!, values=n.fields;
     const grams=gramsFor(dish);
     const option:LookupOption={
+      ...(dish.dietary_evidence?{dietary_evidence:dish.dietary_evidence}:{}),
+      ...(dish.match?{match:structuredClone(dish.match)}:{}),
       option_id:stableId(dish),
       kind:dish.sourceKind==='menu'?'restaurant':'product',
       ...(dish.sourceKind==='product'&&(dish.retailers?.find(r=>r.evidence_status==='verified')?.brand||brandFor(dish))?{brand:dish.retailers?.find(r=>r.evidence_status==='verified')?.brand||brandFor(dish)}:{}),

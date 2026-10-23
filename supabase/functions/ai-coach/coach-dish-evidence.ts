@@ -1,3 +1,4 @@
+import {relatedRestaurantMatch,type RestaurantMatch} from './restaurant-similarity.ts';
 import {compoundFoodParts,compoundFoodMatches,compoundItemEvidence} from './meal-retrieval-outcome.ts';
 import {verifiedRegistryPages,verifiedRegistryCandidates,isRegistryCandidate,isOfficialRestaurantPlan} from './coach-official-capabilities.ts';
 import { isVerifiedMcDonaldsBranch, type VerifiedMcDonaldsBranch } from './coach-mcdonalds-api.ts';
@@ -10,7 +11,7 @@ import { publicPlace } from './coach-lookup-intent.ts';
 import { parseDishJSON } from './coach-dish-json.ts';
 import { verifiedPublisherBrand } from './_shared/coach-recommendation-contract.ts';
 export { parseDishJSON } from './coach-dish-json.ts';
-export type DishEvidence = { nutrition?: Nutrition | null; name: string; portion: string | null; calories: number | null; nutritionStatus: 'verified' | 'unverified'; areaVerified: boolean; url: string; productUrl?:string|null; locatorUrl?:string|null; quote: string; sourceTitle: string; market: string | null; sourceKind: 'menu' | 'product' | 'retrieved_recipe'; instructions: string[]; restaurantName?:string; variant?:string;retailers?:VerifiedRetailer[];location?:VerifiedBranch;discoveryMetadata?:CitedDiscoveryMetadata };
+export type DishEvidence = { dietary_evidence?:string; match?:RestaurantMatch; nutrition?: Nutrition | null; name: string; portion: string | null; calories: number | null; nutritionStatus: 'verified' | 'unverified'; areaVerified: boolean; url: string; productUrl?:string|null; locatorUrl?:string|null; quote: string; sourceTitle: string; market: string | null; sourceKind: 'menu' | 'product' | 'retrieved_recipe'; instructions: string[]; restaurantName?:string; variant?:string;retailers?:VerifiedRetailer[];location?:VerifiedBranch;discoveryMetadata?:CitedDiscoveryMetadata };
 export type EvidenceResult = { requestedKind?:DishEvidence['sourceKind']; candidates?: DishEvidence[]; rejectedCandidates?:Array<{name:string;url:string;reason:'unverified_packaged_product'}>; status: 'supported' | 'missing' | 'conflicting'; dishes: DishEvidence[]; sources: CoachSource[]; conflicts: string[] };
 const decoded = (s: string) => s.replace(/&amp;/gi,'&').replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'");
 const plain = (s: string) => decoded(s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
@@ -44,7 +45,7 @@ export function sourceInstructions(content: string): string[] {
   const chunks=section.split(/\n+|(?<=\.)\s+|\s+(?=\d+\)\s)/).map(s=>s.trim().replace(/^\d+[.)]\s*/,''));
   return chunks.filter(s=>s.length>=12&&s.length<=160&&!/^[_*#]|^\.{3}|^\d+$/.test(s)).slice(0,3).map(decoded);
 }
-export function validateDishEvidence(message:any,retrievedAt:string,scope:{generalMeal?:boolean;food?:string;restaurant?:string;area?:string;product?:string;market?:string;sourceKind?:DishEvidence['sourceKind'];variant?:string;menuVariant?:string;productVariant?:string;portion?:string;modifications?:string[];onReject?:(reason:CandidateRejection)=>void}={}):EvidenceResult {
+export function validateDishEvidence(message:any,retrievedAt:string,scope:{allowSimilar?:boolean;generalMeal?:boolean;food?:string;restaurant?:string;area?:string;product?:string;market?:string;sourceKind?:DishEvidence['sourceKind'];variant?:string;menuVariant?:string;productVariant?:string;portion?:string;modifications?:string[];onReject?:(reason:CandidateRejection)=>void}={}):EvidenceResult {
   const providerAnnotations=Array.isArray(message?.annotations)?message.annotations.slice(0,20):[];
   const registryPages=verifiedRegistryPages(message),registryURLs=new Set(registryPages.map(page=>page.url));
   const sourceRecords=[...registryPages,...providerAnnotations.filter((a:any)=>a?.type==='url_citation'&&!registryURLs.has(a.url_citation?.url)).map((a:any)=>({...a.url_citation,evidence_origin:'provider'}))];
@@ -57,7 +58,7 @@ export function validateDishEvidence(message:any,retrievedAt:string,scope:{gener
     // Published standard-item values do not establish nutrition after customizations.
     if(scope.modifications?.length){discard('nutrition','unsupported_modifications');continue;}
     if(scope.variant&&name!==plain(scope.variant)){discard('identity','item_variant_mismatch');continue;}
-    if(scope.food==='pizza'&&/\b(sandwich(?:es)?|wrap|pasta|salad|burger|sauce|topping)\b/.test(name)){discard('identity','food_category_mismatch');continue;}
+    if(!scope.allowSimilar&&scope.food==='pizza'&&/\b(sandwich(?:es)?|wrap|pasta|salad|burger|sauce|topping)\b/.test(name)){discard('identity','food_category_mismatch');continue;}
     const ann=sourceRecords.filter((a:any)=>a?.url===row.url);
     const sources=ann.flatMap((a:any)=>coachSources([{url:a.url,title:a.title,retrievedAt}]));const source=sources[0];if(!source){discard('source','missing_candidate_citation');continue;}
 const mcdCitation=ann.length===1&&ann[0].public_page_verified===true?ann[0]:undefined;
@@ -74,13 +75,13 @@ const mcdParsed=mcdReceipt
 const mcdRestaurant=mcdParsed&&verifiedMcDonaldsMerchant(source.url,mcdCitation?.title,mcdCitation?.raw_page_content,row.name.trim());
 const mcdVerified=!!mcdParsed&&!!mcdRestaurant&&['mcdonalds.com','www.mcdonalds.com'].includes(new URL(source.url).hostname);
 
-    if(kind==='menu'&&scope.food&&!compoundFoodParts(scope.food)&&!categoryMatches(scope.food,row.name)&&!mcdVerified){discard('identity','food_category_mismatch');continue;}
+    if(!scope.allowSimilar&&kind==='menu'&&scope.food&&!compoundFoodParts(scope.food)&&!categoryMatches(scope.food,row.name)&&!mcdVerified){discard('identity','food_category_mismatch');continue;}
     const texts:string[]=ann.flatMap((a:any)=>[a.content,a.page_content].filter((x:unknown)=>typeof x==='string'));
-    const marketPages=ann.filter((a:any)=>a.public_page_verified===true&&typeof a.page_content==='string');const isPapaJohns=['papajohns.com','www.papajohns.com'].includes(new URL(source.url).hostname);const marketContent=isPapaJohns?(marketPages.length===1?marketPages[0].page_content:''):texts.join('\n');const market=sourceMarket(source.url,marketContent,row.name.trim());if(scope.market&&market!==scope.market.toUpperCase()){discard('market','requested_market_mismatch');continue;}
+    const marketPages=ann.filter((a:any)=>a.public_page_verified===true&&typeof a.page_content==='string');const isPapaJohns=['papajohns.com','www.papajohns.com'].includes(new URL(source.url).hostname);const marketContent=isPapaJohns?(marketPages.length===1?marketPages[0].page_content:''):texts.join('\n');const market=sourceMarket(source.url,marketContent,row.name.trim());if(scope.market&&market!==scope.market.toUpperCase()&&(!scope.allowSimilar||market!==null)){discard('market','requested_market_mismatch');continue;}
     const knownHosts:Record<string,string[]>={dominos:['dominos.com','www.dominos.com','cache.dominos.com'],mcdonalds:['mcdonalds.com','www.mcdonalds.com'],baskinrobbins:['baskinrobbins.com','www.baskinrobbins.com'],dairyqueen:['dairyqueen.com','www.dairyqueen.com'],papajohns:['papajohns.com','www.papajohns.com']};
     if(scope.restaurant){const hosts=knownHosts[plain(scope.restaurant).replace(/[^a-z]/g,'')];if(hosts?!hosts.includes(new URL(source.url).hostname):!texts.some(t=>plain(t).includes(plain(scope.restaurant!))))continue;}
     if(scope.product&&!texts.some(t=>plain(t).includes(plain(scope.product!))))continue;
-    let evidence:string|undefined,matchedText:string|undefined,matchedSection='';
+    let evidence:string|undefined,matchedText:string|undefined,matchedSection='',match:RestaurantMatch|undefined,dietaryEvidence:string|undefined;
     for(const content of texts){
       const normalized=plain(content),at=normalized.indexOf(name);if(at<0)continue;
       const contentLines=content.split(/\n/);let nearestHeading='';
@@ -102,10 +103,18 @@ const mcdVerified=!!mcdParsed&&!!mcdRestaurant&&['mcdonalds.com','www.mcdonalds.
       // Other headings elsewhere on the page must not lend their category to this item.
       const categoryScope=[name,nearestHeading,lineText,exactTitle?source.title:''].join(' ');
       const compoundEvidence=scope.food&&compoundFoodParts(scope.food)?compoundItemEvidence(row.name,lineText):null;
-      if(scope.food&&compoundFoodParts(scope.food)&&compoundEvidence===null)continue;
-      if(scope.food&&!categoryMatches(scope.food,compoundEvidence??categoryScope)&&!mcdVerified)continue;
-      if(scope.food&&!categoryMatches(scope.food,name)&&/\b(sandwich(?:es)?|wrap|pasta|salad)\b/.test(plain(segment)))continue;
+      if(scope.allowSimilar&&kind==='menu'&&scope.food){
+       // Name alone is item-bound even if a citation flattens neighboring menu entries.
+       const ownText=compoundItemEvidence(row.name,lineText)??row.name;
+       const exact=categoryMatches(scope.food,ownText);
+       if(!exact){const related=relatedRestaurantMatch(scope.food,ownText);if(!related)continue;match=related;}
+      }else{
+       if(scope.food&&compoundFoodParts(scope.food)&&compoundEvidence===null)continue;
+       if(scope.food&&!categoryMatches(scope.food,compoundEvidence??categoryScope)&&!mcdVerified)continue;
+       if(scope.food&&!categoryMatches(scope.food,name)&&/\b(sandwich(?:es)?|wrap|pasta|salad)\b/.test(plain(segment)))continue;
+      }
       if(kind==='retrieved_recipe'&&!/\b(recipe|recipes|receta|recetas|instructions|directions)\b/.test(plain(content)))continue;
+      dietaryEvidence=compoundItemEvidence(row.name,lineText)??row.name;
       evidence=segment;matchedText=content;matchedSection=nearestHeading;break;
     }
     if(!evidence||!matchedText){discard('identity','item_not_bound_to_source');continue;}
@@ -141,9 +150,9 @@ if(mcdVerified&&isVerifiedMcDonaldsBranch(mcDonaldsBranch)&&mcDonaldsBranch.sour
 }else branchFailure='branch_source_unverified';
 
     }
-    if(kind==='menu'&&scope.area&&market&&(!location||location.country!==market)){discard(location||branchFailure==='branch_country_unrecognized'?'market':branchFailure.includes('source')?'source':/identity|merchant/.test(branchFailure)?'identity':'locality',location?'branch_country_mismatch':branchFailure);continue;}
+    if(kind==='menu'&&scope.area&&market&&((!location&&!scope.allowSimilar)||(location&&location.country!==market))){discard(location||branchFailure==='branch_country_unrecognized'?'market':branchFailure.includes('source')?'source':/identity|merchant/.test(branchFailure)?'identity':'locality',location?'branch_country_mismatch':branchFailure);continue;}
     const officialPage=kind==='product'?fetched[0]:null;let locatorUrl:string|null=null;if(officialPage){try{const pageHost=new URL(source.url).hostname,links=Array.isArray(officialPage.page_links)?officialPage.page_links:[];locatorUrl=links.find((link:any)=>{try{const u=new URL(link);return u.protocol==='https:'&&u.hostname===pageHost&&!u.username&&!u.password&&!u.port&&u.href.length<=2000;}catch{return false;}})??null;}catch{}}
-    accepted.push({name:row.name.trim(),portion:nutrition?.basis.label??null,calories:nutrition?.fields.calories?.value??null,nutritionStatus:nutrition&&nutrition.itemIntegrity==='complete'?'verified':'unverified',nutrition,areaVerified:!!location,url:source.url,productUrl:officialPage?source.url:null,locatorUrl,quote:evidence,sourceTitle:source.title,market,sourceKind:kind,instructions:kind==='retrieved_recipe'?sourceInstructions(matchedText):[],...((kind==='menu'&&nutrition?.itemAssociation==='menu_item'&&nutrition.itemIntegrity==='complete')?{itemCompleteness:'complete_menu_item'}:{}),...((kind==='product'&&nutrition?.itemAssociation==='packaged_product'&&nutrition.itemIntegrity==='complete')?{itemCompleteness:'complete_product'}:{}),...((kind==='menu'&&(location?.name||discoveryMetadata.restaurant_name?.value))?{restaurantName:location?.name??discoveryMetadata.restaurant_name!.value}:{}),...((selectedVariant||discoveryMetadata.variant?.value)?{variant:selectedVariant??discoveryMetadata.variant!.value}:{}),...(Object.keys(discoveryMetadata).length?{discoveryMetadata}:{}),...(retailers?.length?{retailers}:{}),...(location?{location}:{})});usedSources.push(source);for(const field of Object.values(discoveryMetadata)){if(!field)continue;const citation=sourceRecords.find((a:any)=>a?.url===field.source_url);if(citation)usedSources.push(...coachSources([{url:field.source_url,title:citation.title??'Cited identity evidence',retrievedAt}]));}if(associationSource)usedSources.push(associationSource);
+    accepted.push({...(dietaryEvidence?{dietary_evidence:dietaryEvidence}:{}),...(match?{match}:{}),name:row.name.trim(),portion:nutrition?.basis.label??null,calories:nutrition?.fields.calories?.value??null,nutritionStatus:nutrition&&nutrition.itemIntegrity==='complete'?'verified':'unverified',nutrition,areaVerified:!!location,url:source.url,productUrl:officialPage?source.url:null,locatorUrl,quote:evidence,sourceTitle:source.title,market,sourceKind:kind,instructions:kind==='retrieved_recipe'?sourceInstructions(matchedText):[],...((kind==='menu'&&nutrition?.itemAssociation==='menu_item'&&nutrition.itemIntegrity==='complete')?{itemCompleteness:'complete_menu_item'}:{}),...((kind==='product'&&nutrition?.itemAssociation==='packaged_product'&&nutrition.itemIntegrity==='complete')?{itemCompleteness:'complete_product'}:{}),...((kind==='menu'&&(location?.name||discoveryMetadata.restaurant_name?.value))?{restaurantName:location?.name??discoveryMetadata.restaurant_name!.value}:{}),...((selectedVariant||discoveryMetadata.variant?.value)?{variant:selectedVariant??discoveryMetadata.variant!.value}:{}),...(Object.keys(discoveryMetadata).length?{discoveryMetadata}:{}),...(retailers?.length?{retailers}:{}),...(location?{location}:{})});usedSources.push(source);for(const field of Object.values(discoveryMetadata)){if(!field)continue;const citation=sourceRecords.find((a:any)=>a?.url===field.source_url);if(citation)usedSources.push(...coachSources([{url:field.source_url,title:citation.title??'Cited identity evidence',retrievedAt}]));}if(associationSource)usedSources.push(associationSource);
   }
   const seen=new Set<string>();const candidates=accepted.filter(d=>{const key=d.url+'|'+plain(d.name)+'|'+plain(d.variant??'')+'|'+plain(d.portion??'');if(seen.has(key))return false;seen.add(key);return true;});
   const dishes=candidates.filter(d=>d.market&&d.nutrition&&d.nutrition.itemIntegrity==='complete'&&d.nutrition.missing.length===0&&d.sourceKind!=='retrieved_recipe').slice(0,isOfficialRestaurantPlan(message?.official_restaurant_plan)?12:3);

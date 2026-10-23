@@ -62,6 +62,10 @@ export function createMealServices(deps: {
   saved:deps.transport.saved,
   restore:async(access:MealAccess)=>choices(await deps.transport.restore(access)),
   explore:async(access:MealAccess,input:MealExploreInput,meal:DailyMealSlot)=>choices(await deps.transport.run(access,{operation:'explore',...input},{meal,mode:input.mode})),
+  prepareGeneral:async(access:MealAccess,source:MealChoices,portion:string)=>{
+   if(!source.noResults||!portion.trim()||portion.length>160||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:'general_meal_confirmation_required'} as const;
+   return choices(await deps.transport.run(access,{operation:'prepare_general_estimate',source_request_id:source.noResults.sourceRequestId,portion_label:portion.trim(),general_meal_acknowledged:true},{meal:source.meal,mode:source.mode}));
+  },
   discover:async(access:MealAccess,source:MealChoices)=>{
    if(!source.capabilities.discovery||!source.publicRequest||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:source.capabilities.reason??'discovery_unavailable'} as const;
    return importDiscovery(access,await deps.transport.run(access,{operation:'discover',source_request_id:source.requestId,consent:true},{meal:source.meal,mode:source.mode}));
@@ -73,11 +77,23 @@ export function createMealServices(deps: {
   },
   async recover(access:()=>ReturnType<MealReviewDependencies['access']>){
    const pending=await deps.transport.pending(access);if(!pending)return {kind:'blocked',reason:'no_pending_request'} as const;
+   // Resolve the admitted option before consuming the pending review receipt.
+   // A failed identity lookup must leave that exact review recoverable.
+   let reviewSource:any;
+   if(pending.envelope.operation==='review'){
+    const optionId=pending.envelope.option_id;
+    const source=await deps.transport.readSource(access,pending.envelope.source_request_id,{meal:pending.meal,mode:pending.mode});
+    if(source.kind!=='ready')return source;
+    reviewSource=source.body.options.find((o:any)=>o.id===optionId);
+    if(!reviewSource)return {kind:'unavailable',reason:'review_source_unavailable'} as const;
+   }
    const result=await deps.transport.recover(access);
    if(pending.envelope.operation==='discover')return importDiscovery(access,result);
    if(pending.envelope.operation==='review'&&result.kind==='ready'){
     const r=result.body.review;if(!r||r.logged!==false)return {kind:'unavailable',reason:'invalid_review'} as const;
-    // Recovery receipts omit allergy status. Keep ingredient review available;    // never downgrade a previously required acknowledgement to unknown.    const option=mealEvidenceFromOption({id:r.option_id,name:r.name,provenance:r.original_source,nutrition:r.review_basis??r.original_nutrition,source_nutrition:r.original_nutrition,physical_portion:r.physical_portion??undefined,ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true,dietary_constraints:r.dietary_constraints},pending.mode);
+    // Recovery receipts omit allergy status. Keep ingredient review available;    // never downgrade a previously required acknowledgement to unknown.    const identity=reviewSource?.identity;
+    if(r.original_source?.kind==='estimate'&&identity?.kind!=='general_meal')return {kind:'unavailable',reason:'general_review_identity_unavailable'} as const;
+    const option=mealEvidenceFromOption({id:r.option_id,name:r.name,provenance:r.original_source,nutrition:r.review_basis??r.original_nutrition,source_nutrition:r.original_nutrition,physical_portion:r.physical_portion??undefined,identity,match:reviewSource?.match,ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true,dietary_constraints:r.dietary_constraints},pending.mode);
     if(!option)return {kind:'unavailable',reason:'invalid_review'} as const;
     const context={owner:result.owner,date:result.date,meal:pending.meal,sourceReceiptId:pending.envelope.source_request_id,option};
     const scaled=scaleMealNutrition(option,r.servings);if(!scaled)return {kind:'unavailable',reason:'invalid_portion'} as const;

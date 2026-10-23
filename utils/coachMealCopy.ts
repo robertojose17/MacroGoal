@@ -20,6 +20,9 @@ export function mealFailureKind(reason:string):MealFailureKind {
 }
 export function mealFailureMessage(reason:string,es:boolean):string {
  const say=(en:string,sp:string)=>es?sp:en;
+ if(['portion_clarification_required','explicit_general_meal_confirmation_required'].includes(reason))return say('Please describe the food and portion only, without personal, medical or address details. Nothing has been estimated.','Describe solo la comida y la porción, sin datos personales, médicos ni direcciones. No se ha estimado nada.');
+ if(reason==='general_meal_conflicts_with_constraints')return say('This meal or portion conflicts with a restriction you confirmed. Change the food or ingredients before estimating.','Esta comida o porción entra en conflicto con una restricción que confirmaste. Cambia la comida o los ingredientes antes de estimar.');
+ if(reason==='general_food_clarification_required')return say('I need a clear food description before estimating this meal.','Necesito una descripción clara de la comida antes de estimarla.');
  if(mealFailureKind(reason)==='premium')return say('I could not verify Premium access. Check your subscription and try again.','No pude verificar el acceso Premium. Revisa tu suscripción e inténtalo de nuevo.');
  if(mealFailureKind(reason)==='permission')return say('Web search is not enabled or its permission could not be verified. You can still browse recipes or return to our conversation.','La búsqueda web no está habilitada o no pude verificar su permiso. Puedes explorar recetas o volver a la conversación.');
  if(mealFailureKind(reason)==='limit')return say('Search is paused by a usage or budget limit. No automatic retry will run. You can browse recipes instead.','La búsqueda está pausada por un límite de uso o presupuesto. No se reintentará automáticamente. Puedes explorar recetas.');

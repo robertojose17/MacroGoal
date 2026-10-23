@@ -51,7 +51,9 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
   return <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
     {button(say('Back to Coach', 'Volver al Coach'), cancel)}
     {!valid && status !== 'complete' ? <Text accessibilityRole="alert" style={s.body}>{say('Checking this meal’s access. If your account or day changed, choose it again in Coach.', 'Verificando el acceso a esta comida. Si cambiaste de cuenta o de día, elígela de nuevo en Coach.')}</Text> : <>
-      <Text accessibilityRole="header" style={s.title}>{source.name}</Text>
+      <Text accessibilityRole="header" style={s.title}>{source.name}</Text>      {source.match&&<><Text style={s.body}>{say('Related option','Opción similar')}: {source.match.requestedFood}</Text>{source.match.differences.map((difference,i)=><Text key={i} style={s.muted}>{difference}</Text>)}</>}
+        {source.kind==='general'&&<Text style={s.muted}>{say('General meal estimate — not a verified restaurant item.','Estimación general de comida; no es un plato verificado de un restaurante.')}</Text>}
+
       <Text style={s.body}>{mealLabel} · {session.context.date}</Text>
       <Text style={s.body}>{authority(prepared?.authority ?? (edit?.changed.length ? 'user_edited' : source.nutrition.authority))}</Text>
       <Text style={s.muted}>{source.provenance.label}{source.provenance.url ? ` · ${source.provenance.url}` : ''}</Text>
