@@ -189,3 +189,28 @@ test('restored unpaid preparation requires fresh visible search consent and neve
  h.button(h.render(),'Resume meal search').props.onPress();await new Promise(r=>setImmediate(r));let tree=h.render();assert.deepEqual(h.calls,[{operation:'restore'}]);assert.ok(h.button(tree,'Review web search'));assert.equal(h.button(tree,'Search these details'),undefined);h.button(tree,'Review web search').props.onPress();tree=h.render();assert.ok(h.button(tree,'Search these details'));assert.match(h.text(tree),/grilled chicken rice and vegetables/);assert.match(h.text(tree),/Orlando/);assert.equal(h.calls.length,1);
  }finally{h.restore()}
 });
+
+test('actual chat hook preserves active handoff identity during same-owner auth events and clears on identity changes',async()=>{
+ const original=Module._load,states=[],refs=[],effects=[],callbacks=[],writes=[];let cursor=0,ref=0,owner='A';
+ const fake={useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;writes.push(i)}]},useRef(init){const i=ref++;return refs[i]??(refs[i]={current:init})},useEffect:f=>effects.push(f),useCallback:f=>f};
+ Module._load=function(n,parent,isMain){if(n==='react')return fake;if(n==='@react-native-async-storage/async-storage')return {getItem:async()=>null,setItem:async()=>{},removeItem:async()=>{}};if(n==='@/lib/supabase/client')return {SUPABASE_PROJECT_URL:'https://offline.invalid',supabase:{auth:{getSession:async()=>({data:{session:owner?{user:{id:owner},access_token:'offline'}:null}}),getUser:async()=>({data:{user:owner?{id:owner}:null}}),onAuthStateChange:fn=>{callbacks.push(fn);return {data:{subscription:{unsubscribe(){}}}}}}}};if(n==='expo/fetch')return {fetch:()=>{throw Error('auth events must not send a model request')}};if(n==='@/lib/i18n')return {__esModule:true,default:{language:'en',t:k=>k}};if(n.startsWith('@/'))return original.call(this,path.resolve(__dirname,'..',n.slice(2)),parent,isMain);return original.call(this,n,parent,isMain)};
+ let cleanup;try{
+  const file=require.resolve('../hooks/useAICoach.ts');delete require.cache[file];states[5]={conversationId:'existing',hasHistory:true};require(file).useAICoach({mealConversation:true});
+  cleanup=effects.find(f=>f.toString().includes('restoreAccepted'))();await new Promise(r=>setImmediate(r));
+  const card={value:handoff(),owner:'A',date:'2026-10-22'},message={id:'active-card',role:'assistant',content:'Here is the search.',mealConversation:card};states[3]=[message];states[0]=true;
+  const before=states[3],count=writes.length,auth=callbacks.at(-1);
+  for(const event of ['SIGNED_IN','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED']){auth(event,{user:{id:'A'}});await new Promise(r=>setImmediate(r));assert.equal(states[3],before);assert.equal(states[3][0],message);assert.equal(states[3][0].mealConversation,card);assert.equal(states[0],true);}
+  assert.equal(writes.length,count);
+  owner='B';auth('SIGNED_IN',{user:{id:'B'}});assert.deepEqual(states[3],[]);assert.equal(states[0],false);await new Promise(r=>setImmediate(r));assert.deepEqual(states[3],[]);
+  states[3]=[{...message,id:'B-card',mealConversation:{...card,owner:'B'}}];const b=states[3];auth('SIGNED_IN',{user:{id:'B'}});assert.equal(states[3],b);
+  owner=null;auth('SIGNED_OUT',null);assert.deepEqual(states[3],[]);cleanup();cleanup=undefined;const after=writes.length;auth('SIGNED_IN',{user:{id:'A'}});assert.equal(writes.length,after);
+ }finally{cleanup?.();Module._load=original;}
+});
+
+test('active meal component keeps its in-flight action when same-account props retain the handoff identity',async()=>{
+ const h=harness();try{let finish;h.props.service.explore=()=>new Promise(resolve=>finish=resolve);const identity=h.props.handoff;h.button(h.render(),'Confirm preferences and find meals').props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.states[1],true);
+ Object.assign(h.props,{handoff:identity}); // Real hook regression above verifies this identity is retained.
+ const working=h.render();assert.equal(h.button(working,'Confirm preferences and find meals').props.disabled,true);assert.equal(h.states[1],true);
+ finish({kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'result',options:[],publicRequest:{food:'chicken',area:'Orlando'},capabilities:{discovery:true,estimate:false,reason:null}});await new Promise(r=>setImmediate(r));assert.equal(h.states[1],false);assert.ok(h.button(h.render(),'Review web search'));
+ }finally{h.restore()}
+});

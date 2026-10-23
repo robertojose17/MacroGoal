@@ -134,13 +134,14 @@ function genMsgId() {
 export function useAICoach(options?: UseAICoachOptions) {
   const [conversationPending,setConversationPending]=useState(false);
   const journal=useRef<ReturnType<typeof createConversationTransport>|null>(null);
+  const conversationOwner=useRef<string|null|undefined>(undefined);
   if(!journal.current)journal.current=createConversationTransport({store:AsyncStorage,scope:SUPABASE_PROJECT_URL,owner:async()=>{const {data,error}=await supabase.auth.getUser();return error?undefined:data.user?.id;},today:toLocalDateString,newId:()=> 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const n=Math.floor(Math.random()*16);return(c==='x'?n:(n&3)|8).toString(16);}),invoke:async (body,owner,signal)=>{const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token||session.user.id!==owner)throw Error('unauthorized');return expoFetch(`${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`,apikey:SUPABASE_ANON_KEY},body:JSON.stringify(body),signal});}});
   useEffect(()=>{
     if(!options?.mealConversation)return;
     let active=true,version=0;
     const refresh=()=>{const ownVersion=++version;void journal.current!.pending().then(p=>{if(active&&version===ownVersion)setConversationPending(!!p)}).catch(()=>{if(active&&version===ownVersion)setConversationPending(true)});};
     refresh();const timer=setInterval(refresh,15000);
-    const {data:{subscription}}=supabase.auth.onAuthStateChange(()=>{setConversationPending(false);setTimeout(()=>{if(active)refresh();},0);});
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT'||session?.user?.id!==conversationOwner.current)setConversationPending(false);setTimeout(()=>{if(active)refresh();},0);});
     return()=>{active=false;clearInterval(timer);subscription.unsubscribe();};
   },[options?.mealConversation]);
   const [state, setState] = useState<State>({ status: 'idle', error: null });
@@ -173,6 +174,7 @@ export function useAICoach(options?: UseAICoachOptions) {
       try {
         console.log('[useAICoach] Initializing conversation history');
         const { data: { session } } = await supabase.auth.getSession();
+        conversationOwner.current=session?.user?.id??null;
         const jwt = session?.access_token;
         if (!jwt) {
           console.log('[useAICoach] No session, skipping conversation load');
@@ -297,6 +299,9 @@ export function useAICoach(options?: UseAICoachOptions) {
     if(!options?.mealConversation||!initResult)return;
     let active=true,version=0;
     const restore=async()=>{const ownVersion=++version;try{
+      const owner=(await supabase.auth.getUser()).data.user?.id??null;
+      if(!active||ownVersion!==version)return;
+      if(conversationOwner.current===undefined)conversationOwner.current=owner;
       const rows=await journal.current!.restoreAccepted();
       const pending=!!await journal.current!.pending();
       if(rows.length&&((await supabase.auth.getUser()).data.user?.id!==rows[0].owner||toLocalDateString()!==rows[0].date))return;
@@ -340,7 +345,13 @@ export function useAICoach(options?: UseAICoachOptions) {
       setConversationPending(pending);
     }catch{/* Existing pending reference remains available for explicit retry. */}};
     void restore();
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'||event==='SIGNED_IN'){version++;setMessages([]);void restore();}});
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      if(!active||!['SIGNED_OUT','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(event))return;
+      const owner=event==='SIGNED_OUT'?null:session?.user?.id??null;
+      if(event!=='SIGNED_OUT'&&owner===conversationOwner.current)return;
+      conversationOwner.current=owner;version++;setMessages([]);setConversationPending(false);
+      if(owner)void restore();
+    });
     return()=>{active=false;version++;subscription.unsubscribe();};
   },[initResult,options?.mealConversation]);
 
