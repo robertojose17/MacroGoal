@@ -299,3 +299,60 @@ test('only explicit bounded gallery no-match response carries the UI explanation
 test('explicit recipe portion stays in the pending envelope and reload recovery never sends another estimate',async()=>{
  const f=fixture(),source=await f.services.explore(f.access,input,'dinner'),label='one plate with 1 cup rice and one chicken breast';f.state.lose=true;assert.equal((await f.services.estimate(f.access,source,source.options[0].id,label)).kind,'pending');const p=await f.transport.pending(f.access);assert.equal(p.envelope.portion_label,label);assert.equal(p.envelope.source_request_id,source.requestId);f.state.lose=false;const restarted=createMealTransport(f.deps);assert.equal((await restarted.pending(f.access)).envelope.portion_label,label);const r=await restarted.recover(f.access);assert.equal(r.kind,'ready');assert.equal(r.requestId,p.envelope.request_id);assert.equal(f.calls.filter(x=>x.operation==='estimate').length,1);assert.equal(f.calls.at(-1).intent,'recover_daily');assert.equal(f.writes.length,0);
 });
+
+test('each conversation flow restores its own latest estimate after another meal flow and restart',async()=>{
+ const f=fixture(),cook=await f.services.explore(f.access,input,'dinner','cook-chat');
+ const estimated=await f.services.estimate(f.access,cook,cook.options[0].id);
+ assert.equal(estimated.flowId,'cook-chat');
+ const restaurant=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example'},'lunch','restaurant-chat');
+ const menu=await f.services.discover(f.access,restaurant);
+ assert.equal(menu.flowId,'restaurant-chat');
+ const restarted=createMealTransport(f.deps),before=f.calls.length;
+ const restored=await restarted.restore(f.access,'cook-chat');
+ assert.equal(restored.requestId,estimated.requestId);assert.equal(restored.body.options[0].nutrition.values.fiber,4);
+ assert.equal((await restarted.restore(f.access,'restaurant-chat')).requestId,menu.requestId);
+ assert.deepEqual(f.calls.slice(before).map(x=>x.intent),['recover_daily','recover_daily']);
+ assert.ok(f.calls.every(x=>!('flowId' in x)));assert.equal(f.writes.length,0);
+ assert.equal((await restarted.restore(f.access,'unknown-card')).kind,'blocked');
+ f.state.owner='B';assert.equal(await restarted.saved(f.access,'cook-chat'),null);
+ f.state.owner='A';f.state.day='2026-10-23';assert.equal(await restarted.saved(f.access,'cook-chat'),null);
+});
+
+test('historical flow cannot recover another card pending envelope or claim legacy global reference',async()=>{
+ const f=fixture();await f.services.explore(f.access,input,'dinner');
+ assert.equal(await f.transport.saved(f.access,'cook-chat'),null);
+ f.state.lose=true;await f.services.explore(f.access,input,'dinner','restaurant-chat');
+ const before=f.calls.length,pending=await f.transport.pending(f.access);
+ assert.equal((await f.services.recover(f.access,'cook-chat')).reason,'recovery_scope_mismatch');
+ assert.equal(f.calls.length,before);assert.deepEqual(await f.transport.pending(f.access),pending);
+ f.state.lose=false;const restored=await f.services.recover(f.access,'restaurant-chat');
+ assert.equal(restored.flowId,'restaurant-chat');assert.equal(restored.requestId,pending.envelope.request_id);
+});
+
+test('saved chooser listing and selection recover an existing estimate without exploration, inferred mode, or diary writes',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,input,'dinner'),estimate=await f.services.estimate(f.access,found,found.options[0].id),invoke=f.deps.invoke;
+ let mode='cook',duplicate=false;
+ const row=()=>({receipt_id:estimate.requestId,operation:'estimate',mode,date:f.state.day,saved_at:'2026-10-22T15:00:00Z',options:[{name:'Chicken and rice',nutrition_authority:'estimated'}]});
+ f.deps.invoke=async b=>{if(b.intent!=='list_meal_flows')return invoke(b);f.calls.push(b);return Response.json({schema:'meal_flow_list_v1',flows:duplicate?[row(),row()]:[row()],truncated:false});};
+ const before=f.calls.length,list=await f.services.listSaved(f.access);assert.equal(list.kind,'ready');assert.equal(list.flows[0].mode,'cook');
+ assert.equal((await f.services.restoreSaved(f.access,{...list.flows[0]})).kind,'unavailable');
+ const result=await f.services.restoreSaved(f.access,list.flows[0]);assert.equal(result.kind,'ready');assert.equal(result.requestId,estimate.requestId);assert.equal(result.mode,'cook');assert.equal(result.options[0].nutrition.values.fiber,4);
+ assert.deepEqual(f.calls.slice(before).map(x=>x.intent),['list_meal_flows','recover_daily']);assert.equal(f.writes.length,0);
+ mode=undefined;assert.equal((await f.services.listSaved(f.access)).kind,'unavailable');mode='cook';duplicate=true;assert.equal((await f.services.listSaved(f.access)).kind,'unavailable');
+ const count=f.calls.length;f.state.owner='B';assert.equal((await f.services.restoreSaved(f.access,list.flows[0])).kind,'unavailable');assert.equal(f.calls.length,count);
+});
+
+test('actual saved browser requires explicit list and selection, composes real receipt recovery, and cancels late results',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,input,'dinner'),invoke=f.deps.invoke;
+ f.deps.invoke=async b=>{if(b.intent!=='list_meal_flows')return invoke(b);f.calls.push(b);return Response.json({schema:'meal_flow_list_v1',flows:[{receipt_id:found.requestId,mode:'cook',operation:'explore',date:f.state.day,saved_at:'2026-10-22T15:00:00Z',options:[{name:'Chicken and rice',nutrition_authority:'estimated'}]}],truncated:false})};
+ const React=require('react'),Module=require('node:module'),path=require('node:path'),old=Module._load,states=[],refs=[],effects=[];let cursor=0,ref=0;
+ const fake={...React,useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return[states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useRef(init){const i=ref++;return refs[i]??(refs[i]={current:init})},useEffect(fn){effects.push(fn)}};
+ const prev=require.extensions['.tsx'];require.extensions['.tsx']=(m,p)=>m._compile(ts.transpile(fs.readFileSync(p,'utf8'),{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}),p);
+ Module._load=function(n,p,i){if(n==='react')return fake;if(n==='react-native')return {View:'View',Text:'Text'};if(n==='react-i18next')return{useTranslation:()=>({i18n:{language:'en'}})};if(n==='./CoachSavedMealOptions')return{__esModule:true,default:'Chooser'};if(n==='./CoachConversationActions')return{__esModule:true,default:'Actions'};if(n.startsWith('@/'))return old.call(this,path.resolve(__dirname,'..',n.slice(2)),p,i);return old.call(this,n,p,i)};
+ try{const file=require.resolve('../components/CoachSavedMealBrowser.tsx');delete require.cache[file];const C=require(file).default,props={...f.state.access,service:f.services,active:true,onActivate(){},onComposer(){}};
+ const render=()=>{cursor=ref=0;effects.length=0;return C(props)},nodes=n=>!n||typeof n!=='object'?[]:[n,...React.Children.toArray(n.props?.children).flatMap(nodes)],find=(tree,type)=>nodes(tree).find(n=>n.type===type);
+ const before=f.calls.length;let tree=render();assert.equal(f.calls.length,before);find(tree,'Chooser').props.onOpen();await new Promise(r=>setImmediate(r));tree=render();assert.equal(find(tree,'Chooser').props.rows.length,1);assert.equal(find(tree,'Actions'),undefined);
+ find(tree,'Chooser').props.onSelect(found.requestId);await new Promise(r=>setImmediate(r));tree=render();assert.equal(find(tree,'Actions').props.initialResult.requestId,found.requestId);assert.equal(find(tree,'Actions').props.handoff,undefined);assert.deepEqual(f.calls.slice(before).map(x=>x.intent),['list_meal_flows','recover_daily']);assert.equal(f.writes.length,0);
+ let resolve;props.service={...f.services,listSaved:()=>new Promise(r=>resolve=r)};tree=render();find(tree,'Chooser').props.onOpen();await new Promise(r=>setImmediate(r));tree=render();find(tree,'Chooser').props.onClose();resolve({kind:'ready',flows:[],truncated:false});await new Promise(r=>setImmediate(r));tree=render();assert.equal(find(tree,'Chooser').props.open,false);assert.equal(find(tree,'Actions'),undefined);
+ }finally{Module._load=old;if(prev)require.extensions['.tsx']=prev;else delete require.extensions['.tsx'];}
+});

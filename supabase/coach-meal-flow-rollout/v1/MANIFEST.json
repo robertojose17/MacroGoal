@@ -1,0 +1,5 @@
+{
+  "01-install.sql": "c01cace28d6b92cabe8942f1cf96e54167e4cb3a7a1ade7c88c0914084da6817",
+  "02-verify-read-only.sql": "996db1ea716830453dbc90e7eab73793d3424342f5bc89dc04c065a69c6c38f8",
+  "03-rollback.sql": "3ee23c879eb7806b7a4018a6b07694a21c2fd94aa273e2402223d0935192c7fb"
+}

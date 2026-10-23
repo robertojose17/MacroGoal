@@ -1,3 +1,4 @@
+import CoachSavedMealBrowser from '@/components/CoachSavedMealBrowser';
 import CoachConversationActions from '@/components/CoachConversationActions';
 import type { MealComposer } from '@/utils/coachMealComposer';
 import { isMealHelpRequest } from '@/utils/coachJourney';
@@ -2509,7 +2510,7 @@ export default function CoachScreen() {
                         <StreamingCursor isDark={isDark} />
                       )}
                     </View>
-                    {COACH_CONVERSATION_READY && message.mealConversation && !isThisStreaming && coachDailyServices.experience && <CoachConversationActions service={coachDailyServices.experience} handoff={message.mealConversation} hasConversation showRecovery={index===visibleMessages.length-1} onPrompt={handleSend} active={activeMealCard?activeMealCard===message.id:index===visibleMessages.length-1} onResume={()=>setActiveMealCard(message.id)} onComposer={composerFor(message.id)} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
+                    {COACH_CONVERSATION_READY && message.mealConversation && !isThisStreaming && coachDailyServices.experience && <CoachConversationActions service={coachDailyServices.experience} handoff={message.mealConversation} flowId={message.mealConversation.requestId??message.id} hasConversation showRecovery={activeMealCard?activeMealCard===message.id:index===visibleMessages.length-1} onPrompt={handleSend} active={activeMealCard?activeMealCard===message.id:index===visibleMessages.length-1} onResume={()=>setActiveMealCard(message.id)} onComposer={composerFor(message.id)} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
                     {message.guidedMealChoice && index === visibleMessages.length - 1 && !isThisStreaming && <TouchableOpacity accessibilityRole="button" style={{ marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: '#27614D' }} onPress={() => { setMealHelpRequest(value => value + 1); scrollViewRef.current?.scrollTo({ y: 0, animated: true }); }}><Text style={{ color: '#FFF', fontWeight: '600' }}>{getAppLocale().startsWith('es') ? 'Elegir una comida juntos' : 'Choose a meal together'}</Text></TouchableOpacity>}
                     {message.showUpgradeButton && (
                       <View style={{ marginTop: 16 }}>
@@ -2570,6 +2571,7 @@ export default function CoachScreen() {
           })}
 
           {/* ── Craving chips hub — welcome state only ── */}
+          {COACH_CONVERSATION_READY && coachDailyServices.experience && <CoachSavedMealBrowser service={coachDailyServices.experience} active={activeMealCard==='saved-meal-options'} onActivate={()=>setActiveMealCard('saved-meal-options')} onComposer={composerFor('saved-meal-options')} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading}/>}
           {COACH_DAILY_ACTION_INTEGRATED && (!COACH_CONVERSATION_READY || !visibleMessages.some(m=>m.mealConversation)) && <CoachDailyAction services={coachDailyServices} mealRequest={mealHelpRequest} conversational={COACH_CONVERSATION_READY} handoff={visibleMessages.length&&visibleMessages[visibleMessages.length-1].role==='assistant'?visibleMessages[visibleMessages.length-1].mealConversation:undefined} onPrompt={handleSend} onComposer={setMealComposer} onJourneyActive={setMealJourneyActive} hasConversation={visibleMessages.some(message => message.role === 'user')} onConversation={() => { conversationEngaged.current = true; scrollToBottom(); conversationInputRef.current?.focus(); }} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
           {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>

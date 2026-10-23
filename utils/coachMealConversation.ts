@@ -1,7 +1,7 @@
 import {parseConstraints,mergeConstraints,type DietaryConstraints} from './coachDietaryConstraints';
 import type { MealExploreInput } from './coachMealTransport';
 export type MealConversation = {schema:'meal_conversation_v1';fields:DietaryConstraints&{mode:'cook'|'quick'|'eat_out'|null;food_query:string|null;public_area:string|null;restaurant:string|null;preference:'balanced'|'high_protein'|'lower_calorie'|'preferred_food'|null};status:'clarify'|'ready';question:{key:'mode'|'food_query'|'public_area'}|null;requires_search_consent:true;constraints_review_required:true;options:[]};
-export type ScopedMealConversation={value:MealConversation;owner:string;date:string};
+export type ScopedMealConversation={requestId?:string;value:MealConversation;owner:string;date:string};
 export function parseMealConversation(value:unknown):MealConversation|null {
  const v=value as any;if(!v||v.schema!=='meal_conversation_v1'||v.requires_search_consent!==true||v.constraints_review_required!==true||!Array.isArray(v.options)||v.options.length||!v.fields||typeof v.fields!=='object'||Array.isArray(v.fields))return null;
  if(Object.keys(v).some(k=>!['schema','fields','status','question','requires_search_consent','constraints_review_required','options'].includes(k))||Object.keys(v.fields).some(k=>!['mode','food_query','public_area','restaurant','preference','exclusions','allergens','dietary_preferences','provenance','verification'].includes(k)))return null;

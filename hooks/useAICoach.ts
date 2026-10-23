@@ -312,7 +312,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         let matchBefore=next.length;
         for(const row of [...rows].reverse()){
           const value=parseMealConversation(row.reply.mealConversation);
-          const mealConversation=value?{value,owner:row.owner,date:row.date}:undefined;
+          const mealConversation=value?{value,owner:row.owner,date:row.date,requestId:row.requestId}:undefined;
           const id='accepted-'+row.requestId;
           // Remote history uses database IDs and save timestamps, not the client
           // request ID or send time. Reconcile ordered complete turns, once each,
@@ -621,7 +621,7 @@ export function useAICoach(options?: UseAICoachOptions) {
         const finalOwner = (mealConversation || options?.mealConversation) ? (await supabase.auth.getUser()).data.user?.id : undefined;
         if(options?.mealConversation && (finalOwner !== requestOwner || requestDay !== toLocalDateString()))throw Error('scope_changed');
         if(options?.mealConversation){actionProposal=null;suggestions=null;}
-        const scopedMealConversation = mealConversation && requestOwner && finalOwner === requestOwner && requestDay === toLocalDateString() ? {value:mealConversation,owner:requestOwner,date:requestDay} : undefined;
+        const scopedMealConversation = mealConversation && requestOwner && finalOwner === requestOwner && requestDay === toLocalDateString() ? {value:mealConversation,owner:requestOwner,date:requestDay,requestId:response.headers.get('x-coach-request-id')??undefined} : undefined;
 
         if(options?.mealConversation && isMountedRef.current){
           await journal.current!.acknowledge(response.headers.get('x-coach-request-id'),{content:fullText,timestamp:placeholderMsg.timestamp,...(scopedMealConversation?{mealConversation:scopedMealConversation.value}:{})});

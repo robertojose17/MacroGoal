@@ -7,7 +7,7 @@ import { createMealReviewSession, NUTRIENTS, scaleMealNutrition, type MealReview
 import { existingMealLogPayload, mealEvidenceFromOption } from './coachMealReviewAdapter';
 import {noResultsContext} from './coachNoResults';
 
-export type MealChoices = { kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; galleryNoMatch?:boolean; question?:string; publicRequest?:Record<string,unknown>; noResults?:NonNullable<ReturnType<typeof noResultsContext>>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
+export type MealChoices = { flowId?:string;kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; galleryNoMatch?:boolean; question?:string; publicRequest?:Record<string,unknown>; noResults?:NonNullable<ReturnType<typeof noResultsContext>>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
 export type MealChoiceOutcome = MealChoices | Exclude<MealResponse,{kind:'ready'}>;
 export function estimateNeedsPortion(option:MealEvidence):boolean {
  if(option.identity?.portion_label?.trim())return false;
@@ -30,19 +30,19 @@ export function createMealServices(deps: {
   const options=b.options.map((o:any)=>mealEvidenceFromOption(o,result.mode));
   if(options.some((o:MealEvidence|null)=>!o)||b.status==='options'&&!options.length)return {kind:'unavailable',reason:'invalid_meal_option'};
   if(b.question&&!['food_query','mode','restaurant','dish_and_portion','portion_label','public_area'].includes(b.question.key))return {kind:'unavailable',reason:'unsupported_question'};
-  return {kind:'ready',owner:result.owner,date:result.date,meal:result.meal,mode:result.mode,requestId:result.requestId,options,
+  return {kind:'ready',flowId:result.flowId,owner:result.owner,date:result.date,meal:result.meal,mode:result.mode,requestId:result.requestId,options,
    ...(b.status==='discovery_available'&&b.coverage==='bounded_gallery_search'&&result.mode!=='eat_out'&&!options.length?{galleryNoMatch:true}:{}),
    capabilities:{discovery:b.paid_capabilities?.discovery===true,estimate:b.paid_capabilities?.estimate===true,reason:typeof b.paid_capabilities?.reason==='string'?b.paid_capabilities.reason:null},
    ...(b.question&&!noResults?{question:b.question.key}:{}),...(noResults?{noResults}:{}),...(b.discovery_request&&typeof b.discovery_request==='object'?{publicRequest:b.discovery_request}:{})};
  }
- function session(context:MealReviewContext,access:()=>ReturnType<MealReviewDependencies['access']>,cached?:{response:MealResponse;edit:MealReviewEdit}) {
+ function session(context:MealReviewContext,access:()=>ReturnType<MealReviewDependencies['access']>,cached?:{response:MealResponse;edit:MealReviewEdit},flowId?:string) {
   return createMealReviewSession(context,{
   owner:deps.owner,today:deps.today,access,store:deps.store,subscribeInvalidation:f=>deps.subscribeInvalidation(context.owner,f),
    async prepare(c,edit){
     const edits=Object.fromEntries(edit.changed.filter(k=>edit.values[k]!==null).map(k=>[k,edit.values[k]!]));
     if(edit.changed.some(k=>edit.values[k]===null))throw Error('unknown_edit_not_numeric');
     const result=cached&&cached.edit.multiplier===edit.multiplier&&JSON.stringify(cached.edit.values)===JSON.stringify(edit.values)&&cached.edit.estimateAcknowledged===edit.estimateAcknowledged&&cached.edit.ingredientAcknowledged===edit.ingredientAcknowledged?cached.response:await deps.transport.run(access,{operation:'review',source_request_id:c.sourceReceiptId,option_id:c.option.id,servings:edit.multiplier,
-     estimate_acknowledged:edit.estimateAcknowledged===true,ingredient_review_acknowledged:edit.ingredientAcknowledged===true,...(Object.keys(edits).length?{edited_values:edits}:{})},{meal:c.meal,mode:c.option.kind==='restaurant'?'eat_out':'cook'});
+     estimate_acknowledged:edit.estimateAcknowledged===true,ingredient_review_acknowledged:edit.ingredientAcknowledged===true,...(Object.keys(edits).length?{edited_values:edits}:{})},{flowId,meal:c.meal,mode:c.option.kind==='restaurant'?'eat_out':'cook'});
     cached=undefined;
     if(result.kind!=='ready'||result.body.status!=='review'||result.owner!==c.owner||result.date!==c.date)throw Error('review_unavailable');
     const r=result.body.review;
@@ -58,7 +58,7 @@ export function createMealServices(deps: {
    confirm:async(entry,identityId,consent)=>{const payload=deps.catalogIdentity?(identityId&&consent?coachCatalogDiaryPayload(entry,consent,identityId):(()=>{throw Error('catalog_consent_required')})()):existingMealLogPayload(context,entry);await deps.write({...payload,p_logged_at:new Date().toISOString()});},
   },cached?.edit);
  }
- async function importDiscovery(access:MealAccess,result:MealResponse):Promise<MealChoiceOutcome>{if(result.kind!=='ready')return result;if(await deps.owner()!==result.owner||deps.today()!==result.date)return {kind:'blocked',reason:'scope_changed'};return choices(await deps.transport.run(access,{operation:'import_discovery',source_request_id:result.requestId},{meal:result.meal,mode:result.mode}));}
+ async function importDiscovery(access:MealAccess,result:MealResponse):Promise<MealChoiceOutcome>{if(result.kind!=='ready')return result;if(await deps.owner()!==result.owner||deps.today()!==result.date)return {kind:'blocked',reason:'scope_changed'};return choices(await deps.transport.run(access,{operation:'import_discovery',source_request_id:result.requestId},{flowId:result.flowId,meal:result.meal,mode:result.mode}));}
  return {
   async confirmedConstraints(){
    const owner=await deps.owner(),date=deps.today(),key='coach_constraints_v1';const raw=await deps.store.getItem(key);if(!raw)return emptyConstraints();
@@ -69,25 +69,28 @@ export function createMealServices(deps: {
   owner:deps.owner,today:deps.today,subscribeInvalidation:deps.subscribeInvalidation,
   pending:deps.transport.pending,
   saved:deps.transport.saved,
-  restore:async(access:MealAccess)=>choices(await deps.transport.restore(access)),
-  explore:async(access:MealAccess,input:MealExploreInput,meal:DailyMealSlot)=>choices(await deps.transport.run(access,{operation:'explore',...input},{meal,mode:input.mode})),
+  listSaved:(access:()=>ReturnType<MealReviewDependencies['access']>)=>deps.transport.savedFlows.list(access),
+  restoreSaved:async(access:()=>ReturnType<MealReviewDependencies['access']>,flow:Parameters<typeof deps.transport.savedFlows.recover>[1])=>{const r=await deps.transport.savedFlows.recover(access,flow);return r.kind==='ready'?choices({...r,flowId:'saved:'+r.requestId,meal:'lunch'}):{kind:'unavailable' as const,reason:'saved_options_unavailable'};},
+  restore:async(access:MealAccess,flowId?:string)=>choices(await deps.transport.restore(access,flowId)),
+  explore:async(access:MealAccess,input:MealExploreInput,meal:DailyMealSlot,flowId?:string)=>choices(await deps.transport.run(access,{operation:'explore',...input},{flowId,meal,mode:input.mode})),
   prepareGeneral:async(access:MealAccess,source:MealChoices,portion:string)=>{
    if(!source.noResults||!portion.trim()||portion.length>160||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:'general_meal_confirmation_required'} as const;
-   return choices(await deps.transport.run(access,{operation:'prepare_general_estimate',source_request_id:source.noResults.sourceRequestId,portion_label:portion.trim(),general_meal_acknowledged:true},{meal:source.meal,mode:source.mode}));
+   return choices(await deps.transport.run(access,{operation:'prepare_general_estimate',source_request_id:source.noResults.sourceRequestId,portion_label:portion.trim(),general_meal_acknowledged:true},{flowId:source.flowId,meal:source.meal,mode:source.mode}));
   },
   discover:async(access:MealAccess,source:MealChoices)=>{
    if(!source.capabilities.discovery||!source.publicRequest||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:source.capabilities.reason??'discovery_unavailable'} as const;
-   return importDiscovery(access,await deps.transport.run(access,{operation:'discover',source_request_id:source.requestId,consent:true},{meal:source.meal,mode:source.mode}));
+   return importDiscovery(access,await deps.transport.run(access,{operation:'discover',source_request_id:source.requestId,consent:true},{flowId:source.flowId,meal:source.meal,mode:source.mode}));
   },
   retrySearch:async(access:MealAccess,offer:MealRetryOffer)=>importDiscovery(access,await deps.transport.retry(access,offer)),
   estimate:async(access:MealAccess,source:MealChoices,optionId:string,portionLabel?:string)=>{
    if(!source.capabilities.estimate||!source.options.some(o=>o.id===optionId)||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:source.capabilities.reason??'estimate_unavailable'} as const;
    const originalPortion=source.options.find(o=>o.id===optionId)?.identity?.portion_label;
    const override=portionLabel?.trim();
-   return choices(await deps.transport.run(access,{operation:'estimate',source_request_id:source.requestId,option_id:optionId,consent:true,...(override&&override!==originalPortion?.trim()?{portion_label:override}:{})},{meal:source.meal,mode:source.mode}));
+   return choices(await deps.transport.run(access,{operation:'estimate',source_request_id:source.requestId,option_id:optionId,consent:true,...(override&&override!==originalPortion?.trim()?{portion_label:override}:{})},{flowId:source.flowId,meal:source.meal,mode:source.mode}));
   },
-  async recover(access:()=>ReturnType<MealReviewDependencies['access']>){
+  async recover(access:()=>ReturnType<MealReviewDependencies['access']>,flowId?:string){
    const pending=await deps.transport.pending(access);if(!pending)return {kind:'blocked',reason:'no_pending_request'} as const;
+   if(flowId!==undefined&&pending.flowId!==flowId)return {kind:'blocked',reason:'recovery_scope_mismatch'} as const;
    // Resolve the admitted option before consuming the pending review receipt.
    // A failed identity lookup must leave that exact review recoverable.
    let reviewSource:any;
@@ -109,11 +112,11 @@ export function createMealServices(deps: {
     const context={owner:result.owner,date:result.date,meal:pending.meal,sourceReceiptId:pending.envelope.source_request_id,option};
     const scaled=scaleMealNutrition(option,r.servings);if(!scaled)return {kind:'unavailable',reason:'invalid_portion'} as const;
     const edit:MealReviewEdit={multiplier:r.servings,values:r.values,changed:NUTRIENTS.filter(k=>scaled[k]!==r.values[k]),estimateAcknowledged:pending.envelope.estimate_acknowledged,ingredientAcknowledged:pending.envelope.ingredient_review_acknowledged};
-    return {kind:'recovered_review' as const,session:session(context,access,{response:result,edit})};
+    return {kind:'recovered_review' as const,session:session(context,access,{response:result,edit},pending.flowId)};
    }
    return choices(result);
   },
-  review(source:MealChoices,optionId:string,access:()=>ReturnType<MealReviewDependencies['access']>){const option=source.options.find(o=>o.id===optionId);if(!option)throw Error('option_not_found');return session({owner:source.owner,date:source.date,meal:source.meal,sourceReceiptId:source.requestId,option},access);},
+  review(source:MealChoices,optionId:string,access:()=>ReturnType<MealReviewDependencies['access']>){const option=source.options.find(o=>o.id===optionId);if(!option)throw Error('option_not_found');return session({owner:source.owner,date:source.date,meal:source.meal,sourceReceiptId:source.requestId,option},access,undefined,source.flowId);},
  };
 }
 export type MealExperienceServices=ReturnType<typeof createMealServices>;

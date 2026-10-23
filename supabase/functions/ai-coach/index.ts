@@ -1,3 +1,4 @@
+import {createMealFlowListRoute} from './meal-flow-list.ts';
 import {createJournalConversation,sqlConversationPermit} from './journal-conversation.ts';
 import {createMealChoiceRoute} from './meal-choice-route.ts';
 import {createMealExploreRoute} from './meal-explore-route.ts';
@@ -14,5 +15,6 @@ const daily=createBoundDailyRoute(db,(owner,now)=>fetchRevenueCatAccess(owner,De
 const guided=createMealChoiceRoute(db,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now));
 const explore=createMealExploreRoute(db,modern,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now),Date.now,fetch,{key:()=>Deno.env.get('OPENROUTER_API_KEY')??''});
 const conversation=createJournalConversation(db,legacy,sqlConversationPermit(db),(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now));
-Deno.serve(async(req:Request)=>(await conversation(req))??(await explore(req))??(await guided(req))??(await daily(req))??original(req));
+const mealFlows=createMealFlowListRoute(db);
+Deno.serve(async(req:Request)=>(await mealFlows(req))??(await conversation(req))??(await explore(req))??(await guided(req))??(await daily(req))??original(req));
 

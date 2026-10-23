@@ -1,0 +1,2 @@
+SELECT p.oid::regprocedure AS signature,md5(p.prosrc) AS body_md5,p.prosecdef,p.provolatile,p.proconfig,p.proacl,has_function_privilege('service_role',p.oid,'EXECUTE') AS service_execute,has_function_privilege('anon',p.oid,'EXECUTE') AS anon_execute,has_function_privilege('authenticated',p.oid,'EXECUTE') AS authenticated_execute FROM pg_proc p WHERE p.oid=to_regprocedure('public.coach_list_meal_flows_v1(uuid)');
+-- Expected body_md5 9beed822851ff17dc3c03b57dacd994f, invoker, stable, empty search_path,3s timeout,service true,anon/auth false.
