@@ -170,6 +170,7 @@ export default function RootLayout() {
     // hasResolved prevents double-calls when both INITIAL_SESSION and
     // getSession() resolve before the 800ms timeout fires.
     let hasResolved = false;
+    let authOwner: string | null = null;
 
     const resolve = (resolvedSession: Session | null, source: string) => {
       if (!mounted || hasResolved) return;
@@ -178,6 +179,7 @@ export default function RootLayout() {
         `[App] Auth init complete (via ${source}). User:`,
         resolvedSession?.user?.id ?? "none"
       );
+      authOwner = resolvedSession?.user?.id ?? null;
       setSession(resolvedSession);
       setIsReady(true);
       if (!appOpenedTrackedRef.current) {
@@ -236,8 +238,11 @@ export default function RootLayout() {
       }
 
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        const nextOwner = newSession?.user?.id ?? null;
+        // Reauthentication of the same account must not eject an active screen.
+        if (nextOwner !== authOwner) hasNavigatedRef.current = false;
+        authOwner = nextOwner;
         setSession(newSession);
-        if (event === "SIGNED_IN") hasNavigatedRef.current = false;
 
         if (newSession?.user?.id) {
           const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
@@ -259,6 +264,7 @@ export default function RootLayout() {
 
       if (event === "SIGNED_OUT") {
         console.log("[Navigation] SIGNED_OUT → /auth/signup");
+        authOwner = null;
         setSession(null);
         hasNavigatedRef.current = true;
         logoutRevenueCat().catch((e) => console.warn("[App] logoutRevenueCat failed:", e));

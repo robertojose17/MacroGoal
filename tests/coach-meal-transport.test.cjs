@@ -62,7 +62,7 @@ test('completed receipt prevents duplicate Add even after reopening the same mea
  assert.equal(f.writes.length,1);
 });
 test('known refunded discovery is terminal without import or automatic retry; uncertainty stays recoverable',async()=>{
- for(const status of ['refunded','uncertain']){const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example'},'dinner');f.deps.invoke=async body=>new Response(`data: ${JSON.stringify({done:true,request_id:body.request_id,usage_status:status})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});const result=await f.services.discover(f.access,found);assert.equal(result.kind,status==='refunded'?'blocked':'pending');assert.equal(f.rows.size,status==='refunded'?0:1);}
+ for(const status of ['refunded','uncertain']){const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',restaurant:'Example'},'dinner');f.deps.invoke=async body=>new Response(`data: ${JSON.stringify({done:true,request_id:body.request_id,usage_status:status})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});const result=await f.services.discover(f.access,found);assert.equal(result.kind,status==='refunded'?'blocked':'pending');assert.equal(!!await f.transport.pending(f.access),status!=='refunded');assert.equal((await f.transport.saved(f.access)).requestId,found.requestId);}
 });
 
 test('actual recovered service plus review component allows portion edit, ingredient re-acknowledgement and explicit Add',async()=>{
@@ -240,4 +240,11 @@ test('additive outcome takes precedence over legacy clarification and malformed 
   else {assert.equal(result.kind,'ready');assert.ok(result.noResults);assert.equal(await f.transport.pending(f.access),null);}
  }
  const f=fixture();f.deps.invoke=async()=>Response.json(f.json({status:'clarify',question:{key:'dish_and_portion'},options:[]}));const legacy=await f.services.explore(f.access,input,'dinner');assert.equal(legacy.kind,'ready');assert.equal(legacy.question,'dish_and_portion');assert.equal(legacy.noResults,undefined);
+});
+
+test('unpaid discovery preparation survives reload via receipt lookup without restoring paid consent or dispatch',async()=>{
+ const f=fixture(),found=await f.services.explore(f.access,{...input,mode:'eat_out',public_area:'Orlando'},'dinner');assert.equal(found.kind,'ready');assert.equal(f.calls.length,1);assert.equal(f.calls[0].operation,'explore');
+ const saved=await f.transport.saved(f.access);assert.equal(saved.requestId,found.requestId);assert.equal(await f.transport.pending(f.access),null);
+ const restarted=createMealTransport(f.deps),restored=await restarted.restore(f.access);assert.equal(restored.kind,'ready');assert.equal(restored.body.status,'discovery_available');assert.equal(restored.requestId,found.requestId);assert.equal(f.calls.at(-1).intent,'recover_daily');assert.equal(f.calls.some(b=>b.operation==='discover'||b.consent===true),false);
+ f.state.owner='B';assert.equal(await restarted.saved(f.access),null);f.state.owner='A';f.state.day='2026-10-23';assert.equal(await restarted.saved(f.access),null);assert.equal(f.writes.length,0);
 });
