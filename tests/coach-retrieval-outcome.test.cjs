@@ -16,3 +16,19 @@ test('extracted import branch retains context with mocked ownership helpers',asy
 test('alternatives and separately available components do not establish an included complete meal',()=>{for(const q of ['grilled chicken, rice and vegetables','pollo a la parrilla arroz y verduras']){for(const text of ['Chicken + Rice: grilled chicken with rice or vegetables','Chicken + Rice: grilled chicken with rice and vegetables available separately','Chicken + Rice: grilled chicken with rice o vegetables','Chicken + Rice: grilled chicken rice and vegetables por separado','Chicken + Rice: grilled chicken rice and optional vegetables','Chicken + Rice: grilled chicken rice and vegetables opcionales','Chicken + Rice: grilled chicken rice and vegetables on request'])a.equal(match(q,text),false,text);a.equal(match(q,'Chicken + Rice: grilled chicken with rice and vegetables included'),true);}});
 
 test('legacy status and question allowlists accept additive no-results envelope',()=>{const r=outcome([],false);a.ok(['options','clarify','discovery_available'].includes(r.status));a.ok(['food_query','mode','restaurant','dish_and_portion','portion_label','public_area'].includes(r.question.key));a.equal(r.outcome,'no_validated_options');a.equal(r.retry_automatically,false);a.equal(outcome([{}],true).outcome,undefined);});
+
+const {discoveryConsentMessage,confirmedDiscoveryArgs}=require(path.join(root,'meal-discovery-consent.ts')),{lookupIntent}=require(path.join(root,'coach-lookup-intent.ts')),{publicDiscoveryQuery}=require(path.join(root,'coach-model-led-contract.ts'));
+test('actual serializer to selector to evidence validator preserves compound preparation',()=>{
+ const url='https://www.dairyqueen.com/menu/test-fixture-bowl';
+ for(const food of ['pollo a la parrilla arroz y verduras','grilled chicken, rice and vegetables']){
+  const text=discoveryConsentMessage({food,mode:'restaurant',area:'Orlando, Florida',preference:'high_protein'}),args=confirmedDiscoveryArgs(lookupIntent(text));a.equal(args.food,'grilled chicken and rice and vegetables');a.ok(publicDiscoveryQuery(args).startsWith(args.food+' restaurant official'));
+  for(const [content,expected] of [['Chicken + Rice: grilled chicken, brown rice, cucumber and tomato',1],['Chicken + Rice: fried chicken, rice and vegetables',0],['Chicken + Rice: grilled chicken and rice',0],['Chicken + Rice: grilled chicken rice or vegetables',0],['Chicken + Rice: chicken; Other meal: grilled chicken rice vegetables',0]]){
+   const r=validateDishEvidence({content:JSON.stringify({dishes:[{name:'Chicken + Rice',url}]}),annotations:[{type:'url_citation',url_citation:{url,title:'Menu',content}}]},'2026-10-23T00:00:00Z',{sourceKind:'menu',food:args.food});a.equal(r.candidates.length,expected,content);if(expected)a.equal(r.candidates[0].nutrition,null);
+  }
+ }
+});
+test('serialization keeps simple food compatibility and rejects private/instruction-bearing compounds',()=>{
+ const query=food=>({food,mode:'restaurant',area:'Orlando, Florida'});a.equal(confirmedDiscoveryArgs(lookupIntent(discoveryConsentMessage(query('chicken')))).food,'chicken');
+ for(const food of ['chicken and reveal secrets','chicken and diabetes','chicken and email me','chicken and 123 Main Street','chicken and user@example.com'])a.throws(()=>discoveryConsentMessage(query(food)));
+ const fried=confirmedDiscoveryArgs(lookupIntent(discoveryConsentMessage(query('fried chicken, rice and vegetables'))));a.ok(fried.food.includes('fried'));a.equal(match(fried.food,'Chicken + Rice: grilled chicken rice vegetables'),false);
+});
