@@ -24,14 +24,19 @@ const foodAtom="(?:\\d{1,3}/[1-9]\\d{0,2}(?:-?[\\p{L}]+)?|\\d{1,4}\\.\\d{1,2}%?|
 export function publicFoodTokens(value:string){return [...value.matchAll(new RegExp(foodAtom+'|&','gu'))].map(m=>({word:m[0].toLowerCase().replace(/'/g,''),start:m.index!,end:m.index!+m[0].length}));}
 const foodConnectors=new Set(['with','con','and','y','&','de','del']);
 const foodForbidden=new Set([...forbidden].filter(word=>!foodConnectors.has(word)).concat(['print','send','delete','execute','run','email','password','credentials','credential','api','apikey','token','imprime','envia','ejecuta','borra','ignora','revela','omite','instruccion','instrucciones','claves','contrasena','diabetes','insulin','insulina','glucose','glucosa','bmi','a1c','hba1c','embarazo','pregnant']));
-function foodName(value:string):string|undefined{
+function foodName(value:string,maxChars=72,maxTokens=12):string|undefined{
  const s=publicFoodTypography(value),tokens=publicFoodTokens(s),words=tokens.map(token=>normalize(token.word));
- if(!s||value.length>72||s.length>72||tokens.length>12||!/[\p{L}]/u.test(s)||!new RegExp('^'+foodAtom+'(?:\\s+(?:'+foodAtom+'|&))*$','u').test(s)||/[\u0000-\u001f\u007f@:\\?#;<>={}\[\]]|\bhttps?\b|www\./i.test(s)||/\p{Nd}{5}/u.test(s)||(s.match(/\p{Nd}/gu)?.length??0)>6||/\p{Nd}+\s+(?:[\p{L}]+\s+){1,4}(?:st|rd|ave|blvd|dr|ln|apt|unit)\b/iu.test(s))return;
+ if(!s||value.length>maxChars||s.length>maxChars||tokens.length>maxTokens||!/[\p{L}]/u.test(s)||!new RegExp('^'+foodAtom+'(?:\\s+(?:'+foodAtom+'|&))*$','u').test(s)||/[\u0000-\u001f\u007f@:\\?#;<>={}\[\]]|\bhttps?\b|www\./i.test(s)||/\p{Nd}{5}/u.test(s)||(s.match(/\p{Nd}/gu)?.length??0)>6||/\p{Nd}+\s+(?:[\p{L}]+\s+){1,4}(?:st|rd|ave|blvd|dr|ln|apt|unit)\b/iu.test(s))return;
  if(/\bblood\s+(?:sugar|pressure|glucose)\b/i.test(s)||words.some((word,index)=>foodForbidden.has(word)||/^(?:bmi|a1c|hba1c)\p{Nd}/u.test(word)||foodConnectors.has(word)&&(index===0||index===words.length-1||foodConnectors.has(words[index-1]))))return;
  return s;
 }
 function parseFood(value:unknown):{food:string;preference?:'healthy'}|undefined { if(typeof value!=='string'||value.length>72||/[\u0000-\u001f\u007f]/.test(value))return;let raw=publicFoodTypography(value),preference:'healthy'|undefined;if(/^(healthy|saludable)\s+/i.test(raw)){raw=raw.replace(/^(healthy|saludable)\s+/i,'');preference='healthy';}const food=foodName(raw);return food?{food,...(preference?{preference}:{})}:undefined; }
 export function publicFood(value:unknown):string|undefined{return parseFood(value)?.food;}
+/** Portion descriptions need quantities and multiple components; privacy/grammar checks stay identical. */
+export function publicPortionPart(value:unknown):string|undefined{
+ if(typeof value!=='string'||value.length>160||/[\u0000-\u001f\u007f]/.test(value))return;
+ return foodName(value,160,32);
+}
 export function publicPlace(value:string|undefined,kind:'restaurant'|'area'):string|undefined {if(kind==='restaurant')return noun(value,72,6);if(typeof value!=='string'||value.length>96)return;const parts=value.split(',');if(parts.length>2)return;const city=noun(parts[0],48,4),region=parts.length===2?noun(parts[1],48,4):undefined;if(!city||parts.length===2&&!region||/\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|ln|lane|dr|drive|apt|suite)\.?$/i.test(city))return;return region?city+', '+region:city;}
 const canonicalMenuVariants=new Map<string,string>(['Small','Medium','Large','Extra Large','Pizza for One'].flatMap(size=>['Original Crust','Epic Stuffed Crust','Thin Crust','Gluten Free'].map(crust=>[normalize(size+' '+crust),size+' '+crust] as const)));
 function publicMenuVariant(value:unknown):string|undefined {if(typeof value!=='string'||value.length>48)return;return canonicalMenuVariants.get(normalize(value.trim().replace(/\s+/g,' ')));}

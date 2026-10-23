@@ -1,12 +1,12 @@
 import type {MealOption} from './gallery-meals.ts';
 import {dietaryConstraints,constrainMeals} from './dietary-constraints.ts';
 import {compoundFoodParts} from './meal-retrieval-outcome.ts';
-import {publicFood} from './coach-lookup-intent.ts';
+import {publicFood,publicPortionPart} from './coach-lookup-intent.ts';
 export function validatePublicPortion(portion:unknown):asserts portion is string{
  if(typeof portion!=='string'||!portion.trim()||portion.length>160)throw Error('portion_clarification_required');
  // Validate every complete comma-delimited description; never strip private words.
  const parts=portion.split(',').map(x=>x.trim());
- if(parts.length>5||parts.some(x=>!publicFood(x)))throw Error('portion_clarification_required');
+ if(parts.length>5||parts.some(x=>!publicPortionPart(x)))throw Error('portion_clarification_required');
 }
 export function validateGeneralEstimateOption(option:MealOption):void{
  const portion=option.identity?.portion_label;
