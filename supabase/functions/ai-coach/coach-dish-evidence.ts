@@ -102,7 +102,7 @@ const mcdVerified=!!mcdParsed&&!!mcdRestaurant&&['mcdonalds.com','www.mcdonalds.
       // Match against this item's own line and only its closest preceding section heading.
       // Other headings elsewhere on the page must not lend their category to this item.
       const categoryScope=[name,nearestHeading,lineText,exactTitle?source.title:''].join(' ');
-      const compoundEvidence=scope.food&&compoundFoodParts(scope.food)?compoundItemEvidence(row.name,lineText):null;
+      const compoundEvidence=scope.food&&compoundFoodParts(scope.food)?(kind==='retrieved_recipe'&&titleMatch?row.name:compoundItemEvidence(row.name,lineText)):null;
       if(scope.allowSimilar&&kind==='menu'&&scope.food){
        // Name alone is item-bound even if a citation flattens neighboring menu entries.
        const ownText=compoundItemEvidence(row.name,lineText)??row.name;

@@ -3,7 +3,7 @@ import {importedDiscoveryOutcome} from './meal-retrieval-outcome.ts';
 import {confirmedMealDiscoveryRequest} from './confirmed-meal-discovery.ts';
 import {dietaryConstraints,constrainMeals} from './dietary-constraints.ts';
 import {currentMealCapabilities} from './meal-paid-capabilities.ts';
-import {discoveryConsentMessage} from './meal-discovery-consent.ts';
+import {discoveryConsentMessage,recipeTimingOptions} from './meal-discovery-consent.ts';
 import {createPaidMealAdmission} from './manual/paid-meal-admission.ts';
 import {estimateMeal,needsExplicitEstimatePortion} from './meal-auto-estimate.ts';
 import {guardedChat} from './chat-access.ts';
@@ -97,7 +97,7 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
     if(r.error||row?.state!=='completed'||row.user_id!==undefined&&row.user_id!==owner||!Number.isFinite(Date.parse(row.created_at))||localDay(Date.parse(row.created_at),b.time_zone)!==date)return json({error:'discovery_receipt_unavailable'},409);
     const originId=row.request_payload?.meal_source_request_id;
     const origin=originId?await source(originId):null,constraints=origin?dietaryConstraints(origin.dietary_constraints):null;
-    const validated=ownedDiscoveryMeals(row.result),options=constraints?constrainMeals(validated,constraints):validated;return json({schema:'meal_explore_v1',owner,date,...importedDiscoveryOutcome(options,validated.length>0),options,...(!options.length&&origin?{source_request_id:originId,discovery_request:origin.discovery_request,dietary_constraints:constraints}:{}),confirmation_transport:'existing_log_food',server_auto_logging:false});
+    const validated=ownedDiscoveryMeals(row.result),options=recipeTimingOptions(constraints?constrainMeals(validated,constraints):validated,origin?.discovery_request);return json({schema:'meal_explore_v1',owner,date,...importedDiscoveryOutcome(options,validated.length>0),options,...(!options.length&&origin?{source_request_id:originId,discovery_request:origin.discovery_request,dietary_constraints:constraints}:{}),confirmation_transport:'existing_log_food',server_auto_logging:false});
    }
    if(b.operation==='review'){
     const prior=await source(b.source_request_id),option=prior.options?.find((o:MealOption)=>o.id===b.option_id);if(!option)return json({error:'option_not_found'},404);
