@@ -1665,6 +1665,13 @@ export default function CoachScreen() {
         timestamp: Date.now(),
       };
 
+      // A new ordinary turn owns the conversation. Keep saved results intact,
+      // but collapse their old controls instead of displaying them as this reply.
+      if (COACH_CONVERSATION_READY) {
+        setActiveMealCard(null);
+        composerOwner.current = null;
+        setMealComposer(null);
+      }
       setMessages((prev) => [...prev, userMsg]);
       setInputText('');
 

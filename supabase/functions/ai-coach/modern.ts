@@ -1,5 +1,5 @@
 import {paidEligibility} from './paid-eligibility.ts';
-import {confirmedMealDiscoveryPlan} from './confirmed-meal-discovery.ts';
+import {confirmedMealDiscoveryPlan,confirmedMealAdmissionPayload} from './confirmed-meal-discovery.ts';
 import {mealDiscoveryRetryCheck} from './meal-discovery-retry.ts';
 import {classifyStructuredProviderError} from './planner-provider-error.ts';
 import {confirmedDiscoveryArgs} from './meal-discovery-consent.ts';
@@ -404,7 +404,7 @@ const handler = (async (req) => {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(parsedRequest.fingerprintInput));
     const fingerprint = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
     candidateKnownAbsent=false; // From here an unknown begin outcome must stay in recovery, never be attested absent.
-    const reservation = await reserveCoachRequest(supabase, userId, requestId, fingerprint,Date.now(),{...JSON.parse(parsedRequest.fingerprintInput),...(storedLookupContext?{lookup_context:storedLookupContext}:{})},
+    const reservation = await reserveCoachRequest(supabase, userId, requestId, fingerprint,Date.now(),confirmedMealAdmissionPayload(req,authUser.id,body,{...JSON.parse(parsedRequest.fingerprintInput),...(storedLookupContext?{lookup_context:storedLookupContext}:{})}),
       (authenticatedUserId, now) => fetchRevenueCatAccessDetailed(authenticatedUserId, Deno.env.get('REVENUECAT_API_KEY'), now),{retryOfRequestId:parsedRequest.retryOfRequestId,reserveWeb:webEnabled&&!selectedDiscovery&&!localRestaurantTurn,deadlineAt:persistenceDeadlineAt});
     if (reservation.kind === 'replay') return replay(reservation.result);
     if (reservation.kind !== 'reserved') {

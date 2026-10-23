@@ -4,6 +4,11 @@ import {confirmedDiscoveryArgs} from './meal-discovery-consent.ts';
 import {lookupIntent} from './coach-lookup-intent.ts';
 type Proof={owner:string;source:string;requestId:string;retryOf:string|null;fingerprint:string;args:string};
 const proofs=new WeakMap<Request,Proof>();
+/** Admission metadata is derived from the same server-only proof, never a serialized caller flag. */
+export function confirmedMealAdmissionPayload(request:Request,owner:string,body:any,payload:Record<string,unknown>){
+ const args=confirmedDiscoveryArgs(lookupIntent(body.messages?.at(-1)?.content??''));
+ return confirmedMealDiscoveryPlan(request,owner,body,args??undefined,true)?{...payload,use_web:true}:payload;
+}
 /** Server-only bridge factory, called AFTER owned same-day source and explicit consent checks. */
 export function confirmedMealDiscoveryRequest(url:string,headers:Headers,body:any,owner:string):Request{
  const parsed=coachRequest(body);
