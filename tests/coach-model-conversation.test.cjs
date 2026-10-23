@@ -74,3 +74,93 @@ test('terminal search retry shows original details and requires a separate expli
   h.states[0]=offer;tree=h.render();const submit=h.button(tree,'Confirm new search');submit.props.onPress();submit.props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,1);assert.equal(h.calls[0].value,offer);
  }finally{h.restore()}
 });
+
+test('actual component + services + journal retain a rejected child and replace consumed consent with a visible failure across recovery',async()=>{
+ for(const format of ['http','sse','final_owner_failure','day_change','unmounted']){
+  const h=harness();let cleanup;
+  try{
+   const {createMealTransport}=require('../utils/coachMealTransport'),{createMealServices}=require('../utils/coachMealServices');
+   const {stoppedCoachResult}=require('../supabase/functions/ai-coach/_shared/coach-execution');
+   const {coachResponseSSEFrame}=require('../supabase/functions/ai-coach/_shared/coach-recommendation-contract');
+   const parent='11111111-1111-4111-8111-111111111111',source='22222222-2222-4222-8222-222222222222',child='33333333-3333-4333-8333-333333333333';
+   const date='2026-10-22',scope='outer-controller-'+format,key='coach_meal_v2:'+JSON.stringify([scope,'A',date]);
+   const original={owner:'A',date,meal:'dinner',mode:'eat_out',recovery:'discovery',envelope:{intent:'meal_choice',experience:'meal_v2',operation:'discover',source_request_id:source,consent:true,request_id:parent,time_zone:'UTC'}};
+   const rows=new Map([[key,JSON.stringify(original)]]),calls=[];let minted=0,remaining=Infinity,day=date,unmountedState;
+   const owner=async()=>remaining-->0?'A':undefined,store={getItem:async k=>rows.get(k)??null,setItem:async(k,v)=>rows.set(k,v),removeItem:async k=>rows.delete(k)};
+   const deps={scope,owner,today:()=>day,zone:()=> 'UTC',newId:()=>{minted++;return child},store,invoke:async body=>{
+    calls.push(body);
+    if(body.intent==='recover_daily')return Response.json({schema:'meal_explore_v1',owner:'A',date,status:'discovery_available',options:[],paid_capabilities:{discovery:true,estimate:false},discovery_request:{food:'grilled chicken rice and vegetables',area:'Orlando, Florida',mode:'restaurant'}});
+    assert.equal(body.operation,'discover');
+    if(body.request_id===child){assert.deepEqual(JSON.parse(rows.get(key)).envelope,body);assert.equal(body.retry_of_request_id,parent);if(format==='final_owner_failure')remaining=1;if(format==='day_change')day='2026-10-23';if(format==='unmounted'){cleanup();cleanup=undefined;unmountedState=JSON.stringify(h.states);}}
+    const stopped={error:'execution_stopped',request_id:body.request_id,execution_state:'stopped',retry_of_request_id:body.retry_of_request_id??null,retry_eligible:true,successor_request_id:null};
+    // schema_complexity/HTTP400 is private provider diagnostics. The real server
+    // publishes this bounded stopped result, not that internal diagnostic string.
+    return format==='sse'&&body.request_id===child?new Response(coachResponseSSEFrame(stoppedCoachResult(stopped,'es','uncertain')),{headers:{'content-type':'text/event-stream'}}):Response.json(stopped,{status:409});
+   }};
+   const services=()=>createMealServices({transport:createMealTransport(deps),owner,today:()=>day,store,subscribeInvalidation:()=>()=>{},write:async()=>{throw Error('unexpected diary write')}});
+   h.props.service=services();h.render();cleanup=h.effects.at(-1)();await new Promise(r=>setImmediate(r));
+   let tree=h.render();h.button(tree,'Retry search').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();
+   assert.match(h.text(tree),/grilled chicken rice and vegetables/);assert.match(h.text(tree),/Orlando, Florida/);assert.equal(minted,0);
+   const confirm=h.button(tree,'Confirm new search');confirm.props.onPress();confirm.props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();
+   assert.equal(minted,1);assert.equal(calls.filter(c=>c.request_id===child).length,1);assert.equal(h.button(tree,'Confirm new search'),undefined);
+   if(format==='unmounted'){assert.equal(JSON.stringify(h.states),unmountedState);assert.equal(JSON.parse(rows.get(key)).envelope.request_id,child);continue;}
+   assert.match(h.text(tree),['final_owner_failure','day_change'].includes(format)?/session needs checking/:/I could not complete this search. Your choices are saved/);
+   const persisted=rows.get(key);assert.equal(JSON.parse(persisted).envelope.request_id,child);assert.equal(rows.get(key+':stopped:'+parent),JSON.stringify(original));
+   if(format==='day_change'){assert.equal(await h.props.service.pending(()=>h.props),null);assert.equal(rows.get(key),persisted);continue;}
+   remaining=Infinity;cleanup();h.props.service=services();h.render();cleanup=h.effects.at(-1)();await new Promise(r=>setImmediate(r));
+   tree=h.render();h.button(tree,'Retry search').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();
+   assert.equal(minted,1);assert.equal(rows.get(key),persisted);assert.equal(calls.at(-1).request_id,child);assert.equal(h.button(tree,'Confirm new search'),undefined);
+   assert.equal(calls.filter(c=>c.intent==='recover_daily').length,1);assert.equal(calls.some(c=>c.operation==='import_discovery'),false);
+  }finally{cleanup?.();h.restore();}
+ }
+});
+
+test('retry confirmation with unavailable initial owner displays session failure without dispatch',async()=>{
+ const h=harness();try{h.render();h.states[0]={kind:'retry_available',reason:'search_stopped',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'parent',publicRequest:{food:'chicken',area:'Orlando'}};h.props.service.owner=async()=>undefined;h.props.service.retrySearch=async()=>{throw Error('must not dispatch')};h.button(h.render(),'Confirm new search').props.onPress();await new Promise(r=>setImmediate(r));const tree=h.render();assert.equal(h.button(tree,'Confirm new search'),undefined);assert.match(h.text(tree),/session needs checking/);assert.equal(h.calls.length,0);}finally{h.restore();}
+});
+
+test('mounted scope resets clear busy and older completions cannot unlock a newer action',async()=>{
+ for(const reset of ['invalidation','day','service','handoff']){
+  const h=harness(),originalInterval=global.setInterval,originalClear=global.clearInterval;let cleanup,tick,invalidate,day='2026-10-22';
+  global.setInterval=fn=>{tick=fn;return 1};global.clearInterval=()=>{};
+  try{
+   const deferred=[];h.props.service.today=()=>day;h.props.service.subscribeInvalidation=(_owner,fn)=>{invalidate=fn;return()=>{}};
+   h.props.service.retrySearch=()=>new Promise(resolve=>deferred.push(resolve));
+   h.render();cleanup=h.effects.at(-1)();await new Promise(r=>setImmediate(r));
+   const offer=()=>({kind:'retry_available',reason:'search_stopped',owner:'A',date:day,meal:'dinner',mode:'eat_out',requestId:'parent',publicRequest:{food:'chicken',area:'Orlando'}});
+   h.states[0]=offer();h.button(h.render(),'Confirm new search').props.onPress();await new Promise(r=>setImmediate(r));assert.equal(deferred.length,1);assert.equal(h.states[1],true);
+   if(reset==='invalidation')invalidate();
+   else if(reset==='day'){day='2026-10-23';tick();}
+   else{cleanup();if(reset==='service')h.props.service={...h.props.service};else h.props.handoff={...h.props.handoff};h.render();cleanup=h.effects.at(-1)();await new Promise(r=>setImmediate(r));}
+   assert.equal(h.states[1],false);
+   if(['invalidation','day'].includes(reset))assert.match(h.text(h.render()),/session needs checking/);
+   // The current instance can begin an explicit action after resetting. The old
+   // promise must not release that newer action's lock or clear its spinner.
+   h.states[0]=offer();const next=h.button(h.render(),'Confirm new search');next.props.onPress();await new Promise(r=>setImmediate(r));assert.equal(deferred.length,2);assert.equal(h.states[1],true);if(reset==='day'){tick();assert.equal(h.states[1],true);}
+   deferred[0]({kind:'pending',reason:'old_failure'});await new Promise(r=>setImmediate(r));assert.equal(h.states[1],true);next.props.onPress();await new Promise(r=>setImmediate(r));assert.equal(deferred.length,2);
+   deferred[1]({kind:'pending',reason:'search_stopped'});await new Promise(r=>setImmediate(r));assert.equal(h.states[1],false);assert.match(h.text(h.render()),/I could not complete this search/);
+   cleanup();cleanup=undefined;const afterUnmount=JSON.stringify(h.states);invalidate();tick();assert.equal(JSON.stringify(h.states),afterUnmount);
+  }finally{cleanup?.();global.setInterval=originalInterval;global.clearInterval=originalClear;h.restore();}
+ }
+});
+
+test('late pending read cannot update an unmounted or invalidated component or disturb a newer action',async()=>{
+ for(const reset of ['unmount','invalidation']){
+  const h=harness();let cleanup,invalidate,resolvePending,resolveNew;
+  try{
+   h.props.service.subscribeInvalidation=(_owner,fn)=>{invalidate=fn;return()=>{}};
+   h.render();cleanup=h.effects.at(-1)();await new Promise(r=>setImmediate(r));
+   h.props.service.retrySearch=async()=>({kind:'pending',reason:'search_stopped'});
+   h.props.service.pending=()=>new Promise(resolve=>{resolvePending=resolve;});
+   const offer={kind:'retry_available',reason:'search_stopped',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'parent',publicRequest:{food:'chicken',area:'Orlando'}};
+   h.states[0]=offer;h.button(h.render(),'Confirm new search').props.onPress();await new Promise(r=>setImmediate(r));assert.equal(typeof resolvePending,'function');
+   if(reset==='unmount'){cleanup();cleanup=undefined;const snapshot=JSON.stringify(h.states);resolvePending({envelope:{request_id:'old-child'}});await new Promise(r=>setImmediate(r));assert.equal(JSON.stringify(h.states),snapshot);}
+   else{
+    invalidate();assert.equal(h.states[2],false);assert.equal(h.states[1],false);
+    h.props.service.retrySearch=()=>new Promise(resolve=>{resolveNew=resolve;});h.states[0]=offer;const submit=h.button(h.render(),'Confirm new search');submit.props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.states[1],true);
+    resolvePending({envelope:{request_id:'old-child'}});await new Promise(r=>setImmediate(r));assert.equal(h.states[2],false);assert.equal(h.states[1],true);
+    h.props.service.pending=async()=>null;resolveNew({kind:'pending',reason:'search_stopped'});await new Promise(r=>setImmediate(r));assert.equal(h.states[1],false);assert.equal(h.states[2],false);
+   }
+  }finally{cleanup?.();h.restore();}
+ }
+});

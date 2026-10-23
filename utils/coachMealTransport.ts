@@ -58,6 +58,9 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
  const stopped=(value:any,record:MealPending)=>record.envelope.operation==='discover'&&value?.request_id===record.envelope.request_id&&value.execution_state==='stopped'&&value.retry_eligible===true&&value.successor_request_id===null;
  async function offerRetry(access:MealAccess,record:MealPending):Promise<MealResponse>{
   if(record.envelope.operation!=='discover')return {kind:'pending',reason:'recovery_scope_mismatch'};
+  // One explicit successor has already consumed the parent's consent. Keep this
+  // exact child recoverable; a failed child must not offer another paid search.
+  if(record.envelope.retry_of_request_id)return {kind:'pending',reason:'search_stopped'};
   // Read the original admitted source, not reconstructed conversation text.
   const response=await deps.invoke({intent:'recover_daily',request_id:record.envelope.source_request_id,journey:'meal_explore_v1'});
   if(!response.ok)return {kind:'pending',reason:'retry_details_unavailable'};
