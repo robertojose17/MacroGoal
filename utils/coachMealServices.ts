@@ -1,3 +1,4 @@
+import {coachCatalogDiaryPayload,type createCoachCatalogIdentity} from './coachCatalogIdentity';
 import {parseConstraints,emptyConstraints,type DietaryConstraints} from './coachDietaryConstraints';
 import type { DailyMealSlot } from './coachDailyAction';
 import { dailyAccess } from './coachDailyAction';
@@ -18,7 +19,8 @@ export function createMealServices(deps: {
   transport:ReturnType<typeof createMealTransport>;
   owner:MealReviewDependencies['owner']; today:MealReviewDependencies['today']; store:MealReviewDependencies['store'];
   subscribeInvalidation(owner:string,onInvalidate:()=>void):()=>void;
-  write(body:ReturnType<typeof existingMealLogPayload>&{p_logged_at:string}):Promise<void>;
+  catalogIdentity?:ReturnType<typeof createCoachCatalogIdentity>;
+  write(body:(ReturnType<typeof existingMealLogPayload>|ReturnType<typeof coachCatalogDiaryPayload>)&{p_logged_at:string}):Promise<void>;
 }) {
  function choices(result:MealResponse):MealChoiceOutcome {
   if(result.kind!=='ready')return result;
@@ -52,7 +54,8 @@ export function createMealServices(deps: {
      portionLabel:String(r.servings)+' x '+c.option.nutrition.basis.label,...(r.physical_portion?{physicalPortion:r.physical_portion}:{}),nutrition:r.values,authority:r.authority,assumptions:r.assumptions,readyForConfirmation:r.ready_for_explicit_confirmation===true};
     return entry;
    },
-   confirm:async entry=>{const payload=existingMealLogPayload(context,entry);await deps.write({...payload,p_logged_at:new Date().toISOString()});},
+   prepareIdentity:deps.catalogIdentity,
+   confirm:async(entry,identityId,consent)=>{const payload=deps.catalogIdentity?(identityId&&consent?coachCatalogDiaryPayload(entry,consent,identityId):(()=>{throw Error('catalog_consent_required')})()):existingMealLogPayload(context,entry);await deps.write({...payload,p_logged_at:new Date().toISOString()});},
   },cached?.edit);
  }
  async function importDiscovery(access:MealAccess,result:MealResponse):Promise<MealChoiceOutcome>{if(result.kind!=='ready')return result;if(await deps.owner()!==result.owner||deps.today()!==result.date)return {kind:'blocked',reason:'scope_changed'};return choices(await deps.transport.run(access,{operation:'import_discovery',source_request_id:result.requestId},{meal:result.meal,mode:result.mode}));}

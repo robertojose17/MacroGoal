@@ -1,3 +1,4 @@
+import {createCoachCatalogIdentity,type PublicCoachFood} from './coachCatalogIdentity';
 import { createGuidedServices } from './coachGuidedServices';
 import { createMealTransport } from './coachMealTransport';
 import { createMealServices } from './coachMealServices';
@@ -40,7 +41,12 @@ const mealTransport = createMealTransport({ owner: transport.owner, today: toLoc
     return result.data && typeof result.data.text === 'function' && result.data.headers ? result.data as Response : new Response(JSON.stringify(result.data), { headers: { 'Content-Type': 'application/json' } });
   },
 });
-const mealExperience = createMealServices({ transport: mealTransport, owner: transport.owner, today: toLocalDateString, store: AsyncStorage,
+const catalogApi=supabase as unknown as {from(table:'foods'):{select(columns:string):{eq(column:'id',id:string):{maybeSingle():Promise<{data:Record<string,unknown>|null;error:unknown}>}};insert(row:PublicCoachFood):PromiseLike<{error:unknown}>}};
+const catalogIdentity=createCoachCatalogIdentity({store:AsyncStorage,owner:transport.owner,
+ async read(id){const {data,error}=await catalogApi.from('foods').select('id,name,serving_amount,serving_unit,calories,protein,carbs,fats,fiber,user_created,created_by').eq('id',id).maybeSingle();if(error)throw error;if(!data)return null;for(const k of ['serving_amount','calories','protein','carbs','fats','fiber']){const value=(data as any)[k];if(!['number','string'].includes(typeof value)||value===''||!Number.isFinite(Number(value)))throw Error('invalid_catalog_row');}return {...data,serving_amount:Number(data.serving_amount),calories:Number(data.calories),protein:Number(data.protein),carbs:Number(data.carbs),fats:Number(data.fats),fiber:Number(data.fiber)} as any;},
+ async insert(row){const {error}=await catalogApi.from('foods').insert(row);if(error)throw error;}
+});
+const mealExperience = createMealServices({ catalogIdentity, transport: mealTransport, owner: transport.owner, today: toLocalDateString, store: AsyncStorage,
   subscribeInvalidation(owner, invalidate) { const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_OUT' || session?.user?.id !== owner) invalidate(); }); return () => subscription.unsubscribe(); },
   async write(body) { const { error } = await supabase.rpc('log_food', body); if (error) throw error; },
 });

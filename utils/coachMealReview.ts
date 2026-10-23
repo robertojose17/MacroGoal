@@ -1,3 +1,4 @@
+import type {CatalogConsent} from './coachCatalogIdentity';
 import type {DietaryConstraints} from './coachDietaryConstraints';
 import { dailyAccess, type DailyAccess, type DailyMealSlot } from './coachDailyAction';
 import { addReviewedSavedMeal } from './manualSavedMealAdd';
@@ -38,7 +39,8 @@ export type MealReviewDependencies = {
   // prepare MUST NOT log. confirm must bind the existing reviewed durable write
   // contract. Neither callback has a live default or a guessed endpoint.
   prepare(context: MealReviewContext, edit: MealReviewEdit): Promise<PreparedMealEntry>;
-  confirm(prepared: PreparedMealEntry): Promise<void>;
+  prepareIdentity?(prepared:PreparedMealEntry,consent:CatalogConsent,current:()=>boolean):Promise<string>;
+  confirm(prepared: PreparedMealEntry,identityId?:string,consent?:CatalogConsent): Promise<void>;
 };
 const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 99999;
 const validValues = (x: MealNutrition) => x && NUTRIENTS.every(k => x[k] === null || finite(x[k]));
@@ -85,7 +87,8 @@ export function createMealReviewSession(context: MealReviewContext, deps: MealRe
   const current = () => active && !stopped && deps.today() === source.date && dailyAccess(deps.access()) === 'ready';
   const authorized = async () => current() && await deps.owner() === source.owner && current();
   return {
-    context: copy(source),
+    context: copy(source),
+    catalogRequired: !!deps.prepareIdentity,
     initialEdit: initialEdit ? copy(initialEdit) : undefined,
     watch(onInvalidate: () => void) { return deps.subscribeInvalidation(() => { active = false; prepared = null; onInvalidate(); }); },
     async valid() { try { return active && deps.today() === source.date && dailyAccess(deps.access()) === 'ready' && await deps.owner() === source.owner && active && deps.today() === source.date && dailyAccess(deps.access()) === 'ready'; } catch { return false; } },
@@ -104,17 +107,22 @@ export function createMealReviewSession(context: MealReviewContext, deps: MealRe
         prepared = copy(value); return copy(prepared);
       } catch { return null; } finally { busy = false; }
     },
-    async confirm(value: PreparedMealEntry, estimateAcknowledged: boolean) {
+    async confirm(value: PreparedMealEntry, estimateAcknowledged: boolean, catalogConsent?:CatalogConsent) {
       if (busy) return { status: 'busy' as const, completed: 0 };
       if (!prepared || !hasLoggableNutrition(prepared) || JSON.stringify(value) !== JSON.stringify(prepared) || needsEstimateAcknowledgement(prepared) && !estimateAcknowledged || !current()) return { status: 'blocked' as const, completed: 0 };
       busy = true;
       try {
-        const entry = copy(prepared);
+        const entry = copy(prepared), confirmedCatalog = catalogConsent ? copy(catalogConsent) : undefined;
         const completedKey = `coach_meal_logged_v2:${JSON.stringify([source.owner,source.date,source.sourceReceiptId,source.option.id])}`;
         if (await deps.store.getItem(completedKey)) { stopped = true; prepared = null; return { status: 'complete' as const, completed: 0 }; }
+        const pendingKey=`manual_saved_meal_pending_v1:${JSON.stringify([source.owner,source.date,source.meal,`coach-review:${source.sourceReceiptId}:${source.option.id}`])}`;
+        if(await deps.store.getItem(pendingKey))return {status:'review' as const,completed:0};
+        if(deps.prepareIdentity&&(!catalogConsent||!catalogConsent.massAcknowledged||!catalogConsent.publicAcknowledged))return {status:'blocked' as const,completed:0};
+        const identityId=deps.prepareIdentity?await deps.prepareIdentity(entry,confirmedCatalog!,()=>current()&&prepared!==null&&JSON.stringify(prepared)===JSON.stringify(entry)):undefined;
+        if(!await authorized()||!prepared||JSON.stringify(prepared)!==JSON.stringify(entry))return {status:'blocked' as const,completed:0};
         const result = await addReviewedSavedMeal({ owner: source.owner, date: source.date, mealType: source.meal,
           mealId: `coach-review:${source.sourceReceiptId}:${source.option.id}`, items: [entry], store: deps.store,
-          currentOwner: deps.owner, isCurrent: current, write: async item => { await deps.confirm(item); await deps.store.setItem(completedKey, 'confirmed'); } });
+          currentOwner: deps.owner, isCurrent: current, write: async item => { await deps.confirm(item,identityId,confirmedCatalog); await deps.store.setItem(completedKey, 'confirmed'); } });
         if (result.status === 'complete' || result.status === 'review') { stopped = true; prepared = null; }
         return result;
       } catch { return { status: 'unavailable' as const, completed: 0 }; } finally { busy = false; }

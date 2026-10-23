@@ -1,3 +1,4 @@
+import {coachCatalogPreview,type CatalogConsent} from '@/utils/coachCatalogIdentity';
 import {constraintLines} from '@/utils/coachDietaryConstraints';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -17,7 +18,15 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
   const [prepared, setPrepared] = useState<PreparedMealEntry | null>(null);
   const [status, setStatus] = useState<'edit' | 'error' | 'complete' | 'review' | 'blocked'>('edit');
   const alive = useRef(true), claim = useRef(false), generation = useRef(0);
-  const source = session.context.option;
+  const source = session.context.option;
+  const [mass,setMass]=useState(''),[massBasis,setMassBasis]=useState(''),[catalogName,setCatalogName]=useState(source.name);
+  const [massAck,setMassAck]=useState(false),[catalogAck,setCatalogAck]=useState(false);
+  const massValue=/^\d+(?:[.,]\d+)?$/.test(mass)?Number(mass.replace(',','.')):NaN;
+  const massAuthority=prepared?.physicalPortion?.authority==='source_reported'&&prepared.physicalPortion.total_grams===massValue?'source_reported':'estimated';
+  const catalogConsent:CatalogConsent={grams:massValue,massAuthority,massBasis,name:catalogName,massAcknowledged:massAck,publicAcknowledged:catalogAck};
+  let publicPreview:ReturnType<typeof coachCatalogPreview>|null=null;try{if(prepared)publicPreview=coachCatalogPreview(prepared,catalogConsent);}catch{}
+  const resetCatalog=()=>{setMassAck(false);setCatalogAck(false);};
+
   const multiplier = /^\d+(?:[.,]\d+)?$/.test(portion) ? Number(portion.replace(',', '.')) : NaN;
   const edit = editMealNutrition(source, multiplier, edits);
   useEffect(() => {
@@ -26,19 +35,19 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
     void check(); const timer = setInterval(() => { void check(); }, 15000);
     return () => { alive.current = false; generation.current++; clearInterval(timer); stopWatching(); };
   }, [session]);
-  const change = () => { session.clearPrepared(); setPrepared(null); setAck(false); setIngredientAck(false); setStatus('edit'); generation.current++; };
+  const change = () => { session.clearPrepared(); setPrepared(null); setAck(false); setIngredientAck(false); setStatus('edit'); setMass('');setMassBasis('');resetCatalog(); generation.current++; };
   const cancel = () => { session.invalidate(); generation.current++; onCancel(); };
   async function prepare() {
     if (!edit || !valid || claim.current) return;
     claim.current = true; setBusy(true); const rev = generation.current;
-    try { const result = await session.prepare({ ...edit, estimateAcknowledged: ack, ingredientAcknowledged: ingredientAck }); if (!alive.current || rev !== generation.current) return; setPrepared(result); setStatus(result ? 'edit' : 'error'); }
+    try { const result = await session.prepare({ ...edit, estimateAcknowledged: ack, ingredientAcknowledged: ingredientAck }); if (!alive.current || rev !== generation.current) return; setPrepared(result);setMass(result?.physicalPortion?.authority==='source_reported'?String(result.physicalPortion.total_grams):'');setMassBasis(result?.physicalPortion?.authority==='source_reported'?say('Source-reported whole portion','Porción completa publicada por la fuente'):'');resetCatalog(); setStatus(result ? 'edit' : 'error'); }
     finally { claim.current = false; if (alive.current) setBusy(false); }
   }
   async function add() {
     if (!prepared || !valid || claim.current) return;
     claim.current = true; setBusy(true);
     try {
-      const result = await session.confirm(prepared, ack);
+      const result = await session.confirm(prepared, ack, session.catalogRequired?catalogConsent:undefined);
       if (!alive.current) return;
       setStatus(result.status === 'complete' ? 'complete' : result.status === 'review' ? 'review' : result.status === 'blocked' ? 'blocked' : 'error');
     } finally { claim.current = false; if (alive.current) setBusy(false); }
@@ -76,7 +85,20 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
         {prepared ? <>
           {!hasLoggableNutrition(prepared) && <Text accessibilityRole="alert" style={s.body}>{say('Some nutrients are unknown. Edit them with values you can estimate before adding; unknown values will not be saved as zero.', 'Faltan nutrientes. Introduce valores que puedas estimar antes de añadir; los desconocidos no se guardarán como cero.')}</Text>}
           {needsEstimateAcknowledgement(prepared) && <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: ack, disabled: busy }} disabled={busy} onPress={() => setAck(value => !value)} style={s.checkbox}><Text style={s.body}>{ack ? '✓ ' : '○ '}{say('I understand these numbers are estimates or my edits.', 'Entiendo que estos números son estimaciones o mis ediciones.')}</Text></Pressable>}
-          {button(say('Add to diary', 'Añadir al diario'), () => { void add(); }, busy || !valid || !hasLoggableNutrition(prepared) || needsEstimateAcknowledgement(prepared) && !ack || status === 'blocked')}
+          {session.catalogRequired&&<View style={s.details}>
+            <Text style={s.body}>{say('Confirm the weight of this entire selected meal in grams. Component weights are not the total. If the source has no total, enter your estimate and explain its basis.','Confirma el peso en gramos de toda la comida seleccionada. El peso de un ingrediente no es el total. Si la fuente no tiene un total, introduce tu estimación y explica su base.')}</Text>
+            <TextInput accessibilityLabel={say('Whole meal grams','Gramos de toda la comida')} value={mass} editable={!busy} keyboardType="decimal-pad" onChangeText={v=>{resetCatalog();setMass(v);}} style={s.input}/>
+            <TextInput accessibilityLabel={say('Weight basis','Base del peso')} value={massBasis} editable={!busy} onChangeText={v=>{resetCatalog();setMassBasis(v);}} style={s.input}/>
+            <Text style={s.body}>{say('Public food name — food only, no personal or health details','Nombre público del alimento: sin datos personales ni de salud')}</Text>
+            <TextInput accessibilityLabel={say('Public food name','Nombre público del alimento')} value={catalogName} editable={!busy} onChangeText={v=>{resetCatalog();setCatalogName(v);}} style={s.input}/>
+            <Text style={s.muted}>{say('Saving creates a public custom food. Other people can read its name, nutrition per 100 g, serving basis and your owner ID. Your chat, portion narrative, sources and health context are excluded. The 100 g is a calculation basis, not the amount eaten.','Guardar crea un alimento personalizado público. Otras personas pueden leer su nombre, nutrientes por 100 g, base de porción y tu identificador de propietario. Se excluyen el chat, la descripción de tu porción, las fuentes y el contexto de salud. Los 100 g son una base de cálculo, no la cantidad consumida.')}</Text>
+            {publicPreview&&<><Text style={s.body}>{publicPreview.name} · 100 g</Text><Text selectable style={s.muted}>{say('Public owner ID','Identificador público del propietario')}: {publicPreview.created_by}</Text>{NUTRIENTS.map((k,i)=><Text key={k} style={s.muted}>{labels[i]}: {publicPreview![k]}</Text>)}</>}
+            <Pressable accessibilityRole="checkbox" accessibilityState={{checked:massAck,disabled:busy}} disabled={busy} onPress={()=>setMassAck(v=>!v)} style={s.checkbox}><Text style={s.body}>{say('I confirm this whole-meal weight and understand any estimated nutrition or weight is approximate.','Confirmo este peso de la comida completa y entiendo que los nutrientes o el peso estimados son aproximados.')}{massAck?' ✓':''}</Text></Pressable>
+            <Pressable accessibilityRole="checkbox" accessibilityState={{checked:catalogAck,disabled:busy}} disabled={busy} onPress={()=>setCatalogAck(v=>!v)} style={s.checkbox}><Text style={s.body}>{say('I agree to publish exactly these food fields and my owner ID.','Acepto publicar exactamente estos datos del alimento y mi identificador de propietario.')}{catalogAck?' ✓':''}</Text></Pressable>
+            <Text style={s.muted}>{say('A failed diary save may leave an unused public food. Do not repeat an uncertain save from another device; cross-device duplicate prevention is not guaranteed. Cancel creates nothing.','Si falla el registro, puede quedar un alimento público sin usar. No repitas un registro incierto desde otro dispositivo; no se garantiza evitar duplicados entre dispositivos. Cancelar no crea nada.')}</Text>
+          </View>}
+
+          {button(say('Add to diary', 'Añadir al diario'), () => { void add(); }, busy || !valid || session.catalogRequired&&(!publicPreview||!massAck||!catalogAck) || !hasLoggableNutrition(prepared) || needsEstimateAcknowledgement(prepared) && !ack || status === 'blocked')}
           {button(say('Edit portion or nutrition', 'Editar porción o nutrientes'), change, busy)}
         </> : <>{button(editing ? say('Finish edits', 'Terminar edición') : say('Edit nutrition', 'Editar nutrientes'), () => setEditing(value => !value), busy)}{button(say('Review diary entry', 'Revisar registro'), () => { void prepare(); }, busy || !edit || !valid)}</>}
       </>}
