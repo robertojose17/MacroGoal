@@ -15,7 +15,7 @@ import {reviewMeal} from './meal-estimate-review.ts';
 import {ownedDiscoveryMeals} from './discovery-meals.ts';
 import {upgradeGallerySources} from './gallery-source-upgrade.ts';
 import {containsExcludedIngredient,exclusionTerms} from './ingredient-constraints.ts';
-import {WEB_PILOT_USER_IDS,WEB_SEARCH_APPROVED} from './coach-web-search.ts';
+import {paidEligibility} from './paid-eligibility.ts';
 import type {Access} from './_shared/coach-access.ts';
 const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 const json=(v:unknown,status=200)=>Response.json(v,{status,headers:{'Access-Control-Allow-Origin':'*','Cache-Control':'no-store'}});
@@ -52,8 +52,7 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    if(!option)return json({error:'option_not_found'},404);
    try{if(b.portion_label!==undefined)validatePublicPortion(b.portion_label);if(option.identity?.kind==='general_meal')validateGeneralEstimateOption(b.portion_label?{...option,identity:{...option.identity,portion_label:b.portion_label}}:option);}catch(e){return validationError((e as Error).message);}
    if(needsExplicitEstimatePortion(option)&&!b.portion_label)return json({schema:'meal_explore_v1',owner,date,status:'clarify',question:{key:'portion_label'},options:[]});
-   if(!WEB_SEARCH_APPROVED||!WEB_PILOT_USER_IDS.includes(owner))return json({error:'existing_search_pilot_required',admission_state:'not_admitted'},403);
-   const opt=await db.rpc('coach_web_pilot_enabled_v1',{p_user_id:owner});if(opt.error||opt.data!==true)return json({error:'existing_search_opt_in_required',admission_state:'not_admitted'},403);
+   const eligibility=await paidEligibility(db,owner,now());if(!eligibility.enabled)return validationError(eligibility.reason??'paid_access_unavailable',403);
    const key=estimator?.key();if(!key)return json({error:'estimator_not_configured',admission_state:'not_admitted'},503);
    const payload={...b,contract:'manual_v1',intent:'recommend',journey:'meal_explore_v1'};
    const paid=createPaidMealAdmission(db,policy,now,resolve);
@@ -72,8 +71,7 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    if(!query||!short(query.food)||!['recipe','restaurant'].includes(query.mode))return json({error:'discovery_request_unavailable'},409);
    // No automatic pilot expansion or direct paid recipe-finder call. Modern still
    // owns reservation, phase authorization, paid bounds, persistence and replay.
-   if(!WEB_SEARCH_APPROVED||!WEB_PILOT_USER_IDS.includes(owner))return json({error:'existing_search_pilot_required',admission_state:'not_admitted'},403);
-   const opt=await db.rpc('coach_web_pilot_enabled_v1',{p_user_id:owner});if(opt.error||opt.data!==true)return json({error:'existing_search_opt_in_required',admission_state:'not_admitted'},403);
+   const eligibility=await paidEligibility(db,owner,now());if(!eligibility.enabled)return validationError(eligibility.reason??'paid_access_unavailable',403);
    let publicText:string;try{publicText=discoveryConsentMessage(query);}catch(e){return json({error:(e as Error).message,next_action:'clarify_public_search'},400);}
    return modern(confirmedMealDiscoveryRequest(req.url,req.headers,{request_id:b.request_id,...(b.retry_of_request_id!==undefined?{retry_of_request_id:b.retry_of_request_id,retry_consent:true}:{}),meal_source_request_id:b.source_request_id,messages:[{role:'user',content:publicText}],use_web:true,language:'en'},owner));
   }

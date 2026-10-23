@@ -1,3 +1,4 @@
+import {paidEligibility} from './paid-eligibility.ts';
 import {confirmedMealDiscoveryPlan} from './confirmed-meal-discovery.ts';
 import {mealDiscoveryRetryCheck} from './meal-discovery-retry.ts';
 import {classifyStructuredProviderError} from './planner-provider-error.ts';
@@ -7,7 +8,7 @@ import { readOwnedRestaurantReceipt, ownedRestaurantPool, restaurantSummary, res
 import { isBroadRestaurantRequest } from './coach-restaurant-recovery.ts';
 import { fetchBoundedProviderJson, fetchWithAbortSignal, withPersistenceDeadline, WORK_DEADLINE_MS, TOTAL_DEADLINE_MS, PERSISTENCE_RPC_LIMIT_MS, PLANNER_PROVIDER_PHASE_LIMIT_MS, FINAL_PROVIDER_PHASE_LIMIT_MS } from './bounded-provider-phase.ts';
 import { plannerMessages, groundedPlannerResponseFormat, resolvePlannerReplyWithDiagnostic, plannerReplyState, type PlannerValidationDiagnostic } from './coach-planner-intent.ts';
-import { searchFoodSources, emitPrivateProviderDiagnostic, WEB_SEARCH_APPROVED, WEB_PILOT_LIMITS, WEB_PLANNER_MAX_COST_USD, WEB_DISCOVERY_MAX_COST_USD, WEB_FINAL_MAX_COST_USD, WEB_PILOT_USER_IDS, type WebResult } from './coach-web-search.ts';
+import { searchFoodSources, emitPrivateProviderDiagnostic, WEB_SEARCH_APPROVED, WEB_PILOT_LIMITS, WEB_PLANNER_MAX_COST_USD, WEB_DISCOVERY_MAX_COST_USD, WEB_FINAL_MAX_COST_USD, type WebResult } from './coach-web-search.ts';
 import { parseVerifiedFoodRequest, findVerifiedFood, verifiedFoodReply } from './coach-verified-food.ts';
 import { verifyDiscoveredRecipe, verifyAndProjectDiscoverySelection } from './coach-recipe-discovery.ts';
 import { foodEvidenceQuestion, generatedFoodEvidenceQuestion, unverifiedDiscoveryGuidance } from './coach-food-fallback.ts';
@@ -361,14 +362,9 @@ const handler = (async (req) => {
       if(!args)return reject('lookup_consent_context_invalid',409);
       selectedConsentProposal={context,args,source_request_id:selection.source_request_id,created_at:source.created_at,...(typeof source.result?.private_source_servings==='number'&&validatedSuggestedServings(source.result.private_source_servings)!==null?{sourceServings:source.result.private_source_servings}:{})};
     }
-    const pilotAllowlisted = WEB_SEARCH_APPROVED && WEB_PILOT_USER_IDS.includes(authUser.id);
-    let webEnabled = false;
-    if (pilotAllowlisted) {
-      // Free public reads still require the private per-account pilot opt-in.
-      // This read-only gate does not reserve OpenRouter budget.
-      const pilotOptIn = await supabase.rpc('coach_web_pilot_enabled_v1',{p_user_id:authUser.id});
-      webEnabled = !pilotOptIn.error && pilotOptIn.data === true;
-    }
+    const eligibility=await paidEligibility(supabase,authUser.id);
+    const webEnabled=WEB_SEARCH_APPROVED&&eligibility.enabled;
+    if(!webEnabled)return reject(eligibility.reason??'paid_access_unavailable',403);
     const modelLed=webEnabled;
     const lookupText=body.messages!.at(-1)!.content;
     let storedLookupContext: ReturnType<typeof lookupContext> = null;

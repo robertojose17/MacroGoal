@@ -39,7 +39,7 @@ export function createPaidMealAdmission(db:Db,policy:DailyPolicy,now=Date.now,re
   const reservation=await reserveCoachRequest(db,input.ownerId,input.requestId,await digest(input.fingerprint),now(),payload,resolveUncertain,{retryOfRequestId:null,reserveWeb:true,deadlineAt:deadline});
   if(reservation.kind==='replay')return project(reservation.result,input.requestId);
   if(reservation.kind!=='reserved'){
-   const known=['budget_limit','limit','entitlement_unavailable','unauthorized','execution_admission_paused','execution_active','execution_committing','execution_stopped','conflict'];
+   const known=['account_budget_exhausted','global_budget_exhausted','account_paused','paid_operation_invalid','premium_required','permission_required','budget_limit','limit','entitlement_unavailable','unauthorized','execution_admission_paused','execution_active','execution_committing','execution_stopped','conflict'];
    const kind=known.includes(reservation.kind)?reservation.kind:'admission_unavailable';
    return json({error:kind,request_id:input.requestId,next_action:'recover_existing_request',...admissionDenial(reservation.kind,'transaction_response',reservation.admission_state)},Number.isInteger(reservation.status)&&reservation.status>=400&&reservation.status<=599?reservation.status:503);
   }

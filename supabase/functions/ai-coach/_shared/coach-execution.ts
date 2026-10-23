@@ -1,7 +1,7 @@
 import { withPersistenceDeadline, PERSISTENCE_RPC_LIMIT_MS } from '../bounded-provider-phase.ts';
 
 export type ExecutionMetadata={request_id:string;execution_state:'generating'|'committing'|'completed'|'stopped'|null;execution_deadline_at:string|null;retry_of_request_id:string|null;successor_request_id:string|null;retry_eligible:boolean};
-const transactionDenials=new Set(['budget_limit','limit','entitlement_unavailable','unauthorized','not_reserved_premium','execution_admission_paused','invalid_retry_request','retry_not_found','retry_envelope_mismatch','lookup_consent_expired','retry_consent_expired']);
+const transactionDenials=new Set(['account_budget_exhausted','global_budget_exhausted','account_paused','paid_operation_invalid','premium_required','permission_required','budget_limit','limit','entitlement_unavailable','unauthorized','not_reserved_premium','execution_admission_paused','invalid_retry_request','retry_not_found','retry_envelope_mismatch','lookup_consent_expired','retry_consent_expired']);
 const beforeBeginDenials=new Set(['retry_not_found','retry_envelope_mismatch','invalid_discovery_selection','invalid_public_lookup_selection','discovery_selection_not_found','discovery_context_invalid','lookup_consent_expired','retry_consent_expired','lookup_consent_not_found','lookup_consent_context_invalid','invalid_lookup_context']);
 export function admissionDenial(kind:string,evidence:'before_begin'|'transaction_response',confirmed:unknown) {
   const allowed=evidence==='before_begin'?confirmed===true&&beforeBeginDenials.has(kind):confirmed==='not_admitted'&&transactionDenials.has(kind);

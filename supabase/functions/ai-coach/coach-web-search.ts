@@ -7,10 +7,9 @@ import { validateDishEvidence, evidenceReply, parseDishJSON, type EvidenceResult
 import { privateDiscoveryMetadataDiagnostics, type CandidateRejection } from './coach-public-metadata.ts';
 export const WEB_SEARCH_APPROVED = true;
 // Empty until an authenticated pilot owner is explicitly approved. Never client controlled.
-export const WEB_PILOT_USER_IDS: readonly string[] = ['3af0eabf-e742-4657-80c4-130dfa867502'];
 export const WEB_TIMEOUT_MS = 55000;
 // Proposed one-request pilot limits, NOT approved for activation. Existing private account must also be explicitly enabled.
-export const WEB_PILOT_LIMITS = { reserveUSD: 3.00, globalCapUSD: 15 } as const;
+export const WEB_PILOT_LIMITS = { reserveUSD: 3.00, globalCapUSD: 50 } as const;
 export const WEB_PLANNER_MAX_COST_USD = 0.10572;
 export const WEB_DISCOVERY_MAX_COST_USD = 2.65916;
 export const WEB_FINAL_MAX_COST_USD = 0.10572;
