@@ -11,7 +11,10 @@
       "distribution": "internal",
       "ios": {
         "resourceClass": "medium"
-      }
+      },
+      "buildArtifactPaths": [
+        "native-diagnostics/**"
+      ]
     },
     "production": {
       "distribution": "store"
