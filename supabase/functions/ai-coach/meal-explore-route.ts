@@ -1,3 +1,4 @@
+import {confirmedMealDiscoveryRequest} from './confirmed-meal-discovery.ts';
 import {dietaryConstraints,constrainMeals} from './dietary-constraints.ts';
 import {currentMealCapabilities} from './meal-paid-capabilities.ts';
 import {discoveryConsentMessage} from './meal-discovery-consent.ts';
@@ -63,7 +64,7 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    if(!WEB_SEARCH_APPROVED||!WEB_PILOT_USER_IDS.includes(owner))return json({error:'existing_search_pilot_required',admission_state:'not_admitted'},403);
    const opt=await db.rpc('coach_web_pilot_enabled_v1',{p_user_id:owner});if(opt.error||opt.data!==true)return json({error:'existing_search_opt_in_required',admission_state:'not_admitted'},403);
    let publicText:string;try{publicText=discoveryConsentMessage(query);}catch(e){return json({error:(e as Error).message,next_action:'clarify_public_search'},400);}
-   return modern(new Request(req.url,{method:'POST',headers:req.headers,body:JSON.stringify({request_id:b.request_id,...(b.retry_of_request_id!==undefined?{retry_of_request_id:b.retry_of_request_id,retry_consent:true}:{}),meal_source_request_id:b.source_request_id,messages:[{role:'user',content:publicText}],use_web:true,language:'en'})}));
+   return modern(confirmedMealDiscoveryRequest(req.url,req.headers,{request_id:b.request_id,...(b.retry_of_request_id!==undefined?{retry_of_request_id:b.retry_of_request_id,retry_consent:true}:{}),meal_source_request_id:b.source_request_id,messages:[{role:'user',content:publicText}],use_web:true,language:'en'},owner));
   }
   const allowed=b.operation==='explore'?['intent','experience','operation','request_id','time_zone','food_query','mode','available_minutes','restaurant','public_area','preference','exclusions','allergens','dietary_preferences']:b.operation==='import_discovery'?['intent','experience','operation','request_id','time_zone','source_request_id']:['intent','experience','operation','request_id','time_zone','source_request_id','option_id','servings','edited_values','estimate_acknowledged','ingredient_review_acknowledged','modification'];
   if(Object.keys(b).some(k=>!allowed.includes(k)))return json({error:'invalid_request'},400);
