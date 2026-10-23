@@ -6,7 +6,7 @@ import { createMealReviewSession, NUTRIENTS, scaleMealNutrition, type MealReview
 import { existingMealLogPayload, mealEvidenceFromOption } from './coachMealReviewAdapter';
 import {noResultsContext} from './coachNoResults';
 
-export type MealChoices = { kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; question?:string; publicRequest?:Record<string,unknown>; noResults?:NonNullable<ReturnType<typeof noResultsContext>>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
+export type MealChoices = { kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; galleryNoMatch?:boolean; question?:string; publicRequest?:Record<string,unknown>; noResults?:NonNullable<ReturnType<typeof noResultsContext>>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
 export type MealChoiceOutcome = MealChoices | Exclude<MealResponse,{kind:'ready'}>;
 export const estimatePublicDetails = (option:MealEvidence, portionLabel?:string) => ({ name:option.name.slice(0,160), identity:portionLabel ? {...option.identity, portion_label:portionLabel} : option.identity??null, physical_portion:option.physicalPortion??null, source:{url:option.provenance.url??null,nutrition:{authority:(option.sourceNutrition??option.nutrition).authority,basis:(option.sourceNutrition??option.nutrition).basis,values:(option.sourceNutrition??option.nutrition).values}}, ingredients:(option.ingredients??[]).slice(0,30).map(s=>s.slice(0,180)) });
 export function createMealServices(deps: {
@@ -24,6 +24,7 @@ export function createMealServices(deps: {
   if(options.some((o:MealEvidence|null)=>!o)||b.status==='options'&&!options.length)return {kind:'unavailable',reason:'invalid_meal_option'};
   if(b.question&&!['food_query','mode','restaurant','dish_and_portion','portion_label','public_area'].includes(b.question.key))return {kind:'unavailable',reason:'unsupported_question'};
   return {kind:'ready',owner:result.owner,date:result.date,meal:result.meal,mode:result.mode,requestId:result.requestId,options,
+   ...(b.status==='discovery_available'&&b.coverage==='bounded_gallery_search'&&result.mode!=='eat_out'&&!options.length?{galleryNoMatch:true}:{}),
    capabilities:{discovery:b.paid_capabilities?.discovery===true,estimate:b.paid_capabilities?.estimate===true,reason:typeof b.paid_capabilities?.reason==='string'?b.paid_capabilities.reason:null},
    ...(b.question&&!noResults?{question:b.question.key}:{}),...(noResults?{noResults}:{}),...(b.discovery_request&&typeof b.discovery_request==='object'?{publicRequest:b.discovery_request}:{})};
  }
