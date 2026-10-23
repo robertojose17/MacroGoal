@@ -103,12 +103,6 @@ export function formatFoodRowServing(
 
   // Check if the raw serving_description itself is a pure unit word (e.g. "g", "ml", "oz", "cup")
   const rawDesc = servingDescription ? servingDescription.trim() : '';
-
-  // Coach stores provenance and assumptions after the explicit portion.
-  // Component weights in that metadata are not total meal weights.
-  const coachServing = rawDesc.match(/^(ESTIMATE|SOURCE-REPORTED) \| ([^|]+) \| /);
-  if (coachServing) return coachServing[1] + ' · ' + coachServing[2].trim();
-
   if (rawDesc && isPureUnit(rawDesc)) {
     const isWeightUnit = /^(g|ml)$/i.test(rawDesc);
     if (isWeightUnit && fallbackGrams != null && fallbackGrams > 0) {
