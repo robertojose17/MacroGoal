@@ -85,18 +85,22 @@ const mcdVerified=!!mcdParsed&&!!mcdRestaurant&&['mcdonalds.com','www.mcdonalds.
     for(const content of texts){
       const normalized=plain(content),at=normalized.indexOf(name);if(at<0)continue;
       const contentLines=content.split(/\n/);let nearestHeading='';
+      // A JSON-LD/title/navigation mention may precede the visible recipe heading.
+      // Bind a recipe to its exact unique primary heading, not the first substring occurrence.
+      const primaryRecipeHeadings=kind==='retrieved_recipe'?[...new Set(contentLines.filter(line=>/^\s*#\s+\S/.test(line)).map(line=>plain(line.replace(/^\s*#\s+/,''))))]:[];
+      const recipeHeading=primaryRecipeHeadings.length===1&&primaryRecipeHeadings[0]===name?contentLines.find(line=>/^\s*#\s+\S/.test(line)&&plain(line.replace(/^\s*#\s+/,''))===name):undefined;
       for(const candidateLine of contentLines){
         if(/^\s*#{1,6}\s/.test(candidateLine))nearestHeading=candidateLine.replace(/^\s*#+\s*/,'').trim();
         if(plain(candidateLine).includes(name))break;
       }
       const exactTitle=plain(source.title).split(/\s*[|—]\s*/)[0]===name;
-      const titleMatch=exactTitle||plain(nearestHeading)===name;
+      const titleMatch=exactTitle||plain(nearestHeading)===name||recipeHeading!==undefined;
       // A one-word flavour in a flattened multi-product table is ambiguous. A real recipe title may be just Pizza.
       if(name.split(' ').length===1&&!titleMatch&&kind!=='menu')continue;
       if(/^(pizza|pizzas|ice cream|burger|tacos?)$/.test(name)&&!(kind==='retrieved_recipe'&&titleMatch))continue;
       const compact=decoded(content).normalize('NFKC').replace(/\s+/g,' ').trim();const index=plain(compact).indexOf(name);
       // Evidence always comes from provider/page text, never row.quote. Identity remains exact after harmless entity/space normalization.
-      const line=content.split(/\n+/).find(line=>plain(line).includes(name))??compact;
+      const line=recipeHeading??content.split(/\n+/).find(line=>plain(line).includes(name))??compact;
       const lineText=decoded(line).normalize('NFKC').trim(),lineIndex=plain(lineText).indexOf(name);
       const segment=lineText.slice(Math.max(0,lineIndex-90),Math.min(lineText.length,lineIndex+name.length+220));
       // Match against this item's own line and only its closest preceding section heading.
