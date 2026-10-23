@@ -1,3 +1,4 @@
+import {compoundFoodParts,compoundFoodMatches,compoundItemEvidence} from './meal-retrieval-outcome.ts';
 import {verifiedRegistryPages,verifiedRegistryCandidates,isRegistryCandidate,isOfficialRestaurantPlan} from './coach-official-capabilities.ts';
 import { isVerifiedMcDonaldsBranch, type VerifiedMcDonaldsBranch } from './coach-mcdonalds-api.ts';
 import { parseMcDonaldsNutrition, verifiedMcDonaldsMerchant, type McDonaldsItemReceipt } from './coach-mcdonalds-api.ts';
@@ -14,7 +15,7 @@ export type EvidenceResult = { requestedKind?:DishEvidence['sourceKind']; candid
 const decoded = (s: string) => s.replace(/&amp;/gi,'&').replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'");
 const plain = (s: string) => decoded(s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
 const categoryText = (s: string) => plain(s.replace(/([a-z])([A-Z])/g,'$1 $2'));
-function categoryMatches(food:string,evidence:string):boolean { const resolved=foodCategory(food),f=resolved??plain(food).replace(/^(healthy|saludable)\s+/,''); const text=categoryText(evidence);const escaped=f.replace(/[.*+?^$|(){}\[\]\\]/g,'\\$&');const plural=/^(?:ice cream|pasta|soup|salad|bread|lasagna|burrito|bowl|casserole|pie|cake|omelet|omelette)$/.test(f)?'':'s?';if(!f||!new RegExp('\\b'+escaped+plural+'\\b','i').test(text))return false;if(resolved){const categoryEscaped=resolved.replace(/[.*+?^$|(){}\[\]\\]/g,'\\$&');if(new RegExp('\\b'+categoryEscaped+'\\s+(?:sauce|crust|toppings?|dough|base|side|ingredient)\\b','i').test(text))return false;}return true; }
+function categoryMatches(food:string,evidence:string):boolean { if(compoundFoodParts(food))return compoundFoodMatches(food,evidence); const resolved=foodCategory(food),f=resolved??plain(food).replace(/^(healthy|saludable)\s+/,''); const text=categoryText(evidence);const escaped=f.replace(/[.*+?^$|(){}\[\]\\]/g,'\\$&');const plural=/^(?:ice cream|pasta|soup|salad|bread|lasagna|burrito|bowl|casserole|pie|cake|omelet|omelette)$/.test(f)?'':'s?';if(!f||!new RegExp('\\b'+escaped+plural+'\\b','i').test(text))return false;if(resolved){const categoryEscaped=resolved.replace(/[.*+?^$|(){}\[\]\\]/g,'\\$&');if(new RegExp('\\b'+categoryEscaped+'\\s+(?:sauce|crust|toppings?|dough|base|side|ingredient)\\b','i').test(text))return false;}return true; }
 export function sourceMarket(url: string, content='', itemName?:string): string | null {
   const u=new URL(url),parts=u.pathname.toLowerCase().split('/');
   if(itemName&&['papajohns.com','www.papajohns.com'].includes(u.hostname)){
@@ -73,7 +74,7 @@ const mcdParsed=mcdReceipt
 const mcdRestaurant=mcdParsed&&verifiedMcDonaldsMerchant(source.url,mcdCitation?.title,mcdCitation?.raw_page_content,row.name.trim());
 const mcdVerified=!!mcdParsed&&!!mcdRestaurant&&['mcdonalds.com','www.mcdonalds.com'].includes(new URL(source.url).hostname);
 
-    if(kind==='menu'&&scope.food&&!categoryMatches(scope.food,row.name)&&!mcdVerified){discard('identity','food_category_mismatch');continue;}
+    if(kind==='menu'&&scope.food&&!compoundFoodParts(scope.food)&&!categoryMatches(scope.food,row.name)&&!mcdVerified){discard('identity','food_category_mismatch');continue;}
     const texts:string[]=ann.flatMap((a:any)=>[a.content,a.page_content].filter((x:unknown)=>typeof x==='string'));
     const marketPages=ann.filter((a:any)=>a.public_page_verified===true&&typeof a.page_content==='string');const isPapaJohns=['papajohns.com','www.papajohns.com'].includes(new URL(source.url).hostname);const marketContent=isPapaJohns?(marketPages.length===1?marketPages[0].page_content:''):texts.join('\n');const market=sourceMarket(source.url,marketContent,row.name.trim());if(scope.market&&market!==scope.market.toUpperCase()){discard('market','requested_market_mismatch');continue;}
     const knownHosts:Record<string,string[]>={dominos:['dominos.com','www.dominos.com','cache.dominos.com'],mcdonalds:['mcdonalds.com','www.mcdonalds.com'],baskinrobbins:['baskinrobbins.com','www.baskinrobbins.com'],dairyqueen:['dairyqueen.com','www.dairyqueen.com'],papajohns:['papajohns.com','www.papajohns.com']};
@@ -100,7 +101,9 @@ const mcdVerified=!!mcdParsed&&!!mcdRestaurant&&['mcdonalds.com','www.mcdonalds.
       // Match against this item's own line and only its closest preceding section heading.
       // Other headings elsewhere on the page must not lend their category to this item.
       const categoryScope=[name,nearestHeading,lineText,exactTitle?source.title:''].join(' ');
-      if(scope.food&&!categoryMatches(scope.food,categoryScope)&&!mcdVerified)continue;
+      const compoundEvidence=scope.food&&compoundFoodParts(scope.food)?compoundItemEvidence(row.name,lineText):null;
+      if(scope.food&&compoundFoodParts(scope.food)&&compoundEvidence===null)continue;
+      if(scope.food&&!categoryMatches(scope.food,compoundEvidence??categoryScope)&&!mcdVerified)continue;
       if(scope.food&&!categoryMatches(scope.food,name)&&/\b(sandwich(?:es)?|wrap|pasta|salad)\b/.test(plain(segment)))continue;
       if(kind==='retrieved_recipe'&&!/\b(recipe|recipes|receta|recetas|instructions|directions)\b/.test(plain(content)))continue;
       evidence=segment;matchedText=content;matchedSection=nearestHeading;break;

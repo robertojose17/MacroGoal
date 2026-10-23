@@ -1,3 +1,4 @@
+import {importedDiscoveryOutcome} from './meal-retrieval-outcome.ts';
 import {confirmedMealDiscoveryRequest} from './confirmed-meal-discovery.ts';
 import {dietaryConstraints,constrainMeals} from './dietary-constraints.ts';
 import {currentMealCapabilities} from './meal-paid-capabilities.ts';
@@ -80,8 +81,8 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
     const r=await db.rpc('coach_recover_requests_v1',{p_user_id:owner,p_request_id:b.source_request_id,p_offset:0});const row=Array.isArray(r.data)?r.data.find((x:any)=>x.request_id===b.source_request_id):null;
     if(r.error||row?.state!=='completed'||row.user_id!==undefined&&row.user_id!==owner||!Number.isFinite(Date.parse(row.created_at))||localDay(Date.parse(row.created_at),b.time_zone)!==date)return json({error:'discovery_receipt_unavailable'},409);
     const originId=row.request_payload?.meal_source_request_id;
-    const constraints=originId?dietaryConstraints((await source(originId)).dietary_constraints):null;
-    const options=constraints?constrainMeals(ownedDiscoveryMeals(row.result),constraints):ownedDiscoveryMeals(row.result);return json({schema:'meal_explore_v1',owner,date,status:options.length?'options':'clarify',options,...(!options.length?{question:{key:'dish_and_portion'}}:{}),next_action:'review_option',confirmation_transport:'existing_log_food',server_auto_logging:false});
+    const origin=originId?await source(originId):null,constraints=origin?dietaryConstraints(origin.dietary_constraints):null;
+    const validated=ownedDiscoveryMeals(row.result),options=constraints?constrainMeals(validated,constraints):validated;return json({schema:'meal_explore_v1',owner,date,...importedDiscoveryOutcome(options,validated.length>0),options,...(!options.length&&origin?{source_request_id:originId,discovery_request:origin.discovery_request,dietary_constraints:constraints}:{}),confirmation_transport:'existing_log_food',server_auto_logging:false});
    }
    if(b.operation==='review'){
     const prior=await source(b.source_request_id),option=prior.options?.find((o:MealOption)=>o.id===b.option_id);if(!option)return json({error:'option_not_found'},404);
