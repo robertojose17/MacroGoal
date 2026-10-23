@@ -56,11 +56,12 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
  }
 
  const stopped=(value:any,record:MealPending)=>record.envelope.operation==='discover'&&value?.request_id===record.envelope.request_id&&value.execution_state==='stopped'&&value.retry_eligible===true&&value.successor_request_id===null;
- async function offerRetry(access:MealAccess,record:MealPending):Promise<MealResponse>{
+ async function offerRetry(access:MealAccess,record:MealPending,explicitRecovery=false):Promise<MealResponse>{
   if(record.envelope.operation!=='discover')return {kind:'pending',reason:'recovery_scope_mismatch'};
-  // One explicit successor has already consumed the parent's consent. Keep this
-  // exact child recoverable; a failed child must not offer another paid search.
-  if(record.envelope.retry_of_request_id)return {kind:'pending',reason:'search_stopped'};
+  // A failed dispatch must visibly end, not silently replace consumed consent.
+  // A later explicit same-ID recovery can offer consent after the stopped check;
+  // it still cannot allocate or dispatch a successor until separately confirmed.
+  if(record.envelope.retry_of_request_id&&!explicitRecovery)return {kind:'pending',reason:'search_stopped'};
   // Read the original admitted source, not reconstructed conversation text.
   const response=await deps.invoke({intent:'recover_daily',request_id:record.envelope.source_request_id,journey:'meal_explore_v1'});
   if(!response.ok)return {kind:'pending',reason:'retry_details_unavailable'};
@@ -105,7 +106,7 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
    if(record.completed&&record.recovery==='discovery')return {kind:'ready',requestId:record.envelope.request_id,owner,date,meal:record.meal,mode:record.mode,body:{done:true,request_id:record.envelope.request_id,usage_status:'completed'}};
    const body=recover&&record.recovery==='daily'?{intent:'recover_daily',request_id:record.envelope.request_id,journey:'meal_explore_v1'}:record.envelope;
    const response=await deps.invoke(body);
-   if(!response.ok){let error:any={};try{error=await response.json();}catch{}if(!await scopeOK(owner,date,zone))return {kind:'blocked',reason:'scope_changed'};if(stopped(error,record))return offerRetry(access,record);if(error.request_id===record.envelope.request_id&&error.admission_state==='not_admitted')await deps.store.removeItem(k);return {kind:[401,403,429].includes(response.status)?'blocked':'pending',reason:typeof error.error==='string'?error.error:'request_unresolved'};}
+   if(!response.ok){let error:any={};try{error=await response.json();}catch{}if(!await scopeOK(owner,date,zone))return {kind:'blocked',reason:'scope_changed'};if(stopped(error,record))return offerRetry(access,record,recover);if(error.request_id===record.envelope.request_id&&error.admission_state==='not_admitted')await deps.store.removeItem(k);return {kind:[401,403,429].includes(response.status)?'blocked':'pending',reason:typeof error.error==='string'?error.error:'request_unresolved'};}
    let output:any;
    if(record.recovery==='discovery'){
     if(!response.headers.get('content-type')?.includes('text/event-stream'))return {kind:'pending',reason:'discovery_stream_expected'};
@@ -114,7 +115,7 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
     const decoder=new TextDecoder();let buffer='',size=0;
     if(reader){try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>1024*1024)throw Error('stream_too_large');buffer+=decoder.decode(part.value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()??'';for(const line of lines)parse(line);}buffer+=decoder.decode();if(buffer.trim())parse(buffer);}finally{reader.releaseLock();}}
     else{const text=await response.text();if(text.length>1024*1024)throw Error('stream_too_large');text.split('\n').forEach(parse);}
-    if(stopped(output,record))return offerRetry(access,record);
+    if(stopped(output,record))return offerRetry(access,record,recover);
     if(output?.done&&output.request_id===record.envelope.request_id&&output.usage_status==='refunded'&&await scopeOK(owner,date,zone)&&ready(access)){await deps.store.removeItem(k);return {kind:'blocked',reason:'discovery_not_completed'};}
     if(!output?.done||output.request_id!==record.envelope.request_id||output.usage_status!=='completed')return {kind:'pending',reason:'discovery_unresolved'};
    }else{

@@ -175,3 +175,22 @@ test('parent-ID replay or denial cannot complete or retire the saved child; rest
 test('stale original source receipt cannot offer a cross-day retry or reconstruct details from conversation',async()=>{
  const f=await stoppedFixture();f.receipts.get(f.found.requestId).date='2026-10-21';const result=await f.transport.recover(f.access);assert.equal(result.reason,'retry_details_unavailable');assert.equal((await f.transport.pending(f.access)).envelope.request_id,f.parentId);assert.equal(f.calls.filter(b=>b.retry_of_request_id).length,0);
 });
+
+test('failed retry child needs later explicit same-ID recovery and separate confirmation before its own successor',async()=>{
+ const f=await stoppedFixture();const first=await f.services.retrySearch(f.access,f.offer);assert.equal(first.kind,'pending');assert.equal(first.reason,'search_stopped');
+ const child=await f.transport.pending(f.access),childId=child.envelope.request_id;assert.equal(child.envelope.retry_of_request_id,f.parentId);const before=f.calls.length;
+ const restarted=createMealTransport(f.deps),offer=await restarted.recover(f.access);assert.equal(offer.kind,'retry_available');assert.equal(offer.requestId,childId);
+ assert.deepEqual((await restarted.pending(f.access)).envelope,child.envelope);assert.equal(f.calls.slice(before).filter(b=>b.operation==='discover').length,1);assert.equal(f.calls.slice(before).find(b=>b.operation==='discover').request_id,childId);
+ const outcome=await restarted.retry(f.access,offer);assert.equal(outcome.reason,'search_stopped');const next=await restarted.pending(f.access);
+ assert.notEqual(next.envelope.request_id,childId);assert.equal(next.envelope.retry_of_request_id,childId);assert.equal(next.envelope.source_request_id,child.envelope.source_request_id);assert.equal(next.envelope.retry_consent,true);
+ assert.deepEqual(JSON.parse([...f.rows].find(([k])=>k.endsWith(':stopped:'+childId))[1]),child);
+ assert.equal(f.calls.filter(b=>b.request_id===f.parentId).length,2);assert.equal(f.writes.length,0);
+});
+
+test('explicit stopped-child recovery still rejects active, claimed, mismatched and ineligible receipts',async()=>{
+ for(const patch of [{error:'conflict',request_id:undefined,execution_state:undefined,retry_eligible:undefined,successor_request_id:undefined},{execution_state:'generating'},{retry_eligible:false},{successor_request_id:'66666666-6666-4666-8666-666666666666'},{request_id:'77777777-7777-4777-8777-777777777777'}]){
+  const f=await stoppedFixture();await f.services.retrySearch(f.access,f.offer);const child=await f.transport.pending(f.access);const priorCalls=f.calls.length;
+  f.deps.invoke=async body=>{f.calls.push(body);return Response.json({error:'execution_stopped',request_id:child.envelope.request_id,execution_state:'stopped',retry_eligible:true,successor_request_id:null,...patch},{status:409})};
+  const response=await f.transport.recover(f.access);assert.equal(response.kind,'pending');assert.deepEqual((await f.transport.pending(f.access)).envelope,child.envelope);assert.equal(f.calls.length,priorCalls+1);
+ }
+});

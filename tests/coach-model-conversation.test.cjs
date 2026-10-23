@@ -76,7 +76,7 @@ test('terminal search retry shows original details and requires a separate expli
 });
 
 test('actual component + services + journal retain a rejected child and replace consumed consent with a visible failure across recovery',async()=>{
- for(const format of ['http','sse','final_owner_failure','day_change','unmounted']){
+ for(const format of ['http','sse','conflict_recovery','final_owner_failure','day_change','unmounted']){
   const h=harness();let cleanup;
   try{
    const {createMealTransport}=require('../utils/coachMealTransport'),{createMealServices}=require('../utils/coachMealServices');
@@ -85,13 +85,14 @@ test('actual component + services + journal retain a rejected child and replace 
    const parent='11111111-1111-4111-8111-111111111111',source='22222222-2222-4222-8222-222222222222',child='33333333-3333-4333-8333-333333333333';
    const date='2026-10-22',scope='outer-controller-'+format,key='coach_meal_v2:'+JSON.stringify([scope,'A',date]);
    const original={owner:'A',date,meal:'dinner',mode:'eat_out',recovery:'discovery',envelope:{intent:'meal_choice',experience:'meal_v2',operation:'discover',source_request_id:source,consent:true,request_id:parent,time_zone:'UTC'}};
-   const rows=new Map([[key,JSON.stringify(original)]]),calls=[];let minted=0,remaining=Infinity,day=date,unmountedState;
+   const rows=new Map([[key,JSON.stringify(original)]]),calls=[];let minted=0,remaining=Infinity,day=date,unmountedState,failOwnerOnce=true,childRequests=0;
    const owner=async()=>remaining-->0?'A':undefined,store={getItem:async k=>rows.get(k)??null,setItem:async(k,v)=>rows.set(k,v),removeItem:async k=>rows.delete(k)};
    const deps={scope,owner,today:()=>day,zone:()=> 'UTC',newId:()=>{minted++;return child},store,invoke:async body=>{
     calls.push(body);
     if(body.intent==='recover_daily')return Response.json({schema:'meal_explore_v1',owner:'A',date,status:'discovery_available',options:[],paid_capabilities:{discovery:true,estimate:false},discovery_request:{food:'grilled chicken rice and vegetables',area:'Orlando, Florida',mode:'restaurant'}});
     assert.equal(body.operation,'discover');
-    if(body.request_id===child){assert.deepEqual(JSON.parse(rows.get(key)).envelope,body);assert.equal(body.retry_of_request_id,parent);if(format==='final_owner_failure')remaining=1;if(format==='day_change')day='2026-10-23';if(format==='unmounted'){cleanup();cleanup=undefined;unmountedState=JSON.stringify(h.states);}}
+    if(body.request_id===child){assert.deepEqual(JSON.parse(rows.get(key)).envelope,body);assert.equal(body.retry_of_request_id,parent);if(format==='final_owner_failure'&&failOwnerOnce){remaining=1;failOwnerOnce=false;}if(format==='day_change')day='2026-10-23';if(format==='unmounted'){cleanup();cleanup=undefined;unmountedState=JSON.stringify(h.states);}}
+    if(body.request_id===child&&++childRequests>1&&format==='conflict_recovery')return Response.json({error:'conflict'},{status:409});
     const stopped={error:'execution_stopped',request_id:body.request_id,execution_state:'stopped',retry_of_request_id:body.retry_of_request_id??null,retry_eligible:true,successor_request_id:null};
     // schema_complexity/HTTP400 is private provider diagnostics. The real server
     // publishes this bounded stopped result, not that internal diagnostic string.
@@ -109,8 +110,11 @@ test('actual component + services + journal retain a rejected child and replace 
    if(format==='day_change'){assert.equal(await h.props.service.pending(()=>h.props),null);assert.equal(rows.get(key),persisted);continue;}
    remaining=Infinity;cleanup();h.props.service=services();h.render();cleanup=h.effects.at(-1)();await new Promise(r=>setImmediate(r));
    tree=h.render();h.button(tree,'Retry search').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();
-   assert.equal(minted,1);assert.equal(rows.get(key),persisted);assert.equal(calls.at(-1).request_id,child);assert.equal(h.button(tree,'Confirm new search'),undefined);
-   assert.equal(calls.filter(c=>c.intent==='recover_daily').length,1);assert.equal(calls.some(c=>c.operation==='import_discovery'),false);
+   assert.equal(minted,1);assert.equal(rows.get(key),persisted);assert.equal(calls.filter(c=>c.operation==='discover').at(-1).request_id,child);
+   if(format==='conflict_recovery'){assert.equal(h.button(tree,'Confirm new search'),undefined);assert.equal(h.states[0].reason,'conflict');assert.match(h.text(tree),/I could not complete this search/);assert.equal(calls.filter(c=>c.intent==='recover_daily').length,1);continue;}
+   assert.ok(h.button(tree,'Confirm new search'));
+   assert.equal(h.states[0].requestId,child);assert.match(h.text(tree),/grilled chicken rice and vegetables/);assert.match(h.text(tree),/Orlando, Florida/);
+   assert.equal(calls.filter(c=>c.intent==='recover_daily').length,2);assert.equal(calls.some(c=>c.operation==='import_discovery'),false);
   }finally{cleanup?.();h.restore();}
  }
 });
