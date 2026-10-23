@@ -71,8 +71,11 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
           <Text style={s.body}>{say('Portion multiplier', 'Multiplicador de la porción')} · 1 × {source.nutrition.basis.label}</Text>
           <TextInput accessibilityLabel={say('Portion multiplier', 'Multiplicador de la porción')} keyboardType="decimal-pad" value={portion} editable={!busy} onChangeText={value => { change(); setPortion(value); setEdits({}); }} style={s.input} />
           {Object.keys(edits).length > 0 && <Text style={s.muted}>{say('Changing the portion resets your nutrient edits to the source values.', 'Cambiar la porción restablece los nutrientes a los valores de la fuente.')}</Text>}
+        </>}
+        {prepared && <>
+          <Text style={s.body}>{session.catalogRequired?say('Original portion description: ','Descripción original de la porción: '):''}{prepared.portionLabel}</Text>
+          {session.catalogRequired&&publicPreview&&<><Text style={s.body}>{massAck?say('Confirmed whole-meal weight: ','Peso confirmado de toda la comida: '):say('Entered whole-meal weight: ','Peso introducido de toda la comida: ')}{massValue} g{massAuthority==='estimated'?say(' (estimated)',' (estimado)'):''}</Text><Text style={s.muted}>{say('Meal nutrition totals stay the same. This weight is used to calculate nutrition per 100 g.','Los nutrientes totales de la comida no cambian. Este peso se usa para calcular los nutrientes por 100 g.')}</Text></>}
         </>}
-        {prepared && <Text style={s.body}>{prepared.portionLabel}</Text>}
         {NUTRIENTS.map((key,i) => <View key={key} style={s.nutrient}><Text style={s.body}>{labels[i]}{key === 'calories' ? ' (kcal)' : ' (g)'}</Text>{editing && !prepared ? <TextInput accessibilityLabel={labels[i]} keyboardType="decimal-pad" editable={!busy} style={s.valueInput} value={edits[key] ?? (shown?.[key] == null ? '' : String(Math.round(shown[key]! * 10) / 10))} placeholder={say('Unknown', 'Desconocido')} onChangeText={value => { change(); setEdits(values => ({ ...values, [key]: value })); }} /> : <Text style={s.body}>{shown?.[key] == null ? say('Unknown', 'Desconocido') : String(Math.round(shown[key]! * 10) / 10)}</Text>}</View>)}
         {source.dietaryConstraints&&constraintLines(source.dietaryConstraints,i18n.language.startsWith('es')).map(line=><Text key={line} style={s.muted}>{line}</Text>)}
         {(prepared?.assumptions ?? source.nutrition.assumptions).map((assumption,i) => <Text key={i} style={s.muted}>• {assumption}</Text>)}
