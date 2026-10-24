@@ -2,7 +2,6 @@ import CoachIngredientEditor from './CoachIngredientEditor';
 import {previewComponentEdits,type MealComponent,type ComponentEdit} from '@/utils/coachMealComponents';
 import {coachRecipeTimeLabel} from '@/utils/coachMealReviewAdapter';
 import {coachCatalogPreview,type CatalogConsent} from '@/utils/coachCatalogIdentity';
-import {constraintLines} from '@/utils/coachDietaryConstraints';
 import React, { useEffect, useRef, useState } from 'react';
 
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -150,7 +149,6 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
 
         {button(say('Details','Detalles'),()=>setDetails(v=>!v))}
         {details&&<View style={s.details}>{source.nutrition.confidence==='low'&&<Text style={s.muted}>{say('Low-confidence estimate: ingredient amounts and preparation may differ.','Estimaci�n de baja confianza: las cantidades y la preparaci�n pueden variar.')}</Text>}<Text style={s.muted}>{source.provenance.label}{source.provenance.url?' � '+source.provenance.url:''}</Text>
-        {source.dietaryConstraints&&constraintLines(source.dietaryConstraints,i18n.language.startsWith('es')).map(line=><Text key={line} style={s.muted}>{line}</Text>)}
         {(prepared?.assumptions ?? source.nutrition.assumptions).map((assumption,i) => <Text key={i} style={s.muted}>• {assumption}</Text>)}
 
         <Text style={s.muted}>{source.allergyStatus === 'contains_declared_allergen' ? say('The source lists an allergen you asked to avoid. Review before choosing this food.', 'La fuente indica un alérgeno que quieres evitar. Revísalo antes de elegir esta comida.') : say('Allergen information is not guaranteed. Confirm ingredients with the source or restaurant.', 'La información de alérgenos no está garantizada. Confirma los ingredientes con la fuente o el restaurante.')}</Text>

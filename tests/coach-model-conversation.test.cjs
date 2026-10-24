@@ -298,3 +298,21 @@ test('source total time is independent of estimated nutrition and legacy prep mi
 });
 
  test('legacy complete estimates offer explicit ingredient breakdown without inventing components or auto-estimating',()=>{const h=harness();try{h.render();h.states[0]={kind:'ready',owner:'A',date:'2026-10-22',requestId:'owned',meal:'lunch',mode:'cook',options:[{id:'bowl',name:'Bowl',kind:'recipe',identity:{kind:'recipe',portion_label:'one bowl'},provenance:{kind:'estimate',label:'Estimate',url:'https://example.com/recipe'},nutrition:{authority:'estimated',basis:{amount:1,unit:'serving',label:'one bowl'},values:{calories:500,protein:30,carbs:50,fats:20,fiber:3},assumptions:[]},allergyStatus:'requires_review'}],capabilities:{estimate:true,discovery:false,reason:null}};let tree=h.render();h.button(tree,'Estimate ingredient breakdown').props.onPress();tree=h.render();assert.equal(h.calls.length,0);assert.ok(h.button(tree,'Confirm estimate'));h.button(tree,'Cancel estimate').props.onPress();assert.equal(h.calls.length,0);assert.ok(h.button(h.render(),'Estimate ingredient breakdown'));}finally{h.restore()}});
+
+
+test('current and recovered meal cards omit condition summaries in both languages without dropping constraints',async()=>{
+ for(const language of ['en','es'])for(const recovered of [false,true])for(const allergens of [[],['peanuts']]){
+  const h=harness(true,language);try{
+   const constraints={exclusions:[],allergens,dietary_preferences:[],provenance:'user_provided',verification:'unverified'};
+   const option={id:'recipe',name:'Ginger-Scallion Chicken and Rice',kind:'recipe',provenance:{kind:'estimate',label:'Estimated'},nutrition:{authority:'estimated',basis:{amount:1,unit:'serving',label:'one serving'},values:{calories:480,protein:47.5,carbs:45.5,fats:11.4,fiber:0.8},assumptions:[]},allergyStatus:'requires_review',dietaryConstraints:constraints};
+   const result={kind:'ready',owner:'A',date:'2026-10-22',requestId:'owned',meal:'lunch',mode:'cook',options:[option],capabilities:{estimate:false,discovery:false,reason:null}};
+   if(recovered)h.props.initialResult=result;else h.props.service.explore=async()=>result;
+   let cleanup;let tree=h.render();if(recovered){cleanup=h.effects[1]();await new Promise(r=>setImmediate(r));tree=h.render();cleanup();}if(!recovered){h.button(tree,language==='es'?'Buscar opciones de comida':'Find meal options').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();}
+   assert.match(h.text(tree),/Ginger-Scallion Chicken and Rice/);
+   assert.doesNotMatch(h.text(tree),/Avoid:|Declared allergies:|Dietary preferences:|Not collected|Evitar:|Alergias indicadas:|Preferencias alimentarias:|No recopiladas/);
+   assert.deepEqual(result.options[0].dietaryConstraints,constraints);assert.equal(option.allergyStatus,'requires_review');
+   assert.ok(h.button(tree,language==='es'?'Añadir a comida':'Add to meal'));
+  }finally{h.restore();}
+ }
+ const review=fs.readFileSync(path.resolve(__dirname,'../components/CoachMealReview.tsx'),'utf8');assert.doesNotMatch(review,/constraintLines/);assert.match(review,/source.allergyStatus !== 'unknown'/);assert.match(review,/ingredientAcknowledged/);
+});

@@ -1,6 +1,6 @@
 import {coachMealQuickReplies} from '@/utils/coachMealQuickReplies';
 import {coachRecipeTimeLabel} from '@/utils/coachMealReviewAdapter';
-import {emptyConstraints,parseConstraints,mergeConstraints,constraintLines,type DietaryConstraints} from '@/utils/coachDietaryConstraints';
+import {emptyConstraints,parseConstraints,mergeConstraints,type DietaryConstraints} from '@/utils/coachDietaryConstraints';
 import type { MealComposer } from '@/utils/coachMealComposer';
 import React,{useEffect,useRef,useState} from 'react';
 import {ActivityIndicator,Linking,Pressable,StyleSheet,Text,View} from 'react-native';
@@ -98,7 +98,6 @@ export default function CoachConversationActions(props:Props){
   {ready?.publicRequest&&!ready.noResults&&!ready.options.length&&<>{ready.galleryNoMatch&&<Text style={s.body}>{say('I didn’t find a match for this request in your recipes or the gallery. You can review a web search next.','No encontré coincidencias para lo que pediste en tus recetas ni en la galería. Puedes revisar una búsqueda web a continuación.')}</Text>}{consent?<><View style={s.details}>{mealSearchDisclosure(ready.publicRequest,es).map((line,i)=><Text key={i} style={s.body}>{line}</Text>)}</View><Text style={s.muted}>{say('OpenRouter / Gemini will use these public search details. Coach planning may also use your nutrition context. Existing usage limits apply. Nothing is logged without confirmation.','OpenRouter / Gemini usará estos datos públicos. El Coach también puede usar tu contexto nutricional. Se aplican los límites existentes. No se registra nada sin confirmar.')}</Text>{action(say('Search these details','Buscar estos datos'),()=>{void run('discover');},gate!=='ready'||!ready.capabilities.discovery)}{action(say('Cancel search','Cancelar búsqueda'),()=>setConsent(false))}</>:<>{ready.capabilities.discovery?action(say('Review web search','Revisar búsqueda web'),()=>setConsent(true),gate!=='ready'): <Text style={s.muted}>{mealFailureMessage(ready.capabilities.reason??'unknown',es)}</Text>}</>}</>}
   {ready?.options.map(o=><View key={o.id} style={s.card}>
    {o.kind==='general'&&<Text style={s.muted}>{say('General meal estimate — not restaurant-specific.','Estimación general de comida; no corresponde a un restaurante específico.')}</Text>}
-   {(o.dietaryConstraints??constraints)&&constraintLines((o.dietaryConstraints??constraints)!,es).map(line=><Text key={line} style={s.muted}>{line}</Text>)}
    <Text style={s.title}>{o.venue?.name??o.name}</Text>{o.venue&&<Text style={s.body}>{o.name}</Text>}
    {o.match&&<><Text style={s.body}>{say('Related option','Opción similar')}</Text><Text style={s.muted}>{say('You asked for: ','Pediste: ')}{o.match.requestedFood}</Text>{o.match.differences.map((difference,i)=><Text key={i} style={s.muted}>{difference}</Text>)}</>}
    {o.venue?.address&&o.venue.addressSourceUrl&&<Text style={s.muted}>{o.venue.address}</Text>}
