@@ -744,7 +744,11 @@ export default function FoodDetailsLayout({
   const bannerOpacity = useRef(new Animated.Value(0)).current;
   const [showMicroDetails, setShowMicroDetails] = useState(false);
   const [showCoachDetails, setShowCoachDetails] = useState(false);
-  const coachDetails = coachFoodDetailsPresentation(product?.serving_size, i18n.language.startsWith('es'));
+  // Keep the persisted Coach label for display only: the generic product adapter
+  // wraps serving descriptions and must retain its existing calculation behavior.
+  const [savedCoachServing, setSavedCoachServing] = useState<{itemId:string;description:string|null}|null>(null);
+  const coachDetails = coachFoodDetailsPresentation(mode==='edit'&&savedCoachServing?.itemId===itemId?savedCoachServing.description:null, i18n.language.startsWith('es'))
+    ?? coachFoodDetailsPresentation(product?.serving_size, i18n.language.startsWith('es'));
 
 
   const backgroundColor = isDark ? colors.backgroundDark : colors.background;
@@ -1081,6 +1085,7 @@ export default function FoodDetailsLayout({
       }
 
       setProduct(mockProduct);
+      setSavedCoachServing({itemId:itemId!,description:typeof mealItem.serving_description==='string'?mealItem.serving_description:null});
 
       setPer100Macros({
         calories: per100Cals,
