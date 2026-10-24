@@ -1,3 +1,4 @@
+import {parseMealConversation,type ScopedMealConversation} from './coachMealConversation';
 import {validateReviewedComposition,type MealComponent} from './coachMealComponents';
 import {coachCatalogDiaryPayload,type createCoachCatalogIdentity} from './coachCatalogIdentity';
 import {parseConstraints,emptyConstraints,type DietaryConstraints} from './coachDietaryConstraints';
@@ -80,6 +81,11 @@ export function createMealServices(deps: {
   restoreSaved:async(access:()=>ReturnType<MealReviewDependencies['access']>,flow:Parameters<typeof deps.transport.savedFlows.recover>[1])=>{const r=await deps.transport.savedFlows.recover(access,flow);return r.kind==='ready'?choices({...r,flowId:'saved:'+r.requestId,meal:'lunch'}):{kind:'unavailable' as const,reason:'saved_options_unavailable'};},
   restore:async(access:MealAccess,flowId?:string)=>choices(await deps.transport.restore(access,flowId)),
   explore:async(access:MealAccess,input:MealExploreInput,meal:DailyMealSlot,flowId?:string)=>choices(await deps.transport.run(access,{operation:'explore',...input},{flowId,meal,mode:input.mode})),
+  prepareSelected:async(access:MealAccess,handoff:ScopedMealConversation,flowId?:string)=>{
+   const value=parseMealConversation(handoff.value),owner=await deps.owner();
+   if(!value?.selected_meal||!handoff.requestId||! /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(handoff.requestId)||owner!==handoff.owner||deps.today()!==handoff.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:'selected_meal_unavailable'} as const;
+   return choices(await deps.transport.run(access,{operation:'prepare_general_estimate',source_request_id:handoff.requestId,portion_label:value.selected_meal.portion_label,general_meal_acknowledged:true},{flowId,meal:'lunch',mode:'quick'}));
+  },
   prepareGeneral:async(access:MealAccess,source:MealChoices,portion:string)=>{
    if(!source.noResults||!portion.trim()||portion.length>160||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:'general_meal_confirmation_required'} as const;
    return choices(await deps.transport.run(access,{operation:'prepare_general_estimate',source_request_id:source.noResults.sourceRequestId,portion_label:portion.trim(),general_meal_acknowledged:true},{flowId:source.flowId,meal:source.meal,mode:source.mode}));

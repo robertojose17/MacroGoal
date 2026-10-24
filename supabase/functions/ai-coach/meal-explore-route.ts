@@ -1,3 +1,4 @@
+import {selectedMealFromMessages} from './selected-meal.ts';
 import {resolveComponentAdditions,validateComponentAdditions} from './meal-component-catalog.ts';
 import {savedFoodPreferences,mergeSavedMealConstraints} from './saved-food-preferences.ts';
 import {prepareGeneralMeal,validatePublicPortion,validateGeneralEstimateOption} from './general-meal.ts';
@@ -89,7 +90,20 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
   let general:MealOption|undefined;
   if(b.operation==='prepare_general_estimate'){
    if(b.source_request_id===b.request_id||b.general_meal_acknowledged!==true||!short(b.portion_label))return validationError('explicit_general_meal_confirmation_required');
-   let origin:any;try{origin=await source(b.source_request_id);}catch{return validationError('source_scope_mismatch',409);}
+   let origin:any;try{origin=await source(b.source_request_id);}catch{
+    // Existing owned conversation receipts may prepare an unpaid general estimate.
+    // Client text cannot replace the portion grounded in the completed source request.
+    const recovered=await db.rpc('coach_recover_requests_v1',{p_user_id:owner,p_request_id:b.source_request_id,p_offset:0});
+    const row=Array.isArray(recovered.data)?recovered.data.find((r:any)=>r.request_id===b.source_request_id):null;
+    if(recovered.error||row?.state!=='completed'||row.user_id!==undefined&&row.user_id!==owner||row.request_payload?.journey!=='conversation_v1'||row.request_payload?.experience!=='conversation_v1'||!Number.isFinite(Date.parse(row.created_at))||localDay(Date.parse(row.created_at),b.time_zone)!==date||row.result?.request_id!==b.source_request_id)return validationError('source_scope_mismatch',409);
+    const storedFields=row.result?.manual_handoff_v1?.body?.meal_conversation?.fields;
+    if(storedFields&&['exclusions','allergens','dietary_preferences'].some(k=>Array.isArray(storedFields[k])&&storedFields[k].length))return validationError('selected_constraints_require_review',409);
+    const selected=selectedMealFromMessages(row.request_payload.messages);
+    if(!selected||b.portion_label!==selected.portion_label)return validationError('selected_portion_mismatch',409);
+    const profile=await db.from('users').select('dietary_restrictions, protein_preferences, recipe_styles, disliked_foods').eq('id',owner).maybeSingle();
+    if(profile.error)return validationError('profile_context_unavailable',503);
+    try{origin={discovery_request:{food:selected.name},dietary_constraints:mergeSavedMealConstraints({},savedFoodPreferences(profile.data))};}catch{return validationError('invalid_saved_food_preferences');}
+   }
    try{general=prepareGeneralMeal(origin,b.portion_label);}catch(e){return validationError((e as Error).message);}
   }
   const payload={...b,contract:'manual_v1',intent:'recommend',journey:'meal_explore_v1'};

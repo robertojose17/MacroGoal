@@ -316,3 +316,29 @@ test('current and recovered meal cards omit condition summaries in both language
  }
  const review=fs.readFileSync(path.resolve(__dirname,'../components/CoachMealReview.tsx'),'utf8');assert.doesNotMatch(review,/constraintLines/);assert.match(review,/source.allergyStatus !== 'unknown'/);assert.match(review,/ingredientAcknowledged/);
 });
+
+function selectedHandoff(){return {...handoff(),fields:{...handoff().fields,mode:'quick',food_query:'Selected meal',public_area:null,restaurant:null},requires_search_consent:false,requires_estimate_consent:true,next_action:'prepare_general_estimate',selected_meal:{name:'Chicken, rice and broccoli',portion_label:'150 g chicken, 1 cup rice and 1 cup broccoli'}};}
+test('selected meal metadata is bounded and cannot become an ordinary search or trust prose nutrition',()=>{
+ const v=selectedHandoff();assert.deepEqual(parseMealConversation(v),v);assert.equal(mealConversationInput(v,v.fields),null);
+ for(const patch of [{requires_search_consent:true},{requires_estimate_consent:false},{next_action:'log_food'},{options:[{calories:474}]},{selected_meal:{...v.selected_meal,calories:474}},{selected_meal:{name:'Chicken',portion_label:'x'.repeat(161)}},{fields:{...v.fields,restaurant:'invented'}}])assert.equal(parseMealConversation({...v,...patch}),null);
+ assert.ok(parseMealConversation(handoff()));
+});
+test('selected meal renders immediately; unpaid preparation opens consent without chat/search/estimate/save',async()=>{
+ const h=harness();try{
+  h.props.handoff={value:selectedHandoff(),owner:'A',date:'2026-10-22',requestId:'33333333-3333-4333-8333-333333333333'};
+  const option={id:'general-meal',name:'Chicken, rice and broccoli',kind:'general',identity:{kind:'general_meal',portion_label:h.props.handoff.value.selected_meal.portion_label},provenance:{kind:'estimate',label:'Estimated'},nutrition:{authority:'unknown',basis:{amount:1,unit:'portion',label:h.props.handoff.value.selected_meal.portion_label},values:{calories:null,protein:null,carbs:null,fats:null,fiber:null},assumptions:[]},allergyStatus:'requires_review'};
+  h.props.service.prepareSelected=async(_access,source)=>{h.calls.push({operation:'prepare',source});return {kind:'ready',owner:'A',date:'2026-10-22',requestId:'prepared',meal:'lunch',mode:'quick',options:[option],capabilities:{estimate:true,discovery:false,reason:null}};};
+  let tree=h.render();assert.match(h.text(tree),/150 g chicken/);assert.ok(h.button(tree,'Review this meal'));assert.equal(h.button(tree,'Find meal options'),undefined);assert.equal(h.calls.length,0);
+  h.button(tree,'Review this meal').props.onPress();h.button(tree,'Review this meal').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();assert.equal(h.calls.length,1);assert.equal(h.calls[0].source.requestId,h.props.handoff.requestId);assert.ok(h.button(tree,'Confirm estimate'));assert.equal(h.button(tree,'Add to meal').props.disabled,true);
+  h.button(tree,'Cancel estimate').props.onPress();tree=h.render();assert.ok(h.button(tree,'Estimate nutrition'));assert.equal(h.calls.length,1);
+ }finally{h.restore();}
+});
+test('selected preparation uses exact receipt and portion through real service/transport; lost response keeps the same ID',async()=>{
+ const {createMealTransport}=require('../utils/coachMealTransport'),{createMealServices}=require('../utils/coachMealServices');let owner='A',day='2026-10-22',lose=true,id=0;const rows=new Map(),calls=[];
+ const store={getItem:async k=>rows.get(k)??null,setItem:async(k,v)=>rows.set(k,v),removeItem:async k=>rows.delete(k)},access=()=>({isPremium:true,premiumLoading:false,gated:false,busy:false}),source={value:selectedHandoff(),owner,date:day,requestId:'33333333-3333-4333-8333-333333333333'};
+ const transport=createMealTransport({owner:async()=>owner,today:()=>day,zone:()=> 'UTC',scope:'selected',store,newId:()=>`22222222-2222-4222-8222-${String(++id).padStart(12,'0')}`,invoke:async body=>{calls.push(body);throw Error('lost response');}});
+ const service=createMealServices({transport,owner:async()=>owner,today:()=>day,store,subscribeInvalidation:()=>()=>{},write:async()=>{throw Error('unexpected save')}});
+ await service.prepareSelected(access,source,'selected-flow');assert.equal(calls.length,1);assert.equal(calls[0].operation,'prepare_general_estimate');assert.equal(calls[0].source_request_id,source.requestId);assert.equal(calls[0].portion_label,source.value.selected_meal.portion_label);assert.equal(calls[0].general_meal_acknowledged,true);
+ const pending=await transport.pending(access);assert.equal(pending.flowId,'selected-flow');await service.prepareSelected(access,source,'selected-flow');assert.ok(calls.every(c=>c.request_id===pending.envelope.request_id));
+ const before=calls.length;owner='B';await service.prepareSelected(access,source);owner='A';day='2026-10-23';await service.prepareSelected(access,source);day=source.date;await service.prepareSelected(access,{...source,requestId:undefined});assert.equal(calls.length,before);
+});
