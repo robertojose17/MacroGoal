@@ -1,4 +1,5 @@
 import i18n from '@/lib/i18n';
+import {coachFoodDetailsPresentation,coachDisplayServingOptions} from '@/utils/coachFoodDetailsPresentation';
 import { getAppLocale } from '@/lib/localization';
 
 import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractUnitFromString } from '@/utils/openFoodFacts';
@@ -742,6 +743,8 @@ export default function FoodDetailsLayout({
   const [bannerQueue, setBannerQueue] = useState<{ id: number; message: string; timestamp: number }[]>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
   const [showMicroDetails, setShowMicroDetails] = useState(false);
+  const [showCoachDetails, setShowCoachDetails] = useState(false);
+  const coachDetails = coachFoodDetailsPresentation(product?.serving_size, i18n.language.startsWith('es'));
 
 
   const backgroundColor = isDark ? colors.backgroundDark : colors.background;
@@ -1804,7 +1807,7 @@ export default function FoodDetailsLayout({
         }
 
         setBannerQueue((prev) => [...prev, { id: Date.now(), message: t('foodDetails.foodUpdated'), timestamp: Date.now() }]);
-        
+
         if (onSaveComplete) {
           onSaveComplete();
         }
@@ -2106,12 +2109,12 @@ export default function FoodDetailsLayout({
           <Text style={[styles.sectionTitle, { color: textColor }]}>{t('foodDetails.servingSize')}</Text>
 
           <ServingPicker
-            options={servingOptions}
+            options={coachDisplayServingOptions(servingOptions, selectedServingOptionKey, coachDetails)}
             selectedKey={selectedServingOptionKey}
             quantity={numberOfServings}
             onOptionChange={(option) => {
               console.log('[FoodDetails] ServingPicker option changed:', option.key, option.label);
-              handleServingOptionChange(option);
+              handleServingOptionChange(servingOptions.find(original => original.key === option.key) ?? option);
             }}
             onQuantityChange={(value) => {
               console.log('[FoodDetails] ServingPicker quantity changed:', value);
@@ -2279,6 +2282,13 @@ export default function FoodDetailsLayout({
             </View>
           );
         })()}
+
+        {coachDetails && <View style={styles.section}>
+          <TouchableOpacity accessibilityRole="button" accessibilityState={{expanded:showCoachDetails}} onPress={()=>setShowCoachDetails(value=>!value)} style={{minHeight:44,justifyContent:'center'}}>
+            <Text style={[styles.sectionTitle,{color:textColor}]}>{i18n.language.startsWith('es')?'Detalles':'Details'} {showCoachDetails?'−':'+'}</Text>
+          </TouchableOpacity>
+          {showCoachDetails&&<><Text style={{color:textColor,lineHeight:22}}>{coachDetails.description}</Text><Text style={{color:isDark?colors.textSecondaryDark:colors.textSecondary,fontSize:13,lineHeight:20,marginTop:8}}>{coachDetails.note}</Text></>}
+        </View>}
 
         {source === 'barcode' && (
           <View style={{ marginTop: 8, marginBottom: 16, alignItems: 'center' }}>

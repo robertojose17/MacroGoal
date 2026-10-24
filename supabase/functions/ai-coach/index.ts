@@ -13,7 +13,7 @@ const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVI
 const original=createGuardedConversation(db,legacy,modern,()=>MODERN_APPROVED,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now));
 const daily=createBoundDailyRoute(db,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now),Date.now,()=>Boolean(Deno.env.get('OPENROUTER_API_KEY')));
 const guided=createMealChoiceRoute(db,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now));
-const explore=createMealExploreRoute(db,modern,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now),Date.now,fetch,{key:()=>Deno.env.get('OPENROUTER_API_KEY')??''});
+const explore=createMealExploreRoute(db,modern,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now),Date.now,fetch,{key:()=>Deno.env.get('OPENROUTER_API_KEY')??''},authorization=>{const key=Deno.env.get('SUPABASE_ANON_KEY');if(!key)throw Error('catalog_unavailable');return createClient(Deno.env.get('SUPABASE_URL')!,key,{global:{headers:{Authorization:authorization}},auth:{persistSession:false,autoRefreshToken:false}});});
 const conversation=createJournalConversation(db,legacy,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now));
 const mealFlows=createMealFlowListRoute(db);
 Deno.serve(async(req:Request)=>(await mealFlows(req))??(await conversation(req))??(await explore(req))??(await guided(req))??(await daily(req))??original(req));

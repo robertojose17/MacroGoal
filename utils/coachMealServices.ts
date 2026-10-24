@@ -1,3 +1,4 @@
+import {validateReviewedComposition,type MealComponent} from './coachMealComponents';
 import {coachCatalogDiaryPayload,type createCoachCatalogIdentity} from './coachCatalogIdentity';
 import {parseConstraints,emptyConstraints,type DietaryConstraints} from './coachDietaryConstraints';
 import type { DailyMealSlot } from './coachDailyAction';
@@ -20,6 +21,7 @@ export function createMealServices(deps: {
   owner:MealReviewDependencies['owner']; today:MealReviewDependencies['today']; store:MealReviewDependencies['store'];
   subscribeInvalidation(owner:string,onInvalidate:()=>void):()=>void;
   catalogIdentity?:ReturnType<typeof createCoachCatalogIdentity>;
+  searchIngredients?(query:string):Promise<MealComponent[]>;
   write(body:(ReturnType<typeof existingMealLogPayload>|ReturnType<typeof coachCatalogDiaryPayload>)&{p_logged_at:string}):Promise<void>;
 }) {
  function choices(result:MealResponse):MealChoiceOutcome {
@@ -37,21 +39,26 @@ export function createMealServices(deps: {
  }
  function session(context:MealReviewContext,access:()=>ReturnType<MealReviewDependencies['access']>,cached?:{response:MealResponse;edit:MealReviewEdit},flowId?:string) {
   return createMealReviewSession(context,{
-  owner:deps.owner,today:deps.today,access,store:deps.store,subscribeInvalidation:f=>deps.subscribeInvalidation(context.owner,f),
+  owner:deps.owner,today:deps.today,access,store:deps.store,searchIngredients:deps.searchIngredients,subscribeInvalidation:f=>deps.subscribeInvalidation(context.owner,f),
    async prepare(c,edit){
     const edits=Object.fromEntries(edit.changed.filter(k=>edit.values[k]!==null).map(k=>[k,edit.values[k]!]));
     if(edit.changed.some(k=>edit.values[k]===null))throw Error('unknown_edit_not_numeric');
-    const result=cached&&cached.edit.multiplier===edit.multiplier&&JSON.stringify(cached.edit.values)===JSON.stringify(edit.values)&&cached.edit.estimateAcknowledged===edit.estimateAcknowledged&&cached.edit.ingredientAcknowledged===edit.ingredientAcknowledged?cached.response:await deps.transport.run(access,{operation:'review',source_request_id:c.sourceReceiptId,option_id:c.option.id,servings:edit.multiplier,
-     estimate_acknowledged:edit.estimateAcknowledged===true,ingredient_review_acknowledged:edit.ingredientAcknowledged===true,...(Object.keys(edits).length?{edited_values:edits}:{})},{flowId,meal:c.meal,mode:c.option.kind==='restaurant'?'eat_out':'cook'});
+    const result=cached&&cached.edit.multiplier===edit.multiplier&&JSON.stringify(cached.edit.values)===JSON.stringify(edit.values)&&cached.edit.estimateAcknowledged===edit.estimateAcknowledged&&cached.edit.ingredientAcknowledged===edit.ingredientAcknowledged&&JSON.stringify(cached.edit.componentEdits)===JSON.stringify(edit.componentEdits)&&JSON.stringify(cached.edit.componentAdditions)===JSON.stringify(edit.componentAdditions)?cached.response:await deps.transport.run(access,{operation:'review',source_request_id:c.sourceReceiptId,option_id:c.option.id,servings:edit.multiplier,
+     ...(edit.componentEdits!==undefined?{component_edits:edit.componentEdits}:{}),...(edit.componentAdditions!==undefined?{component_additions:edit.componentAdditions}:{}),estimate_acknowledged:edit.estimateAcknowledged===true,ingredient_review_acknowledged:edit.ingredientAcknowledged===true,...(Object.keys(edits).length?{edited_values:edits}:{})},{flowId,meal:c.meal,mode:c.option.kind==='restaurant'?'eat_out':'cook'});
     cached=undefined;
     if(result.kind!=='ready'||result.body.status!=='review'||result.owner!==c.owner||result.date!==c.date)throw Error('review_unavailable');
     const r=result.body.review;
     if (r?.review_basis && (!NUTRIENTS.every(k=>r.review_basis.values?.[k]===c.option.nutrition.values[k]) || r.review_basis.authority!==c.option.nutrition.authority || r.review_basis.basis?.label!==c.option.nutrition.basis.label)) throw Error('review_basis_mismatch');
+    const composition=c.option.components?validateReviewedComposition(c.option.components,edit.componentEdits,edit.componentAdditions,edit.multiplier,r?.components):null;
+    if(c.option.components&&(!composition||NUTRIENTS.some(k=>composition.nutrition[k]!==r.values?.[k])))throw Error('review_composition_mismatch');
     const grams=c.option.physicalPortion;
-    if (grams ? r?.physical_portion?.grams!==grams.grams || r.physical_portion.authority!==grams.authority || r.physical_portion.total_grams!==Math.round(grams.grams*edit.multiplier*10)/10 : r?.physical_portion!=null) throw Error('review_portion_mismatch');
+    const componentChanged=edit.componentEdits!==undefined||!!edit.componentAdditions?.length;
+    const expectedPhysical=grams&&!componentChanged?{grams:grams.grams,authority:grams.authority,total_grams:Math.round(grams.grams*edit.multiplier*10)/10}:composition&&composition.grams!==null?{grams:composition.grams,total_grams:composition.grams,authority:'estimated'}:null;
+    if(expectedPhysical?Object.keys(expectedPhysical).some(k=>(r?.physical_portion as any)?.[k]!==expectedPhysical[k as keyof typeof expectedPhysical]):r?.physical_portion!=null)throw Error('review_portion_mismatch');
+
     if(!r||r.logged!==false||r.option_id!==c.option.id||r.name!==c.option.name||r.servings!==edit.multiplier||!NUTRIENTS.every(k=>r.original_nutrition?.values?.[k]===(c.option.sourceNutrition??c.option.nutrition).values[k])||r.original_nutrition.authority!==(c.option.sourceNutrition??c.option.nutrition).authority||r.original_source?.gallery_id!==c.option.provenance.galleryId||r.original_source?.source_url!==c.option.provenance.url)throw Error('review_scope_mismatch');
     const entry:PreparedMealEntry={confirmationId:result.requestId,owner:c.owner,date:c.date,meal:c.meal,sourceReceiptId:c.sourceReceiptId,optionId:r.option_id,name:r.name,multiplier:r.servings,
-     portionLabel:String(r.servings)+' x '+c.option.nutrition.basis.label,...(r.physical_portion?{physicalPortion:r.physical_portion}:{}),nutrition:r.values,authority:r.authority,assumptions:r.assumptions,readyForConfirmation:r.ready_for_explicit_confirmation===true};
+     ...(composition?{components:composition.components}:{}),portionLabel:String(r.servings)+' x '+c.option.nutrition.basis.label,...(r.physical_portion?{physicalPortion:r.physical_portion}:{}),nutrition:r.values,authority:r.authority,assumptions:r.assumptions,readyForConfirmation:r.ready_for_explicit_confirmation===true};
     return entry;
    },
    prepareIdentity:deps.catalogIdentity,
@@ -105,14 +112,19 @@ export function createMealServices(deps: {
    if(pending.envelope.operation==='discover')return importDiscovery(access,result);
    if(pending.envelope.operation==='review'&&result.kind==='ready'){
     const r=result.body.review;if(!r||r.logged!==false)return {kind:'unavailable',reason:'invalid_review'} as const;
-    // Recovery receipts omit allergy status. Keep ingredient review available;    // never downgrade a previously required acknowledgement to unknown.    const identity=reviewSource?.identity;
+    // Recovery receipts omit allergy status. Keep ingredient review available;
+    // never downgrade a previously required acknowledgement to unknown.
+    const identity=reviewSource?.identity;
     const sourceRecipe=identity?.kind==='recipe'&&pending.mode!=='eat_out'&&reviewSource?.provenance?.kind==='estimate'&&typeof reviewSource.provenance.source_url==='string'&&r.original_source?.source_url===reviewSource.provenance.source_url&&r.option_id===reviewSource.id&&r.name===reviewSource.name&&mealEvidenceFromOption(reviewSource,pending.mode)?.kind==='recipe';
     if(r.original_source?.kind==='estimate'&&identity?.kind!=='general_meal'&&!sourceRecipe)return {kind:'unavailable',reason:'general_review_identity_unavailable'} as const;
-    const option=mealEvidenceFromOption({id:r.option_id,name:r.name,provenance:r.original_source,nutrition:r.review_basis??r.original_nutrition,source_nutrition:r.original_nutrition,physical_portion:r.physical_portion??undefined,identity,total_time:reviewSource?.total_time,match:reviewSource?.match,ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true,dietary_constraints:r.dietary_constraints},pending.mode);
+    const additionsRequest=pending.envelope.component_additions;
+    const cleared=r.components_cleared===true;
+    if(cleared&&(!Array.isArray(r.components)||r.components.length!==0||!pending.envelope.edited_values||pending.envelope.component_edits!==undefined||additionsRequest?.length))return {kind:'unavailable',reason:'invalid_component_clear'} as const;
+    const option=mealEvidenceFromOption({id:r.option_id,name:r.name,provenance:r.original_source,nutrition:r.review_basis??r.original_nutrition,source_nutrition:r.original_nutrition,physical_portion:reviewSource?.physical_portion??undefined,identity,components:cleared?undefined:reviewSource?.components,total_time:reviewSource?.total_time,match:reviewSource?.match,ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true,dietary_constraints:r.dietary_constraints},pending.mode);
     if(!option)return {kind:'unavailable',reason:'invalid_review'} as const;
     const context={owner:result.owner,date:result.date,meal:pending.meal,sourceReceiptId:pending.envelope.source_request_id,option};
     const scaled=scaleMealNutrition(option,r.servings);if(!scaled)return {kind:'unavailable',reason:'invalid_portion'} as const;
-    const edit:MealReviewEdit={multiplier:r.servings,values:r.values,changed:NUTRIENTS.filter(k=>scaled[k]!==r.values[k]),estimateAcknowledged:pending.envelope.estimate_acknowledged,ingredientAcknowledged:pending.envelope.ingredient_review_acknowledged};
+    const edit:MealReviewEdit={multiplier:r.servings,values:option.components?scaled:r.values,changed:option.components?[]:NUTRIENTS.filter(k=>scaled[k]!==r.values[k]),componentEdits:pending.envelope.component_edits,componentAdditions:pending.envelope.component_additions,additionPreviews:Array.isArray(r.components)?r.components.filter((c:any)=>additionsRequest?.some((a:any)=>c.id==='catalog-'+a.food_item_id)).map((c:any)=>({...c,quantity:c.quantity/r.servings,grams:c.grams===null?null:c.grams/r.servings,nutrition:Object.fromEntries(NUTRIENTS.map(k=>[k,c.nutrition[k]/r.servings]))})):undefined,estimateAcknowledged:pending.envelope.estimate_acknowledged,ingredientAcknowledged:pending.envelope.ingredient_review_acknowledged};
     return {kind:'recovered_review' as const,session:session(context,access,{response:result,edit},pending.flowId)};
    }
    return choices(result);

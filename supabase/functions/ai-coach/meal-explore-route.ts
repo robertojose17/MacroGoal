@@ -1,3 +1,5 @@
+import {resolveComponentAdditions,validateComponentAdditions} from './meal-component-catalog.ts';
+import {savedFoodPreferences,mergeSavedMealConstraints} from './saved-food-preferences.ts';
 import {prepareGeneralMeal,validatePublicPortion,validateGeneralEstimateOption} from './general-meal.ts';
 import {importedDiscoveryOutcome} from './meal-retrieval-outcome.ts';
 import {confirmedMealDiscoveryRequest} from './confirmed-meal-discovery.ts';
@@ -21,7 +23,7 @@ const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9
 const json=(v:unknown,status=200)=>Response.json(v,{status,headers:{'Access-Control-Allow-Origin':'*','Cache-Control':'no-store'}});
 const canonical=(v:any):string=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}':JSON.stringify(v);
 const short=(v:unknown,max=160)=>typeof v==='string'&&v.trim().length>0&&v.length<=max;
-export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Response>,resolve?:(owner:string,now:number)=>Promise<Access>,now=Date.now,publicFetch:typeof fetch=fetch,estimator?:{key:()=>string;fetcher?:typeof fetch}){
+export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Response>,resolve?:(owner:string,now:number)=>Promise<Access>,now=Date.now,publicFetch:typeof fetch=fetch,estimator?:{key:()=>string;fetcher?:typeof fetch},callerCatalog?:(authorization:string)=>any){
  const policy={...savedMealReviewPolicy(db),async checkRequest(owner:string){const {data,error}=await db.from('coach_permissions').select('permission_level').eq('user_id',owner).maybeSingle();return !error&&[1,2,3,4].includes(data?.permission_level)?{allowed:true as const}:{allowed:false as const,reason:'safety_gate' as const};}};
  const admission=createV202Admission(db,policy,now,resolve);
  const run=guardedChat(db,async(req:Request)=>{
@@ -75,7 +77,7 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    let publicText:string;try{publicText=discoveryConsentMessage(query);}catch(e){return json({error:(e as Error).message,next_action:'clarify_public_search'},400);}
    return modern(confirmedMealDiscoveryRequest(req.url,req.headers,{request_id:b.request_id,...(b.retry_of_request_id!==undefined?{retry_of_request_id:b.retry_of_request_id,retry_consent:true}:{}),meal_source_request_id:b.source_request_id,messages:[{role:'user',content:publicText}],use_web:true,language:'en'},owner));
   }
-  const allowed=b.operation==='prepare_general_estimate'?['intent','experience','operation','request_id','time_zone','source_request_id','portion_label','general_meal_acknowledged']:b.operation==='explore'?['intent','experience','operation','request_id','time_zone','food_query','mode','available_minutes','restaurant','public_area','preference','exclusions','allergens','dietary_preferences']:b.operation==='import_discovery'?['intent','experience','operation','request_id','time_zone','source_request_id']:['intent','experience','operation','request_id','time_zone','source_request_id','option_id','servings','edited_values','estimate_acknowledged','ingredient_review_acknowledged','modification'];
+  const allowed=b.operation==='prepare_general_estimate'?['intent','experience','operation','request_id','time_zone','source_request_id','portion_label','general_meal_acknowledged']:b.operation==='explore'?['intent','experience','operation','request_id','time_zone','food_query','mode','available_minutes','restaurant','public_area','preference','exclusions','allergens','dietary_preferences']:b.operation==='import_discovery'?['intent','experience','operation','request_id','time_zone','source_request_id']:['intent','experience','operation','request_id','time_zone','source_request_id','option_id','servings','edited_values','estimate_acknowledged','ingredient_review_acknowledged','modification','component_edits','component_additions'];
   if(Object.keys(b).some(k=>!allowed.includes(k)))return b.operation==='prepare_general_estimate'?validationError('invalid_request'):json({error:'invalid_request'},400);
   if(b.operation==='explore'){
    try{dietaryConstraints(b);}catch{return json({error:'invalid_dietary_constraints'},400);}
@@ -83,6 +85,7 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    if(![b.exclusions,b.allergens].every(a=>Array.isArray(a)&&a.length<=12&&a.every((x:any)=>short(x,60)))||b.available_minutes!==undefined&&(!Number.isInteger(b.available_minutes)||b.available_minutes<1||b.available_minutes>240)||b.preference!==undefined&&!['balanced','high_protein','lower_calorie','preferred_food'].includes(b.preference)||b.restaurant!==undefined&&!short(b.restaurant)||b.public_area!==undefined&&!short(b.public_area))return json({error:'invalid_request'},400);
    if(b.mode==='eat_out'&&!short(b.public_area))return json({schema:'meal_explore_v1',owner,date,status:'clarify',question:{key:'public_area'},options:[]});
   }else if(!uuid(b.source_request_id)||b.operation==='review'&&!short(b.option_id,200))return b.operation==='prepare_general_estimate'?validationError('invalid_review'):json({error:'invalid_review'},400);
+  if(b.operation==='review'){try{validateComponentAdditions(b.component_additions);}catch(e){return validationError((e as Error).message);}}
   let general:MealOption|undefined;
   if(b.operation==='prepare_general_estimate'){
    if(b.source_request_id===b.request_id||b.general_meal_acknowledged!==true||!short(b.portion_label))return validationError('explicit_general_meal_confirmation_required');
@@ -101,8 +104,13 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    }
    if(b.operation==='review'){
     const prior=await source(b.source_request_id),option=prior.options?.find((o:MealOption)=>o.id===b.option_id);if(!option)return json({error:'option_not_found'},404);
-    try{return json({schema:'meal_explore_v1',owner,date,status:'review',review:reviewMeal(option,b),options:[]});}catch(e){return json({error:e instanceof Error?e.message:'invalid_review'},400);}
+    try{const additions=b.component_additions?.length?await resolveComponentAdditions(callerCatalog?callerCatalog(req.headers.get('authorization')!):(()=>{throw Error('catalog_unavailable')})(),owner,b.component_additions):[];return json({schema:'meal_explore_v1',owner,date,status:'review',review:reviewMeal(option,b,additions),options:[]});}catch(e){return json({error:e instanceof Error?e.message:'invalid_review'},400);}
    }
+   // Read once for a fresh unpaid exploration; replay returns the original stored snapshot.
+   const preferenceRow=await db.from('users').select('dietary_restrictions, protein_preferences, recipe_styles, disliked_foods').eq('id',owner).maybeSingle();
+   if(preferenceRow.error)throw Error('profile_context_unavailable');
+   const savedPreferences=savedFoodPreferences(preferenceRow.data);
+   Object.assign(b,mergeSavedMealConstraints(b,savedPreferences));
    const found=b.mode==='eat_out'?{options:[],coverage:'restaurant_requires_discovery'}:await searchExistingGallery(db,{...b,desired_food:b.food_query},owner);
    found.options=await upgradeGallerySources(found.options,publicFetch,now());
    if(exclusionTerms(b.exclusions).unsupported.length===0&&b.exclusions.length)found.options=found.options.filter((o:MealOption)=>!containsExcludedIngredient(o.ingredients,b.exclusions));

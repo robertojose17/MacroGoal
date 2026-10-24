@@ -14,7 +14,7 @@ export default function CoachSavedMealOptions(props:Props){
   const {i18n}=useTranslation(),es=i18n.language.startsWith('es');
   const say=(en:string,spanish:string)=>es?spanish:en;
   const action=(label:string,fn:()=>void,key?:string)=><Pressable key={key} accessibilityRole="button" accessibilityState={{disabled:props.busy||!props.available}} disabled={props.busy||!props.available} style={styles.action} onPress={fn}><Text style={styles.label}>{label}</Text></Pressable>;
-  if(!props.open)return action(say('Saved meal options today','Opciones de comida guardadas hoy'),props.onOpen);
+  if(!props.open)return action(say('Earlier meals','Comidas anteriores'),props.onOpen);
   return <View style={styles.container}>
     <Text style={styles.body}>{say('Choose an earlier result to review. Nothing is added to your diary.','Elige un resultado anterior para revisarlo. No se añade nada al diario.')}</Text>
     {props.busy?<ActivityIndicator accessibilityLabel={say('Loading saved options','Cargando opciones guardadas')}/>:props.error?<>
@@ -27,4 +27,4 @@ export default function CoachSavedMealOptions(props:Props){
     <Pressable accessibilityRole="button" style={styles.action} onPress={props.onClose}><Text style={styles.label}>{say('Close','Cerrar')}</Text></Pressable>
   </View>;
 }
-const styles=StyleSheet.create({container:{gap:8,paddingVertical:8},body:{fontSize:15,lineHeight:22,color:'#263F34'},detail:{fontSize:13,lineHeight:19,color:'#586A5E'},action:{minHeight:44,paddingHorizontal:12,paddingVertical:10,justifyContent:'center',alignSelf:'flex-start',borderRadius:14,backgroundColor:'#EDF3EF'},label:{fontSize:14,color:'#27614D'}});
+const styles=StyleSheet.create({container:{gap:8,paddingVertical:8},body:{fontSize:15,lineHeight:22,color:'#263F34'},detail:{fontSize:13,lineHeight:19,color:'#586A5E'},action:{minHeight:44,paddingHorizontal:12,paddingVertical:10,justifyContent:'center',alignSelf:'flex-start',borderRadius:14,backgroundColor:'transparent'},label:{fontSize:14,color:'#27614D'}});

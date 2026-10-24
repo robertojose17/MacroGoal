@@ -5,11 +5,11 @@ test('chooser renders only supplied rows, waits for explicit selection, supports
  try{const Component=require('../components/CoachSavedMealOptions.tsx').default,calls=[];
  const props={open:false,busy:false,available:true,rows:[{key:'owned-reference',title:'Earlier recipe',detail:'Recipe estimate'}],error:false,onOpen:()=>calls.push('open'),onClose:()=>calls.push('close'),onSelect:k=>calls.push(k)};
  const text=n=>n==null?'':typeof n==='string'?n:React.Children.toArray(n.props?.children).map(text).join(' '),nodes=n=>!n||typeof n!=='object'?[]:[n,...React.Children.toArray(n.props?.children).flatMap(nodes)],button=(tree,label)=>nodes(tree).find(n=>n.props?.accessibilityRole==='button'&&text(n)===label);
- let tree=Component(props);assert.deepEqual(calls,[]);button(tree,'Saved meal options today').props.onPress();assert.deepEqual(calls,['open']);
+ let tree=Component(props);assert.deepEqual(calls,[]);button(tree,'Earlier meals').props.onPress();assert.deepEqual(calls,['open']);
  props.open=true;tree=Component(props);assert.match(text(tree),/Nothing is added/);assert.deepEqual(calls,['open']);button(tree,'Earlier recipe').props.onPress();assert.deepEqual(calls,['open','owned-reference']);
  props.busy=true;tree=Component(props);assert.equal(button(tree,'Earlier recipe'),undefined);button(tree,'Close').props.onPress();assert.equal(calls.at(-1),'close');
  props.busy=false;props.error=true;tree=Component(props);assert.equal(button(tree,'Earlier recipe'),undefined);assert.ok(button(tree,'Try again'));
- language='es';props.error=false;props.rows=[];tree=Component(props);assert.match(text(tree),/No hay opciones/);props.open=false;assert.ok(button(Component(props),'Opciones de comida guardadas hoy'));
- props.available=false;assert.equal(button(Component(props),'Opciones de comida guardadas hoy').props.disabled,true);
+ language='es';props.error=false;props.rows=[];tree=Component(props);assert.match(text(tree),/No hay opciones/);props.open=false;assert.ok(button(Component(props),'Comidas anteriores'));
+ props.available=false;assert.equal(button(Component(props),'Comidas anteriores').props.disabled,true);
  }finally{Module._load=old;}
 });

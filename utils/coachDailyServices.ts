@@ -1,3 +1,4 @@
+import {createCoachIngredientSearch} from './coachIngredientCatalog';
 import {createCoachCatalogIdentity,type PublicCoachFood} from './coachCatalogIdentity';
 import { createGuidedServices } from './coachGuidedServices';
 import { createMealTransport } from './coachMealTransport';
@@ -46,7 +47,7 @@ const catalogIdentity=createCoachCatalogIdentity({store:AsyncStorage,owner:trans
  async read(id){const {data,error}=await catalogApi.from('foods').select('id,name,serving_amount,serving_unit,calories,protein,carbs,fats,fiber,user_created,created_by').eq('id',id).maybeSingle();if(error)throw error;if(!data)return null;for(const k of ['serving_amount','calories','protein','carbs','fats','fiber']){const value=(data as any)[k];if(!['number','string'].includes(typeof value)||value===''||!Number.isFinite(Number(value)))throw Error('invalid_catalog_row');}return {...data,serving_amount:Number(data.serving_amount),calories:Number(data.calories),protein:Number(data.protein),carbs:Number(data.carbs),fats:Number(data.fats),fiber:Number(data.fiber)} as any;},
  async insert(row){const {error}=await catalogApi.from('foods').insert(row);if(error)throw error;}
 });
-const mealExperience = createMealServices({ catalogIdentity, transport: mealTransport, owner: transport.owner, today: toLocalDateString, store: AsyncStorage,
+const mealExperience = createMealServices({ searchIngredients:createCoachIngredientSearch(supabase,transport.owner),catalogIdentity, transport: mealTransport, owner: transport.owner, today: toLocalDateString, store: AsyncStorage,
   subscribeInvalidation(owner, invalidate) { const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_OUT' || session?.user?.id !== owner) invalidate(); }); return () => subscription.unsubscribe(); },
   async write(body) { const { error } = await supabase.rpc('log_food', body); if (error) throw error; },
 });

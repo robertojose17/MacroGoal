@@ -2508,7 +2508,7 @@ export default function CoachScreen() {
               <View key={message.id} style={styles.assistantMessageWrapper}>
                 <View style={styles.assistantBubbleColumn}>
                   {isWaitingForFirstToken ? (
-                    <View><TypingIndicator isDark={isDark} />{COACH_CONVERSATION_READY && <Text style={{color:colors.textSecondary}}>{locale.startsWith('es')?'Esperando la respuesta de tu coach…':'Waiting for your coach’s response…'}</Text>}</View>
+                    <TypingIndicator isDark={isDark} />
                   ) : (
                   <View style={styles.assistantBubble}>
                     <View>

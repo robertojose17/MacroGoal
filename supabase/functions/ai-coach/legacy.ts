@@ -1,3 +1,4 @@
+import {savedFoodPreferences,savedFoodContext} from './saved-food-preferences.ts';
 import {MEAL_CONVERSATION_INSTRUCTIONS,extractMealConversation,mealConversationStream} from './meal-conversation.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -254,7 +255,7 @@ const handler = (async (req:Request, control?:{providerFetch:typeof fetch}) => {
       coachActionsResult,
       lastInsightResult,
     ] = await Promise.all([
-      supabase.from("users").select("name, username, sex, date_of_birth, height, current_weight, goal_weight, activity_level, weight_unit").eq("id", userId).maybeSingle(),
+      supabase.from("users").select("name, username, sex, date_of_birth, height, current_weight, goal_weight, activity_level, weight_unit, dietary_restrictions, protein_preferences, recipe_styles, disliked_foods").eq("id", userId).maybeSingle(),
       supabase.from("goals").select("daily_calories, protein_g, carbs_g, fats_g, fiber_g, goal_type, macro_preset").eq("user_id", userId).eq("is_active", true).order("created_at", { ascending: false }).limit(1),
       supabase.from("meals").select("date, meal_items(calories, protein, carbs, fats, fiber)").eq("user_id", userId).gte("date", fourteenDaysAgo).lte("date", today).order("date", { ascending: false }),
       supabase.from("check_ins").select("date, weight").eq("user_id", userId).gte("date", thirtyDaysAgo).order("date", { ascending: false }).limit(30),
@@ -266,7 +267,9 @@ const handler = (async (req:Request, control?:{providerFetch:typeof fetch}) => {
       supabase.from("coach_daily_insights").select("insight_text, condition_type, created_at").eq("user_id", userId).eq("is_read", false).order("created_at", { ascending: false }).limit(1),
     ]);
 
+    if(profileResult.error)throw Error("profile_context_unavailable");
     const profile = profileResult.data;
+    const savedPreferences = savedFoodPreferences(profile);
     const goals = Array.isArray(goalsResult.data) ? goalsResult.data[0] ?? null : goalsResult.data;
     const mealsRaw = mealsResult.data || [];
     const checkIns = checkInsResult.data || [];
@@ -512,6 +515,7 @@ FORMATTING RULES (non-negotiable):
 - Short paragraphs separated by line breaks only
 
 ${profileBlock}
+${savedFoodContext(savedPreferences)}
 
 ${goalsBlock}
 
@@ -688,7 +692,7 @@ INSTRUCTIONS:
         }
 
         const tail=mealStream.finish();if(tail)controller.enqueue(encoder.encode(`data: ${JSON.stringify({token:tail})}\n\n`));
-        const mealConversation=extractMealConversation(fullText,messages);fullText=mealConversation.text;
+        const mealConversation=extractMealConversation(fullText,messages,savedPreferences);fullText=mealConversation.text;
         // Guard: if OpenRouter returned no tokens, send a fallback so the client never gets an empty bubble
         if (fullText.trim().length === 0) {
           console.warn("[AICoach] OpenRouter returned empty response â€” sending fallback token");
