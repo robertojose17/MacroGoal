@@ -2346,6 +2346,8 @@ export default function FoodDetailsLayout({
                 pathname: '/food-photo-capture',
                 params: {
                   barcode: barcodeFromOffData,
+                  name: product?.product_name || product?.generic_name || '',
+                  brand: product?.brands || '',
                   type: 'correction',
                   food_item_id: food_item_id || '',
                   meal: mealType,
