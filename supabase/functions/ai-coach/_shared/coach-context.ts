@@ -1,9 +1,10 @@
 // Calendar context is optional for older clients; it never controls authorization.
-export function coachTimeZone(value?: unknown): string {
-  if (typeof value !== 'string' || value.length > 100) return 'UTC';
-  try { return new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone; }
-  catch { return 'UTC'; }
+export function validatedCoachTimeZone(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 100 || value.trim() !== value) return null;
+  try { return new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone || null; }
+  catch { return null; }
 }
+export function coachTimeZone(value?: unknown): string { return validatedCoachTimeZone(value) ?? 'UTC'; }
 export function deviceCoachTimeZone(): string {
   try { return coachTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone); }
   catch { return 'UTC'; }

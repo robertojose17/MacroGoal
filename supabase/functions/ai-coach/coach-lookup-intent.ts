@@ -65,7 +65,13 @@ function explicitCommand(text:string):{input:string;prefix:string}|undefined{
 function explicit(text:string):boolean{return explicitCommand(text)!==undefined;}
 function introPublicArea(prefix:string):string|undefined{
  const matches=[...prefix.matchAll(/\b(?:in|en)\s+([^.!?;]{1,96})/gi)];
- for(let i=matches.length-1;i>=0;i--){const candidate=matches[i][1].trim();if(/\b(?:tonight|today|tomorrow|morning|evening|afternoon|night|now|hoy|manana|noche|tarde|ahora)\b/i.test(candidate))continue;const area=publicPlace(candidate,'area');if(area)return area;}
+ for(let i=matches.length-1;i>=0;i--){
+  // Keep a city when a trailing time reference follows it ("Orlando tonight");
+  // discard only the time phrase instead of rejecting the whole locality.
+  const candidate=matches[i][1].trim().replace(/\s+\b(?:(?:tonight|today|tomorrow|morning|evening|afternoon|night|now|hoy|manana|mañana|noche|tarde|ahora)|(?:(?:this|the)\s+)?(?:morning|evening|afternoon|night)|esta\s+(?:noche|tarde|manana|mañana)|por\s+la\s+(?:noche|tarde))\b.*$/i,'').trim();
+  if(!candidate)continue;
+  const area=publicPlace(candidate,'area');if(area)return area;
+ }
  return undefined;
 }
 export function lookupIntent(text:string):LookupIntent {if(typeof text!=='string')return {kind:'skip'};if(lookupNegated(text))return {kind:'skip',reason:'search_declined'};if(text.startsWith('public_lookup_confirmation:'))return parseConfirmation(text)!;if(unsafeContext(text))return {kind:'clarify',reason:'private_or_unsafe_context'};const parsed=fromStructured(text);if(parsed)return parsed;const command=explicitCommand(text);if(!command)return {kind:'skip'};const input=command.input;const namedRestaurantMenu=/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+(?:the\s+)?(.+?)(?:'s)?\s+menus?\b/i.exec(input);if(namedRestaurantMenu){const restaurant=publicPlace(namedRestaurantMenu[1].trim().replace(/^(?:the|a)\s+/i,''),'restaurant');if(!restaurant)return {kind:'clarify',mode:'restaurant',reason:'public_locality_only'};const area=introPublicArea(command.prefix);return confirmationProposal({food:'meal',mode:'restaurant',restaurant,...(area?{area}:{})});}const emptyRestaurant=/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+(?:restaurants?|restaurantes?)\s+(?:in|en)\s+(.+?)[.!]?$/i.exec(input);if(emptyRestaurant){const area=publicPlace(emptyRestaurant[1],'area');return {kind:'clarify',mode:'restaurant',...(area?{area}:{}),reason:'food'};}let mode=modeIn(input),rawFood:string|undefined,rawArea:string|undefined;let match:RegExpExecArray|null=null;

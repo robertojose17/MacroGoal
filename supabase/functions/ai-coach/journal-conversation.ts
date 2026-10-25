@@ -28,7 +28,7 @@ export function createJournalConversation(db:any,legacy:(r:Request,c?:{providerF
  const run=guardedChat(db,async(req:Request)=>{
   const b=await req.clone().json();const auth=await db.auth.getUser(req.headers.get('authorization')!.slice(7));const owner=auth.data?.user?.id;
   if(!owner)return Response.json({error:'unauthorized'},{status:401});
-  if(Object.keys(b).some(k=>!['experience','request_id','messages','language','weight_unit','conversation_id'].includes(k))||b.experience!=='conversation_v1')return Response.json({error:'invalid_request'},{status:400});
+  if(Object.keys(b).some(k=>!['experience','request_id','messages','language','weight_unit','conversation_id','time_zone'].includes(k))||b.experience!=='conversation_v1')return Response.json({error:'invalid_request'},{status:400});
   let parsed;try{parsed=coachRequest(b);}catch{return Response.json({error:'invalid_request'},{status:400});}
   if(parsed.kind==='opening')return Response.json({error:'use_local_greeting'},{status:400});
   const payload={...JSON.parse(parsed.fingerprintInput),experience:'conversation_v1',journey:'conversation_v1'};

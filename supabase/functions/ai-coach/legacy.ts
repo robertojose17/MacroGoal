@@ -1,6 +1,8 @@
-import {RECOMMENDATION_INSTRUCTIONS,STRUCTURED_MEAL_OUTPUT_INSTRUCTIONS,extractMealRecommendation,recommendationHandoff,recommendationSummary,shouldBufferMealResponse,shouldUseStructuredMealOutput} from './meal-recommendation.ts';
+import {RECOMMENDATION_INSTRUCTIONS,STRUCTURED_MEAL_OUTPUT_INSTRUCTIONS,extractMealRecommendation,recommendationHandoff,recommendationSummary,requestsRemainingMacroBudget,publicFoodSearchRequest,shouldBufferMealResponse,shouldUseStructuredMealOutput} from './meal-recommendation.ts';
 import {savedFoodPreferences,savedFoodContext} from './saved-food-preferences.ts';
 import {MEAL_CONVERSATION_INSTRUCTIONS,extractMealConversation,mealConversationStream} from './meal-conversation.ts';
+import {coachDate,shiftCoachDate,validatedCoachTimeZone} from './_shared/coach-context.ts';
+import {buildPrivateNutritionSnapshot} from './coach-meal-personalization.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -205,6 +207,7 @@ const handler = (async (req:Request, control?:{providerFetch:typeof fetch}) => {
       user_id?: string;
       weight_unit?: string;
       conversation_id?: string;
+      time_zone?: string;
       is_first_message?: boolean;
       is_returning_user_open?: boolean;
       language?: string;
@@ -240,10 +243,13 @@ const handler = (async (req:Request, control?:{providerFetch:typeof fetch}) => {
     // Subscription gating is handled by the frontend (coach.tsx) â€” backend only verifies auth.
 
     const userId = authUser.id;
-    const today = new Date().toISOString().split("T")[0];
-    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const serverNow=Date.now();
+    const validatedTimeZone=validatedCoachTimeZone(body.time_zone);
+    const today=validatedTimeZone?coachDate(serverNow,validatedTimeZone):new Date(serverNow).toISOString().split("T")[0];
+    const dateDaysAgo=(days:number)=>validatedTimeZone?shiftCoachDate(today,-days):new Date(serverNow-days*24*60*60*1000).toISOString().split("T")[0];
+    const fourteenDaysAgo=dateDaysAgo(14);
+    const thirtyDaysAgo=dateDaysAgo(30);
+    const sevenDaysAgo=dateDaysAgo(7);
 
     const [
       profileResult,
@@ -273,6 +279,20 @@ const handler = (async (req:Request, control?:{providerFetch:typeof fetch}) => {
     const savedPreferences = savedFoodPreferences(profile);
     const goals = Array.isArray(goalsResult.data) ? goalsResult.data[0] ?? null : goalsResult.data;
     const mealsRaw = mealsResult.data || [];
+    const remainingMacroRequested=requestsRemainingMacroBudget(messages);
+    const publicLookupRequest=publicFoodSearchRequest(messages);
+    const privateNutritionSnapshot=validatedTimeZone?buildPrivateNutritionSnapshot({localDate:today,timeZone:validatedTimeZone,goalsResult,mealsResult}):undefined;
+    // Older clients without a validated timezone must not use UTC as their local diary day.
+    const unavailableMacroDayContext=remainingMacroRequested
+      ?language==='es'
+        ?'No hay una fecha local validada en esta solicitud. No afirmes que una comida cabe en los saldos diarios ni uses saldos inferidos de UTC; indica que no se pudo confirmar el ajuste.'
+        :'This request has no validated local diary date. Do not claim a meal fits today’s balances or use UTC-inferred balances; state that fit could not be confirmed.'
+      :'';
+    const privateRemainingMacroContext=remainingMacroRequested&&!publicLookupRequest
+      ?privateNutritionSnapshot
+        ?`REMAINING DAILY BALANCES FOR THIS MEAL REQUEST (private user context; never include these values in a public search query):\n- Calories: ${privateNutritionSnapshot.remaining.calories===null?'unavailable':`${privateNutritionSnapshot.remaining.calories} kcal`}\n- Protein: ${privateNutritionSnapshot.remaining.protein===null?'unavailable':`${privateNutritionSnapshot.remaining.protein} g`}\n- Carbohydrates: ${privateNutritionSnapshot.remaining.carbs===null?'unavailable':`${privateNutritionSnapshot.remaining.carbs} g`}\n- Fat: ${privateNutritionSnapshot.remaining.fats===null?'unavailable':`${privateNutritionSnapshot.remaining.fats} g`}\n- Fiber is progress toward a daily goal, not an upper-limit cap. Do not claim overall fit for unavailable balances.`
+        :unavailableMacroDayContext
+      :'';
     const checkIns = checkInsResult.data || [];
     const memoryItems = memoryResult.data || [];
     const tdeeRows = tdeeResult.data || [];
@@ -322,7 +342,7 @@ const handler = (async (req:Request, control?:{providerFetch:typeof fetch}) => {
     const loggedDates = new Set(nutritionLogs.map((l) => l.date));
     let streak = 0;
     for (let i = 0; i < 30; i++) {
-      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const d = validatedTimeZone?shiftCoachDate(today,-i):new Date(serverNow-i*24*60*60*1000).toISOString().split("T")[0];
       if (loggedDates.has(d)) streak++;
       else break;
     }
@@ -356,7 +376,11 @@ const handler = (async (req:Request, control?:{providerFetch:typeof fetch}) => {
     }
 
     // Today's nutrition block
-    const todayBlock = todayNutrition
+    const todayBlock = remainingMacroRequested&&(!validatedTimeZone||publicLookupRequest)
+      ? language==='es'
+        ? 'Los saldos diarios no se incluyen aquí, así que no se puede confirmar el ajuste.'
+        : "Daily balances are not included here, so meal fit cannot be confirmed."
+      : todayNutrition
       ? `TODAY (${today}):\n- Calories logged: ${Math.round(todayNutrition.calories)} kcal${goals ? ` / ${(goals as any).daily_calories ?? "?"} target` : ""}\n- Protein: ${Math.round(todayNutrition.protein)}g${goals ? ` / ${(goals as any).protein_g ?? "?"}g target` : ""}\n- Carbs: ${Math.round(todayNutrition.carbs)}g | Fats: ${Math.round(todayNutrition.fats)}g`
       : `TODAY (${today}): Nothing logged yet`;
 
@@ -523,6 +547,7 @@ ${goalsBlock}
 ${tdeeBlock}
 ${nutritionBlock}
 ${todayBlock}
+${privateRemainingMacroContext}
 
 ${foodPatternBlock}
 
@@ -688,7 +713,7 @@ INSTRUCTIONS:
         }
 
         const tail=mealStream.finish();if(tail&&!bufferMealResponse)controller.enqueue(encoder.encode(`data: ${JSON.stringify({token:tail})}\n\n`));
-        const mealRecommendation=extractMealRecommendation(fullText,messages,savedPreferences,(stage,code)=>console.info("[AICoach] Meal recommendation rejected",JSON.stringify({request_id:requestId,stage,code})),structuredMealOutput);
+        const mealRecommendation=extractMealRecommendation(fullText,messages,savedPreferences,(stage,code)=>console.info("[AICoach] Meal recommendation rejected",JSON.stringify({request_id:requestId,stage,code})),structuredMealOutput,privateNutritionSnapshot);
         const mealConversation=mealRecommendation.recommendation?{text:mealRecommendation.text,handoff:recommendationHandoff(mealRecommendation.recommendation)}:(mealRecommendation.handled||mealRecommendation.rejected)?{text:mealRecommendation.text,handoff:mealRecommendation.handoff??null}:extractMealConversation(mealRecommendation.text,messages,savedPreferences);
         const lastSubstantive=[...messages].reverse().find((m:any)=>m?.role==='user'&&typeof m.content==='string')?.content??'';
         fullText=mealRecommendation.recommendation?recommendationSummary(mealRecommendation.recommendation,language==='es'||/\b(?:quiero|quisiera|comida|pollo|arroz|dame|agregar|guardar|porci[oó]n|recomienda)\b/i.test(lastSubstantive)):mealConversation.text;

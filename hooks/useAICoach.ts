@@ -12,6 +12,14 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { fetch as expoFetch } from 'expo/fetch';
 import i18n from '@/lib/i18n';
 
+function deviceCoachTimeZone():string|undefined{
+  try{
+    const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if(typeof zone!=='string'||zone.length===0||zone.length>100)return undefined;
+    return new Intl.DateTimeFormat('en',{timeZone:zone}).resolvedOptions().timeZone?zone:undefined;
+  }catch{return undefined;}
+}
+
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 export type CoachMessage = {
@@ -458,7 +466,7 @@ export function useAICoach(options?: UseAICoachOptions) {
           console.warn('[useAICoach] Request timed out after 30s — aborting');
         }, 30000);
 
-        const response = options?.mealConversation ? await journal.current!.run({messages:fullMessages,weight_unit:weightUnit,conversation_id:conversationIdRef.current??null,language:i18n.language},recoverScoped) : await expoFetch(
+      const response = options?.mealConversation ? await journal.current!.run({messages:fullMessages,weight_unit:weightUnit,conversation_id:conversationIdRef.current??null,language:i18n.language,time_zone:deviceCoachTimeZone()},recoverScoped) : await expoFetch(
           `${SUPABASE_PROJECT_URL}/functions/v1/ai-coach`,
           {
             method: 'POST',

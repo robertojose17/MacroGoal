@@ -1,4 +1,5 @@
 import {withPersistenceDeadline,PERSISTENCE_RPC_LIMIT_MS} from '../bounded-provider-phase.ts';
+import {validatedCoachTimeZone} from './coach-context.ts';
 export type Access = 'premium' | 'free' | 'unknown';
 // Exact IDs already used by usePremium, plus the previously supported legacy ID.
 export const coachEntitlementIds = ['Macrogoal Pro', 'macrogoal_pro', 'pro', 'premium', 'Premium'];
@@ -33,6 +34,8 @@ export function coachOpening(language: string, returning: boolean) {
 }
 export function coachRequest(body: any) {
   if (!body || !Array.isArray(body.messages) || !body.messages.length || body.messages.length > 30 || body.messages.some((m: any) => !m || !['user','assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 16000)) throw new Error('invalid_request');
+  const timeZone=body.time_zone===undefined?undefined:validatedCoachTimeZone(body.time_zone);
+  if(body.time_zone!==undefined&&!timeZone)throw new Error('invalid_time_zone');
   if(Object.prototype.hasOwnProperty.call(body,'meal_source_request_id')&&(typeof body.meal_source_request_id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.meal_source_request_id)))throw new Error('invalid_meal_source');
   const last = body.messages[body.messages.length - 1];
   if (last.role !== 'user' || !last.content.trim()) throw new Error('invalid_request');
@@ -48,7 +51,7 @@ export function coachRequest(body: any) {
   if(consentSelection!==undefined&&selection!==undefined)throw new Error('conflicting_selection');
   if(consentSelection!==undefined&&body.lookup_context!==undefined)throw new Error('caller_lookup_context_not_allowed');
   return { kind: 'message' as const, requestId: body.request_id.toLowerCase(), retryOfRequestId:body.retry_of_request_id?.toLowerCase()??null, language,
-    fingerprintInput: JSON.stringify({ ...(body.meal_source_request_id?{meal_source_request_id:body.meal_source_request_id}:{}),messages: body.messages.map((m: any) => ({ role: m.role, content: m.content })), language, weight_unit: body.weight_unit || 'lb', conversation_id: body.conversation_id || null, ...(typeof body.time_zone === 'string' ? {time_zone: body.time_zone} : {}),...(selection?{discovery_selection:selection}:{}),...(consentSelection?{public_lookup_selection:consentSelection}:{}) }) };
+    fingerprintInput: JSON.stringify({ ...(body.meal_source_request_id?{meal_source_request_id:body.meal_source_request_id}:{}),messages: body.messages.map((m: any) => ({ role: m.role, content: m.content })), language, weight_unit: body.weight_unit || 'lb', conversation_id: body.conversation_id || null, ...(timeZone?{time_zone:timeZone}:{}),...(selection?{discovery_selection:selection}:{}),...(consentSelection?{public_lookup_selection:consentSelection}:{}) }) };
 }
 export async function reserveCoachRequest(db: any, userId: string, requestId: string, fingerprint: string, now = Date.now(),requestPayload:unknown=null,resolveUncertain?: (userId: string, now: number) => Promise<Access|{access:Access;reason?:string}>,execution?:{retryOfRequestId:string|null;reserveWeb:boolean;deadlineAt:number}) {
   let access: Access = 'unknown';
