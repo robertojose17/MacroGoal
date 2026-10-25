@@ -4,7 +4,8 @@ import { discoverProducts } from './recovery-discovery.ts';
 
 type Dependencies = {
   supabase:any; userId:string; secret:string; apiKey:string; projectUrl:string; enabled:boolean; deadline?:number;
-  readPhotos:(label:string,front:string,known:string|null)=>Promise<any>;
+  readPhotos:(label:string,front:string,known:string|null,providerFetch?:typeof fetch)=>Promise<any>;
+  receiptFetch?:(submission:string,revision:number)=>typeof fetch;
 };
 const ttl=20*60*1000;
 const issues=(field:string,reason:string)=>[{field,reason}];
@@ -42,6 +43,8 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     p_owner:userId,p_submission:session.submission,p_barcode:session.binding.barcode,p_phase:phase,
   });
   if(claimError)return {status:'unavailable',code:'request_already_used_or_limit'};
+  const providerFetch=deps.receiptFetch?.(session.submission,revision)??fetch;
+  const readPhotos=(label:string,front:string,known:string|null)=>deps.readPhotos(label,front,known,providerFetch);
   let photo:any=null,partialEvidence:any=null,photoIssues:any[]=[];
   if(phase==='photos') {
     const allowed=(value:unknown)=>{try{
@@ -49,7 +52,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
       return url.origin===base.origin && url.pathname.startsWith('/storage/v1/object/public/food-photos/submissions/'+userId+'/') && !url.search && !url.hash;
     }catch{return false;}};
     if(!allowed(body.photo_label_url)||!allowed(body.photo_front_url))throw Error('invalid_photo');
-    const result=await deps.readPhotos(body.photo_label_url,body.photo_front_url,session.name||null);
+    const result=await readPhotos(body.photo_label_url,body.photo_front_url,session.name||null);
     partialEvidence=result.partialEvidence;
     if(result.ok) {
       photo={name:result.productName,brand:result.brand||'',variant:result.productName,
@@ -66,7 +69,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     }
   }
   let found:any={candidates:[],source_links:[]},searchCode:string|undefined;
-  try{found=await discoverProducts({barcode:session.binding.barcode,name:session.name,brand:session.brand},{apiKey:deps.apiKey,fetch,deadline:deps.deadline,readLabel:deps.readPhotos});}
+  try{found=await discoverProducts({barcode:session.binding.barcode,name:session.name,brand:session.brand},{apiKey:deps.apiKey,fetch:providerFetch,deadline:deps.deadline,readLabel:readPhotos});}
   catch{searchCode='search_unavailable';}
   const candidates=distinctCandidates(found.candidates).map((candidate:any)=>{
     const conflict=conflictsWithPhoto(candidate,photo||partialEvidence);

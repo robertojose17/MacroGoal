@@ -4,6 +4,7 @@ import { canonicalBarcode, handleVerifiedCorrection, legacyPer100gResponseItem, 
 import { runTwoReadGate, readableLabelEvidence } from "./nutritionReadGate.mjs";
 import { handleRecovery } from "./recovery.ts";
 import { recoveryImageDataUri } from "./recovery-images.ts";
+import { createReceiptFetch, persistRecoveryReceipt } from "./recovery-receipts.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -51,7 +52,8 @@ async function callVision(
   frontDataUri: string,
   knownProductName: string | null,
   signal?: AbortSignal,
-  bounded = false
+  bounded = false,
+  providerFetch:typeof fetch = fetch
 ): Promise<{ text: string; finishReason: string | null }> {
   const prompt = `You are a careful nutrition-label transcription system.
 
@@ -94,10 +96,10 @@ If either image or any required label field is unclear, return the same schema w
     { type: "image_url", image_url: { url: labelDataUri } },
     { type: "image_url", image_url: { url: frontDataUri } },
     { type: "text", text: prompt },
-  ], signal, bounded);
+  ], signal, bounded, providerFetch);
 }
 
-async function callIndependentLabelRead(labelDataUri: string, signal?: AbortSignal, bounded=false): Promise<{ text: string; finishReason: string | null }> {
+async function callIndependentLabelRead(labelDataUri: string, signal?: AbortSignal, bounded=false, providerFetch:typeof fetch=fetch): Promise<{ text: string; finishReason: string | null }> {
   const prompt = `Independently transcribe the nutrition facts label in the single supplied image. This is a fresh reading: do not assume or reuse any previous result, expected values, product database values, or outside product knowledge. Do not infer, estimate, convert, or fill anything not legible and printed. Use null for absent or illegible values; a printed zero is 0. Detect all column headers, select the clearly labeled per-serving column, or the printed per-100-g column if no per-serving column exists, and ensure the selected basis agrees with its exact header. Read total carbohydrate, total fat, protein, calories and dietary fiber only, not sugars, saturated fat, or trans fat. Do not turn qualified values such as less than 1 g, <1 g, or trace into exact numbers. For serving size and each selected nutrient, return the exact header and basis, serving size, row label, unit, numeric value, and a short literal evidence snippet including that row label and its amount. Preserve the literal serving description, including cooking/preparation words.
 
 Return ONLY valid JSON, without markdown:
@@ -121,11 +123,11 @@ Return ONLY valid JSON, without markdown:
   return await requestVision("independent_label_only_read", [
     { type: "image_url", image_url: { url: labelDataUri } },
     { type: "text", text: prompt },
-  ], signal, bounded);
+  ], signal, bounded, providerFetch);
 }
 
-async function requestVision(stage: string, content: unknown[], signal?: AbortSignal, bounded=false): Promise<{ text: string; finishReason: string | null }> {
-  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+async function requestVision(stage: string, content: unknown[], signal?: AbortSignal, bounded=false, providerFetch:typeof fetch=fetch): Promise<{ text: string; finishReason: string | null }> {
+  const res = await providerFetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -205,20 +207,22 @@ Deno.serve(async (req) => {
       const result = await handleRecovery(body, {
         supabase, userId, secret:SERVICE_ROLE, apiKey:OPENROUTER_API_KEY, projectUrl:SUPABASE_URL,
         enabled:Deno.env.get('BARCODE_RECOVERY_ENABLED') === 'true',deadline:recoveryDeadline,
-        readPhotos:async (label, front, known) => {
+        receiptFetch:(submission,revision)=>createReceiptFetch({fetcher:fetch,submission,revision,deadline:recoveryDeadline,
+          persist:(receipt:any)=>persistRecoveryReceipt(supabase,userId,submission,receipt)}),
+        readPhotos:async (label, front, known, providerFetch=fetch) => {
           const labelData = await recoveryImageDataUri(label,fetch,recoveryDeadline);
           const frontData = await recoveryImageDataUri(front,fetch,recoveryDeadline);
           if(Date.now()>=recoveryDeadline)throw Error('request_deadline');
           let identity: {name?:string;brand?:string} = {};
           let partialEvidence: unknown = null;
           const result = await runTwoReadGate(async signal => {
-            const response=await callVision(labelData,frontData,known,signal,true);
+            const response=await callVision(labelData,frontData,known,signal,true,providerFetch);
             const parsed=extractJSON(response.text) as any;
             identity={name:parsed?.product_name,brand:parsed?.brand};
             partialEvidence=readableLabelEvidence(parsed);
             return {result:parsed,finishReason:response.finishReason};
           },async signal => {
-            const response=await callIndependentLabelRead(labelData,signal,true);
+            const response=await callIndependentLabelRead(labelData,signal,true,providerFetch);
             return {result:extractJSON(response.text),finishReason:response.finishReason};
           },{timeoutMs:Math.max(1,Math.min(30000,recoveryDeadline-Date.now()))});
           return {...result,identity,partialEvidence};
