@@ -12,7 +12,6 @@ import {
   ImageBackground,
   ScrollView,
   Image,
-  TextInput,
   Linking,
   useWindowDimensions,
 } from 'react-native';
@@ -129,6 +128,17 @@ export default function SubscriptionScreen() {
   const [affiliateCodeStatus, setAffiliateCodeStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
   const [affiliateCodeApplied, setAffiliateCodeApplied] = useState('');
   const [redemptionUrl, setRedemptionUrl] = useState<string | null>(null);
+
+  // Prefer the actual StoreKit/RevenueCat billing period. A package name
+  // alone must not label a weekly or multi-month product as monthly/annual.
+  const resolvedMonthlyPkg = packages.find((pkg: PurchasesPackage) =>
+    pkg.product?.subscriptionPeriod === 'P1M' ||
+    (!pkg.product?.subscriptionPeriod && pkg.packageType === 'MONTHLY')
+  );
+  const resolvedYearlyPkg = packages.find((pkg: PurchasesPackage) =>
+    ['P1Y', 'P12M'].includes(pkg.product?.subscriptionPeriod) ||
+    (!pkg.product?.subscriptionPeriod && pkg.packageType === 'ANNUAL')
+  );
 
   // Initialize RevenueCat and fetch offerings
   const initializeRevenueCat = async () => {
@@ -331,27 +341,18 @@ export default function SubscriptionScreen() {
     trackEvent('paywall_viewed');
   }, []);
 
-  // Auto-start yearly purchase when coming from onboarding
+  // Onboarding requests annual only. Use the same resolved package as the
+  // annual card, and leave any other available plan for an explicit selection.
   useEffect(() => {
-    if (autoStart !== 'true' || packages.length === 0 || autoStartFiredRef.current) return;
+    if (
+      autoStart !== 'true' || loading || errorMessage || isPremium ||
+      !resolvedYearlyPkg || autoStartFiredRef.current
+    ) return;
     autoStartFiredRef.current = true;
-    const yearlyPkg =
-      packages.find((p: any) => p.packageType === 'ANNUAL') ??
-      packages.find((p: any) =>
-        p.identifier.toLowerCase().includes('annual') ||
-        p.identifier.toLowerCase().includes('yearly')
-      );
-    const monthlyPkg =
-      packages.find((p: any) => p.packageType === 'MONTHLY') ??
-      packages.find((p: any) => p.identifier.toLowerCase().includes('monthly')) ??
-      packages[0];
-    const targetPkg = yearlyPkg ?? monthlyPkg;
-    if (targetPkg) {
-      setActivePlan(yearlyPkg ? 'yearly' : 'monthly');
-      console.log('[Subscription] Auto-starting yearly purchase from onboarding:', targetPkg.identifier);
-      setTimeout(() => handlePurchase(targetPkg), 500);
-    }
-  }, [packages, autoStart]); // eslint-disable-line react-hooks/exhaustive-deps
+    setActivePlan('yearly');
+    console.log('[Subscription] Auto-starting yearly purchase from onboarding:', resolvedYearlyPkg.identifier);
+    handlePurchase(resolvedYearlyPkg);
+  }, [autoStart, loading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle purchase
   const handlePurchase = async (pkg: PurchasesPackage) => {
@@ -576,8 +577,8 @@ export default function SubscriptionScreen() {
     );
   }
 
-  // Show error state if there's an error
-  if (errorMessage) {
+  // Unsupported offerings must expose the existing retry UI, not an empty paywall.
+  if (errorMessage || (!isPremium && !resolvedMonthlyPkg && !resolvedYearlyPkg)) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: DARK_BG }]} edges={['top']}>
         <View style={styles.header}>
@@ -753,30 +754,15 @@ export default function SubscriptionScreen() {
     );
   }
 
-  // Resolve packages
-  const monthlyPkg =
-    packages.find((p: any) => p.packageType === 'MONTHLY') ??
-    packages.find((p: any) => p.identifier.toLowerCase().includes('monthly'));
-
-  const yearlyPkg =
-    packages.find((p: any) => p.packageType === 'ANNUAL') ??
-    packages.find((p: any) =>
-      p.identifier.toLowerCase().includes('annual') ||
-      p.identifier.toLowerCase().includes('yearly')
-    );
-
-  const resolvedMonthlyPkg = monthlyPkg ?? (yearlyPkg ? undefined : packages[0]);
-  const resolvedYearlyPkg = yearlyPkg;
-
   const monthlyPrice = resolvedMonthlyPkg?.product?.priceString ?? '';
   const yearlyPrice = resolvedYearlyPkg?.product?.priceString ?? '';
 
-  const yearlyRawPrice = resolvedYearlyPkg?.product?.price;
-  const yearlyMonthlyEquiv = yearlyRawPrice
-    ? `$${(Number(yearlyRawPrice) / 12).toFixed(2)}${t('localization.shared.perMonth')}`
-    : null;
-
-  const selectedPkg = activePlan === 'yearly' ? resolvedYearlyPkg : resolvedMonthlyPkg;
+  // Use the store's localized equivalent; never assume a dollar currency.
+  const yearlyMonthlyEquiv = resolvedYearlyPkg?.product?.pricePerMonthString;
+  const effectivePlan = activePlan === 'yearly' && !resolvedYearlyPkg
+    ? 'monthly'
+    : activePlan;
+  const selectedPkg = effectivePlan === 'yearly' ? resolvedYearlyPkg : resolvedMonthlyPkg;
 
   const handleApplyAffiliateCode = async () => {
     const code = affiliateCodeInput.trim().toUpperCase();
@@ -944,119 +930,43 @@ export default function SubscriptionScreen() {
 
           {/* ── 3. PLANS ── */}
           <View style={styles.newPlansSection}>
-            {/* Yearly card */}
-            {resolvedYearlyPkg && (
+            {([
+              { plan: 'yearly', pkg: resolvedYearlyPkg, price: yearlyPrice },
+              { plan: 'monthly', pkg: resolvedMonthlyPkg, price: monthlyPrice },
+            ] as const).map(({ plan, pkg, price }) => pkg && (
               <TouchableOpacity
+                key={plan}
                 style={[
-                  styles.darkPlanCard,
-                  activePlan === 'yearly' && styles.darkPlanCardSelected,
+                  styles.nativePlanCard,
+                  effectivePlan === plan && styles.nativePlanCardSelected,
                 ]}
-                onPress={() => {
-                  console.log('[Subscription] Yearly plan selected');
-                  setActivePlan('yearly');
-                }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: effectivePlan === plan, disabled: purchasing }}
+                onPress={() => setActivePlan(plan)}
+                disabled={purchasing}
                 activeOpacity={0.85}
               >
-                <View style={[styles.saveBadge, { backgroundColor: '#5B9AA8' }]}>
-                  <Text style={styles.saveBadgeText}>{t('localization.shared.save58')}</Text>
+                <View style={styles.nativePlanHeading}>
+                  <View style={[styles.radioOuter, effectivePlan === plan && { borderColor: '#5B9AA8' }]}>
+                    {effectivePlan === plan && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
+                  </View>
+                  <Text style={styles.nativePlanName}>{t(`subscription.${plan}`)}</Text>
                 </View>
-
-                <View style={styles.planCardInner}>
-                  <View style={[styles.radioOuter, activePlan === 'yearly' && { borderColor: '#5B9AA8' }]}>
-                    {activePlan === 'yearly' && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    {yearlyMonthlyEquiv && (
-                      <Text style={styles.darkPlanCardTitle}>{yearlyMonthlyEquiv}</Text>
-                    )}
-                    <Text style={styles.darkPlanCardSub}>{yearlyPrice} {t('subscription.billedAnnually')}</Text>
-                    <Text style={[styles.planCardTag, { color: '#5B9AA8' }]}>
-                      {t('subscription.mostUsersChoose')}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-
-            {/* Monthly card */}
-            {resolvedMonthlyPkg && (
-              <TouchableOpacity
-                style={[
-                  styles.darkPlanCard,
-                  activePlan === 'monthly' && styles.darkPlanCardSelected,
-                ]}
-                onPress={() => {
-                  console.log('[Subscription] Monthly plan selected');
-                  setActivePlan('monthly');
-                }}
-                activeOpacity={0.85}
-              >
-                <View style={styles.planCardInner}>
-                  <View style={[styles.radioOuter, activePlan === 'monthly' && { borderColor: '#5B9AA8' }]}>
-                    {activePlan === 'monthly' && <View style={[styles.radioInner, { backgroundColor: '#5B9AA8' }]} />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.darkPlanCardPrice}>{monthlyPrice} {t('subscription.monthlyLabel')}</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-
-          </View>
-
-          {/* ── 3.5. AFFILIATE CODE ── */}
-          <View style={styles.affiliateCodeSection}>
-            <Text style={styles.affiliateCodeLabel}>{t('subscription.affiliateLabel')}</Text>
-            <View style={styles.affiliateCodeRow}>
-              <TextInput
-                style={[
-                  styles.affiliateCodeInput,
-                  affiliateCodeStatus === 'valid' && { borderColor: '#22c55e' },
-                  affiliateCodeStatus === 'invalid' && { borderColor: '#ef4444' },
-                ]}
-                placeholder={t('subscription.affiliatePlaceholder')}
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={affiliateCodeInput}
-                onChangeText={text => {
-                  setAffiliateCodeInput(text.toUpperCase().replace(/[^A-Z0-9]/g, ''));
-                  if (affiliateCodeStatus !== 'idle') {
-                    setAffiliateCodeStatus('idle');
-                    setAffiliateCodeApplied('');
-                    setRedemptionUrl(null);
-                  }
-                }}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                maxLength={20}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.affiliateCodeApplyBtn,
-                  affiliateCodeStatus === 'checking' && { opacity: 0.6 },
-                ]}
-                onPress={handleApplyAffiliateCode}
-                disabled={affiliateCodeStatus === 'checking' || !affiliateCodeInput.trim()}
-                activeOpacity={0.85}
-              >
-                {affiliateCodeStatus === 'checking' ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.affiliateCodeApplyText}>{t('subscription.affiliateApply')}</Text>
+                <Text style={styles.nativePlanPrice}>{price}</Text>
+                <Text style={styles.nativePlanPeriod}>
+                  {t(plan === 'yearly' ? 'subscription.billedYearly' : 'subscription.billedMonthly')}
+                </Text>
+                {plan === 'yearly' && yearlyMonthlyEquiv && (
+                  <Text style={styles.nativePlanEquivalent}>
+                    {'≈ '}{yearlyMonthlyEquiv}{t('subscription.perMonth')}
+                  </Text>
                 )}
               </TouchableOpacity>
-            </View>
-            {affiliateCodeStatus === 'valid' && (
-              <Text style={styles.affiliateCodeSuccess}>
-                {'✓ '}
-                {t('subscription.affiliateCodeApplied', { code: affiliateCodeApplied })}
-              </Text>
-            )}
-            {affiliateCodeStatus === 'invalid' && (
-              <Text style={styles.affiliateCodeError}>{t('subscription.affiliateInvalid')}</Text>
-            )}
+            ))}
           </View>
 
-          {/* ── 4. CTA BUTTON ── */}
+          {/* Native code entry is temporarily hidden; attribution and purchase handlers are retained. */}
+
           <View style={styles.newCtaSection}>
             <TouchableOpacity
               style={[styles.newCtaButton, purchasing && { opacity: 0.7 }]}
@@ -1083,6 +993,20 @@ export default function SubscriptionScreen() {
             >
               <Text style={styles.darkRestoreText}>{t('subscription.restorePurchases')}</Text>
             </TouchableOpacity>
+
+            <View style={styles.nativeLegalLinks}>
+              <TouchableOpacity accessibilityRole="link" onPress={() => router.push('/terms-of-use-eula')} style={styles.nativeFooterLink}>
+                <Text style={styles.nativeLegalText}>{t('subscription.subscriptionTerms')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="link" onPress={() => router.push('/privacy-policy')} style={styles.nativeFooterLink}>
+                <Text style={styles.nativeLegalText}>{t('subscription.privacyPolicy')}</Text>
+              </TouchableOpacity>
+            </View>
+            {router.canGoBack() && (
+              <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.nativeFooterLink}>
+                <Text style={styles.nativeLegalText}>{t('subscription.goBack')}</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={styles.disclaimerContainer}>
               <Text style={styles.darkDisclaimerText}>
@@ -1507,13 +1431,15 @@ const styles = StyleSheet.create({
 
   // Restore
   restoreButton: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingVertical: spacing.xs,
     alignItems: 'center',
     marginTop: spacing.xs,
   },
   darkRestoreText: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 14,
     fontWeight: '500',
   },
 
@@ -1523,10 +1449,10 @@ const styles = StyleSheet.create({
   },
   darkDisclaimerText: {
     ...typography.caption,
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.3)',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
-    lineHeight: 12,
+    lineHeight: 19,
   },
 
   // ── New paywall layout ─────────────────────────────────────────────────────
@@ -1648,6 +1574,62 @@ const styles = StyleSheet.create({
   newPlansSection: {
     marginHorizontal: 16,
     marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  nativePlanCard: {
+    flex: 1,
+    minWidth: 0,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#444',
+    backgroundColor: '#111',
+    gap: 10,
+  },
+  nativePlanCardSelected: {
+    borderColor: '#5B9AA8',
+    backgroundColor: '#14262A',
+  },
+  nativePlanHeading: {
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  nativePlanName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  nativePlanPrice: {
+    color: '#fff',
+    fontSize: 26,
+    fontWeight: '700',
+  },
+  nativePlanPeriod: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  nativePlanEquivalent: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 14,
+  },
+  nativeLegalLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    columnGap: 16,
+  },
+  nativeFooterLink: {
+    minHeight: 44,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  nativeLegalText: {
+    color: '#80BDCB',
+    fontSize: 14,
+    textAlign: 'center',
   },
 
   // CTA
@@ -1656,6 +1638,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   newCtaButton: {
+    paddingHorizontal: 16,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm + 2,
     alignItems: 'center',
@@ -1664,6 +1647,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#5B9AA8',
   },
   newCtaButtonText: {
+    textAlign: 'center',
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
