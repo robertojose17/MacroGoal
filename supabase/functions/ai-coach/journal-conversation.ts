@@ -9,7 +9,12 @@ export function boundedConversationFetch(deadline:number,fetcher:typeof fetch=fe
   if(dispatched)throw Error('conversation_already_dispatched');
   if(String(url)!=='https://openrouter.ai/api/v1/chat/completions')throw Error('unexpected_provider');
   const original=JSON.parse(String(init?.body));
-  const body=JSON.stringify({model:'google/gemini-2.5-pro',messages:original.messages,temperature:0.7,stream:true,max_tokens:2048,reasoning:{max_tokens:512},provider:{max_price:{prompt:2.5,completion:15},require_parameters:true,allow_fallbacks:false}});
+  // The caller is legacy.ts inside this server-owned adapter. Preserve only
+  // its exact structured-output mode; never forward arbitrary provider fields.
+  const responseFormat=original?.response_format;
+  const jsonObjectMode=!!responseFormat&&typeof responseFormat==='object'&&!Array.isArray(responseFormat)
+   &&Object.keys(responseFormat).length===1&&responseFormat.type==='json_object';
+  const body=JSON.stringify({model:'google/gemini-2.5-pro',messages:original.messages,temperature:0.7,stream:true,max_tokens:2048,reasoning:{max_tokens:512},...(jsonObjectMode?{response_format:{type:'json_object'}}:{}),provider:{max_price:{prompt:2.5,completion:15},require_parameters:true,allow_fallbacks:false}});
   if(new TextEncoder().encode(body).length>30000)throw Error('conversation_context_too_large');
   const ms=deadline-Date.now();if(ms<=0)throw Error('conversation_deadline');
   dispatched=true;

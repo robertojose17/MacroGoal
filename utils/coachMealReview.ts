@@ -153,7 +153,9 @@ export function editMealNutrition(option: MealEvidence, multiplier: number, entr
 
 export const needsEstimateAcknowledgement = (entry: PreparedMealEntry) => !['official','publisher_reported'].includes(entry.authority);
 
-export const hasLoggableNutrition = (entry: PreparedMealEntry) => entry.readyForConfirmation !== false && NUTRIENTS.every(k => finite(entry.nutrition[k])) && entry.nutrition.calories! > 0;
+export const hasCompleteCoreNutrition = (entry: Pick<PreparedMealEntry, 'nutrition'>) => NUTRIENTS.every(k => finite(entry.nutrition[k])) && entry.nutrition.calories! > 0;
+
+export const hasLoggableNutrition = (entry: PreparedMealEntry) => entry.readyForConfirmation !== false && hasCompleteCoreNutrition(entry);
 
 const sameValues = (a: MealNutrition, b: MealNutrition) => NUTRIENTS.every(k => a[k] === b[k]);
 

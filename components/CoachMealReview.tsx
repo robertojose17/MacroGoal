@@ -8,7 +8,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 
 import { useTranslation } from 'react-i18next';
 
-import { editMealNutrition, NUTRIENTS, needsEstimateAcknowledgement, hasLoggableNutrition, type MealReviewSession, type Nutrient, type PreparedMealEntry } from '@/utils/coachMealReview';
+import { editMealNutrition, NUTRIENTS, needsEstimateAcknowledgement, hasCompleteCoreNutrition, hasLoggableNutrition, type MealReviewSession, type Nutrient, type PreparedMealEntry } from '@/utils/coachMealReview';
 
 
 
@@ -107,7 +107,7 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
 
   const labels = es ? ['Calorías', 'Proteína', 'Carbohidratos', 'Grasas', 'Fibra'] : ['Calories', 'Protein', 'Carbohydrates', 'Fat', 'Fiber'];
 
-  const mealLabel = (es ? { breakfast:'Desayuno',lunch:'Almuerzo',dinner:'Cena',snack:'Snack' } : { breakfast:'Breakfast',lunch:'Lunch',dinner:'Dinner',snack:'Snack' })[session.context.meal];
+  const diaryLabel = say('Diary', 'Diario');
 
   const shown = prepared?.nutrition ?? previewValues ?? edit?.values;
 
@@ -122,7 +122,7 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
         {source.kind==='general'&&<Text style={s.muted}>{say('General meal estimate — not a verified restaurant item.','Estimación general de comida; no es un plato verificado de un restaurante.')}</Text>}
 
       {coachRecipeTimeLabel(source,es)&&<Text style={s.muted}>{coachRecipeTimeLabel(source,es)}</Text>}
-      <Text style={s.body}>{mealLabel} · {session.context.date}</Text>
+      <Text style={s.body}>{diaryLabel} · {session.context.date}</Text>
 
       <Text style={s.muted}>{authority(prepared?.authority ?? (edit?.changed.length ? 'user_edited' : source.nutrition.authority))}</Text>
 
@@ -167,7 +167,8 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
 
         {prepared ? <>
 
-          {!hasLoggableNutrition(prepared) && <Text accessibilityRole="alert" style={s.body}>{say('Some nutrients are unknown. Edit them with values you can estimate before adding; unknown values will not be saved as zero.', 'Faltan nutrientes. Introduce valores que puedas estimar antes de añadir; los desconocidos no se guardarán como cero.')}</Text>}
+          {!hasCompleteCoreNutrition(prepared) && <Text accessibilityRole="alert" style={s.body}>{say('Some nutrients are unknown. Edit them with values you can estimate before adding; unknown values will not be saved as zero.', 'Faltan nutrientes. Introduce valores que puedas estimar antes de añadir; los desconocidos no se guardarán como cero.')}</Text>}
+          {hasCompleteCoreNutrition(prepared) && prepared.readyForConfirmation === false && <Text accessibilityRole="alert" style={s.body}>{say('This meal is not ready to add yet. Choose “Edit portion or nutrition,” complete any required review checks, and request the review again.', 'Esta comida aún no está lista para añadirse. Elige “Editar porción o nutrientes”, completa las verificaciones necesarias y solicita la revisión otra vez.')}</Text>}
 
           {needsEstimateAcknowledgement(prepared) && <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: ack, disabled: busy }} disabled={busy} onPress={() => setAck(value => !value)} style={s.checkbox}><Text style={s.body}>{ack ? '✓ ' : '○ '}{say('I understand these numbers are estimates or my edits.', 'Entiendo que estos números son estimaciones o mis ediciones.')}</Text></Pressable>}
 

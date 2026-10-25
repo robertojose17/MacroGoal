@@ -1,5 +1,8 @@
 import i18n from '@/lib/i18n';
 import {coachFoodDetailsPresentation,coachDisplayServingOptions} from '@/utils/coachFoodDetailsPresentation';
+import {clearCoachPrivateMealDetails,hasCoachPrivateDetailsReference,loadCoachPrivateMealDetails,type CoachPrivateMealDetails} from '@/utils/coachPrivateMealDetails';
+import {coachDailyServices} from '@/utils/coachDailyServices';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAppLocale } from '@/lib/localization';
 
 import { OpenFoodFactsProduct, extractServingSize, extractNutrition, extractUnitFromString } from '@/utils/openFoodFacts';
@@ -746,8 +749,27 @@ export default function FoodDetailsLayout({
   const [showCoachDetails, setShowCoachDetails] = useState(false);
   // Keep the persisted Coach label for display only: the generic product adapter
   // wraps serving descriptions and must retain its existing calculation behavior.
-  const [savedCoachServing, setSavedCoachServing] = useState<{itemId:string;description:string|null}|null>(null);
-  const coachDetails = coachFoodDetailsPresentation(mode==='edit'&&savedCoachServing?.itemId===itemId?savedCoachServing.description:null, i18n.language.startsWith('es'))
+  const [savedCoachServing, setSavedCoachServing] = useState<{owner:string;itemId:string;description:string|null;details:CoachPrivateMealDetails|null}|null>(null);
+  const [coachDetailsOwner,setCoachDetailsOwner]=useState<string|null>(null);
+  const coachDetailsOwnerRef=useRef<string|null>(null);
+  useEffect(()=>{
+    let mounted=true;
+    const adoptOwner=(owner:string|null)=>{
+      if(!mounted)return;
+      const previous=coachDetailsOwnerRef.current;
+      coachDetailsOwnerRef.current=owner;
+      setCoachDetailsOwner(owner);
+      if(!owner||previous&&previous!==owner){
+        setSavedCoachServing(null);
+        if(previous&&previous!==owner)void clearCoachPrivateMealDetails(AsyncStorage,previous);
+      }
+    };
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>adoptOwner(session?.user?.id??null));
+    void supabase.auth.getUser().then(({data})=>adoptOwner(data.user?.id??null)).catch(()=>adoptOwner(null));
+    return()=>{mounted=false;subscription.unsubscribe();};
+  },[]);
+  useEffect(()=>{setSavedCoachServing(null);},[itemId]);
+  const coachDetails = coachFoodDetailsPresentation(mode==='edit'&&savedCoachServing?.owner===coachDetailsOwner&&savedCoachServing?.itemId===itemId?savedCoachServing.description:null, i18n.language.startsWith('es'))
     ?? coachFoodDetailsPresentation(product?.serving_size, i18n.language.startsWith('es'));
 
 
@@ -937,6 +959,12 @@ export default function FoodDetailsLayout({
         return;
       }
 
+      const { data: { user: currentOwner } } = await supabase.auth.getUser();
+      if (!currentOwner || currentOwner.id !== user.id) {
+        setSavedCoachServing(null);
+        return;
+      }
+
       // Use food_name/food_brand columns as fallback when foods JOIN is null
       const food = mealItem.foods ?? (
         (mealItem as any).food_name
@@ -1084,8 +1112,17 @@ export default function FoodDetailsLayout({
         });
       }
 
+      const privateDataItem=mealItem as any;
+      const savedMealId=String(privateDataItem.id);
+      const localCoachDetails=await loadCoachPrivateMealDetails(AsyncStorage,user.id,savedMealId);
+      const privateLink=privateDataItem.off_data&&typeof privateDataItem.off_data==='object'?privateDataItem.off_data.coach_private_details:null;
+      const hasPrivateLink=hasCoachPrivateDetailsReference(privateLink);
+      const {data:{user:latestOwner}}=await supabase.auth.getUser();
+      if(!latestOwner||latestOwner.id!==user.id){setSavedCoachServing(null);return;}
       setProduct(mockProduct);
-      setSavedCoachServing({itemId:itemId!,description:typeof mealItem.serving_description==='string'?mealItem.serving_description:null});
+      coachDetailsOwnerRef.current=user.id;setCoachDetailsOwner(user.id);setSavedCoachServing({owner:user.id,itemId:itemId!,description:typeof privateDataItem.serving_description==='string'?privateDataItem.serving_description:null,details:localCoachDetails});
+      const mealDetailsService=coachDailyServices.experience;
+      if(hasPrivateLink&&mealDetailsService){void mealDetailsService.savedDetails(savedMealId).then(async resolved=>{if(!resolved)return;const {data:{user:resolvedOwner}}=await supabase.auth.getUser();if(!resolvedOwner||resolvedOwner.id!==user.id||coachDetailsOwnerRef.current!==user.id)return;const crossDeviceDetails={...resolved,ingredients:localCoachDetails?.ingredients??[],instructions:localCoachDetails?.instructions??[],portion:localCoachDetails?.portion||resolved.portion,source:resolved.source??localCoachDetails?.source??null};setSavedCoachServing(current=>current?.owner===user.id&&current.itemId===itemId?{...current,details:crossDeviceDetails}:current);}).catch(()=>{});}
 
       setPer100Macros({
         calories: per100Cals,
@@ -2292,7 +2329,7 @@ export default function FoodDetailsLayout({
           <TouchableOpacity accessibilityRole="button" accessibilityState={{expanded:showCoachDetails}} onPress={()=>setShowCoachDetails(value=>!value)} style={{minHeight:44,justifyContent:'center'}}>
             <Text style={[styles.sectionTitle,{color:textColor}]}>{i18n.language.startsWith('es')?'Detalles':'Details'} {showCoachDetails?'−':'+'}</Text>
           </TouchableOpacity>
-          {showCoachDetails&&<><Text style={{color:textColor,lineHeight:22}}>{coachDetails.description}</Text><Text style={{color:isDark?colors.textSecondaryDark:colors.textSecondary,fontSize:13,lineHeight:20,marginTop:8}}>{coachDetails.note}</Text></>}
+          {showCoachDetails&&<><Text style={{color:textColor,lineHeight:22}}>{coachDetails.description}</Text>{savedCoachServing?.owner===coachDetailsOwner&&savedCoachServing?.itemId===itemId&&savedCoachServing.details&&<><Text style={{color:textColor,lineHeight:22,marginTop:8}}>{savedCoachServing.details.portion}{savedCoachServing.details.confirmedMass?` · ${savedCoachServing.details.confirmedMass} g`:''}</Text>{savedCoachServing.details.ingredients.length>0&&<><Text style={{color:textColor,fontWeight:'600',marginTop:8}}>{i18n.language.startsWith('es')?'Ingredientes':'Ingredients'}</Text>{savedCoachServing.details.ingredients.map((x,i)=><Text key={'i'+i} style={{color:textColor,lineHeight:22}}>{x}</Text>)}</>}{savedCoachServing.details.instructions.length>0&&<><Text style={{color:textColor,fontWeight:'600',marginTop:8}}>{i18n.language.startsWith('es')?'Preparación':'Preparation'}</Text>{savedCoachServing.details.instructions.map((x,i)=><Text key={'s'+i} style={{color:textColor,lineHeight:22}}>{i+1}. {x}</Text>)}</>}{savedCoachServing.details.assumptions.length>0&&<><Text style={{color:textColor,fontWeight:'600',marginTop:8}}>{i18n.language.startsWith('es')?'Notas':'Notes'}</Text>{savedCoachServing.details.assumptions.map((x,i)=><Text key={'a'+i} style={{color:textColor,lineHeight:22}}>{x}</Text>)}</>}{savedCoachServing.details.components.length>0&&<><Text style={{color:textColor,fontWeight:'600',marginTop:8}}>{i18n.language.startsWith('es')?'Componentes revisados':'Reviewed components'}</Text>{savedCoachServing.details.components.map((x,i)=><Text key={'c'+i} style={{color:textColor,lineHeight:22}}>{x.quantity} {x.unit} {x.name}{x.grams?` (${x.grams} g)`:''}</Text>)}</>}{savedCoachServing.details.source&&<Text style={{color:isDark?colors.textSecondaryDark:colors.textSecondary,fontSize:13,lineHeight:20}}>{savedCoachServing.details.source}</Text>}</>}<Text style={{color:isDark?colors.textSecondaryDark:colors.textSecondary,fontSize:13,lineHeight:20,marginTop:8}}>{coachDetails.note}</Text></>}
         </View>}
 
         {source === 'barcode' && (

@@ -21,6 +21,8 @@ import ProgressCircle from '@/components/ProgressCircle';
 import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearCoachPrivateMealDetails } from '@/utils/coachPrivateMealDetails';
 import {
   listMealPlans,
   deleteMealPlan,
@@ -778,6 +780,8 @@ export default function HomeScreen() {
         throw error;
       }
       console.log('[Home] Successfully deleted from database');
+      const { data: { user: cacheOwner } } = await supabase.auth.getUser();
+      if (cacheOwner) await clearCoachPrivateMealDetails(AsyncStorage, cacheOwner.id, itemId);
     } catch (err: any) {
       console.error('[Home] Error in handleDeleteFood:', err);
       Alert.alert(t('home.deleteFailed'), err?.message || t('home.failedToDeleteFood'), [{ text: t('common.ok') }]);

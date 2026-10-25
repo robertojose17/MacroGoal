@@ -1,4 +1,5 @@
 import {createMealFlowListRoute} from './meal-flow-list.ts';
+import {createSavedMealDetailsRoute} from './saved-meal-details.ts';
 import {createJournalConversation} from './journal-conversation.ts';
 import {createMealChoiceRoute} from './meal-choice-route.ts';
 import {createMealExploreRoute} from './meal-explore-route.ts';
@@ -16,5 +17,6 @@ const guided=createMealChoiceRoute(db,(owner,now)=>fetchRevenueCatAccess(owner,D
 const explore=createMealExploreRoute(db,modern,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now),Date.now,fetch,{key:()=>Deno.env.get('OPENROUTER_API_KEY')??''},authorization=>{const key=Deno.env.get('SUPABASE_ANON_KEY');if(!key)throw Error('catalog_unavailable');return createClient(Deno.env.get('SUPABASE_URL')!,key,{global:{headers:{Authorization:authorization}},auth:{persistSession:false,autoRefreshToken:false}});});
 const conversation=createJournalConversation(db,legacy,(owner,now)=>fetchRevenueCatAccess(owner,Deno.env.get('REVENUECAT_API_KEY'),now));
 const mealFlows=createMealFlowListRoute(db);
-Deno.serve(async(req:Request)=>(await mealFlows(req))??(await conversation(req))??(await explore(req))??(await guided(req))??(await daily(req))??original(req));
+const savedMealDetails=createSavedMealDetailsRoute(db);
+Deno.serve(async(req:Request)=>(await savedMealDetails(req))??(await mealFlows(req))??(await conversation(req))??(await explore(req))??(await guided(req))??(await daily(req))??original(req));
 

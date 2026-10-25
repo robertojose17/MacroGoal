@@ -1,3 +1,4 @@
+import {RECOMMENDATION_INSTRUCTIONS,STRUCTURED_MEAL_OUTPUT_INSTRUCTIONS,extractMealRecommendation,recommendationHandoff,recommendationSummary,shouldBufferMealResponse,shouldUseStructuredMealOutput} from './meal-recommendation.ts';
 import {savedFoodPreferences,savedFoodContext} from './saved-food-preferences.ts';
 import {MEAL_CONVERSATION_INSTRUCTIONS,extractMealConversation,mealConversationStream} from './meal-conversation.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -535,21 +536,12 @@ ${coachActionsBlock}
 ${returningUserContextBlock}
 Today: ${today}
 
-CONVERSATION PROGRESSION RULES:
-- Messages 1-3: Ask questions to understand the user's lifestyle, schedule, cooking habits, and constraints. One question per message.
-- Message 4+: Only after understanding their lifestyle, offer to build a meal plan or give specific recommendations
-- Never offer a meal plan before message 4
-- Never assume the user's schedule, work type, or weekly routine â€” always ask first
-
-NATURAL ONBOARDING RULES (replace the old modal â€” learn through conversation):
-- You no longer receive pre-filled onboarding answers. Learn about the user naturally through conversation.
-- The COACH MEMORY section above shows what you already know. Check it before asking anything.
-- If "onboarding_experience" is not in memory, you need to learn the user's experience level. If "onboarding_challenge" is not in memory, you need to learn their biggest challenge.
-- Never ask two onboarding questions at once. Never say "Step 1 of 3" or anything form-like. Just conversation.
-- When the user's answer reveals their experience level, use the save_memory tool to store: key="onboarding_experience", value one of: "beginner" / "intermediate" / "advanced", category="onboarding"
-- When the user's answer reveals their biggest challenge, use save_memory: key="onboarding_challenge", value one of: "cravings" / "not_seeing_results" / "inconsistency" / "dont_know_what_to_eat", category="onboarding"
-- When the user's answer reveals whether they want a meal plan, use save_memory: key="onboarding_meal_plan", value one of: "yes" / "no", category="onboarding"
-- After saving, adapt your tone and advice from that point forward based on what you learned.
+DIRECT HELP AND SAVED CONTEXT:
+- Answer the current request immediately. A request for food or a meal is never blocked by onboarding, message count, tracking experience or lifestyle questions.
+- Use the saved dietary restrictions, food preferences, current daily targets and remaining macros already supplied above. Do not ask the user to fill them again.
+- For a meal request, propose one useful editable meal with explicit estimated portions and numbers. Ask at most one question only if essential information is genuinely missing.
+- If portions or preparation are assumed, disclose that they are estimates; never describe guessed restaurant nutrition as official or say a meal fits perfectly without numerical support.
+- Learn optional background naturally when relevant; never divert a food request into a questionnaire. Never invent their routine or interpret a preference as an allergy.
 
 MEMORY CATEGORIZATION RULES â€” when using save_memory, always pick the right category:
 - User mentions food they like or dislike (e.g. "I love chicken", "I hate broccoli") â†’ category: food_preferences
@@ -616,9 +608,11 @@ INSTRUCTIONS:
 - When adding food to diary: ACTION_PROPOSAL: {"action_type":"add_food_to_diary","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"food_name":"...","calories":0,"protein":0,"carbs":0,"fats":0,"date":"YYYY-MM-DD","meal_type":"lunch","quantity":1,"serving_unit":"serving"}}
 - When recommending a calorie adjustment based on data: write 1-2 sentences with the evidence, then append ACTION_PROPOSAL: {"action_type":"adjust_calories","action_id":"<uuid>","confirmation_token":"<uuid>","proposal":{"reason":"...","current_calories":<number>,"proposed_calories":<number>,"adjustment_amount":<number>,"expected_effect":"...","evidence":"..."}}`;
 
+    const structuredMealOutput=shouldUseStructuredMealOutput(messages);
+    const recommendationInstructions=structuredMealOutput?`${RECOMMENDATION_INSTRUCTIONS}\n${STRUCTURED_MEAL_OUTPUT_INSTRUCTIONS}`:RECOMMENDATION_INSTRUCTIONS;
     // Gemini doesn't support system role
     const apiMessages: { role: string; content: string }[] = [
-      { role: "user", content: `[SYSTEM INSTRUCTIONS]\n${systemPrompt}\n${MEAL_CONVERSATION_INSTRUCTIONS}` },
+      { role: "user", content: `[SYSTEM INSTRUCTIONS]\n${systemPrompt}\n${MEAL_CONVERSATION_INSTRUCTIONS}\n${recommendationInstructions}` },
       { role: "assistant", content: "Understood. I have your full profile, goals, nutrition history, TDEE trends, habit trackers, and coach action history. How can I help?" },
       ...messages.map((m) => ({
         role: m.role,
@@ -629,7 +623,7 @@ INSTRUCTIONS:
       })),
     ];
 
-    console.log("[AICoach] Calling OpenRouter streaming, model:", DEFAULT_MODEL, "messages:", apiMessages.length);
+    console.log("[AICoach] Calling OpenRouter streaming, model:", DEFAULT_MODEL, "messages:", apiMessages.length, "structured_meal_output:", structuredMealOutput);
 
     const chatRes = await (control?.providerFetch??fetch)(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
@@ -645,6 +639,7 @@ INSTRUCTIONS:
         temperature: 0.7,
         max_tokens: 4096,
         stream: true,
+        ...(structuredMealOutput?{response_format:{type:"json_object"},provider:{require_parameters:true}}:{}),
       }),
     });
 
@@ -659,6 +654,7 @@ INSTRUCTIONS:
 
     // Stream tokens to client as SSE
     const encoder = new TextEncoder();
+    const bufferMealResponse=shouldBufferMealResponse(messages);
     const stream = new ReadableStream({
       async start(controller) {
         const reader = chatRes.body!.getReader();
@@ -682,7 +678,7 @@ INSTRUCTIONS:
                 const token = json.choices?.[0]?.delta?.content;
                 if (token) {
                   fullText += token;
-                  const visible=mealStream.push(token);if(visible)controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token:visible })}\n\n`));
+                  const visible=mealStream.push(token);if(visible&&!bufferMealResponse)controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token:visible })}\n\n`));
                 }
               } catch { /* skip malformed */ }
             }
@@ -691,8 +687,11 @@ INSTRUCTIONS:
           reader.releaseLock();
         }
 
-        const tail=mealStream.finish();if(tail)controller.enqueue(encoder.encode(`data: ${JSON.stringify({token:tail})}\n\n`));
-        const mealConversation=extractMealConversation(fullText,messages,savedPreferences);fullText=mealConversation.text;
+        const tail=mealStream.finish();if(tail&&!bufferMealResponse)controller.enqueue(encoder.encode(`data: ${JSON.stringify({token:tail})}\n\n`));
+        const mealRecommendation=extractMealRecommendation(fullText,messages,savedPreferences,(stage,code)=>console.info("[AICoach] Meal recommendation rejected",JSON.stringify({request_id:requestId,stage,code})),structuredMealOutput);
+        const mealConversation=mealRecommendation.recommendation?{text:mealRecommendation.text,handoff:recommendationHandoff(mealRecommendation.recommendation)}:(mealRecommendation.handled||mealRecommendation.rejected)?{text:mealRecommendation.text,handoff:mealRecommendation.handoff??null}:extractMealConversation(mealRecommendation.text,messages,savedPreferences);
+        const lastSubstantive=[...messages].reverse().find((m:any)=>m?.role==='user'&&typeof m.content==='string')?.content??'';
+        fullText=mealRecommendation.recommendation?recommendationSummary(mealRecommendation.recommendation,language==='es'||/\b(?:quiero|quisiera|comida|pollo|arroz|dame|agregar|guardar|porci[oó]n|recomienda)\b/i.test(lastSubstantive)):mealConversation.text;
         // Guard: if OpenRouter returned no tokens, send a fallback so the client never gets an empty bubble
         if (fullText.trim().length === 0) {
           console.warn("[AICoach] OpenRouter returned empty response â€” sending fallback token");

@@ -10,6 +10,8 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import ProgressCircle from '@/components/ProgressCircle';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearCoachPrivateMealDetails } from '@/utils/coachPrivateMealDetails';
 import { formatServing } from '@/utils/servingFormat';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { calcMacros } from '@/utils/macros';
@@ -321,6 +323,8 @@ export default function HomeScreen() {
       }
 
       console.log('[Home Web] Successfully deleted from database');
+      const { data: { user: cacheOwner } } = await supabase.auth.getUser();
+      if (cacheOwner) await clearCoachPrivateMealDetails(AsyncStorage, cacheOwner.id, itemId);
     } catch (err: any) {
       console.error('[Home Web] Error in handleDeleteFood:', err);
       Alert.alert(t('localization.screens.deleteFailed'), t('localization.screens.deleteEntryFailed'), [{ text: 'OK' }]);

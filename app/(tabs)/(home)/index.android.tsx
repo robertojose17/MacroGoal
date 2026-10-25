@@ -21,6 +21,8 @@ import ProgressCircle from '@/components/ProgressCircle';
 import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { supabase } from '@/lib/supabase/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearCoachPrivateMealDetails } from '@/utils/coachPrivateMealDetails';
 import {
   listMealPlans,
   deleteMealPlan,
@@ -31,6 +33,7 @@ import { listTemplatePlans, type TemplatePlan } from '@/utils/templatePlansApi';
 import { formatServing } from '@/utils/servingFormat';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { diaryMealTypeForLocalTime } from '@/utils/diaryMealType';
 import { usePremium } from '@/hooks/usePremium';
 import { useWidget } from '@/contexts/WidgetContext';
 import { calcMacros } from '@/utils/macros';
@@ -532,6 +535,8 @@ export default function HomeScreen() {
         throw error;
       }
       console.log('[Home Android] Successfully deleted from database');
+      const { data: { user: cacheOwner } } = await supabase.auth.getUser();
+      if (cacheOwner) await clearCoachPrivateMealDetails(AsyncStorage, cacheOwner.id, itemId);
     } catch (err: any) {
       console.error('[Home Android] Error in handleDeleteFood:', err);
       Alert.alert(t('localization.screens.deleteFailed'), t('localization.screens.deleteEntryFailed'), [{ text: 'OK' }]);
@@ -1240,12 +1245,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.addMealButton}
               onPress={() => {
-                const hour = new Date().getHours();
-                let mealType: MealType = 'snack';
-                if (hour >= 6 && hour < 10) mealType = 'breakfast';
-                else if (hour >= 10 && hour < 15) mealType = 'lunch';
-                else if (hour >= 15 && hour < 18) mealType = 'snack';
-                else if (hour >= 18 && hour < 22) mealType = 'dinner';
+                const mealType: MealType = diaryMealTypeForLocalTime();
                 console.log('[Home Android] Add food pressed, smart meal type:', mealType);
                 handleAddFood(mealType);
               }}

@@ -8,6 +8,8 @@ import { createMealTransport, type MealAccess, type MealExploreInput, type MealR
 import { createMealReviewSession, NUTRIENTS, scaleMealNutrition, type MealReviewContext, type MealReviewDependencies, type MealReviewEdit, type MealEvidence, type PreparedMealEntry } from './coachMealReview';
 import { existingMealLogPayload, mealEvidenceFromOption } from './coachMealReviewAdapter';
 import {noResultsContext} from './coachNoResults';
+import {saveCoachPrivateMealDetails} from './coachPrivateMealDetails';
+import type {CoachPrivateMealDetails} from './coachPrivateMealDetails';
 
 export type MealChoices = { flowId?:string;kind:'ready'; owner:string; date:string; meal:DailyMealSlot; mode:MealExploreInput['mode']; requestId:string; options:MealEvidence[]; galleryNoMatch?:boolean; question?:string; publicRequest?:Record<string,unknown>; noResults?:NonNullable<ReturnType<typeof noResultsContext>>; capabilities:{discovery:boolean;estimate:boolean;reason:string|null}; };
 export type MealChoiceOutcome = MealChoices | Exclude<MealResponse,{kind:'ready'}>;
@@ -23,7 +25,10 @@ export function createMealServices(deps: {
   subscribeInvalidation(owner:string,onInvalidate:()=>void):()=>void;
   catalogIdentity?:ReturnType<typeof createCoachCatalogIdentity>;
   searchIngredients?(query:string):Promise<MealComponent[]>;
-  write(body:(ReturnType<typeof existingMealLogPayload>|ReturnType<typeof coachCatalogDiaryPayload>)&{p_logged_at:string}):Promise<void>;
+  persistPrivateDetailsLink?(owner:string,mealItemId:string,reviewRequestId:string,optionId:string):Promise<boolean>;
+  reportPrivateDetailsOutcome?(value:'log_food_missing_meal_item_id'|'private_link_writer_unavailable'):void;
+  resolvePrivateDetails?(mealItemId:string):Promise<CoachPrivateMealDetails|null>;
+  write(body:(ReturnType<typeof existingMealLogPayload>|ReturnType<typeof coachCatalogDiaryPayload>)&{p_logged_at:string}):Promise<unknown>;
 }) {
  function choices(result:MealResponse):MealChoiceOutcome {
   if(result.kind!=='ready')return result;
@@ -63,7 +68,7 @@ export function createMealServices(deps: {
     return entry;
    },
    prepareIdentity:deps.catalogIdentity,
-   confirm:async(entry,identityId,consent)=>{const payload=deps.catalogIdentity?(identityId&&consent?coachCatalogDiaryPayload(entry,consent,identityId):(()=>{throw Error('catalog_consent_required')})()):existingMealLogPayload(context,entry);await deps.write({...payload,p_logged_at:new Date().toISOString()});},
+  confirm:async(entry,identityId,consent)=>{const payload=deps.catalogIdentity?(identityId&&consent?coachCatalogDiaryPayload(entry,consent,identityId):(()=>{throw Error('catalog_consent_required')})()):existingMealLogPayload(context,entry);const written=await deps.write({...payload,p_logged_at:new Date().toISOString()}) as any;const mealItemId=typeof written?.meal_item_id==='string'?written.meal_item_id:null;if(mealItemId){if(deps.persistPrivateDetailsLink){try{await deps.persistPrivateDetailsLink(entry.owner,mealItemId,entry.confirmationId,entry.optionId);}catch{/* The diary row is already saved; never repeat log_food to repair metadata. */}}else deps.reportPrivateDetailsOutcome?.('private_link_writer_unavailable');try{await saveCoachPrivateMealDetails(deps.store,entry.owner,mealItemId,entry,context.option);}catch{/* Local detail enrichment must never change the diary save result. */}}else deps.reportPrivateDetailsOutcome?.('log_food_missing_meal_item_id');},
   },cached?.edit);
  }
  async function importDiscovery(access:MealAccess,result:MealResponse):Promise<MealChoiceOutcome>{if(result.kind!=='ready')return result;if(await deps.owner()!==result.owner||deps.today()!==result.date)return {kind:'blocked',reason:'scope_changed'};return choices(await deps.transport.run(access,{operation:'import_discovery',source_request_id:result.requestId},{flowId:result.flowId,meal:result.meal,mode:result.mode}));}
@@ -77,14 +82,15 @@ export function createMealServices(deps: {
   owner:deps.owner,today:deps.today,subscribeInvalidation:deps.subscribeInvalidation,
   pending:deps.transport.pending,
   saved:deps.transport.saved,
+  savedDetails:(mealItemId:string)=>deps.resolvePrivateDetails?.(mealItemId)??Promise.resolve(null),
   listSaved:(access:()=>ReturnType<MealReviewDependencies['access']>)=>deps.transport.savedFlows.list(access),
   restoreSaved:async(access:()=>ReturnType<MealReviewDependencies['access']>,flow:Parameters<typeof deps.transport.savedFlows.recover>[1])=>{const r=await deps.transport.savedFlows.recover(access,flow);return r.kind==='ready'?choices({...r,flowId:'saved:'+r.requestId,meal:'lunch'}):{kind:'unavailable' as const,reason:'saved_options_unavailable'};},
   restore:async(access:MealAccess,flowId?:string)=>choices(await deps.transport.restore(access,flowId)),
   explore:async(access:MealAccess,input:MealExploreInput,meal:DailyMealSlot,flowId?:string)=>choices(await deps.transport.run(access,{operation:'explore',...input},{flowId,meal,mode:input.mode})),
-  prepareSelected:async(access:MealAccess,handoff:ScopedMealConversation,flowId?:string)=>{
+  prepareSelected:async(access:MealAccess,handoff:ScopedMealConversation,flowId?:string,optionId?:string)=>{
    const value=parseMealConversation(handoff.value),owner=await deps.owner();
-   if(!value?.selected_meal||!handoff.requestId||! /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(handoff.requestId)||owner!==handoff.owner||deps.today()!==handoff.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:'selected_meal_unavailable'} as const;
-   return choices(await deps.transport.run(access,{operation:'prepare_general_estimate',source_request_id:handoff.requestId,portion_label:value.selected_meal.portion_label,general_meal_acknowledged:true},{flowId,meal:'lunch',mode:'quick'}));
+   if(!value||(optionId?!value.options.some(o=>o.id===optionId):!value.selected_meal)||!handoff.requestId||! /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(handoff.requestId)||owner!==handoff.owner||deps.today()!==handoff.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:'selected_meal_unavailable'} as const;
+   return choices(await deps.transport.run(access,optionId?{operation:'prepare_general_estimate',source_request_id:handoff.requestId,option_id:optionId}:{operation:'prepare_general_estimate',source_request_id:handoff.requestId,portion_label:value.selected_meal!.portion_label,general_meal_acknowledged:true},{flowId,meal:'lunch',mode:value.fields.mode??'quick'}));
   },
   prepareGeneral:async(access:MealAccess,source:MealChoices,portion:string)=>{
    if(!source.noResults||!portion.trim()||portion.length>160||await deps.owner()!==source.owner||deps.today()!==source.date||dailyAccess(typeof access==='function'?access():access)!=='ready')return {kind:'blocked',reason:'general_meal_confirmation_required'} as const;

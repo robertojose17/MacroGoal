@@ -1,11 +1,18 @@
 import type {MealOption} from './gallery-meals.ts';
 import {dietaryConstraints,constrainMeals} from './dietary-constraints.ts';
 import {compoundFoodParts} from './meal-retrieval-outcome.ts';
-import {publicFood,publicPortionPart} from './coach-lookup-intent.ts';
+import {publicFood,publicPortionPart,publicTypography} from './coach-lookup-intent.ts';
 export function validatePublicPortion(portion:unknown):asserts portion is string{
- if(typeof portion!=='string'||!portion.trim()||portion.length>160)throw Error('portion_clarification_required');
- // Validate every complete comma-delimited description; never strip private words.
- const parts=portion.split(',').map(x=>x.trim());
+ if(typeof portion!=='string'||!portion.trim()||portion.length>160||/[\u0000-\u001f\u007f]/.test(portion))throw Error('portion_clarification_required');
+ // Parentheses and a terminal numeric multiplier are serving-label typography.
+ // Validate their contents as data; keep the original request/portion unchanged.
+ const label=publicTypography(portion);let depth=0;
+ for(const char of label){if(char==='('&&++depth>2||char===')'&&--depth<0)throw Error('portion_clarification_required');}
+ if(depth||/\(\s*\)/.test(label))throw Error('portion_clarification_required');
+ const syntax=label.replace(/(\d+(?:\.\d+)?)\s*×(?=\s*(?:[),.]|$))/gu,'$1 times').replace(/[()]/g,' ').replace(/\.\s*$/,'');
+ // Every word, quantity and comma-delimited component still passes the existing
+ // bounded privacy/instruction grammar. This never changes discovery food limits.
+ const parts=syntax.split(',').map(x=>x.trim().replace(/\s+/g,' '));
  if(parts.length>5||parts.some(x=>!publicPortionPart(x)))throw Error('portion_clarification_required');
 }
 export function validateGeneralEstimateOption(option:MealOption):void{

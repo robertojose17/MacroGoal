@@ -8,6 +8,7 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { toLocalDateString } from './dateUtils';
 import { createCoachDailyTransport } from './coachDailyTransport';
 import { createManualHandoffServices } from './coachManualHandoff';
+import { coachPrivateDetailsFromResolver, persistCoachPrivateDetailsReference } from './coachPrivateMealDetails';
 
 // UUID is a deduplication key, never an authorization secret. Matches the existing
 // candidate journal's UUID algorithm without importing unrelated chat machinery.
@@ -42,13 +43,28 @@ const mealTransport = createMealTransport({ owner: transport.owner, today: toLoc
     return result.data && typeof result.data.text === 'function' && result.data.headers ? result.data as Response : new Response(JSON.stringify(result.data), { headers: { 'Content-Type': 'application/json' } });
   },
 });
+const mealItemPrivateDataApi=supabase as any;
+function reportPrivateDetailsOutcome(value:string){if(typeof __DEV__!=='undefined'&&__DEV__)console.info('[CoachPrivateDetailsLink]',value);}
+async function persistPrivateDetailsLink(owner:string,mealItemId:string,reviewRequestId:string,optionId:string){
+ return persistCoachPrivateDetailsReference({owner,mealItemId,reviewRequestId,optionId,currentOwner:transport.owner,
+  async read(id){const {data,error}=await mealItemPrivateDataApi.from('meal_items').select('off_data').eq('id',id).maybeSingle();return {value:data?.off_data??null,error};},
+  async compareAndSet(id,expected,next){let query=mealItemPrivateDataApi.from('meal_items').update({off_data:next}).eq('id',id);query=expected===null?query.is('off_data',null):query.filter('off_data','eq',JSON.stringify(expected));const {data,error}=await query.select('id').maybeSingle();return {updated:data?.id===id,error};},
+  onOutcome:reportPrivateDetailsOutcome
+ });
+}
+async function resolvePrivateDetails(mealItemId:string){
+ if(typeof mealItemId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mealItemId))return null;
+ const owner=await transport.owner();if(!owner)return null;
+ try{const {data,error}=await supabase.functions.invoke('ai-coach',{body:{intent:'get_saved_meal_details',meal_item_id:mealItemId}});if(error||!data||await transport.owner()!==owner)return null;return coachPrivateDetailsFromResolver(data,owner,mealItemId);}catch{return null;}
+}
 const catalogApi=supabase as unknown as {from(table:'foods'):{select(columns:string):{eq(column:'id',id:string):{maybeSingle():Promise<{data:Record<string,unknown>|null;error:unknown}>}};insert(row:PublicCoachFood):PromiseLike<{error:unknown}>}};
 const catalogIdentity=createCoachCatalogIdentity({store:AsyncStorage,owner:transport.owner,
  async read(id){const {data,error}=await catalogApi.from('foods').select('id,name,serving_amount,serving_unit,calories,protein,carbs,fats,fiber,user_created,created_by').eq('id',id).maybeSingle();if(error)throw error;if(!data)return null;for(const k of ['serving_amount','calories','protein','carbs','fats','fiber']){const value=(data as any)[k];if(!['number','string'].includes(typeof value)||value===''||!Number.isFinite(Number(value)))throw Error('invalid_catalog_row');}return {...data,serving_amount:Number(data.serving_amount),calories:Number(data.calories),protein:Number(data.protein),carbs:Number(data.carbs),fats:Number(data.fats),fiber:Number(data.fiber)} as any;},
  async insert(row){const {error}=await catalogApi.from('foods').insert(row);if(error)throw error;}
 });
 const mealExperience = createMealServices({ searchIngredients:createCoachIngredientSearch(supabase,transport.owner),catalogIdentity, transport: mealTransport, owner: transport.owner, today: toLocalDateString, store: AsyncStorage,
+  persistPrivateDetailsLink,resolvePrivateDetails,reportPrivateDetailsOutcome,
   subscribeInvalidation(owner, invalidate) { const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_OUT' || session?.user?.id !== owner) invalidate(); }); return () => subscription.unsubscribe(); },
-  async write(body) { const { error } = await supabase.rpc('log_food', body); if (error) throw error; },
+  async write(body) { const { data,error } = await supabase.rpc('log_food', body); if (error) throw error; return data; },
 });
 export const coachDailyServices = { ...dailyServices, ...(COACH_GUIDED_CONTRACT_READY ? guidedServices : {}), ...(COACH_MEAL_V2_READY ? { experience: mealExperience } : {}) };

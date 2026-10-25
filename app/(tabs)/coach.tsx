@@ -1026,6 +1026,7 @@ export default function CoachScreen() {
 
   // ── History state ──────────────────────────────────────────────────────────
   const [showHistory, setShowHistory] = useState(false);
+  const [mealHistoryRequest, setMealHistoryRequest] = useState(0);
   const [historyConversations, setHistoryConversations] = useState<{
     id: string;
     title: string | null;
@@ -2578,7 +2579,7 @@ export default function CoachScreen() {
           })}
 
           {/* ── Craving chips hub — welcome state only ── */}
-          {COACH_CONVERSATION_READY && coachDailyServices.experience && <CoachSavedMealBrowser service={coachDailyServices.experience} active={activeMealCard==='saved-meal-options'} onActivate={()=>setActiveMealCard('saved-meal-options')} onComposer={composerFor('saved-meal-options')} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading}/>}
+          {COACH_CONVERSATION_READY && coachDailyServices.experience && <CoachSavedMealBrowser openRequest={mealHistoryRequest} service={coachDailyServices.experience} active={activeMealCard==='saved-meal-options'} onActivate={()=>setActiveMealCard('saved-meal-options')} onComposer={composerFor('saved-meal-options')} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading}/>}
           {COACH_DAILY_ACTION_INTEGRATED && (!COACH_CONVERSATION_READY || !visibleMessages.some(m=>m.mealConversation)) && <CoachDailyAction services={coachDailyServices} mealRequest={mealHelpRequest} conversational={COACH_CONVERSATION_READY} handoff={visibleMessages.length&&visibleMessages[visibleMessages.length-1].role==='assistant'?visibleMessages[visibleMessages.length-1].mealConversation:undefined} onPrompt={handleSend} onComposer={setMealComposer} onJourneyActive={setMealJourneyActive} hasConversation={visibleMessages.some(message => message.role === 'user')} onConversation={() => { conversationEngaged.current = true; scrollToBottom(); conversationInputRef.current?.focus(); }} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
           {!COACH_DAILY_ACTION_INTEGRATED && isOnlyWelcome && isFirstEverSession && firstMessageReceived && !loading && !isNewUser && (
             <View style={styles.cravingHubSection}>
@@ -2745,6 +2746,14 @@ export default function CoachScreen() {
                 );
               })
             )}
+
+            {COACH_CONVERSATION_READY && <TouchableOpacity
+              accessibilityRole="button" style={styles.historyActionLink}
+              onPress={() => { setShowHistory(false); setMealHistoryRequest(value => value + 1); setActiveMealCard('saved-meal-options'); }}>
+              <Text style={[styles.historyActionLinkText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {locale.startsWith('es') ? 'Comidas de hoy' : "Today's meals"}
+              </Text>
+            </TouchableOpacity>}
 
             {/* View action history link */}
             <TouchableOpacity

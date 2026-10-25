@@ -78,7 +78,7 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
    let publicText:string;try{publicText=discoveryConsentMessage(query);}catch(e){return json({error:(e as Error).message,next_action:'clarify_public_search'},400);}
    return modern(confirmedMealDiscoveryRequest(req.url,req.headers,{request_id:b.request_id,...(b.retry_of_request_id!==undefined?{retry_of_request_id:b.retry_of_request_id,retry_consent:true}:{}),meal_source_request_id:b.source_request_id,messages:[{role:'user',content:publicText}],use_web:true,language:'en'},owner));
   }
-  const allowed=b.operation==='prepare_general_estimate'?['intent','experience','operation','request_id','time_zone','source_request_id','portion_label','general_meal_acknowledged']:b.operation==='explore'?['intent','experience','operation','request_id','time_zone','food_query','mode','available_minutes','restaurant','public_area','preference','exclusions','allergens','dietary_preferences']:b.operation==='import_discovery'?['intent','experience','operation','request_id','time_zone','source_request_id']:['intent','experience','operation','request_id','time_zone','source_request_id','option_id','servings','edited_values','estimate_acknowledged','ingredient_review_acknowledged','modification','component_edits','component_additions'];
+  const allowed=b.operation==='prepare_general_estimate'?['intent','experience','operation','request_id','time_zone','source_request_id','option_id','portion_label','general_meal_acknowledged']:b.operation==='explore'?['intent','experience','operation','request_id','time_zone','food_query','mode','available_minutes','restaurant','public_area','preference','exclusions','allergens','dietary_preferences']:b.operation==='import_discovery'?['intent','experience','operation','request_id','time_zone','source_request_id']:['intent','experience','operation','request_id','time_zone','source_request_id','option_id','servings','edited_values','estimate_acknowledged','ingredient_review_acknowledged','modification','component_edits','component_additions'];
   if(Object.keys(b).some(k=>!allowed.includes(k)))return b.operation==='prepare_general_estimate'?validationError('invalid_request'):json({error:'invalid_request'},400);
   if(b.operation==='explore'){
    try{dietaryConstraints(b);}catch{return json({error:'invalid_dietary_constraints'},400);}
@@ -89,26 +89,35 @@ export function createMealExploreRoute(db:any,modern:(req:Request)=>Promise<Resp
   if(b.operation==='review'){try{validateComponentAdditions(b.component_additions);}catch(e){return validationError((e as Error).message);}}
   let general:MealOption|undefined;
   if(b.operation==='prepare_general_estimate'){
-   if(b.source_request_id===b.request_id||b.general_meal_acknowledged!==true||!short(b.portion_label))return validationError('explicit_general_meal_confirmation_required');
+   if(b.source_request_id===b.request_id||b.option_id!==undefined&&!short(b.option_id,200)||b.option_id===undefined&&(b.general_meal_acknowledged!==true||!short(b.portion_label)))return validationError('explicit_general_meal_confirmation_required');
+   if(b.option_id!==undefined&&(b.portion_label!==undefined||b.general_meal_acknowledged!==undefined))return validationError('stored_option_payload_only');
    let origin:any;try{origin=await source(b.source_request_id);}catch{
     // Existing owned conversation receipts may prepare an unpaid general estimate.
     // Client text cannot replace the portion grounded in the completed source request.
     const recovered=await db.rpc('coach_recover_requests_v1',{p_user_id:owner,p_request_id:b.source_request_id,p_offset:0});
     const row=Array.isArray(recovered.data)?recovered.data.find((r:any)=>r.request_id===b.source_request_id):null;
     if(recovered.error||row?.state!=='completed'||row.user_id!==undefined&&row.user_id!==owner||row.request_payload?.journey!=='conversation_v1'||row.request_payload?.experience!=='conversation_v1'||!Number.isFinite(Date.parse(row.created_at))||localDay(Date.parse(row.created_at),b.time_zone)!==date||row.result?.request_id!==b.source_request_id)return validationError('source_scope_mismatch',409);
-    const storedFields=row.result?.manual_handoff_v1?.body?.meal_conversation?.fields;
-    if(storedFields&&['exclusions','allergens','dietary_preferences'].some(k=>Array.isArray(storedFields[k])&&storedFields[k].length))return validationError('selected_constraints_require_review',409);
-    const selected=selectedMealFromMessages(row.request_payload.messages);
-    if(!selected||b.portion_label!==selected.portion_label)return validationError('selected_portion_mismatch',409);
+    const handoff=row.result?.manual_handoff_v1?.body?.meal_conversation;
     const profile=await db.from('users').select('dietary_restrictions, protein_preferences, recipe_styles, disliked_foods').eq('id',owner).maybeSingle();
     if(profile.error)return validationError('profile_context_unavailable',503);
-    try{origin={discovery_request:{food:selected.name},dietary_constraints:mergeSavedMealConstraints({},savedFoodPreferences(profile.data))};}catch{return validationError('invalid_saved_food_preferences');}
+    if(b.option_id!==undefined){
+     const option=handoff?.schema==='meal_conversation_v1'&&Array.isArray(handoff.options)?handoff.options.find((o:MealOption)=>o.id===b.option_id):null;
+     if(!option||option.id!=='conversation-meal'||option.nutrition?.authority!=='estimated'||!Array.isArray(option.components)||!option.components.length)return validationError('recommendation_option_unavailable',409);
+     try{const constraints=mergeSavedMealConstraints(option.dietary_constraints??handoff.fields??{},savedFoodPreferences(profile.data));const screened=constrainMeals([structuredClone(option)],dietaryConstraints(constraints));if(!screened.length)return validationError('meal_conflicts_with_constraints');general=screened[0];}catch{return validationError('invalid_recommendation_constraints');}
+    }else{
+     const storedFields=handoff?.fields;
+     if(storedFields&&['exclusions','allergens','dietary_preferences'].some(k=>Array.isArray(storedFields[k])&&storedFields[k].length))return validationError('selected_constraints_require_review',409);
+     const selected=selectedMealFromMessages(row.request_payload.messages);
+     if(!selected||b.portion_label!==selected.portion_label)return validationError('selected_portion_mismatch',409);
+     try{origin={discovery_request:{food:selected.name},dietary_constraints:mergeSavedMealConstraints({},savedFoodPreferences(profile.data))};}catch{return validationError('invalid_saved_food_preferences');}
+    }
    }
-   try{general=prepareGeneralMeal(origin,b.portion_label);}catch(e){return validationError((e as Error).message);}
+   if(!general){if(b.option_id!==undefined)return validationError('recommendation_source_unavailable',409);try{general=prepareGeneralMeal(origin,b.portion_label);}catch(e){return validationError((e as Error).message);}}
   }
+
   const payload={...b,contract:'manual_v1',intent:'recommend',journey:'meal_explore_v1'};
   const result=await admission.run({ownerId:owner,requestId:b.request_id,intent:'recommend',fingerprint:canonical(payload)},async()=>{
-   if(b.operation==='prepare_general_estimate')return json({schema:'meal_explore_v1',owner,date,status:'options',options:[general!],next_action:'review_option',confirmation_transport:'existing_log_food',server_auto_logging:false});
+   if(b.operation==='prepare_general_estimate')return json({schema:'meal_explore_v1',owner,date,status:'options',source_request_id:b.source_request_id,options:[general!],next_action:'review_option',confirmation_transport:'existing_log_food',server_auto_logging:false});
    if(b.operation==='import_discovery'){
     const r=await db.rpc('coach_recover_requests_v1',{p_user_id:owner,p_request_id:b.source_request_id,p_offset:0});const row=Array.isArray(r.data)?r.data.find((x:any)=>x.request_id===b.source_request_id):null;
     if(r.error||row?.state!=='completed'||row.user_id!==undefined&&row.user_id!==owner||!Number.isFinite(Date.parse(row.created_at))||localDay(Date.parse(row.created_at),b.time_zone)!==date)return json({error:'discovery_receipt_unavailable'},409);

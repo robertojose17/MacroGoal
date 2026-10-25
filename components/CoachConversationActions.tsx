@@ -1,12 +1,13 @@
 import {coachMealQuickReplies} from '@/utils/coachMealQuickReplies';
-import {coachRecipeTimeLabel} from '@/utils/coachMealReviewAdapter';
+import {mealEvidenceFromOption,coachRecipeTimeLabel} from '@/utils/coachMealReviewAdapter';
 import {emptyConstraints,parseConstraints,mergeConstraints,type DietaryConstraints} from '@/utils/coachDietaryConstraints';
 import type { MealComposer } from '@/utils/coachMealComposer';
 import React,{useEffect,useRef,useState} from 'react';
 import {ActivityIndicator,Linking,Pressable,StyleSheet,Text,View} from 'react-native';
 import {useRouter} from 'expo-router';
 import {useTranslation} from 'react-i18next';
-import {dailyAccess,DAILY_MEAL_SLOTS,type DailyAccess,type DailyMealSlot} from '@/utils/coachDailyAction';
+import {dailyAccess,type DailyAccess,type DailyMealSlot} from '@/utils/coachDailyAction';
+import {diaryMealTypeForLocalTime} from '@/utils/diaryMealType';
 import {mealConversationInput,type ScopedMealConversation} from '@/utils/coachMealConversation';
 import type {MealExperienceServices,MealChoices,MealChoiceOutcome} from '@/utils/coachMealServices';
 import {estimatePublicDetails,estimateNeedsPortion} from '@/utils/coachMealServices';
@@ -18,7 +19,7 @@ type Props=DailyAccess&{initialResult?:MealChoices;flowId?:string;active?:boolea
 // model turns; this component never classifies or answers unrestricted text.
 export default function CoachConversationActions(props:Props){
  const {i18n}=useTranslation(),es=i18n.language.startsWith('es'),router=useRouter(),say=(en:string,sp:string)=>es?sp:en;
- const [result,setResult]=useState<MealChoiceOutcome|null>(null),[busy,setBusy]=useState(false),[pending,setPending]=useState(false),[consent,setConsent]=useState(false),[estimateId,setEstimateId]=useState<string|null>(null),[selectId,setSelectId]=useState<string|null>(null);
+ const [result,setResult]=useState<MealChoiceOutcome|null>(null),[busy,setBusy]=useState(false),[pending,setPending]=useState(false),[consent,setConsent]=useState(false),[estimateId,setEstimateId]=useState<string|null>(null);
  const [savedOptions,setSavedOptions]=useState(false);
  const [portion,setPortion]=useState(''),[needsPortion,setNeedsPortion]=useState(false);
  const [searchDraft,setSearchDraft]=useState<MealExploreInput|null>(null),[searchEdit,setSearchEdit]=useState<'food_query'|'public_area'|'restaurant'|null>(null),[showPreferences,setShowPreferences]=useState(false);
@@ -30,7 +31,7 @@ export default function CoachConversationActions(props:Props){
  const [constraintsLoaded,setConstraintsLoaded]=useState(typeof props.service.confirmedConstraints!=='function');
  const version=useRef(0),lock=useRef(false),actionEpoch=useRef(0),access=useRef(props);access.current=props;const service=props.service,gate=dailyAccess(props),ready=result?.kind==='ready'?result:null;
  const resetActivity=()=>{actionEpoch.current++;lock.current=false;setBusy(false);setPreparingGeneral(false);setPortionError(null);setSearchDraft(null);setSearchEdit(null);setShowPreferences(false);};
- useEffect(()=>{const v=++version.current;resetActivity();setResult(props.initialResult??null);setSavedOptions(false);setConstraints(null);setConstraintsLoaded(false);setNeedsPortion(false);setConsent(false);setEstimateId(null);setSelectId(null);setPortion('');setNeedsPortion(false);let disposed=false,stop=()=>{};const day=service.today();void(async()=>{const owner=await service.owner();if(v!==version.current)return;if(props.handoff&&(props.handoff.owner!==owner||props.handoff.date!==day))return;const prior=await service.confirmedConstraints?.()??emptyConstraints();if(v!==version.current)return;const incoming=props.handoff?parseConstraints(props.handoff.value.fields):emptyConstraints();setConstraints(incoming?mergeConstraints(prior,incoming):null);setConstraintsLoaded(true);if(owner)stop=service.subscribeInvalidation(owner,()=>{if(disposed)return;version.current++;resetActivity();setResult({kind:'blocked',reason:'scope_changed'});setPending(false);setSavedOptions(false);setConstraints(null);setConstraintsLoaded(false);setNeedsPortion(false);});const p=await service.pending(()=>access.current);if(v===version.current)setPending(!!p&&(props.flowId===undefined||p.flowId===props.flowId));const saved=await service.saved?.(()=>access.current,props.flowId);if(v===version.current&&day===service.today())setSavedOptions(!!saved);})().catch(()=>{if(v===version.current)setResult({kind:'unavailable',reason:'constraints_unavailable'});});let watchedDay=day;const timer=setInterval(()=>{const currentDay=service.today();if(!disposed&&watchedDay!==currentDay){watchedDay=currentDay;version.current++;resetActivity();setResult({kind:'blocked',reason:'scope_changed'});setPending(false);setConstraints(null);setConstraintsLoaded(false);setNeedsPortion(false);}},15000);return()=>{disposed=true;version.current++;actionEpoch.current++;lock.current=false;stop();clearInterval(timer);};},[service,props.handoff,props.flowId,props.initialResult]);
+ useEffect(()=>{const v=++version.current;resetActivity();setResult(props.initialResult??null);setSavedOptions(false);setConstraints(null);setConstraintsLoaded(false);setNeedsPortion(false);setConsent(false);setEstimateId(null);setPortion('');setNeedsPortion(false);let disposed=false,stop=()=>{};const day=service.today();void(async()=>{const owner=await service.owner();if(v!==version.current)return;if(props.handoff&&(props.handoff.owner!==owner||props.handoff.date!==day))return;const prior=await service.confirmedConstraints?.()??emptyConstraints();if(v!==version.current)return;const incoming=props.handoff?parseConstraints(props.handoff.value.fields):emptyConstraints();setConstraints(incoming?mergeConstraints(prior,incoming):null);setConstraintsLoaded(true);if(owner)stop=service.subscribeInvalidation(owner,()=>{if(disposed)return;version.current++;resetActivity();setResult({kind:'blocked',reason:'scope_changed'});setPending(false);setSavedOptions(false);setConstraints(null);setConstraintsLoaded(false);setNeedsPortion(false);});const p=await service.pending(()=>access.current);if(v===version.current)setPending(!!p&&(props.flowId===undefined||p.flowId===props.flowId));const saved=await service.saved?.(()=>access.current,props.flowId);if(v===version.current&&day===service.today())setSavedOptions(!!saved);})().catch(()=>{if(v===version.current)setResult({kind:'unavailable',reason:'constraints_unavailable'});});let watchedDay=day;const timer=setInterval(()=>{const currentDay=service.today();if(!disposed&&watchedDay!==currentDay){watchedDay=currentDay;version.current++;resetActivity();setResult({kind:'blocked',reason:'scope_changed'});setPending(false);setConstraints(null);setConstraintsLoaded(false);setNeedsPortion(false);}},15000);return()=>{disposed=true;version.current++;actionEpoch.current++;lock.current=false;stop();clearInterval(timer);};},[service,props.handoff,props.flowId,props.initialResult]);
  const action=(label:string,fn:()=>void,disabled=false)=><Pressable accessibilityRole="button" accessibilityState={{disabled:disabled||busy}} disabled={disabled||busy} onPress={fn} style={s.action}><Text style={s.actionText}>{label}</Text></Pressable>;
  async function run(kind:'explore'|'discover'|'estimate'|'recover'|'restore'|'retrySearch'|'reviseSearch'|'prepareGeneral'|'prepareSelected'){
   if(lock.current||gate!=='ready'||props.active===false)return;lock.current=true;const epoch=++actionEpoch.current;setBusy(true);const v=version.current,day=service.today();
@@ -38,9 +39,9 @@ export default function CoachConversationActions(props:Props){
   // captured offer for this call, never leave its buttons active after a failure.
   if(kind==='retrySearch')setResult({kind:'pending',reason:'request_unresolved'});
   try{const owner=await service.owner();if(v!==version.current)return;if(!owner){setResult({kind:'blocked',reason:'unauthorized'});return;}let next;
-   if(kind==='explore'){const h=props.handoff;if(!h||h.owner!==owner||h.date!==day)return;if(!constraintsLoaded||!constraints)return;await service.confirmConstraints?.(constraints,owner,day);const input=mealConversationInput(h.value,constraints);if(!input)return;next=await service.explore(()=>access.current,input,'lunch',props.flowId);}
+   if(kind==='explore'){const h=props.handoff;if(!h||h.owner!==owner||h.date!==day)return;if(!constraintsLoaded||!constraints)return;await service.confirmConstraints?.(constraints,owner,day);const input=mealConversationInput(h.value,constraints);if(!input)return;next=await service.explore(()=>access.current,input,diaryMealTypeForLocalTime(),props.flowId);}
    else if(kind==='prepareSelected'){if(!props.handoff)return;next=await service.prepareSelected(()=>access.current,props.handoff,props.flowId);}
-   else if(kind==='reviseSearch'){if(!ready?.noResults||!searchDraft||ready.owner!==owner||ready.date!==day)return;next=await service.explore(()=>access.current,searchDraft,ready.meal,ready.flowId??props.flowId);}
+   else if(kind==='reviseSearch'){if(!ready?.noResults||!searchDraft||ready.owner!==owner||ready.date!==day)return;next=await service.explore(()=>access.current,searchDraft,diaryMealTypeForLocalTime(),ready.flowId??props.flowId);}
    else if(kind==='prepareGeneral'){if(!ready?.noResults||!preparingGeneral||needsPortion||!portion.trim())return;next=await service.prepareGeneral(()=>access.current,ready,portion);}
    else if(kind==='restore')next=await service.restore(()=>access.current,props.flowId);
    else if(kind==='recover')next=await service.recover(()=>access.current,props.flowId);
@@ -64,9 +65,46 @@ export default function CoachConversationActions(props:Props){
   }catch{if(v===version.current)setResult({kind:'unavailable',reason:'request_unresolved'});}finally{if(epoch===actionEpoch.current){lock.current=false;if(v===version.current)setBusy(false);}}
  }
  async function review(source:MealChoices,id:string,meal:DailyMealSlot){if(lock.current||gate!=='ready')return;lock.current=true;const epoch=++actionEpoch.current,v=version.current;try{if(await service.owner()!==source.owner||service.today()!==source.date||v!==version.current)return;const session=service.review({...source,meal},id,()=>access.current);router.push({pathname:'/recipe-finder-detail',params:{coachMealReviewKey:holdMealReview(session)}});}finally{if(epoch===actionEpoch.current)lock.current=false;}}
+ async function openRecommendation(id:string,meal:DailyMealSlot){
+  if(lock.current||gate!=='ready'||!props.handoff)return;
+  lock.current=true;const epoch=++actionEpoch.current,v=version.current,day=service.today();setBusy(true);
+  try{
+   const owner=await service.owner();if(v!==version.current||epoch!==actionEpoch.current)return;
+   if(owner!==props.handoff.owner||day!==props.handoff.date){setResult({kind:'blocked',reason:'scope_changed'});return;}
+   const next=await service.prepareSelected(()=>access.current,props.handoff,props.flowId,id);
+   if(v!==version.current||epoch!==actionEpoch.current)return;
+   const currentOwner=await service.owner();if(v!==version.current||epoch!==actionEpoch.current)return;
+   if(currentOwner!==owner||service.today()!==day){setResult({kind:'blocked',reason:'scope_changed'});return;}
+   setResult(next);
+   if(next.kind==='ready'){
+    const selected=next.options.find(o=>o.id===id)??(next.options.length===1?next.options[0]:null);
+    if(!selected){setResult({kind:'unavailable',reason:'selected_meal_unavailable'});return;}
+    const session=service.review({...next,meal},selected.id,()=>access.current);
+    router.push({pathname:'/recipe-finder-detail',params:{coachMealReviewKey:holdMealReview(session)}});
+   }
+   const unresolved=await service.pending(()=>access.current);
+   if(v===version.current&&epoch===actionEpoch.current)setPending(!!unresolved&&(props.flowId===undefined||unresolved.flowId===props.flowId));
+  }catch{if(v===version.current&&epoch===actionEpoch.current)setResult({kind:'unavailable',reason:'request_unresolved'});}
+  finally{if(epoch===actionEpoch.current){lock.current=false;if(v===version.current)setBusy(false);}}
+ }
  const h=props.handoff,estimate=ready?.options.find(o=>o.id===estimateId),details=estimate?estimatePublicDetails(estimate,portion||undefined):null;
- if(props.active===false)return <View style={s.container}>{action(say('Resume these meal options','Retomar estas opciones'),()=>props.onResume?.())}</View>;
+ const recommendations=!ready&&h?.value.options.length?h.value.options.map(row=>mealEvidenceFromOption(row,h.value.fields.mode??'quick')).filter((o):o is NonNullable<typeof o>=>o!==null):[];
+ const recommendationCards=recommendations.map(o=><View key={o.id} style={s.card}>
+  <Text style={s.title}>{o.name}</Text><Text style={s.body}>{o.nutrition.basis.label}</Text>
+  <Text style={s.body}>{o.nutrition.values.calories??'—'} kcal · P {o.nutrition.values.protein??'—'} g · C {o.nutrition.values.carbs??'—'} g · F {o.nutrition.values.fats??'—'} g</Text>
+  <Text style={s.muted}>{['estimated','user_edited'].includes(o.nutrition.authority)?say('Estimated nutrition','Nutrición estimada'):o.nutrition.authority==='unknown'?say('Nutrition needs an estimate','Falta estimar los nutrientes'):say('Source-reported nutrition','Nutrición publicada por la fuente')}</Text>
+  {action(say('View Details','Ver detalles'),()=>{void openRecommendation(o.id,diaryMealTypeForLocalTime());},gate!=='ready'||pending)}
+  {action(say('Add to diary','Añadir al diario'),()=>{void openRecommendation(o.id,diaryMealTypeForLocalTime());},gate!=='ready'||pending||Object.values(o.nutrition.values).some(x=>x===null))}
+ </View>);
+ if(props.active===false&&recommendationCards.length)return <View style={s.container}>{recommendationCards}{busy&&<ActivityIndicator/>}</View>;
+ if(props.active===false)return ready?.options.length?<View style={s.container}>{ready.options.map(o=><View key={o.id} style={s.card}>
+  <Text style={s.title}>{o.name}</Text><Text style={s.body}>{o.nutrition.basis.label}</Text>
+  <Text style={s.body}>{o.nutrition.values.calories??'-'} kcal · {o.nutrition.values.protein??'-'} g {say('protein','proteína')}</Text>
+  {action(say('View Details','Ver detalles'),()=>{void review(ready,o.id,diaryMealTypeForLocalTime());},gate!=='ready')}
+   {action(say('Add to diary','Añadir al diario'),()=>{void review(ready,o.id,diaryMealTypeForLocalTime());},gate!=='ready'||Object.values(o.nutrition.values).some(x=>x===null))}
+ </View>)}</View>:null;
  return <View style={s.container}>
+  {recommendationCards}
   {h?.value.status==='clarify'&&props.onPrompt&&<View style={s.row}>{coachMealQuickReplies(h.value,es).map(reply=><React.Fragment key={reply}>{action(reply,()=>props.onPrompt?.(reply),gate!=='ready'||pending||busy)}</React.Fragment>)}</View>}
   {!props.hasConversation&&!h&&!result&&<><Text style={s.body}>{say('Hi, I’m your Coach. Tell me what you feel like eating, or what you’d like help with today.','Hola, soy tu Coach. Cuéntame qué te apetece comer o en qué quieres ayuda hoy.')}</Text>{props.isPremium&&!props.premiumLoading&&!props.premiumError&&<View style={s.row}>{action(say('Choose something to eat','Elegir qué comer'),()=>props.onPrompt?.(say('Help me choose something to eat.','Ayúdame a elegir qué comer.')))}{action(say('Review my day','Revisar mi día'),()=>props.onPrompt?.(say('Help me review my day.','Ayúdame a revisar mi día.')))}</View>}</>}
   {props.premiumLoading&&<Text style={s.muted}>{say('Checking access…','Verificando acceso…')}</Text>}
@@ -80,10 +118,8 @@ export default function CoachConversationActions(props:Props){
    {action(say('Confirm new search','Confirmar nueva b\u00fasqueda'),()=>{void run('retrySearch');},gate!=='ready')}
    {action(say('Not now','Ahora no'),()=>setResult(null))}
   </View>}
-  {savedOptions&&!pending&&result?.kind!=='ready'&&props.showRecovery!==false&&action(say('Resume meal search','Retomar búsqueda de comida'),()=>{void run('restore');},gate!=='ready')}
-  {!result&&!h?.value.selected_meal&&h?.value.status==='ready'&&constraints&&(['exclusions','allergens','dietary_preferences'] as const).some(k=>constraints[k].length>0)&&action(say('Change preferences','Cambiar preferencias'),()=>setShowPreferences(value=>!value),gate!=='ready'||busy)}
-  {!result&&showPreferences&&constraints&&<View style={s.row}>{(['exclusions','allergens','dietary_preferences'] as const).flatMap(k=>constraints[k].map(value=><React.Fragment key={k+value}>{action(say('Remove: ','Quitar: ')+value,()=>setConstraints({...constraints,[k]:constraints[k].filter(x=>x!==value)}))}</React.Fragment>))}</View>}
-  {!result&&!h?.value.selected_meal&&h?.value.status==='ready'&&action(say('Find meal options','Buscar opciones de comida'),()=>{void run('explore');},gate!=='ready'||pending||!constraintsLoaded||!constraints)}
+
+  {!result&&!h?.value.selected_meal&&!h?.value.options.length&&h?.value.status==='ready'&&action(say('Find meal options','Buscar opciones de comida'),()=>{void run('explore');},gate!=='ready'||pending||!constraintsLoaded||!constraints)}
   {!ready&&h?.value.selected_meal&&<View style={s.card}><Text style={s.title}>{h.value.selected_meal.name}</Text><Text style={s.body}>{h.value.selected_meal.portion_label}</Text>{action(say('Review this meal','Revisar esta comida'),()=>{void run('prepareSelected');},gate!=='ready'||pending||!h.requestId)}</View>}
   {ready?.question&&<Text style={s.body}>{ready.question==='public_area'?say('Which public city or area should I use? Reply in our conversation.','¿Qué ciudad o zona pública uso? Respóndeme en la conversación.'):say('Tell me a little more about what you want in our conversation.','Cuéntame un poco más de lo que quieres en la conversación.')}</Text>}
   {ready?.noResults&&<View style={s.details}>
@@ -110,7 +146,8 @@ export default function CoachConversationActions(props:Props){
    {o.provenance.url&&action(say('Open source','Abrir fuente'),()=>{void Linking.openURL(o.provenance.url!);})}
    {estimateId===o.id&&portionError&&<Text accessibilityRole="alert" style={s.body}>{portionError}</Text>}
    {estimateId===o.id&&needsPortion?<><Text style={s.body}>{say('What size or portion are you considering? Reply below before reviewing the estimate request.','¿Qué tamaño o porción estás considerando? Responde abajo antes de revisar la solicitud de estimación.')}</Text>{portion&&<Text style={s.muted}>{say('Current portion: ','Porción actual: ')}{portion}</Text>}{action(say('Cancel estimate','Cancelar estimación'),()=>{setEstimateId(null);setNeedsPortion(false);setPortionError(null);})}</>:estimateId===o.id&&details?<><Text style={s.muted}>{say('Estimate this dish with OpenRouter / Gemini? These dish, ingredient, source and portion details are sent; estimates are not official nutrition or allergen guarantees.','¿Estimar este plato con OpenRouter / Gemini? Se envían estos datos de plato, ingredientes, fuente y porción; no son valores oficiales ni garantías ante alergias.')}</Text><Text style={s.body}>{details.name}</Text>{details.ingredients.map((x,i)=><Text key={i} style={s.muted}>{x}</Text>)}<Text style={s.muted}>{[details.identity?.entity,details.identity?.variant,details.identity?.portion_label].filter(Boolean).join(' / ')}</Text><Text style={s.muted}>{details.physical_portion?.grams?`${details.physical_portion.grams} g`:''} · {details.source.url} · {details.source.nutrition.basis.label}</Text>{Object.entries(details.source.nutrition.values).map(([key,value])=><Text key={key} style={s.muted}>{key}: {value??say('Unknown','Desconocido')}</Text>)}{action(say('Edit portion','Editar porción'),()=>setNeedsPortion(true),gate!=='ready')}{action(say('Confirm estimate','Confirmar estimación'),()=>{void run('estimate');},gate!=='ready')}{action(say('Cancel estimate','Cancelar estimación'),()=>setEstimateId(null))}</>:(Object.values(o.nutrition.values).some(x=>x===null)||o.nutrition.authority==='estimated'&&!o.components?.length)&&ready.capabilities.estimate&&action(Object.values(o.nutrition.values).some(x=>x===null)?say('Estimate nutrition','Estimar nutrici\u00f3n'):say('Estimate ingredient breakdown','Estimar ingredientes'),()=>{setEstimateId(o.id);setPortion(o.identity?.portion_label??'');setPortionError(null);setNeedsPortion(estimateNeedsPortion(o));},gate!=='ready')}
-   {selectId===o.id?<><Text style={s.body}>{say('Which meal should this go into?','¿A qué comida lo añadirías?')}</Text><View style={s.row}>{DAILY_MEAL_SLOTS.map((meal,i)=><React.Fragment key={meal}>{action((es?['Desayuno','Almuerzo','Cena','Snack']:['Breakfast','Lunch','Dinner','Snack'])[i],()=>{void review(ready,o.id,meal);},gate!=='ready')}</React.Fragment>)}</View></>:action(say('Add to meal','Añadir a comida'),()=>setSelectId(o.id),gate!=='ready'||o.kind==='general'&&Object.values(o.nutrition.values).some(x=>x===null))}
+   {action(say('View Details','Ver detalles'),()=>{void review(ready,o.id,diaryMealTypeForLocalTime());},gate!=='ready')}
+   {action(say('Add to diary','Añadir al diario'),()=>{void review(ready,o.id,diaryMealTypeForLocalTime());},gate!=='ready'||o.kind==='general'&&Object.values(o.nutrition.values).some(x=>x===null))}
   </View>)}
   {!busy&&result&&result.kind!=='ready'&&result.kind!=='retry_available'&&<Text accessibilityRole="alert" style={s.body}>{mealFailureMessage(result.reason,es)}</Text>}
   {busy&&<ActivityIndicator accessibilityLabel={say('Working','Procesando')}/>}

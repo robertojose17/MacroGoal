@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import React, { useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { ActivityIndicator, AppState, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase/client';
 import { createSupabaseInboxAuthBinding } from '../communityPrivacyV2/supabaseInboxAuth';
@@ -22,6 +22,23 @@ export function ProtectedReaderBoundary({ children, scopeKey = '' }: { children:
   }, [binding, active]);
   useLayoutEffect(() => {
     const changes = AppState.addEventListener('change', setAppState);
+    // React Native Web exposes change only. Keep the same privacy boundary on
+    // browser focus loss without subscribing to unsupported native events.
+    if (Platform.OS === 'web') {
+      const onBlur = () => setWindowFocused(false);
+      const onFocus = () => setWindowFocused(true);
+      if (typeof window !== 'undefined') {
+        window.addEventListener('blur', onBlur);
+        window.addEventListener('focus', onFocus);
+      }
+      return () => {
+        changes.remove();
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('blur', onBlur);
+          window.removeEventListener('focus', onFocus);
+        }
+      };
+    }
     const blur = AppState.addEventListener('blur', () => setWindowFocused(false));
     const focus = AppState.addEventListener('focus', () => setWindowFocused(true));
     return () => { changes.remove(); blur.remove(); focus.remove(); };

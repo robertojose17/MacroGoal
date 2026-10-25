@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 for(const ext of ['.ts','.tsx'])require.extensions[ext]=(m,f)=>m._compile(ts.transpile(fs.readFileSync(f,'utf8'),{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}),f);
-const {createMealReviewSession,scaleMealNutrition,editMealNutrition,holdMealReview,readMealReview,clearMealReview}=require('../utils/coachMealReview.ts');
+const {createMealReviewSession,scaleMealNutrition,editMealNutrition,holdMealReview,readMealReview,clearMealReview,hasCompleteCoreNutrition,hasLoggableNutrition}=require('../utils/coachMealReview.ts');
 const {mealEvidenceFromOption,existingMealLogPayload}=require('../utils/coachMealReviewAdapter.ts');
 const option=()=>({id:'dish',name:'Chicken tacos',kind:'restaurant',provenance:{kind:'estimate',label:'Menu portion estimate'},nutrition:{authority:'estimated',basis:{amount:2,unit:'tacos',label:'2 tacos'},values:{calories:500,protein:25,carbs:45,fats:24,fiber:null},assumptions:['Two medium tortillas; sauce included.']},allergyStatus:'requires_review'});
 function fixture(o=option()){
@@ -9,6 +9,16 @@ function fixture(o=option()){
  const deps={owner:async()=>state.owner,today:()=>state.day,access:()=>state.access,subscribeInvalidation:()=>()=>{},store:{getItem:async k=>rows.get(k)??null,setItem:async(k,v)=>rows.set(k,v),removeItem:async k=>rows.delete(k)},prepare:async(c,e)=>{prepares.push(e);return {confirmationId:'confirmation',owner:c.owner,date:c.date,meal:c.meal,sourceReceiptId:c.sourceReceiptId,optionId:c.option.id,name:c.option.name,multiplier:e.multiplier,portionLabel:`${e.multiplier} × ${c.option.nutrition.basis.label}`,nutrition:e.values,authority:e.changed.length?'user_edited':c.option.nutrition.authority,assumptions:c.option.nutrition.assumptions}},confirm:async p=>{writes.push(p)}};
  return {state,context,deps,rows,writes,prepares,session:createMealReviewSession(context,deps)};
 }
+test('server-held review with complete macros is not mislabeled as unknown nutrition',()=>{
+ const prepared={nutrition:{calories:908,protein:133,carbs:32,fats:26.0662,fiber:9},readyForConfirmation:false};
+ assert.equal(hasCompleteCoreNutrition(prepared),true);assert.equal(hasLoggableNutrition(prepared),false);
+ const screen=fs.readFileSync(path.resolve(__dirname,'../components/CoachMealReview.tsx'),'utf8');
+ assert.match(screen,/!hasCompleteCoreNutrition\(prepared\).*Some nutrients are unknown/);
+ assert.match(screen,/hasCompleteCoreNutrition\(prepared\) && prepared\.readyForConfirmation === false/);
+ assert.match(screen,/This meal is not ready to add yet/);assert.match(screen,/Edit portion or nutrition/);
+ assert.match(screen,/!hasLoggableNutrition\(prepared\)/);
+ assert.equal(hasCompleteCoreNutrition({...prepared,nutrition:{...prepared.nutrition,fiber:null}}),false);
+});
 test('gallery and restaurant nutrition scale from exact basis; unknown fiber stays null and source is not mutated',()=>{for(const kind of ['gallery','restaurant']){const o={...option(),kind};const original=JSON.stringify(o);assert.deepEqual(scaleMealNutrition(o,1.5),{calories:750,protein:37.5,carbs:67.5,fats:36,fiber:null});assert.equal(JSON.stringify(o),original);for(const x of [0,-1,NaN,Infinity,21])assert.equal(scaleMealNutrition(o,x),null);}});
 test('documented gallery/restaurant DTO maps to review without fake instructions, serving yield or zero fiber',()=>{
  const o=option();const row={id:o.id,name:o.name,provenance:{kind:'gallery',gallery_id:'gallery-one'},nutrition:o.nutrition,ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true};
