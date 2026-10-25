@@ -4,6 +4,8 @@ import { lookupOptionPortion, validatedSuggestedServings, type LookupOption } fr
 export type Nutrients={calories:number|null;protein:number|null;carbs:number|null;fats:number|null;fiber:number|null};
 export type PrivateNutritionSnapshot={localDate:string;timeZone:string;goalsStatus:'available'|'missing'|'failed';diaryStatus:'available'|'missing'|'failed';targets:Nutrients;logged:Nutrients;remaining:Nutrients};
 const keys=['calories','protein','carbs','fats','fiber'] as const;
+// Fiber goals are tracked as progress; they are not a known upper-limit cap.
+const cappedKeys=['calories','protein','carbs','fats'] as const;
 const empty=():Nutrients=>({calories:null,protein:null,carbs:null,fats:null,fiber:null});
 const finite=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=100000;
 const round=(n:number)=>Math.round((n+Number.EPSILON)*10000)/10000;
@@ -64,25 +66,62 @@ export function currentRequestedSourceServings(messages:Array<{role:string;conte
  }
 }
 
-export function personalizeVerifiedOptions(options:LookupOption[],snapshot:PrivateNutritionSnapshot,servings?:number,preference?:string):LookupOption[]{
+export function requestsRemainingMacroFit(messages:Array<{role?:string;content?:unknown}>):boolean{
+ const users=messages.filter(m=>m?.role==='user'&&typeof m.content==='string').map(m=>(m.content as string).trim());
+ const last=users.at(-1);if(!last)return false;
+ const consent=/^(?:public_lookup_confirmation:|yes|sure|okay|ok|search|find|go ahead|si|s[ií]|vale|adelante|buscar|yes, search public options|si, buscar opciones publicas)[.!]?$/i.test(last);
+ const request=consent?(users.at(-2)??''):last;
+ const value=request.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const fit=/\b(?:fit\w*|within|stay\s+within|encaj\w*|caber|ajust\w*|quepa|quepan)\b/.test(value);
+ const remaining=/\b(?:remaining|left|restantes?|restante|saldo|balance|diario|daily|today|hoy|quedan?|budget|presupuesto)\b/.test(value);
+ const nutrition=/\b(?:macros?|calories?|calorias?|protein|proteina|carbs?|carbohydrates?|carbohidratos?|fats?|grasas?|fiber|fibra|nutrients?|nutrientes?)\b/.test(value);
+ return fit&&remaining&&nutrition;
+}
+
+function fitsCompleteRemainingBalance(n:Nutrients,snapshot:PrivateNutritionSnapshot):boolean{
+ return cappedKeys.every(k=>snapshot.remaining[k]!==null&&n[k]<=snapshot.remaining[k]!+1e-6);
+}
+
+export function personalizeVerifiedOptions(options:LookupOption[],snapshot:PrivateNutritionSnapshot,servings?:number,preference?:string,requireMacroFit=false):LookupOption[]{
  const count=validatedSuggestedServings(servings);
  const out=options.filter(o=>validatedSuggestedServings(o.suggested_servings)!==null&&o.loggable===true&&o.complete_item_verified===true&&o.nutrition_status==='complete_verified'&&keys.every(k=>finite(o.nutrition?.[k]))).map(o=>o.kind==='restaurant'&&servings!==undefined&&count!==null?{...o,suggested_servings:count}:o);
  const balance=snapshot.remaining;
+ const knownFitOptions=requireMacroFit&&cappedKeys.every(k=>balance[k]!==null)?out.filter(o=>{const portion=lookupOptionPortion(o,validatedSuggestedServings(o.suggested_servings)??1);return !!portion&&fitsCompleteRemainingBalance(portion.nutrition,snapshot);}):[];
+ const candidates=knownFitOptions.length?knownFitOptions:out;
  const score=(o:LookupOption)=>{
   if(o.loggable!==true||!o.complete_item_verified||o.nutrition_status!=='complete_verified')return Infinity;
   const portion=lookupOptionPortion(o,validatedSuggestedServings(o.suggested_servings)??1);if(!portion)return Infinity;const n=portion.nutrition;
-  let s=0;for(const k of keys){const left=balance[k];if(left!==null&&left>=0)s+=Math.max(0,n[k]-left)/Math.max(1,left)*(k==='calories'?10:1);}
+  let s=0;for(const k of cappedKeys){const left=balance[k];if(left!==null)s+=Math.max(0,n[k]-left)/Math.max(1,Math.abs(left))*(k==='calories'?10:1);}
   // Preserve room for later meals when several portions fit; do not maximize daily-balance consumption.
   if(balance.calories!==null&&balance.calories>0)s+=n.calories/balance.calories*.01;
-  if(preference==='high_protein')s-=n.protein/Math.max(1,n.calories);
-  else if(preference==='lower_calorie')s+=n.calories/100000;
+  if(!requireMacroFit&&preference==='high_protein')s-=n.protein/Math.max(1,n.calories);
+  else if(!requireMacroFit&&preference==='lower_calorie')s+=n.calories/100000;
   return s;
  };
- return out.map((o,i)=>({o,i,score:score(o)})).sort((a,b)=>a.score-b.score||a.i-b.i).map(x=>x.o);
+ return candidates.map((o,i)=>({o,i,score:score(o)})).sort((a,b)=>a.score-b.score||a.i-b.i).map(x=>x.o);
+}
+
+function macroFitFact(name:string,n:Nutrients,snapshot:PrivateNutritionSnapshot,language:string):string{
+ const es=language.startsWith('es'),r=snapshot.remaining;
+ const label:Record<keyof Nutrients,string>=es?{calories:'calor\u00edas',protein:'prote\u00edna',carbs:'carbohidratos',fats:'grasas',fiber:'fibra'}:{calories:'calories',protein:'protein',carbs:'carbs',fats:'fat',fiber:'fiber'};
+ const amount=(value:number)=>String(round(value));
+ const known=cappedKeys.filter(k=>r[k]!==null),unknown=cappedKeys.filter(k=>r[k]===null);
+ const fiberProgress=snapshot.logged.fiber===null||snapshot.targets.fiber===null
+  ?(es?`Esta porci\u00f3n aporta ${amount(n.fiber)} g de fibra; el progreso diario de fibra no est\u00e1 disponible.`:`This portion provides ${amount(n.fiber)} g of fiber; daily fiber progress is unavailable.`)
+  :(es?`Progreso de fibra: ${amount(snapshot.logged.fiber)} g registrados + ${amount(n.fiber)} g en esta porci\u00f3n; meta diaria ${amount(snapshot.targets.fiber)} g.`:`Fiber progress: ${amount(snapshot.logged.fiber)} g logged + ${amount(n.fiber)} g in this portion; daily goal ${amount(snapshot.targets.fiber)} g.`);
+ if(!known.length)return (es?`No puedo confirmar si ${name} encaja con tus macros porque no hay saldos diarios disponibles.`:`I cannot confirm whether ${name} fits your macros because today's remaining macro values are unavailable.`)+' '+fiberProgress;
+ const exceeded=known.filter(k=>n[k]>(r[k]??0)+1e-6);
+ if(exceeded.length){
+  const details=exceeded.map(k=>{const unit=k==='calories'?'kcal':'g';return r[k]!<0?(es?`${label[k]} ya supera la meta por ${amount(-r[k]!)} ${unit} y esta porci\u00f3n a\u00f1ade ${amount(n[k])} ${unit}`:`${label[k]} is already ${amount(-r[k]!)} ${unit} over target and this portion adds ${amount(n[k])} ${unit}`):(es?`${label[k]} por ${amount(n[k]-r[k]!)} ${unit}`:`${label[k]} by ${amount(n[k]-r[k]!)} ${unit}`);}).join('; ');
+  const base=es?`Alternativa con compensaci\u00f3n, no ajustada al saldo: ${name} supera el saldo registrado de ${details}.`:`Tradeoff, not within the recorded balance: ${name} exceeds the remaining amount for ${details}.`;
+  return (unknown.length?base+' '+(es?`No puedo confirmar ${unknown.map(k=>label[k]).join(', ')} porque esos saldos no est\u00e1n disponibles.`:`I cannot confirm ${unknown.map(k=>label[k]).join(', ')} because those remaining values are unavailable.`):base)+' '+fiberProgress;
+ }
+ if(unknown.length)return (es?`${name} queda dentro de los saldos registrados para ${known.map(k=>label[k]).join(', ')}, pero no puedo confirmar ${unknown.map(k=>label[k]).join(', ')} porque esos datos no est\u00e1n disponibles.`:`${name} is within the recorded remaining amounts for ${known.map(k=>label[k]).join(', ')}, but I cannot confirm ${unknown.map(k=>label[k]).join(', ')} because those values are unavailable.`)+' '+fiberProgress;
+ return (es?`${name} queda dentro de los saldos diarios registrados de calor\u00edas y macronutrientes.`:`${name} is within today's recorded remaining calories and macros.`)+' '+fiberProgress;
 }
 
 /** Typed arithmetic is rendered by the server; no model-provided amount becomes evidence. */
-export function trustedMealFacts(options:LookupOption[],snapshot:PrivateNutritionSnapshot,language:string):string[]{
+export function trustedMealFacts(options:LookupOption[],snapshot:PrivateNutritionSnapshot,language:string,requireMacroFit=false):string[]{
  if(!options.some(o=>o.loggable&&o.complete_item_verified&&o.nutrition_status==='complete_verified'))return [];
  const es=language.startsWith('es'),lines:string[]=[],{targets:t,logged:l,remaining:r}=snapshot;
  if(r.calories!==null)lines.push(es?`Tu meta diaria es ${t.calories} kcal; llevas registradas ${l.calories} kcal; el saldo diario es ${r.calories} kcal.`:`Your daily target is ${t.calories} kcal; you have logged ${l.calories} kcal; the daily balance is ${r.calories} kcal.`);
@@ -91,7 +130,8 @@ export function trustedMealFacts(options:LookupOption[],snapshot:PrivateNutritio
   const m=validatedSuggestedServings(o.suggested_servings);if(m===null)continue;const portion=lookupOptionPortion(o,m);if(!portion)continue;const n=portion.nutrition;
   lines.push(es?`${[o.item_name,o.variant].filter(Boolean).join(', ')} (${m} × ${o.serving.label}): ${n.calories} kcal; proteína ${n.protein} g, carbohidratos ${n.carbs} g, grasas ${n.fats} g y fibra ${n.fiber} g.`:`${[o.item_name,o.variant].filter(Boolean).join(', ')} (${m} × ${o.serving.label}): ${n.calories} kcal; protein ${n.protein} g, carbs ${n.carbs} g, fats ${n.fats} g and fiber ${n.fiber} g.`);
  }
- const first=options[0],firstPortion=first?lookupOptionPortion(first,validatedSuggestedServings(first.suggested_servings)??1):null;
+  if(requireMacroFit)for(const o of options.filter(o=>o.loggable&&o.complete_item_verified&&o.nutrition_status==='complete_verified').slice(0,3)){const count=validatedSuggestedServings(o.suggested_servings);if(count===null)continue;const portion=lookupOptionPortion(o,count);if(portion)lines.push(macroFitFact([o.item_name,o.variant].filter(Boolean).join(', '),portion.nutrition,snapshot,language));}
+  const first=options[0],firstPortion=first?lookupOptionPortion(first,validatedSuggestedServings(first.suggested_servings)??1):null;
  if(first&&firstPortion&&r.calories!==null&&first.loggable&&first.complete_item_verified){
   const after=round(r.calories-firstPortion.nutrition.calories);
   lines.push(es?`Con la porción mostrada de ${[first.item_name,first.variant].filter(Boolean).join(', ')}, ${r.calories} − ${firstPortion.nutrition.calories} = ${after} kcal de saldo diario.`:`With the displayed portion of ${[first.item_name,first.variant].filter(Boolean).join(', ')}, ${r.calories} − ${firstPortion.nutrition.calories} = ${after} kcal of daily balance.`);

@@ -3,7 +3,7 @@ import {confirmedMealDiscoveryPlan,confirmedMealAdmissionPayload} from './confir
 import {mealDiscoveryRetryCheck} from './meal-discovery-retry.ts';
 import {classifyStructuredProviderError} from './planner-provider-error.ts';
 import {confirmedDiscoveryArgs} from './meal-discovery-consent.ts';
-import { buildPrivateNutritionSnapshot, personalizeVerifiedOptions, currentRequestedSourceServings, trustedMealFacts, guardPersonalizedMealText } from './coach-meal-personalization.ts';
+import { buildPrivateNutritionSnapshot, personalizeVerifiedOptions, currentRequestedSourceServings, requestsRemainingMacroFit, trustedMealFacts, guardPersonalizedMealText } from './coach-meal-personalization.ts';
 import { readOwnedRestaurantReceipt, ownedRestaurantPool, restaurantSummary, restaurantFollowupAction, nextRestaurantOptions, retainedRestaurantOptions, makeRestaurantPool, publicRestaurantChoices, type RestaurantPool } from './coach-restaurant-followup.ts';
 import { isBroadRestaurantRequest } from './coach-restaurant-recovery.ts';
 import { fetchBoundedProviderJson, fetchWithAbortSignal, withPersistenceDeadline, WORK_DEADLINE_MS, TOTAL_DEADLINE_MS, PERSISTENCE_RPC_LIMIT_MS, PLANNER_PROVIDER_PHASE_LIMIT_MS, FINAL_PROVIDER_PHASE_LIMIT_MS } from './bounded-provider-phase.ts';
@@ -476,7 +476,8 @@ const handler = (async (req) => {
     let requestedMealServings:number|undefined;
     let retainedVerifiedOptions:ReturnType<typeof projectLookupOptions>|null=null;
     let carriedRestaurantPool:RestaurantPool|null=null;
-    const allPersonalizedOptions=(evidence:any,food:any)=>personalizeVerifiedOptions(retainedVerifiedOptions??projectLookupOptions(evidence,food,evidence?.requestedKind==='menu'?12:3),privateNutritionSnapshot,requestedMealServings,lookupContext(modelLedLookupContext)?.preference??storedLookupContext?.preference);
+    const macroFitRequested=requestsRemainingMacroFit(messages);
+    const allPersonalizedOptions=(evidence:any,food:any)=>personalizeVerifiedOptions(retainedVerifiedOptions??projectLookupOptions(evidence,food,evidence?.requestedKind==='menu'?12:3),privateNutritionSnapshot,requestedMealServings,lookupContext(modelLedLookupContext)?.preference??storedLookupContext?.preference,macroFitRequested);
     const personalizedOptions=(evidence:any,food:any)=>{const ranked=allPersonalizedOptions(evidence,food);return ranked.every(o=>o.kind==='restaurant')?publicRestaurantChoices(ranked):ranked.slice(0,3);};
     if(localRestaurantTurn){
       const claimed=publicRestaurantSummary?.request??null,pool=retainedPool;
@@ -1016,9 +1017,10 @@ INSTRUCTIONS:
           modelLedChoices=[];
         }
 
-        const balanceCannotConfirmFit=(privateNutritionSnapshot.remaining.calories===null||privateNutritionSnapshot.remaining.calories<(verifiedResponseOptions[0]?lookupOptionPortion(verifiedResponseOptions[0],validatedSuggestedServings(verifiedResponseOptions[0].suggested_servings)??1)?.nutrition.calories??0:0));
+        const fitKeys=['calories','protein','carbs','fats'] as const;
+        const balanceCannotConfirmFit=!verifiedResponseOptions.length||fitKeys.some(k=>privateNutritionSnapshot.remaining[k]===null)||verifiedResponseOptions.some((o:any)=>{const portion=lookupOptionPortion(o,validatedSuggestedServings(o.suggested_servings)??1);return !portion||fitKeys.some(k=>portion.nutrition[k]>privateNutritionSnapshot.remaining[k]!+1e-6);});
         const personalizedMealReply=modelLed&&modelLedStatus==='completed'&&(hasVerifiedNutrition||(modelLedLookupContext as any)?.mode==='restaurant'&&providerPhaseLedger.some(p=>p.phase==='final'));
-        const personalizedMealFacts=personalizedMealReply?trustedMealFacts(verifiedResponseOptions,privateNutritionSnapshot,language):[];
+        const personalizedMealFacts=personalizedMealReply?trustedMealFacts(verifiedResponseOptions,privateNutritionSnapshot,language,macroFitRequested):[];
         const verifiedNutritionText=personalizedMealFacts.join(' ');
         // The model cannot write nutrient claims into visible prose. We render only
         // complete source-verified values below, so a claim such as "999 kcal" is
