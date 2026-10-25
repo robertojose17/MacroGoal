@@ -31,6 +31,7 @@ export type MealEvidence = {
   dietaryConstraints?:DietaryConstraints;
   venue?: {name:string;sourceUrl:string;address?:string;addressSourceUrl?:string};
   totalTime?:{minutes:number;authority:"source_reported";sourceUrl:string}; // Independent of nutrition authority.
+  estimatedPrepMinutes?:number;
   sourceNutrition?: MealEvidence['nutrition'];
 
   identity?: { kind: string; entity?: string; variant?: string; portion_label?: string };

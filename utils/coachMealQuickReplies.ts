@@ -10,5 +10,6 @@ export function coachMealQuickReplies(value:MealConversation|undefined,es:boolea
 export function coachMealQuestionQuickReplies(question:string|undefined,es:boolean):string[]{
  if(question==='mode')return es?['Quiero cocinar','Quiero comer fuera','Algo rápido sin cocinar']:['I want to cook','I want to eat out','Something quick without cooking'];
  if(question==='food_query')return es?['Algo con más proteína','Dame algunas ideas']:['Something with more protein','Give me a few ideas'];
- return []; // Area must come from the person; never fabricate nearby places.
+ if(question==='public_area')return es?['Prefiero cocinar','Algo rápido en casa']:['I would rather cook','Something quick at home'];
+ return []; // A public area must come from the person; never fabricate a city.
 }

@@ -63,6 +63,22 @@ function explicitCommand(text:string):{input:string;prefix:string}|undefined{
  return {input:value.slice(start).trim(),prefix:value.slice(0,start)};
 }
 function explicit(text:string):boolean{return explicitCommand(text)!==undefined;}
+/** Preserve a menu item explicitly named by the user in an otherwise broad restaurant lookup. */
+function requestedMenuItem(text:string):string|undefined{
+ const patterns=[
+  /\b(?:if\s+)?(?:the\s+)?menu\s+(?:includes?|has|offers?)\s+(.{1,96}?)(?=\s*[,;.!?]\s*(?:then\s+)?(?:use|choose|order|pick|select)\b|\s+(?:use|choose|order|pick|select)\s+(?:that\s+)?(?:item|one)\b|[.!?;]|$)/i,
+  /\b(?:prefer|choose|order|select|use)\s+(?:the\s+)?(?:menu\s+)?item\s+(.{1,96}?)(?=[,;.!?]|$)/i,
+ ];
+ for(const pattern of patterns){const match=pattern.exec(text);if(!match)continue;const candidate=match[1].trim().replace(/\s*[-\u2013\u2014]\s*/g,' ');const food=publicFood(candidate);if(food)return food;}
+ return undefined;
+}
+function requestedMenuDetails(text:string):{food?:string;area?:string;invalidArea:boolean}{
+ const marker=/\bmenus?\s+item\s+/i.exec(text);if(!marker)return {food:requestedMenuItem(text),invalidArea:false};
+ const remainder=text.slice(marker.index+marker[0].length).trim();
+ const withArea=/^(.{1,96}?)\s+(?:in|en)\s+([^.!?;]{1,96})[.!?;]?\s*$/i.exec(remainder);
+  if(withArea){const food=publicFood(withArea[1].trim()),area=introPublicArea('in '+withArea[2]);return {food,...(area?{area}:{}),invalidArea:!area};}
+ return {food:publicFood(remainder.replace(/[.!?;]+$/,'').trim()),invalidArea:false};
+}
 function introPublicArea(prefix:string):string|undefined{
  const matches=[...prefix.matchAll(/\b(?:in|en)\s+([^.!?;]{1,96})/gi)];
  for(let i=matches.length-1;i>=0;i--){
@@ -74,7 +90,7 @@ function introPublicArea(prefix:string):string|undefined{
  }
  return undefined;
 }
-export function lookupIntent(text:string):LookupIntent {if(typeof text!=='string')return {kind:'skip'};if(lookupNegated(text))return {kind:'skip',reason:'search_declined'};if(text.startsWith('public_lookup_confirmation:'))return parseConfirmation(text)!;if(unsafeContext(text))return {kind:'clarify',reason:'private_or_unsafe_context'};const parsed=fromStructured(text);if(parsed)return parsed;const command=explicitCommand(text);if(!command)return {kind:'skip'};const input=command.input;const namedRestaurantMenu=/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+(?:the\s+)?(.+?)(?:'s)?\s+menus?\b/i.exec(input);if(namedRestaurantMenu){const restaurant=publicPlace(namedRestaurantMenu[1].trim().replace(/^(?:the|a)\s+/i,''),'restaurant');if(!restaurant)return {kind:'clarify',mode:'restaurant',reason:'public_locality_only'};const area=introPublicArea(command.prefix);return confirmationProposal({food:'meal',mode:'restaurant',restaurant,...(area?{area}:{})});}const emptyRestaurant=/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+(?:restaurants?|restaurantes?)\s+(?:in|en)\s+(.+?)[.!]?$/i.exec(input);if(emptyRestaurant){const area=publicPlace(emptyRestaurant[1],'area');return {kind:'clarify',mode:'restaurant',...(area?{area}:{}),reason:'food'};}let mode=modeIn(input),rawFood:string|undefined,rawArea:string|undefined;let match:RegExpExecArray|null=null;
+export function lookupIntent(text:string):LookupIntent {if(typeof text!=='string')return {kind:'skip'};if(lookupNegated(text))return {kind:'skip',reason:'search_declined'};if(text.startsWith('public_lookup_confirmation:'))return parseConfirmation(text)!;if(unsafeContext(text))return {kind:'clarify',reason:'private_or_unsafe_context'};const parsed=fromStructured(text);if(parsed)return parsed;const command=explicitCommand(text);if(!command)return {kind:'skip'};const input=command.input;const namedRestaurantMenu=/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+(?:the\s+)?(.+?)(?:'s)?\s+menus?\b/i.exec(input);if(namedRestaurantMenu){const restaurant=publicPlace(namedRestaurantMenu[1].trim().replace(/^(?:the|a)\s+/i,''),'restaurant');if(!restaurant)return {kind:'clarify',mode:'restaurant',reason:'public_locality_only'};const requested=requestedMenuDetails(text);if(requested.invalidArea)return {kind:'clarify',food:requested.food??'meal',mode:'restaurant',reason:'public_locality_only',context:{food:requested.food??'meal',mode:'restaurant',restaurant}};const area=requested.area??introPublicArea(command.prefix);return confirmationProposal({food:requested.food??'meal',mode:'restaurant',restaurant,...(area?{area}:{})});}const emptyRestaurant=/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+(?:restaurants?|restaurantes?)\s+(?:in|en)\s+(.+?)[.!]?$/i.exec(input);if(emptyRestaurant){const area=publicPlace(emptyRestaurant[1],'area');return {kind:'clarify',mode:'restaurant',...(area?{area}:{}),reason:'food'};}let mode=modeIn(input),rawFood:string|undefined,rawArea:string|undefined;let match:RegExpExecArray|null=null;
 const patterns:Array<{mode:LookupMode;re:RegExp;food:number;area?:number;restaurant?:number}>=[
 {mode:'restaurant',re:/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+restaurants?\s+(?:selling|serving|with)\s+(.+?)\s+(?:in|en)\s+(.+?)[.!]?$/i,food:1,area:2},
 {mode:'recipe',re:/^(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up|browse|busca|buscar|encuentra)\s+(?:recipes?\s+(?:for|of)|recetas?\s+de)\s+(.+?)(?:\s+(?:online|on the web|web|en internet|internet))?[.!]?$/i,food:1},

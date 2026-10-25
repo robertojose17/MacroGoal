@@ -196,9 +196,9 @@ export default function CoachMealReview({ session, onCancel }: { session: MealRe
 
       {details&&source.sourceNutrition && <View style={s.details}><Text style={s.body}>{say('Original source nutrition (before estimation or edits)', 'Nutrición original de la fuente (antes de estimar o editar)')}</Text><Text style={s.muted}>{authority(source.sourceNutrition.authority)} · {source.sourceNutrition.basis.label}</Text>{NUTRIENTS.map(k=><Text key={k} style={s.muted}>{k}: {source.sourceNutrition!.values[k] ?? say('Unknown','Desconocido')}</Text>)}</View>}
 
-      {details&&!!source.ingredients?.length && <View style={s.details}><Text style={s.body}>{say('Source ingredients', 'Ingredientes de la fuente')}</Text>{source.ingredients.map((item,i) => <Text key={i} style={s.muted}>{item}</Text>)}</View>}
+      {details&&!!source.ingredients?.length && <View style={s.details}><Text style={s.body}>{source.provenance.kind==='estimate'?say('Estimated ingredients','Ingredientes estimados'):say('Source ingredients', 'Ingredientes de la fuente')}</Text>{source.ingredients.map((item,i) => <Text key={i} style={s.muted}>{item}</Text>)}</View>}
 
-      {details&&!!source.instructions?.length && <View style={s.details}><Text style={s.body}>{say('Source instructions', 'Instrucciones de la fuente')}</Text>{source.instructions.map((item,i) => <Text key={i} style={s.muted}>{i+1}. {item}</Text>)}</View>}
+      {details&&!!source.instructions?.length && <View style={s.details}><Text style={s.body}>{source.provenance.kind==='estimate'?say('Suggested preparation (estimate)','Preparación sugerida (estimación)'):say('Source instructions', 'Instrucciones de la fuente')}</Text>{source.instructions.map((item,i) => <Text key={i} style={s.muted}>{i+1}. {item}</Text>)}</View>}
 
     </>}
 

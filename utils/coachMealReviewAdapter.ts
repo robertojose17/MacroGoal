@@ -42,6 +42,7 @@ export function mealEvidenceFromOption(row: any, mode: 'cook' | 'quick' | 'eat_o
     provenance: { kind: p.kind, label: general ? 'General meal estimate' : url ? new URL(url).hostname : p.kind === 'gallery' ? 'Macro Goal gallery' : p.kind === 'official' ? 'Official menu' : 'Meal source', ...(url ? { url } : {}), ...(p.gallery_id ? { galleryId: p.gallery_id } : {}) },
 
     ...(mode!=='eat_out'&&row.identity?.kind==='recipe'&&url&&row.total_time?.authority==='source_reported'&&row.total_time.source_url===url&&Number.isInteger(row.total_time.minutes)&&row.total_time.minutes>0&&row.total_time.minutes<=1440?{totalTime:{minutes:row.total_time.minutes,authority:'source_reported',sourceUrl:url}}:{}),
+    ...(p.kind==='estimate'&&Number.isInteger(row.estimated_prep_minutes)&&row.estimated_prep_minutes>=5&&row.estimated_prep_minutes<=240?{estimatedPrepMinutes:row.estimated_prep_minutes}:{}),
     nutrition: { authority: row.nutrition.authority, basis: row.nutrition.basis, values: row.nutrition.values, assumptions: row.nutrition.assumptions,...(['low','medium','high'].includes(row.nutrition.confidence)?{confidence:row.nutrition.confidence}:{}) },
 
     ...(components?{components}:{}),
@@ -86,6 +87,7 @@ export function existingMealLogPayload(context: MealReviewContext, entry: Prepar
 
 
 export function coachRecipeTimeLabel(option:MealEvidence,es:boolean):string|null {
+  if(option.provenance.kind==='estimate'&&Number.isInteger(option.estimatedPrepMinutes)&&option.estimatedPrepMinutes!>=5&&option.estimatedPrepMinutes!<=240)return (es?'Preparación estimada: ':'Estimated prep time: ')+option.estimatedPrepMinutes+' min';
   if(!['recipe','gallery'].includes(option.kind))return null;
   return option.kind==='recipe'&&option.totalTime?.authority==='source_reported'&&option.totalTime.sourceUrl===option.provenance.url&&Number.isInteger(option.totalTime.minutes)&&option.totalTime.minutes>0&&option.totalTime.minutes<=1440
     ? (es?'Tiempo total publicado: ':'Published total time: ')+option.totalTime!.minutes+' min'

@@ -36,6 +36,9 @@ import { useAICoach, Message, ActionProposal } from '@/hooks/useAICoach';
 import { usePremium } from '@/hooks/usePremium';
 import { supabase } from '@/lib/supabase/client';
 import { createMealPlan, addMealPlanItem } from '@/utils/mealPlansApi';
+import { parseMealConversation, type ScopedMealConversation } from '@/utils/coachMealConversation';
+import { diaryMealTypeForLocalTime } from '@/utils/diaryMealType';
+import { holdMealReview } from '@/utils/coachMealReview';
 
 // ── ID generator ────────────────────────────────────────────────────────────
 let msgCounter = 0;
@@ -44,7 +47,24 @@ const genId = () => {
   return `coach-${Date.now()}-${msgCounter}`;
 };
 
-type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean };
+type MessageWithId = Message & { showUpgradeButton?: boolean; isPremiumGate?: boolean; isTyping?: boolean; mealAddChoices?: BoundMealCandidate[] };
+
+type BoundMealCandidate = { handoff: ScopedMealConversation; flowId: string; optionId: string; name: string; cardTimestamp:number; optionIndex:number };
+const titleKey=(value:string)=>value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+function typedMealAddRequest(text:string):string|null {
+  const normalized=text.normalize('NFKD').replace(/[\u0300-\u036f]/g,'');
+  const match=/^(?:please\s+|por\s+favor\s+)?(?:add|log|record|put|save|agrega|anade|registra)\s+(.+?)\s+(?:to|into|in|a|al|en)\s+(?:(?:today(?:'s)?|my|mi|el|la)\s+)?(?:food\s+)?(?:diary|diario)\b/i.exec(normalized.trim());
+  return match?.[1]?.trim()||null;
+}
+function boundMealCandidates(messages:MessageWithId[],owner:string,date:string):BoundMealCandidate[]{
+  const found:BoundMealCandidate[]=[];const seen=new Set<string>();
+  for(const message of messages.slice(-30).reverse()){
+    const scoped=message.role==='assistant'?message.mealConversation:undefined;if(!scoped||scoped.owner!==owner||scoped.date!==date||typeof scoped.requestId!=='string')continue;
+    const value=parseMealConversation(scoped.value);if(!value?.options.length)continue;
+    for(const [index,raw] of value.options.entries()){const option=raw as any;if(typeof option?.id!=='string'||typeof option?.name!=='string')continue;const key=scoped.requestId+'|'+option.id;if(seen.has(key))continue;seen.add(key);found.push({handoff:{...scoped,value},flowId:scoped.requestId??message.id,optionId:option.id,name:option.name,cardTimestamp:message.timestamp,optionIndex:index+1});}
+  }
+  return found;
+}
 
 const QUICK_ACTION_CARDS = [
   { iosIcon: 'fork.knife', androidIcon: 'restaurant', titleKey: 'coach.prompt_1_title', subtitleKey: 'coach.prompt_1_sub', messageKey: 'localization.coach.quickMessage1' },
@@ -1553,9 +1573,12 @@ export default function CoachScreen() {
 
   const handleConfirmInlineRef = useRef<(messageId: string) => void>(() => {});
   const handleSendRef = useRef<(text: string) => void>(() => {});
+  const mealReviewOpeningRef = useRef(false);
+  const mealCandidateOverrideRef = useRef<BoundMealCandidate|null>(null);
 
   const handleSend = useCallback(
     async (text: string) => {
+      const selectedMealChoice=mealCandidateOverrideRef.current;mealCandidateOverrideRef.current=null;
       const trimmed = text.trim();
       if (!trimmed || loading || premiumLoading || premiumError || (COACH_CONVERSATION_READY && conversationPending)) return;
 
@@ -1593,6 +1616,45 @@ export default function CoachScreen() {
           content: getAppLocale().startsWith('es') ? 'Podemos explorar cómo elegir una comida en la vista previa. Para conversar sobre tu día y recibir orientación personalizada, necesitas Premium.' : 'You can explore choosing a meal in the guided preview. Personalized conversation about your day requires Premium.',
           showUpgradeButton: true, isPremiumGate: true,
         }]);
+        return;
+      }
+
+      const requestedMealTitle=COACH_CONVERSATION_READY?typedMealAddRequest(trimmed):null;
+      if(requestedMealTitle){
+        if(mealReviewOpeningRef.current)return;
+        mealReviewOpeningRef.current=true;
+        const userMsg:MessageWithId={id:genId(),role:'user',content:trimmed,timestamp:Date.now()};
+        setMessages(prev=>[...prev,userMsg]);setInputText('');
+        const say=(en:string,es:string)=>getAppLocale().startsWith('es')?es:en;
+        try{
+          const service=coachDailyServices.experience;
+          const owner=await service?.owner(),date=service?.today();
+          if(!service||!owner||!date)throw Error('review_unavailable');
+          const available=boundMealCandidates(messages,owner,date);
+          const chosenOverride=selectedMealChoice&&titleKey(selectedMealChoice.name)===titleKey(requestedMealTitle)?available.find(candidate=>candidate.handoff.requestId===selectedMealChoice.handoff.requestId&&candidate.optionId===selectedMealChoice.optionId):undefined;
+          const matches=chosenOverride?[chosenOverride]:available.filter(candidate=>titleKey(candidate.name)===titleKey(requestedMealTitle));
+          if(matches.length!==1){
+            const distinctNames:string[]=[],seenNames=new Set<string>();for(const candidate of available){const key=titleKey(candidate.name);if(key&&!seenNames.has(key)){seenNames.add(key);distinctNames.push(candidate.name);}}
+            const choices=matches.length>1?matches:available.slice(0,5);
+            const content=matches.length>1
+              ?say('I found more than one current suggestion with that name. Open the card you mean; nothing has been added.','Encontré más de una sugerencia actual con ese nombre. Abre la tarjeta que quieres; no se agregó nada.')
+              :distinctNames.length
+                ?say('I could not match that name to a current suggestion. Choose one of these cards, or tell me what you would like me to suggest. Nothing has been added.','No encontré ese nombre entre las sugerencias actuales. Elige una tarjeta o dime qué quieres que te sugiera. No se agregó nada.')
+                :say('I could not find a current meal card to review, so nothing was added. Ask me to suggest the meal first, then I can open its review.','No encontré una tarjeta de comida actual para revisar, así que no se agregó nada. Primero pídeme que sugiera la comida y luego abriré su revisión.');
+            setMessages(prev=>[...prev,{id:genId(),role:'assistant',content,timestamp:Date.now(),...(choices.length?{mealAddChoices:choices}:{})}]);
+            return;
+          }
+          const candidate=matches[0],access=()=>({isPremium,premiumLoading,premiumError,gated:isGated,busy:loading});
+          const prepared=await service.prepareSelected(access,candidate.handoff,candidate.flowId,candidate.optionId);
+          if(prepared.kind!=='ready'||prepared.owner!==owner||prepared.date!==date)throw Error('review_unavailable');
+          const selected=prepared.options.find(option=>titleKey(option.name)===titleKey(candidate.name))??(prepared.options.length===1?prepared.options[0]:null);
+          if(!selected||await service.owner()!==owner||service.today()!==date)throw Error('scope_changed');
+          const session=service.review({...prepared,meal:diaryMealTypeForLocalTime()},selected.id,access);
+          setMessages(prev=>[...prev,{id:genId(),role:'assistant',content:say('Opening the review for this meal. It has not been saved to your diary.','Abriendo la revisión de esta comida. Todavía no se ha guardado en tu diario.'),timestamp:Date.now()}]);
+          router.push({pathname:'/recipe-finder-detail',params:{coachMealReviewKey:holdMealReview(session)}});
+        }catch{
+          if(isMountedRef.current)setMessages(prev=>[...prev,{id:genId(),role:'assistant',content:say('I could not open a safe review for that meal. Nothing was added to your diary.','No pude abrir una revisión segura para esa comida. No se agregó nada a tu diario.'),timestamp:Date.now()}]);
+        }finally{mealReviewOpeningRef.current=false;}
         return;
       }
 
@@ -1703,7 +1765,7 @@ export default function CoachScreen() {
         }
       }
     },
-    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, premiumError, conversationPending, t]
+    [loading, messages, sendMessage, conversationId, setMessages, isPremium, premiumLoading, premiumError, isGated, conversationPending, router, t]
   );
 
   // Keep ref in sync so the premium-upgrade effect can call handleSend without
@@ -2519,6 +2581,8 @@ export default function CoachScreen() {
                       )}
                     </View>
                     {COACH_CONVERSATION_READY && message.mealConversation && !isThisStreaming && coachDailyServices.experience && <CoachConversationActions service={coachDailyServices.experience} handoff={message.mealConversation} flowId={message.mealConversation.requestId??message.id} hasConversation showRecovery={activeMealCard?activeMealCard===message.id:index===visibleMessages.length-1} onPrompt={handleSend} active={activeMealCard?activeMealCard===message.id:index===visibleMessages.length-1} onResume={()=>setActiveMealCard(message.id)} onComposer={composerFor(message.id)} isPremium={isPremium} premiumLoading={premiumLoading} premiumError={premiumError} gated={isGated} busy={loading} />}
+                    {!isThisStreaming&&!!message.mealAddChoices?.length&&<View style={styles.suggestedInlineRow}>{message.mealAddChoices.slice(0,5).map((candidate,i)=>{const cardTime=new Date(candidate.cardTimestamp).toLocaleTimeString(getAppLocale(),{hour:'numeric',minute:'2-digit'});const label=`${candidate.name} · ${cardTime} · ${getAppLocale().startsWith('es')?'opción':'option'} ${candidate.optionIndex}`;return <TouchableOpacity key={`${message.id}-meal-choice-${candidate.handoff.requestId}-${candidate.optionId}-${i}`} accessibilityRole="button" style={[styles.suggestedInlineChip,{backgroundColor:isDark?colors.cardDark:'#FFFFFF',borderColor:isDark?colors.borderDark:colors.border}]} disabled={loading||premiumLoading||!!premiumError||isGated||conversationPending} onPress={()=>{mealCandidateOverrideRef.current=candidate;handleSend(getAppLocale().startsWith('es')?`Agrega ${candidate.name} al diario de hoy y llévame a revisarlo antes de guardarlo.`:`Please add ${candidate.name} to today's diary and take me to review before saving.`);}}><Text style={[styles.suggestedInlineChipText,{color:isDark?colors.textDark:colors.text}]}>{label}</Text></TouchableOpacity>})}</View>}
+                    {!isThisStreaming&&!!message.suggestions?.length&&<View style={styles.suggestedInlineRow}>{message.suggestions.slice(0,5).map((suggestion,i)=><TouchableOpacity key={`${message.id}-suggestion-${i}`} accessibilityRole="button" style={[styles.suggestedInlineChip,{backgroundColor:isDark?colors.cardDark:'#FFFFFF',borderColor:isDark?colors.borderDark:colors.border}]} disabled={loading||premiumLoading||!!premiumError||isGated} onPress={()=>handleSend(suggestion)}><Text style={[styles.suggestedInlineChipText,{color:isDark?colors.textDark:colors.text}]}>{suggestion}</Text></TouchableOpacity>)}</View>}
                     {message.guidedMealChoice && index === visibleMessages.length - 1 && !isThisStreaming && <TouchableOpacity accessibilityRole="button" style={{ marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: '#27614D' }} onPress={() => { setMealHelpRequest(value => value + 1); scrollViewRef.current?.scrollTo({ y: 0, animated: true }); }}><Text style={{ color: '#FFF', fontWeight: '600' }}>{getAppLocale().startsWith('es') ? 'Elegir una comida juntos' : 'Choose a meal together'}</Text></TouchableOpacity>}
                     {message.showUpgradeButton && (
                       <View style={{ marginTop: 16 }}>
