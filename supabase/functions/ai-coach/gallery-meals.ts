@@ -4,7 +4,7 @@ export type Values=Record<typeof nutrients[number],number|null>;
 export type MealOption={components?:import('./meal-components.ts').MealComponent[];total_time?:{minutes:number;authority:'source_reported';source_url:string};estimated_prep_minutes?:number;dietary_evidence?:string;match?:import('./restaurant-similarity.ts').RestaurantMatch;dietary_constraints?:import('./dietary-constraints.ts').DietaryConstraints;venue?:{name:string;source_url:string;address?:string;address_source_url?:string};source_nutrition?:MealOption['nutrition'];physical_portion?:{grams:number;authority:'source_reported'|'estimated'};identity?:{kind?:string;entity?:string;variant?:string;portion_label?:string};id:string;name:string;ingredients:string[];instructions:string[];prep_minutes:number|null;provenance:{kind:'gallery'|'official'|'publisher'|'estimate';gallery_id?:string;source_url?:string};nutrition:{authority:'official'|'publisher_reported'|'estimated'|'user_edited'|'unknown';basis:{amount:number;unit:'serving';label:string};values:Values;assumptions:string[];confidence:'source_reported'|'low'|'unknown'};allergy_status:'unknown'|'requires_review';review_required:true};
 const n=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:typeof v==='string'&&/^\d+(?:\.\d+)?$/.test(v)&&Number.isFinite(Number(v))?Number(v):null;
 const words=(s:string)=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[\p{L}\p{N}]+/gu)??[];
-const stop=new Set('i want would like please something with a an the me some recipe recipes meal eat cook quiero quisiera algo con de el la los las para una un receta recetas comer cocinar'.split(' '));
+const stop=new Set('i want would like please something with a an the me some and recipe recipes meal eat cook quiero quisiera algo con de el la los las para una un receta recetas comer cocinar'.split(' '));
 const canonicalWord=(word:string)=>exclusionTerms([word]).groups[0]?.[0]??word;
 export function foodSearchTerms(query:string){return words(query).filter(w=>w.length>1&&!stop.has(w)).map(canonicalWord).slice(0,12);}
 const text=(v:any)=>typeof v==='string'?v.trim():typeof v?.name==='string'?`${typeof v.amount==='string'?v.amount+' ':''}${v.name}`:typeof v?.ingredient==='string'?v.ingredient:'';
@@ -22,18 +22,35 @@ export function galleryOption(row:any):MealOption|null{
 }
 export type GalleryQuery={desired_food:string;available_minutes?:number;exclusions:string[];allergens:string[];preference?:'balanced'|'high_protein'|'lower_calorie'|'preferred_food'};
 export async function searchExistingGallery(db:any,input:GalleryQuery,owner:string){
- const terms=foodSearchTerms(input.desired_food);if(!terms.length)return {options:[] as MealOption[],coverage:'query_needs_food' as const};
- const columns='id,name,cuisine,meal_type,calories,protein,carbs,fat,description,dietary_tags,source,ingredients,instructions,created_by,is_public,average_rating,review_count';
- // Actual RecipesSection/recipe-detail source. Service-role reads MUST explicitly
- // scope public rows or the current owner; never rely on bypassed RLS.
- const query=(owned:boolean,filtered:boolean)=>{let q=db.from('meal_recipes').select(columns).eq(owned?'created_by':'is_public',owned?owner:true).order('average_rating',{ascending:false,nullsFirst:false}).order('review_count',{ascending:false,nullsFirst:false}).limit(filtered?30:100);if(filtered)q=q.ilike('name','%'+terms.join('%')+'%');return q;};
- const primary=await Promise.all([query(false,true),query(true,true)]);
- if(primary.some(r=>r.error))throw Error('gallery_unavailable');
- let rows=primary.flatMap(r=>Array.isArray(r.data)?r.data:[]);
- if(rows.length<3){const fallback=await Promise.all([query(false,false),query(true,false)]);rows.push(...fallback.filter(r=>!r.error).flatMap(r=>Array.isArray(r.data)?r.data:[]));}
- const seen=new Set<string>();rows=rows.filter(r=>{if(r.is_public!==true&&r.created_by!==owner)return false;if(seen.has(r.id))return false;seen.add(r.id);return true;});
+ const terms=foodSearchTerms(input.desired_food).filter(term=>term.length>2);if(!terms.length)return {options:[] as MealOption[],coverage:'query_needs_food' as const};
+ const libraryColumns='id,title,description,source_name,source_url,prep_time_minutes,servings,calories_per_serving,protein_per_serving,carbs_per_serving,fat_per_serving,fiber_per_serving,ingredients,instructions,tags,click_count';
+ // Food > Recipes reads the public `recipes` library and stores a user's saved
+ // snapshots in `saved_recipes`. This function uses service-role access, so the
+ // private saved snapshot query is explicitly scoped and rechecked by owner.
+ const [libraryResult,savedResult]=await Promise.all([
+  db.from('recipes').select(libraryColumns).textSearch('search_vector',terms.map((term:string)=>term+':*').join(' & ')).order('click_count',{ascending:false}).limit(30),
+  db.from('saved_recipes').select('id,user_id,recipe_data,created_at').eq('user_id',owner).order('created_at',{ascending:false}).limit(100),
+ ]);
+ if(libraryResult.error||savedResult.error)throw Error('gallery_unavailable');
+ const savedRows=(Array.isArray(savedResult.data)?savedResult.data:[]).flatMap((saved:any)=>{
+  if(saved?.user_id!==owner||typeof saved?.id!=='string'||!saved.recipe_data||typeof saved.recipe_data!=='object'||Array.isArray(saved.recipe_data))return [];
+  const recipe=saved.recipe_data;
+  if(typeof recipe.id!=='string'||recipe.id!==saved.id)return [];
+  return [{
+   id:recipe.id,title:typeof recipe.title==='string'?recipe.title:recipe.name,description:recipe.description,
+   source_name:recipe.source_name,source_url:recipe.source_url,prep_time_minutes:recipe.prep_time_minutes,
+   servings:recipe.servings,calories_per_serving:recipe.calories_per_serving,protein_per_serving:recipe.protein_per_serving,
+   carbs_per_serving:recipe.carbs_per_serving,fat_per_serving:recipe.fat_per_serving,fiber_per_serving:recipe.fiber_per_serving,
+   ingredients:recipe.ingredients,instructions:recipe.instructions,tags:recipe.tags,
+  }];
+ });
+ const seen=new Set<string>();
+ const rows=[...(Array.isArray(libraryResult.data)?libraryResult.data:[]),...savedRows].filter((row:any)=>{
+  if(typeof row?.id!=='string'||seen.has(row.id))return false;
+  seen.add(row.id);return true;
+ });
  const ranked=rows.flatMap((r:any)=>{const option=galleryOption(r);if(!option)return [];
-  const hay=words([option.name,r.description??'',r.cuisine??'',...option.ingredients,...(Array.isArray(r.dietary_tags)?r.dietary_tags:[])].join(' ')).map(canonicalWord);
+  const hay=words([option.name,r.description??'',...(Array.isArray(r.ingredients)?r.ingredients.map(text):[]),...(Array.isArray(r.tags)?r.tags:[])].join(' ')).map(canonicalWord);
   const score=terms.filter(t=>hay.some(w=>w.startsWith(t))).length/terms.length;if(score<1)return [];
   if(input.available_minutes!==undefined&&option.prep_minutes!==null&&option.prep_minutes>input.available_minutes)return [];
   if(input.available_minutes!==undefined&&option.prep_minutes===null)option.nutrition.assumptions.push(`Preparation time is unknown; the ${input.available_minutes}-minute preference is not verified.`);
