@@ -267,7 +267,8 @@ function validatedHandoff(text:string,messages:any[],saved?:SavedFoodPreferences
  if(metadata.length<=2048){try{handoff=searchHandoffFromModel(JSON.parse(metadata),messages,saved);}catch{/* Invalid handoffs cannot authorize a workflow. */}}
  return {attempted:true,text:prose,handoff};
 }
-function safeHandoffAcknowledgement(messages:any[]){
+function safeHandoffAcknowledgement(messages:any[],handoff?:any){
+ if(handoff?.status==='clarify'&&handoff.question?.key)return clarificationText(handoff.question.key,isSpanishMealRequest(messages));
  const userText=messages.filter(x=>x?.role==='user'&&typeof x.content==='string').slice(-4).map((x:any)=>norm(x.content)).join(' ');
  return /\b(?:quiero|comida|pollo|arroz|dame|agregar|guardar|porcion|recomienda|receta|ingredientes|comer|cena|desayuno)\b/.test(userText)
   ?'Puedo preparar esa búsqueda para que la revises.'
@@ -284,7 +285,7 @@ export function extractMealRecommendation(text:string,messages:any[],saved?:Save
    if(text.length<=12000){try{const envelope=JSON.parse(text.trim());if(envelope&&typeof envelope==='object'&&!Array.isArray(envelope))candidate=envelope.payload;}catch{}}
    let handoff=null,lookupError:unknown=null;
    try{handoff=explicitLookupHandoff(messages,saved??defaults,candidate);}catch(error){lookupError=error;}
-   if(handoff)return {text:safeHandoffAcknowledgement(messages),recommendation:null,handoff,handled:true,rejected:false};
+   if(handoff)return {text:safeHandoffAcknowledgement(messages,handoff),recommendation:null,handoff,handled:true,rejected:false};
    const code=lookupError?safeRecommendationErrorCode(lookupError):'invalid_search_intake';
    reportRecommendationFailure(report,'explicit_lookup_validation',code);
    const restrictionFailure=['ambiguous_allergy','unrepresented_allergy','ambiguous_saved_restriction','unsupported_saved_restriction','invalid_dietary_constraints','unrepresented_restriction'].includes(code);
@@ -311,7 +312,7 @@ export function extractMealRecommendation(text:string,messages:any[],saved?:Save
      const restrictionFailure=['ambiguous_allergy','unrepresented_allergy','ambiguous_saved_restriction','unsupported_saved_restriction','invalid_dietary_constraints','unrepresented_restriction'].includes(code);
      return {text:safeMealFallback(messages,saved,restrictionFailure?'restriction_cannot_be_screened':undefined),recommendation:null,handoff:null,handled:true,rejected:true};
     }
-    return {text:safeHandoffAcknowledgement(messages),recommendation:null,handoff,handled:true,rejected:false};
+    return {text:safeHandoffAcknowledgement(messages,handoff),recommendation:null,handoff,handled:true,rejected:false};
    }
   try{const recommendation=recommendationFromModel(envelope.payload,messages,saved??defaults,snapshot);return {text:recommendationSummary(recommendation),recommendation,handoff:null,handled:true,rejected:false};}
   catch(error){reportRecommendationFailure(report,'recommendation_validation',safeRecommendationErrorCode(error));return {text:safeMealFallback(messages,saved),recommendation:null,handoff:null,handled:true,rejected:true};}
@@ -324,7 +325,7 @@ export function extractMealRecommendation(text:string,messages:any[],saved?:Save
   const foodIntent=direct||publicFoodSearchRequest(messages);
   // Only a parsed, validated handoff may continue. Replace model prose with a
   // deterministic acknowledgement, so a marker cannot carry unreviewed advice.
-  if(parsedHandoff.handoff&&foodIntent)return {text:safeHandoffAcknowledgement(messages),recommendation:null,handoff:parsedHandoff.handoff,handled:true,rejected:false};
+  if(parsedHandoff.handoff&&foodIntent)return {text:safeHandoffAcknowledgement(messages,parsedHandoff.handoff),recommendation:null,handoff:parsedHandoff.handoff,handled:true,rejected:false};
   if(plainAdvice||foodIntent){reportRecommendationFailure(report,'marker_payload',parsedHandoff.attempted?'invalid_handoff':'structured_outcome_missing');return {text:safeMealFallback(messages,saved),recommendation:null,handoff:null,handled:true,rejected:true};}
   if(parsedHandoff.attempted)return {text:visibleText,recommendation:null,handoff:null,handled:true,rejected:false};
   return {text,recommendation:null,handoff:null,handled:false,rejected:false};
