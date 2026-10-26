@@ -21,6 +21,7 @@ export default function FoodDetailsScreen() {
   const offDataString = params.offData as string;
   const returnTo = (params.returnTo as string) || undefined;
   const itemId = (params.itemId as string) || undefined;
+  const itemTable = params.itemTable === 'saved_meal_items' ? 'saved_meal_items' : 'meal_items';
   const planId = (params.planId as string) || undefined;
   const source = (params.source as FoodLogSource) || 'search';
   const food_item_id = (params.food_item_id as string) || undefined;
@@ -78,6 +79,7 @@ export default function FoodDetailsScreen() {
         context={context}
         returnTo={returnTo}
         itemId={itemId}
+        itemTable={itemTable}
         planId={planId}
         source={source}
         food_item_id={food_item_id}
@@ -95,6 +97,7 @@ export default function FoodDetailsScreen() {
       context={context}
       returnTo={returnTo}
       itemId={itemId}
+      itemTable={itemTable}
       source={source}
       food_item_id={food_item_id}
     />

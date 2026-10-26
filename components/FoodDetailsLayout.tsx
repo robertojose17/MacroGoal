@@ -1,3 +1,4 @@
+import { recoveryRouteContext, macroDisplayGrams, recoveryProduct, preferRecoveryProduct, createLoadGeneration } from '@/utils/recoveryRouteContext';
 import { optionalFiber } from '@/utils/optionalFiber';
 import i18n from '@/lib/i18n';
 import {coachFoodDetailsPresentation,coachDisplayServingOptions} from '@/utils/coachFoodDetailsPresentation';
@@ -17,7 +18,7 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { IconSymbol } from '@/components/IconSymbol';
 import { isFavorite, toggleFavorite } from '@/utils/favoritesDatabase';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { addToDraft } from '@/utils/myMealsDraft';
 
 import { logFoodUsage, type FoodLogSource } from '@/utils/logFoodUsage';
@@ -628,6 +629,13 @@ export default function FoodDetailsLayout({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+  const routeContext = useLocalSearchParams();
+  const latestOffData = useRef(offData);
+  latestOffData.current = offData;
+  const editGeneration = useRef(createLoadGeneration());
+  const editRouteKey = JSON.stringify([itemId,itemTable,offData,routeContext.recoverySaved]);
+  const latestEditRoute = useRef(editRouteKey);
+  latestEditRoute.current = editRouteKey;
   const { t } = useTranslation();
 
   const [product, setProduct] = useState<OpenFoodFactsProduct | null>(null);
@@ -928,6 +936,9 @@ export default function FoodDetailsLayout({
   };
 
   const loadEditItem = useCallback(async () => {
+    const generationCurrent = editGeneration.current.begin();
+    const isCurrent = () => generationCurrent() && latestEditRoute.current === editRouteKey;
+    const approvedProduct = recoveryProduct(offData, routeContext.recoverySaved === '1');
     if (!itemId) {
       setLoading(false);
       return;
@@ -935,6 +946,7 @@ export default function FoodDetailsLayout({
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!isCurrent()) return;
       if (!user) {
         Alert.alert(t('common.error'), t('common.loggedIn'));
         router.back();
@@ -953,6 +965,7 @@ export default function FoodDetailsLayout({
         .eq('id', itemId)
         .single();
 
+      if (!isCurrent()) return;
       if (error || !mealItem) {
         console.error('Error loading meal item:', error);
         Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
@@ -961,6 +974,7 @@ export default function FoodDetailsLayout({
       }
 
       const { data: { user: currentOwner } } = await supabase.auth.getUser();
+      if (!isCurrent()) return;
       if (!currentOwner || currentOwner.id !== user.id) {
         setSavedCoachServing(null);
         return;
@@ -997,7 +1011,7 @@ export default function FoodDetailsLayout({
                 user_created: false,
               }
             : null
-      );
+      ) ?? (approvedProduct ? {name:approvedProduct.product_name,brand:approvedProduct.brands,calories:mealItem.calories??0,protein:mealItem.protein??0,carbs:mealItem.carbs??0,fats:mealItem.fats??0,fiber:mealItem.fiber??0,serving_amount:mealItem.grams??100,serving_unit:'g'} : null);
       if (!food) {
         Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
         router.back();
@@ -1019,6 +1033,7 @@ export default function FoodDetailsLayout({
           .select('id, name, brand, barcode, calories, protein, carbs, fat, fiber, serving_size, serving_unit, serving_quantity, serving_description, serving_count, macros_per, nutriments, sugar_g, saturated_fat_g, polyunsaturated_fat_g, monounsaturated_fat_g, trans_fat_g, cholesterol_mg, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg, vitamin_b12_mcg, folate_mcg, choline_mg, pantothenic_acid_mg, selenium_mcg, source, usda_fdc_id, data_quality_score, ingredients_text, allergens, off_data')
           .eq('id', mealItem.food_item_id)
           .single();
+        if (!isCurrent()) return;
         foodItem = fetchedFoodItem;
 
         if (foodItem) {
@@ -1113,17 +1128,27 @@ export default function FoodDetailsLayout({
         });
       }
 
+      // Approved recovery nutrition wins even when this diary item has an old/missing catalog link.
+      // The diary item and its quantity/grams below are read-only and remain unchanged.
+      mockProduct = preferRecoveryProduct(mockProduct, approvedProduct);
+      if (approvedProduct) {
+        const nm = approvedProduct.nutriments;
+        per100Cals=safeNum(nm['energy-kcal_100g']);per100Protein=safeNum(nm.proteins_100g);
+        per100Carbs=safeNum(nm.carbohydrates_100g);per100Fats=safeNum(nm.fat_100g);per100Fiber=safeNum(nm.fiber_100g);
+      }
       const privateDataItem=mealItem as any;
       const savedMealId=String(privateDataItem.id);
       const localCoachDetails=await loadCoachPrivateMealDetails(AsyncStorage,user.id,savedMealId);
+      if (!isCurrent()) return;
       const privateLink=privateDataItem.off_data&&typeof privateDataItem.off_data==='object'?privateDataItem.off_data.coach_private_details:null;
       const hasPrivateLink=hasCoachPrivateDetailsReference(privateLink);
       const {data:{user:latestOwner}}=await supabase.auth.getUser();
+      if (!isCurrent()) return;
       if(!latestOwner||latestOwner.id!==user.id){setSavedCoachServing(null);return;}
       setProduct(mockProduct);
       coachDetailsOwnerRef.current=user.id;setCoachDetailsOwner(user.id);setSavedCoachServing({owner:user.id,itemId:itemId!,description:typeof privateDataItem.serving_description==='string'?privateDataItem.serving_description:null,details:localCoachDetails});
       const mealDetailsService=coachDailyServices.experience;
-       if(hasPrivateLink&&mealDetailsService){void mealDetailsService.savedDetails(savedMealId).then(async resolved=>{if(!resolved)return;const {data:{user:resolvedOwner}}=await supabase.auth.getUser();if(!resolvedOwner||resolvedOwner.id!==user.id||coachDetailsOwnerRef.current!==user.id)return;const crossDeviceDetails={...resolved,ingredients:localCoachDetails?.ingredients??[],instructions:localCoachDetails?.instructions?.length?localCoachDetails.instructions:resolved.instructions,portion:localCoachDetails?.portion||resolved.portion,source:resolved.source??localCoachDetails?.source??null};setSavedCoachServing(current=>current?.owner===user.id&&current.itemId===itemId?{...current,details:crossDeviceDetails}:current);}).catch(()=>{});}
+       if(hasPrivateLink&&mealDetailsService){void mealDetailsService.savedDetails(savedMealId).then(async resolved=>{if(!resolved)return;const {data:{user:resolvedOwner}}=await supabase.auth.getUser();if(!isCurrent()||!resolvedOwner||resolvedOwner.id!==user.id||coachDetailsOwnerRef.current!==user.id)return;const crossDeviceDetails={...resolved,ingredients:localCoachDetails?.ingredients??[],instructions:localCoachDetails?.instructions?.length?localCoachDetails.instructions:resolved.instructions,portion:localCoachDetails?.portion||resolved.portion,source:resolved.source??localCoachDetails?.source??null};setSavedCoachServing(current=>current?.owner===user.id&&current.itemId===itemId?{...current,details:crossDeviceDetails}:current);}).catch(()=>{});}
 
       setPer100Macros({
         calories: per100Cals,
@@ -1247,16 +1272,17 @@ export default function FoodDetailsLayout({
         }
       }
 
-      await checkFavoriteStatus(mockProduct);
+      await checkFavoriteStatus(mockProduct, isCurrent);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Error in loadEditItem:', error);
       Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
       router.back();
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId, router, itemTable]);
+  }, [itemId, router, itemTable, offData, editRouteKey, routeContext.recoverySaved]);
 
   useEffect(() => {
     if (itemId) {
@@ -1268,6 +1294,7 @@ export default function FoodDetailsLayout({
     } else if (mode === 'edit') {
       loadEditItem();
     }
+    return () => { editGeneration.current.invalidate(); };
   }, [mode, itemId, loadViewData, loadEditItem]);
 
   useEffect(() => {
@@ -1302,6 +1329,8 @@ export default function FoodDetailsLayout({
       }
       if (!food_item_id || mode !== 'view') return;
 
+      let active = true;
+      const requestedOffData = offData;
       console.log('[FoodDetailsLayout] useFocusEffect: re-fetching food_item id=', food_item_id);
       (async () => {
         try {
@@ -1311,6 +1340,7 @@ export default function FoodDetailsLayout({
             .eq('id', food_item_id)
             .single();
 
+          if (!active || latestOffData.current !== requestedOffData) return;
           if (!fi) {
             console.warn('[FoodDetailsLayout] useFocusEffect: food_item not found for id=', food_item_id);
             return;
@@ -1395,13 +1425,14 @@ export default function FoodDetailsLayout({
             setSelectedServingOptionKey('default');
           }
         } catch (err) {
-          console.warn('[FoodDetailsLayout] useFocusEffect: refresh error (silenced):', err);
+          if (active && latestOffData.current === requestedOffData) console.warn('[FoodDetailsLayout] useFocusEffect: refresh error (silenced):', err);
         }
       })();
-    }, [food_item_id, mode])
+      return () => { active = false; };
+    }, [food_item_id, mode, offData])
   );
 
-  const checkFavoriteStatus = async (prod: OpenFoodFactsProduct) => {
+  const checkFavoriteStatus = async (prod: OpenFoodFactsProduct, isCurrent = () => true) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -1410,7 +1441,7 @@ export default function FoodDetailsLayout({
       const foodCode = prod.code || undefined;
       const favStatus = await isFavorite(user.id, foodSource, foodCode, prod.product_name, prod.brands || undefined);
       console.log('[FoodDetails] checkFavoriteStatus result:', favStatus, 'for', prod.product_name);
-      setIsFav(favStatus);
+      if (isCurrent()) setIsFav(favStatus);
     } catch (error) {
       console.error('[FoodDetails] Error checking favorite status:', error);
     }
@@ -1498,8 +1529,8 @@ export default function FoodDetailsLayout({
     return servingAmount * servings;
   };
 
-  const calculateMacros = () => {
-    if (!per100Macros || !foodItemRef) {
+  const calculateMacros = (forDisplay = false) => {
+    if (!per100Macros) {
       return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
     }
     const totalGrams = getTotalGrams();
@@ -1509,16 +1540,17 @@ export default function FoodDetailsLayout({
       carbs: per100Macros.carbs,
       fat: per100Macros.fats,
       fiber: per100Macros.fiber,
-      serving_size: foodItemRef.serving_size,
-      macros_per: foodItemRef.macros_per,
+      // These values are already normalized by every loader. Never reuse the DB basis.
+      serving_size: 100,
+      macros_per: '100g',
     };
     const result = calcMacros(fi, totalGrams);
     return {
       calories: Math.round(result.calories),
-      protein: Math.round(result.protein),
-      carbs: Math.round(result.carbs),
-      fats: Math.round(result.fat),
-      fiber: Math.round(result.fiber),
+      protein: forDisplay ? macroDisplayGrams(result.protein) : Math.round(result.protein),
+      carbs: forDisplay ? macroDisplayGrams(result.carbs) : Math.round(result.carbs),
+      fats: forDisplay ? macroDisplayGrams(result.fat) : Math.round(result.fat),
+      fiber: forDisplay ? macroDisplayGrams(result.fiber) : Math.round(result.fiber),
     };
   };
 
@@ -2091,7 +2123,7 @@ export default function FoodDetailsLayout({
     );
   }
 
-  const macros = calculateMacros();
+  const macros = calculateMacros(true);
 
   const currentBanner = bannerQueue[0];
 
@@ -2346,6 +2378,7 @@ export default function FoodDetailsLayout({
               router.push({
                 pathname: '/food-photo-capture',
                 params: {
+                  ...recoveryRouteContext(routeContext),
                   barcode: barcodeFromOffData,
                   name: product?.product_name || product?.generic_name || '',
                   brand: product?.brands || '',
@@ -2353,7 +2386,10 @@ export default function FoodDetailsLayout({
                   food_item_id: food_item_id || '',
                   meal: mealType,
                   date: date,
-                  mode: mode,
+                  mode: typeof routeContext.mode === 'string' ? routeContext.mode : (planId && onMealPlanSave ? 'meal-plan' : mode),
+                  itemId: itemId || '',
+                  itemTable: itemTable || '',
+                  planId: planId || '',
                   context: context || '',
                   returnTo: returnTo || '',
                 },

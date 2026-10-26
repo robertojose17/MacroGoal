@@ -1,3 +1,4 @@
+import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,7 +18,7 @@ type Candidate = {
   provenance:{kind:string;url:string;retrieved_at:string};
 };
 type Review = {session?:string;candidates?:Candidate[];photo?:Candidate|null;issues?:{field:string;reason:string}[];search_code?:string;source_links?:string[]};
-type Stage = 'search'|'results'|'front'|'label'|'confirm'|'done';
+type Stage = 'search'|'results'|'front'|'label';
 export default function FoodPhotoCaptureScreen() {
   const params=useLocalSearchParams(),router=useRouter(),{i18n}=useTranslation();
   const es=i18n.language.startsWith('es'),dark=String(useColorScheme())==='dark';
@@ -29,7 +30,7 @@ export default function FoodPhotoCaptureScreen() {
   const [permission,requestPermission]=useCameraPermissions();
   const recoveryKey=useRef('');
   const camera=useRef<CameraView>(null),inFlight=useRef(false),front=useRef<string|null>(null);
-  const [saved,setSaved]=useState<any>(null);
+  const [saving,setSaving]=useState(false);
   const ink=dark?'#F5F6FA':'#182326',background=dark?'#101719':'#F7F9F8',card=dark?'#1D292B':'#FFFFFF';
   const fieldNames:Record<string,string>={label:tr('nutrition label','etiqueta nutricional'),serving:tr('serving and preparation','porción y preparación'),serving_g:tr('serving weight in grams','peso de la porción en gramos'),calories:tr('calories','calorías'),protein:tr('protein','proteína'),carbs:tr('total carbohydrates','carbohidratos totales'),fat:tr('total fat','grasa total'),fiber:tr('fiber','fibra'),barcode:tr('barcode','código de barras')};
   function message(code:string) {
@@ -103,24 +104,24 @@ export default function FoodPhotoCaptureScreen() {
       setReview(data);setStage('results');
     });
   }
-  function select(candidate:Candidate) {
-    if(!candidate.can_confirm)return;
-    setSelected(candidate);setStage('confirm');setError('');
+  async function select(candidate:Candidate) {
+    if(inFlight.current||!candidate.can_confirm||!candidate.proposal)return;
+    // An uncertain save can only retry its original signed proposal/receipt.
+    if(selected&&selected.proposal!==candidate.proposal)return;
+    setSelected(candidate);setSaving(true);
+    try { await operation(async()=>{
+      const data=await request({action:'recovery_confirm',proposal:candidate.proposal,confirmations:{identity:true,serving:true,nutrition:true,shared:true}});
+      if(data.status!=='approved'||!data.food_item?.id)throw Error('save_unknown');
+      finish(data.food_item);
+    }); } finally {setSaving(false);}
   }
-  async function confirm() {
-    if(!selected?.proposal)return;
-    await operation(async()=>{
-      const data=await request({action:'recovery_confirm',proposal:selected.proposal,confirmations:{identity:true,serving:true,nutrition:true,shared:true}});
-      setSaved(data.food_item);setStage('done');
-    });
-  }
-  function finish() {
-    if(param('type')==='correction'){router.back();return;}
-    if(!saved){router.back();return;}
-    router.replace({pathname:'/food-details',params:{
+  function finish(saved:any) {
+    const destination={pathname:'/food-details' as const,params:{
       offData:JSON.stringify(buildSyntheticOffData(saved)),food_item_id:saved.id,source:'barcode',
-      meal:param('meal'),date:param('date'),mode:param('mode'),context:param('context'),returnTo:param('returnTo'),mealId:param('mealId'),
-    }});
+      ...recoveryRouteContext(params),recoverySaved:'1',
+    }};
+    if(param('type')==='correction')router.dismissTo(destination);
+    else router.replace(destination);
   }
   const button=(label:string,onPress:()=>void,disabled=false,secondary=false)=>(
     <TouchableOpacity accessibilityRole="button" accessibilityState={{disabled:disabled||busy}} disabled={disabled||busy} onPress={onPress}
@@ -150,14 +151,14 @@ export default function FoodPhotoCaptureScreen() {
       {candidate.nutrition_image_url&&source(candidate.nutrition_image_url,tr('View nutrition label','Ver etiqueta nutricional'))}
       {!!candidate.label_issue&&<Text style={styles.warning}>{tr('The published label could not be reconciled with this record. These values cannot update the catalog; use clear package photos.','No se pudo conciliar la etiqueta publicada con este registro. Estos valores no pueden actualizar el catálogo; usa fotos claras del empaque.')}</Text>}
       {!!candidate.conflicts?.length&&!candidate.label_issue&&<Text style={styles.warning}>{tr('These online values differ from your readable label. Use your package values below.','Estos valores de internet difieren de tu etiqueta legible. Usa los valores de tu empaque abajo.')}</Text>}
-      {stage==='results'&&candidate.can_confirm&&button(tr('This is my product','Este es mi producto'),()=>select(candidate))}
+      {stage==='results'&&candidate.can_confirm&&button(tr('This is my product','Este es mi producto'),()=>void select(candidate),!!selected&&selected.proposal!==candidate.proposal)}
     </View>;
   }
   const usableCandidates=(review.candidates||[]).filter(candidate=>candidate.can_confirm);
   const cameraStage=stage==='front'||stage==='label';
   return <SafeAreaView style={[styles.screen,{backgroundColor:background}]} edges={['top','bottom']}>
     <View style={styles.header}>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel={tr('Back','Atrás')} onPress={()=>{if(stage==='confirm'||cameraStage)setStage('results');else router.back();}}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={tr('Back','Atrás')} disabled={saving} onPress={()=>{if(cameraStage)setStage('results');else router.back();}}>
         <Text style={[styles.back,{color:ink}]}>{'\u2039'}</Text>
       </TouchableOpacity>
       <Text style={[styles.heading,{color:ink}]}>{tr('Correct product data','Corregir datos del producto')}</Text>
@@ -172,30 +173,19 @@ export default function FoodPhotoCaptureScreen() {
       </View>
     </View>:<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!!error&&<Text accessibilityRole="alert" style={styles.warning}>{error}</Text>}
-      {busy&&<View style={styles.loading}><ActivityIndicator/><Text style={{color:ink}}>{tr('Searching for your product data','Buscando los datos de tu producto')}</Text></View>}
+      {busy&&<View style={styles.loading}><ActivityIndicator/><Text style={{color:ink}}>{saving?tr('Saving product data','Guardando los datos del producto'):tr('Searching for your product data','Buscando los datos de tu producto')}</Text></View>}
       {!busy&&stage==='search'&&!!error&&button(tr('Retry this scanned product','Reintentar este producto escaneado'),()=>void discover(true))}
-      {!busy&&stage==='results'&&<>
+      {(!busy||saving)&&stage==='results'&&<>
         <Text style={[styles.title,{color:ink}]}>{review.photo?tr('Compare with your package','Compara con tu empaque'):usableCandidates.length?tr('Product data found','Datos del producto encontrados'):tr('Package photos needed','Necesitamos fotos del empaque')}</Text>
         {!!review.search_code&&<Text style={styles.warning}>{tr('Web search could not finish. You can continue with clear package photos.','La búsqueda web no pudo terminar. Puedes continuar con fotos claras del empaque.')}</Text>}
+        {(usableCandidates.length>0||review.photo?.can_confirm)&&<Text style={[styles.text,{color:ink}]}>{tr('This is my product confirms the exact product, variant, serving and displayed nutrition, and saves the correction to the shared barcode catalog. Nothing is added to your diary.','Este es mi producto confirma el producto, variante, porción y datos mostrados, y guarda la corrección en el catálogo compartido. No se añade nada a tu diario.')}</Text>}
         {usableCandidates.map((candidate,index)=>candidateCard(candidate,'web-'+index))}
         {!usableCandidates.length&&!review.photo&&<Text style={[styles.text,{color:ink}]}>{tr('No complete, verified product option was found. We will not fill in missing numbers.','No encontramos una opción completa y verificada. No rellenaremos números ausentes.')}</Text>}
         {review.photo&&candidateCard(review.photo,'physical')}
         {(review.issues||[]).map((issue,index)=><Text key={index} style={styles.warning}>{issue.field==='analysis'
           ?tr('The analysis service could not finish. This does not mean your label is wrong. Please try a new photo attempt later.','El servicio de análisis no pudo terminar. Esto no significa que tu etiqueta esté mal. Intenta otra lectura más tarde.')
           :tr('Please show clearly: ','Muestra claramente: ')+(issue.field==='front'?tr('the product name, brand and exact variant','el nombre, marca y variante exactos'):fieldNames[issue.field]||fieldNames.label)+(issue.reason==='reads_disagree'?tr(' — the two readings disagree.',' — las dos lecturas no coinciden.'):'.')}</Text>)}
-        {button(review.photo?tr('Retake package photos','Volver a tomar fotos'):usableCandidates.length?tr('None of these — take package photos','Ninguno de estos — tomar fotos del empaque'):tr('Take package photos','Tomar fotos del empaque'),()=>void beginPhotos(),!review.session,true)}
-      </>}
-      {stage==='confirm'&&selected&&<>
-        <Text style={[styles.title,{color:ink}]}>{tr('Confirm before updating the catalog','Confirma antes de actualizar el catálogo')}</Text>
-        {candidateCard(selected,'confirmation')}
-        <Text style={[styles.text,{color:ink}]}>{tr('By confirming, you identify this exact product and variant as the one you scanned, confirm the serving and displayed nutrition, and approve updating the shared barcode catalog for future scans. Nothing is added to your diary.','Al confirmar, identificas este producto y variante como el que escaneaste, confirmas la porción y los datos mostrados, y autorizas actualizar el catálogo compartido para futuros escaneos. No se añade nada a tu diario.')}</Text>
-        {button(tr('Confirm data and update product','Confirmar datos y actualizar producto'),()=>void confirm())}
-        {button(tr('Back to options','Volver a las opciones'),()=>setStage('results'),false,true)}
-      </>}
-      {stage==='done'&&<>
-        <Text style={[styles.title,{color:ink}]}>{tr('Product data updated','Datos del producto actualizados')}</Text>
-        <Text style={[styles.text,{color:ink}]}>{tr('The confirmed data is ready for future barcode scans. Nothing was added to your diary.','Los datos confirmados están listos para futuros escaneos. No se añadió nada a tu diario.')}</Text>
-        {button(tr('Return to product','Volver al producto'),finish)}
+        {button(review.photo?tr('Retake package photos','Volver a tomar fotos'):usableCandidates.length?tr('None of these — take package photos','Ninguno de estos — tomar fotos del empaque'):tr('Take package photos','Tomar fotos del empaque'),()=>void beginPhotos(),!review.session||!!selected,true)}
       </>}
     </ScrollView>}
   </SafeAreaView>;
