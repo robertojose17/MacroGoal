@@ -91,6 +91,8 @@ export function validateNutritionLabelRead(result, { requireProduct = false } = 
   const nutrients = {};
   for (const nutrient of NUTRIENTS) {
     const row = result.nutrients[nutrient];
+    // An absent optional row is unknown, never an inferred zero.
+    if (nutrient === 'fiber' && (row == null || typeof row.value !== 'number' || !Number.isFinite(row.value) || row.value < 0 || !canonicalUnit(row.unit,nutrient) || !labelMatches(nutrient,row.row_label) || !hasExactPrintedAmount(row.printed_text,row.value,nutrient) || normalizeText(row.column_header)!==normalizeText(selectedColumn))) { nutrients.fiber = { value: null, unit: null }; continue; }
     if (!row || typeof row !== 'object' || Array.isArray(row)) return invalid(nutrient);
     if (typeof row.value !== 'number' || !Number.isFinite(row.value) || row.value < 0) return invalid(nutrient);
     const unit = canonicalUnit(row.unit, nutrient);
@@ -130,6 +132,7 @@ export function compareNutritionLabelReads(firstResult, secondResult) {
   if (!second.ok) return second;
   if (first.reading.servingSize !== second.reading.servingSize || first.reading.servingQuantity !== second.reading.servingQuantity) return invalid('serving', 'reads_disagree');
   for (const nutrient of NUTRIENTS) {
+    if (nutrient === 'fiber' && (first.reading.nutrients.fiber.value == null || second.reading.nutrients.fiber.value == null || first.reading.nutrients.fiber.value !== second.reading.nutrients.fiber.value)) { first.reading.nutrients.fiber = { value: null, unit: null }; continue; }
     if (first.reading.nutrients[nutrient].value !== second.reading.nutrients[nutrient].value || first.reading.nutrients[nutrient].unit !== second.reading.nutrients[nutrient].unit) return invalid(nutrient, 'reads_disagree');
   }
 

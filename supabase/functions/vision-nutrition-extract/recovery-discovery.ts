@@ -5,13 +5,15 @@ import { sameBarcode } from './identity.mjs';
 
 const MAX_BYTES = 1024 * 1024;
 // Proposed bounded retailer expansion for review. No arbitrary-domain fetching.
+const MANUFACTURERS = new Set(['violife.com','www.violife.com','floraprofessional.com','www.floraprofessional.com']);
 const RETAILERS = new Set(['walmart.com','www.walmart.com','target.com','www.target.com']);
 export function productPageURL(value:string) {
   const safe=safeCitationURL(value); if(!safe)return null;
-  return allowedEvidenceURL(safe)|| (RETAILERS.has(new URL(safe).hostname)?safe:null);
+  return allowedEvidenceURL(safe)|| ((RETAILERS.has(new URL(safe).hostname)||MANUFACTURERS.has(new URL(safe).hostname))?safe:null);
 }
 export function productImageURL(value:string,page:string) {
-  const safe=safeCitationURL(value),source=productPageURL(page);if(!safe||!source)return null;
+  let absolute:string;try{absolute=new URL(value,page).href;}catch{return null;}
+  const safe=safeCitationURL(absolute),source=productPageURL(page);if(!safe||!source)return null;
   const host=new URL(safe).hostname,pageHost=new URL(source).hostname;
   const hosts=new Set([pageHost]);
   if(/(^|\.)walmart\.com$/.test(pageHost))hosts.add('i5.walmartimages.com');
@@ -20,13 +22,15 @@ export function productImageURL(value:string,page:string) {
 }
 async function readPage(url: string, fetcher: typeof fetch, deadline:number) {
   const safe = productPageURL(url);
-  if (!safe) return null; // Reuse existing source boundary; never broaden it from model/client input.
+  if (!safe) throw Error('host_not_supported'); // Reuse existing source boundary; never broaden it from model/client input.
   if(Date.now()>=deadline)throw Error('request_deadline');
   const response = await fetcher(safe, { redirect:'manual', credentials:'omit', signal:AbortSignal.timeout(Math.max(1,Math.min(6000,deadline-Date.now()))) });
-  if (!response.ok || !/text\/html|application\/(?:ld\+)?json/i.test(response.headers.get('content-type') || '') || !response.body) return null;
+  if(response.status>=300&&response.status<400)throw Error('source_redirect');
+  if(!response.ok)throw Error('source_http_error');
+  if(!/text\/html|application\/(?:ld\+)?json/i.test(response.headers.get('content-type')||'')||!response.body)throw Error('source_content_type');
   const reader = response.body.getReader(); let count=0, body=''; const decoder=new TextDecoder();
   try { while(true) { const next=await reader.read(); if(next.done) break; count+=next.value.length;
-    if(count>MAX_BYTES) { await reader.cancel(); return null; } body+=decoder.decode(next.value,{stream:true}); }
+    if(count>MAX_BYTES) { await reader.cancel(); throw Error('source_too_large'); } body+=decoder.decode(next.value,{stream:true}); }
     return body+decoder.decode();
   } finally { reader.releaseLock(); }
 }
@@ -34,6 +38,32 @@ function amount(value: unknown, unit: string) {
   if(typeof value !== 'string') return null;
   const m=new RegExp('^\\s*(\\d+(?:[.,]\\d+)?)\\s*'+unit+'\\s*$','i').exec(value);
   return m ? Number(m[1].replace(',','.')) : null;
+}
+// Accept only one bounded nutrition table on a single-product manufacturer page.
+// Never join separate products, tables, regions or inferred barcode values.
+const plain=(html:string)=>html.replace(/<[^>]*>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim();
+function manufacturerNutrition(html:string,url:string,row:any,productCount:number) {
+  if(!MANUFACTURERS.has(new URL(url).hostname)||productCount!==1)return null;
+  const headings=[...html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)];
+  if(headings.length!==1||norm(plain(headings[0][1]))!==norm(row.name))return null;
+  const tables=[...html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)].map(m=>m[1]).filter(t=>/Serving size/i.test(plain(t))&&/Calories/i.test(plain(t)));
+  if(tables.length!==1)return null;
+  const rows=[...tables[0].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map(m=>[...m[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c=>plain(c[1])));
+  // Only one amount column plus optional %DV columns is supported.
+  // Reject per-100g/as-prepared/dual-serving headers instead of choosing one.
+  if(/(?:per\s*100|as\s+prepared|as\s+packaged|dry\s+mix)/i.test(plain(tables[0])))return null;
+  for(const cells of rows){
+    if(cells.slice(1).some(c=>/serving|calories|\d+(?:[.,]\d+)?\s*(?:g|mg|kcal)\b/i.test(c)))return null;
+    if(!/^Calories$/i.test(cells[0]||'')&&cells.slice(1).some(c=>c&&!/^\d+(?:[.,]\d+)?%$|^%DV\*?$/i.test(c)))return null;
+    if(/^Calories$/i.test(cells[0]||'')&&(cells.slice(2).some(Boolean)||!/^\d+(?:[.,]\d+)?$/.test(cells[1]||'')))return null;
+  }
+  const servingRows=rows.filter(r=>/Serving size/i.test(r[0]||''));
+  if(servingRows.length!==1||!rows.some(r=>/^Amount per serving$/i.test(r[0]||'')))return null;
+  const serving=servingRows[0][0].split(/Serving size/i)[1]?.trim();
+  const get=(label:string,unit:string)=>{const hits=rows.filter(r=>new RegExp('^'+label+'(?:\\s|$)','i').test(r[0]||''));if(hits.length!==1)return null;
+    const text=hits[0][0].replace(new RegExp('^'+label,'i'),'').trim()||hits[0][1];
+    const value=amount(text,unit);return value==null?null:String(value)+(unit?' '+unit:' kcal');};
+  return {servingSize:serving,calories:get('Calories',''),proteinContent:get('Protein','g'),carbohydrateContent:get('Total Carbohydrate','g'),fatContent:get('Total Fat','g'),fiberContent:get('(?:Dietary )?Fib(?:er|re)','g')};
 }
 export function parseProductPage(html: string, url: string, barcode: string, includeImageOnly=false) {
   const records:any[]=[];
@@ -49,7 +79,8 @@ export function parseProductPage(html: string, url: string, barcode: string, inc
     const code=codes[0];
     if(codes.some(c=>!sameBarcode(code,c)))continue;
     if(row.name.length>160||typeof brand!=='string'||brand.length>100)continue;
-    const n=row.nutrition, serving=typeof n?.servingSize==='string'?n.servingSize:'';
+    const tableNutrition=!row.nutrition?manufacturerNutrition(html,url,row,records.filter(r=>[r['@type']].flat().includes('Product')).length):null;
+    const n=row.nutrition||tableNutrition, serving=typeof n?.servingSize==='string'?n.servingSize:'';
     const gramMatches=[...serving.matchAll(/(\d+(?:[.,]\d+)?)\s*g\b/gi)];
     const grams=gramMatches.length===1?gramMatches[0]:null;
     const nutrition={calories:amount(n?.calories,'(?:kcal|calories)'),protein:amount(n?.proteinContent,'g'),carbs:amount(n?.carbohydrateContent,'g'),fat:amount(n?.fatContent,'g'),fiber:amount(n?.fiberContent,'g')};
@@ -60,7 +91,7 @@ export function parseProductPage(html: string, url: string, barcode: string, inc
     const exact=!!code && sameBarcode(code,barcode);
     result.push({name:row.name,brand,variant:row.name,barcode:code || null,serving,serving_g:grams?Number(grams[1].replace(',','.')):null,
       nutrition,image_url:image,nutrition_image_url:null,exact_barcode:exact,
-      product_images:productImages,validated:exact&&!!grams&&complete(nutrition),provenance:{kind:'source_record',url,retrieved_at:new Date().toISOString(),basis:'Product.nutrition',identity:'published_gtin'},
+      product_images:productImages,validated:exact&&!!grams&&complete(nutrition),provenance:{kind:'source_record',url,retrieved_at:new Date().toISOString(),basis:tableNutrition?'single_product_nutrition_table':'Product.nutrition',identity:'published_gtin'},
       confidence:exact?'published_barcode':'identity_unconfirmed'});
   }
   return result;
@@ -85,13 +116,16 @@ export async function discoverProducts(input:{barcode:string;name:string;brand:s
   let urls:unknown,labels:any[]=[];try{const parsed=JSON.parse(choice.message.content);urls=parsed.urls;labels=Array.isArray(parsed.labels)?parsed.labels:[];}catch{throw Error('search_incomplete');}
   const cited=new Set((choice.message.annotations || []).map((a:any)=>a?.url_citation?.url).filter((u:any)=>typeof u==='string'));
   if(!Array.isArray(urls))throw Error('search_incomplete');
-  const candidates:any[]=[]; const sourceLinks:string[]=[];let imageReads=0;
+  const candidates:any[]=[]; const sourceLinks:string[]=[];const diagnostics:{slot:number;outcome:string;records?:number}[]=[];let imageReads=0;let slot=0;
   for(const raw of urls.slice(0,3)) {
-    if(typeof raw!=='string'||!cited.has(raw)||!safeCitationURL(raw))continue;
+    slot++;
+    if(typeof raw!=='string'||!cited.has(raw)||!safeCitationURL(raw)){diagnostics.push({slot,outcome:'uncited_or_unsafe'});continue;}
     sourceLinks.push(raw);
     try{
       const page=await readPage(raw,deps.fetch,deadline);if(!page)continue;
-      for(const row of parseProductPage(page,raw,input.barcode,true)) {
+      const parsedRows=parseProductPage(page,raw,input.barcode,true);
+      diagnostics.push({slot,outcome:parsedRows.length?'product_records':'no_bound_product_record',records:parsedRows.length});
+      for(const row of parsedRows) {
         const label=labels.find((x:any)=>x?.page_url===raw&&typeof x.image_url==='string'&&row.product_images.includes(x.image_url));
         if(label&&row.exact_barcode&&productImageURL(label.image_url,raw)) {
           // A known label must be reconciled; a failure cannot silently restore HTML eligibility.
@@ -113,10 +147,11 @@ export async function discoverProducts(input:{barcode:string;name:string;brand:s
             if(row.conflicts.length)row.label_issue='label_conflict';
           }
         }
-        if(row.serving_g&&complete(row.nutrition))candidates.push(row);
+        if(row.serving_g&&complete(row.nutrition)){candidates.push(row);diagnostics.push({slot,outcome:row.validated?'eligible_candidate':'comparison_only_candidate'});}
+        else diagnostics.push({slot,outcome:'serving_or_core_macros_missing'});
       }
-    }catch{/* Show no fabricated option when source is unavailable. */}
+    }catch(error){const code=error instanceof Error?error.message:'';diagnostics.push({slot,outcome:['host_not_supported','source_redirect','source_http_error','source_content_type','source_too_large','request_deadline'].includes(code)?code:'source_read_failed'});}
   }
-  return {candidates:distinctCandidates(candidates),source_links:sourceLinks.slice(0,3)};
+  return {candidates:distinctCandidates(candidates),source_links:sourceLinks.slice(0,3),diagnostics};
 }
 

@@ -33,9 +33,11 @@ declare s public.food_submissions; item public.food_items; saved public.food_ite
 begin
   if code !~ '^[0-9]{8,14}$' or length(coalesce(p_payload->>'name',''))=0 or length(coalesce(p_payload->>'brand',''))=0 then raise exception 'invalid_identity'; end if;
   if jsonb_typeof(p_payload->'serving_size') is distinct from 'number' or (p_payload->>'serving_size')::numeric<=0 then raise exception 'invalid_serving'; end if;
-  foreach k in array array['calories','protein','carbs','fat','fiber'] loop
+  foreach k in array array['calories','protein','carbs','fat'] loop
     if jsonb_typeof(p_payload->k) is distinct from 'number' or (p_payload->>k)::numeric<0 then raise exception 'invalid_nutrition'; end if;
   end loop;
+  if p_payload->'fiber' is not null and p_payload->'fiber' <> 'null'::jsonb and
+    (jsonb_typeof(p_payload->'fiber') is distinct from 'number' or (p_payload->>'fiber')::numeric<0) then raise exception 'invalid_fiber'; end if;
   aliases:=case when length(code)=13 and left(code,1)='0' then array[code,substring(code from 2)] else array[code] end;
   perform pg_advisory_xact_lock(hashtextextended('barcode-recovery:'||code,0));
   select * into s from public.food_submissions where id=p_submission and submitted_by_user_id=p_owner for update;

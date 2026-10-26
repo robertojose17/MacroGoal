@@ -32,7 +32,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     const identity=await resolveCorrectionIdentity({barcode:body.barcode,food_item_id:body.food_item_id},repo);
     session={version:1,kind:'session',owner:userId,expires:Date.now()+ttl,
       submission:crypto.randomUUID(),binding:{barcode:body.barcode,id:identity.row?.id||null,updated_at:identity.row?.updated_at||null},
-      name:String(body.name||identity.row?.name||'').slice(0,160),brand:String(body.brand||identity.row?.brand||'').slice(0,100)};
+      name:String(identity.row?.name||body.name||'').slice(0,160),brand:String(identity.row?.brand||body.brand||'').slice(0,100)};
   } else {
     session=await openDraft(body.session,deps.secret,userId);
     if(session.kind!=='session')throw Error('invalid_proposal');
@@ -82,7 +82,8 @@ export async function handleRecovery(body:any,deps:Dependencies) {
       proposal:eligible?await sealDraft({version:1,kind:'candidate',owner:userId,expires:session.expires,
         submission:session.submission,binding:session.binding,candidate,revision},deps.secret):null};
   };
-  return {status:'review',session:await sealDraft(session,deps.secret),
+  console.log('[BarcodeRecovery] outcome', JSON.stringify({submission:session.submission,revision,phase,candidate_count:candidates.length,photo_valid:!!photo,issues:photoIssues.map(({field,reason})=>({field,reason})),search_code:searchCode||null,diagnostics:found.diagnostics||[]}));
+  return {status:'review',expires_at:session.expires,session:await sealDraft(session,deps.secret),
     candidates:await Promise.all(candidates.map(signCandidate)),photo:photo?await signCandidate(photo):null,
     issues:photoIssues,source_links:found.source_links,search_code:searchCode};
 }

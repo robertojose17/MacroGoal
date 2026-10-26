@@ -87,6 +87,7 @@ export function validateVerifiedLabel(result) {
   const fields = ['calories', 'protein', 'carbs', 'fat', 'fiber'];
   for (const field of fields) {
     const value = per[field];
+    if (field === 'fiber' && value == null) continue;
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return fail(`Could not read ${field} from the nutrition label. Please retake the label photo.`);
   }
   return {
@@ -95,7 +96,7 @@ export function validateVerifiedLabel(result) {
     brand: result.brand,
     servingSize: result.serving_size_g,
     servingQuantity: result.serving_quantity,
-    nutrition: { calories: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat, fiber: per.fiber },
+    nutrition: { calories: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat, fiber: per.fiber ?? null },
   };
 }
 
@@ -130,7 +131,7 @@ export function legacyPer100gResponseItem(row) {
     protein: row.protein * factor,
     carbs: row.carbs * factor,
     fat: row.fat * factor,
-    fiber: row.fiber * factor,
+    fiber: row.fiber == null ? null : row.fiber * factor,
     macros_per: '100g',
   };
 }

@@ -1,7 +1,9 @@
 import { canonicalBarcode, sameBarcode } from './identity.mjs';
 
 export const FIELDS = ['calories', 'protein', 'carbs', 'fat', 'fiber'];
-export const complete = n => !!n && FIELDS.every(k => typeof n[k] === 'number' && Number.isFinite(n[k]) && n[k] >= 0);
+export const REQUIRED_FIELDS = ['calories', 'protein', 'carbs', 'fat'];
+const numeric = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+export const complete = n => !!n && REQUIRED_FIELDS.every(k => numeric(n[k])) && (n.fiber == null || numeric(n.fiber));
 export const norm = s => typeof s === 'string' ? s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase() : '';
 export function validBarcode(s) {
   if (typeof s !== 'string' || !/^(?:\d{8}|\d{12,14})$/.test(s)) return false;
@@ -28,7 +30,7 @@ export function distinctCandidates(candidates) {
 }
 export function conflictsWithPhoto(candidate, photo) {
   if (!photo?.nutrition || !photo.serving_g) return [];
-  const fields = FIELDS.filter(k => typeof photo.nutrition[k] === 'number' && Math.abs(candidate.nutrition[k] / candidate.serving_g - photo.nutrition[k] / photo.serving_g) > 0.000001);
+  const fields = FIELDS.filter(k => typeof photo.nutrition[k] === 'number' && typeof candidate.nutrition[k] === 'number' && Math.abs(candidate.nutrition[k] / candidate.serving_g - photo.nutrition[k] / photo.serving_g) > 0.000001);
   if (candidate.serving_g !== photo.serving_g || (photo.serving && norm(candidate.serving) !== norm(photo.serving))) fields.unshift('serving');
   return fields;
 }
@@ -39,7 +41,7 @@ export function confirmationPayload(candidate, binding, confirmations) {
     barcode: canonicalBarcode(binding.barcode), expected_id: binding.id || null, expected_updated_at: binding.updated_at || null,
     name: candidate.name, brand: candidate.brand, variant: candidate.variant,
     serving_size: candidate.serving_g, serving_quantity: candidate.serving,
-    ...candidate.nutrition, image_url:candidate.image_url || null, provenance: {...candidate.provenance,label_image_url:candidate.nutrition_image_url || null},
+    ...candidate.nutrition, fiber:candidate.nutrition.fiber ?? null, image_url:candidate.image_url || null, provenance: {...candidate.provenance,label_image_url:candidate.nutrition_image_url || null},
   };
 }
 const encoder = new TextEncoder();

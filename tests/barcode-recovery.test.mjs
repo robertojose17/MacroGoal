@@ -134,7 +134,7 @@ test('barcode check digit and UPC/EAN identity are validated',()=>{
 });
 test('a click alone, incomplete nutrition and unsigned client changes cannot confirm',()=>{
   assert.throws(()=>confirmationPayload(candidate(),{barcode},{}),/confirmation_required/);
-  assert.equal(candidateEligible({...candidate(),nutrition:{...nutrition,fiber:null}},barcode),false);
+  assert.equal(candidateEligible({...candidate(),nutrition:{...nutrition,protein:null}},barcode),false);
   assert.equal(candidateEligible({...candidate(),validated:false},barcode),false);
 });
 test('proposals bind owner, expiry, version and exact server data',async()=>{
@@ -161,9 +161,9 @@ test('missing fiber is not zero and qualified values request the precise field',
   const saturated=read();saturated.nutrients.fat.row_label='Grasas saturadas';saturated.nutrients.fat.printed_text='Grasas saturadas 3 g';
   assert.equal(validateNutritionLabelRead(saturated).ok,false);
   const r=read();r.nutrients.fiber.value=null;
-  assert.equal(validateNutritionLabelRead(r).issues[0].field,'fiber');
+  assert.equal(validateNutritionLabelRead(r).reading.nutrients.fiber.value,null);
   r.nutrients.fiber.value=0;r.nutrients.fiber.printed_text='Dietary Fiber <1 g';
-  assert.equal(validateNutritionLabelRead(r).ok,false);
+  assert.equal(validateNutritionLabelRead(r).reading.nutrients.fiber.value,null);
 });
 test('100g-only labels preserve the printed basis; 100ml is not grams',()=>{
   const r=read();r.selected_column_header='Per 100 g';r.selected_basis='per_100g';r.detected_columns=['Per 100 g'];r.serving_size_g=null;r.serving_quantity=null;
@@ -205,3 +205,37 @@ test('a cited private/unapproved page is never fetched',async()=>{
   assert.equal(calls,1);assert.deepEqual(result.candidates,[]);
 });
 
+
+test('missing optional fiber passes two independent reads as null; printed zero stays zero',()=>{
+  const a=read(),b=read();delete a.nutrients.fiber;delete b.nutrients.fiber;
+  assert.equal(compareNutritionLabelReads(a,b).nutrition.fiber,null);
+  assert.equal(compareNutritionLabelReads(read(),read()).nutrition.fiber,0);
+  assert.equal(compareNutritionLabelReads(a,read()).nutrition.fiber,null);
+  const disagreement=read();disagreement.nutrients.fiber.value=1;disagreement.nutrients.fiber.printed_text='Dietary Fiber 1 g';
+  assert.equal(compareNutritionLabelReads(read(),disagreement).nutrition.fiber,null);
+  const c={...candidate(),nutrition:{...nutrition,fiber:null}};
+  assert.equal(candidateEligible(c,barcode),true);
+  assert.equal(confirmationPayload(c,{barcode},{identity:true,serving:true,nutrition:true,shared:true}).fiber,null);
+  assert.deepEqual(conflictsWithPhoto(c,candidate()),[]);
+});
+test('real manufacturer HTML supplies four macros, relative image and unknown fiber without invented GTIN',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const html=readFileSync(new URL('./fixtures/violife-us-provolone.html',import.meta.url),'utf8');
+  const url='https://www.violife.com/en-us/products/dairy-free-cheese-slices/just-like-smoked-provolone-slices';
+  const rows=parseProductPage(html,url,'0810934030123');
+  assert.equal(rows.length,1);assert.deepEqual(rows[0].nutrition,{calories:60,protein:0,carbs:4,fat:4.5,fiber:null});
+  assert.equal(rows[0].serving_g,20);assert.match(rows[0].image_url,/^https:\/\/www.violife.com\//);
+  assert.equal(rows[0].barcode,null);assert.equal(rows[0].validated,false);
+  assert.equal(parseProductPage(html+html,url,'0810934030123').length,0);
+});
+test('empty discovery explains unsupported source without logging URLs or payloads',async()=>{
+  const url='https://unsupported.example/product';let calls=0;
+  const result=await discoverProducts({barcode,name:'Fixture',brand:'Fixture'},{apiKey:'offline',fetch:async()=>{calls++;return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({urls:[url]}),annotations:[{url_citation:{url}}]}}]}));}});
+  assert.equal(calls,1);assert.deepEqual(result.diagnostics,[{slot:1,outcome:'host_not_supported'}]);
+});
+
+test('manufacturer table rejects dual bases and extra numeric nutrient columns',async()=>{
+ const {readFileSync}=await import('node:fs');const html=readFileSync(new URL('./fixtures/violife-us-provolone.html',import.meta.url),'utf8');
+ const url='https://www.violife.com/en-us/products/dairy-free-cheese-slices/just-like-smoked-provolone-slices';
+ for(const changed of [html.replace('Amount per serving','Amount per serving / Per 100 g'),html.replace('6%','9 g'),html.replace('20%','2')])assert.equal(parseProductPage(changed,url,'0810934030123').length,0);
+});

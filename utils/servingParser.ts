@@ -149,7 +149,7 @@ export function buildSyntheticOffData(item: {
     'proteins_100g': (Number(item.protein) || 0) * multiplier,
     'carbohydrates_100g': (Number(item.carbs) || 0) * multiplier,
     'fat_100g': (Number(item.fat) || 0) * multiplier,
-    'fiber_100g': (Number(item.fiber) || 0) * multiplier,
+    'fiber_100g': item.fiber == null ? undefined : Number(item.fiber) * multiplier,
     'sugars_100g': item.sugar_g != null ? Number(item.sugar_g) * multiplier : undefined,
     'saturated-fat_100g': item.saturated_fat_g != null ? Number(item.saturated_fat_g) * multiplier : undefined,
     'polyunsaturated-fat_100g': item.polyunsaturated_fat_g != null ? Number(item.polyunsaturated_fat_g) * multiplier : undefined,

@@ -1,3 +1,4 @@
+import { optionalFiber } from '@/utils/optionalFiber';
 import i18n from '@/lib/i18n';
 import {coachFoodDetailsPresentation,coachDisplayServingOptions} from '@/utils/coachFoodDetailsPresentation';
 import {clearCoachPrivateMealDetails,hasCoachPrivateDetailsReference,loadCoachPrivateMealDetails,type CoachPrivateMealDetails} from '@/utils/coachPrivateMealDetails';
@@ -875,7 +876,7 @@ export default function FoodDetailsLayout({
         proteins_100g: n['proteins_100g'] ?? n['proteins'] ?? food.protein,
         carbohydrates_100g: n['carbohydrates_100g'] ?? n['carbohydrates'] ?? food.carbs,
         fat_100g: n['fat_100g'] ?? n['fat'] ?? food.fats,
-        fiber_100g: n['fiber_100g'] ?? n['fiber'] ?? food.fiber ?? 0,
+        fiber_100g: n['fiber_100g'] ?? n['fiber'] ?? food.fiber ?? undefined,
       },
       serving_size: servingSize,
       serving_quantity: servingQty,
@@ -903,7 +904,7 @@ export default function FoodDetailsLayout({
         proteins_100g: food.protein,
         carbohydrates_100g: food.carbs,
         fat_100g: food.fats,
-        fiber_100g: food.fiber ?? 0,
+        fiber_100g: food.fiber ?? undefined,
       },
       serving_size: servingSize,
       serving_quantity: servingAmount,
@@ -1053,7 +1054,7 @@ export default function FoodDetailsLayout({
                 'proteins_100g': n.macros_per === '100g' ? n.protein : (totalGrams ? (n.protein / totalGrams) * 100 : n.protein),
                 'carbohydrates_100g': n.macros_per === '100g' ? n.carbs : (totalGrams ? (n.carbs / totalGrams) * 100 : n.carbs),
                 'fat_100g': n.macros_per === '100g' ? n.fat : (totalGrams ? (n.fat / totalGrams) * 100 : n.fat),
-                'fiber_100g': n.macros_per === '100g' ? n.fiber : (totalGrams ? ((n.fiber ?? 0) / totalGrams) * 100 : n.fiber),
+                'fiber_100g': n.fiber == null ? undefined : n.macros_per === '100g' ? n.fiber : (totalGrams ? (n.fiber / totalGrams) * 100 : n.fiber),
                 'sugars_100g': n.sugar_g != null ? (n.macros_per === '100g' ? n.sugar_g : (totalGrams ? (n.sugar_g / totalGrams) * 100 : n.sugar_g)) : undefined,
                 'saturated-fat_100g': n.saturated_fat_g != null ? (n.macros_per === '100g' ? n.saturated_fat_g : (totalGrams ? (n.saturated_fat_g / totalGrams) * 100 : n.saturated_fat_g)) : undefined,
                 'sodium_100g': n.sodium_mg != null ? n.sodium_mg / 1000 : undefined,
@@ -1344,7 +1345,7 @@ export default function FoodDetailsLayout({
               'proteins_100g': n.macros_per === '100g' ? n.protein : (totalGrams ? (n.protein / totalGrams) * 100 : n.protein),
               'carbohydrates_100g': n.macros_per === '100g' ? n.carbs : (totalGrams ? (n.carbs / totalGrams) * 100 : n.carbs),
               'fat_100g': n.macros_per === '100g' ? n.fat : (totalGrams ? (n.fat / totalGrams) * 100 : n.fat),
-              'fiber_100g': n.macros_per === '100g' ? n.fiber : (totalGrams ? ((n.fiber ?? 0) / totalGrams) * 100 : n.fiber),
+              'fiber_100g': n.fiber == null ? undefined : n.macros_per === '100g' ? n.fiber : (totalGrams ? (n.fiber / totalGrams) * 100 : n.fiber),
               'sugars_100g': n.sugar_g != null ? (n.macros_per === '100g' ? n.sugar_g : (totalGrams ? (n.sugar_g / totalGrams) * 100 : n.sugar_g)) : undefined,
               'saturated-fat_100g': n.saturated_fat_g != null ? (n.macros_per === '100g' ? n.saturated_fat_g : (totalGrams ? (n.saturated_fat_g / totalGrams) * 100 : n.saturated_fat_g)) : undefined,
               'sodium_100g': n.sodium_mg != null ? n.sodium_mg / 1000 : undefined,
@@ -1569,7 +1570,7 @@ export default function FoodDetailsLayout({
       protein: safeNum(nutrition.protein),
       carbs: safeNum(nutrition.carbs),
       fat: safeNum(nutrition.fat),
-      fiber: safeNum(nutrition.fiber),
+      fiber: optionalFiber(prod.nutriments),
       nutriments: prod.nutriments || null,
       nutriscore_grade: (prod.nutriscore_grade || prod.nutrition_grade_fr || null)?.toLowerCase() || null,
       off_data: (() => {
@@ -2187,7 +2188,7 @@ export default function FoodDetailsLayout({
             </View>
             <View style={styles.macroRow}>
               <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.fiber')}</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.fiber}{t('common.grams')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{product?.nutriments?.['fiber_100g'] == null && product?.nutriments?.['fiber'] == null ? '\u2014' : macros.fiber + t('common.grams')}</Text>
             </View>
           </View>
         </View>

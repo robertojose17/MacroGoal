@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -7,11 +7,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { buildSyntheticOffData } from '@/utils/servingParser';
+import { recoveryDiscoveryOnce, recoveryRefine, expireRecovery } from '@/utils/recoveryDiscoveryOnce';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 type Candidate = {
   name:string; brand:string; variant:string; barcode:string|null; serving:string; serving_g:number;
-  nutrition:Record<string,number>; image_url:string; nutrition_image_url?:string; exact_barcode:boolean;
+  nutrition:Record<string,number|null>; image_url:string; nutrition_image_url?:string; exact_barcode:boolean;
   can_confirm:boolean; proposal?:string; conflicts?:string[]; label_issue?:string;
   provenance:{kind:string;url:string;retrieved_at:string};
 };
@@ -22,11 +23,12 @@ export default function FoodPhotoCaptureScreen() {
   const es=i18n.language.startsWith('es'),dark=String(useColorScheme())==='dark';
   const tr=(en:string,spanish:string)=>es?spanish:en;
   const param=(name:string)=>typeof params[name]==='string'?params[name] as string:'';
-  const [name,setName]=useState(param('name')), [brand,setBrand]=useState(param('brand'));
-  const [stage,setStage]=useState<Stage>('search'),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const name=param('name'),brand=param('brand');
+  const [stage,setStage]=useState<Stage>('search'),[busy,setBusy]=useState(true),[error,setError]=useState('');
   const [review,setReview]=useState<Review>({}),[selected,setSelected]=useState<Candidate|null>(null);
   const [confirmed,setConfirmed]=useState({identity:false,serving:false,nutrition:false,shared:false});
   const [permission,requestPermission]=useCameraPermissions();
+  const recoveryKey=useRef('');
   const camera=useRef<CameraView>(null),inFlight=useRef(false),front=useRef<string|null>(null);
   const [saved,setSaved]=useState<any>(null);
   const ink=dark?'#F5F6FA':'#182326',background=dark?'#101719':'#F7F9F8',card=dark?'#1D292B':'#FFFFFF';
@@ -60,15 +62,21 @@ export default function FoodPhotoCaptureScreen() {
   async function operation(work:()=>Promise<void>) {
     if(inFlight.current)return;
     inFlight.current=true;setBusy(true);setError('');
-    try{await work();}catch(e){setError(message(e instanceof Error?e.message:''));}
+    try{await work();}catch(e){const code=e instanceof Error?e.message:'';setError(message(code));if(['expired_proposal','request_already_used_or_limit','save_conflict'].includes(code)){expireRecovery(recoveryKey.current);setStage('search');}}
     finally{inFlight.current=false;setBusy(false);}
   }
-  async function search() {
-    await operation(async()=>{
-      const data=await request({action:'recovery_discover',barcode:param('barcode'),food_item_id:param('food_item_id')||null,name,brand});
-      setReview(data);setSelected(null);setStage('results');
-    });
+  async function discover(retry=false,active=()=>true) {
+    if(inFlight.current)return;
+    inFlight.current=true;setBusy(true);setError('');
+    try {
+      const {data:{session}}=await supabase.auth.getSession();if(!session)throw Error('auth');
+      recoveryKey.current=session.user.id+':'+param('barcode');
+      const data=await recoveryDiscoveryOnce(recoveryKey.current,()=>request({action:'recovery_discover',barcode:param('barcode'),food_item_id:param('food_item_id')||null,name,brand}),retry);
+      if(active()){setReview(data);setSelected(null);setStage('results');}
+    } catch(e){if(active()){setError(message(e instanceof Error?e.message:''));setStage('search');}}
+    finally{inFlight.current=false;if(active())setBusy(false);}
   }
+  useEffect(()=>{let active=true;void discover(false,()=>active);return()=>{active=false;inFlight.current=false;};},[]);
   async function beginPhotos() {
     if(!review.session)return;
     if(!permission?.granted) {
@@ -92,7 +100,7 @@ export default function FoodPhotoCaptureScreen() {
       if(!photo?.uri)throw Error('capture_failed');
       const url=await upload(photo.uri,stage);
       if(stage==='front'){front.current=url;setStage('label');return;}
-      const data=await request({action:'recovery_photos',session:review.session,photo_front_url:front.current,photo_label_url:url});
+      const data=await recoveryRefine(recoveryKey.current,()=>request({action:'recovery_photos',session:review.session,photo_front_url:front.current,photo_label_url:url})).catch(error=>{setStage('search');throw error;});
       setReview(data);setStage('results');
     });
   }
@@ -135,7 +143,7 @@ export default function FoodPhotoCaptureScreen() {
         ?tr('Your package · two label readings · confirm scanned identity','Tu empaque · dos lecturas de etiqueta · confirma la identidad escaneada')
         :candidate.exact_barcode?tr('Source publishes the same barcode','La fuente publica el mismo código'):tr('Similar product · barcode not verified','Producto similar · código no verificado')}</Text>
       <Text style={[styles.text,{color:ink}]}>{tr('Per','Por')} {candidate.serving} · {candidate.serving_g} g</Text>
-      <View style={styles.macros}>{['calories','carbs','protein','fat','fiber'].map(k=><View key={k} style={styles.macro}>
+      <View style={styles.macros}>{['calories','carbs','protein','fat','fiber'].filter(k=>candidate.nutrition[k]!=null).map(k=><View key={k} style={styles.macro}>
         <Text style={{color:ink,fontWeight:'700',fontSize:18}}>{candidate.nutrition[k]}{k==='calories'?' kcal':' g'}</Text>
         <Text style={{color:ink,fontSize:12}}>{fieldNames[k]}</Text>
       </View>)}</View>
@@ -149,7 +157,7 @@ export default function FoodPhotoCaptureScreen() {
   const cameraStage=stage==='front'||stage==='label';
   return <SafeAreaView style={[styles.screen,{backgroundColor:background}]} edges={['top','bottom']}>
     <View style={styles.header}>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel={tr('Back','Atrás')} disabled={busy} onPress={()=>{if(stage==='confirm'||cameraStage)setStage('results');else router.back();}}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={tr('Back','Atrás')} onPress={()=>{if(stage==='confirm'||cameraStage)setStage('results');else router.back();}}>
         <Text style={[styles.back,{color:ink}]}>{'\u2039'}</Text>
       </TouchableOpacity>
       <Text style={[styles.heading,{color:ink}]}>{tr('Correct product data','Corregir datos del producto')}</Text>
@@ -164,26 +172,18 @@ export default function FoodPhotoCaptureScreen() {
       </View>
     </View>:<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!!error&&<Text accessibilityRole="alert" style={styles.warning}>{error}</Text>}
-      {busy&&<View style={styles.loading}><ActivityIndicator/><Text style={{color:ink}}>{tr('Checking sources and product data…','Comprobando fuentes y datos del producto…')}</Text></View>}
-      {stage==='search'&&<>
-        <Text style={[styles.title,{color:ink}]}>{tr('Find your exact product','Encuentra tu producto exacto')}</Text>
-        <Text style={[styles.text,{color:ink}]}>{tr('We will search public product and nutrition-label sources. Nothing is saved until you review and confirm.','Buscaremos fuentes públicas del producto y su etiqueta nutricional. Nada se guarda hasta que lo revises y confirmes.')}</Text>
-        <Text style={[styles.caption,{color:ink}]}>{tr('Barcode','Código')}: {param('barcode')}</Text>
-        <TextInput accessibilityLabel={tr('Product name','Nombre del producto')} placeholder={tr('Product name or variant','Nombre o variante')} placeholderTextColor="#788682" value={name} onChangeText={setName} maxLength={160} style={[styles.input,{color:ink,backgroundColor:card}]}/>
-        <TextInput accessibilityLabel={tr('Brand','Marca')} placeholder={tr('Brand','Marca')} placeholderTextColor="#788682" value={brand} onChangeText={setBrand} maxLength={100} style={[styles.input,{color:ink,backgroundColor:card}]}/>
-        {button(tr('Search product sources','Buscar fuentes del producto'),()=>void search())}
-      </>}
-      {stage==='results'&&<>
-        <Text style={[styles.title,{color:ink}]}>{review.photo?tr('Compare with your package','Compara con tu empaque'):tr('Which product is yours?','¿Cuál es tu producto?')}</Text>
+      {busy&&<View style={styles.loading}><ActivityIndicator/><Text style={{color:ink}}>{tr('Searching for your product data','Buscando los datos de tu producto')}</Text></View>}
+      {!busy&&stage==='search'&&!!error&&button(tr('Retry this scanned product','Reintentar este producto escaneado'),()=>void discover(true))}
+      {!busy&&stage==='results'&&<>
+        <Text style={[styles.title,{color:ink}]}>{review.photo?tr('Compare with your package','Compara con tu empaque'):review.candidates?.length?tr('Product data found','Datos del producto encontrados'):tr('Package photos needed','Necesitamos fotos del empaque')}</Text>
         {!!review.search_code&&<Text style={styles.warning}>{tr('Web search could not finish. You can continue with clear package photos.','La búsqueda web no pudo terminar. Puedes continuar con fotos claras del empaque.')}</Text>}
         {(review.candidates||[]).map((candidate,index)=>candidateCard(candidate,'web-'+index))}
-        {!review.candidates?.length&&<Text style={[styles.text,{color:ink}]}>{tr('No complete, verified product option was found. We will not fill in missing numbers.','No encontramos una opción completa y verificada. No rellenaremos números ausentes.')}</Text>}
+        {!review.candidates?.length&&!review.photo&&<Text style={[styles.text,{color:ink}]}>{tr('No complete, verified product option was found. We will not fill in missing numbers.','No encontramos una opción completa y verificada. No rellenaremos números ausentes.')}</Text>}
         {review.photo&&candidateCard(review.photo,'physical')}
         {(review.issues||[]).map((issue,index)=><Text key={index} style={styles.warning}>{issue.field==='analysis'
           ?tr('The analysis service could not finish. This does not mean your label is wrong. Please try a new photo attempt later.','El servicio de análisis no pudo terminar. Esto no significa que tu etiqueta esté mal. Intenta otra lectura más tarde.')
           :tr('Please show clearly: ','Muestra claramente: ')+(issue.field==='front'?tr('the product name, brand and exact variant','el nombre, marca y variante exactos'):fieldNames[issue.field]||fieldNames.label)+(issue.reason==='reads_disagree'?tr(' — the two readings disagree.',' — las dos lecturas no coinciden.'):'.')}</Text>)}
-        {button(review.photo?tr('Retake package photos','Volver a tomar fotos'):tr('None of these — take package photos','Ninguno de estos — tomar fotos del empaque'),()=>void beginPhotos(),!review.session,true)}
-        {button(tr('Change search','Cambiar búsqueda'),()=>{setStage('search');setError('');},false,true)}
+        {button(review.photo?tr('Retake package photos','Volver a tomar fotos'):tr('Take package photos','Tomar fotos del empaque'),()=>void beginPhotos(),!review.session,true)}
       </>}
       {stage==='confirm'&&selected&&<>
         <Text style={[styles.title,{color:ink}]}>{tr('Confirm before updating the catalog','Confirma antes de actualizar el catálogo')}</Text>
