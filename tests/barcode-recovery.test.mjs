@@ -231,7 +231,7 @@ test('real manufacturer HTML supplies four macros, relative image and unknown fi
 test('empty discovery explains unsupported source without logging URLs or payloads',async()=>{
   const url='https://unsupported.example/product';let calls=0;
   const result=await discoverProducts({barcode,name:'Fixture',brand:'Fixture'},{apiKey:'offline',fetch:async()=>{calls++;return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({urls:[url]}),annotations:[{url_citation:{url}}]}}]}));}});
-  assert.equal(calls,1);assert.deepEqual(result.diagnostics,[{slot:1,outcome:'host_not_supported'}]);
+  assert.equal(calls,1);assert.deepEqual(result.diagnostics,[{slot:1,host:'unsupported.example',outcome:'host_not_supported'}]);
 });
 
 test('manufacturer table rejects dual bases and extra numeric nutrient columns',async()=>{

@@ -63,6 +63,35 @@ function columnMatchesServing(header, servingSize, servingQuantity) {
   return servingAmount || (/\b(?:per|por)\b/.test(value) && servingDescriptor.some(token => value.includes(token)));
 }
 
+// Front net mass is usable only for an explicit, single, same-package serving.
+export function packageServingEvidence(result) {
+  const p=result?.package_evidence;
+  if(result?.serving_mass_basis!=='single_package_net_weight')return null;
+  if(!p||p.same_package!==true||p.identity_confidence!=='high'||p.multipack!==false)return null;
+  if(!['not_applicable','as_sold'].includes(p.preparation))return null;
+  if(!text(p.front_product_name)||!text(p.front_brand)||!text(p.same_package_evidence))return null;
+  if(!/^(?:serving size\s*)?1(?:\.0)?\s+(?:package|bag|pouch|container)$/i.test(text(p.serving_size_text)))return null;
+  if(!/^1(?:\.0)?\s+servings?\s+per\s+container$/i.test(text(p.servings_per_container_text)))return null;
+  if(!/^(?:serving size\s*)?1(?:\.0)?\s+(?:package|bag|pouch|container)$/i.test(text(result.serving_quantity)))return null;
+  const grams=result.serving_size_g;
+  if(typeof grams!=='number'||!Number.isFinite(grams)||grams<=0||p.net_weight_g!==grams)return null;
+  if(!/\bnet\s*(?:wt|weight)\b/i.test(text(p.net_weight_text))||/multipack|\bpack of\b|\d\s*[x×]/i.test(text(p.net_weight_text)))return null;
+  const amounts=[...text(p.net_weight_text).matchAll(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:g|grams?)\b/gi)];
+  if(amounts.length!==1||Number(amounts[0][1])!==grams)return null;
+  const columns=result.detected_columns;
+  if(!Array.isArray(columns)||columns.length!==1||result.selected_basis!=='per_serving')return null;
+  return {grams,identity:normalizeText(p.front_brand)+'|'+normalizeText(p.front_product_name),basis:'single_package_net_weight'};
+}
+
+// Enum/boolean diagnostics only: no OCR text, images or product/profile payloads.
+export function labelBasisDiagnostics(result) {
+  return {basis:['per_serving','per_100g'].includes(result?.selected_basis)?result.selected_basis:'unknown',
+    mass_basis:result?.serving_mass_basis==='single_package_net_weight'?'single_package_net_weight':'label_grams',
+    column_count:Array.isArray(result?.detected_columns)?Math.min(result.detected_columns.length,10):0,
+    has_mass:typeof result?.serving_size_g==='number'&&result.serving_size_g>0,
+    package_proof_valid:!!packageServingEvidence(result)};
+}
+
 function invalid(field = 'label', reason = 'unreadable') {
   return { ok: false, message: RETAKE, issues: [{ field, reason }] };
 }
@@ -84,8 +113,11 @@ export function validateNutritionLabelRead(result, { requireProduct = false } = 
   if (!selectedColumn || (!per100 && (selectedBasis !== 'per_serving' || !columnMatchesServing(selectedColumn, servingSize, servingQuantity)))) return invalid('serving', 'basis_unclear');
   if (!Array.isArray(detectedColumns) || !detectedColumns.length || !detectedColumns.every(value => typeof value === 'string' && text(value))) return invalid();
   if (!detectedColumns.some(value => normalizeText(value) === normalizeText(selectedColumn))) return invalid();
-  if (typeof servingSize !== 'number' || !Number.isFinite(servingSize) || servingSize <= 0 || !servingQuantity) return invalid();
-  if (!servingEvidence || !hasGramServingEvidence(servingEvidence, servingSize)) return invalid('serving_g', 'grams_unreadable');
+  if (typeof servingSize !== 'number' || !Number.isFinite(servingSize) || servingSize <= 0 || !servingQuantity) return invalid('serving_g', 'grams_unreadable');
+  const packageMass=result.serving_mass_basis==='single_package_net_weight';
+  if(packageMass && !['not_applicable','as_sold'].includes(result.package_evidence?.preparation))return invalid('preparation','state_unclear');
+  if(packageMass && !packageServingEvidence(result))return invalid('serving_g','single_package_not_proven');
+  if (!packageMass && (!servingEvidence || !hasGramServingEvidence(servingEvidence, servingSize))) return invalid('serving_g', 'grams_unreadable');
   if (!result.nutrients || typeof result.nutrients !== 'object' || Array.isArray(result.nutrients)) return invalid();
 
   const nutrients = {};
@@ -115,6 +147,8 @@ export function validateNutritionLabelRead(result, { requireProduct = false } = 
     reading: {
       selectedColumn: normalizeText(selectedColumn),
       selectedBasis,
+      massBasis:packageMass?'single_package_net_weight':'label_grams',
+      packageIdentity:packageMass?packageServingEvidence(result).identity:null,
       detectedColumns: [...new Set(detectedColumns.map(normalizeText))].sort(),
       servingSize,
       servingQuantity: normalizeText(servingQuantity),
@@ -130,6 +164,7 @@ export function compareNutritionLabelReads(firstResult, secondResult) {
   if (!first.ok) return first;
   const second = validateNutritionLabelRead(secondResult);
   if (!second.ok) return second;
+  if(first.reading.massBasis!==second.reading.massBasis || first.reading.packageIdentity!==second.reading.packageIdentity)return invalid('serving_g','reads_disagree');
   if (first.reading.servingSize !== second.reading.servingSize || first.reading.servingQuantity !== second.reading.servingQuantity) return invalid('serving', 'reads_disagree');
   for (const nutrient of NUTRIENTS) {
     if (nutrient === 'fiber' && (first.reading.nutrients.fiber.value == null || second.reading.nutrients.fiber.value == null || first.reading.nutrients.fiber.value !== second.reading.nutrients.fiber.value)) { first.reading.nutrients.fiber = { value: null, unit: null }; continue; }
@@ -140,6 +175,7 @@ export function compareNutritionLabelReads(firstResult, secondResult) {
     ok: true,
     productName: first.productName,
     brand: first.brand,
+    servingMassBasis:first.reading.massBasis,
     servingSize: first.reading.servingSize,
     servingQuantity: first.reading.servingQuantity,
     nutrition: Object.fromEntries(NUTRIENTS.map(nutrient => [nutrient, first.reading.nutrients[nutrient].value])),
@@ -167,7 +203,7 @@ export async function runTwoReadGate(primaryRead, independentRead, { timeoutMs =
   }
   if (first?.finishReason !== 'stop') { clearTimeout(timer); return { ...invalid('analysis', 'analysis_unavailable'), calls }; }
   const firstCheck = validateNutritionLabelRead(first?.result, { requireProduct: true });
-  if (!firstCheck.ok) { clearTimeout(timer); return { ...firstCheck, calls }; }
+  if (!firstCheck.ok) { clearTimeout(timer); return { ...firstCheck, calls, basis_diagnostics:{primary:labelBasisDiagnostics(first?.result)} }; }
 
   let second;
   try {
@@ -180,8 +216,8 @@ export async function runTwoReadGate(primaryRead, independentRead, { timeoutMs =
   clearTimeout(timer);
   if (second?.finishReason !== 'stop') return { ...invalid('analysis', 'analysis_unavailable'), calls };
   const checked = compareNutritionLabelReads(first.result, second?.result);
-  if (!checked.ok) return { ...checked, calls };
-  return { ...checked, calls };
+  if (!checked.ok) return { ...checked, calls, basis_diagnostics:{primary:labelBasisDiagnostics(first.result),independent:labelBasisDiagnostics(second?.result)} };
+  return { ...checked, calls, basis_diagnostics:{primary:labelBasisDiagnostics(first.result),independent:labelBasisDiagnostics(second?.result)} };
 }
 
 export const VISION_RETAKE_MESSAGE = RETAKE;
@@ -193,7 +229,7 @@ export function readableLabelEvidence(result) {
   const per100=result.selected_basis==='per_100g' && /\b(?:per|por)\s*100\s*g\b/i.test(header);
   const grams=per100?100:result.serving_size_g;
   if (typeof grams!=='number'||!Number.isFinite(grams)||grams<=0) return null;
-  if (!per100 && (result.selected_basis!=='per_serving'||!columnMatchesServing(header,grams,result.serving_quantity)||!hasGramServingEvidence(result.serving_size_evidence,grams))) return null;
+  if (!per100 && (result.selected_basis!=='per_serving'||!columnMatchesServing(header,grams,result.serving_quantity)||!(result.serving_mass_basis==='single_package_net_weight'?packageServingEvidence(result):hasGramServingEvidence(result.serving_size_evidence,grams)))) return null;
   const nutrition={};
   for (const nutrient of NUTRIENTS) {
     const row=result.nutrients?.[nutrient];

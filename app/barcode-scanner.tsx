@@ -101,16 +101,15 @@ export default function BarcodeScannerScreen() {
 
       if (result.found) {
         // Always build synthetic offData from DB columns — single source of truth.
-        // Force macros_per to '100g' so buildSyntheticOffData never mis-scales
-        // (old DB rows may have null macros_per, causing a 100/serving_size multiplier).
+        // Preserve the server's explicit basis; legacy rows without one are per 100 g.
         const itemWithDefaults = {
           ...result.item,
-          macros_per: '100g',
+          macros_per: result.item?.macros_per ?? '100g',
           name: result.item?.name || '',
         };
         const offData = buildSyntheticOffData(itemWithDefaults);
 
-        console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item (macros_per forced to 100g)');
+        console.log('[BarcodeScanner] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item (server nutrition basis preserved)');
         console.log('[BarcodeScanner] product_name resolved to:', offData?.product_name || offData?.generic_name || '(empty)');
 
         console.log('[BarcodeScanner] 🚀 Navigating to food-details');

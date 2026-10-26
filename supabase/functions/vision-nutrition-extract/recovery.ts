@@ -45,7 +45,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
   if(claimError)return {status:'unavailable',code:'request_already_used_or_limit'};
   const providerFetch=deps.receiptFetch?.(session.submission,revision)??fetch;
   const readPhotos=(label:string,front:string,known:string|null)=>deps.readPhotos(label,front,known,providerFetch);
-  let photo:any=null,partialEvidence:any=null,photoIssues:any[]=[];
+  let photo:any=null,partialEvidence:any=null,photoIssues:any[]=[],basisDiagnostics:any=null;
   if(phase==='photos') {
     const allowed=(value:unknown)=>{try{
       const url=new URL(String(value)),base=new URL(deps.projectUrl);
@@ -54,12 +54,13 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     if(!allowed(body.photo_label_url)||!allowed(body.photo_front_url))throw Error('invalid_photo');
     const result=await readPhotos(body.photo_label_url,body.photo_front_url,session.name||null);
     partialEvidence=result.partialEvidence;
+    basisDiagnostics=result.basis_diagnostics||null;
     if(result.ok) {
       photo={name:result.productName,brand:result.brand||'',variant:result.productName,
         barcode:session.binding.barcode,exact_barcode:false,serving:result.servingQuantity,serving_g:result.servingSize,
         nutrition:result.nutrition,image_url:body.photo_front_url,nutrition_image_url:body.photo_label_url,
         validated:true,confidence:'physical_label',provenance:{kind:'physical_label',url:body.photo_label_url,
-          front_url:body.photo_front_url,retrieved_at:new Date().toISOString(),basis:'two_independent_label_reads',identity:'user_confirms_scanned_package'}};
+          front_url:body.photo_front_url,retrieved_at:new Date().toISOString(),basis:'two_independent_label_reads',serving_mass_basis:result.servingMassBasis||'label_grams',identity:'user_confirms_scanned_package'}};
       session.name=photo.name; session.brand=photo.brand;
     } else {
       photoIssues=result.issues||issues('label','analysis_unavailable');
@@ -82,7 +83,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
       proposal:eligible?await sealDraft({version:1,kind:'candidate',owner:userId,expires:session.expires,
         submission:session.submission,binding:session.binding,candidate,revision},deps.secret):null};
   };
-  console.log('[BarcodeRecovery] outcome', JSON.stringify({submission:session.submission,revision,phase,candidate_count:candidates.length,usable_candidate_count:candidates.filter(c=>candidateEligible(c,session.binding.barcode)).length,photo_valid:!!photo,issues:photoIssues.map(({field,reason})=>({field,reason})),search_code:searchCode||null,diagnostics:found.diagnostics||[]}));
+  console.log('[BarcodeRecovery] outcome', JSON.stringify({submission:session.submission,revision,phase,candidate_count:candidates.length,usable_candidate_count:candidates.filter(c=>candidateEligible(c,session.binding.barcode)).length,photo_valid:!!photo,basis_diagnostics:basisDiagnostics,issues:photoIssues.map(({field,reason})=>({field,reason})),search_code:searchCode||null,diagnostics:found.diagnostics||[]}));
   return {status:'review',expires_at:session.expires,session:await sealDraft(session,deps.secret),
     candidates:await Promise.all(candidates.map(signCandidate)),photo:photo?await signCandidate(photo):null,
     issues:photoIssues,source_links:found.source_links,search_code:searchCode};
