@@ -1,5 +1,6 @@
+import { readChallengeMetric, healthChallengeProgress } from '@/utils/challengeHealth.mjs';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import {
   loadOrGenerateFlashChallenges,
   acceptChallenge as apiAcceptChallenge,
@@ -24,36 +25,8 @@ export interface FlashChallengeWithProgress extends FlashChallenge {
 }
 
 // Read a single metric for today
-async function readMetricToday(metric: MetricType): Promise<number> {
-  const date = new Date();
-  try {
-    switch (metric) {
-      case 'steps': {
-        const r = await getStepsForDate(date);
-        return r.steps ?? 0;
-      }
-      case 'active_calories': {
-        const r = await getActiveCaloriesForDate(date);
-        return r.value ?? 0;
-      }
-      case 'exercise_minutes': {
-        const r = await getExerciseMinutesForDate(date);
-        return r.value ?? 0;
-      }
-      case 'distance': {
-        const r = await getDistanceMilesForDate(date);
-        return r.value ?? 0;
-      }
-      case 'floors': {
-        const r = await getFlightsClimbedForDate(date);
-        return r.value ?? 0;
-      }
-      default:
-        return 0;
-    }
-  } catch {
-    return 0;
-  }
+async function readMetricToday(metric: MetricType): Promise<number | null> {
+  return readChallengeMetric(metric, {getStepsForDate,getActiveCaloriesForDate,getExerciseMinutesForDate,getDistanceMilesForDate,getFlightsClimbedForDate});
 }
 
 // Compute per-challenge countdown string from expires_at
@@ -102,9 +75,8 @@ export function useFlashChallenges() {
 
       // Accepted: progress = current - baseline
       const currentValue = await readMetricToday(c.metric_type);
-      const baseline = c.baseline_value ?? 0;
-      const progress = Math.max(0, currentValue - baseline);
-      const progressPct = Math.min(100, Math.round((progress / c.target_value) * 100));
+      const baseline = c.baseline_value;
+      const {progress,progressPct}=healthChallengeProgress(currentValue,baseline,c.target_value);
       console.log(
         '[useFlashChallenges] progress for', c.metric_type,
         'current:', currentValue, 'baseline:', baseline,
@@ -123,7 +95,7 @@ export function useFlashChallenges() {
       const raw = await loadOrGenerateFlashChallenges();
       if (!mountedRef.current) return;
       // Hard cap: max 2 challenges, prefer active over expired
-      const sorted = [...raw].sort((a, b) => {
+      const sorted = raw.filter(c => Platform.OS !== 'android' || c.metric_type !== 'exercise_minutes').sort((a, b) => {
         const order: Record<string, number> = { completed: 0, accepted: 1, available: 2, expired: 3 };
         return (order[a.challenge_status] ?? 2) - (order[b.challenge_status] ?? 2);
       });

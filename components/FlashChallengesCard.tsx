@@ -1,3 +1,4 @@
+import { acceptChallengeWithBaseline } from '@/utils/challengeHealth.mjs';
 import { challengeUnitLabel } from '@/components/challengeUnitLabel';
 import { getAppLocale } from '@/lib/localization';
 import React, { useEffect, useRef, useState } from 'react';
@@ -9,6 +10,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Share,
+  Alert,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,42 +62,6 @@ function formatValue(value: number, unit: string): string {
   if (unit === 'mi') return value.toLocaleString(getAppLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return (Math.round(value * 10) / 10).toLocaleString(getAppLocale());
 }
-
-// Read current HealthKit value for a metric (returns 0 on Android or error)
-async function readCurrentMetric(metric: MetricType): Promise<number> {
-  if (Platform.OS === 'android') return 0;
-  const date = new Date();
-  try {
-    switch (metric) {
-      case 'steps': {
-        const r = await getStepsForDate(date);
-        return r.steps ?? 0;
-      }
-      case 'active_calories': {
-        const r = await getActiveCaloriesForDate(date);
-        return r.value ?? 0;
-      }
-      case 'exercise_minutes': {
-        const r = await getExerciseMinutesForDate(date);
-        return r.value ?? 0;
-      }
-      case 'distance': {
-        const r = await getDistanceMilesForDate(date);
-        return r.value ?? 0;
-      }
-      case 'floors': {
-        const r = await getFlightsClimbedForDate(date);
-        return r.value ?? 0;
-      }
-      default:
-        return 0;
-    }
-  } catch {
-    return 0;
-  }
-}
-
-// ─── Animated progress bar ────────────────────────────────────────────────────
 
 interface ProgressBarProps {
   pct: number;
@@ -196,12 +162,14 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
     console.log('[FlashChallengesCard] Accept Challenge pressed for', challenge.id, 'metric:', challenge.metric_type);
     setAccepting(true);
     try {
-      const baseline = await readCurrentMetric(challenge.metric_type);
-      console.log('[FlashChallengesCard] baseline value read:', baseline, 'for metric:', challenge.metric_type);
-      await onAccept(challenge.id, baseline);
+      await acceptChallengeWithBaseline(challenge.metric_type, {
+        getStepsForDate, getActiveCaloriesForDate, getExerciseMinutesForDate,
+        getDistanceMilesForDate, getFlightsClimbedForDate,
+      }, (baseline: number) => onAccept(challenge.id, baseline));
       onXpAwarded(); // trigger parent refresh
     } catch (e) {
       console.warn('[FlashChallengesCard] accept failed:', e);
+      Alert.alert('Challenge not started', e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setAccepting(false);
     }

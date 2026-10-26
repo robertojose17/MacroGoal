@@ -371,6 +371,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
                 activeOpacity={0.8}
               >
                 <Text style={styles.logBtnText}>{t('checkIns.connect')}</Text>
+                {Platform.OS === 'android' && stepsHook.error ? <Text accessibilityRole="alert" style={{color:'#fff',fontSize:11,maxWidth:180}}>{stepsHook.error}</Text> : null}
               </TouchableOpacity>
             ) : (
               <View style={styles.stepsRow}>

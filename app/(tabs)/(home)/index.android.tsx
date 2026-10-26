@@ -742,44 +742,9 @@ export default function HomeScreen() {
     }
   };
 
-  // Android-compatible replacement for ActionSheetIOS.showActionSheetWithOptions
-  const handleDayPlanPress = (day: DayKey) => {
-    console.log('[Home Android] Day plan pressed:', day);
-    const currentPlanId = currentWeekPlan[day];
-    const hasAssigned = currentPlanId != null;
+  const [planPickerDay, setPlanPickerDay] = useState<DayKey | null>(null);
+  const handleDayPlanPress = (day: DayKey) => setPlanPickerDay(day);
 
-    const buttons: { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }[] = [
-      ...plans.map(p => ({
-        text: p.name,
-        onPress: () => {
-          console.log('[Home Android] Assigning plan', p.id, 'to day:', day);
-          setCurrentDayPlan(day, p.id);
-          fetchPlanMacros(p.id);
-        },
-      })),
-      ...(hasAssigned
-        ? [{
-            text: 'Remove plan',
-            style: 'destructive' as const,
-            onPress: () => {
-              console.log('[Home Android] Removing plan from day:', day);
-              setCurrentDayPlan(day, null);
-            },
-          }]
-        : []),
-      { text: 'Cancel', style: 'cancel' as const },
-    ];
-
-    Alert.alert(
-      day,
-      hasAssigned
-        ? `Current: ${plans.find(p => p.id === currentPlanId)?.name || ''}`
-        : 'Assign a plan to this day',
-      buttons
-    );
-  };
-
-  // ── Mark scheduled item as eaten ──
   const handleMarkEaten = async (itemId: string) => {
     console.log('[Home Android] Mark as eaten pressed for item:', itemId);
     try {
@@ -2074,6 +2039,21 @@ export default function HomeScreen() {
         }}
       />
 
+      <Modal visible={planPickerDay !== null} transparent animationType="slide" onRequestClose={() => setPlanPickerDay(null)}>
+        <View style={{flex:1,justifyContent:'flex-end',backgroundColor:'rgba(0,0,0,0.4)'}}>
+          <View style={{backgroundColor:isDark?colors.cardDark:colors.card,padding:20,borderTopLeftRadius:20,borderTopRightRadius:20,maxHeight:'75%'}}>
+            <Text accessibilityRole="header" style={{color:isDark?colors.textDark:colors.text,fontSize:20,fontWeight:'600',marginBottom:12}}>{planPickerDay}</Text>
+            <ScrollView>
+              {plans.map(plan => <TouchableOpacity key={plan.id} accessibilityRole="button" accessibilityState={{selected:planPickerDay !== null && currentWeekPlan[planPickerDay] === plan.id}} style={{paddingVertical:16}} onPress={() => {
+                if (planPickerDay === null) return;
+                setCurrentDayPlan(planPickerDay, plan.id); fetchPlanMacros(plan.id); setPlanPickerDay(null);
+              }}><Text style={{color:isDark?colors.textDark:colors.text}}>{plan.name}{planPickerDay !== null && currentWeekPlan[planPickerDay] === plan.id ? ' ✓' : ''}</Text></TouchableOpacity>)}
+              {planPickerDay !== null && currentWeekPlan[planPickerDay] != null ? <TouchableOpacity accessibilityRole="button" style={{paddingVertical:16}} onPress={() => {setCurrentDayPlan(planPickerDay,null);setPlanPickerDay(null);}}><Text style={{color:colors.error}}>Remove plan</Text></TouchableOpacity> : null}
+            </ScrollView>
+            <TouchableOpacity accessibilityRole="button" style={{paddingVertical:16}} onPress={() => setPlanPickerDay(null)}><Text style={{color:colors.primary}}>{t('common.cancel')}</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       {/* New Plan Modal */}
       <Modal
         visible={newPlanModalVisible}

@@ -8,7 +8,7 @@ import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibil
 
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,8 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -37,6 +39,7 @@ import { calcMacros } from '@/utils/macros';
 import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
 import { useStreakStatus } from '@/hooks/useStreakStatus';
 import { calcDailyScore } from '@/utils/consistencyMath';
+import FeedPostCard from '@/components/social/FeedPostCard';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -144,6 +147,8 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
 
   // Posts feed
   const [posts, setPosts] = useState<any[]>([]);
+  const [commentsPost, setCommentsPost] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Follow modal
   const [followerActionTarget, setFollowerActionTarget] = useState<{ id: string; name: string } | null>(null);
@@ -168,6 +173,9 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
 
   // Tooltip
   const [tooltipKey, setTooltipKey] = useState<string | null>(null);
+
+  // Avatar upload
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
 
 
@@ -409,7 +417,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       // Load posts feed
       const { data: postsData, error: postsError } = await scope.request(supabase
         .from('social_posts')
-        .select('id, content, created_at, likes_count')
+        .select('id, user_id, content, image_url, created_at, likes_count, comments_count, is_public, post_type, post_type_v2, meal_photo_url, meal_calories, meal_protein, meal_carbs, meal_fat, meal_servings, meal_recipe_id, meal_recipe_data, question_title, progress_stats, is_pinned, is_founder_post, saves_count, auto_post_type, streak_days, weekly_recap_score, weekly_recap_days_tracked, weekly_recap_week_start, weekly_recap_day_flags, weight_goal_pct, edu_headline, edu_body, edu_example, edu_week, author:users!user_id(id, username, full_name, avatar_url)')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
         .limit(50));
@@ -434,6 +442,12 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nutritionRange, customStartDate, customEndDate])
   );
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user?.id ?? null);
+    });
+  }, []);
 
   const onRefresh = () => {
     console.log('[Profile] pull-to-refresh triggered');
@@ -682,6 +696,75 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     );
   };
 
+  const handleAvatarPress = () => {
+    console.log('[Profile iOS] Avatar tapped — showing photo picker alert');
+    Alert.alert(
+      t('localization.profileUi.profilePhoto'),
+      t('localization.profileUi.choosePhotoMethod'),
+      [
+        { text: t('localization.profileUi.takePhoto'), onPress: () => pickAvatarImage('camera') },
+        { text: t('localization.profileUi.chooseLibrary'), onPress: () => pickAvatarImage('library') },
+        { text: t('localization.profileUi.cancel'), style: 'cancel' },
+      ]
+    );
+  };
+
+  const pickAvatarImage = async (source: 'camera' | 'library') => {
+    console.log('[Profile iOS] pickAvatarImage — source:', source);
+    try {
+      let result: ImagePicker.ImagePickerResult;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(t('localization.profileUi.permissionRequired'), t('localization.profileUi.cameraPermission'));
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(t('localization.profileUi.permissionRequired'), t('localization.profileUi.libraryPermission'));
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+      }
+      if (result.canceled) {
+        console.log('[Profile iOS] pickAvatarImage — user cancelled');
+        return;
+      }
+      console.log('[Profile iOS] pickAvatarImage — image selected, uploading');
+      await uploadAvatarFromProfile(result.assets[0].uri);
+    } catch (error: any) {
+      console.error('[Profile iOS] pickAvatarImage — error:', error);
+      Alert.alert(t('localization.profileUi.error'), t('localization.profileUi.pickImageFailed'));
+    }
+  };
+
+  const uploadAvatarFromProfile = async (uri: string) => {
+    if (!user?.id) return;
+    console.log('[Profile iOS] uploadAvatarFromProfile — starting upload for user:', user.id);
+    setAvatarUploading(true);
+    try {
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+      const path = `${user.id}/avatar.jpg`;
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+      const { error: updateError } = await supabase.from('users').update({ avatar_url: urlData.publicUrl, updated_at: new Date().toISOString() }).eq('id', user.id);
+      if (updateError) throw updateError;
+      console.log('[Profile iOS] uploadAvatarFromProfile — upload successful, reloading user data');
+      await loadData();
+    } catch (error: any) {
+      console.error('[Profile iOS] uploadAvatarFromProfile — error:', error);
+      Alert.alert(t('localization.profileUi.error'), t('localization.profileUi.uploadFailed'));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top']}>
@@ -735,7 +818,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
         <View style={styles.topBarRight}>
           <TouchableOpacity
             onPress={() => {
-              console.log('[Profile Android] Bug report icon pressed');
+              console.log('[Profile iOS] Bug report icon pressed');
               router.push('/bug-report?tab_source=profile');
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -782,21 +865,35 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
           {/* Row: avatar + info */}
           <View style={styles.igHeaderRow}>
             {/* Avatar */}
-            <View style={[styles.igAvatarRing, { borderColor: colors.primary }]}>
-              {user.avatar_url ? (
-                <Image
-                  key={user.avatar_url}
-                  source={{ uri: user.avatar_url }}
-                  style={styles.igAvatarImage}
-                  resizeMode="cover"
-                  onError={(e) => console.warn('[Profile Android] Avatar image load error:', e.nativeEvent.error, 'URL:', user.avatar_url)}
-                />
-              ) : (
-                <View style={[styles.igAvatarFallback, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.igAvatarInitials}>{initials}</Text>
-                </View>
-              )}
-            </View>
+            <TouchableOpacity accessibilityLabel={t('localization.profileUi.profilePhoto')} onPress={handleAvatarPress} activeOpacity={0.8} style={{ position: 'relative' }}>
+              <View style={[styles.igAvatarRing, { borderColor: colors.primary }]}>
+                {user.avatar_url ? (
+                  <Image
+                    key={user.avatar_url}
+                    source={{ uri: user.avatar_url }}
+                    style={styles.igAvatarImage}
+                    resizeMode="cover"
+                    onError={(e) => console.warn('[Profile iOS] Avatar image load error:', e.nativeEvent.error, 'URL:', user.avatar_url)}
+                  />
+                ) : (
+                  <View style={[styles.igAvatarFallback, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.igAvatarInitials}>{initials}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={{
+                position: 'absolute', bottom: 0, right: 0,
+                width: 24, height: 24, borderRadius: 12,
+                backgroundColor: colors.primary,
+                alignItems: 'center', justifyContent: 'center',
+                borderWidth: 2, borderColor: isDark ? colors.backgroundDark : '#fff',
+              }}>
+                {avatarUploading
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <IconSymbol ios_icon_name="camera.fill" android_material_icon_name="camera-alt" size={12} color="#fff" />
+                }
+              </View>
+            </TouchableOpacity>
 
             {/* Info column */}
             <View style={styles.igInfoCol}>
@@ -998,48 +1095,28 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               </Text>
             </View>
           ) : (
-            posts.map((post) => {
-              const postTime = relativeTime(post.created_at, t);
-              const postLikes = String(post.likes_count ?? 0);
-              return (
-                <View
-                  key={post.id}
-                  style={[styles.postCard, { backgroundColor: cardBg, borderColor: cardBorderColor }]}
-                >
-                  <View style={styles.postCardHeader}>
-                    <View style={styles.postCardBody}>
-                      <Text style={[styles.postContent, { color: textColor }]}>{post.content}</Text>
-                      <View style={styles.postMeta}>
-                        <Text style={[styles.postTime, { color: secondaryText }]}>{postTime}</Text>
-                        <View style={styles.postLikesRow}>
-                          <IconSymbol
-                            ios_icon_name="heart.fill"
-                            android_material_icon_name="favorite"
-                            size={13}
-                            color={colors.error}
-                          />
-                          <Text style={[styles.postLikes, { color: secondaryText }]}>{postLikes}</Text>
-                        </View>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      accessibilityLabel={t('localization.profileUi.deletePost')}
-                      onPress={() => handleDeletePost(post.id)}
-                      activeOpacity={0.7}
-                      style={styles.postDeleteButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <IconSymbol
-                        ios_icon_name="trash"
-                        android_material_icon_name="delete"
-                        size={16}
-                        color={colors.error}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
+            posts.map((post) => (
+              <FeedPostCard
+                key={post.id}
+                post={{
+                  ...post,
+                  liked_by_me: false,
+                  saved_by_me: false,
+                  comments_count: post.comments_count ?? 0,
+                  likes_count: post.likes_count ?? 0,
+                  saves_count: post.saves_count ?? 0,
+                }}
+                currentUserId={currentUserId ?? undefined}
+                onLike={(postId, liked) => {
+                  console.log('[Profile] onLike — postId:', postId, 'liked:', liked);
+                  setPosts(prev => prev.map(p => p.id === postId ? { ...p, liked_by_me: liked, likes_count: liked ? (p.likes_count ?? 0) + 1 : Math.max(0, (p.likes_count ?? 0) - 1) } : p));
+                }}
+                onDelete={(postId) => {
+                  handleDeletePost(postId);
+                }}
+                onOpenComments={(p) => setCommentsPost(p)}
+              />
+            ))
           )}
         </View>
       </ScrollView>
@@ -1484,44 +1561,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.sm,
   },
-  postCard: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  postCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  postCardBody: {
-    flex: 1,
-  },
-  postDeleteButton: {
-    padding: 4,
-  },
-  postContent: {
-    ...typography.body,
-    marginBottom: spacing.sm,
-  },
-  postMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  postTime: {
-    ...typography.small,
-  },
-  postLikesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  postLikes: {
-    ...typography.small,
-  },
-
   // Follow modal
   modalOverlay: {
     flex: 1,

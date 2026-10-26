@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import {
   getTodaySteps,
   initializeHealthData,
@@ -75,7 +75,7 @@ export function useSteps(): UseStepsResult {
         const { available } = await initializeHealthData();
         if (!mountedRef.current) return;
 
-        if (!available) {
+        if (!available && Platform.OS !== 'android') {
           console.log('[useSteps] health data not available on this device');
           setPermission('denied');
           setLoading(false);

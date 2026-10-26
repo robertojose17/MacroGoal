@@ -14,7 +14,8 @@
  *            Always go through this module.
  */
 
-import { Platform } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
+import { readAndroidSteps } from './healthConnectSteps.mjs';
 
 // ─── DEV MOCK ─────────────────────────────────────────────────────────────────
 // Set MOCK_METRICS to a non-null object to bypass HealthKit / Health Connect.
@@ -437,9 +438,20 @@ async function android_initialize(): Promise<{ available: boolean }> {
 
 async function android_requestPermission(): Promise<PermissionStatus> {
   try {
-    const { initialize, requestPermission, getGrantedPermissions } =
+    const { initialize, requestPermission, getGrantedPermissions, getSdkStatus, SdkAvailabilityStatus, openHealthConnectSettings } =
       await import('react-native-health-connect');
 
+    const status = await getSdkStatus();
+    if (status !== SdkAvailabilityStatus.SDK_AVAILABLE) {
+      const needsUpdate = status === SdkAvailabilityStatus.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED;
+      Alert.alert('Health Connect', needsUpdate
+        ? 'Install or update Health Connect, then return to Macro Goal and tap Connect.'
+        : 'Health Connect is not supported on this device.', needsUpdate ? [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Install or update', onPress: () => { void Linking.openURL('https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata').catch(() => Alert.alert('Health Connect', 'Open Google Play and search for Health Connect.')); } },
+        ] : [{ text: 'OK' }]);
+      return 'denied';
+    }
     const initialized = await initialize();
     if (!initialized) {
       console.log('[healthKit] Android Health Connect not available');
@@ -466,6 +478,10 @@ async function android_requestPermission(): Promise<PermissionStatus> {
       (p: { recordType: string; accessType: string }) =>
         p.recordType === 'Steps' && p.accessType === 'read'
     );
+    if (!nowGranted) Alert.alert('Health Connect', 'Steps access was not granted. You can allow Steps in Health Connect settings.', [
+      {text:'Cancel',style:'cancel'},
+      {text:'Open settings',onPress:()=>{try {openHealthConnectSettings();} catch {Alert.alert('Health Connect','Open Health Connect in Android settings to manage access.');}}},
+    ]);
     return nowGranted ? 'granted' : 'denied';
   } catch (e) {
     console.warn('[healthKit] Android requestPermission error:', e);
@@ -522,50 +538,11 @@ async function android_requestAllPermissions(): Promise<PermissionStatus> {
 
 async function android_getStepsForDate(date: Date): Promise<StepsResult> {
   try {
-    const { initialize, getGrantedPermissions, readRecords } = await import(
-      'react-native-health-connect'
-    );
-
-    const initialized = await initialize();
-    if (!initialized) {
-      return { available: false, permission: 'denied', steps: null };
-    }
-
-    const granted = await getGrantedPermissions();
-    const hasSteps = granted.some(
-      (p: { recordType: string; accessType: string }) =>
-        p.recordType === 'Steps' && p.accessType === 'read'
-    );
-    if (!hasSteps) {
-      console.log('[healthKit] Android steps: no permission');
-      return { available: true, permission: 'not_determined', steps: null };
-    }
-
-    const start = startOfDay(date);
-    const end = endOfDay(date);
-    console.log('[healthKit] Android querying steps for', start.toISOString(), '→', end.toISOString());
-
-    const result = await readRecords('Steps', {
-      timeRangeFilter: {
-        operator: 'between',
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-      },
-    });
-
-    const records = result?.records ?? [];
-    const total = records.reduce(
-      (sum: number, r: { count?: number }) => sum + (r.count ?? 0),
-      0
-    );
-    const steps = sanitizeSteps(total);
-    console.log('[healthKit] Android steps total:', steps, '(', records.length, 'records)');
-
-    return { available: true, permission: 'granted', steps };
+    const sdk = await import('react-native-health-connect');
+    return await readAndroidSteps(sdk, date) as StepsResult;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[healthKit] Android getStepsForDate error:', msg);
-    return { available: true, permission: 'not_determined', steps: null, error: msg };
+    return { available: true, permission: 'not_determined', steps: null,
+      error: e instanceof Error ? e.message : String(e) };
   }
 }
 

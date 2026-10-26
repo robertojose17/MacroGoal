@@ -95,7 +95,7 @@ export default function SettingsScreen() {
   const [savingFoodPrefs, setSavingFoodPrefs] = useState(false);
 
   const handleAvatarPress = () => {
-    console.log('[Profile Android] Avatar tapped — showing photo picker options');
+    console.log('[Profile iOS] Avatar tapped — showing photo picker options');
     Alert.alert(
       t('localization.settings.profilePhoto'),
       t('localization.settings.choosePhoto'),
@@ -103,14 +103,14 @@ export default function SettingsScreen() {
         {
           text: t('localization.settings.takePhoto'),
           onPress: () => {
-            console.log('[Profile Android] Take Photo selected');
+            console.log('[Profile iOS] Take Photo selected');
             pickImage('camera');
           },
         },
         {
           text: t('localization.settings.chooseLibrary'),
           onPress: () => {
-            console.log('[Profile Android] Choose from Library selected');
+            console.log('[Profile iOS] Choose from Library selected');
             pickImage('library');
           },
         },
@@ -124,14 +124,14 @@ export default function SettingsScreen() {
       let result: ImagePicker.ImagePickerResult;
 
       if (source === 'camera') {
-        console.log('[Profile Android] Requesting camera permissions');
+        console.log('[Profile iOS] Requesting camera permissions');
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          console.log('[Profile Android] Camera permission denied');
+          console.log('[Profile iOS] Camera permission denied');
           Alert.alert(t('localization.settings.permissionRequired'), t('localization.settings.cameraPermission'));
           return;
         }
-        console.log('[Profile Android] Launching camera');
+        console.log('[Profile iOS] Launching camera');
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
@@ -139,14 +139,14 @@ export default function SettingsScreen() {
           quality: 0.8,
         });
       } else {
-        console.log('[Profile Android] Requesting media library permissions');
+        console.log('[Profile iOS] Requesting media library permissions');
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          console.log('[Profile Android] Media library permission denied');
+          console.log('[Profile iOS] Media library permission denied');
           Alert.alert(t('localization.settings.permissionRequired'), t('localization.settings.photoPermission'));
           return;
         }
-        console.log('[Profile Android] Launching image library');
+        console.log('[Profile iOS] Launching image library');
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
@@ -156,22 +156,22 @@ export default function SettingsScreen() {
       }
 
       if (result.canceled) {
-        console.log('[Profile Android] Image picker cancelled');
+        console.log('[Profile iOS] Image picker cancelled');
         return;
       }
 
       const asset = result.assets[0];
-      console.log('[Profile Android] Image selected — uri:', asset.uri, 'width:', asset.width, 'height:', asset.height);
+      console.log('[Profile iOS] Image selected — uri:', asset.uri, 'width:', asset.width, 'height:', asset.height);
       await uploadAvatar(asset.uri);
     } catch (error: any) {
-      console.error('[Profile Android] Error picking image:', error);
+      console.error('[Profile iOS] Error picking image:', error);
       Alert.alert(t('common.error'), t('localization.settings.pickImageError'));
     }
   };
 
   const uploadAvatar = async (uri: string) => {
     if (!user) return;
-    console.log('[Avatar Android] Starting upload for user:', user.id);
+    console.log('[Avatar iOS] Starting upload for user:', user.id);
     setAvatarUploading(true);
     try {
       // Step 1: Read file as base64 (fetch(uri).blob() produces 0 bytes in React Native)
@@ -183,7 +183,7 @@ export default function SettingsScreen() {
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      console.log('[Avatar Android] File size (bytes):', bytes.length);
+      console.log('[Avatar iOS] File size (bytes):', bytes.length);
       if (bytes.length === 0) throw new Error('Image file is empty');
 
       // Step 2: Upload directly to Supabase Storage
@@ -192,12 +192,12 @@ export default function SettingsScreen() {
         .from('avatars')
         .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
       if (uploadError) throw uploadError;
-      console.log('[Avatar Android] Upload successful');
+      console.log('[Avatar iOS] Upload successful');
 
       // Step 4: Get the public URL (clean, no cache-buster)
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
       const publicUrl = urlData.publicUrl;
-      console.log('[Avatar Android] Public URL:', publicUrl);
+      console.log('[Avatar iOS] Public URL:', publicUrl);
 
       // Step 5: Save clean URL to DB
       const { error: updateError } = await supabase
@@ -209,9 +209,9 @@ export default function SettingsScreen() {
       // Step 6: Update local state with cache-busted URL so image refreshes immediately
       const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
       setUser((prev: any) => ({ ...prev, avatar_url: cacheBustedUrl }));
-      console.log('[Avatar Android] Done — avatar updated successfully');
+      console.log('[Avatar iOS] Done — avatar updated successfully');
     } catch (error: any) {
-      console.error('[Avatar Android] Upload failed:', error);
+      console.error('[Avatar iOS] Upload failed:', error);
       Alert.alert(t('localization.settings.uploadFailed'), t('localization.settings.uploadError'));
     } finally {
       setAvatarUploading(false);
@@ -223,12 +223,12 @@ export default function SettingsScreen() {
       setLoading(true);
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) {
-        console.log('[Profile Android] No authenticated user found');
+        console.log('[Profile iOS] No authenticated user found');
         setLoading(false);
         return;
       }
 
-      console.log('[Profile Android] Loading profile for user:', authUser.id);
+      console.log('[Profile iOS] Loading profile for user:', authUser.id);
 
       const [userResult, goalResult] = await Promise.all([
         supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
@@ -236,33 +236,33 @@ export default function SettingsScreen() {
       ]);
 
       if (userResult.error) {
-        console.error('[Profile Android] Error loading user data:', userResult.error);
+        console.error('[Profile iOS] Error loading user data:', userResult.error);
       } else if (userResult.data) {
-        console.log('[Profile Android] User data loaded:', userResult.data);
+        console.log('[Profile iOS] User data loaded:', userResult.data);
         setUser({ ...authUser, ...userResult.data });
         setIsAdmin(!!userResult.data.is_admin);
         if (userResult.data.onboarding_completed && !userResult.data.goal_weight) {
-          console.log('[Profile Android] Goal weight is missing, showing prompt');
+          console.log('[Profile iOS] Goal weight is missing, showing prompt');
           setShowGoalWeightPrompt(true);
         }
       } else {
-        console.log('[Profile Android] No user data found in database');
+        console.log('[Profile iOS] No user data found in database');
         setUser(authUser);
       }
 
       if (goalResult.error) {
-        console.error('[Profile Android] Error loading goal:', goalResult.error);
+        console.error('[Profile iOS] Error loading goal:', goalResult.error);
         setGoal(null);
       } else if (goalResult.data && goalResult.data.length > 0) {
         const activeGoal = goalResult.data[0];
-        console.log('[Profile Android] Active goal loaded:', activeGoal);
+        console.log('[Profile iOS] Active goal loaded:', activeGoal);
         setGoal(activeGoal);
       } else {
-        console.log('[Profile Android] No active goal found for user');
+        console.log('[Profile iOS] No active goal found for user');
         setGoal(null);
       }
     } catch (error) {
-      console.error('[Profile Android] Error in loadUserData:', error);
+      console.error('[Profile iOS] Error in loadUserData:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -271,7 +271,7 @@ export default function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[Profile Android] Screen focused, loading data');
+      console.log('[Profile iOS] Screen focused, loading data');
       loadUserData();
       refreshPremiumStatus();
     }, [refreshPremiumStatus])
@@ -295,14 +295,14 @@ export default function SettingsScreen() {
   };
 
   const toggleSection = (section: AccordionSection) => {
-    console.log('[Profile Android] Accordion section toggled:', section);
+    console.log('[Profile iOS] Accordion section toggled:', section);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setOpenSection((prev) => (prev === section ? null : section));
   };
 
   const saveFoodPrefs = async () => {
     if (!user) return;
-    console.log('[Profile Android] Save Food Preferences button pressed', foodPrefs);
+    console.log('[Profile iOS] Save Food Preferences button pressed', foodPrefs);
     setSavingFoodPrefs(true);
     try {
       const updateData = {
@@ -312,14 +312,14 @@ export default function SettingsScreen() {
         disliked_foods: foodPrefs.disliked_foods.trim(),
         updated_at: new Date().toISOString(),
       };
-      console.log('[Profile Android] Saving food preferences to Supabase:', updateData);
+      console.log('[Profile iOS] Saving food preferences to Supabase:', updateData);
       const { error } = await supabase.from('users').update(updateData).eq('id', user.id);
       if (error) throw error;
-      console.log('[Profile Android] Food preferences saved successfully');
+      console.log('[Profile iOS] Food preferences saved successfully');
       setShowFoodPrefsModal(false);
       await loadUserData();
     } catch (error: any) {
-      console.error('[Profile Android] Error saving food preferences:', error);
+      console.error('[Profile iOS] Error saving food preferences:', error);
       Alert.alert(t('common.error'), t('profile.failedToSavePreferences'));
     } finally {
       setSavingFoodPrefs(false);
@@ -327,7 +327,7 @@ export default function SettingsScreen() {
   };
 
   const toggleDietaryRestriction = (item: string) => {
-    console.log('[Profile Android] Dietary restriction toggled:', item);
+    console.log('[Profile iOS] Dietary restriction toggled:', item);
     setFoodPrefs((prev) => {
       const exists = prev.dietary_restrictions.includes(item);
       return {
@@ -340,7 +340,7 @@ export default function SettingsScreen() {
   };
 
   const toggleProteinPreference = (item: string) => {
-    console.log('[Profile Android] Protein preference toggled:', item);
+    console.log('[Profile iOS] Protein preference toggled:', item);
     setFoodPrefs((prev) => ({
       ...prev,
       protein_preferences: prev.protein_preferences.includes(item)
@@ -350,7 +350,7 @@ export default function SettingsScreen() {
   };
 
   const toggleRecipeStyle = (item: string) => {
-    console.log('[Profile Android] Recipe style toggled:', item);
+    console.log('[Profile iOS] Recipe style toggled:', item);
     setFoodPrefs((prev) => ({
       ...prev,
       recipe_styles: prev.recipe_styles.includes(item)
@@ -360,7 +360,7 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = async () => {
-    console.log('[Profile Android] Log Out button pressed');
+    console.log('[Profile iOS] Log Out button pressed');
     Alert.alert(
       t('profile.logOut'),
       t('profile.logOutConfirm'),
@@ -370,7 +370,7 @@ export default function SettingsScreen() {
           text: t('profile.logOut'),
           style: 'destructive',
           onPress: async () => {
-            console.log('[Profile Android] Logging out user');
+            console.log('[Profile iOS] Logging out user');
             await clearOnboardingSession();
             await supabase.auth.signOut();
             router.replace('/auth/welcome');
@@ -381,7 +381,7 @@ export default function SettingsScreen() {
   };
 
   const handleEditGoals = () => {
-    console.log('[Profile Android] Advanced goals button pressed');
+    console.log('[Profile iOS] Advanced goals button pressed');
     if (!user?.onboarding_completed) {
       router.push('/onboarding/complete');
     } else {
@@ -417,7 +417,7 @@ export default function SettingsScreen() {
   };
 
   const openEditModal = (field: EditField) => {
-    console.log('[Profile Android] Opening edit modal for field:', field);
+    console.log('[Profile iOS] Opening edit modal for field:', field);
     const units = user?.preferred_units || 'metric';
 
     switch (field) {
@@ -472,11 +472,11 @@ export default function SettingsScreen() {
 
   const recalculateGoals = async (updatedUser: any, updatedGoal: any) => {
     try {
-      console.log('[Profile Android] Recalculating goals with updated data...');
+      console.log('[Profile iOS] Recalculating goals with updated data...');
 
       const age = calculateAge(updatedUser.date_of_birth);
       if (!age || !updatedUser.height || !updatedUser.current_weight || !updatedUser.sex || !updatedUser.activity_level) {
-        console.log('[Profile Android] Missing required data for calculation');
+        console.log('[Profile iOS] Missing required data for calculation');
         return;
       }
 
@@ -490,7 +490,7 @@ export default function SettingsScreen() {
 
       const macros = calculateMacrosWithPreset(targetCalories, updatedUser.current_weight, updatedGoal.macro_preset || 'lean_body');
 
-      console.log('[Profile Android] New calculations:', { bmr, tdee, targetCalories, macros });
+      console.log('[Profile iOS] New calculations:', { bmr, tdee, targetCalories, macros });
 
       await supabase
         .from('goals')
@@ -521,11 +521,11 @@ export default function SettingsScreen() {
 
       if (goalError) throw goalError;
 
-      console.log('[Profile Android] Goals recalculated and updated');
+      console.log('[Profile iOS] Goals recalculated and updated');
 
       await loadUserData();
     } catch (error) {
-      console.error('[Profile Android] Error recalculating goals:', error);
+      console.error('[Profile iOS] Error recalculating goals:', error);
       throw error;
     }
   };
@@ -536,7 +536,7 @@ export default function SettingsScreen() {
    */
   const saveFieldDirectly = async (field: EditField, value: string) => {
     if (!user || !field) return;
-    console.log('[Profile Android] saveFieldDirectly:', field, value);
+    console.log('[Profile iOS] saveFieldDirectly:', field, value);
 
     setSaving(true);
     try {
@@ -558,7 +558,7 @@ export default function SettingsScreen() {
 
       updateData.updated_at = new Date().toISOString();
 
-      console.log('[Profile Android] Saving to Supabase:', updateData);
+      console.log('[Profile iOS] Saving to Supabase:', updateData);
       const { error } = await supabase
         .from('users')
         .update(updateData)
@@ -570,7 +570,7 @@ export default function SettingsScreen() {
       const updatedUser = { ...user, ...updateData };
       setUser(updatedUser);
 
-      console.log('[Profile Android] User data updated:', updateData);
+      console.log('[Profile iOS] User data updated:', updateData);
 
       if (needsRecalculation && goal) {
         await recalculateGoals(updatedUser, goal);
@@ -578,7 +578,7 @@ export default function SettingsScreen() {
         await loadUserData();
       }
     } catch (error: any) {
-      console.error('[Profile Android] Error in saveFieldDirectly:', error);
+      console.error('[Profile iOS] Error in saveFieldDirectly:', error);
       Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
@@ -587,7 +587,7 @@ export default function SettingsScreen() {
 
   const saveEditedField = async () => {
     if (!user || !editingField) return;
-    console.log('[Profile Android] Save button pressed for field:', editingField);
+    console.log('[Profile iOS] Save button pressed for field:', editingField);
 
     setSaving(true);
     try {
@@ -675,7 +675,7 @@ export default function SettingsScreen() {
       if (Object.keys(updateData).length > 0) {
         updateData.updated_at = new Date().toISOString();
 
-        console.log('[Profile Android] Saving to Supabase:', updateData);
+        console.log('[Profile iOS] Saving to Supabase:', updateData);
         const { error } = await supabase
           .from('users')
           .update(updateData)
@@ -687,7 +687,7 @@ export default function SettingsScreen() {
         const updatedUser = { ...user, ...updateData };
         setUser(updatedUser);
 
-        console.log('[Profile Android] User data updated:', updateData);
+        console.log('[Profile iOS] User data updated:', updateData);
 
         if (needsRecalculation && goal) {
           await recalculateGoals(updatedUser, goal);
@@ -698,7 +698,7 @@ export default function SettingsScreen() {
 
       closeEditModal();
     } catch (error: any) {
-      console.error('[Profile Android] Error saving field:', error);
+      console.error('[Profile iOS] Error saving field:', error);
       Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
     } finally {
       setSaving(false);
@@ -726,7 +726,7 @@ export default function SettingsScreen() {
       setSaving(true);
       const dateString = toLocalDateString(date);
 
-      console.log('[Profile Android] Saving Journey Start Date:', dateString);
+      console.log('[Profile iOS] Saving Journey Start Date:', dateString);
 
       const { error } = await supabase
         .from('goals')
@@ -735,7 +735,7 @@ export default function SettingsScreen() {
 
       if (error) throw error;
 
-      console.log('[Profile Android] Journey Start Date saved successfully:', dateString);
+      console.log('[Profile iOS] Journey Start Date saved successfully:', dateString);
 
       await loadUserData();
 
@@ -745,7 +745,7 @@ export default function SettingsScreen() {
 
       Alert.alert(t('common.success'), t('profile.journeyStartUpdated'));
     } catch (error: any) {
-      console.error('[Profile Android] Error saving start date:', error);
+      console.error('[Profile iOS] Error saving start date:', error);
       Alert.alert(t('common.error'), t('profile.failedToSaveStartDate'));
     } finally {
       setSaving(false);
@@ -753,7 +753,7 @@ export default function SettingsScreen() {
   };
 
   const openStartDatePicker = () => {
-    console.log('[Profile Android] Journey Start Date picker opened');
+    console.log('[Profile iOS] Journey Start Date picker opened');
     if (!goal) {
       Alert.alert(t('profile.noGoalAlert'), t('profile.noGoalAlertMessage'));
       return;
@@ -794,7 +794,7 @@ export default function SettingsScreen() {
       const date = new Date(ymd + 'T00:00:00');
       return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
     } catch (error) {
-      console.error('[Profile Android] Error formatting date:', error);
+      console.error('[Profile iOS] Error formatting date:', error);
       return 'Set Date';
     }
   };
@@ -834,7 +834,7 @@ export default function SettingsScreen() {
   const age = calculateAge(user.date_of_birth);
 
   const subscriptionStatusText = isPremium ? t('profile.premium') : t('profile.free');
-  console.log('[Profile Android] Displaying subscription status:', subscriptionStatusText, '(isPremium:', isPremium, ')');
+  console.log('[Profile iOS] Displaying subscription status:', subscriptionStatusText, '(isPremium:', isPremium, ')');
 
   const DIETARY_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free'];
 
@@ -889,7 +889,7 @@ export default function SettingsScreen() {
       <View style={[styles.header, { flexDirection: 'row', alignItems: 'center' }]}>
         <TouchableOpacity
           onPress={() => {
-            console.log('[Settings Android] Back button pressed');
+            console.log('[Settings iOS] Back button pressed');
             router.back();
           }}
           activeOpacity={0.7}
@@ -914,96 +914,12 @@ export default function SettingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* ── Avatar Card ─────────────────────────────────────────────────── */}
-        <View style={[styles.profileCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <TouchableOpacity
-            onPress={handleAvatarPress}
-            activeOpacity={0.8}
-            style={styles.avatarWrapper}
-            disabled={avatarUploading}
-          >
-            {user.avatar_url ? (
-              <Image
-                key={user.avatar_url}
-                source={{ uri: user.avatar_url }}
-                style={styles.avatarImage}
-                resizeMode="cover"
-                onError={(e) => console.warn('[Settings Android] Avatar image load error:', e.nativeEvent.error, 'URL:', user.avatar_url)}
-              />
-            ) : (
-              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                <Text style={styles.avatarText}>
-                  {user.name ? user.name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
-                </Text>
-              </View>
-            )}
-            <View style={[styles.avatarCameraBadge, { backgroundColor: isDark ? colors.cardDark : '#fff' }]}>
-              {avatarUploading ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <IconSymbol
-                  ios_icon_name="camera.fill"
-                  android_material_icon_name="camera-alt"
-                  size={14}
-                  color={colors.primary}
-                />
-              )}
-            </View>
-          </TouchableOpacity>
-
-          <Text style={[styles.userName, { color: isDark ? colors.textDark : colors.text }]}>
-            {user.name || t('localization.completion.user')}
-          </Text>
-
-          {user.username ? (
-            <Text style={styles.usernameText}>
-              {'@'}
-              {user.username}
-            </Text>
-          ) : (
-            <TouchableOpacity
-              style={styles.setUsernameRow}
-              onPress={() => {
-                console.log('[Profile Android] Set username pressed from avatar card');
-                router.push('/choose-username');
-              }}
-              activeOpacity={0.7}
-            >
-              <IconSymbol
-                ios_icon_name="plus.circle.fill"
-                android_material_icon_name="add-circle"
-                size={14}
-                color={colors.primary}
-              />
-              <Text style={styles.setUsernameText}>
-                {t('profile.setUsername')}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <Text style={[styles.subscriptionStatus, { color: isPremium ? colors.primary : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
-            {subscriptionStatusText}
-          </Text>
-
-          <Text style={[styles.email, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {user.email || t('localization.settings.guestUser')}
-          </Text>
-
-          {user.challenger_badge && (
-            <View style={styles.badgeRow}>
-              <View style={styles.challengerBadgePill}>
-                <IconSymbol ios_icon_name="medal.fill" android_material_icon_name="military_tech" size={20} color="#F59E0B" />
-                <Text style={styles.badgeLabel}>{t('profile.challenger')}</Text>
-              </View>
-            </View>
-          )}
-        </View>
 
         {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
         {!isPremium && !premiumLoading && (
           <TouchableOpacity
             onPress={() => {
-              console.log('[Profile Android] Upgrade to Premium button pressed');
+              console.log('[Profile iOS] Upgrade to Premium button pressed');
               router.push('/subscription');
             }}
             activeOpacity={0.85}
@@ -1073,6 +989,12 @@ export default function SettingsScreen() {
               <View style={[styles.accordionDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
               <View style={styles.accordionContent}>
                 <EditableSettingItem
+                  label={t('profile.email') || 'Email'}
+                  value={user.email || ''}
+                  onPress={() => {}}
+                  isDark={isDark}
+                />
+                <EditableSettingItem
                   label={t('profile.name')}
                   value={user.name || t('profile.tapToSetName')}
                   onPress={() => openEditModal('name')}
@@ -1083,7 +1005,7 @@ export default function SettingsScreen() {
                   label={t('profile.username')}
                   value={user.username ? `@${user.username}` : t('profile.setUsernameShort')}
                   onPress={() => {
-                    console.log('[Profile Android] Username row tapped');
+                    console.log('[Profile iOS] Username row tapped');
                     router.push('/choose-username');
                   }}
                   isDark={isDark}
@@ -1100,7 +1022,7 @@ export default function SettingsScreen() {
                   label={t('profile.sex')}
                   value={sexDisplayValue}
                   onPress={() => {
-                    console.log('[Profile Android] Sex field tapped');
+                    console.log('[Profile iOS] Sex field tapped');
                     Alert.alert(
                       t('profile.selectSex'),
                       '',
@@ -1108,14 +1030,14 @@ export default function SettingsScreen() {
                         {
                           text: t('profile.male'),
                           onPress: () => {
-                            console.log('[Profile Android] Sex changed to male');
+                            console.log('[Profile iOS] Sex changed to male');
                             saveFieldDirectly('sex', 'male');
                           },
                         },
                         {
                           text: t('profile.female'),
                           onPress: () => {
-                            console.log('[Profile Android] Sex changed to female');
+                            console.log('[Profile iOS] Sex changed to female');
                             saveFieldDirectly('sex', 'female');
                           },
                         },
@@ -1151,7 +1073,7 @@ export default function SettingsScreen() {
                   label={t('profile.units')}
                   value={unitsDisplayValue}
                   onPress={() => {
-                    console.log('[Profile Android] Units field tapped');
+                    console.log('[Profile iOS] Units field tapped');
                     Alert.alert(
                       t('profile.selectUnits'),
                       '',
@@ -1159,7 +1081,7 @@ export default function SettingsScreen() {
                         {
                           text: t('profile.metricLabel'),
                           onPress: async () => {
-                            console.log('[Profile Android] Units changed to metric');
+                            console.log('[Profile iOS] Units changed to metric');
                             try {
                               const { error } = await supabase
                                 .from('users')
@@ -1168,7 +1090,7 @@ export default function SettingsScreen() {
                               if (error) throw error;
                               await loadUserData();
                             } catch (err: any) {
-                              console.error('[Profile Android] Error saving units:', err);
+                              console.error('[Profile iOS] Error saving units:', err);
                               Alert.alert(t('common.error'), t('profile.failedToSaveUnits'));
                             }
                           },
@@ -1176,7 +1098,7 @@ export default function SettingsScreen() {
                         {
                           text: t('profile.imperialLabel'),
                           onPress: async () => {
-                            console.log('[Profile Android] Units changed to imperial');
+                            console.log('[Profile iOS] Units changed to imperial');
                             try {
                               const { error } = await supabase
                                 .from('users')
@@ -1185,7 +1107,7 @@ export default function SettingsScreen() {
                               if (error) throw error;
                               await loadUserData();
                             } catch (err: any) {
-                              console.error('[Profile Android] Error saving units:', err);
+                              console.error('[Profile iOS] Error saving units:', err);
                               Alert.alert(t('common.error'), t('profile.failedToSaveUnits'));
                             }
                           },
@@ -1200,7 +1122,7 @@ export default function SettingsScreen() {
                   label={t('profile.activityLevel')}
                   value={activityDisplayValue}
                   onPress={() => {
-                    console.log('[Profile Android] Activity level field tapped');
+                    console.log('[Profile iOS] Activity level field tapped');
                     Alert.alert(
                       t('profile.selectActivityLevel'),
                       '',
@@ -1208,28 +1130,28 @@ export default function SettingsScreen() {
                         {
                           text: t('profile.sedentary'),
                           onPress: () => {
-                            console.log('[Profile Android] Activity level changed to sedentary');
+                            console.log('[Profile iOS] Activity level changed to sedentary');
                             saveFieldDirectly('activity', 'sedentary');
                           },
                         },
                         {
                           text: t('profile.light'),
                           onPress: () => {
-                            console.log('[Profile Android] Activity level changed to light');
+                            console.log('[Profile iOS] Activity level changed to light');
                             saveFieldDirectly('activity', 'light');
                           },
                         },
                         {
                           text: t('profile.moderate'),
                           onPress: () => {
-                            console.log('[Profile Android] Activity level changed to moderate');
+                            console.log('[Profile iOS] Activity level changed to moderate');
                             saveFieldDirectly('activity', 'moderate');
                           },
                         },
                         {
                           text: t('profile.veryActive'),
                           onPress: () => {
-                            console.log('[Profile Android] Activity level changed to very_active');
+                            console.log('[Profile iOS] Activity level changed to very_active');
                             saveFieldDirectly('activity', 'very_active');
                           },
                         },
@@ -1280,7 +1202,7 @@ export default function SettingsScreen() {
                       label={t('profile.goal')}
                       value={goalTypeDisplayValue}
                       onPress={() => {
-                        console.log('[Profile Android] Goal type field tapped');
+                        console.log('[Profile iOS] Goal type field tapped');
                         Alert.alert(
                           t('profile.selectGoal'),
                           '',
@@ -1288,7 +1210,7 @@ export default function SettingsScreen() {
                             {
                               text: t('profile.loseWeight'),
                               onPress: () => {
-                                console.log('[Profile Android] Goal type changed to lose');
+                                console.log('[Profile iOS] Goal type changed to lose');
                                 if (goal) {
                                   recalculateGoals(user, { ...goal, goal_type: 'lose', loss_rate_lbs_per_week: goal?.loss_rate_lbs_per_week || 1.0 });
                                 }
@@ -1297,7 +1219,7 @@ export default function SettingsScreen() {
                             {
                               text: t('profile.maintain'),
                               onPress: () => {
-                                console.log('[Profile Android] Goal type changed to maintain');
+                                console.log('[Profile iOS] Goal type changed to maintain');
                                 if (goal) {
                                   recalculateGoals(user, { ...goal, goal_type: 'maintain' });
                                 }
@@ -1306,7 +1228,7 @@ export default function SettingsScreen() {
                             {
                               text: t('profile.gainWeight'),
                               onPress: () => {
-                                console.log('[Profile Android] Goal type changed to gain');
+                                console.log('[Profile iOS] Goal type changed to gain');
                                 if (goal) {
                                   recalculateGoals(user, { ...goal, goal_type: 'gain' });
                                 }
@@ -1335,7 +1257,7 @@ export default function SettingsScreen() {
                       label={t('profile.journeyStart')}
                       value={journeyStartDisplay}
                       onPress={() => {
-                        console.log('[Profile Android] Journey Start Date row tapped');
+                        console.log('[Profile iOS] Journey Start Date row tapped');
                         openStartDatePicker();
                       }}
                       isDark={isDark}
@@ -1346,7 +1268,7 @@ export default function SettingsScreen() {
                       label={t('profile.macroSplit')}
                       value={macroPresetDisplayValue}
                       onPress={() => {
-                        console.log('[Profile Android] Macro Split row tapped, current preset:', currentMacroPreset);
+                        console.log('[Profile iOS] Macro Split row tapped, current preset:', currentMacroPreset);
                         Alert.alert(
                           t('profile.selectMacroSplit'),
                           '',
@@ -1354,35 +1276,35 @@ export default function SettingsScreen() {
                             {
                               text: t('profile.leanBodyFormula'),
                               onPress: () => {
-                                console.log('[Profile Android] Macro preset changed to lean_body');
+                                console.log('[Profile iOS] Macro preset changed to lean_body');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'lean_body' });
                               },
                             },
                             {
                               text: t('profile.balanced'),
                               onPress: () => {
-                                console.log('[Profile Android] Macro preset changed to balanced');
+                                console.log('[Profile iOS] Macro preset changed to balanced');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'balanced' });
                               },
                             },
                             {
                               text: t('profile.highProtein'),
                               onPress: () => {
-                                console.log('[Profile Android] Macro preset changed to high_protein');
+                                console.log('[Profile iOS] Macro preset changed to high_protein');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'high_protein' });
                               },
                             },
                             {
                               text: t('profile.lowCarb'),
                               onPress: () => {
-                                console.log('[Profile Android] Macro preset changed to low_carb');
+                                console.log('[Profile iOS] Macro preset changed to low_carb');
                                 if (goal) recalculateGoals(user, { ...goal, macro_preset: 'low_carb' });
                               },
                             },
                             {
                               text: t('profile.custom'),
                               onPress: () => {
-                                console.log('[Profile Android] Macro preset: navigating to custom-macros screen');
+                                console.log('[Profile iOS] Macro preset: navigating to custom-macros screen');
                                 router.push('/custom-macros');
                               },
                             },
@@ -1443,7 +1365,7 @@ export default function SettingsScreen() {
                     <TouchableOpacity
                       style={[styles.recalculateButton, { borderColor: colors.primary }]}
                       onPress={async () => {
-                        console.log('[Profile Android] Recalculate Goals button pressed');
+                        console.log('[Profile iOS] Recalculate Goals button pressed');
                         if (!user || !goal) return;
                         setSaving(true);
                         try {
@@ -1488,7 +1410,7 @@ export default function SettingsScreen() {
                       <Switch
                         value={user?.adaptive_tdee_enabled !== false}
                         onValueChange={async (val) => {
-                          console.log('[Profile Android] Smart Calorie Adjustment toggled:', val);
+                          console.log('[Profile iOS] Smart Calorie Adjustment toggled:', val);
                           try {
                             const { error } = await supabase
                               .from('users')
@@ -1497,7 +1419,7 @@ export default function SettingsScreen() {
                             if (error) throw error;
                             setUser((prev: any) => ({ ...prev, adaptive_tdee_enabled: val }));
                           } catch (err: any) {
-                            console.error('[Profile Android] Error saving adaptive_tdee_enabled:', err);
+                            console.error('[Profile iOS] Error saving adaptive_tdee_enabled:', err);
                             Alert.alert(t('common.error'), t('errors.failedToSave'));
                           }
                         }}
@@ -1511,7 +1433,7 @@ export default function SettingsScreen() {
                       <TouchableOpacity
                         style={styles.adaptiveRow}
                         onPress={() => {
-                          console.log('[Profile Android] Adjustment Day row pressed');
+                          console.log('[Profile iOS] Adjustment Day row pressed');
                           setShowAdjustmentDayModal(true);
                         }}
                         activeOpacity={0.7}
@@ -1545,7 +1467,7 @@ export default function SettingsScreen() {
                     <TouchableOpacity
                       style={styles.adaptiveRow}
                       onPress={() => {
-                        console.log('[Profile Android] Calorie Adjustment History row pressed');
+                        console.log('[Profile iOS] Calorie Adjustment History row pressed');
                         router.push('/adaptive-tdee-history');
                       }}
                       activeOpacity={0.7}
@@ -1585,7 +1507,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.accordionHeader}
             onPress={() => {
-              console.log('[Profile Android] Food Preferences row pressed');
+              console.log('[Profile iOS] Food Preferences row pressed');
               setShowFoodPrefsModal(true);
             }}
             activeOpacity={0.7}
@@ -1616,7 +1538,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.accordionHeader}
             onPress={() => {
-              console.log('[Profile Android] Invite Friends & Earn XP pressed');
+              console.log('[Profile iOS] Invite Friends & Earn XP pressed');
               if (isAdmin) {
                 router.push('/affiliate-admin');
               } else {
@@ -1650,10 +1572,10 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.actionRow}
             onPress={() => {
-              console.log('[Profile Android] Send Feedback button pressed');
+              console.log('[Profile iOS] Send Feedback button pressed');
               const mailtoUrl = 'mailto:macrogoalapp@gmail.com?subject=MacroGoal%20App%20Feedback&body=Hi%2C%20I%27d%20like%20to%20share%20the%20following%20feedback%3A%0A%0A';
               Linking.openURL(mailtoUrl).catch((err) => {
-                console.error('[Profile Android] Failed to open mail app:', err);
+                console.error('[Profile iOS] Failed to open mail app:', err);
                 Alert.alert(t('common.error'), t('errors.couldNotOpenMail'));
               });
             }}
@@ -1683,11 +1605,11 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.actionRow}
             onPress={() => {
-              console.log('[Profile Android] Language selector pressed');
+              console.log('[Profile iOS] Language selector pressed');
               const options = supportedLanguages.map(lang => ({
                 text: lang.nativeLabel,
                 onPress: async () => {
-                  console.log('[Profile Android] Language changed to:', lang.code);
+                  console.log('[Profile iOS] Language changed to:', lang.code);
                   await i18nInstance.changeLanguage(lang.code);
                   const stored = await setStoredLanguage(lang.code);
                   if (!stored) Alert.alert(i18n.t('common.error'), i18n.t('localization.settings.languageSaveError'));
@@ -1736,7 +1658,7 @@ export default function SettingsScreen() {
         <View style={styles.footerLinksContainer}>
           <View style={styles.footerLinksRow}>
             <TouchableOpacity onPress={() => {
-              console.log('[Profile Android] Privacy Policy link pressed');
+              console.log('[Profile iOS] Privacy Policy link pressed');
               router.push('/privacy-policy');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1747,7 +1669,7 @@ export default function SettingsScreen() {
               {' · '}
             </Text>
             <TouchableOpacity onPress={() => {
-              console.log('[Profile Android] Terms of Service link pressed');
+              console.log('[Profile iOS] Terms of Service link pressed');
               router.push('/terms-of-service');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1758,7 +1680,7 @@ export default function SettingsScreen() {
               {' · '}
             </Text>
             <TouchableOpacity onPress={() => {
-              console.log('[Profile Android] Terms of Use (EULA) link pressed');
+              console.log('[Profile iOS] Terms of Use (EULA) link pressed');
               router.push('/terms-of-use-eula');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -1769,7 +1691,7 @@ export default function SettingsScreen() {
               {' · '}
             </Text>
             <TouchableOpacity onPress={() => {
-              console.log('[Profile Android] Delete Account link pressed');
+              console.log('[Profile iOS] Delete Account link pressed');
               router.push('/delete-account');
             }}>
               <Text style={[styles.footerLink, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -2044,7 +1966,7 @@ export default function SettingsScreen() {
                 ]}
                 value={foodPrefs.disliked_foods}
                 onChangeText={(text) => {
-                  console.log('[Profile Android] Disliked foods text changed');
+                  console.log('[Profile iOS] Disliked foods text changed');
                   setFoodPrefs((prev) => ({ ...prev, disliked_foods: text }));
                 }}
                 placeholder={t('profile.dislikedFoodsPlaceholder')}
@@ -2143,7 +2065,7 @@ export default function SettingsScreen() {
                     isSelected && { backgroundColor: colors.primary + '15' },
                   ]}
                   onPress={async () => {
-                    console.log('[Profile Android] Adjustment day selected:', dayName, 'index:', index);
+                    console.log('[Profile iOS] Adjustment day selected:', dayName, 'index:', index);
                     try {
                       const { error } = await supabase
                         .from('users')
@@ -2153,7 +2075,7 @@ export default function SettingsScreen() {
                       setUser((prev: any) => ({ ...prev, adjustment_day: index }));
                       setShowAdjustmentDayModal(false);
                     } catch (err: any) {
-                      console.error('[Profile Android] Error saving adjustment_day:', err);
+                      console.error('[Profile iOS] Error saving adjustment_day:', err);
                       Alert.alert(t('common.error'), t('errors.failedToSave'));
                     }
                   }}
