@@ -30,6 +30,7 @@ create or replace function public.confirm_barcode_recovery(p_owner uuid,p_submis
 returns jsonb language plpgsql security invoker set search_path=public,pg_temp as $$
 declare s public.food_submissions; item public.food_items; saved public.food_items;
   code text:=p_payload->>'barcode'; aliases text[]; matches integer; k text;
+  user_bound boolean:=coalesce(p_payload#>>'{provenance,identity}','')='user_confirmed_barcode';
 begin
   if code !~ '^[0-9]{8,14}$' or length(coalesce(p_payload->>'name',''))=0 or length(coalesce(p_payload->>'brand',''))=0 then raise exception 'invalid_identity'; end if;
   if jsonb_typeof(p_payload->'serving_size') is distinct from 'number' or (p_payload->>'serving_size')::numeric<=0 then raise exception 'invalid_serving'; end if;
@@ -38,6 +39,11 @@ begin
   end loop;
   if p_payload->'fiber' is not null and p_payload->'fiber' <> 'null'::jsonb and
     (jsonb_typeof(p_payload->'fiber') is distinct from 'number' or (p_payload->>'fiber')::numeric<0) then raise exception 'invalid_fiber'; end if;
+  if user_bound and (
+    p_payload#>'{provenance,source_barcode}' is distinct from 'null'::jsonb or
+    p_payload#>'{provenance,exact_barcode}' is distinct from 'false'::jsonb or
+    coalesce(p_payload#>>'{provenance,kind}','') not in ('source_record','source_label')
+  ) then raise exception 'invalid_user_binding'; end if;
   aliases:=case when length(code)=13 and left(code,1)='0' then array[code,substring(code from 2)] else array[code] end;
   perform pg_advisory_xact_lock(hashtextextended('barcode-recovery:'||code,0));
   select * into s from public.food_submissions where id=p_submission and submitted_by_user_id=p_owner for update;
@@ -57,13 +63,13 @@ begin
   elsif item.id is not null then raise exception 'catalog_changed'; end if;
   if item.id is null then
     insert into public.food_items(barcode,name,brand,calories,protein,carbs,fat,fiber,serving_size,serving_unit,serving_quantity,macros_per,source,verified,confidence,ai_verified,ai_verified_source,updated_at)
-    values(code,p_payload->>'name',p_payload->>'brand',(p_payload->>'calories')::numeric,(p_payload->>'protein')::numeric,(p_payload->>'carbs')::numeric,(p_payload->>'fat')::numeric,(p_payload->>'fiber')::numeric,(p_payload->>'serving_size')::numeric,'g',p_payload->>'serving_quantity','serving','user',true,'high',true,'barcode_recovery:'||(p_payload#>>'{provenance,kind}'),now()) returning * into saved;
+    values(code,p_payload->>'name',p_payload->>'brand',(p_payload->>'calories')::numeric,(p_payload->>'protein')::numeric,(p_payload->>'carbs')::numeric,(p_payload->>'fat')::numeric,(p_payload->>'fiber')::numeric,(p_payload->>'serving_size')::numeric,'g',p_payload->>'serving_quantity','serving','user',not user_bound,case when user_bound then 'medium' else 'high' end,not user_bound,'barcode_recovery:'||(case when user_bound then 'user_confirmed_barcode:' else '' end)||(p_payload#>>'{provenance,kind}'),now()) returning * into saved;
   else
     update public.food_items set name=p_payload->>'name',brand=p_payload->>'brand',
       calories=(p_payload->>'calories')::numeric,protein=(p_payload->>'protein')::numeric,carbs=(p_payload->>'carbs')::numeric,fat=(p_payload->>'fat')::numeric,fiber=(p_payload->>'fiber')::numeric,
       serving_size=(p_payload->>'serving_size')::numeric,serving_quantity=p_payload->>'serving_quantity',serving_unit='g',macros_per='serving',
-      serving_description=null,serving_count=null,source='user',verified=true,confidence='high',ai_verified=true,
-      ai_verified_source='barcode_recovery:'||(p_payload#>>'{provenance,kind}'),last_verified_at=now(),updated_at=now()
+      serving_description=null,serving_count=null,source='user',verified=not user_bound,confidence=case when user_bound then 'medium' else 'high' end,ai_verified=not user_bound,
+      ai_verified_source='barcode_recovery:'||(case when user_bound then 'user_confirmed_barcode:' else '' end)||(p_payload#>>'{provenance,kind}'),last_verified_at=case when user_bound then null else now() end,updated_at=now()
       where id=item.id returning * into saved;
   end if;
   -- A newly confirmed serving/label invalidates ALL older auxiliary nutrient evidence.

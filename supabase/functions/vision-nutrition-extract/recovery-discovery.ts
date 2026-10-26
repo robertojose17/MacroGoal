@@ -1,6 +1,6 @@
 import { allowedEvidenceURL } from '../ai-coach/coach-source-pages.ts';
 import { safeCitationURL } from '../ai-coach/coach-sources.ts';
-import { complete, conflictsWithPhoto, distinctCandidates, norm, validBarcode } from './recovery-contract.mjs';
+import { candidateEligible, complete, conflictsWithPhoto, distinctCandidates, norm, validBarcode } from './recovery-contract.mjs';
 import { sameBarcode } from './identity.mjs';
 
 const MAX_BYTES = 1024 * 1024;
@@ -75,9 +75,10 @@ export function parseProductPage(html: string, url: string, barcode: string, inc
   for(const row of records) {
     if(![row['@type']].flat().includes('Product') || !norm(row.name))continue;
     const brand=typeof row.brand==='string'?row.brand:row.brand?.name;
-    const codes=[row.gtin,row.gtin8,row.gtin12,row.gtin13,row.gtin14].filter(validBarcode);
+    const suppliedCodes=[row.gtin,row.gtin8,row.gtin12,row.gtin13,row.gtin14].filter(v=>v!=null&&v!=='');
+    const codes=suppliedCodes.filter(validBarcode);
     const code=codes[0];
-    if(codes.some(c=>!sameBarcode(code,c)))continue;
+    const barcodeState=suppliedCodes.some(c=>!validBarcode(c))?'invalid':codes.some(c=>!sameBarcode(code,c))?'conflicting':!code?'absent':sameBarcode(code,barcode)?'matching':'conflicting';
     if(row.name.length>160||typeof brand!=='string'||brand.length>100)continue;
     const tableNutrition=!row.nutrition?manufacturerNutrition(html,url,row,records.filter(r=>[r['@type']].flat().includes('Product')).length):null;
     const n=row.nutrition||tableNutrition, serving=typeof n?.servingSize==='string'?n.servingSize:'';
@@ -90,9 +91,9 @@ export function parseProductPage(html: string, url: string, barcode: string, inc
     // JSON-LD Product is one item-bound record. No joining nutrients across records/pages.
     const exact=!!code && sameBarcode(code,barcode);
     result.push({name:row.name,brand,variant:row.name,barcode:code || null,serving,serving_g:grams?Number(grams[1].replace(',','.')):null,
-      nutrition,image_url:image,nutrition_image_url:null,exact_barcode:exact,
-      product_images:productImages,validated:exact&&!!grams&&complete(nutrition),provenance:{kind:'source_record',url,retrieved_at:new Date().toISOString(),basis:tableNutrition?'single_product_nutrition_table':'Product.nutrition',identity:'published_gtin'},
-      confidence:exact?'published_barcode':'identity_unconfirmed'});
+      nutrition,image_url:image,nutrition_image_url:null,exact_barcode:exact&&barcodeState==='matching',barcode_evidence:barcodeState,nutrition_validated:!!grams&&complete(nutrition),
+      product_images:productImages,validated:barcodeState==='matching'&&!!grams&&complete(nutrition),provenance:{kind:'source_record',url,retrieved_at:new Date().toISOString(),basis:tableNutrition?'single_product_nutrition_table':'Product.nutrition',identity:barcodeState==='absent'?'source_barcode_absent':barcodeState==='matching'?'published_gtin':'source_barcode_'+barcodeState},
+      confidence:barcodeState==='matching'?'published_barcode':'identity_unconfirmed'});
   }
   return result;
 }
@@ -127,9 +128,9 @@ export async function discoverProducts(input:{barcode:string;name:string;brand:s
       diagnostics.push({slot,outcome:parsedRows.length?'product_records':'no_bound_product_record',records:parsedRows.length});
       for(const row of parsedRows) {
         const label=labels.find((x:any)=>x?.page_url===raw&&typeof x.image_url==='string'&&row.product_images.includes(x.image_url));
-        if(label&&row.exact_barcode&&productImageURL(label.image_url,raw)) {
+        if(label&&['matching','absent'].includes(row.barcode_evidence)&&productImageURL(label.image_url,raw)) {
           // A known label must be reconciled; a failure cannot silently restore HTML eligibility.
-          row.validated=false;row.label_issue='label_not_checked';
+          row.validated=false;row.nutrition_validated=false;row.label_issue='label_not_checked';
           let reading:any={ok:false};
           if(deps.readLabel&&imageReads<1&&deadline-Date.now()>=1000) {
             imageReads++;
@@ -140,18 +141,18 @@ export async function discoverProducts(input:{barcode:string;name:string;brand:s
           if(reading.ok) {
             // Read a complete label as one source; never combine its fields with HTML nutrition.
             row.nutrition=reading.nutrition;row.serving_g=reading.servingSize;row.serving=reading.servingQuantity;
-            row.nutrition_image_url=label.image_url;row.validated=true;row.provenance.kind='source_label';row.provenance.basis='two_independent_source_label_reads';
+            row.nutrition_image_url=label.image_url;row.nutrition_validated=true;row.validated=row.exact_barcode;row.provenance.kind='source_label';row.provenance.basis='two_independent_source_label_reads';
             delete row.label_issue;
           } else if(reading.partialEvidence&&row.serving_g&&complete(row.nutrition)) {
             row.conflicts=conflictsWithPhoto(row,reading.partialEvidence);
             if(row.conflicts.length)row.label_issue='label_conflict';
           }
         }
-        if(row.serving_g&&complete(row.nutrition)){candidates.push(row);diagnostics.push({slot,outcome:row.validated?'eligible_candidate':'comparison_only_candidate'});}
+        if(row.serving_g&&complete(row.nutrition)){candidates.push(row);diagnostics.push({slot,outcome:candidateEligible(row,input.barcode)?(row.barcode_evidence==='absent'?'user_identity_confirmation_available':'eligible_candidate'):'comparison_only_candidate'});}
         else diagnostics.push({slot,outcome:'serving_or_core_macros_missing'});
       }
     }catch(error){const code=error instanceof Error?error.message:'';diagnostics.push({slot,outcome:['host_not_supported','source_redirect','source_http_error','source_content_type','source_too_large','request_deadline'].includes(code)?code:'source_read_failed'});}
   }
-  return {candidates:distinctCandidates(candidates),source_links:sourceLinks.slice(0,3),diagnostics};
+  return {candidates:distinctCandidates([...candidates.filter(c=>candidateEligible(c,input.barcode)),...candidates.filter(c=>!candidateEligible(c,input.barcode))]),source_links:sourceLinks.slice(0,3),diagnostics};
 }
 

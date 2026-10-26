@@ -47,3 +47,19 @@ test('actual catalog upsert preserves unknown fiber after defaulting nutrition e
  assert.match(upsert,/fiber: optionalFiber\(prod.nutriments\)/);assert.doesNotMatch(upsert,/fiber: safeNum/);
  assert.match(source,/update\(payload\)/);
 });
+
+test('selecting a usable option opens confirmation without camera and keeps one explicit shared-save action',async()=>{
+ const {readFileSync}=await import('node:fs');const source=readFileSync(new URL('../components/BarcodeRecoveryScreen.tsx',import.meta.url),'utf8');
+ const select=source.slice(source.indexOf('function select('),source.indexOf('async function confirm('));
+ assert.match(select,/setStage\('confirm'\)/);assert.doesNotMatch(select,/beginPhotos|requestPermission|setStage\('front'\)/);
+ assert.match(source,/None of these.*take package photos/);assert.match(source,/Confirm data and update product/);
+ assert.match(source,/approve updating the shared barcode catalog/);assert.doesNotMatch(source,/accessibilityRole="checkbox"/);
+});
+
+test('user-bound cache keeps honest verification flags and barcode lookup returns it before providers',async()=>{
+ const {readFileSync}=await import('node:fs');const sql=readFileSync(new URL('../supabase/proposed/barcode-recovery.sql',import.meta.url),'utf8');
+ assert.match(sql,/verified=not user_bound/);assert.match(sql,/ai_verified=not user_bound/);assert.match(sql,/when user_bound then 'medium' else 'high'/);assert.match(sql,/invalid_user_binding/);
+ const lookup=readFileSync(new URL('../supabase/functions/lookup-barcode/index.ts',import.meta.url),'utf8');
+ const hit=lookup.slice(lookup.indexOf('// If found in DB'),lookup.indexOf('// Step 2: Call OpenFoodFacts'));
+ assert.match(hit,/if \(dbRow\)/);assert.match(hit,/return jsonResponse\(\{ found: true, item: dbRow, source: 'supabase' \}\)/);assert.doesNotMatch(hit,/verified|ai_verified|confidence/);
+});

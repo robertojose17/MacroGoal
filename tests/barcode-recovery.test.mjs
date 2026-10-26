@@ -239,3 +239,39 @@ test('manufacturer table rejects dual bases and extra numeric nutrient columns',
  const url='https://www.violife.com/en-us/products/dairy-free-cheese-slices/just-like-smoked-provolone-slices';
  for(const changed of [html.replace('Amount per serving','Amount per serving / Per 100 g'),html.replace('6%','9 g'),html.replace('20%','2')])assert.equal(parseProductPage(changed,url,'0810934030123').length,0);
 });
+
+test('absent source GTIN is selectable but invalid, conflicting and unresolved nutrition are not',()=>{
+ const row=productSchema();delete row.gtin12;
+ const parse=r=>parseProductPage(page(r),'https://www.target.com/p/fixture',barcode)[0];
+ const absent=parse(row);assert.equal(absent.barcode_evidence,'absent');assert.equal(absent.barcode,null);
+ assert.equal(absent.exact_barcode,false);assert.equal(candidateEligible(absent,barcode),true);
+ for(const changed of [{...row,gtin12:'012345678906'},{...row,gtin12:'000000000000'},{...row,gtin12:barcode,gtin13:'0000000000000'}]) {
+  assert.equal(candidateEligible(parse(changed),barcode),false);assert.equal(parse(changed).validated,false);
+ }
+ for(const changed of [{...absent,label_issue:'label_unreadable'},{...absent,conflicts:['calories']},{...absent,nutrition:{...nutrition,protein:null}},{...absent,nutrition_validated:false}])assert.equal(candidateEligible(changed,barcode),false);
+ assert.equal(candidateEligible({...candidate(),barcode:null},barcode),false);
+});
+
+test('both source confirmation and physical-label confirmation save signed data through the same canonical RPC',async()=>{
+ const source={...candidate(),barcode:null,barcode_evidence:'absent',nutrition_validated:true,validated:false,exact_barcode:false,nutrition:{...nutrition,fiber:null}};
+ const physical={...candidate(),nutrition:{...nutrition,fiber:null},provenance:{kind:'physical_label',identity:'user_confirms_scanned_package'}};
+ for(const c of [source,physical,candidate()]) {
+  const proposal=await sealDraft({version:1,kind:'candidate',owner:'owner',expires:Date.now()+60000,submission:'submission',binding:{barcode,id:'row',updated_at:'revision'},candidate:c,revision:1},'offline');
+  const signed=await openDraft(proposal,'offline','owner');assert.equal(signed.candidate.barcode,c.barcode);
+  let savedPayload;
+  const result=await handleRecovery({action:'recovery_confirm',proposal,barcode:'000000000000',calories:999,confirmations:{identity:true,serving:true,nutrition:true,shared:true}},
+   {enabled:true,userId:'owner',secret:'offline',supabase:{async rpc(name,args){assert.equal(name,'confirm_barcode_recovery');savedPayload=args.p_payload;return {data:{id:'row',...savedPayload}};}}});
+  assert.equal(result.status,'approved');assert.equal(savedPayload.calories,100);assert.equal(savedPayload.expected_id,'row');assert.equal(savedPayload.revision,1);
+  assert.deepEqual(lookupAliases(barcode),lookupAliases(savedPayload.barcode));
+  if(c===source){assert.equal(savedPayload.provenance.identity,'user_confirmed_barcode');assert.equal(savedPayload.provenance.source_barcode,null);assert.equal(savedPayload.provenance.exact_barcode,false);assert.equal(savedPayload.fiber,null);}
+  if(c===physical)assert.equal(savedPayload.provenance.kind,'physical_label');
+ }
+});
+
+test('manufacturer source without GTIN offers explicit identity confirmation with unknown fiber',async()=>{
+ const {readFileSync}=await import('node:fs');const html=readFileSync(new URL('./fixtures/violife-us-provolone.html',import.meta.url),'utf8');
+ const c=parseProductPage(html,'https://www.violife.com/en-us/products/dairy-free-cheese-slices/just-like-smoked-provolone-slices','0810934030123')[0];
+ assert.equal(candidateEligible(c,'0810934030123'),true);
+ const payload=confirmationPayload(c,{barcode:'0810934030123'},{identity:true,serving:true,nutrition:true,shared:true});
+ assert.equal(payload.fiber,null);assert.equal(payload.provenance.source_barcode,null);assert.equal(payload.provenance.exact_barcode,false);
+});

@@ -74,7 +74,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
   const candidates=distinctCandidates(found.candidates).map((candidate:any)=>{
     const conflict=conflictsWithPhoto(candidate,photo||partialEvidence);
     // Once physical label evidence exists it wins; online data cannot overwrite it.
-    return {...candidate,conflicts:[...new Set([...(candidate.conflicts||[]),...conflict])],validated:candidate.validated&&!conflict.length};
+    return {...candidate,conflicts:[...new Set([...(candidate.conflicts||[]),...conflict])],validated:candidate.validated&&!conflict.length,nutrition_validated:candidate.nutrition_validated&&!conflict.length};
   });
   const signCandidate=async(candidate:any)=>{
     const eligible=candidateEligible(candidate,session.binding.barcode);
@@ -82,7 +82,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
       proposal:eligible?await sealDraft({version:1,kind:'candidate',owner:userId,expires:session.expires,
         submission:session.submission,binding:session.binding,candidate,revision},deps.secret):null};
   };
-  console.log('[BarcodeRecovery] outcome', JSON.stringify({submission:session.submission,revision,phase,candidate_count:candidates.length,photo_valid:!!photo,issues:photoIssues.map(({field,reason})=>({field,reason})),search_code:searchCode||null,diagnostics:found.diagnostics||[]}));
+  console.log('[BarcodeRecovery] outcome', JSON.stringify({submission:session.submission,revision,phase,candidate_count:candidates.length,usable_candidate_count:candidates.filter(c=>candidateEligible(c,session.binding.barcode)).length,photo_valid:!!photo,issues:photoIssues.map(({field,reason})=>({field,reason})),search_code:searchCode||null,diagnostics:found.diagnostics||[]}));
   return {status:'review',expires_at:session.expires,session:await sealDraft(session,deps.secret),
     candidates:await Promise.all(candidates.map(signCandidate)),photo:photo?await signCandidate(photo):null,
     issues:photoIssues,source_links:found.source_links,search_code:searchCode};
