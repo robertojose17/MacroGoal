@@ -493,47 +493,8 @@ async function android_requestPermission(): Promise<PermissionStatus> {
  * Request authorization for ALL health metrics on Android at once.
  */
 async function android_requestAllPermissions(): Promise<PermissionStatus> {
-  try {
-    const { initialize, requestPermission, getGrantedPermissions } =
-      await import('react-native-health-connect');
-
-    const initialized = await initialize();
-    if (!initialized) {
-      console.log('[healthKit] Android Health Connect not available');
-      return 'denied';
-    }
-
-    const granted = await getGrantedPermissions();
-    const allTypes = ['Steps', 'ActiveCaloriesBurned', 'Distance', 'FloorsClimbed'];
-    const allGranted = allTypes.every((type) =>
-      granted.some(
-        (p: { recordType: string; accessType: string }) =>
-          p.recordType === type && p.accessType === 'read'
-      )
-    );
-    if (allGranted) {
-      console.log('[healthKit] Android all permissions already granted');
-      return 'granted';
-    }
-
-    console.log('[healthKit] Android requesting all Health Connect permissions');
-    const result = await requestPermission([
-      { accessType: 'read', recordType: 'Steps' },
-      { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
-      { accessType: 'read', recordType: 'Distance' },
-      { accessType: 'read', recordType: 'FloorsClimbed' },
-    ]);
-    console.log('[healthKit] Android requestAllPermissions result:', result);
-
-    const stepsGranted = result.some(
-      (p: { recordType: string; accessType: string }) =>
-        p.recordType === 'Steps' && p.accessType === 'read'
-    );
-    return stepsGranted ? 'granted' : 'denied';
-  } catch (e) {
-    console.warn('[healthKit] Android requestAllPermissions error:', e);
-    return 'not_determined';
-  }
+  // Android currently exposes Steps only. Reuse its availability and permission UX.
+  return android_requestPermission();
 }
 
 async function android_getStepsForDate(date: Date): Promise<StepsResult> {
@@ -546,141 +507,18 @@ async function android_getStepsForDate(date: Date): Promise<StepsResult> {
   }
 }
 
-async function android_getActiveCaloriesForDate(date: Date): Promise<MetricResult> {
-  try {
-    const { initialize, getGrantedPermissions, readRecords } = await import(
-      'react-native-health-connect'
-    );
-
-    const initialized = await initialize();
-    if (!initialized) return { available: false, permission: 'denied', value: null };
-
-    const granted = await getGrantedPermissions();
-    const hasPerm = granted.some(
-      (p: { recordType: string; accessType: string }) =>
-        p.recordType === 'ActiveCaloriesBurned' && p.accessType === 'read'
-    );
-    if (!hasPerm) {
-      return { available: true, permission: 'not_determined', value: null };
-    }
-
-    const start = startOfDay(date);
-    const end = endOfDay(date);
-    console.log('[healthKit] Android querying active calories for', start.toISOString(), '→', end.toISOString());
-
-    const result = await readRecords('ActiveCaloriesBurned', {
-      timeRangeFilter: {
-        operator: 'between',
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-      },
-    });
-
-    const records = result?.records ?? [];
-    const total = records.reduce(
-      (sum: number, r: { energy?: { inKilocalories?: number } }) =>
-        sum + (r.energy?.inKilocalories ?? 0),
-      0
-    );
-    const value = sanitizeMetric(total);
-    console.log('[healthKit] Android active calories:', value, '(', records.length, 'records)');
-    return { available: true, permission: 'granted', value };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[healthKit] Android getActiveCaloriesForDate error:', msg);
-    return { available: true, permission: 'not_determined', value: null, error: msg };
-  }
+// These metrics have no reachable Android UI. Do not query previously granted
+// data or silently substitute zero; iOS readers remain unchanged.
+async function android_getActiveCaloriesForDate(_date: Date): Promise<MetricResult> {
+  return { available: false, permission: 'denied', value: null };
 }
 
-async function android_getDistanceMilesForDate(date: Date): Promise<MetricResult> {
-  try {
-    const { initialize, getGrantedPermissions, readRecords } = await import(
-      'react-native-health-connect'
-    );
-
-    const initialized = await initialize();
-    if (!initialized) return { available: false, permission: 'denied', value: null };
-
-    const granted = await getGrantedPermissions();
-    const hasPerm = granted.some(
-      (p: { recordType: string; accessType: string }) =>
-        p.recordType === 'Distance' && p.accessType === 'read'
-    );
-    if (!hasPerm) {
-      return { available: true, permission: 'not_determined', value: null };
-    }
-
-    const start = startOfDay(date);
-    const end = endOfDay(date);
-    console.log('[healthKit] Android querying distance for', start.toISOString(), '→', end.toISOString());
-
-    const result = await readRecords('Distance', {
-      timeRangeFilter: {
-        operator: 'between',
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-      },
-    });
-
-    const records = result?.records ?? [];
-    const totalMeters = records.reduce(
-      (sum: number, r: { distance?: { inMeters?: number } }) =>
-        sum + (r.distance?.inMeters ?? 0),
-      0
-    );
-    const miles = sanitizeMetric(totalMeters / METERS_PER_MILE);
-    console.log('[healthKit] Android distance:', miles, 'miles (', totalMeters, 'm,', records.length, 'records)');
-    return { available: true, permission: 'granted', value: miles };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[healthKit] Android getDistanceMilesForDate error:', msg);
-    return { available: true, permission: 'not_determined', value: null, error: msg };
-  }
+async function android_getDistanceMilesForDate(_date: Date): Promise<MetricResult> {
+  return { available: false, permission: 'denied', value: null };
 }
 
-async function android_getFlightsClimbedForDate(date: Date): Promise<MetricResult> {
-  try {
-    const { initialize, getGrantedPermissions, readRecords } = await import(
-      'react-native-health-connect'
-    );
-
-    const initialized = await initialize();
-    if (!initialized) return { available: false, permission: 'denied', value: null };
-
-    const granted = await getGrantedPermissions();
-    const hasPerm = granted.some(
-      (p: { recordType: string; accessType: string }) =>
-        p.recordType === 'FloorsClimbed' && p.accessType === 'read'
-    );
-    if (!hasPerm) {
-      return { available: true, permission: 'not_determined', value: null };
-    }
-
-    const start = startOfDay(date);
-    const end = endOfDay(date);
-    console.log('[healthKit] Android querying floors climbed for', start.toISOString(), '→', end.toISOString());
-
-    const result = await readRecords('FloorsClimbed', {
-      timeRangeFilter: {
-        operator: 'between',
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-      },
-    });
-
-    const records = result?.records ?? [];
-    const total = records.reduce(
-      (sum: number, r: { floors?: number }) => sum + (r.floors ?? 0),
-      0
-    );
-    const value = sanitizeMetric(total);
-    console.log('[healthKit] Android floors climbed:', value, '(', records.length, 'records)');
-    return { available: true, permission: 'granted', value };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[healthKit] Android getFlightsClimbedForDate error:', msg);
-    return { available: true, permission: 'not_determined', value: null, error: msg };
-  }
+async function android_getFlightsClimbedForDate(_date: Date): Promise<MetricResult> {
+  return { available: false, permission: 'denied', value: null };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

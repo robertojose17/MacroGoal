@@ -4,14 +4,14 @@ import plugin from '../plugins/withBlockMediaPermissions.js';
 
 const node = (name, extra = {}) => ({ $: { 'android:name': name, ...extra } });
 const blockedPermissions = [
+  'health.READ_ACTIVE_CALORIES_BURNED', 'health.READ_DISTANCE', 'health.READ_FLOORS_CLIMBED',
   'READ_MEDIA_IMAGES', 'READ_MEDIA_VIDEO', 'READ_MEDIA_AUDIO',
   'FOREGROUND_SERVICE', 'FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'FOREGROUND_SERVICE_MICROPHONE',
 ].map(name => `android.permission.${name}`);
 const blockedServices = ['AudioControlsService', 'AudioRecordingService']
   .map(name => `expo.modules.audio.service.${name}`);
 const allowed = ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS', 'CAMERA', 'ACTIVITY_RECOGNITION',
-  'health.READ_STEPS', 'health.READ_DISTANCE', 'health.READ_FLOORS_CLIMBED',
-  'health.READ_ACTIVE_CALORIES_BURNED'].map(name => `android.permission.${name}`);
+  'health.READ_STEPS'].map(name => `android.permission.${name}`);
 const fixture = () => ({ manifest: {
   $: { 'xmlns:android': 'http://schemas.android.com/apk/res/android' },
   'uses-permission': [...allowed.map(name => node(name)),

@@ -3,6 +3,10 @@ const { withAndroidManifest, AndroidConfig } = require('@expo/config-plugins');
 // These are unused: the app uses the system photo picker and foreground-only
 // voice recording. RECORD_AUDIO and MODIFY_AUDIO_SETTINGS remain available.
 const BLOCKED_PERMISSIONS = [
+  // Health Connect exposes Steps only on Android; keep unused library scopes out.
+  'android.permission.health.READ_ACTIVE_CALORIES_BURNED',
+  'android.permission.health.READ_DISTANCE',
+  'android.permission.health.READ_FLOORS_CLIMBED',
   'android.permission.READ_MEDIA_IMAGES',
   'android.permission.READ_MEDIA_VIDEO',
   'android.permission.READ_MEDIA_AUDIO',
