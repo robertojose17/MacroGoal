@@ -4158,20 +4158,21 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
   // ── Post created callback — optimistic prepend + delayed server refresh ──
   const handlePosted = useCallback((newPost?: CommunityPost) => {
+    const postedSection = newPost?.section ?? activeTab;
     console.log('[Community] Post created callback, optimistic prepend:', newPost?.id, 'tab:', activeTab);
     if (newPost) {
-      if (activeTab === 'feed') {
+      if (postedSection === 'feed') {
         setFeedPosts(prev => [newPost, ...prev]);
-      } else if (activeTab === 'club') {
+      } else if (postedSection === 'club') {
         setClubPosts(prev => [newPost, ...prev]);
       }
     }
     // Refresh from server after a short delay to get the real post with correct data
     setTimeout(() => {
       console.log('[Community] Delayed server refresh after post, tab:', activeTab);
-      if (activeTab === 'feed') {
+      if (postedSection === 'feed') {
         fetchFeedPosts(currentUserId);
-      } else if (activeTab === 'club') {
+      } else if (postedSection === 'club') {
         fetchClubPosts(currentUserId);
       }
     }, 1500);
