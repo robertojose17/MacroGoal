@@ -1,3 +1,4 @@
+import { formatCommunityRelativeTime } from '@/utils/communityRelativeTime';
 import {progressMediaCopy} from '@/utils/progressMediaCopy';
 import {PrivateProgressCapture} from '@/components/PrivateProgressCapture';
 import {publishProgress,type PublicationCheckpoint,type CapturedPhoto} from '@/utils/publication';
@@ -255,14 +256,7 @@ function formatPercent(value: number): string {
 }
 
 function getRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = Math.floor((now - then) / 1000);
-  const formatter = new Intl.RelativeTimeFormat(getAppLocale(), { numeric: 'auto', style: 'short' });
-  if (diff < 60) return formatter.format(0, 'second');
-  if (diff < 3600) return formatter.format(-Math.floor(diff / 60), 'minute');
-  if (diff < 86400) return formatter.format(-Math.floor(diff / 3600), 'hour');
-  return formatter.format(-Math.floor(diff / 86400), 'day');
+  return formatCommunityRelativeTime(dateStr, getAppLocale());
 }
 
 function getInitials(name: string | null, username: string): string {
