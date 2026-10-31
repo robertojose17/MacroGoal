@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput, ActivityIndicator, Animated } from 'react-native';
@@ -660,7 +661,7 @@ export default function AddFoodScreen() {
     console.log('[AddFood] AI Meal Estimator button pressed');
     if (!isPremium) {
       console.log('[AddFood] User is not premium, redirecting to subscription');
-      router.push('/subscription');
+      router.push(premiumEntry('ai_meal_estimator'));
       return;
     }
     console.log('[AddFood] Navigating to chatbot for AI Meal Estimator');
