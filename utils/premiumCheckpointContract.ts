@@ -13,18 +13,24 @@ export type DisplayedOffer = Readonly<{
   offeringId: string; packageId: string; productId: string;
   priceString: string; currencyCode: string; subscriptionPeriod: string | null;
 }>;
-export type ClientPurchaseResult =
-  'success_provisional' | 'canceled' | 'pending' | 'already_owned' | 'error';
+export type Attribution = 'consistent' | 'unknown' | 'sdk_actor_mismatch';
+export type ClientPurchaseResult = 'sdk_returned_entitlement' | 'sdk_returned_no_entitlement' |
+  'canceled' | 'pending' | 'already_owned' | 'error';
+export type TransactionCorrelation = Readonly<{
+  transactionId: string; productId: string;
+  store: 'APP_STORE' | 'PLAY_STORE' | 'AMAZON' | 'STRIPE' | 'MAC_APP_STORE' | 'RC_BILLING';
+  environment: 'PRODUCTION' | 'SANDBOX';
+}>;
 export type CheckpointDetail =
   | { name: 'inline_impression' | 'entrypoint_clicked' }
   | { name: 'offer_displayed'; offer: DisplayedOffer }
   | { name: 'purchase_attempt'; attemptId: string; offer: DisplayedOffer;
-      trigger: 'manual' | 'auto_start'; attribution: 'consistent' | 'unknown' }
-  | { name: 'purchase_result'; attemptId: string; result: ClientPurchaseResult;
-      transactionId?: string; store?: string; environment?: string; productId?: string }
+      trigger: 'manual' | 'auto_start'; attribution: Attribution }
+  | { name: 'purchase_result'; attemptId: string; outcome: ClientPurchaseResult;
+      attribution: Attribution; correlation?: TransactionCorrelation }
   | { name: 'restore_attempt'; attemptId: string }
-  | { name: 'restore_result'; attemptId: string;
-      result: 'restored' | 'no_entitlement' | 'canceled' | 'pending' | 'error' };
+  | { name: 'restore_result'; attemptId: string; attribution: Attribution;
+      outcome: 'restored_entitlement' | 'no_entitlement' | 'canceled' | 'pending' | 'error' };
 export type PremiumCheckpoint = Readonly<{
   namespace: 'premium_checkpoint'; schema_version: 1; eventId: string;
   occurredAt: string; flow: PremiumFlow; platform: 'ios' | 'android' | 'web';
