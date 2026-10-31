@@ -52,7 +52,11 @@ export function displayedPackage(pkg: any, offeringId: unknown): DisplayedOffer 
 export async function purchaseAttribution(sdk: any, actor: ActorLease | null): Promise<Attribution> {
   if (!actorStillCurrent(actor)) return 'unknown';
   try {
-    const sdkActor = await sdk.getAppUserID();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const sdkActor = await Promise.race([
+      Promise.resolve().then(() => sdk.getAppUserID()),
+      new Promise<null>(resolve => { timeout = setTimeout(() => resolve(null), 500); }),
+    ]).finally(() => { if (timeout) clearTimeout(timeout); });
     if (!actorStillCurrent(actor)) return 'unknown';
     return typeof sdkActor === 'string' ? sdkActor === actor!.userId ? 'consistent' : 'sdk_actor_mismatch' : 'unknown';
   } catch { return 'unknown'; }
