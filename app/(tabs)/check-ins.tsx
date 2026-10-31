@@ -3211,7 +3211,10 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
   const [memberListLoading, setMemberListLoading] = useState(false);
 
   const likeCoordinator = useRef(createCommunityLikeCoordinator()).current;
-  likeCoordinator.setScope(JSON.stringify([currentUserId, communityPrivacyState.viewKey, isPremium]));
+  likeCoordinator.setScope(
+    JSON.stringify([currentUserId, communityPrivacyState.viewKey, isPremium]),
+    JSON.stringify([currentUserId, communityPrivacyState.viewKey]),
+  );
   const likeActorRef = useRef(currentUserId);
   likeActorRef.current = currentUserId;
   const likePostsRef = useRef({ feed: feedPosts, club: clubPosts });
