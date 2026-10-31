@@ -59,7 +59,7 @@ export function checkpointBody(value: unknown): string | null {
   } catch { return null; }
 }
 
-export type ActorLease = Readonly<{ userId: string; generation: number; accessToken: string }>;
+export type ActorLease = Readonly<{ userId: string; sessionId: string; generation: number; credentials: { accessToken: string } }>;
 export type CheckpointTransport = (body: string, lease: ActorLease, signal: AbortSignal) => Promise<'ack' | 'retry' | 'reject'>;
 export const CHECKPOINT_ENDPOINT = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/premium-checkpoint';
 /** Production injection remains null until this exact endpoint has been reviewed and verified. */
@@ -74,7 +74,7 @@ export function pinnedCheckpointTransport(
     try {
       if (signal.aborted || current() !== lease || !(await verify(lease)) || current() !== lease || signal.aborted) return 'reject';
       const response = await request(endpoint, { method: 'POST', redirect: 'error', credentials: 'omit',
-        headers: { Authorization: 'Bearer ' + lease.accessToken, 'Content-Type': 'application/json' }, body, signal });
+        headers: { Authorization: 'Bearer ' + lease.credentials.accessToken, 'Content-Type': 'application/json' }, body, signal });
       if (signal.aborted || current() !== lease) return 'reject';
       if (response.status === 408 || response.status === 429 || response.status >= 500) return 'retry';
       if (response.status !== 200 && response.status !== 202) return 'reject';
