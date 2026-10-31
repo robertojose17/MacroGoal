@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import {coachMealQuickReplies,coachMealQuestionQuickReplies} from '@/utils/coachMealQuickReplies';
 import {mealEvidenceFromOption,coachRecipeTimeLabel} from '@/utils/coachMealReviewAdapter';
 import {emptyConstraints,parseConstraints,mergeConstraints,type DietaryConstraints} from '@/utils/coachDietaryConstraints';
@@ -114,7 +115,7 @@ export default function CoachConversationActions(props:Props){
   {!props.hasConversation&&!h&&!result&&<><Text style={s.body}>{say('Hi, I’m your Coach. Tell me what you feel like eating, or what you’d like help with today.','Hola, soy tu Coach. Cuéntame qué te apetece comer o en qué quieres ayuda hoy.')}</Text>{props.isPremium&&!props.premiumLoading&&!props.premiumError&&<View style={s.row}>{action(say('Choose something to eat','Elegir qué comer'),()=>props.onPrompt?.(say('Help me choose something to eat.','Ayúdame a elegir qué comer.')))}{action(say('Review my day','Revisar mi día'),()=>props.onPrompt?.(say('Help me review my day.','Ayúdame a revisar mi día.')))}</View>}</>}
   {props.premiumLoading&&<Text style={s.muted}>{say('Checking access…','Verificando acceso…')}</Text>}
   {props.premiumError&&<Text style={s.muted}>{say('I couldn’t verify access. Try again when connected.','No pude verificar el acceso. Inténtalo cuando tengas conexión.')}</Text>}
-  {!props.isPremium&&!props.premiumLoading&&!props.premiumError&&<><Text style={s.body}>{say('With Premium, we can talk through your choices, compare sourced meals and review portions before you log.','Con Premium podemos conversar sobre tus opciones, comparar comidas con fuentes y revisar porciones antes de registrarlas.')}</Text>{action(say('See Premium','Ver Premium'),()=>router.push('/subscription'))}</>}
+  {!props.isPremium&&!props.premiumLoading&&!props.premiumError&&<><Text style={s.body}>{say('With Premium, we can talk through your choices, compare sourced meals and review portions before you log.','Con Premium podemos conversar sobre tus opciones, comparar comidas con fuentes y revisar porciones antes de registrarlas.')}</Text>{action(say('See Premium','Ver Premium'),()=>router.push(premiumEntry('coach_conversation')))}</>}
   {pending&&result?.kind!=='retry_available'&&props.showRecovery!==false&&action(say('Retry search','Reintentar b\u00fasqueda'),()=>{void run('recover');},gate!=='ready')}
   {result?.kind==='retry_available'&&<View style={s.details}>
    <Text style={s.body}>{say('This search stopped. Review the same details before starting a new search.','Esta b\u00fasqueda se detuvo. Revisa los mismos datos antes de iniciar otra.')}</Text>
