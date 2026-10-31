@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { newPremiumFlow } from '@/utils/premiumCheckpointContract';
 import type { PremiumSource, PremiumFlow } from '@/utils/premiumCheckpointContract';
 import { usePremiumCheckpointVisibility } from '@/hooks/usePremiumCheckpointVisibility';
@@ -29,7 +30,14 @@ export function PremiumCheckpointInline({ source, children, enabled = true }: {
   enabled?: boolean;
 }) {
   const [flow, setFlow] = useState(() => newPremiumFlow(source));
+  const [consumed, setConsumed] = useState(false);
+  const focused = useIsFocused();
+  const wasFocused = useRef(focused);
+  useEffect(() => {
+    if (focused && !wasFocused.current && consumed) { setFlow(newPremiumFlow(source)); setConsumed(false); }
+    wasFocused.current = focused;
+  }, [focused, consumed, source]);
   const child = typeof children === 'function' ? children(flow) : children;
-  return <InlineObservation key={flow.flowId} flow={flow} enabled={enabled}
-    consumed={() => setFlow(newPremiumFlow(source))}>{child}</InlineObservation>;
+  return <InlineObservation key={flow.flowId} flow={flow} enabled={enabled && !consumed}
+    consumed={() => setConsumed(true)}>{child}</InlineObservation>;
 }
