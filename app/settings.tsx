@@ -1,3 +1,4 @@
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { BlockedAccountsSettingsEntry } from '@/features/blockedAccounts/BlockedAccountsSettingsEntry';
@@ -968,7 +969,7 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -1961,7 +1962,7 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
 
       {/* ── Edit Modal ──────────────────────────────────────────────────────── */}
       <Modal
@@ -2159,7 +2160,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.foodPrefsScroll}>
+            <PremiumCheckpointScrollView showsVerticalScrollIndicator={false} style={styles.foodPrefsScroll}>
               {/* Dietary Restrictions */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
                 {t('profile.dietaryRestrictions')}
@@ -2260,7 +2261,7 @@ export default function SettingsScreen() {
                   );
                 })}
               </View>
-            </ScrollView>
+            </PremiumCheckpointScrollView>
 
             {/* Save Button */}
             <TouchableOpacity
