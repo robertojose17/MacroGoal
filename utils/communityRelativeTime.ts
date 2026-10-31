@@ -12,3 +12,16 @@ export function formatCommunityRelativeTime(dateStr: string, _locale: string, no
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}H`;
   return `${Math.floor(seconds / 86400)}D`;
 }
+/** Expanded text for screen readers; the visible timestamp stays compact. */
+export function communityRelativeTimeAccessibilityLabel(dateStr: string, locale: string, now = Date.now()): string {
+  const compact = formatCommunityRelativeTime(dateStr, locale, now);
+  if (!compact) return '';
+  const amount = Number(compact.slice(0, -1));
+  const unit = compact.slice(-1);
+  const spanish = locale.startsWith('es');
+  const labels: Record<string, string[]> = spanish
+    ? { S: ['segundo', 'segundos'], M: ['minuto', 'minutos'], H: ['hora', 'horas'], D: ['día', 'días'] }
+    : { S: ['second', 'seconds'], M: ['minute', 'minutes'], H: ['hour', 'hours'], D: ['day', 'days'] };
+  const label = labels[unit][amount === 1 ? 0 : 1];
+  return spanish ? `hace ${amount} ${label}` : `${amount} ${label} ago`;
+}
