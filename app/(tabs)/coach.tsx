@@ -991,7 +991,7 @@ export default function CoachScreen() {
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
   const locale = getAppLocale();
-  const scrollViewRef = useRef<PremiumCheckpointScrollView>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefillSentRef = useRef(false);
