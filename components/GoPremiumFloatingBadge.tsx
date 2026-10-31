@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
@@ -21,7 +22,7 @@ export default function GoPremiumFloatingBadge() {
 
   const handlePress = () => {
     console.log('[GoPremiumBadge] Tapped — navigating to /subscription');
-    router.push('/subscription');
+    router.push(premiumEntry('floating_badge'));
   };
 
   // Coach owns an inline preview/paywall action; a global floating badge covers
