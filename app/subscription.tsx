@@ -32,7 +32,7 @@ import { validateAndAttributeCode } from '@/utils/affiliateApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 import { capturePremiumFlow, newCheckpointId } from '@/utils/premiumCheckpointContract';
 import type { Attribution } from '@/utils/premiumCheckpointContract';
-import { checkpoint, checkpointActor, displayedPackage, purchaseAttribution, observedPurchaseError, actorStillCurrent } from '@/utils/premiumCheckpoints';
+import { checkpoint, checkpointActor, displayedPackage, purchaseAttribution, observedPurchaseError, actorStillCurrent, transactionCandidate } from '@/utils/premiumCheckpoints';
 import { usePremiumCheckpointVisibility } from '@/hooks/usePremiumCheckpointVisibility';
 
 function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
@@ -410,7 +410,8 @@ export default function SubscriptionScreen() {
       const offer = displayedPackage(pkg, offerings?.identifier);
       if (offer) checkpoint(checkpointFlow, { name: 'purchase_attempt', attemptId, offer, trigger, attribution }, actor);
       sdkInvoked = true;
-      const { customerInfo, productIdentifier } = await Purchases.purchasePackage(pkg);
+      const purchaseResult = await Purchases.purchasePackage(pkg);
+      const { customerInfo, productIdentifier } = purchaseResult;
 
       console.log('[Subscription] ✅ Purchase successful');
       console.log('[Subscription] Product:', productIdentifier);
@@ -425,7 +426,8 @@ export default function SubscriptionScreen() {
       const resultAttribution = actorStillCurrent(actor) ? await purchaseAttribution(Purchases, actor) : 'unknown';
       checkpoint(checkpointFlow, { name: 'purchase_result', attemptId,
         attribution: attribution === 'consistent' ? resultAttribution : attribution,
-        outcome: hasActiveEntitlement ? 'sdk_returned_entitlement' : 'sdk_returned_no_entitlement' }, actor);
+        outcome: hasActiveEntitlement ? 'sdk_returned_entitlement' : 'sdk_returned_no_entitlement',
+        ...(transactionCandidate(purchaseResult) ? { correlation: transactionCandidate(purchaseResult) } : {}) }, actor);
       resultRecorded = true;
       setIsPremium(hasActiveEntitlement);
       setCustomerInfo(customerInfo);
