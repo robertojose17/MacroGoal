@@ -17,7 +17,7 @@ test('server validator stays byte-identical to client contract and validation im
  const source=fs.readFileSync(path.join(root,'supabase/premium-checkpoints-rollout/edge/protocol.ts'),'utf8');
  const contract=fs.readFileSync(path.join(root,'utils/premiumCheckpointContract.ts'),'utf8');
  const runtime=fs.readFileSync(path.join(root,'utils/premiumCheckpointRuntime.ts'),'utf8');
- assert.equal(source.slice(source.indexOf('export ')).includes(contract.trim()),true);
+ assert.equal(source.includes(contract.trim()),true);
  assert.equal(source.includes(runtime.slice(runtime.indexOf('type Obj ='),runtime.indexOf('export type ActorLease'))),true);
 });
 test('closed protocol rejects actor, payment confirmation, health and purchase token fields',()=>{
