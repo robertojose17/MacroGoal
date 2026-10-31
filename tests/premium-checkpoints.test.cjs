@@ -49,17 +49,43 @@ function reconciliationFixture(){
  const provider={user_id:user,created_at:new Date(time+1000).toISOString(),event_data:null,raw_event:{event:{id:'vendor1',app_user_id:user,transaction_id:'transaction1',product_id:'product1',store:'APP_STORE',environment:'PRODUCTION',currency:'USD',type:'INITIAL_PURCHASE',period_type:'NORMAL',purchased_at_ms:time,event_timestamp_ms:time,price_in_purchased_currency:9.99}}};
  const attempt={user_id:user,received_at:new Date(time-1000).toISOString(),payload:{...event(),detail:{name:'purchase_attempt',attemptId:'attempt_1',attribution:'consistent',offer:{productId:'product1'}}}};
  const result={user_id:user,received_at:new Date(time+1000).toISOString(),payload:{...event(),eventId:'event_0002',detail:{name:'purchase_result',attemptId:'attempt_1',attribution:'consistent',outcome:'sdk_returned_entitlement',correlation:{transactionId:'transaction1',productId:'product1'}}}};
- return {provider,attempt,result,start:'2026-10-31T00:00:00.000Z'};
+ return {provider,attempt,result,verified:new Set([user]),start:'2026-10-31T00:00:00.000Z'};
 }
 test('exact verified transaction matches irrespective of arrival order and duplicate provider rows',()=>{
- const f=reconciliationFixture();const r=reconcileObservedPayments([f.provider,f.provider],[f.result,f.attempt],f.start);
+ const f=reconciliationFixture();const r=reconcileObservedPayments([f.provider,f.provider],[f.result,f.attempt],f.start,f.verified);
  assert.equal(r.payments.length,1);assert.equal(r.payments[0].status,'matched');assert.equal(r.payments[0].firstPaidStatus,'unknown');
 });
 test('client dimensions cannot hide multiple trusted transaction keys',()=>{
  const f=reconciliationFixture(),other=JSON.parse(JSON.stringify(f.provider));other.raw_event.event.id='vendor2';other.raw_event.event.environment='SANDBOX';f.result.payload.detail.correlation.environment='PRODUCTION';
- const r=reconcileObservedPayments([f.provider,other],[f.attempt,f.result],f.start);assert.equal(r.payments.every(p=>p.status==='ambiguous'),true);
+ const r=reconcileObservedPayments([f.provider,other],[f.attempt,f.result],f.start,f.verified);assert.equal(r.payments.every(p=>p.status==='ambiguous'),true);
 });
 test('missing attempt and replayed historical purchase remain unattributed',()=>{
- const f=reconciliationFixture();assert.equal(reconcileObservedPayments([f.provider],[f.result],f.start).payments[0].status,'unattributed');
- f.attempt.received_at='2026-10-31T13:00:00.000Z';assert.equal(reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start).payments[0].status,'unattributed');
+ const f=reconciliationFixture();assert.equal(reconcileObservedPayments([f.provider],[f.result],f.start,f.verified).payments[0].status,'unattributed');
+ f.attempt.received_at='2026-10-31T13:00:00.000Z';assert.equal(reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start,f.verified).payments[0].status,'unattributed');
+});
+
+test('trusted raw provider UUID resolves against server Auth snapshot when normalized user_id is null',()=>{
+ const f=reconciliationFixture();f.provider.user_id=null;
+ const r=reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start,f.verified);
+ assert.equal(r.observedPaymentCount,1);assert.equal(r.matchedPaymentCount,1);assert.equal(r.unmappedPaymentCount,0);
+ const noMapping=reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start,new Set());
+ assert.equal(noMapping.matchedPaymentCount,0);assert.equal(noMapping.unmappedPaymentCount,1);
+});
+test('financial conflicts are quarantined with no arbitrary payment amount or product',()=>{
+ const f=reconciliationFixture(),other=JSON.parse(JSON.stringify(f.provider));other.raw_event.event.id='vendor2';other.raw_event.event.price_in_purchased_currency=19.99;
+ const r=reconcileObservedPayments([f.provider,other],[f.attempt,f.result],f.start,f.verified);
+ assert.equal(r.payments.length,0);assert.equal(r.quarantined.length,1);
+ assert.equal('price' in r.quarantined[0],false);assert.equal('productId' in r.quarantined[0],false);
+});
+test('same vendor ID with zero or trial variant conflicts before qualification',()=>{
+ for(const change of [e=>e.price_in_purchased_currency=0,e=>e.period_type='TRIAL']){
+  const f=reconciliationFixture(),other=JSON.parse(JSON.stringify(f.provider));change(other.raw_event.event);
+  const r=reconcileObservedPayments([f.provider,other],[f.attempt,f.result],f.start,f.verified);
+  assert.equal(r.payments.length,0);assert.equal(r.conflictingVendorIds,1);assert.equal(r.quarantined.length,1);
+ }
+});
+test('attempt received after result cannot attribute an otherwise valid financial fact',()=>{
+ const f=reconciliationFixture();f.attempt.received_at=new Date(Date.parse(f.result.received_at)+60000).toISOString();
+ const r=reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start,f.verified);
+ assert.equal(r.observedPaymentCount,1);assert.equal(r.matchedPaymentCount,0);assert.equal(r.payments[0].status,'unattributed');assert.equal(r.quarantined.length,0);
 });
