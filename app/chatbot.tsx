@@ -158,7 +158,7 @@ export default function ChatbotScreen() {
     t('chatbot.lowCalorie'),
     t('chatbot.highProtein'),
   ];
-  const scrollViewRef = useRef<PremiumCheckpointScrollView>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
