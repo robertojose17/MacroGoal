@@ -1,3 +1,4 @@
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -118,7 +119,7 @@ export default function CoachMealConversation(props:Props){
    <View style={s.row}>{action(say('Choose food','Elegir comida'),choose,busy)}{action(say('Open diary','Abrir diario'),()=>router.push('/(tabs)/(home)'))}</View>
   </>:stage==='mode'?<>
    <Text style={s.body}>{say('Are you cooking, keeping it quick, or eating out?','¿Vas a cocinar, quieres algo rápido o vas a comer fuera?')}</Text>
-   <View style={s.row}>{([['cook','Cook','Cocinar'],['quick','Quick','Rápido'],['eat_out','Eat out','Comer fuera']]as const).map(([mode,en,sp])=><React.Fragment key={mode}>{action(say(en,sp),()=>{change({mode});setStage(mode==='eat_out'?'restaurant':draft.food_query?'meal':'food');},busy)}</React.Fragment>)}{action(say('My saved meals','Mis comidas guardadas'),()=>free?router.push(premiumEntry('coach_meal_saved')):router.push('/my-meals'),busy)}</View>
+   <View style={s.row}>{([['cook','Cook','Cocinar'],['quick','Quick','Rápido'],['eat_out','Eat out','Comer fuera']]as const).map(([mode,en,sp])=><React.Fragment key={mode}>{action(say(en,sp),()=>{change({mode});setStage(mode==='eat_out'?'restaurant':draft.food_query?'meal':'food');},busy)}</React.Fragment>)}{<PremiumCheckpointInline source="coach_meal_saved" enabled={free && !busy}>{premiumFlow => (action(say('My saved meals','Mis comidas guardadas'),()=>free?router.push(premiumEntry('coach_meal_saved', false, premiumFlow)):router.push('/my-meals'),busy))}</PremiumCheckpointInline>}</View>
   </>:stage==='area'?<>
    <Text style={s.body}>{say('Which city should I use for this restaurant menu?', '¿En qué ciudad busco el menú de ese restaurante?')}</Text>
    {input(say('City or public area','Ciudad o zona pública'),draft.public_area??'',value=>setDraft(d=>({...d,public_area:value})))}
@@ -143,7 +144,7 @@ export default function CoachMealConversation(props:Props){
     {input(say('Allergies, separated by commas','Alergias, separadas por comas'),draft.allergensText??draft.allergens.join(', '),s=>change({allergensText:s,allergens:s.split(',').map(v=>v.trim()).filter(Boolean)}),300)}
     <Text style={s.muted}>{say('Ingredients and cross-contact still need review with the source.','Los ingredientes y el contacto cruzado aún deben revisarse con la fuente.')}</Text>
    </>:action(say('Add preferences or allergies','Añadir preferencias o alergias'),()=>setPreferences(true),busy)}
-   {free?<View style={s.card}><Text style={s.body}>{say('Preview: compare a meal, change its portion, then confirm before logging. Premium can search your gallery and help you review sources and estimates.','Ejemplo: compara una comida, cambia la porción y confirma antes de registrarla. Premium puede buscar en tu galería y ayudarte a revisar fuentes y estimaciones.')}</Text>{action(say('See Premium','Ver Premium'),()=>router.push(premiumEntry('coach_meal_preview')))}</View>:action(say('Find options','Buscar opciones'),()=>{void run('explore');},busy||gate!=='ready'||!!pending)}
+   {free?<View style={s.card}><Text style={s.body}>{say('Preview: compare a meal, change its portion, then confirm before logging. Premium can search your gallery and help you review sources and estimates.','Ejemplo: compara una comida, cambia la porción y confirma antes de registrarla. Premium puede buscar en tu galería y ayudarte a revisar fuentes y estimaciones.')}</Text>{<PremiumCheckpointInline source="coach_meal_preview" enabled={!busy}>{premiumFlow => (action(say('See Premium','Ver Premium'),()=>router.push(premiumEntry('coach_meal_preview', false, premiumFlow))))}</PremiumCheckpointInline>}</View>:action(say('Find options','Buscar opciones'),()=>{void run('explore');},busy||gate!=='ready'||!!pending)}
   </>:stage==='estimate_consent'&&estimateOption?<>
    <Text style={s.body}>{say('Estimate nutrition for this dish and a practical portion?','¿Estimar la nutrición de este plato y una porción práctica?')}</Text>
    {estimateOption.kind==='restaurant'&&!estimateOption.identity?.variant&&!estimateOption.identity?.portion_label&&input(say('Which size or portion? e.g. one regular bowl','¿Qué tamaño o porción? Ej. un bowl regular'),portionLabel,setPortionLabel)}
