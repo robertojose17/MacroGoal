@@ -18,7 +18,7 @@ export function usePremiumCheckpointVisibility(flow: PremiumFlow, enabled: boole
   const focused = useIsFocused();
   const dimensions = useWindowDimensions();
   const latest = useRef({ enabled, focused, dimensions, clips });
-  latest.current = { enabled, focused, dimensions };
+  latest.current = { enabled, focused, dimensions, clips };
   const targets = useRef(new Map<string, { node: Measurable; detail: Impression }>());
   const observer = useRef(createFlowImpressionObserver());
   const actor = useRef<ActorLease | null>(checkpointActor());
