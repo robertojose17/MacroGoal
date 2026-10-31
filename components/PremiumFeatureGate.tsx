@@ -74,9 +74,9 @@ export function PremiumFeatureGate({
         {message}
       </Text>
 
-      <PremiumCheckpointInline source="feature_gate"><TouchableOpacity
+      <PremiumCheckpointInline source="feature_gate">{premiumFlow => (<TouchableOpacity
         style={[styles.upgradeButton, { backgroundColor: colors.primary }]}
-        onPress={() => router.push(premiumEntry('feature_gate'))}
+        onPress={() => router.push(premiumEntry('feature_gate', false, premiumFlow))}
       >
         <IconSymbol
           ios_icon_name="star.fill"
@@ -85,7 +85,7 @@ export function PremiumFeatureGate({
           color="#FFFFFF"
         />
         <Text style={styles.upgradeButtonText}>{t('premium.upgradeToPremium')}</Text>
-      </TouchableOpacity></PremiumCheckpointInline>
+      </TouchableOpacity>)}</PremiumCheckpointInline>
     </View>
   );
 }
