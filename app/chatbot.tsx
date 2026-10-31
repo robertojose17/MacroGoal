@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
@@ -1610,7 +1611,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                         style={styles.goPremiumButton}
                         onPress={() => {
                           console.log('[Chatbot] Go Premium button pressed — navigating to /subscription');
-                          router.push('/subscription');
+                          router.push(premiumEntry('chatbot_upgrade'));
                         }}
                         activeOpacity={0.8}
                       >
