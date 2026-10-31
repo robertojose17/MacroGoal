@@ -369,7 +369,8 @@ export async function deletePost(postId: string): Promise<void> {
 
 export async function toggleLike(
   post_id: string,
-  currentlyLiked: boolean
+  currentlyLiked: boolean,
+  expectedUserId?: string
 ): Promise<{ liked: boolean; likes_count: number }> {
   return withCommunityPrivacyScope(async scope => {
   console.log('[SocialApi] toggleLike — post_id:', post_id, 'currentlyLiked:', currentlyLiked);
@@ -377,6 +378,7 @@ export async function toggleLike(
   scope.assertActor(session?.user?.id);
   if (!session?.user) throw new Error('Not authenticated');
   const userId = session.user.id;
+  if (expectedUserId && userId !== expectedUserId) throw new Error('Community actor changed');
 
   const { data, error } = await scope.request(supabase.rpc('toggle_post_like', {
     p_post_id: post_id,
@@ -387,8 +389,12 @@ export async function toggleLike(
   if (error) throw error;
 
   const result = Array.isArray(data) ? data[0] : data;
-  const liked = result?.liked ?? !currentlyLiked;
-  const likes_count = Number(result?.likes_count ?? 0);
+  if (typeof result?.liked !== 'boolean' || result?.likes_count == null
+      || !Number.isSafeInteger(Number(result.likes_count)) || Number(result.likes_count) < 0) {
+    throw new Error('Invalid community like response');
+  }
+  const liked = result.liked;
+  const likes_count = Number(result.likes_count);
 
   console.log('[SocialApi] toggleLike — liked:', liked, 'count:', likes_count);
   return { liked, likes_count };
