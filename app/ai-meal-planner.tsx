@@ -1,3 +1,5 @@
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
@@ -1134,11 +1136,11 @@ export default function AIMealPlannerScreen() {
           <Text style={[styles.gateMessage, { color: secondaryColor }]}>
             {t('aiMealPlanner.premiumFeature')}
           </Text>
-          <TouchableOpacity
+          <PremiumCheckpointInline source="ai_meal_planner">{premiumFlow => (<TouchableOpacity
             style={[styles.gateButton, { backgroundColor: TEAL }]}
             onPress={() => {
               console.log('[AIMealPlanner] User tapped Upgrade to Premium');
-              router.push(premiumEntry('ai_meal_planner'));
+              router.push(premiumEntry('ai_meal_planner', false, premiumFlow));
             }}
           >
             <IconSymbol
@@ -1148,7 +1150,7 @@ export default function AIMealPlannerScreen() {
               color="#FFFFFF"
             />
             <Text style={styles.gateButtonText}>{t('aiMealPlanner.upgradeToPremium')}</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>)}</PremiumCheckpointInline>
           <TouchableOpacity
             style={styles.gateBackButton}
             onPress={() => {
@@ -1191,7 +1193,7 @@ export default function AIMealPlannerScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
-        <ScrollView
+        <PremiumCheckpointScrollView
           style={styles.flex}
           contentContainerStyle={styles.prefsContent}
           showsVerticalScrollIndicator={false}
@@ -1272,7 +1274,7 @@ export default function AIMealPlannerScreen() {
             <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={20} color="#fff" />
             <Text style={styles.generateBtnText}>{t('aiMealPlanner.generateMyPlan')}</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </PremiumCheckpointScrollView>
         </KeyboardAvoidingView>
       )}
 
@@ -1293,7 +1295,7 @@ export default function AIMealPlannerScreen() {
       {/* Step: Plan */}
       {step === 'plan' && generatedPlan && (
         <>
-          <ScrollView
+          <PremiumCheckpointScrollView
             style={styles.flex}
             contentContainerStyle={styles.planContent}
             showsVerticalScrollIndicator={false}
@@ -1341,7 +1343,7 @@ export default function AIMealPlannerScreen() {
             })}
 
             <View style={styles.planBottomSpacer} />
-          </ScrollView>
+          </PremiumCheckpointScrollView>
 
           {/* Sticky bottom bar */}
           <View style={[styles.stickyBar, { backgroundColor: bgColor, borderTopColor: borderColor }]}>
@@ -1504,7 +1506,7 @@ export default function AIMealPlannerScreen() {
                 </Text>
               </View>
             ) : (
-              <ScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
+              <PremiumCheckpointScrollView style={styles.recipeModalScroll} showsVerticalScrollIndicator={false}>
                 {recipeIngredients.length > 0 && (
                   <View style={styles.recipeSection}>
                     <Text style={[styles.recipeSectionTitle, { color: TEAL }]}>{t('aiMealPlanner.recipeIngredients')}</Text>
@@ -1536,7 +1538,7 @@ export default function AIMealPlannerScreen() {
                   </Text>
                 )}
                 <View style={{ height: 40 }} />
-              </ScrollView>
+              </PremiumCheckpointScrollView>
             )}
           </View>
         </View>
