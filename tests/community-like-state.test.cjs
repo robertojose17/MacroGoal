@@ -184,7 +184,7 @@ function premiumLifecycle() {
   const effect = screen.slice(start, end);
   function render(nextActor, nextPremium) {
     actor = nextActor; premium = nextPremium;
-    guard.setScope(JSON.stringify([actor, 'view', premium]));
+    guard.setScope(JSON.stringify([actor, 'view', premium]), JSON.stringify([actor, 'view']));
     const bindings = { isPremium: premium, currentUserId: actor, useRef: () => previous,
       useEffect: fn => fn(),
       fetchFeedPosts: () => read('feed'), fetchClubPosts: () => read('club'),
@@ -243,4 +243,58 @@ test('Premium resolving before identity waits for existing initial user load', (
   h.read('feed'); h.read('club');
   assert.equal(h.requests.length, 2);
   assert.equal(h.requests.every(request => request.actor === 'actor-a'), true);
+});
+
+test('pending Feed like survives Premium resolution and blocks stale replacement read', async () => {
+  let resolve;
+  const guard = createCommunityLikeCoordinator();
+  guard.setScope('actor-a:free', 'actor-a:privacy-view');
+  const h = makeHandler('feed', () => new Promise(done => { resolve = done; }), guard);
+  const pending = h.handle('post', false);
+  guard.setScope('actor-a:premium', 'actor-a:privacy-view');
+  // The transition effect attempts this read; old unliked data cannot be committed.
+  assert.equal(guard.beginRead('feed'), null);
+  assert.equal(guard.beginLike('feed', 'post'), null);
+  resolve({ liked:true, likes_count:1 });
+  await pending;
+  assert.equal(h.state.feed[0].liked_by_me, true);
+  assert.equal(h.state.feed[0].likes_count, 1);
+  assert.equal(guard.beginRead('feed').current(), true);
+});
+test('Premium revocation preserves same-actor Feed settlement but never resurrects Club', async () => {
+  for (const section of ['feed', 'club']) {
+    let resolve;
+    const guard = createCommunityLikeCoordinator();
+    guard.setScope('actor-a:premium', 'actor-a:view');
+    const h = makeHandler(section, () => new Promise(done => { resolve = done; }), guard);
+    const pending = h.handle('post', false);
+    guard.setScope('actor-a:free', 'actor-a:view');
+    if (section === 'club') h.state.club = [];
+    resolve({ liked:true, likes_count:1 });
+    await pending;
+    if (section === 'club') assert.equal(h.state.club.length, 0);
+    else {
+      assert.equal(h.state.feed[0].liked_by_me, true);
+      assert.equal(h.state.feed[0].likes_count, 1);
+    }
+  }
+});
+test('actor privacy and auth invalidation still reject pending Feed responses', async () => {
+  for (const invalidate of [
+    guard => guard.setScope('actor-b:premium', 'actor-b:view'),
+    guard => guard.setScope('actor-a:premium', 'actor-a:new-view'),
+    guard => guard.invalidate(),
+  ]) {
+    let resolve;
+    const guard = createCommunityLikeCoordinator();
+    guard.setScope('actor-a:free', 'actor-a:view');
+    const h = makeHandler('feed', () => new Promise(done => { resolve = done; }), guard);
+    const pending = h.handle('post', false);
+    invalidate(guard);
+    h.state.feed = [{ id:'post', section:'feed', liked_by_me:false, likes_count:0 }];
+    resolve({ liked:true, likes_count:1 });
+    await pending;
+    assert.equal(h.state.feed[0].liked_by_me, false);
+    assert.equal(h.state.feed[0].likes_count, 0);
+  }
 });
