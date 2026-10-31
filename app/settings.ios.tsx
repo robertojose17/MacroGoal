@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { BlockedAccountsSettingsEntry } from '@/features/blockedAccounts/BlockedAccountsSettingsEntry';
 import { getAppLocale, translatePreference } from '@/lib/localization';
 
@@ -920,7 +921,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             onPress={() => {
               console.log('[Profile iOS] Upgrade to Premium button pressed');
-              router.push('/subscription');
+              router.push(premiumEntry('settings_upgrade'));
             }}
             activeOpacity={0.85}
             style={{
