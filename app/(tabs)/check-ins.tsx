@@ -3505,6 +3505,23 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Replace reads invalidated when asynchronous Premium eligibility resolves.
+  const previousLikePremiumRef = useRef(isPremium);
+  useEffect(() => {
+    if (previousLikePremiumRef.current === isPremium) return;
+    previousLikePremiumRef.current = isPremium;
+    if (!currentUserId) return; // Initial user load will read the resolved scope.
+    setFeedLoading(true);
+    void fetchFeedPosts(currentUserId).finally(() => setFeedLoading(false));
+    if (isPremium) {
+      setClubLoading(true);
+      void fetchClubPosts(currentUserId).finally(() => setClubLoading(false));
+    } else {
+      setClubPosts([]);
+      setClubLoading(false);
+    }
+  }, [isPremium, currentUserId, fetchFeedPosts, fetchClubPosts]);
+
   // ── Founder check (server-side RPC) ──
   const [isFounder, setIsFounder] = useState(false);
 
