@@ -30,6 +30,10 @@ import Constants from 'expo-constants';
 import Purchases, { LOG_LEVEL, isPurchasesAvailable } from '@/utils/purchases';
 import { validateAndAttributeCode } from '@/utils/affiliateApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
+import { capturePremiumFlow, newCheckpointId } from '@/utils/premiumCheckpointContract';
+import type { Attribution } from '@/utils/premiumCheckpointContract';
+import { checkpoint, checkpointActor, displayedPackage, purchaseAttribution, observedPurchaseError, actorStillCurrent } from '@/utils/premiumCheckpoints';
+import { usePremiumCheckpointVisibility } from '@/hooks/usePremiumCheckpointVisibility';
 
 function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
   if (!isPurchasesAvailable) return { Purchases: null, LOG_LEVEL: null };
@@ -120,7 +124,17 @@ export default function SubscriptionScreen() {
   const [activePlan, setActivePlan] = useState<'monthly' | 'yearly'>('yearly');
   const [selectedFeature, setSelectedFeature] = useState<FeatureKey | null>(null);
   const [showAllFeatures, setShowAllFeatures] = useState(false);
-  const { autoStart } = useLocalSearchParams<{ autoStart?: string }>();
+  const { autoStart, source, flowId } = useLocalSearchParams<{ autoStart?: string; source?: string; flowId?: string }>();
+  const [checkpointFlow] = useState(() => capturePremiumFlow(source, flowId));
+  const purchaseBusyRef = React.useRef(false);
+  const restoreBusyRef = React.useRef(false);
+  const configuredActorRef = React.useRef<string | null>(null);
+  const observeOffer = usePremiumCheckpointVisibility(checkpointFlow,
+    Platform.OS !== 'web' && !loading && !errorMessage && !isPremium && !purchasing && !showSuccessModal);
+  const cardRef = (pkg: PurchasesPackage) => {
+    const offer = displayedPackage(pkg, offerings?.identifier);
+    return offer ? observeOffer(JSON.stringify(offer), { name: 'offer_displayed', offer }) : undefined;
+  };
   const autoStartFiredRef = React.useRef(false);
 
   // Affiliate code state
@@ -213,6 +227,8 @@ export default function SubscriptionScreen() {
         apiKey,
         appUserID: user.id,
       });
+
+      configuredActorRef.current = user.id;
 
       // Enable debug logs
       await Purchases.setLogLevel(LOG_LEVEL.DEBUG);
@@ -351,11 +367,11 @@ export default function SubscriptionScreen() {
     autoStartFiredRef.current = true;
     setActivePlan('yearly');
     console.log('[Subscription] Auto-starting yearly purchase from onboarding:', resolvedYearlyPkg.identifier);
-    handlePurchase(resolvedYearlyPkg);
+    handlePurchase(resolvedYearlyPkg, 'auto_start');
   }, [autoStart, loading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle purchase
-  const handlePurchase = async (pkg: PurchasesPackage) => {
+  const handlePurchase = async (pkg: PurchasesPackage, trigger: 'manual' | 'auto_start' = 'manual') => {
     if (Platform.OS === 'web') {
       Alert.alert(
         t('subscription.notAvailableWeb'),
@@ -364,12 +380,18 @@ export default function SubscriptionScreen() {
       return;
     }
 
-    if (purchasing) {
+    if (purchasing || purchaseBusyRef.current) {
       console.log('[Subscription] Purchase already in progress');
       return;
     }
 
     const { Purchases } = loadPurchases();
+    purchaseBusyRef.current = true;
+    const actor = checkpointActor();
+    const attemptId = newCheckpointId();
+    let attribution: Attribution = 'unknown';
+    let sdkInvoked = false;
+    let resultRecorded = false;
 
     try {
       console.log('[Subscription] ========== STARTING PURCHASE ==========');
@@ -382,7 +404,12 @@ export default function SubscriptionScreen() {
       setPurchasing(true);
       setSelectedPackage(pkg.identifier);
 
-      // Make purchase through RevenueCat
+      // Both manual and auto-start attempts meet at the actual SDK boundary.
+      attribution = await purchaseAttribution(Purchases, actor);
+      if (configuredActorRef.current !== actor?.userId) attribution = 'unknown';
+      const offer = displayedPackage(pkg, offerings?.identifier);
+      if (offer) checkpoint(checkpointFlow, { name: 'purchase_attempt', attemptId, offer, trigger, attribution }, actor);
+      sdkInvoked = true;
       const { customerInfo, productIdentifier } = await Purchases.purchasePackage(pkg);
 
       console.log('[Subscription] ✅ Purchase successful');
@@ -394,6 +421,12 @@ export default function SubscriptionScreen() {
       const entitlementIdentifier = revenueCatConfig?.entitlementIdentifier || 'Macrogoal Pro';
       const hasActiveEntitlement = customerInfo.entitlements.active[entitlementIdentifier]?.isActive || false;
 
+      // An SDK entitlement is a client observation, never a verified new sale.
+      const resultAttribution = actorStillCurrent(actor) ? await purchaseAttribution(Purchases, actor) : 'unknown';
+      checkpoint(checkpointFlow, { name: 'purchase_result', attemptId,
+        attribution: attribution === 'consistent' ? resultAttribution : attribution,
+        outcome: hasActiveEntitlement ? 'sdk_returned_entitlement' : 'sdk_returned_no_entitlement' }, actor);
+      resultRecorded = true;
       setIsPremium(hasActiveEntitlement);
       setCustomerInfo(customerInfo);
 
@@ -411,6 +444,8 @@ export default function SubscriptionScreen() {
       }
 
     } catch (error: any) {
+      if (sdkInvoked && !resultRecorded) checkpoint(checkpointFlow, { name: 'purchase_result', attemptId,
+        attribution: actorStillCurrent(actor) ? attribution : 'unknown', outcome: observedPurchaseError(error) }, actor);
       console.error('[Subscription] ❌ Purchase error:', error);
       console.error('[Subscription] Error details:', {
         message: error.message,
@@ -439,6 +474,7 @@ export default function SubscriptionScreen() {
         );
       }
     } finally {
+      purchaseBusyRef.current = false;
       setPurchasing(false);
       setSelectedPackage(null);
       console.log('[Subscription] ========== PURCHASE COMPLETE ==========');
@@ -455,13 +491,21 @@ export default function SubscriptionScreen() {
       return;
     }
 
+    if (restoreBusyRef.current) return;
+    restoreBusyRef.current = true;
     const { Purchases } = loadPurchases();
-
+    const actor = checkpointActor();
+    const attemptId = newCheckpointId();
+    let attribution: Attribution = 'unknown';
+    let sdkInvoked = false;
+    let resultRecorded = false;
     try {
       console.log('[Subscription] ========== RESTORING PURCHASES ==========');
       setLoading(true);
 
-      // Restore purchases through RevenueCat
+      attribution = await purchaseAttribution(Purchases, actor);
+      checkpoint(checkpointFlow, { name: 'restore_attempt', attemptId }, actor);
+      sdkInvoked = true;
       const info = await Purchases.restorePurchases();
       console.log('[Subscription] ✅ Purchases restored');
       console.log('[Subscription] Active entitlements:', Object.keys(info.entitlements.active));
@@ -472,6 +516,11 @@ export default function SubscriptionScreen() {
       const entitlementIdentifier = revenueCatConfig?.entitlementIdentifier || 'Macrogoal Pro';
       const hasActiveEntitlement = info.entitlements.active[entitlementIdentifier]?.isActive || false;
 
+      const resultAttribution = actorStillCurrent(actor) ? await purchaseAttribution(Purchases, actor) : 'unknown';
+      checkpoint(checkpointFlow, { name: 'restore_result', attemptId,
+        attribution: attribution === 'consistent' ? resultAttribution : attribution,
+        outcome: hasActiveEntitlement ? 'restored_entitlement' : 'no_entitlement' }, actor);
+      resultRecorded = true;
       setIsPremium(hasActiveEntitlement);
 
       if (hasActiveEntitlement) {
@@ -489,12 +538,16 @@ export default function SubscriptionScreen() {
       }
 
     } catch (error: any) {
+      const observed = observedPurchaseError(error);
+      if (sdkInvoked && !resultRecorded) checkpoint(checkpointFlow, { name: 'restore_result', attemptId,
+        attribution: actorStillCurrent(actor) ? attribution : 'unknown', outcome: observed === 'already_owned' ? 'error' : observed }, actor);
       console.error('[Subscription] ❌ Restore error:', error);
       Alert.alert(
         t('subscription.restoreFailed'),
         t('subscription.restoreFailedMsg')
       );
     } finally {
+      restoreBusyRef.current = false;
       setLoading(false);
       console.log('[Subscription] ========== RESTORE COMPLETE ==========');
     }
@@ -936,6 +989,7 @@ export default function SubscriptionScreen() {
             ] as const).map(({ plan, pkg, price }) => pkg && (
               <TouchableOpacity
                 key={plan}
+                ref={cardRef(pkg)}
                 style={[
                   styles.nativePlanCard,
                   effectivePlan === plan && styles.nativePlanCardSelected,
