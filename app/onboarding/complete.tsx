@@ -1,3 +1,6 @@
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
+import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { getAppLocale } from '@/lib/localization';
 import React, { useState, useRef, useEffect } from 'react';
@@ -423,10 +426,10 @@ export default function CompleteOnboardingScreen() {
 
   // ─── Purchase / finish ─────────────────────────────────────────────────────
 
-  const handleStartTrial = async () => {
+  const handleStartTrial = async (premiumFlow: PremiumFlow) => {
     console.log('[Onboarding] Start Free Trial pressed');
     await trackPaywallActionOnce('trial', sessionIdRef.current ?? undefined);
-    await showNotifPromptThen(() => router.push(premiumEntry('onboarding_complete', true)));
+    await showNotifPromptThen(() => router.push(premiumEntry('onboarding_complete', true, premiumFlow)));
   };
 
   const handleSkipTrial = async () => {
@@ -713,7 +716,7 @@ function Step1({
   ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -754,7 +757,7 @@ function Step1({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.thisIsMe')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -795,7 +798,7 @@ function Step2({
   ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -832,7 +835,7 @@ function Step2({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.iWantThis')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -860,7 +863,7 @@ function Step3({
   const ctaDisabled = age === '';
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -933,7 +936,7 @@ function Step3({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -974,7 +977,7 @@ function Step4({
   const { t } = useTranslation();
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -1068,7 +1071,7 @@ function Step4({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -1134,7 +1137,7 @@ function Step5({
       ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -1197,7 +1200,7 @@ function Step5({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -1229,7 +1232,7 @@ function Step6({
   ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -1269,7 +1272,7 @@ function Step6({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -1321,7 +1324,7 @@ function Step7({
   ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -1377,7 +1380,7 @@ function Step7({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.continueArrow')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -1410,7 +1413,7 @@ function Step8({
   ];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.stepScroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -1455,7 +1458,7 @@ function Step8({
         >
           <Text style={styles.primaryBtnText}>{t('onboarding.buildMyPlanArrow')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -1487,7 +1490,7 @@ function Step9({
   return (
     <View style={[styles.fullScreen, { backgroundColor: '#000000' }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-        <ScrollView
+        <PremiumCheckpointScrollView
           contentContainerStyle={styles.stepScroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -1546,7 +1549,7 @@ function Step9({
               </TouchableOpacity>
             </>
           )}
-        </ScrollView>
+        </PremiumCheckpointScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -1583,7 +1586,7 @@ function Step10({
   units,
   goalType,
 }: {
-  onStartTrial: () => void;
+  onStartTrial: (premiumFlow: PremiumFlow) => void;
   onSkip: () => void;
   totalWeeks: number;
   goalWeight: string;
@@ -1689,7 +1692,7 @@ function Step10({
   return (
     <View style={[styles.fullScreen, { backgroundColor: '#000000' }]}>
       <SafeAreaView style={styles.step10Safe} edges={['top', 'bottom']}>
-        <ScrollView
+        <PremiumCheckpointScrollView
             contentContainerStyle={styles.step10Scroll}
             showsVerticalScrollIndicator={false}
           >
@@ -1762,15 +1765,15 @@ function Step10({
             )}
 
             {/* CTA */}
-            <TouchableOpacity
+            <PremiumCheckpointInline source="onboarding_complete" enabled={true}>{premiumFlow => (<TouchableOpacity
               style={styles.purchaseBtn}
               onPress={() => {
                 console.log('[Onboarding] Step 10: Start My Personalized Plan pressed');
-                onStartTrial();
+                onStartTrial(premiumFlow);
               }}
             >
               <Text style={styles.purchaseBtnText}>{t('onboarding.startPersonalizedPlan')}</Text>
-            </TouchableOpacity>
+            </TouchableOpacity>)}</PremiumCheckpointInline>
 
             {/* Skip */}
             <TouchableOpacity
@@ -1782,7 +1785,7 @@ function Step10({
             >
               <Text style={styles.skipLinkText}>{t('onboarding.doEverythingManually')}</Text>
             </TouchableOpacity>
-        </ScrollView>
+        </PremiumCheckpointScrollView>
       </SafeAreaView>
     </View>
   );
