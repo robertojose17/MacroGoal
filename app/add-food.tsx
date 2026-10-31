@@ -1,3 +1,6 @@
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
+import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -657,11 +660,11 @@ export default function AddFoodScreen() {
     });
   }, [router, mealType, date, context, returnTo, mode, planId]);
 
-  const handleAIMealEstimator = useCallback(() => {
+  const handleAIMealEstimator = useCallback((premiumFlow?: PremiumFlow) => {
     console.log('[AddFood] AI Meal Estimator button pressed');
     if (!isPremium) {
       console.log('[AddFood] User is not premium, redirecting to subscription');
-      router.push(premiumEntry('ai_meal_estimator'));
+      router.push(premiumEntry('ai_meal_estimator', false, premiumFlow));
       return;
     }
     console.log('[AddFood] Navigating to chatbot for AI Meal Estimator');
@@ -2019,7 +2022,7 @@ export default function AddFoodScreen() {
         </View>
       )}
 
-      <ScrollView 
+      <PremiumCheckpointScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -2035,9 +2038,9 @@ export default function AddFoodScreen() {
                   {t('addFood.quickActions')}
                 </Text>
                 <View style={styles.quickActionsRowCompact}>
-                  <TouchableOpacity
+                  <PremiumCheckpointInline source="ai_meal_estimator" enabled={!isPremium}>{premiumFlow => (<TouchableOpacity
                     style={[styles.quickActionButtonCompact, styles.quickActionButtonYellow]}
-                    onPress={handleAIMealEstimator}
+                    onPress={() => handleAIMealEstimator(premiumFlow)}
                     activeOpacity={0.7}
                   >
                     <IconSymbol
@@ -2049,7 +2052,7 @@ export default function AddFoodScreen() {
                     <Text style={styles.quickActionButtonTextCompact}>
                       {t('addFood.aiMealEstimator')}
                     </Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity>)}</PremiumCheckpointInline>
 
                   <TouchableOpacity
                     style={[styles.quickActionButtonCompact, styles.quickActionButtonPurple]}
@@ -2204,7 +2207,7 @@ export default function AddFoodScreen() {
         )}
 
         <View style={{ height: 100 }} />
-      </ScrollView>
+      </PremiumCheckpointScrollView>
 
       {/* BANNER QUEUE SYSTEM - Each event gets unique key to force remount */}
       {/* Only show banner if in my_meals_builder context */}
