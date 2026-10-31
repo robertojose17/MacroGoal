@@ -159,3 +159,88 @@ test('compact time has localized expanded accessibility labels without Intl', ()
   }
   assert.equal(format('invalid','en-US',now),'');
 });
+
+function premiumLifecycle() {
+  const guard = createCommunityLikeCoordinator();
+  const previous = { current: false };
+  const state = { feed: [], club: [], feedLoading: false, clubLoading: false };
+  const requests = [];
+  let actor = '';
+  let premium = false;
+  function read(section) {
+    const ticket = guard.beginRead(section);
+    if (!ticket) return Promise.resolve();
+    const requestedActor = actor;
+    return new Promise(resolve => {
+      requests.push({ section, actor: requestedActor, complete() {
+        if (ticket.current()) state[section] = [requestedActor + ':' + section];
+        resolve();
+      } });
+    });
+  }
+  const start = screen.indexOf('  // Replace reads invalidated when asynchronous Premium eligibility resolves.');
+  const end = screen.indexOf('  // ── Founder check', start);
+  assert.ok(start >= 0 && end > start);
+  const effect = screen.slice(start, end);
+  function render(nextActor, nextPremium) {
+    actor = nextActor; premium = nextPremium;
+    guard.setScope(JSON.stringify([actor, 'view', premium]));
+    const bindings = { isPremium: premium, currentUserId: actor, useRef: () => previous,
+      useEffect: fn => fn(),
+      fetchFeedPosts: () => read('feed'), fetchClubPosts: () => read('club'),
+      setFeedLoading: value => { state.feedLoading = value; },
+      setClubLoading: value => { state.clubLoading = value; },
+      setClubPosts: value => { state.club = value; } };
+    vm.runInNewContext(effect, bindings);
+  }
+  return { state, requests, read, render };
+}
+test('delayed Premium resolution replaces initial invalidated feed and Club reads', async () => {
+  const h = premiumLifecycle();
+  h.render('actor-a', false);
+  const initialFeed = h.read('feed');
+  const initialClub = h.read('club');
+  h.render('actor-a', true);
+  assert.equal(h.requests.length, 4);
+  h.requests[0].complete(); h.requests[1].complete();
+  await Promise.all([initialFeed, initialClub]);
+  assert.equal(h.state.feed.length, 0);
+  assert.equal(h.state.club.length, 0);
+  h.requests[2].complete(); h.requests[3].complete();
+  await Promise.resolve();
+  assert.equal(h.state.feed[0], 'actor-a:feed');
+  assert.equal(h.state.club[0], 'actor-a:club');
+  assert.equal(h.state.feedLoading, false);
+  assert.equal(h.state.clubLoading, false);
+});
+test('Premium revocation clears Club and only reloads feed; old actor reads cannot return', async () => {
+  const h = premiumLifecycle();
+  h.render('actor-a', true);
+  h.state.club = ['old-content'];
+  h.render('actor-a', false);
+  assert.equal(h.requests.length, 3);
+  assert.equal(h.requests[2].section, 'feed');
+  assert.equal(h.state.club.length, 0);
+  h.requests[0].complete(); h.requests[1].complete();
+  await Promise.resolve();
+  assert.equal(h.state.feed.length, 0);
+  assert.equal(h.state.club.length, 0);
+  h.render('actor-b', false);
+  // The existing currentUserId load starts reads for the new actor.
+  const newActor = h.read('feed');
+  h.requests[2].complete();
+  assert.equal(h.state.feed.length, 0);
+  h.requests[3].complete(); await newActor;
+  assert.equal(h.state.feed[0], 'actor-b:feed');
+  assert.equal(h.state.club.length, 0);
+});
+test('Premium resolving before identity waits for existing initial user load', () => {
+  const h = premiumLifecycle();
+  h.render('', true);
+  assert.equal(h.requests.length, 0);
+  h.render('actor-a', true);
+  assert.equal(h.requests.length, 0);
+  h.read('feed'); h.read('club');
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.requests.every(request => request.actor === 'actor-a'), true);
+});
