@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import CoachSavedMealBrowser from '@/components/CoachSavedMealBrowser';
 import CoachConversationActions from '@/components/CoachConversationActions';
 import type { MealComposer } from '@/utils/coachMealComposer';
@@ -2604,7 +2605,7 @@ export default function CoachScreen() {
                         <TouchableOpacity
                           onPress={() => {
                             console.log('[AICoach] See What My Coach Found button pressed');
-                            router.push('/subscription');
+                            router.push(premiumEntry('coach_preview'));
                           }}
                           style={{
                             backgroundColor: '#7C3AED',
