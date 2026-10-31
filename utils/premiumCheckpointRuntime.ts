@@ -36,10 +36,10 @@ export function validCheckpoint(v: unknown): v is PremiumCheckpoint {
     case 'purchase_result': return exact(d, ['name','attemptId','outcome','attribution'], ['correlation']) &&
       id(d.attemptId) && oneOf(d.outcome, ['sdk_returned_entitlement','sdk_returned_no_entitlement','canceled','pending','already_owned','error']) &&
       oneOf(d.attribution, ['consistent','unknown','sdk_actor_mismatch']) &&
-      (d.correlation === undefined || (object(d.correlation) && exact(d.correlation, ['transactionId','store','environment','productId']) &&
+      (d.correlation === undefined || (object(d.correlation) && exact(d.correlation, ['transactionId','productId'], ['store','environment']) &&
         catalogId(d.correlation.transactionId) && catalogId(d.correlation.productId) &&
-        oneOf(d.correlation.store, ['APP_STORE','PLAY_STORE','AMAZON','STRIPE','MAC_APP_STORE','RC_BILLING']) &&
-        oneOf(d.correlation.environment, ['PRODUCTION','SANDBOX'])));
+        (d.correlation.store === undefined || oneOf(d.correlation.store, ['APP_STORE','PLAY_STORE'])) &&
+        (d.correlation.environment === undefined || oneOf(d.correlation.environment, ['PRODUCTION','SANDBOX']))));
     case 'restore_attempt': return exact(d, ['name','attemptId']) && id(d.attemptId);
     case 'restore_result': return exact(d, ['name','attemptId','outcome','attribution']) && id(d.attemptId) &&
       oneOf(d.attribution, ['consistent','unknown','sdk_actor_mismatch']) &&
