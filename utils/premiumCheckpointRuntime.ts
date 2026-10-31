@@ -103,14 +103,17 @@ export function createCheckpointQueue(current: () => ActorLease | null, transpor
         if (current() !== item.lease || Date.now() - item.created > 120000 || item.tries >= 3) { pending.shift(); continue; }
         active = new AbortController();
         const controller = active;
-        let timedOut = false;
-        const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 8000);
+        let timeout: ReturnType<typeof setTimeout> | undefined;
         let result: 'ack' | 'retry' | 'reject' = 'retry';
-        try { item.tries += 1; result = await transport(item.body, item.lease, controller.signal); }
-        catch { result = 'retry'; }
-        finally { clearTimeout(timeout); active = null; }
+        try {
+          item.tries += 1;
+          result = await Promise.race([
+            Promise.resolve().then(() => transport(item.body, item.lease, controller.signal)),
+            new Promise<'retry'>(resolve => { timeout = setTimeout(() => { controller.abort(); resolve('retry'); }, 8000); }),
+          ]);
+        } catch { result = 'retry'; }
+        finally { if (timeout) clearTimeout(timeout); active = null; }
         if (pending[0] !== item) continue;
-        if (timedOut && current() === item.lease && !stopped) result = 'retry';
         if (result !== 'retry' || current() !== item.lease || item.tries >= 3) { pending.shift(); continue; }
         retryTimer = setTimeout(() => { retryTimer = null; void run(); }, item.tries * 1500);
         break;
