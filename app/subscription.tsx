@@ -129,8 +129,9 @@ export default function SubscriptionScreen() {
   const purchaseBusyRef = React.useRef(false);
   const restoreBusyRef = React.useRef(false);
   const configuredActorRef = React.useRef<string | null>(null);
+  const offerViewport = React.useRef<ScrollView | null>(null);
   const observeOffer = usePremiumCheckpointVisibility(checkpointFlow,
-    Platform.OS !== 'web' && !loading && !errorMessage && !isPremium && !purchasing && !showSuccessModal);
+    Platform.OS !== 'web' && !loading && !errorMessage && !isPremium && !purchasing && !showSuccessModal, offerViewport);
   const cardRef = (pkg: PurchasesPackage) => {
     const offer = displayedPackage(pkg, offerings?.identifier);
     return offer ? observeOffer(JSON.stringify(offer), { name: 'offer_displayed', offer }) : undefined;
@@ -910,7 +911,7 @@ export default function SubscriptionScreen() {
     <>
       <View style={styles.newRoot}>
         <StatusBar style="light" />
-        <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+        <ScrollView ref={offerViewport} showsVerticalScrollIndicator={false} bounces={false}>
 
           {/* ── 1. HERO ── */}
           <View style={{ backgroundColor: '#000', flexDirection: 'row', paddingBottom: 0 }}>
