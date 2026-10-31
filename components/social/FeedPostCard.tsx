@@ -1,4 +1,4 @@
-import { formatCommunityRelativeTime } from '@/utils/communityRelativeTime';
+import { formatCommunityRelativeTime, communityRelativeTimeAccessibilityLabel } from '@/utils/communityRelativeTime';
 import {PrivatePhotoImage} from '@/components/PrivatePhotoImage';
 import {sharedReference} from '@/utils/resolveShared';
 import { getAppLocale } from '@/lib/localization';
@@ -900,7 +900,7 @@ export default function FeedPostCard({
       ) : null}
 
       {/* Timestamp */}
-      <Text style={{ fontSize: 11, color: secondaryColor, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>
+      <Text accessibilityLabel={communityRelativeTimeAccessibilityLabel(post.created_at, getAppLocale())} style={{ fontSize: 11, color: secondaryColor, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>
         {relTime}
       </Text>
 
