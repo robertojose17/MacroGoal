@@ -1,4 +1,5 @@
-import { formatCommunityRelativeTime } from '@/utils/communityRelativeTime';
+import { createCommunityLikeCoordinator, requireCommunityLikedIds } from '@/utils/communityLikeState';
+import { formatCommunityRelativeTime, communityRelativeTimeAccessibilityLabel } from '@/utils/communityRelativeTime';
 import {progressMediaCopy} from '@/utils/progressMediaCopy';
 import {PrivateProgressCapture} from '@/components/PrivateProgressCapture';
 import {publishProgress,type PublicationCheckpoint,type CapturedPhoto} from '@/utils/publication';
@@ -1409,7 +1410,7 @@ function PostCard({
       ) : null}
 
       {/* ── Timestamp ── */}
-      <Text style={{ fontSize: 11, color: secondaryColor, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>
+      <Text accessibilityLabel={communityRelativeTimeAccessibilityLabel(post.created_at, getAppLocale())} style={{ fontSize: 11, color: secondaryColor, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>
         {relTime}
       </Text>
 
@@ -1652,7 +1653,7 @@ function CommentsModal({
             {'  '}
             {item.content}
           </Text>
-          <Text style={{ fontSize: 11, color: secondaryColor, marginTop: 3 }}>{commentTime}</Text>
+          <Text accessibilityLabel={communityRelativeTimeAccessibilityLabel(item.created_at, getAppLocale())} style={{ fontSize: 11, color: secondaryColor, marginTop: 3 }}>{commentTime}</Text>
         </View>
         {isOwn ? (
           <TouchableOpacity accessibilityLabel={t('localization.checkins.moreOptions')}
@@ -3209,6 +3210,20 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
   const [showMemberList, setShowMemberList] = useState(false);
   const [memberListLoading, setMemberListLoading] = useState(false);
 
+  const likeCoordinator = useRef(createCommunityLikeCoordinator()).current;
+  likeCoordinator.setScope(JSON.stringify([currentUserId, communityPrivacyState.viewKey, isPremium]));
+  const likeActorRef = useRef(currentUserId);
+  likeActorRef.current = currentUserId;
+  const likePostsRef = useRef({ feed: feedPosts, club: clubPosts });
+  likePostsRef.current = { feed: feedPosts, club: clubPosts };
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if ((session?.user?.id ?? '') !== likeActorRef.current) likeCoordinator.invalidate();
+    });
+    return () => { subscription.unsubscribe(); likeCoordinator.invalidate(); };
+  }, [likeCoordinator]);
+
+
   useLayoutEffect(() => {
     if (!communityPrivacyEnabled) return;
     setPrivacyViewKey(communityPrivacyState.viewKey);
@@ -3365,24 +3380,22 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
   // ── Fetch feed posts (reads from social_posts — same table the composer writes to) ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchFeedPosts = useCallback(async (overrideUserId?: string) => {
+    const read = likeCoordinator.beginRead('feed');
+    if (!read) return;
     if (communityPrivacyEnabled) {
       const ticket = communityPrivacy?.begin('feed');
       setFeedPosts([]);
       if (!ticket || !communityPrivacy) return;
       try {
         const result = await communityPrivacy.readers.posts(ticket.session, ticket.signal, 'feed', false);
-        if (!ticket.current()) return;
-        setFeedPosts(result.ok ? result.value as unknown as CommunityPost[] : []);
+        if (!ticket.current() || !read.current()) return;
+        setFeedPosts(prev => read.current() && ticket.current() ? (result.ok ? result.value as unknown as CommunityPost[] : []) : prev);
         setPrivacyErrors(prev => ({ ...prev, feed: !result.ok }));
       } finally { ticket.finish(); }
       return;
     }
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
-    if (anyLikePendingRef.current) {
-      console.log('[Community] Skipping fetchFeedPosts — like in progress');
-      return;
-    }
     console.log('[Community] Fetching feed posts from social_posts for user:', uid);
     try {
       const postsRes = await supabase
@@ -3406,7 +3419,8 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
         .limit(50);
       console.log('[Community] Feed posts fetched from social_posts:', postsRes.data?.length ?? 0, 'error:', postsRes.error?.message ?? 'none');
 
-      // Likes and saves — non-fatal if they fail
+      if (postsRes.error) throw postsRes.error;
+      // A failed likes read must not reset an existing heart to unliked.
       let likedIds = new Set<string>();
       let savedIds = new Set<string>();
       try {
@@ -3414,10 +3428,10 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
           supabase.from('community_likes').select('post_id').eq('user_id', uid),
           supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
         ]);
-        likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
+        likedIds = requireCommunityLikedIds(likesRes);
         savedIds = new Set((savesRes.data || []).map((s: { post_id: string }) => s.post_id));
       } catch (likesErr) {
-        console.log('[Community] Likes/saves fetch non-fatal error:', likesErr);
+        throw likesErr;
       }
 
       const posts: CommunityPost[] = (postsRes.data || []).map((p: Record<string, unknown>) => ({
@@ -3429,7 +3443,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
         liked_by_me: likedIds.has(p.id as string),
         saved_by_me: savedIds.has(p.id as string),
       }));
-      setFeedPosts(posts);
+      setFeedPosts(prev => read.current() ? posts : prev);
     } catch (e) {
       console.log('[Community] fetchFeedPosts error:', e);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3440,24 +3454,22 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
   // ── Fetch club posts ──
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchClubPosts = useCallback(async (overrideUserId?: string) => {
+    const read = likeCoordinator.beginRead('club');
+    if (!read) return;
     if (communityPrivacyEnabled) {
       const ticket = communityPrivacy?.begin('club');
       setClubPosts([]);
       if (!ticket || !communityPrivacy || !privacyPremiumRef.current) { ticket?.finish(); return; }
       try {
         const result = await communityPrivacy.readers.posts(ticket.session, ticket.signal, 'club', privacyPremiumRef.current);
-        if (!ticket.current() || !privacyPremiumRef.current) return;
-        setClubPosts(result.ok ? result.value as unknown as CommunityPost[] : []);
+        if (!ticket.current() || !privacyPremiumRef.current || !read.current()) return;
+        setClubPosts(prev => read.current() && ticket.current() && privacyPremiumRef.current ? (result.ok ? result.value as unknown as CommunityPost[] : []) : prev);
         setPrivacyErrors(prev => ({ ...prev, club: !result.ok }));
       } finally { ticket.finish(); }
       return;
     }
     const uid = overrideUserId || currentUserId;
     if (!uid) return;
-    if (anyLikePendingRef.current) {
-      console.log('[Community] Skipping fetchClubPosts — like in progress');
-      return;
-    }
     console.log('[Community] Fetching club posts for user:', uid);
     try {
       const [postsRes, likesRes, commentsRes, savesRes] = await Promise.all([
@@ -3476,7 +3488,8 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
         supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
       ]);
       console.log('[Community] Club posts fetched:', postsRes.data?.length ?? 0);
-      const likedIds = new Set((likesRes.data || []).map((l: { post_id: string }) => l.post_id));
+      if (postsRes.error) throw postsRes.error;
+      const likedIds = requireCommunityLikedIds(likesRes);
       const savedIds = new Set((savesRes.data || []).map((s: { post_id: string }) => s.post_id));
       const commentsByPost: Record<string, TopComment> = {};
       for (const c of (commentsRes.data || [])) {
@@ -3490,7 +3503,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
         saved_by_me: savedIds.has(p.id as string),
         top_comment: commentsByPost[p.id as string] || null,
       }));
-      setClubPosts(posts);
+      setClubPosts(prev => read.current() ? posts : prev);
     } catch (e) {
       console.log('[Community] fetchClubPosts error:', e);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3874,52 +3887,29 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
   };
 
   // ── Like toggle ──
-  const likePendingRef = useRef<Set<string>>(new Set());
-  const anyLikePendingRef = useRef(false);
-
-  const handleLike = useCallback(async (postId: string, liked: boolean) => {
-    // Prevent concurrent calls for the same post
-    if (likePendingRef.current.has(postId)) return;
-    likePendingRef.current.add(postId);
-    anyLikePendingRef.current = true;
-    console.log('[Community] Like button pressed — postId:', postId, 'currentlyLiked:', liked);
-
-    // Optimistic update
-    const updatePosts = (posts: CommunityPost[]) =>
-      posts.map((p) =>
-        p.id === postId
-          ? { ...p, liked_by_me: !liked, likes_count: Math.max(0, liked ? p.likes_count - 1 : p.likes_count + 1) }
-          : p
-      );
-    if (activeTab === 'feed') setFeedPosts((prev) => updatePosts(prev));
-    else setClubPosts((prev) => updatePosts(prev));
-
+  const handleLike = useCallback(async (postId: string, _liked: boolean) => {
+    const section = activeTab === 'club' ? 'club' : activeTab === 'feed' ? 'feed' : null;
+    if (!section || !currentUserId) return;
+    const before = likePostsRef.current[section].find(post => post.id === postId);
+    if (!before || before.section !== section) return;
+    const mutation = likeCoordinator.beginLike(section, postId);
+    if (!mutation) return;
+    const setPosts = section === 'feed' ? setFeedPosts : setClubPosts;
+    const update = (liked_by_me: boolean, likes_count: number) => {
+      setPosts(prev => mutation.current() ? prev.map(post => post.id === postId
+        ? { ...post, liked_by_me, likes_count } : post) : prev);
+    };
+    update(!before.liked_by_me, Math.max(0, before.likes_count + (before.liked_by_me ? -1 : 1)));
     try {
-      const result = await toggleLike(postId, liked);
-      // Sync with authoritative server count
-      const syncPosts = (posts: CommunityPost[]) =>
-        posts.map((p) =>
-          p.id === postId
-            ? { ...p, liked_by_me: result.liked, likes_count: result.likes_count }
-            : p
-        );
-      if (activeTab === 'feed') setFeedPosts((prev) => syncPosts(prev));
-      else setClubPosts((prev) => syncPosts(prev));
-    } catch (e) {
-      console.warn('[Community] Like toggle failed, reverting:', e);
-      const revert = (posts: CommunityPost[]) =>
-        posts.map((p) =>
-          p.id === postId
-            ? { ...p, liked_by_me: liked, likes_count: liked ? p.likes_count + 1 : Math.max(0, p.likes_count - 1) }
-            : p
-        );
-      if (activeTab === 'feed') setFeedPosts((prev) => revert(prev));
-      else setClubPosts((prev) => revert(prev));
+      const result = await toggleLike(postId, before.liked_by_me, currentUserId);
+      update(result.liked, result.likes_count);
+    } catch (error) {
+      console.warn('[Community] Like toggle failed, restoring previous state:', error);
+      update(before.liked_by_me, before.likes_count);
     } finally {
-      likePendingRef.current.delete(postId);
-      if (likePendingRef.current.size === 0) anyLikePendingRef.current = false;
+      mutation.finish();
     }
-  }, [activeTab]);
+  }, [activeTab, currentUserId, likeCoordinator]);
 
   // ── Save toggle ──
   const handleSave = useCallback(async (postId: string, savedByMe: boolean) => {
