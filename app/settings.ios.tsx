@@ -1,3 +1,5 @@
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { BlockedAccountsSettingsEntry } from '@/features/blockedAccounts/BlockedAccountsSettingsEntry';
 import { getAppLocale, translatePreference } from '@/lib/localization';
@@ -908,7 +910,7 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      <ScrollView
+      <PremiumCheckpointScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -918,10 +920,10 @@ export default function SettingsScreen() {
 
         {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
         {!isPremium && !premiumLoading && (
-          <TouchableOpacity
+          <PremiumCheckpointInline source="settings_upgrade">{premiumFlow => (<TouchableOpacity
             onPress={() => {
               console.log('[Profile iOS] Upgrade to Premium button pressed');
-              router.push(premiumEntry('settings_upgrade'));
+              router.push(premiumEntry('settings_upgrade', false, premiumFlow));
             }}
             activeOpacity={0.85}
             style={{
@@ -957,7 +959,7 @@ export default function SettingsScreen() {
                 {t('profile.upgradeNow')}
               </Text>
             </View>
-          </TouchableOpacity>
+          </TouchableOpacity>)}</PremiumCheckpointInline>
         )}
 
         {/* ── Accordion Card ──────────────────────────────────────────────── */}
@@ -1701,7 +1703,7 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </PremiumCheckpointScrollView>
 
       {/* ── Edit Modal ──────────────────────────────────────────────────────── */}
       <Modal
@@ -1899,7 +1901,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.foodPrefsScroll}>
+            <PremiumCheckpointScrollView showsVerticalScrollIndicator={false} style={styles.foodPrefsScroll}>
               {/* Dietary Restrictions */}
               <Text style={[styles.foodPrefsSectionLabel, { color: isDark ? colors.textDark : colors.text }]}>
                 {t('profile.dietaryRestrictions')}
@@ -2000,7 +2002,7 @@ export default function SettingsScreen() {
                   );
                 })}
               </View>
-            </ScrollView>
+            </PremiumCheckpointScrollView>
 
             {/* Save Button */}
             <TouchableOpacity
