@@ -1,3 +1,4 @@
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -1607,7 +1608,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                       </Text>
                     )}
                     {message.showUpgradeButton && (
-                      <TouchableOpacity
+                      <PremiumCheckpointInline source="chatbot_upgrade"><TouchableOpacity
                         style={styles.goPremiumButton}
                         onPress={() => {
                           console.log('[Chatbot] Go Premium button pressed — navigating to /subscription');
@@ -1616,7 +1617,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                         activeOpacity={0.8}
                       >
                         <Text style={styles.goPremiumButtonText}>{t('chatbot.upgrade')}</Text>
-                      </TouchableOpacity>
+                      </TouchableOpacity></PremiumCheckpointInline>
                     )}
                   </View>
                 </View>
