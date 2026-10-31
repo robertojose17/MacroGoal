@@ -3389,7 +3389,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
       try {
         const result = await communityPrivacy.readers.posts(ticket.session, ticket.signal, 'feed', false);
         if (!ticket.current() || !read.current()) return;
-        setFeedPosts(prev => read.current() && ticket.current() ? (result.ok ? result.value as unknown as CommunityPost[] : []) : prev);
+        setFeedPosts(prev => read.current() && ticket.alive() ? (result.ok ? result.value as unknown as CommunityPost[] : []) : prev);
         setPrivacyErrors(prev => ({ ...prev, feed: !result.ok }));
       } finally { ticket.finish(); }
       return;
@@ -3463,7 +3463,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
       try {
         const result = await communityPrivacy.readers.posts(ticket.session, ticket.signal, 'club', privacyPremiumRef.current);
         if (!ticket.current() || !privacyPremiumRef.current || !read.current()) return;
-        setClubPosts(prev => read.current() && ticket.current() && privacyPremiumRef.current ? (result.ok ? result.value as unknown as CommunityPost[] : []) : prev);
+        setClubPosts(prev => read.current() && ticket.alive() && privacyPremiumRef.current ? (result.ok ? result.value as unknown as CommunityPost[] : []) : prev);
         setPrivacyErrors(prev => ({ ...prev, club: !result.ok }));
       } finally { ticket.finish(); }
       return;
