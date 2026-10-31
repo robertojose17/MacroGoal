@@ -40,9 +40,15 @@ export async function handleCheckpoint(req:Request):Promise<Response>{
   const {data,error}=await db.rpc('record_private_checkpoint_v1',{p_user_id:auth.user.id,p_payload:payload});
   if(error){
    if(['22023','22P02','22007','22008','23514','23502'].includes(error.code))return respond(400,{error:'invalid'});
-   if(error.code==='23503')return respond(401,{error:'unauthorized'}); // Account deleted before insert.
+   if(error.code==='23503'){
+    // A concurrent profile deletion can race the RPC precheck; distinguish it from invalid Auth.
+    if((error.message||'').includes('checkpoint_profile_retention'))return respond(409,{error:'profile_unavailable'});
+    return respond(401,{error:'account_unavailable'});
+   }
    return respond(503,{error:'unavailable'});
   }
+  if(data==='account_unavailable')return respond(401,{error:'account_unavailable'});
+  if(data==='profile_unavailable')return respond(409,{error:'profile_unavailable'});
   if(data==='conflict')return respond(409,{error:'event_conflict'});
   if(data==='rate_limited')return respond(429,{error:'rate_limited'});
   if(data==='accepted'||data==='duplicate')return respond(data==='accepted'?202:200,{eventId:payload.eventId,status:data});
