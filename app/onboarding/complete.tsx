@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { getAppLocale } from '@/lib/localization';
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -425,7 +426,7 @@ export default function CompleteOnboardingScreen() {
   const handleStartTrial = async () => {
     console.log('[Onboarding] Start Free Trial pressed');
     await trackPaywallActionOnce('trial', sessionIdRef.current ?? undefined);
-    await showNotifPromptThen(() => router.push('/subscription?autoStart=true'));
+    await showNotifPromptThen(() => router.push(premiumEntry('onboarding_complete', true)));
   };
 
   const handleSkipTrial = async () => {
