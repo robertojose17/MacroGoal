@@ -1,3 +1,4 @@
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { BlockedAccountsSettingsEntry } from '@/features/blockedAccounts/BlockedAccountsSettingsEntry';
 import { getAppLocale, translatePreference } from '@/lib/localization';
@@ -1059,10 +1060,10 @@ export default function SettingsScreen() {
 
         {/* ── Upgrade to Premium ──────────────────────────────────────────── */}
         {!isPremium && !premiumLoading && (
-          <TouchableOpacity
+          <PremiumCheckpointInline source="settings_upgrade">{premiumFlow => (<TouchableOpacity
             onPress={() => {
               console.log('[Profile] Upgrade to Premium button pressed');
-              router.push(premiumEntry('settings_upgrade'));
+              router.push(premiumEntry('settings_upgrade', false, premiumFlow));
             }}
             activeOpacity={0.85}
             style={{
@@ -1098,7 +1099,7 @@ export default function SettingsScreen() {
                 {t('profile.upgradeNow')}
               </Text>
             </View>
-          </TouchableOpacity>
+          </TouchableOpacity>)}</PremiumCheckpointInline>
         )}
 
         {/* ── Accordion Card ──────────────────────────────────────────────── */}
