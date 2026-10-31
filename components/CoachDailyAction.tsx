@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import CoachConversationActions from '@/components/CoachConversationActions';
 import type { ScopedMealConversation } from '@/utils/coachMealConversation';
 import type { MealComposer } from '@/utils/coachMealComposer';
@@ -162,7 +163,7 @@ export function CoachDailyActionContent(props: Props) {
       <View style={s.row}>{([['cook','Cook','Cocinar'],['quick','Quick / no-cook','Rápido / sin cocinar'],['eat_out','Eat out','Comer fuera'],['favorite','A saved meal','Una comida guardada']] as const).map(([mode,en,sp]) => <React.Fragment key={mode}>{action(say(en,sp), () => { change({ mode }); setQuestion('meal'); setStep('context'); }, busy)}</React.Fragment>)}</View>
     </> : step === 'context' && draft.mode === 'favorite' ? <>
       <Text style={s.body}>{say('Choose a saved meal you want to eat. You can review its portion before adding it.', 'Elige una comida guardada que quieras comer. Podrás revisar la porción antes de añadirla.')}</Text>
-      {preview ? action(say('See Premium', 'Ver Premium'), () => router.push('/subscription')) : action(say('Open saved meals', 'Abrir comidas guardadas'), () => router.push('/my-meals'), busy || gate !== 'ready')}
+      {preview ? action(say('See Premium', 'Ver Premium'), () => router.push(premiumEntry('coach_daily_saved'))) : action(say('Open saved meals', 'Abrir comidas guardadas'), () => router.push('/my-meals'), busy || gate !== 'ready')}
     </> : step === 'context' ? <>
       {question !== 'meal' && <View style={s.answer}><Text style={s.answerText}>{mealLabel(draft.meal)}{question === 'preferences' ? ` · ${draft.remaining} ${say('meal(s) planned', 'comida(s) planeadas')}` : ''}</Text></View>}
       {question === 'meal' ? <>
@@ -184,7 +185,7 @@ export function CoachDailyActionContent(props: Props) {
         </> : action(say('Add preferences', 'Añadir preferencias'), () => setPreferencesOpen(true), busy)}
         {preview ? <>
           <View style={s.option}><Text style={s.small}>{say('EXAMPLE — NOT PERSONALIZED', 'EJEMPLO — NO PERSONALIZADO')}</Text><Text style={s.body}>{say('Compare a meal, adjust its portion, then confirm before logging. Premium uses your preferences and diary to help with the choice.', 'Compara una comida, ajusta la porción y confirma antes de registrarla. Premium usa tus preferencias y diario para ayudarte a elegir.')}</Text></View>
-          {action(say('See Premium', 'Ver Premium'), () => router.push('/subscription'))}
+          {action(say('See Premium', 'Ver Premium'), () => router.push(premiumEntry('coach_daily_preview')))}
         </> : button(say('Find food options', 'Buscar opciones'), () => { setShowAlternatives(false); void search(); }, false, busy || gate !== 'ready' || !guidance(draft))}
       </>}
     </> : <>
