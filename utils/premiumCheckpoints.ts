@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
 import { newCheckpointId, newPremiumFlow, premiumRoute } from './premiumCheckpointContract';
-import type { Attribution, CheckpointDetail, DisplayedOffer, PremiumFlow, PremiumSource } from './premiumCheckpointContract';
+import type { Attribution, CheckpointDetail, DisplayedOffer, PremiumFlow, PremiumSource, TransactionCorrelation } from './premiumCheckpointContract';
 import { createCheckpointQueue, validDisplayedOffer } from './premiumCheckpointRuntime';
 import type { ActorLease, CheckpointTransport } from './premiumCheckpointRuntime';
 
@@ -68,4 +68,18 @@ export function observedPurchaseError(error: any): 'canceled' | 'pending' | 'alr
   if (['20','PAYMENT_PENDING_ERROR'].includes(code)) return 'pending';
   if (['6','PRODUCT_ALREADY_PURCHASED_ERROR','PRODUCT_ALREADY_PURCHASED'].includes(code)) return 'already_owned';
   return 'error';
+}
+
+/** Only whitelisted SDK fields; never copy transaction.purchaseToken or receipts. */
+export function transactionCandidate(result: any): TransactionCorrelation | undefined {
+  const transactionId = result?.transaction?.transactionIdentifier;
+  const productId = result?.transaction?.productIdentifier;
+  const safe = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_.:$+/-]{1,256}$/.test(v);
+  if (!safe(transactionId) || !safe(productId) || result?.productIdentifier !== productId) return undefined;
+  const candidate: TransactionCorrelation = { transactionId, productId };
+  const subscription = result?.customerInfo?.subscriptionsByProductIdentifier?.[productId];
+  if (subscription?.storeTransactionId !== transactionId || subscription?.productIdentifier !== productId) return candidate;
+  const store = subscription.store === 'APP_STORE' || subscription.store === 'PLAY_STORE' ? subscription.store : undefined;
+  const environment = typeof subscription.isSandbox === 'boolean' ? subscription.isSandbox ? 'SANDBOX' : 'PRODUCTION' : undefined;
+  return { ...candidate, ...(store ? { store } : {}), ...(environment ? { environment } : {}) };
 }
