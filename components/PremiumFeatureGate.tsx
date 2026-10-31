@@ -1,3 +1,4 @@
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React from 'react';
@@ -73,7 +74,7 @@ export function PremiumFeatureGate({
         {message}
       </Text>
 
-      <TouchableOpacity
+      <PremiumCheckpointInline source="feature_gate"><TouchableOpacity
         style={[styles.upgradeButton, { backgroundColor: colors.primary }]}
         onPress={() => router.push(premiumEntry('feature_gate'))}
       >
@@ -84,7 +85,7 @@ export function PremiumFeatureGate({
           color="#FFFFFF"
         />
         <Text style={styles.upgradeButtonText}>{t('premium.upgradeToPremium')}</Text>
-      </TouchableOpacity>
+      </TouchableOpacity></PremiumCheckpointInline>
     </View>
   );
 }
