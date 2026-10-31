@@ -3421,18 +3421,12 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
       if (postsRes.error) throw postsRes.error;
       // A failed likes read must not reset an existing heart to unliked.
-      let likedIds = new Set<string>();
-      let savedIds = new Set<string>();
-      try {
-        const [likesRes, savesRes] = await Promise.all([
-          supabase.from('community_likes').select('post_id').eq('user_id', uid),
-          supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
-        ]);
-        likedIds = requireCommunityLikedIds(likesRes);
-        savedIds = new Set((savesRes.data || []).map((s: { post_id: string }) => s.post_id));
-      } catch (likesErr) {
-        throw likesErr;
-      }
+      const [likesRes, savesRes] = await Promise.all([
+        supabase.from('community_likes').select('post_id').eq('user_id', uid),
+        supabase.from('social_post_saves').select('post_id').eq('user_id', uid),
+      ]);
+      const likedIds = requireCommunityLikedIds(likesRes);
+      const savedIds = new Set((savesRes.data || []).map((row: { post_id: string }) => row.post_id));
 
       const posts: CommunityPost[] = (postsRes.data || []).map((p: Record<string, unknown>) => ({
         ...(p as CommunityPost),
