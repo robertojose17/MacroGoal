@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
@@ -74,7 +75,7 @@ export function PremiumFeatureGate({
 
       <TouchableOpacity
         style={[styles.upgradeButton, { backgroundColor: colors.primary }]}
-        onPress={() => router.push('/subscription')}
+        onPress={() => router.push(premiumEntry('feature_gate'))}
       >
         <IconSymbol
           ios_icon_name="star.fill"
