@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { createCommunityLikeCoordinator, requireCommunityLikedIds } from '@/utils/communityLikeState';
 import { formatCommunityRelativeTime, communityRelativeTimeAccessibilityLabel } from '@/utils/communityRelativeTime';
 import {progressMediaCopy} from '@/utils/progressMediaCopy';
@@ -4576,7 +4577,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
             style={[styles.inviteBtn, { marginTop: spacing.lg, paddingHorizontal: spacing.xl }]}
             onPress={() => {
               console.log('[Community] Unlock Premium Club button pressed');
-              router.push('/subscription');
+              router.push(premiumEntry('community_club'));
             }}
           >
             <Text style={styles.inviteBtnText}>{t('localization.checkins.unlockClub')}</Text>
