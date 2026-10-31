@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -1137,7 +1138,7 @@ export default function AIMealPlannerScreen() {
             style={[styles.gateButton, { backgroundColor: TEAL }]}
             onPress={() => {
               console.log('[AIMealPlanner] User tapped Upgrade to Premium');
-              router.push('/subscription');
+              router.push(premiumEntry('ai_meal_planner'));
             }}
           >
             <IconSymbol
