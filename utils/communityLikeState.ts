@@ -3,39 +3,51 @@ type Section = 'feed' | 'club';
 /** Coordinates reads with mutations without sharing state between Club and feed. */
 export function createCommunityLikeCoordinator() {
   let scope = '';
-  let generation = 0;
+  let identityScope = '';
+  const generations = { feed: 0, club: 0 };
   const versions = { feed: 0, club: 0 };
   const reads = { feed: 0, club: 0 };
   const pending = { feed: new Set<string>(), club: new Set<string>() };
   const revisions = new Map<string, number>();
+  function invalidateSection(section: Section) {
+    generations[section]++;
+    pending[section].clear();
+    for (const key of revisions.keys()) if (key.startsWith(section + ':')) revisions.delete(key);
+  }
   function invalidate() {
-    generation++;
-    pending.feed.clear();
-    pending.club.clear();
-    revisions.clear();
+    invalidateSection('feed');
+    invalidateSection('club');
   }
   return {
     invalidate,
-    setScope(next: string) {
-      if (scope !== next) { scope = next; invalidate(); }
+    setScope(next: string, identity = next) {
+      if (identityScope !== identity) {
+        identityScope = identity;
+        scope = next;
+        invalidate();
+      } else if (scope !== next) {
+        scope = next;
+        // Premium changes affect Club access, not this actor's Feed mutation.
+        invalidateSection('club');
+      }
     },
     beginRead(section: Section) {
       if (pending[section].size) return null;
-      const owner = generation;
+      const owner = generations[section];
       const version = versions[section];
       const read = ++reads[section];
-      return { current: () => generation === owner && versions[section] === version
+      return { current: () => generations[section] === owner && versions[section] === version
         && reads[section] === read && pending[section].size === 0 };
     },
     beginLike(section: Section, postId: string) {
       if (pending[section].has(postId)) return null;
-      const owner = generation;
+      const owner = generations[section];
       const key = section + ':' + postId;
       const revision = (revisions.get(key) ?? 0) + 1;
       revisions.set(key, revision);
       pending[section].add(postId);
       versions[section]++;
-      const current = () => generation === owner && revisions.get(key) === revision;
+      const current = () => generations[section] === owner && revisions.get(key) === revision;
       let finished = false;
       return {
         current,
