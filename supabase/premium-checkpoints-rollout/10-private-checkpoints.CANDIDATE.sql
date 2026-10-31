@@ -47,6 +47,9 @@ BEGIN
   RAISE EXCEPTION 'invalid checkpoint' USING ERRCODE='22023';
  END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_user_id::text, 72631));
+ IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id=p_user_id) THEN RETURN 'account_unavailable'; END IF;
+ -- Auth success does not guarantee profile creation. Reject explicitly without repairing accounts.
+ IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_user_id) THEN RETURN 'profile_unavailable'; END IF;
  SELECT payload INTO prior FROM macrogoal_checkpoints_private.checkpoint_events
  WHERE user_id=p_user_id AND event_id=p_payload->>'eventId';
  IF FOUND THEN RETURN CASE WHEN prior=p_payload THEN 'duplicate' ELSE 'conflict' END; END IF;
