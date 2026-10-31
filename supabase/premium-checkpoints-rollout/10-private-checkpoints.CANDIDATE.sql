@@ -8,6 +8,7 @@ REVOKE ALL ON SCHEMA macrogoal_checkpoints_private FROM PUBLIC, anon, authentica
 GRANT USAGE ON SCHEMA macrogoal_checkpoints_private TO service_role;
 CREATE TABLE macrogoal_checkpoints_private.checkpoint_events (
  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+ CONSTRAINT checkpoint_profile_retention FOREIGN KEY(user_id) REFERENCES public.users(id) ON DELETE CASCADE,
  event_id text NOT NULL CHECK (event_id ~ '^[A-Za-z0-9_-]{8,96}$'),
  flow_id text NOT NULL CHECK (flow_id ~ '^[A-Za-z0-9_-]{8,96}$'),
  source text NOT NULL CHECK (source IN ('unknown','onboarding_complete','settings_upgrade','home_recipe_limit','home_ai_plan','coach_preview','chatbot_upgrade','ai_meal_estimator','ai_meal_planner','community_club','template_plan','feature_gate','floating_badge','coach_daily_saved','coach_daily_preview','coach_meal_saved','coach_meal_preview','coach_conversation')),
@@ -64,6 +65,6 @@ END;
 $function$;
 REVOKE ALL ON FUNCTION public.record_private_checkpoint_v1(uuid,jsonb) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.record_private_checkpoint_v1(uuid,jsonb) TO service_role;
--- FK cleanup affects only this new table when an auth account is actually deleted.
+-- Both successful public profile deletion and auth account deletion cascade only into this new table.
 -- No existing guards, policies, webhook, financial records or account rows are altered.
 COMMIT;
