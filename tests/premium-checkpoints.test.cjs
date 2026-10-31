@@ -89,3 +89,14 @@ test('attempt received after result cannot attribute an otherwise valid financia
  const r=reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start,f.verified);
  assert.equal(r.observedPaymentCount,1);assert.equal(r.matchedPaymentCount,0);assert.equal(r.payments[0].status,'unattributed');assert.equal(r.quarantined.length,0);
 });
+
+test('valid Auth without a profile is an explicit nonretrying coverage rejection',async()=>{
+ for(const mode of ['profile_unavailable','profile_deleted_during_insert','account_unavailable','invalid_jwt']){
+  const db={auth:{getUser:async()=>mode==='invalid_jwt'?{data:{user:null},error:{status:401}}:{data:{user:{id:'11111111-1111-4111-8111-111111111111'}},error:null}},rpc:async()=>mode==='profile_deleted_during_insert'?{data:null,error:{code:'23503',message:'violates foreign key constraint "checkpoint_profile_retention"'}}:{data:mode,error:null}};
+  const edge=load('supabase/premium-checkpoints-rollout/edge/index.ts',{'npm:@supabase/supabase-js@2.83.0':{createClient:()=>db},'./protocol.ts':protocol},{Response,Request,TextDecoder,Uint8Array,AbortController,setTimeout,clearTimeout,fetch:()=>{throw Error('No network allowed in regression');},Deno:{serve(){},env:{get:key=>key==='SUPABASE_URL'?'https://esgptfiofoaeguslgvcq.supabase.co':'test-only-placeholder'}}});
+  const response=await edge.handleCheckpoint(new Request('https://example.invalid',{method:'POST',headers:{Authorization:'Bearer a.b.c','Content-Type':'application/json'},body:JSON.stringify(event())}));
+  const body=await response.json();
+  if(mode.startsWith('profile_')){assert.equal(response.status,409);assert.equal(body.error,'profile_unavailable');}
+  else {assert.equal(response.status,401);assert.equal(body.error,mode==='invalid_jwt'?'unauthorized':'account_unavailable');}
+ }
+});
