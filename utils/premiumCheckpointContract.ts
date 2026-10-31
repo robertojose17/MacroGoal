@@ -18,8 +18,8 @@ export type ClientPurchaseResult = 'sdk_returned_entitlement' | 'sdk_returned_no
   'canceled' | 'pending' | 'already_owned' | 'error';
 export type TransactionCorrelation = Readonly<{
   transactionId: string; productId: string;
-  store: 'APP_STORE' | 'PLAY_STORE' | 'AMAZON' | 'STRIPE' | 'MAC_APP_STORE' | 'RC_BILLING';
-  environment: 'PRODUCTION' | 'SANDBOX';
+  store?: 'APP_STORE' | 'PLAY_STORE';
+  environment?: 'PRODUCTION' | 'SANDBOX';
 }>;
 export type CheckpointDetail =
   | { name: 'inline_impression' | 'entrypoint_clicked' }
