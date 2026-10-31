@@ -1,3 +1,4 @@
+import { formatCommunityRelativeTime } from '@/utils/communityRelativeTime';
 import {PrivatePhotoImage} from '@/components/PrivatePhotoImage';
 import {sharedReference} from '@/utils/resolveShared';
 import { getAppLocale } from '@/lib/localization';
@@ -136,13 +137,7 @@ export function resolveImageSource(
 }
 
 export function getRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = Math.floor((now - then) / 1000);
-  if (diff < 60) return t('localization.social.just_now');
-  if (diff < 3600) return t('localization.social.minutes_ago', { count: Math.floor(diff / 60) });
-  if (diff < 86400) return t('localization.social.hours_ago', { count: Math.floor(diff / 3600) });
-  return t('localization.social.days_ago', { count: Math.floor(diff / 86400) });
+  return formatCommunityRelativeTime(dateStr, getAppLocale());
 }
 
 export function getInitials(name: string | null | undefined, username: string): string {
