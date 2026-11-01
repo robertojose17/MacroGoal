@@ -1,0 +1,77 @@
+name: Purchase reliability checks
+on:
+  push:
+    branches: [codex/purchase-reliability-20261101]
+permissions:
+  contents: read
+concurrency:
+  group: purchase-reliability-validation
+  cancel-in-progress: true
+jobs:
+  isolated-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    defaults:
+      run:
+        working-directory: candidate
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: bf103da59a54db060d66a8f020a06567d8885014
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned package manager
+        run: npm install --global pnpm@10.21.0 --ignore-scripts
+      - name: Install locked dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Isolated client and backend regressions
+        run: node --test tests/purchase-reliability.test.cjs tests/sync-subscription.test.cjs
+      - name: Compare application TypeScript diagnostics with baseline
+        if: success() || failure()
+        run: |
+          node <<'NODE'
+          const ts = require('typescript');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const candidate = process.cwd();
+          const baseline = path.resolve('../baseline');
+          fs.symlinkSync(path.join(candidate, 'node_modules'), path.join(baseline, 'node_modules'), 'dir');
+          function diagnostics(root) {
+            const configPath = path.join(root, 'tsconfig.json');
+            const read = ts.readConfigFile(configPath, ts.sys.readFile);
+            if (read.error) throw new Error(ts.flattenDiagnosticMessageText(read.error.messageText, '\n'));
+            const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, root);
+            // Deno functions are checked separately in their actual runtime.
+            const files = parsed.fileNames.filter(file => !path.relative(root, file).replaceAll('\\', '/').startsWith('supabase/functions/'));
+            const program = ts.createProgram(files, { ...parsed.options, noEmit: true });
+            return [...parsed.errors, ...ts.getPreEmitDiagnostics(program)].map(d => ({
+              file: d.file ? path.relative(root, d.file.fileName).replaceAll('\\', '/') : '<config>',
+              code: d.code,
+              message: ts.flattenDiagnosticMessageText(d.messageText, '\n').replaceAll(root, '<root>'),
+            }));
+          }
+          const before = diagnostics(baseline);
+          const after = diagnostics(candidate);
+          const counts = new Map();
+          for (const item of before) { const key = JSON.stringify(item); counts.set(key, (counts.get(key) || 0) + 1); }
+          const introduced = after.filter(item => { const key = JSON.stringify(item); const count = counts.get(key) || 0; if (count) { counts.set(key, count - 1); return false; } return true; });
+          console.log(JSON.stringify({ baselineDiagnostics: before.length, candidateDiagnostics: after.length, introduced }, null, 2));
+          if (introduced.length) process.exitCode = 1;
+          NODE
+      - uses: denoland/setup-deno@v2
+        if: success() || failure()
+        with:
+          deno-version: v2.5.6
+      - name: Deno check of backend candidate (no execution)
+        if: success() || failure()
+        run: deno check --no-config --no-lock supabase/functions/sync-subscription/index.ts
