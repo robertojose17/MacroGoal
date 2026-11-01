@@ -21,39 +21,59 @@ export function normalizeQuery(query: string): string {
   const phrase = words(query).join(' ').replace(/\bpechugas? de pollo\b/g, 'chicken breast');
   return [...new Set(phrase.split(' ').flatMap(word => (ALIASES[word] ?? word).split(' ')))].filter(Boolean).join(' ');
 }
+export function queryVariants(query: string): string[] {
+  const original = (query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join(' ');
+  return [...new Set([original,normalizeQuery(query)])].filter(Boolean);
+}
 export function productName(p: Product): string { return firstText(p.product_name, p.name, p.generic_name); }
 export function productBrand(p: Product): string { return firstText(p.brands, p.brand); }
 export function matches(p: Product, query: string): boolean {
-  const haystack = words(productName(p) + ' ' + productBrand(p));
-  const tokens = words(query);
-  return tokens.length > 0 && tokens.every(token => haystack.some(word => word.startsWith(token)));
+  const row = (p._db_row ?? {}) as Product;
+  const haystack = words([productName(p),productBrand(p),p.generic_name,
+    row.name,row.product_name,row.generic_name,row.brand,row.brands].filter(Boolean).join(' '));
+  return queryVariants(query).some(variant => {
+    const tokens = words(variant);
+    return tokens.length > 0 && tokens.every(token => haystack.some(word => word.startsWith(token)));
+  });
 }
-const COMPOSITE = /\b(fried|breaded|deli|roll|sandwich|soup|nuggets?|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty)\b/;
+const COMPOSITE = /\b(fried|stuffed|powder|novelty|novelties|yogurt|sweetened|sauce|mix|smoothie|breaded|deli|roll|sandwich|soup|nuggets?|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty)\b/;
 const PREPARATION = new Set(['raw','cooked','roasted','fried','grilled','baked','boiled','breaded','dried','canned','smoked']);
-export function isBasic(p: Product): boolean {
-  return !productBrand(p) && !COMPOSITE.test(words(productName(p)).join(' '));
+export function isBasic(p: Product, query: string): boolean {
+  // The DB has already evaluated the equivalent predicate before its LIMIT.
+  const row = p._db_row as Product | undefined;
+  if (typeof row?._search_basic === 'boolean') return row._search_basic;
+  const singular = (word: string) => word.replace(/s$/, '');
+  const variants = queryVariants(query).map(words);
+  const heads = variants.map(tokens => singular(tokens[0] ?? ''));
+  const allowed = new Set([...variants.flat().map(singular),'raw','fresh','plain','cooked','boneless','skinless','whole','white','brown','red','green']);
+  const name = productName(p);
+  const head = words(name.split(',')[0]);
+  return !productBrand(p) && head.length > 0 && heads.includes(singular(head[0]))
+    && head.every(word => allowed.has(singular(word))) && !COMPOSITE.test(words(name).join(' '));
 }
 export function hasNutrition(p: Product): boolean {
   const n = p.nutriments as Record<string, unknown> | undefined;
-  return !!n && ['energy-kcal_100g','proteins_100g','carbohydrates_100g','fat_100g']
-    .some(key => Number.isFinite(Number(n[key])) && Number(n[key]) > 0);
+  const values = ['energy-kcal_100g','proteins_100g','carbohydrates_100g','fat_100g'].map(key => Number(n?.[key] ?? 0));
+  return !!n && values.every(value => Number.isFinite(value) && value >= 0) && values.some(value => value > 0);
 }
 export function usable(products: Product[], query: string): Product[] {
   return products.filter(p => matches(p, query) && hasNutrition(p));
 }
 export function satisfiesIntent(products: Product[], query: string): boolean {
-  const tokens = words(query);
-  return products.some(p => isBasic(p)
+  const tokens = words(normalizeQuery(query));
+  return products.some(p => isBasic(p,query)
     || tokens.some(t => PREPARATION.has(t))
     || tokens.some(t => words(productBrand(p)).some(b => b.startsWith(t))));
 }
 export function rankProducts(products: Product[], query: string): Product[] {
-  return [...products].sort((a,b) => Number(isBasic(b)) - Number(isBasic(a))
+  return [...products].sort((a,b) => Number(isBasic(b,query)) - Number(isBasic(a,query))
     || Number(words(productName(b)).join(' ') === query) - Number(words(productName(a)).join(' ') === query)
     || productName(a).length - productName(b).length
     || productName(a).localeCompare(productName(b))
     || String(a.code ?? '').localeCompare(String(b.code ?? '')));
 }
+// Shared barcode/FDC identities use explicit canonical precedence: DB, USDA, OFF.
+// Distinct identities and preparations are retained even when names are similar.
 // Conservative display-only dedupe. Different preparation, brand, serving or
 // nutritional values remain separate; no catalog records or log IDs are edited.
 export function mergeProducts(groups: Product[][], limit: number): Product[] {
@@ -88,22 +108,22 @@ async function bounded(provider: Provider, query: string, ms: number): Promise<{
   finally { if (timer) clearTimeout(timer); }
 }
 export async function searchCatalog(query: string, limit: number, providers: { db: Provider; usda: Provider; off: Provider }, budgets = { db: 1200, usda: 1800, off: 900 }) {
-  const normalized = normalizeQuery(query);
+  // Preserve original-language intent; each provider chooses its request form.
   const states: Record<'db'|'usda'|'off',ProviderState> = { db: 'skipped',usda: 'skipped',off: 'skipped' };
-  const db = await bounded(providers.db,normalized,budgets.db); states.db = db.state;
+  const db = await bounded(providers.db,query,budgets.db); states.db = db.state;
   let usda: Product[] = []; let off: Product[] = [];
-  if (!satisfiesIntent(db.products,normalized)) {
-    const result = await bounded(providers.usda,normalized,budgets.usda); states.usda = result.state;
-    usda = rankProducts(result.products,normalized);
+  if (!satisfiesIntent(db.products,query)) {
+    const result = await bounded(providers.usda,query,budgets.usda); states.usda = result.state;
+    usda = rankProducts(result.products,query);
     // OFF is last resort, not a way to pad an already useful short result list.
     if (db.products.length + usda.length === 0) {
-      const result = await bounded(providers.off,normalized,budgets.off); states.off = result.state;
-      off = rankProducts(result.products,normalized);
+      const result = await bounded(providers.off,query,budgets.off); states.off = result.state;
+      off = rankProducts(result.products,query);
     }
   }
   // A relevant USDA basic food may precede branded/composite DB matches.
   // Stable sort preserves SQL order and DB priority within the same intent tier.
-  const primary = [...db.products,...usda].sort((a,b) => Number(isBasic(b)) - Number(isBasic(a)));
+  const primary = mergeProducts([db.products,usda],200).sort((a,b) => Number(isBasic(b,query)) - Number(isBasic(a,query)));
   const products = mergeProducts([primary,off],limit);
   const partial = Object.values(states).includes('unavailable');
   return { products,count: products.length,ranking_version: RANKING_VERSION,
