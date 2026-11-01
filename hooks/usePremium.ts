@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
 import Purchases, { isPurchasesAvailable, withRevenueCatUser } from '@/utils/purchases';
 import { premiumEntitlement } from '@/utils/premiumEntitlement';
+import { syncPremiumMembership } from '@/utils/premiumSync';
 
 type CustomerInfo = any;
 interface UsePremiumReturn {
@@ -37,13 +38,14 @@ export function usePremium(): UsePremiumReturn {
   const request = useRef(0);
   const inFlight = useRef<number | null>(null);
   const followUp = useRef(false);
+  const syncRequested = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const reset = useCallback(() => {
     setIsPremium(false); setCustomerInfo(null); setExpirationDate(null); setError(null);
   }, []);
 
-  const checkPremiumStatus = useCallback(async (force = false) => {
+  const checkPremiumStatus = useCallback(async (force = false): Promise<void> => {
     if (!mounted.current) return;
     if (!force && inFlight.current !== null) { followUp.current = true; return; }
     const ticket = ++request.current;
@@ -70,6 +72,11 @@ export function usePremium(): UsePremiumReturn {
               await new Promise(resolve => setTimeout(resolve, 1500));
               if (!current()) return;
               continue;
+            }
+            if (entitlement && syncRequested.current) {
+              syncRequested.current = false;
+              // Only a fresh identified read may trigger the existing server sync.
+              void syncPremiumMembership();
             }
             setCustomerInfo(info);
             setIsPremium(!!entitlement);
@@ -127,6 +134,7 @@ export function usePremium(): UsePremiumReturn {
     // to an old account; re-read through the identity coordinator instead.
     const onInfo = () => {
       if (!mounted.current || !owner.current) return;
+      syncRequested.current = true;
       schedule();
     };
     if (Platform.OS !== 'web' && isPurchasesAvailable) Purchases.addCustomerInfoUpdateListener(onInfo);
@@ -138,6 +146,7 @@ export function usePremium(): UsePremiumReturn {
         request.current += 1;
         inFlight.current = null;
         followUp.current = false;
+        syncRequested.current = false;
         reset();
         setLoading(!!next);
         if (next) schedule();
