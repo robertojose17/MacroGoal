@@ -1,155 +1,313 @@
 import { premiumSource } from './premiumCheckpointContract';
 import type { PremiumSource } from './premiumCheckpointContract';
 
-type Theme = 'estimator' | 'recipes' | 'planning' | 'templates' | 'club' | 'coachMeals';
+type Theme = 'estimator' | 'recipes' | 'planning' | 'templates' | 'club' | 'coachMeals' | 'general';
 type Benefit = Readonly<{ title: string; desc: string }>;
 type Copy = Readonly<{
   line1: string; line2: string; subtitle: string;
   benefits: readonly [Benefit, Benefit, Benefit];
 }>;
 
-// Every existing source is intentional. null retains the current Coach copy.
+// Every existing source is intentional; unknown sources use the general theme.
 // Presentation only: no routing, entitlement, purchase or analytics side effects.
-export const PAYWALL_TOP_THEMES: Readonly<Record<PremiumSource, Theme | null>> = {
-  unknown: null,
-  onboarding_complete: null,
-  settings_upgrade: null,
-  home_recipe_limit: 'recipes',
-  home_ai_plan: 'planning',
-  coach_preview: null,
-  chatbot_upgrade: null,
-  ai_meal_estimator: 'estimator',
-  ai_meal_planner: 'planning',
-  community_club: 'club',
-  template_plan: 'templates',
-  feature_gate: null,
-  floating_badge: null,
-  coach_daily_saved: 'coachMeals',
-  coach_daily_preview: 'coachMeals',
-  coach_meal_saved: 'coachMeals',
-  coach_meal_preview: 'coachMeals',
-  coach_conversation: 'coachMeals',
+export const PAYWALL_TOP_THEMES: Readonly<Record<PremiumSource, Theme>> = {
+  "unknown": "general",
+  "onboarding_complete": "general",
+  "settings_upgrade": "general",
+  "home_recipe_limit": "recipes",
+  "home_ai_plan": "planning",
+  "coach_preview": "general",
+  "chatbot_upgrade": "general",
+  "ai_meal_estimator": "estimator",
+  "ai_meal_planner": "planning",
+  "community_club": "club",
+  "template_plan": "templates",
+  "feature_gate": "general",
+  "floating_badge": "general",
+  "coach_daily_saved": "coachMeals",
+  "coach_daily_preview": "coachMeals",
+  "coach_meal_saved": "coachMeals",
+  "coach_meal_preview": "coachMeals",
+  "coach_conversation": "coachMeals"
 };
 
+// Benefit-led copy hypotheses; conversion gains have not been established.
 const COPY: Readonly<Record<'en' | 'es', Record<Theme, Copy>>> = {
-  en: {
-    estimator: {
-      line1: 'Know Your', line2: 'Meal Better.',
-      subtitle: 'Estimate your meal, review the details and make it part of your day.',
-      benefits: [
-        { title: 'Photo or Description', desc: 'Use your camera, a saved photo or a meal description.' },
-        { title: 'Calories & Macros', desc: 'Get an AI estimate to help understand your meal.' },
-        { title: 'Review Before You Log', desc: 'Edit the details before adding food to your diary.' },
-      ],
+  "en": {
+    "estimator": {
+      "line1": "Stop guessing",
+      "line2": "what’s on your plate.",
+      "subtitle": "Understand your meals without searching for every ingredient.",
+      "benefits": [
+        {
+          "title": "Less manual work",
+          "desc": "Get a nutrition estimate from a photo or description, without entering every ingredient."
+        },
+        {
+          "title": "More informed choices",
+          "desc": "See estimated calories and macros to understand how your meal fits into your day."
+        },
+        {
+          "title": "A log that reflects you",
+          "desc": "Adjust the estimate to your actual meal, so your journal reflects what you ate."
+        }
+      ]
     },
-    recipes: {
-      line1: 'Find Your', line2: 'Next Meal.',
-      subtitle: 'Keep exploring recipes and find ideas that fit your day.',
-      benefits: [
-        { title: 'Keep Exploring', desc: 'Browse without the free daily recipe-view limit.' },
-        { title: 'See the Details', desc: 'Review ingredients and nutrition before you choose.' },
-        { title: 'More Meal Ideas', desc: 'Find recipes to bring variety to your routine.' },
-      ],
+    "recipes": {
+      "line1": "Break out of",
+      "line2": "your meal rut.",
+      "subtitle": "Find fresh ideas for meals you look forward to.",
+      "benefits": [
+        {
+          "title": "More variety, less boredom",
+          "desc": "Discover different recipes to bring fresh ideas into your everyday meals."
+        },
+        {
+          "title": "Choices that make sense",
+          "desc": "See ingredients and nutrition details to decide what works for you."
+        },
+        {
+          "title": "Explore beyond one recipe",
+          "desc": "Open more recipes without the free plan’s daily viewing limit."
+        }
+      ]
     },
-    planning: {
-      line1: 'Plan Your', line2: 'Meals Ahead.',
-      subtitle: 'Bring your goals and food preferences into your meal plan.',
-      benefits: [
-        { title: 'Plans for Your Goals', desc: 'Create meal plans around your nutrition targets.' },
-        { title: 'Your Food Preferences', desc: 'Include your preferences when building your plan.' },
-        { title: 'Ready to Shop', desc: 'Generate a grocery list from your meal plan.' },
-      ],
+    "planning": {
+      "line1": "Stop wondering",
+      "line2": "what to eat.",
+      "subtitle": "Give your meals a plan that fits you.",
+      "benefits": [
+        {
+          "title": "Fewer last-minute decisions",
+          "desc": "Know what’s on your plan instead of starting from scratch at every meal."
+        },
+        {
+          "title": "Food that fits you",
+          "desc": "Get a meal plan shaped around your nutrition goals and food preferences."
+        },
+        {
+          "title": "More organized grocery trips",
+          "desc": "Bring a shopping list based on your plan, so you know what to buy."
+        }
+      ]
     },
-    templates: {
-      line1: 'Make This', line2: 'Plan Yours.',
-      subtitle: 'Turn a meal plan template into a plan for your goals.',
-      benefits: [
-        { title: 'A Starting Point', desc: 'Explore the meals in your chosen template.' },
-        { title: 'Choose Your Protein', desc: 'Review protein choices and portions for your goals.' },
-        { title: 'Save Your Plan', desc: 'Add the plan to My Plans when you are ready.' },
-      ],
+    "templates": {
+      "line1": "A meal plan.",
+      "line2": "Not a blank page.",
+      "subtitle": "Start with a ready-made structure and make it yours.",
+      "benefits": [
+        {
+          "title": "A head start",
+          "desc": "Build on an existing plan instead of figuring out every meal yourself."
+        },
+        {
+          "title": "A better personal fit",
+          "desc": "Choose protein options and portions that suit your goals within your selected plan."
+        },
+        {
+          "title": "Your plan, ready to revisit",
+          "desc": "Keep your customized plan in My Plans whenever you need a starting point."
+        }
+      ]
     },
-    club: {
-      line1: 'Join Your', line2: 'Premium Club.',
-      subtitle: 'Share the journey with the Macro Goal Premium community.',
-      benefits: [
-        { title: 'Premium Club Access', desc: 'Join the private space for Premium members.' },
-        { title: 'Share Your Progress', desc: 'Share updates and celebrate progress together.' },
-        { title: 'Support Along the Way', desc: 'Connect with members working on their goals.' },
-      ],
+    "club": {
+      "line1": "You don’t have to",
+      "line2": "do this alone.",
+      "subtitle": "Connect with people working on their goals, like you.",
+      "benefits": [
+        {
+          "title": "A place to belong",
+          "desc": "Find a members-only space to share the everyday ups and downs of your journey."
+        },
+        {
+          "title": "Progress worth sharing",
+          "desc": "Celebrate your wins with a community working toward its own goals."
+        },
+        {
+          "title": "Encouragement along the way",
+          "desc": "Exchange experiences with other members and find inspiration in their progress."
+        }
+      ]
     },
-    coachMeals: {
-      line1: 'Choose Your', line2: 'Next Meal.',
-      subtitle: 'Talk through your food choices with your AI Coach.',
-      benefits: [
-        { title: 'Talk Through Choices', desc: 'Get guidance for cooking, quick meals or eating out.' },
-        { title: 'Review Your Portions', desc: 'Compare meal options and review portions.' },
-        { title: 'Log When Ready', desc: 'Review your meal before adding it to your diary.' },
-      ],
+    "coachMeals": {
+      "line1": "Your next meal,",
+      "line2": "with less guesswork.",
+      "subtitle": "Get AI guidance for the choices in front of you.",
+      "benefits": [
+        {
+          "title": "Ideas for real life",
+          "desc": "Find meal ideas whether you’re cooking, eating out, or grabbing something quick."
+        },
+        {
+          "title": "Clearer portion choices",
+          "desc": "Get portion guidance to help choose a meal that fits your goals."
+        },
+        {
+          "title": "Less effort to keep track",
+          "desc": "Bring your meal into your food journal after reviewing the details."
+        }
+      ]
     },
+    "general": {
+      "line1": "Your goal",
+      "line2": "deserves a plan.",
+      "subtitle": "Bring your meals and goals together with personalized AI guidance.",
+      "benefits": [
+        {
+          "title": "Less uncertainty around food",
+          "desc": "Get AI guidance to help make sense of your everyday food choices."
+        },
+        {
+          "title": "A clearer plan for meals",
+          "desc": "Bring structure to your eating with personalized plans, recipes, and shopping lists."
+        },
+        {
+          "title": "Guidance that can evolve",
+          "desc": "Adjust your approach as your goals, preferences, and progress change."
+        }
+      ]
+    }
   },
-  es: {
-    estimator: {
-      line1: 'Conoce Tu', line2: 'Comida Mejor.',
-      subtitle: 'Estima tu comida, revisa los detalles y añádela a tu día.',
-      benefits: [
-        { title: 'Foto o Descripción', desc: 'Usa la cámara, una foto guardada o describe tu comida.' },
-        { title: 'Calorías y Macros', desc: 'Obtén una estimación con IA para conocer tu comida.' },
-        { title: 'Revisa y Registra', desc: 'Edita los detalles antes de añadirla a tu diario.' },
-      ],
+  "es": {
+    "estimator": {
+      "line1": "Deja de adivinar",
+      "line2": "lo que comes.",
+      "subtitle": "Entiende tus comidas sin buscar cada ingrediente.",
+      "benefits": [
+        {
+          "title": "Menos trabajo manual",
+          "desc": "Obtén una estimación nutricional con una foto o descripción, sin ingresar cada ingrediente."
+        },
+        {
+          "title": "Decisiones mejor informadas",
+          "desc": "Conoce las calorías y macros estimados para entender cómo encaja tu comida en el día."
+        },
+        {
+          "title": "Un registro a tu medida",
+          "desc": "Ajusta la estimación a tu comida real para que tu diario refleje lo que comiste."
+        }
+      ]
     },
-    recipes: {
-      line1: 'Encuentra Tu', line2: 'Próxima Comida.',
-      subtitle: 'Sigue explorando recetas y encuentra ideas para tu día.',
-      benefits: [
-        { title: 'Sigue Explorando', desc: 'Explora sin el límite diario de recetas del plan gratis.' },
-        { title: 'Mira los Detalles', desc: 'Revisa ingredientes y nutrientes antes de elegir.' },
-        { title: 'Más Ideas de Comidas', desc: 'Encuentra recetas para darle variedad a tu rutina.' },
-      ],
+    "recipes": {
+      "line1": "Come variado.",
+      "line2": "Sin complicarte.",
+      "subtitle": "Encuentra ideas nuevas para disfrutar más tus comidas.",
+      "benefits": [
+        {
+          "title": "Más variedad, menos monotonía",
+          "desc": "Descubre recetas diferentes para renovar tus comidas de todos los días."
+        },
+        {
+          "title": "Elige lo que te conviene",
+          "desc": "Consulta ingredientes e información nutricional para decidir qué funciona para ti."
+        },
+        {
+          "title": "Más de una receta",
+          "desc": "Abre más recetas sin el límite diario de visualizaciones del plan gratis."
+        }
+      ]
     },
-    planning: {
-      line1: 'Organiza Tus', line2: 'Comidas.',
-      subtitle: 'Crea un plan de comidas según tus metas y preferencias.',
-      benefits: [
-        { title: 'Planes para Tus Metas', desc: 'Crea planes según tus objetivos de nutrición.' },
-        { title: 'Tus Preferencias', desc: 'Incluye tus preferencias al crear tu plan.' },
-        { title: 'Prepara Tu Compra', desc: 'Genera una lista de compras desde tu plan.' },
-      ],
+    "planning": {
+      "line1": "Deja de improvisar",
+      "line2": "cada comida.",
+      "subtitle": "Organiza tus comidas con un plan para ti.",
+      "benefits": [
+        {
+          "title": "Menos decisiones de último minuto",
+          "desc": "Ten tus comidas planificadas sin empezar de cero cada vez que tengas hambre."
+        },
+        {
+          "title": "Comidas que van contigo",
+          "desc": "Obtén un plan basado en tus metas nutricionales y tus preferencias de comida."
+        },
+        {
+          "title": "Compras mejor organizadas",
+          "desc": "Lleva una lista basada en tu plan para saber qué necesitas comprar."
+        }
+      ]
     },
-    templates: {
-      line1: 'Haz Tuyo', line2: 'Este Plan.',
-      subtitle: 'Convierte una plantilla en un plan para tus objetivos.',
-      benefits: [
-        { title: 'Un Punto de Partida', desc: 'Explora las comidas de la plantilla que elegiste.' },
-        { title: 'Elige Tu Proteína', desc: 'Revisa proteínas y porciones según tus objetivos.' },
-        { title: 'Guarda Tu Plan', desc: 'Añade el plan a Mis Planes cuando estés listo.' },
-      ],
+    "templates": {
+      "line1": "Empieza con un plan,",
+      "line2": "no de cero.",
+      "subtitle": "Parte de una estructura lista y adáptala a ti.",
+      "benefits": [
+        {
+          "title": "Un comienzo más fácil",
+          "desc": "Aprovecha un plan existente sin tener que pensar cada comida desde cero."
+        },
+        {
+          "title": "Más a tu medida",
+          "desc": "Elige proteínas y porciones según tus metas dentro del plan seleccionado."
+        },
+        {
+          "title": "Tu plan siempre a mano",
+          "desc": "Guarda tu plan personalizado en Mis Planes para consultarlo cuando lo necesites."
+        }
+      ]
     },
-    club: {
-      line1: 'Únete a Tu', line2: 'Club Premium.',
-      subtitle: 'Comparte el camino con la comunidad Premium de Macro Goal.',
-      benefits: [
-        { title: 'Acceso al Club Premium', desc: 'Entra al espacio privado para miembros Premium.' },
-        { title: 'Comparte Tu Progreso', desc: 'Comparte novedades y celebren juntos sus avances.' },
-        { title: 'Apoyo en el Camino', desc: 'Conecta con miembros que trabajan en sus metas.' },
-      ],
+    "club": {
+      "line1": "No tienes que",
+      "line2": "hacerlo solo.",
+      "subtitle": "Conecta con personas que también trabajan en sus metas.",
+      "benefits": [
+        {
+          "title": "Un espacio para ti",
+          "desc": "Comparte los avances y retos de tu camino en un espacio exclusivo para miembros."
+        },
+        {
+          "title": "Tus avances merecen celebrarse",
+          "desc": "Comparte tus logros con una comunidad que también trabaja en sus metas."
+        },
+        {
+          "title": "Motivación en el camino",
+          "desc": "Intercambia experiencias con otros miembros y encuentra inspiración en sus avances."
+        }
+      ]
     },
-    coachMeals: {
-      line1: 'Elige Tu', line2: 'Próxima Comida.',
-      subtitle: 'Habla con tu Coach de IA sobre tus opciones de comida.',
-      benefits: [
-        { title: 'Explora Tus Opciones', desc: 'Recibe ideas para cocinar o comer fuera o rápido.' },
-        { title: 'Revisa Tus Porciones', desc: 'Compara opciones de comidas y revisa las porciones.' },
-        { title: 'Registra a Tu Ritmo', desc: 'Revisa tu comida antes de añadirla a tu diario.' },
-      ],
+    "coachMeals": {
+      "line1": "Menos dudas sobre",
+      "line2": "tu próxima comida.",
+      "subtitle": "Recibe orientación de IA para elegir qué comer.",
+      "benefits": [
+        {
+          "title": "Ideas para tu día real",
+          "desc": "Encuentra ideas para cocinar, comer fuera o resolver una comida rápida."
+        },
+        {
+          "title": "Más claridad con las porciones",
+          "desc": "Recibe orientación sobre porciones para elegir una comida que encaje con tus metas."
+        },
+        {
+          "title": "Más fácil llevar tu registro",
+          "desc": "Añade tu comida al diario después de revisar que los detalles reflejen lo que comiste."
+        }
+      ]
     },
-  },
+    "general": {
+      "line1": "Tu meta",
+      "line2": "merece un plan.",
+      "subtitle": "Conecta tus comidas y metas con orientación personalizada de IA.",
+      "benefits": [
+        {
+          "title": "Menos dudas al comer",
+          "desc": "Recibe orientación de IA para entender mejor tus opciones de comida del día a día."
+        },
+        {
+          "title": "Más orden en tus comidas",
+          "desc": "Organiza tu alimentación con planes personalizados, recetas y listas de compras."
+        },
+        {
+          "title": "Una guía que evoluciona",
+          "desc": "Ajusta tu enfoque a medida que cambian tus metas, preferencias y avances."
+        }
+      ]
+    }
+  }
 };
 
 /** Stateless lookup: each render uses the current route source and app language. */
-export function getPaywallTop(source: unknown, language?: string): Copy | null {
+export function getPaywallTop(source: unknown, language?: string): Copy {
   const theme = PAYWALL_TOP_THEMES[premiumSource(source)];
-  if (!theme) return null;
   const locale = /^es(?:[-_]|$)/i.test(language ?? '') ? 'es' : 'en';
   return COPY[locale][theme];
 }
