@@ -62,3 +62,13 @@ export const isPurchasesAvailable = false;
 export async function loginRevenueCat(_userId: string, _apiKey: string, _opts?: { email?: string }): Promise<void> {}
 
 export async function logoutRevenueCat(): Promise<void> {}
+
+export type RevenueCatLease = Readonly<{ userId: string; generation: number }>;
+export function revenueCatLeaseCurrent(_lease: RevenueCatLease): boolean { return false; }
+export async function withRevenueCatUser<T>(_userId: string, _work: (sdk: any, lease: RevenueCatLease) => Promise<T>, _apiKey?: string): Promise<T> {
+  throw new Error('RC_UNAVAILABLE_ON_WEB');
+}
+
+export async function getRevenueCatOffering(_userId: string, _identifier: string, _timeoutMs = 5000): Promise<{ offering: any; lease: RevenueCatLease }> {
+  throw new Error('RC_UNAVAILABLE_ON_WEB');
+}

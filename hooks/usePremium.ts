@@ -1,16 +1,11 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
-import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
+import Purchases, { isPurchasesAvailable, withRevenueCatUser } from '@/utils/purchases';
+import { premiumEntitlement, premiumFallbackState } from '@/utils/premiumEntitlement';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 
-function loadPurchases(): any {
-  return isPurchasesAvailable ? Purchases : null;
-}
-// Use `any` for CustomerInfo so we don't import the type from the native module
 type CustomerInfo = any;
-
 interface UsePremiumReturn {
   isPremium: boolean;
   loading: boolean;
@@ -21,297 +16,165 @@ interface UsePremiumReturn {
   expirationDate: string | null;
 }
 
-/**
- * Hook to check if the current user has an active premium subscription
- * Example premiumEntry import: @/utils/premiumCheckpoints
- *
- * This hook uses RevenueCat as the primary source of truth for premium status,
- * with Supabase as a fallback for offline scenarios.
- *
- * Architecture:
- * 1. Primary: Check RevenueCat entitlements (real-time, authoritative)
- * 2. Fallback: Check Supabase users.user_type (derived state, synced via webhook)
- *
- * The hook re-checks on every SIGNED_IN auth event so that after a sign-out/sign-in
- * cycle the correct entitlements for the newly-identified RevenueCat user are loaded
- * immediately, without requiring the user to trigger a purchase or restore flow.
- *
- * @returns {UsePremiumReturn} Premium status, loading state, customer info, and refresh function
- *
- * @example
- * ```tsx
- * function MyComponent() {
- *   const { isPremium, loading, expirationDate } = usePremium();
- *
- *   if (loading) return <ActivityIndicator />;
- *
- *   return (
- *     <View>
- *       {isPremium ? (
- *         <>
- *           <Text>Premium Feature</Text>
- *           {expirationDate && <Text>Expires: {expirationDate}</Text>}
- *         </>
- *       ) : (
- *         <Button title="Upgrade to Premium" onPress={() => router.push(premiumEntry('feature_gate'))} />
- *       )}
- *     </View>
- *   );
- * }
- * ```
- */
+// Bound waiting at the consumer, never release the SDK identity lock on timeout.
+async function bounded<T>(operation: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([operation, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('RC_STATUS_TIMEOUT')), 5000);
+    })]);
+  } finally { if (timer) clearTimeout(timer); }
+}
+
+/** Same public gate contract; unknown is an error, not a subscription revocation. */
 export function usePremium(): UsePremiumReturn {
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [expirationDate, setExpirationDate] = useState<string | null>(null);
+  const mounted = useRef(false);
+  const knownPremium = useRef(false);
+  const owner = useRef<string | null | undefined>(undefined);
+  const request = useRef(0);
+  const inFlight = useRef<number | null>(null);
+  const followUp = useRef(false);
+  const syncRequested = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Track in-flight check to avoid concurrent duplicate calls
-  const checkInProgress = useRef(false);
+  const reset = useCallback(() => {
+    knownPremium.current = false;
+    setIsPremium(false); setCustomerInfo(null); setExpirationDate(null); setError(null);
+  }, []);
 
-  const checkPremiumStatus = useCallback(async (force = false) => {
-    if (!force && checkInProgress.current) {
-      console.log('[usePremium] Check already in progress, skipping duplicate call');
-      return;
-    }
-    checkInProgress.current = true;
-
-    const Purchases = loadPurchases();
-
+  const checkPremiumStatus = useCallback(async (force = false): Promise<void> => {
+    if (!mounted.current) return;
+    if (!force && inFlight.current !== null) { followUp.current = true; return; }
+    const ticket = ++request.current;
+    inFlight.current = ticket;
+    const current = () => mounted.current && request.current === ticket;
+    setLoading(true);
+    setError(null);
     try {
-      console.log('[usePremium] ========== CHECKING PREMIUM STATUS ==========');
-      setLoading(true);
-      setError(null);
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (!current()) return;
+      if (sessionError) throw sessionError;
+      const userId = data.session?.user.id ?? null;
+      if (owner.current !== userId) { owner.current = userId; reset(); }
+      if (!userId) return;
 
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.log('[usePremium] No user found');
-        setIsPremium(false);
-        setLoading(false);
-        return;
-      }
-
-      console.log('[usePremium] User ID:', user.id);
-
-      // On native platforms, check RevenueCat first (primary source of truth).
-      // We retry once with a short delay to handle the case where RevenueCat
-      // was just initialized (e.g. right after a SIGNED_IN event) and the SDK
-      // hasn't fully identified the user yet.
-      if (Platform.OS !== 'web' && Purchases) {
-        for (let attempt = 1; attempt <= 3; attempt++) {
+      if (Platform.OS !== 'web' && isPurchasesAvailable) {
+        for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            console.log(`[usePremium] 🔍 Checking RevenueCat entitlements (attempt ${attempt})...`);
-
-            // Wrap getCustomerInfo in a 5s timeout so a slow/uninitialized
-            // RevenueCat never blocks the tab layout from rendering.
-            const rcTimeout = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('RevenueCat getCustomerInfo timed out')), 5000)
-            );
-            const info = await Promise.race([Purchases.getCustomerInfo(), rcTimeout]);
-            setCustomerInfo(info);
-
-            console.log('[usePremium] RevenueCat Customer Info:');
-            console.log('[usePremium] - Original App User ID:', info.originalAppUserId);
-            console.log('[usePremium] - Active Entitlements:', Object.keys(info.entitlements.active));
-            console.log('[usePremium] - All Entitlements:', Object.keys(info.entitlements.all));
-
-            // If RevenueCat still has an anonymous user ID but we have a real
-            // session, it means the SDK hasn't been identified yet (race with
-            // _layout.tsx init). Log in now so we get the right entitlements.
-            const isAnonymousUser = info.originalAppUserId.startsWith('$RCAnonymousID:');
-            if (isAnonymousUser && user.id) {
-              console.log('[usePremium] ⚠️ RevenueCat still anonymous, logging in user:', user.id);
-              try {
-                const { customerInfo: identifiedInfo } = await Purchases.logIn(user.id);
-                console.log('[usePremium] ✅ RevenueCat user identified from hook:', user.id);
-                console.log('[usePremium] Active entitlements after login:', Object.keys(identifiedInfo.entitlements.active));
-
-                const premiumEntitlementAfterLogin =
-                  identifiedInfo.entitlements.active['pro'] ||
-                  identifiedInfo.entitlements.active['Macrogoal Pro'] ||
-                  identifiedInfo.entitlements.active['macrogoal_pro'] ||
-                  identifiedInfo.entitlements.active['premium'];
-                const hasActiveAfterLogin = premiumEntitlementAfterLogin?.isActive || false;
-
-                // If the just-logged-in customer info still has zero active entitlements
-                // AND we have more attempts left, retry — RevenueCat sometimes needs a
-                // moment after logIn to populate entitlements from the server.
-                if (!hasActiveAfterLogin && Object.keys(identifiedInfo.entitlements.all).length === 0 && attempt < 3) {
-                  console.log(`[usePremium] logIn returned empty entitlements, retrying (attempt ${attempt}/3)`);
-                  await new Promise(resolve => setTimeout(resolve, 1500));
-                  continue;
-                }
-
-                setCustomerInfo(identifiedInfo);
-                setIsPremium(hasActiveAfterLogin);
-                if (premiumEntitlementAfterLogin?.expirationDate) {
-                  setExpirationDate(premiumEntitlementAfterLogin.expirationDate);
-                }
-                console.log('[usePremium] ✅ Premium status after login:', hasActiveAfterLogin);
-                console.log('[usePremium] ========== PREMIUM STATUS CHECK COMPLETE ==========');
-                return;
-              } catch (loginErr) {
-                console.warn('[usePremium] ⚠️ Could not log in to RevenueCat from hook:', loginErr);
-                if (attempt < 3) {
-                  console.log(`[usePremium] Retrying after logIn failure (attempt ${attempt}/3)`);
-                  await new Promise(resolve => setTimeout(resolve, 1500));
-                  continue;
-                }
-                // Final attempt — fall through to use the anonymous info we already have
-              }
-            }
-
-            // Check for premium entitlement — try both possible keys used in the RevenueCat dashboard
-            const premiumEntitlement =
-              info.entitlements.active['pro'] ||
-              info.entitlements.active['Macrogoal Pro'] ||
-              info.entitlements.active['macrogoal_pro'] ||
-              info.entitlements.active['premium'];
-            const hasActiveEntitlement = premiumEntitlement?.isActive || false;
-
-            console.log('[usePremium] Premium Entitlement Details:');
-            console.log('[usePremium] - Is Active:', hasActiveEntitlement);
-            console.log('[usePremium] - Matched entitlement key:', premiumEntitlement ? 'found' : 'none (checked: pro, Macrogoal Pro, macrogoal_pro, premium)');
-            console.log('[usePremium] - Product Identifier:', premiumEntitlement?.productIdentifier);
-            console.log('[usePremium] - Will Renew:', premiumEntitlement?.willRenew);
-            console.log('[usePremium] - Period Type:', premiumEntitlement?.periodType);
-
-            if (premiumEntitlement?.expirationDate) {
-              setExpirationDate(premiumEntitlement.expirationDate);
-              console.log('[usePremium] - Expiration Date:', premiumEntitlement.expirationDate);
-            }
-
-            console.log('[usePremium] ✅ RevenueCat premium status:', hasActiveEntitlement);
-            setIsPremium(hasActiveEntitlement);
-            setLoading(false);
-            console.log('[usePremium] ========== PREMIUM STATUS CHECK COMPLETE ==========');
-            return;
-          } catch (revenueCatError) {
-            if (attempt < 3) {
-              console.warn(`[usePremium] ⚠️ RevenueCat attempt ${attempt} failed, retrying in 1.5s:`, revenueCatError);
+            const info: CustomerInfo = await bounded(withRevenueCatUser(userId, sdk => sdk.getCustomerInfo()));
+            if (!current() || owner.current !== userId) return;
+            const entitlement = premiumEntitlement(info);
+            // Preserve the existing short retry for an empty just-identified SDK response.
+            if (!entitlement && Object.keys(info.entitlements.all).length === 0 && attempt < 2) {
               await new Promise(resolve => setTimeout(resolve, 1500));
-            } else {
-              console.warn('[usePremium] ⚠️ RevenueCat check failed after 3 attempts, falling back to Supabase:', revenueCatError);
+              if (!current()) return;
+              continue;
+            }
+            if (entitlement && syncRequested.current) {
+              syncRequested.current = false;
+              // Only a fresh identified read may trigger the existing server sync.
+              void syncPremiumMembership();
+            }
+            setCustomerInfo(info);
+            knownPremium.current = !!entitlement;
+            setIsPremium(!!entitlement);
+            setExpirationDate(entitlement?.expirationDate ?? null);
+            return;
+          } catch {
+            if (!current() || owner.current !== userId) return;
+            if (attempt < 2) {
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              if (!current()) return;
             }
           }
         }
       }
 
-      // Fallback: Check Supabase for premium status (derived state)
-      console.log('[usePremium] 🔍 Checking Supabase for premium status...');
-      const { data: userData, error: fetchError } = await supabase
-        .from('users')
-        .select('user_type')
-        .eq('id', user.id)
-        .single();
-
-      if (fetchError) {
-        console.error('[usePremium] ❌ Error fetching user data:', fetchError);
-        throw fetchError;
+      const { data: profile, error: profileError } = await supabase.from('users')
+        .select('user_type').eq('id', userId).single();
+      if (!current() || owner.current !== userId) return;
+      if (profileError || !profile) throw new Error('PREMIUM_STATUS_UNAVAILABLE');
+      const fallbackPremium = profile.user_type === 'premium';
+      if (Platform.OS === 'web') {
+        knownPremium.current = fallbackPremium;
+        setIsPremium(fallbackPremium);
+      } else {
+        // A stale negative mirror after SDK/network failure must not revoke a
+        // known paid session. A successful identified SDK response can revoke.
+        const fallback = premiumFallbackState(knownPremium.current, fallbackPremium);
+        knownPremium.current = fallback.isPremium;
+        setIsPremium(fallback.isPremium);
+        setError(fallback.error);
+        console.warn('[usePremium] RC_STATUS_FALLBACK');
       }
-
-      const userIsPremium = userData?.user_type === 'premium';
-      console.log('[usePremium] ✅ Supabase premium status:', userIsPremium);
-      setIsPremium(userIsPremium);
-
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to check premium status';
-      console.error('[usePremium] ❌ Error checking premium status:', err);
-      setError(errorMessage);
-      setIsPremium(false);
+    } catch {
+      if (current()) {
+        const fallback = premiumFallbackState(knownPremium.current);
+        setIsPremium(fallback.isPremium);
+        setError(fallback.error);
+        console.warn('[usePremium] PREMIUM_STATUS_UNAVAILABLE');
+      }
+      // Keep same-account state on transient failure. Account changes reset above.
     } finally {
-      setLoading(false);
-      checkInProgress.current = false;
-      console.log('[usePremium] ========== PREMIUM STATUS CHECK COMPLETE ==========');
+      if (current()) {
+        setLoading(false);
+        inFlight.current = null;
+        if (followUp.current) {
+          followUp.current = false;
+          retryTimer.current = setTimeout(() => { void checkPremiumStatus(); }, 0);
+        }
+      }
     }
-  }, []);
+  }, [reset]);
 
   const refreshPremiumStatus = useCallback(async () => {
-    console.log('[usePremium] 🔄 Manually refreshing premium status (forced)');
     await checkPremiumStatus(true);
   }, [checkPremiumStatus]);
 
   useEffect(() => {
-    console.log('[usePremium] Hook mounted, starting initial check');
-    checkPremiumStatus();
-
-    const Purchases = loadPurchases();
-
-    // Set up RevenueCat listener for real-time updates (native only).
-    // This fires when a purchase completes or when RevenueCat pushes an update.
-    if (Platform.OS !== 'web' && Purchases) {
-      console.log('[usePremium] Setting up RevenueCat customer info listener');
-      Purchases.addCustomerInfoUpdateListener((info) => {
-        console.log('[usePremium] 🔔 RevenueCat customer info updated via listener');
-        console.log('[usePremium] - Original App User ID:', info.originalAppUserId);
-        console.log('[usePremium] - Active Entitlements:', Object.keys(info.entitlements.active));
-
-        setCustomerInfo(info);
-        const premiumEntitlement =
-          info.entitlements.active['pro'] ||
-          info.entitlements.active['Macrogoal Pro'] ||
-          info.entitlements.active['macrogoal_pro'] ||
-          info.entitlements.active['premium'];
-        const hasActiveEntitlement = premiumEntitlement?.isActive || false;
-
-        console.log('[usePremium] - Premium Status:', hasActiveEntitlement);
-        setIsPremium(hasActiveEntitlement);
-
-        if (hasActiveEntitlement) {
-          console.log('[usePremium] Active entitlement detected via listener — triggering premium sync');
-          syncPremiumMembership().catch(console.warn);
-        }
-
-        if (premiumEntitlement?.expirationDate) {
-          setExpirationDate(premiumEntitlement.expirationDate);
-        }
-      });
-    }
-
-    // Subscribe to Supabase auth state changes.
-    // On SIGNED_IN (including after sign-out → sign-in), re-check premium status
-    // so the Profile tab reflects the correct entitlements for the newly-logged-in
-    // user without requiring a purchase or restore flow.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user?.id) {
-        console.log('[usePremium] 🔐 SIGNED_IN event detected, refreshing premium status for user:', session.user.id);
-        // Small delay to allow loginRevenueCat() in _layout.tsx to complete first,
-        // so getCustomerInfo() returns entitlements for the identified user.
-        setTimeout(() => {
-          console.log('[usePremium] ⏱️ Running post-login premium check');
-          checkPremiumStatus();
-        }, 1500);
-      } else if (event === 'INITIAL_SESSION' && session?.user?.id) {
-        console.log('[usePremium] 🔐 INITIAL_SESSION event detected, scheduling delayed premium check for user:', session.user.id);
-        // loginRevenueCat() in _layout.tsx configures RC atomically on cold start,
-        // so we only need a short delay before asking for customer info.
-        setTimeout(() => {
-          console.log('[usePremium] ⏱️ Running cold-start premium re-check');
-          checkPremiumStatus(true); // force = true to bypass the in-progress guard
-        }, 2000);
-      } else if (event === 'SIGNED_OUT') {
-        console.log('[usePremium] 🚪 SIGNED_OUT event detected, resetting premium status');
-        setIsPremium(false);
-        setCustomerInfo(null);
-        setExpirationDate(null);
-        setError(null);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
+    mounted.current = true;
+    const schedule = () => {
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      retryTimer.current = setTimeout(() => { void checkPremiumStatus(); }, 0);
     };
-  }, [checkPremiumStatus]);
+    // Treat SDK callbacks only as invalidation hints. Their payload may belong
+    // to an old account; re-read through the identity coordinator instead.
+    const onInfo = () => {
+      if (!mounted.current || !owner.current) return;
+      syncRequested.current = true;
+      schedule();
+    };
+    if (Platform.OS !== 'web' && isPurchasesAvailable) Purchases.addCustomerInfoUpdateListener(onInfo);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted.current) return;
+      const next = session?.user.id ?? null;
+      if (next !== owner.current) {
+        owner.current = next;
+        request.current += 1;
+        inFlight.current = null;
+        followUp.current = false;
+        syncRequested.current = false;
+        reset();
+        setLoading(!!next);
+        if (next) schedule();
+      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') schedule();
+    });
+    void checkPremiumStatus();
+    return () => {
+      mounted.current = false;
+      request.current += 1;
+      inFlight.current = null;
+      followUp.current = false;
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      subscription.unsubscribe();
+      if (Platform.OS !== 'web' && isPurchasesAvailable) Purchases.removeCustomerInfoUpdateListener(onInfo);
+    };
+  }, [checkPremiumStatus, reset]);
 
-  return {
-    isPremium,
-    loading,
-    error,
-    checkPremiumStatus,
-    refreshPremiumStatus,
-    customerInfo,
-    expirationDate,
-  };
+  return { isPremium, loading, error, checkPremiumStatus, refreshPremiumStatus, customerInfo, expirationDate };
 }
