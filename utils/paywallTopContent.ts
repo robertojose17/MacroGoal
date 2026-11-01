@@ -35,270 +35,270 @@ export const PAYWALL_TOP_THEMES: Readonly<Record<PremiumSource, Theme>> = {
 const COPY: Readonly<Record<'en' | 'es', Record<Theme, Copy>>> = {
   "en": {
     "estimator": {
-      "line1": "Stop guessing",
-      "line2": "what’s on your plate.",
-      "subtitle": "Understand your meals without searching for every ingredient.",
+      "line1": "Log your meal.",
+      "line2": "Skip the ingredient hunt.",
+      "subtitle": "Turn a photo or description into a nutrition estimate you can review.",
       "benefits": [
         {
-          "title": "Less manual work",
-          "desc": "Get a nutrition estimate from a photo or description, without entering every ingredient."
+          "title": "Less typing, less searching",
+          "desc": "Get an estimate without looking up and entering every ingredient separately."
         },
         {
-          "title": "More informed choices",
-          "desc": "See estimated calories and macros to understand how your meal fits into your day."
+          "title": "Calories and macros together",
+          "desc": "See estimated nutrition to understand how your meal fits into your day."
         },
         {
-          "title": "A log that reflects you",
-          "desc": "Adjust the estimate to your actual meal, so your journal reflects what you ate."
+          "title": "Your meal, your adjustments",
+          "desc": "Correct the details before logging, so your journal reflects what you actually ate."
         }
       ]
     },
     "recipes": {
       "line1": "Break out of",
       "line2": "your meal rut.",
-      "subtitle": "Find fresh ideas for meals you look forward to.",
+      "subtitle": "Find your next meal without stopping at one recipe a day.",
       "benefits": [
         {
-          "title": "More variety, less boredom",
-          "desc": "Discover different recipes to bring fresh ideas into your everyday meals."
+          "title": "More meals to choose from",
+          "desc": "Explore recipe details beyond the free plan’s daily viewing limit."
         },
         {
-          "title": "Choices that make sense",
-          "desc": "See ingredients and nutrition details to decide what works for you."
+          "title": "Know what you’ll need",
+          "desc": "See the ingredients before choosing a recipe, so you can plan around what you have."
         },
         {
-          "title": "Explore beyond one recipe",
-          "desc": "Open more recipes without the free plan’s daily viewing limit."
+          "title": "Nutrition before you decide",
+          "desc": "Check each recipe’s nutrition details to choose what fits your day."
         }
       ]
     },
     "planning": {
       "line1": "Stop wondering",
       "line2": "what to eat.",
-      "subtitle": "Give your meals a plan that fits you.",
+      "subtitle": "Get a meal plan and shopping list built around your goals and preferences.",
       "benefits": [
         {
-          "title": "Fewer last-minute decisions",
-          "desc": "Know what’s on your plan instead of starting from scratch at every meal."
+          "title": "Meals already planned",
+          "desc": "Start with a meal plan instead of coming up with every meal yourself."
         },
         {
-          "title": "Food that fits you",
-          "desc": "Get a meal plan shaped around your nutrition goals and food preferences."
+          "title": "Your preferences, built in",
+          "desc": "Get meals planned around your nutrition goals and the food preferences you provide."
         },
         {
-          "title": "More organized grocery trips",
-          "desc": "Bring a shopping list based on your plan, so you know what to buy."
+          "title": "Less work before grocery shopping",
+          "desc": "Get a shopping list from your plan instead of building it from scratch."
         }
       ]
     },
     "templates": {
-      "line1": "A meal plan.",
-      "line2": "Not a blank page.",
-      "subtitle": "Start with a ready-made structure and make it yours.",
+      "line1": "Start with a plan,",
+      "line2": "not from scratch.",
+      "subtitle": "Make this meal plan yours without building every meal yourself.",
       "benefits": [
         {
-          "title": "A head start",
-          "desc": "Build on an existing plan instead of figuring out every meal yourself."
+          "title": "Meals already mapped out",
+          "desc": "Start from an existing template rather than putting an entire plan together yourself."
         },
         {
-          "title": "A better personal fit",
-          "desc": "Choose protein options and review portions that suit your goals within your selected plan."
+          "title": "Protein choices that suit you",
+          "desc": "Choose your protein options and review the portions in your selected plan."
         },
         {
-          "title": "Your plan, ready to revisit",
-          "desc": "Keep your customized plan in My Plans whenever you need a starting point."
+          "title": "Your plan within reach",
+          "desc": "Save it to My Plans so you can return to it whenever you need."
         }
       ]
     },
     "club": {
       "line1": "You don’t have to",
       "line2": "do this alone.",
-      "subtitle": "Connect with people working on their goals, like you.",
+      "subtitle": "Share your journey in a private community of Premium members.",
       "benefits": [
         {
-          "title": "A place to belong",
-          "desc": "Find a members-only space to share the everyday ups and downs of your journey."
+          "title": "A space beyond your journal",
+          "desc": "Share your progress and everyday challenges with other members in the Premium Club."
         },
         {
-          "title": "Progress worth sharing",
-          "desc": "Celebrate your wins with a community working toward its own goals."
+          "title": "Wins worth sharing",
+          "desc": "Give your milestones a place in a community working toward its own goals."
         },
         {
-          "title": "Encouragement along the way",
-          "desc": "Exchange experiences with other members and find inspiration in their progress."
+          "title": "Other journeys to learn from",
+          "desc": "Read what other members share and exchange experiences along the way."
         }
       ]
     },
     "coachMeals": {
       "line1": "Your next meal,",
       "line2": "with less guesswork.",
-      "subtitle": "Get AI guidance for the choices in front of you.",
+      "subtitle": "Get AI meal ideas for cooking, eating out, or grabbing something quick.",
       "benefits": [
         {
-          "title": "Ideas for real life",
-          "desc": "Find meal ideas whether you’re cooking, eating out, or grabbing something quick."
+          "title": "Options for where you are",
+          "desc": "Get food ideas for your situation instead of starting your search from scratch."
         },
         {
-          "title": "Clearer portion choices",
-          "desc": "Get portion guidance to help choose a meal that fits your goals."
+          "title": "Help with portion decisions",
+          "desc": "Get portion guidance to help you decide how a meal fits your goals."
         },
         {
-          "title": "Less effort to keep track",
-          "desc": "Bring your meal into your food journal after reviewing the details."
+          "title": "From meal idea to journal",
+          "desc": "Review your meal’s details before adding it to your food journal."
         }
       ]
     },
     "general": {
-      "line1": "Your goal",
-      "line2": "deserves a plan.",
-      "subtitle": "Bring your meals and goals together with personalized AI guidance.",
+      "line1": "Know what to eat",
+      "line2": "for your goal.",
+      "subtitle": "A meal plan shaped around your goals and preferences, with everyday AI guidance.",
       "benefits": [
         {
-          "title": "Less uncertainty around food",
-          "desc": "Get AI guidance to help make sense of your everyday food choices."
+          "title": "Meals already planned",
+          "desc": "Get a personalized meal plan instead of figuring out every meal yourself."
         },
         {
-          "title": "A clearer plan for meals",
-          "desc": "Bring structure to your eating with personalized plans, recipes, and shopping lists."
+          "title": "Simplify your grocery shopping",
+          "desc": "Get a shopping list based on your plan, so you know what to buy."
         },
         {
-          "title": "Guidance that can evolve",
-          "desc": "Adjust your approach as your goals, preferences, and progress change."
+          "title": "Help choosing what to eat",
+          "desc": "Ask your AI Coach for meal ideas and portion guidance when you need direction."
         }
       ]
     }
   },
   "es": {
     "estimator": {
-      "line1": "Deja de adivinar",
-      "line2": "lo que comes.",
-      "subtitle": "Entiende tus comidas sin buscar cada ingrediente.",
+      "line1": "Registra tu comida",
+      "line2": "sin buscar cada ingrediente.",
+      "subtitle": "Obtén una estimación nutricional con una foto o descripción y revísala antes de guardar.",
       "benefits": [
         {
-          "title": "Menos trabajo manual",
-          "desc": "Obtén una estimación nutricional con una foto o descripción, sin ingresar cada ingrediente."
+          "title": "Menos búsquedas, menos escritura",
+          "desc": "Obtén una estimación sin buscar e ingresar cada ingrediente por separado."
         },
         {
-          "title": "Decisiones mejor informadas",
-          "desc": "Conoce las calorías y macros estimados para entender cómo encaja tu comida en el día."
+          "title": "Calorías y macros juntos",
+          "desc": "Consulta los valores estimados para entender cómo encaja tu comida en el día."
         },
         {
-          "title": "Un registro a tu medida",
-          "desc": "Ajusta la estimación a tu comida real para que tu diario refleje lo que comiste."
+          "title": "Tu comida, tus ajustes",
+          "desc": "Corrige los detalles antes de guardar para que tu diario refleje lo que realmente comiste."
         }
       ]
     },
     "recipes": {
       "line1": "Come variado.",
       "line2": "Sin complicarte.",
-      "subtitle": "Encuentra ideas nuevas para disfrutar más tus comidas.",
+      "subtitle": "Encuentra tu próxima comida sin quedarte en una receta al día.",
       "benefits": [
         {
-          "title": "Más variedad, menos monotonía",
-          "desc": "Descubre recetas diferentes para renovar tus comidas de todos los días."
+          "title": "Más opciones para elegir",
+          "desc": "Explora los detalles de más recetas sin el límite diario del plan gratis."
         },
         {
-          "title": "Elige lo que te conviene",
-          "desc": "Consulta ingredientes e información nutricional para decidir qué funciona para ti."
+          "title": "Ten claros los ingredientes",
+          "desc": "Revisa qué necesitas antes de elegir y aprovecha lo que ya tienes."
         },
         {
-          "title": "Más de una receta",
-          "desc": "Abre más recetas sin el límite diario de visualizaciones del plan gratis."
+          "title": "Información antes de decidir",
+          "desc": "Consulta la información nutricional de cada receta para elegir lo que encaja en tu día."
         }
       ]
     },
     "planning": {
       "line1": "Deja de improvisar",
       "line2": "cada comida.",
-      "subtitle": "Organiza tus comidas con un plan para ti.",
+      "subtitle": "Obtén un plan y una lista de compras según tus metas y preferencias.",
       "benefits": [
         {
-          "title": "Menos decisiones de último minuto",
-          "desc": "Ten tus comidas planificadas sin empezar de cero cada vez que tengas hambre."
+          "title": "Ten claro qué comer",
+          "desc": "Parte de un plan de comidas sin tener que pensar cada comida desde cero."
         },
         {
-          "title": "Comidas que van contigo",
-          "desc": "Obtén un plan basado en tus metas nutricionales y tus preferencias de comida."
+          "title": "Tus preferencias cuentan",
+          "desc": "Recibe un plan basado en tus metas nutricionales y las preferencias que indiques."
         },
         {
-          "title": "Compras mejor organizadas",
-          "desc": "Lleva una lista basada en tu plan para saber qué necesitas comprar."
+          "title": "Simplifica tus compras",
+          "desc": "Obtén una lista basada en tu plan, sin tener que armarla desde cero."
         }
       ]
     },
     "templates": {
       "line1": "Empieza con un plan,",
       "line2": "no de cero.",
-      "subtitle": "Parte de una estructura lista y adáptala a ti.",
+      "subtitle": "Haz tuyo este plan sin tener que armar cada comida.",
       "benefits": [
         {
-          "title": "Un comienzo más fácil",
-          "desc": "Aprovecha un plan existente sin tener que pensar cada comida desde cero."
+          "title": "Comidas ya organizadas",
+          "desc": "Parte de una plantilla existente en lugar de armar un plan completo desde cero."
         },
         {
-          "title": "Más a tu medida",
-          "desc": "Elige proteínas y revisa las porciones según tus metas dentro del plan seleccionado."
+          "title": "Proteínas que van contigo",
+          "desc": "Elige tus opciones de proteína y revisa las porciones del plan seleccionado."
         },
         {
           "title": "Tu plan siempre a mano",
-          "desc": "Guarda tu plan personalizado en Mis Planes para consultarlo cuando lo necesites."
+          "desc": "Guárdalo en Mis Planes para volver a consultarlo cuando lo necesites."
         }
       ]
     },
     "club": {
       "line1": "No tienes que",
       "line2": "hacerlo solo.",
-      "subtitle": "Conecta con personas que también trabajan en sus metas.",
+      "subtitle": "Comparte tu camino en una comunidad privada de miembros Premium.",
       "benefits": [
         {
-          "title": "Un espacio para ti",
-          "desc": "Comparte los avances y retos de tu camino en un espacio exclusivo para miembros."
+          "title": "Más allá de tu diario",
+          "desc": "Comparte tus avances y retos cotidianos con otros miembros en el Club Premium."
         },
         {
-          "title": "Tus avances merecen celebrarse",
-          "desc": "Comparte tus logros con una comunidad que también trabaja en sus metas."
+          "title": "Un espacio para tus logros",
+          "desc": "Comparte tus metas cumplidas con una comunidad que también trabaja en las suyas."
         },
         {
-          "title": "Motivación en el camino",
-          "desc": "Intercambia experiencias con otros miembros y encuentra inspiración en sus avances."
+          "title": "Aprende de otras experiencias",
+          "desc": "Lee lo que comparten otros miembros e intercambia experiencias durante el camino."
         }
       ]
     },
     "coachMeals": {
       "line1": "Menos dudas sobre",
       "line2": "tu próxima comida.",
-      "subtitle": "Recibe orientación de IA para elegir qué comer.",
+      "subtitle": "Recibe ideas de IA para cocinar, comer fuera o resolver algo rápido.",
       "benefits": [
         {
-          "title": "Ideas para tu día real",
-          "desc": "Encuentra ideas para cocinar, comer fuera o resolver una comida rápida."
+          "title": "Opciones para tu situación",
+          "desc": "Obtén ideas según dónde y cómo vas a comer, sin empezar la búsqueda desde cero."
         },
         {
-          "title": "Más claridad con las porciones",
-          "desc": "Recibe orientación sobre porciones para elegir una comida que encaje con tus metas."
+          "title": "Ayuda con las porciones",
+          "desc": "Recibe orientación sobre porciones para decidir cómo encaja una comida en tus metas."
         },
         {
-          "title": "Más fácil llevar tu registro",
-          "desc": "Añade tu comida al diario después de revisar que los detalles reflejen lo que comiste."
+          "title": "De la idea al diario",
+          "desc": "Revisa los detalles de tu comida antes de añadirla a tu diario."
         }
       ]
     },
     "general": {
-      "line1": "Tu meta",
-      "line2": "merece un plan.",
-      "subtitle": "Conecta tus comidas y metas con orientación personalizada de IA.",
+      "line1": "Ten claro qué comer",
+      "line2": "para tu meta.",
+      "subtitle": "Un plan según tus objetivos y preferencias, con orientación de IA para el día a día.",
       "benefits": [
         {
-          "title": "Menos dudas al comer",
-          "desc": "Recibe orientación de IA para entender mejor tus opciones de comida del día a día."
+          "title": "Ten claro qué comer",
+          "desc": "Obtén un plan personalizado sin tener que pensar cada comida desde cero."
         },
         {
-          "title": "Más orden en tus comidas",
-          "desc": "Organiza tu alimentación con planes personalizados, recetas y listas de compras."
+          "title": "Simplifica tus compras",
+          "desc": "Recibe una lista basada en tu plan para saber qué necesitas comprar."
         },
         {
-          "title": "Una guía que evoluciona",
-          "desc": "Ajusta tu enfoque a medida que cambian tus metas, preferencias y avances."
+          "title": "Resuelve dudas al elegir",
+          "desc": "Consulta a tu Coach de IA para obtener ideas de comidas y orientación sobre porciones."
         }
       ]
     }
