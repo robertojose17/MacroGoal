@@ -46,7 +46,6 @@ function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
 // Type aliases so we don't import from the native module
 type PurchasesPackage = any;
 type PurchasesOffering = any;
-type CustomerInfo = any;
 
 // Premium features list (used in web + isPremium views)
 const PREMIUM_FEATURES = [
@@ -134,7 +133,7 @@ export default function SubscriptionScreen() {
   const configuredActorRef = React.useRef<string | null>(null);
   const offerViewport = React.useRef<ScrollView | null>(null);
   const observeOffer = usePremiumCheckpointVisibility(checkpointFlow,
-    Platform.OS !== 'web' && !loading && !errorMessage && !isPremium && !purchasing && !showSuccessModal, offerViewport);
+    Platform.OS !== 'web' && !loading && !premiumLoading && !errorMessage && !isPremium && !purchasing && !showSuccessModal, offerViewport);
   const cardRef = (pkg: PurchasesPackage) => {
     const offer = displayedPackage(pkg, offerings?.identifier);
     return offer ? observeOffer(JSON.stringify(offer), { name: 'offer_displayed', offer }) : undefined;
@@ -217,6 +216,7 @@ export default function SubscriptionScreen() {
       initializationRef.current += 1;
       configuredActorRef.current = null;
       setOfferings(null); setPackages([]); setShowSuccessModal(false);
+      setPurchasing(false); setSelectedPackage(null);
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => { void initializeRevenueCat(); }, 0);
     });
@@ -256,7 +256,7 @@ export default function SubscriptionScreen() {
       return;
     }
 
-    if (purchasing || purchaseBusyRef.current) {
+    if (purchasing || purchaseBusyRef.current || restoreBusyRef.current) {
       console.log('[Subscription] Purchase already in progress');
       return;
     }
@@ -281,15 +281,15 @@ export default function SubscriptionScreen() {
       setPurchasing(true);
       setSelectedPackage(pkg.identifier);
 
-      // Both manual and auto-start attempts meet at the actual SDK boundary.
-      attribution = await purchaseAttribution(Purchases, actor);
-      if (configuredActorRef.current !== actor?.userId) attribution = 'unknown';
-      const offer = displayedPackage(pkg, offerings?.identifier);
-      if (offer) checkpoint(checkpointFlow, { name: 'purchase_attempt', attemptId, offer, trigger, attribution }, actor);
-      sdkInvoked = true;
       const purchaseResult = await withRevenueCatUser<any>(configuredActorRef.current || '', async (sdk, lease) => {
         operationLease = lease;
         if (!mountedRef.current) throw new Error('RC_SCREEN_CLOSED');
+        attribution = await purchaseAttribution(sdk, actor);
+        if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
+        if (lease.userId !== actor?.userId) attribution = 'unknown';
+        const offer = displayedPackage(pkg, offerings?.identifier);
+        if (offer) checkpoint(checkpointFlow, { name: 'purchase_attempt', attemptId, offer, trigger, attribution }, actor);
+        sdkInvoked = true;
         return sdk.purchasePackage(pkg);
       });
       if (!mountedRef.current || !operationLease || !revenueCatLeaseCurrent(operationLease)) return;
@@ -364,8 +364,10 @@ export default function SubscriptionScreen() {
       }
     } finally {
       purchaseBusyRef.current = false;
-      setPurchasing(false);
-      setSelectedPackage(null);
+      if (mountedRef.current && (!operationLease || revenueCatLeaseCurrent(operationLease))) {
+        setPurchasing(false);
+        setSelectedPackage(null);
+      }
       console.log('[Subscription] ========== PURCHASE COMPLETE ==========');
     }
   };
@@ -380,7 +382,7 @@ export default function SubscriptionScreen() {
       return;
     }
 
-    if (restoreBusyRef.current) return;
+    if (restoreBusyRef.current || purchaseBusyRef.current) return;
     restoreBusyRef.current = true;
     const { Purchases } = loadPurchases();
     const actor = checkpointActor();
@@ -393,12 +395,14 @@ export default function SubscriptionScreen() {
       console.log('[Subscription] ========== RESTORING PURCHASES ==========');
       setLoading(true);
 
-      attribution = await purchaseAttribution(Purchases, actor);
-      checkpoint(checkpointFlow, { name: 'restore_attempt', attemptId }, actor);
-      sdkInvoked = true;
-      const info = await withRevenueCatUser<any>(configuredActorRef.current || '', async (sdk, lease) => {
+      const { data: restoreSession } = await supabase.auth.getSession();
+      const info = await withRevenueCatUser<any>(restoreSession.session?.user.id || '', async (sdk, lease) => {
         operationLease = lease;
         if (!mountedRef.current) throw new Error('RC_SCREEN_CLOSED');
+        attribution = await purchaseAttribution(sdk, actor);
+        if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
+        checkpoint(checkpointFlow, { name: 'restore_attempt', attemptId }, actor);
+        sdkInvoked = true;
         return sdk.restorePurchases();
       });
       if (!mountedRef.current || !operationLease || !revenueCatLeaseCurrent(operationLease)) return;
@@ -443,6 +447,10 @@ export default function SubscriptionScreen() {
           /^es/i.test(i18n.language) ? 'Espera a que la tienda confirme el pago y vuelve a comprobar tu acceso.' : 'Wait for the store to confirm payment, then check your access again.');
         return;
       }
+      if (observed === 'already_owned') {
+        Alert.alert(t('subscription.alreadySubscribed'), t('subscription.alreadySubscribedMsg'));
+        return;
+      }
       console.warn('[Subscription] Restore failed');
       Alert.alert(
         t('subscription.restoreFailed'),
@@ -450,7 +458,7 @@ export default function SubscriptionScreen() {
       );
     } finally {
       restoreBusyRef.current = false;
-      setLoading(false);
+      if (mountedRef.current && (!operationLease || revenueCatLeaseCurrent(operationLease))) setLoading(false);
       console.log('[Subscription] ========== RESTORE COMPLETE ==========');
     }
   };
@@ -533,7 +541,7 @@ export default function SubscriptionScreen() {
   }
 
   // Unsupported offerings must expose the existing retry UI, not an empty paywall.
-  if (errorMessage || (!isPremium && !resolvedMonthlyPkg && !resolvedYearlyPkg)) {
+  if (!isPremium && (errorMessage || (!resolvedMonthlyPkg && !resolvedYearlyPkg))) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: DARK_BG }]} edges={['top']}>
         <View style={styles.header}>
