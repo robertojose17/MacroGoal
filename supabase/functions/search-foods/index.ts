@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { firstText, normalizeQuery, searchCatalog } from './searchCore.ts';
+import { firstText, normalizeQuery, queryVariants, searchCatalog } from './searchCore.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -244,12 +244,12 @@ export async function handleSearch(req: Request): Promise<Response> {
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
   const result = await searchCatalog(query,limit,{
     db: async (normalized,signal) => {
-      const { data,error } = await supabase.rpc('search_food_catalog_v2',{ p_query: normalized,p_limit: limit }).abortSignal(signal);
+      const { data,error } = await supabase.rpc('search_food_catalog_v2',{ p_queries: queryVariants(normalized),p_limit: limit }).abortSignal(signal);
       if (error || !Array.isArray(data)) throw new Error('CATALOG_UNAVAILABLE');
       return data.map(row => mapDbRowToOff(row as Record<string,unknown>,normalized));
     },
     usda: async (normalized,signal) => {
-      const url = 'https://api.nal.usda.gov/fdc/v1/foods/search?query=' + encodeURIComponent(normalized) + '&pageSize=30&api_key=DEMO_KEY';
+      const url = 'https://api.nal.usda.gov/fdc/v1/foods/search?query=' + encodeURIComponent(normalizeQuery(normalized)) + '&pageSize=30&api_key=DEMO_KEY';
       const response = await fetch(url,{ signal });
       if (!response.ok) throw new Error('USDA_UNAVAILABLE');
       const body = await response.json();
