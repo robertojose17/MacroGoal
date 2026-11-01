@@ -1,7 +1,7 @@
 name: Purchase reliability checks
 on:
   push:
-    branches: [codex/purchase-reliability-20261101]
+    branches: [codex/purchase-reliability-20261101, codex/release-23-0-2]
 permissions:
   contents: read
 concurrency:
@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: bf103da59a54db060d66a8f020a06567d8885014
+          ref: cc2a2b73eb8261c8723c0661812a92f68b07406c
           path: baseline
           persist-credentials: false
       - uses: actions/setup-node@v4
