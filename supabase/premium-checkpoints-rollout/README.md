@@ -1,6 +1,6 @@
 # Premium checkpoint rollout candidate
 
-Inactive source only. No SQL has been applied, Edge function deployed, or client transport enabled. Main is unchanged. This directory is outside automatic migrations and functions deployment paths.
+Deployment status (2026-11-01): the private migration and shared track-onboarding v20 endpoint are LIVE. See track-onboarding/DEPLOYED.md for exact deployed source paths, hashes, postflight and rollback. Client transport is wired only on the implementation branch for a future native release; main and published binaries are unchanged. The original candidate/approval discussion below is historical, not a statement that the production objects are absent. This directory is outside automatic migration/function paths; do not redeploy the divergent canonical legacy function over v20.
 
 ## Exact proposed scope
 
