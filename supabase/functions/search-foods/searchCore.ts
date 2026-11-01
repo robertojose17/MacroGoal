@@ -28,7 +28,7 @@ export function matches(p: Product, query: string): boolean {
   const tokens = words(query);
   return tokens.length > 0 && tokens.every(token => haystack.some(word => word.startsWith(token)));
 }
-const COMPOSITE = /\b(breaded|deli|roll|sandwich|soup|nuggets?|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty)\b/;
+const COMPOSITE = /\b(fried|breaded|deli|roll|sandwich|soup|nuggets?|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty)\b/;
 const PREPARATION = new Set(['raw','cooked','roasted','fried','grilled','baked','boiled','breaded','dried','canned','smoked']);
 export function isBasic(p: Product): boolean {
   return !productBrand(p) && !COMPOSITE.test(words(productName(p)).join(' '));
@@ -101,7 +101,10 @@ export async function searchCatalog(query: string, limit: number, providers: { d
       off = rankProducts(result.products,normalized);
     }
   }
-  const products = mergeProducts([db.products,usda,off],limit);
+  // A relevant USDA basic food may precede branded/composite DB matches.
+  // Stable sort preserves SQL order and DB priority within the same intent tier.
+  const primary = [...db.products,...usda].sort((a,b) => Number(isBasic(b)) - Number(isBasic(a)));
+  const products = mergeProducts([primary,off],limit);
   const partial = Object.values(states).includes('unavailable');
   return { products,count: products.length,ranking_version: RANKING_VERSION,
     status: partial ? 'partial' : 'complete',providers: states };
