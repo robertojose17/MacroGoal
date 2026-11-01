@@ -1,7 +1,7 @@
 name: Purchase reliability checks
 on:
   push:
-    branches: [codex/purchase-reliability-20261101, codex/release-23-0-2]
+    branches: [codex/purchase-reliability-20261101, codex/release-23-0-2, codex/food-search-20261101]
 permissions:
   contents: read
 concurrency:
@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: cc2a2b73eb8261c8723c0661812a92f68b07406c
+          ref: 5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb
           path: baseline
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -35,7 +35,7 @@ jobs:
       - name: Install locked dependencies without lifecycle scripts
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Isolated client and backend regressions
-        run: node --test tests/purchase-reliability.test.cjs tests/sync-subscription.test.cjs
+        run: node --test tests/purchase-reliability.test.cjs tests/sync-subscription.test.cjs tests/food-search.test.cjs
       - name: Compare application TypeScript diagnostics with baseline
         if: success() || failure()
         run: |
@@ -74,4 +74,4 @@ jobs:
           deno-version: v2.5.6
       - name: Deno check of backend candidate (no execution)
         if: success() || failure()
-        run: deno check --no-config --no-lock supabase/functions/sync-subscription/index.ts
+        run: deno check --no-config --no-lock supabase/functions/sync-subscription/index.ts supabase/functions/search-foods/index.ts
