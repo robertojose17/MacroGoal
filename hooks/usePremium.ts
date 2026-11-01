@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
 import Purchases, { isPurchasesAvailable, withRevenueCatUser } from '@/utils/purchases';
-import { premiumEntitlement } from '@/utils/premiumEntitlement';
+import { premiumEntitlement, premiumFallbackState } from '@/utils/premiumEntitlement';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 
 type CustomerInfo = any;
@@ -34,6 +34,7 @@ export function usePremium(): UsePremiumReturn {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [expirationDate, setExpirationDate] = useState<string | null>(null);
   const mounted = useRef(false);
+  const knownPremium = useRef(false);
   const owner = useRef<string | null | undefined>(undefined);
   const request = useRef(0);
   const inFlight = useRef<number | null>(null);
@@ -42,6 +43,7 @@ export function usePremium(): UsePremiumReturn {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const reset = useCallback(() => {
+    knownPremium.current = false;
     setIsPremium(false); setCustomerInfo(null); setExpirationDate(null); setError(null);
   }, []);
 
@@ -79,6 +81,7 @@ export function usePremium(): UsePremiumReturn {
               void syncPremiumMembership();
             }
             setCustomerInfo(info);
+            knownPremium.current = !!entitlement;
             setIsPremium(!!entitlement);
             setExpirationDate(entitlement?.expirationDate ?? null);
             return;
@@ -98,15 +101,24 @@ export function usePremium(): UsePremiumReturn {
       if (profileError || !profile) throw new Error('PREMIUM_STATUS_UNAVAILABLE');
       const fallbackPremium = profile.user_type === 'premium';
       if (Platform.OS === 'web') {
+        knownPremium.current = fallbackPremium;
         setIsPremium(fallbackPremium);
       } else {
         // A stale negative mirror after SDK/network failure must not revoke a
         // known paid session. A successful identified SDK response can revoke.
-        setIsPremium(previous => fallbackPremium || previous);
-        setError('PREMIUM_STATUS_UNAVAILABLE');
+        const fallback = premiumFallbackState(knownPremium.current, fallbackPremium);
+        knownPremium.current = fallback.isPremium;
+        setIsPremium(fallback.isPremium);
+        setError(fallback.error);
+        console.warn('[usePremium] RC_STATUS_FALLBACK');
       }
     } catch {
-      if (current()) setError('PREMIUM_STATUS_UNAVAILABLE');
+      if (current()) {
+        const fallback = premiumFallbackState(knownPremium.current);
+        setIsPremium(fallback.isPremium);
+        setError(fallback.error);
+        console.warn('[usePremium] PREMIUM_STATUS_UNAVAILABLE');
+      }
       // Keep same-account state on transient failure. Account changes reset above.
     } finally {
       if (current()) {
