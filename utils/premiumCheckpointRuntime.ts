@@ -61,8 +61,8 @@ export function checkpointBody(value: unknown): string | null {
 
 export type ActorLease = Readonly<{ userId: string; sessionId: string; generation: number; credentials: { accessToken: string } }>;
 export type CheckpointTransport = (body: string, lease: ActorLease, signal: AbortSignal) => Promise<'ack' | 'retry' | 'reject'>;
-export const CHECKPOINT_ENDPOINT = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/premium-checkpoint';
-/** Production injection remains null until this exact endpoint has been reviewed and verified. */
+export const CHECKPOINT_ENDPOINT = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/track-onboarding/premium-checkpoint';
+/** Exact shared endpoint verified against deployed track-onboarding v20 on 2026-11-01. */
 export function pinnedCheckpointTransport(
   endpoint: string,
   current: () => ActorLease | null,
