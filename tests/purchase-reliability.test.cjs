@@ -19,7 +19,7 @@ function load(path, imports) {
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return {promise,resolve,reject}; };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function fixture() {
-  let session = null, callback, sdkUser = null;
+  let session = null, callback, sdkUser = null, profileReads = 0;
   const calls = [];
   const sdk = {
     configure: ({appUserID}) => { calls.push(['configure',appUserID]); sdkUser=appUserID; },
@@ -35,9 +35,9 @@ function fixture() {
     'react-native-purchases': {__esModule:true,default:sdk,LOG_LEVEL:{}},
     'react-native': {Platform:{OS:'ios',select:v=>v.ios}},
     'expo-constants': {__esModule:true,default:{expoConfig:{extra:{revenueCat:{iosApiKey:'appl_fixture'}}}}},
-    '@/lib/supabase/client': {supabase:{auth}},
+    '@/lib/supabase/client': {supabase:{auth,from:()=>{profileReads++;return new Promise(()=>{});}}},
   });
-  return {api,sdk,calls,auth,emit(id,event='SIGNED_IN') { session=id?{user:{id}}:null;callback(event,session); }};
+  return {api,sdk,calls,auth,profileReads:()=>profileReads,emit(id,event='SIGNED_IN') { session=id?{user:{id}}:null;callback(event,session); }};
 }
 
 test('concurrent same-account callers configure once, without anonymous login', async () => {
@@ -105,11 +105,51 @@ test('every deployed legacy alias remains active after cancellation until SDK ex
 });
 test('hook callbacks are hints, removed on cleanup; transient errors do not force free', () => {
   const source=read('hooks/usePremium.ts');
-  for(const expected of ['removeCustomerInfoUpdateListener(onInfo)', 'fallbackPremium || previous', 'request.current === ticket', 'setExpirationDate(entitlement?.expirationDate ?? null)']) assert.ok(source.includes(expected),expected);
+  for(const expected of ['removeCustomerInfoUpdateListener(onInfo)', 'premiumFallbackState(knownPremium.current, fallbackPremium)', 'request.current === ticket', 'setExpirationDate(entitlement?.expirationDate ?? null)']) assert.ok(source.includes(expected),expected);
   for(const forbidden of ['Purchases.logIn', 'originalAppUserId']) assert.ok(!source.includes(forbidden),forbidden);
 });
 test('paywall has no identity mutation or arbitrary offering fallback; auto-start is retained', () => {
   const source=read('app/subscription.tsx');
   for(const forbidden of ['Purchases.configure(', 'Purchases.logIn(', 'Purchases.logOut(', 'offeringsResponse.current', 'firstOfferingKey']) assert.ok(!source.includes(forbidden),forbidden);
-  for(const expected of ['response.all[identifier]', "handlePurchase(resolvedYearlyPkg, 'auto_start')", "outcome === 'pending'", "outcome === 'already_owned'"]) assert.ok(source.includes(expected),expected);
+  for(const expected of ['getRevenueCatOffering(user.id, identifier)', "handlePurchase(resolvedYearlyPkg, 'auto_start')", "outcome === 'pending'", "outcome === 'already_owned'"]) assert.ok(source.includes(expected),expected);
+});
+
+test('real dailyAccess stays ready for same-account paid fallback during SDK outage', () => {
+  const {premiumFallbackState}=load('utils/premiumEntitlement.ts',{});
+  const {dailyAccess}=load('utils/coachDailyAction.ts',{});
+  for(const [known,profile] of [[true,false],[false,true],[true,true]]) {
+    const state=premiumFallbackState(known,profile);
+    assert.equal(state.error,null);
+    assert.equal(dailyAccess({isPremium:state.isPremium,premiumError:state.error,premiumLoading:false,gated:false,busy:false}),'ready');
+  }
+});
+test('real dailyAccess stays blocked for an unknown/free next account', () => {
+  const {premiumFallbackState}=load('utils/premiumEntitlement.ts',{});
+  const {dailyAccess}=load('utils/coachDailyAction.ts',{});
+  const state=premiumFallbackState(false,false);
+  assert.equal(state.isPremium,false);
+  assert.equal(dailyAccess({isPremium:state.isPremium,premiumError:state.error,premiumLoading:false,gated:false,busy:false}),'blocked');
+  const source=read('hooks/usePremium.ts');
+  assert.ok(source.includes('knownPremium.current = false;'));
+});
+test('a hanging optional subscriber attribute does not hold identity authority', async () => {
+  const f=fixture();f.emit('A');f.sdk.setEmail=()=>new Promise(()=>{});
+  await f.api.loginRevenueCat('A','appl_fixture',{email:'fixture@example.invalid'});
+  f.emit('B');await f.api.loginRevenueCat('B','appl_fixture');
+  assert.deepEqual(f.calls,[['configure','A'],['login','B']]);
+});
+test('offer loading neither queries optional profiles nor blocks another identity', async () => {
+  const f=fixture();f.emit('A');const held=deferred();f.sdk.getOfferings=()=>held.promise;
+  const offer=f.api.getRevenueCatOffering('A','Monthly_MG',1000);
+  const rejected=assert.rejects(offer,/RC_ACCOUNT_CHANGED/);
+  await tick();f.emit('B');await f.api.loginRevenueCat('B','appl_fixture');
+  assert.equal(f.profileReads(),0);
+  held.resolve({all:{Monthly_MG:{identifier:'Monthly_MG',availablePackages:[{}]}}});
+  await rejected;
+  assert.ok(!read('app/subscription.tsx').includes("supabase.from('users').select('email')"));
+});
+test('a stalled offer read times out without retaining the identity queue', async () => {
+  const f=fixture();f.emit('A');f.sdk.getOfferings=()=>new Promise(()=>{});
+  await assert.rejects(f.api.getRevenueCatOffering('A','Monthly_MG',1),/RC_OFFERING_TIMEOUT/);
+  assert.equal(await f.api.withRevenueCatUser('A',async()=>true),true);
 });
