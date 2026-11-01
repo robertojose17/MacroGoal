@@ -21,6 +21,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
+import { getPaywallTop } from '@/utils/paywallTopContent';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -107,7 +108,7 @@ const ICON_GRID_ITEM_KEYS: { key: string; icon_ios: string; icon_android: string
 
 export default function SubscriptionScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { width: screenWidth } = useWindowDimensions();
@@ -886,24 +887,26 @@ export default function SubscriptionScreen() {
     'localization.shared.allFeature9',
   ];
 
+  const contextualTop = getPaywallTop(source, i18n.resolvedLanguage ?? i18n.language);
+
   const NEW_FEATURES = [
     {
       ios: 'brain.head.profile',
       android: 'psychology' as const,
-      title: t('subscription.sellingPoint1Title'),
-      desc: t('subscription.sellingPoint1Desc'),
+      title: contextualTop?.benefits[0].title ?? t('subscription.sellingPoint1Title'),
+      desc: contextualTop?.benefits[0].desc ?? t('subscription.sellingPoint1Desc'),
     },
     {
       ios: 'fork.knife.circle.fill',
       android: 'set-meal' as const,
-      title: t('subscription.sellingPoint2Title'),
-      desc: t('subscription.sellingPoint2Desc'),
+      title: contextualTop?.benefits[1].title ?? t('subscription.sellingPoint2Title'),
+      desc: contextualTop?.benefits[1].desc ?? t('subscription.sellingPoint2Desc'),
     },
     {
       ios: 'arrow.triangle.2.circlepath',
       android: 'autorenew' as const,
-      title: t('subscription.stayOnTrack'),
-      desc: t('subscription.sellingPoint3Desc'),
+      title: contextualTop?.benefits[2].title ?? t('subscription.stayOnTrack'),
+      desc: contextualTop?.benefits[2].desc ?? t('subscription.sellingPoint3Desc'),
     },
   ];
 
@@ -918,10 +921,10 @@ export default function SubscriptionScreen() {
 
             {/* LEFT 60% — text block */}
             <View style={{ width: '55%', justifyContent: 'flex-start', paddingLeft: 20, paddingRight: 8, paddingTop: 72, paddingBottom: 20 }}>
-              <Text style={styles.newHeroLine1}>{t('subscription.heroLine1')}</Text>
-              <Text style={styles.newHeroLine2}>{t('subscription.heroLine2')}</Text>
+              <Text style={styles.newHeroLine1}>{contextualTop?.line1 ?? t('subscription.heroLine1')}</Text>
+              <Text style={styles.newHeroLine2}>{contextualTop?.line2 ?? t('subscription.heroLine2')}</Text>
               <Text style={styles.newHeroSubtitle}>
-                {t('subscription.heroSubtitle')}
+                {contextualTop?.subtitle ?? t('subscription.heroSubtitle')}
               </Text>
             </View>
 
