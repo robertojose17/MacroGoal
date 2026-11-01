@@ -68,3 +68,7 @@ export function revenueCatLeaseCurrent(_lease: RevenueCatLease): boolean { retur
 export async function withRevenueCatUser<T>(_userId: string, _work: (sdk: any, lease: RevenueCatLease) => Promise<T>, _apiKey?: string): Promise<T> {
   throw new Error('RC_UNAVAILABLE_ON_WEB');
 }
+
+export async function getRevenueCatOffering(_userId: string, _identifier: string, _timeoutMs = 5000): Promise<{ offering: any; lease: RevenueCatLease }> {
+  throw new Error('RC_UNAVAILABLE_ON_WEB');
+}
