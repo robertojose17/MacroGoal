@@ -2,12 +2,20 @@ import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
 import { newCheckpointId, newPremiumFlow, premiumRoute } from './premiumCheckpointContract';
 import type { Attribution, CheckpointDetail, DisplayedOffer, PremiumFlow, PremiumSource, TransactionCorrelation } from './premiumCheckpointContract';
-import { createCheckpointQueue, validDisplayedOffer } from './premiumCheckpointRuntime';
-import type { ActorLease, CheckpointTransport } from './premiumCheckpointRuntime';
+import { CHECKPOINT_ENDPOINT, createCheckpointQueue, pinnedCheckpointTransport, validDisplayedOffer } from './premiumCheckpointRuntime';
+import type { ActorLease } from './premiumCheckpointRuntime';
 
-// No source-level switch can activate an unreviewed endpoint. Null until deployment review.
-const transport: CheckpointTransport | null = null;
 let lease: ActorLease | null = null;
+// Source-only activation for the next release; server independently verifies this JWT.
+const transport = pinnedCheckpointTransport(CHECKPOINT_ENDPOINT, () => lease, async actor => {
+  if (lease !== actor) return false;
+  const { data, error } = await supabase.auth.getSession();
+  const session = data.session;
+  if (error || lease !== actor || !session || session.user.id !== actor.userId ||
+      checkpointSessionId(session.access_token) !== actor.sessionId) return false;
+  actor.credentials.accessToken = session.access_token;
+  return true;
+});
 let generation = 0;
 let initialized = false;
 const queue = createCheckpointQueue(() => lease, transport);
